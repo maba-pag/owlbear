@@ -1,3 +1,4 @@
+import shlex
 import socket
 import subprocess
 import sys
@@ -134,7 +135,7 @@ def test_a_failing_install_is_a_note_and_nothing_is_launched(ui, tmp_path, monke
     monkeypatch.setattr(before.worktree, "installs", lambda _p, scope: [(".", fail)] if scope == ["site"] else [])
     events = []
     shots = run(ui, tmp_path, events)
-    assert (shots.files, events, worktrees(ui)) == ([], [], 1)
+    assert (shots.files, len(events), worktrees(ui)) == ([], 1, 1)  # only the installer's PID is journaled
     assert shots.findings[0].endswith("failed: no registry")
 
 
@@ -165,6 +166,50 @@ def test_a_recipe_that_never_answers_is_a_note_and_its_processes_are_stopped(ui,
     )
     pid = int(next(iter(events[0]["pids"])))
     assert not (psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE)
+    assert worktrees(ui) == 1
+
+
+def gone(pid):
+    return not (psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE)
+
+
+def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(ui, tmp_path, monkeypatch):
+    def broken(_base, _states, _out):
+        missing = "no Chromium"
+        raise RuntimeError(missing)
+
+    monkeypatch.setattr(visual, "CAPTURE", broken)
+    events = []
+    shots = run(ui, tmp_path, events)
+    assert (shots.files, shots.findings) == ([], ["RuntimeError: no Chromium"])
+    assert all(gone(int(p)) for e in events for p in e["pids"])
+    assert (check.answers(ui.env.ready_url), worktrees(ui)) == (False, 1)
+
+
+def test_an_unwritable_screenshot_folder_is_a_note_not_a_crash(ui, tmp_path):
+    (tmp_path / "blocked").write_text("a file where the folder should be")
+    shots = before.capture(ui, Path(ui.names.worktree), lambda b: tmp_path / "blocked" / b[:7], Profile(), [].append)
+    assert shots.files == []
+    assert shots.findings[0].startswith(("FileExistsError", "NotADirectoryError"))
+    assert worktrees(ui) == 1
+
+
+def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monkeypatch):
+    child = tmp_path / "child.pid"
+    spawn = (
+        "import subprocess, sys, time; "
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        f"open({str(child)!r}, 'w').write(str(p.pid)); time.sleep(60)"
+    )
+    slow = f"{sys.executable} -c {shlex.quote(spawn)}"
+    monkeypatch.setattr(before, "INSTALL_WITHIN", 1.5)
+    monkeypatch.setattr(before.worktree, "installs", lambda _p, _scope: [(".", slow)])
+    events = []
+    shots = run(ui, tmp_path, events)
+    assert shots.findings == [f"`{shlex.join(shlex.split(slow))}` took over 2 s"]
+    installer = int(next(iter(events[0]["pids"])))
+    assert gone(installer)
+    assert gone(int(child.read_text()))
     assert worktrees(ui) == 1
 
 

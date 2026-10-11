@@ -93,7 +93,8 @@ if (hash.get("token")) {
   history.replaceState(null, "", location.pathname);
 }
 const token = sessionStorage.getItem("token");
-let selected = null, lastSeen = null, busy = false, pds = false;
+let selected = null, lastSeen = null, busy = false, again = false, pds = false;
+let shown = { slug: null, forms: "" }, draft = false;  // the rendered detail, and whether it holds unsent input
 
 class HostDown extends Error {}
 class Restarted extends Error {}
@@ -127,7 +128,8 @@ function el(tag, text, attrs = {}) {
 }
 
 function send(path, body) {
-  call(`/changes/${selected}${path}`, body).then(() => {
+  call(`/changes/${shown.slug}${path}`, body).then(() => {  // the Change whose form the person used
+    draft = false;
     document.activeElement.blur();
     return refresh();
   }, failed);
@@ -186,6 +188,13 @@ function waiting(node, on) {
 }
 
 function external(label, href) {
+  let web = false;
+  try {
+    web = ["http:", "https:"].includes(new URL(href).protocol);
+  } catch {
+    web = false;
+  }
+  if (!web) return text(label);
   const link = el("a", label, { href, target: "_blank", rel: "noopener" });
   if (!pds) return link;
   const pure = el("p-link-pure", undefined, { icon: "external" });
@@ -283,26 +292,26 @@ function pullbackNote(p) {
 
 const shots = new Map();
 
-function shot(kind, name, at) {
-  const key = `${selected}/${kind}/${name}/${at}`;
+function shot(slug, kind, name, at) {
+  const key = `${slug}/${kind}/${name}/${at}`;
   if (!shots.has(key)) {
     const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
-    shots.set(key, fetch(`/api/next/changes/${selected}/${kind}/${encodeURIComponent(name)}`, init)
+    shots.set(key, fetch(`/api/next/changes/${slug}/${kind}/${encodeURIComponent(name)}`, init)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
       .then((b) => URL.createObjectURL(b)));
   }
   return shots.get(key);
 }
 
-function image(kind, name, at, alt) {
+function image(slug, kind, name, at, alt) {
   const link = el("a", undefined, { target: "_blank", rel: "noopener" });
   const img = el("img", undefined, { alt, loading: "lazy" });
   link.append(img);
-  shot(kind, name, at).then((url) => { img.src = link.href = url; }, () => { img.alt += " (not available)"; });
+  shot(slug, kind, name, at).then((url) => { img.src = link.href = url; }, () => { img.alt += " (not available)"; });
   return link;
 }
 
-function visualSection(v, b) {
+function visualSection(slug, v, b) {
   const verdict = el("p-tag", v.passed ? "Passed" : "Failed", { variant: v.passed ? "success" : "error" });
   const title = text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" });
   const box = panel("Before and after", row(title, verdict));
@@ -314,30 +323,34 @@ function visualSection(v, b) {
   for (const name of v.files) {
     const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
     const before = b && b.files.includes(name)
-      ? image("before", name, b.at, `${state} at ${width}px before the Change, at ${b.head.slice(0, 7)}`)
+      ? image(slug, "before", name, b.at, `${state} at ${width}px before the Change, at ${b.head.slice(0, 7)}`)
       : text("Before not available", { class: "missing", size: "xs", color: "contrast-medium" });
     const fig = el("figure", undefined, { class: "pair" });
-    fig.append(before, image("visual", name, v.at, `${state} at ${width}px with the Change, at ${v.head.slice(0, 7)}`),
-      el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));
+    const after = image(slug, "visual", name, v.at, `${state} at ${width}px with the Change, at ${v.head.slice(0, 7)}`);
+    fig.append(before, after, el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));
     grid.append(fig);
   }
   box.append(grid);
   return box;
 }
 
-function beforeSection(b) {
+function beforeSection(slug, b) {
   const box = panel(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`);
   if (b.findings.length) box.append(text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }));
   const grid = el("div", undefined, { class: "shots" });
-  for (const name of b.files) grid.append(image("before", name, b.at, `${name} before the Change`));
+  for (const name of b.files) grid.append(image(slug, "before", name, b.at, `${name} before the Change`));
   box.append(grid);
   return box;
 }
 
 async function showDetail() {
   const target = document.getElementById("detail");
-  if (!selected) return target.replaceChildren();
+  if (!selected) {
+    shown = { slug: null, forms: "" };
+    return target.replaceChildren();
+  }
   const d = await call(`/changes/${selected}`);
+  if (d.slug !== selected) return;  // the person chose another Change while this one loaded
   const models = Object.entries(d.spend.models).map(([m, u]) => `${m} ${u.tokens} tokens`).join(", ");
   const spent = `Spent ${d.spend.credits.toFixed(2)} credits${models ? ` (${models})` : ""}`;
   const pause = button(d.paused ? "Resume" : "Pause", () => send("/intent", { intent: d.paused ? "resume" : "pause" }),
@@ -350,8 +363,8 @@ async function showDetail() {
   if (d.question) parts.push(questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
-  if (d.visual) parts.push(visualSection(d.visual, d.before));
-  else if (d.before) parts.push(beforeSection(d.before));
+  if (d.visual) parts.push(visualSection(d.slug, d.visual, d.before));
+  else if (d.before) parts.push(beforeSection(d.slug, d.before));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const items = [
       ...d.criteria.map((k) => `${k.id}: ${k.text}`),
@@ -363,9 +376,15 @@ async function showDetail() {
   }
   const log = d.activity.slice(-8).map((e) => `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`);
   parts.push(panel("Recent activity", list(log, "ol")));
+  const asked = d.checks.filter((c) => c.waiting).map((c) => c.id);
+  const forms = JSON.stringify([d.slug, d.question?.id, d.merge?.head, asked, d.brief.version, d.brief.approved,
+    d.pullback?.state, d.paused]);
   const editing = target.contains(document.activeElement)
-    && document.activeElement.matches("textarea, input, p-textarea, p-radio-group");
-  if (!editing) target.replaceChildren(...parts);
+    && document.activeElement.matches("textarea, input, p-textarea, p-radio-group, p-radio-group-option");
+  if ((editing || draft) && forms === shown.forms) return;  // keep unsent input while the same forms are shown
+  target.replaceChildren(...parts);
+  shown = { slug: d.slug, forms };
+  draft = false;
 }
 
 function cell(child, attrs = {}) {
@@ -386,7 +405,10 @@ function badge(c) {
 }
 
 async function refresh() {
-  if (busy) return;
+  if (busy) {
+    again = true;  // a selection or an action while a refresh runs gets its own refresh after it
+    return;
+  }
   busy = true;
   try {
     const rows = (await call("/changes")).map((c) => {
@@ -422,6 +444,10 @@ async function refresh() {
     failed(e);
   } finally {
     busy = false;
+    if (again) {
+      again = false;
+      refresh();
+    }
   }
 }
 
@@ -453,6 +479,9 @@ async function start() {
     document.getElementById("offline").hidden = false;
   }
   document.querySelector("header").append(button("New Change", newChange, { icon: "add" }));
+  for (const type of ["input", "change"]) {
+    document.getElementById("detail").addEventListener(type, () => { draft = true; });
+  }
   refresh();
   setInterval(refresh, 3000);
 }
