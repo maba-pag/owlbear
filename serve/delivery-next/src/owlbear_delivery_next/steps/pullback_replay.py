@@ -5,7 +5,8 @@ detached worktree, which is always removed afterwards. An update from *old* to *
 result) is applied by a two-tree ``read-tree -m -u`` (which keeps index entries and files of unchanged paths and
 refuses if a changing path has local changes) and a compare-and-swap ``update-ref`` of the expected branch, after
 the caller's guard checked every path the update itself changes. If ``read-tree`` fails after writing some files
-and the index is untouched, those paths are restored from *old*; otherwise the paths to restore are reported.
+and the index is untouched, only the paths that hold exactly what it wrote are restored from *old*; anything else
+is someone's work and stays. If the ref then fails to move, the update is reversed, or the exact recovery named.
 """
 
 from __future__ import annotations
@@ -80,8 +81,8 @@ def changed(wt: Path, old: str, new: str) -> list[str]:
     return [p for p in paths if p]
 
 
-def _remove(wt: Path, tmp: Path) -> None:
-    """Remove the temporary worktree; every step runs even if an earlier one failed, and none fails the caller."""
+def _remove(wt: Path, tmp: Path) -> str:
+    """Remove the temporary worktree; every step runs even if one fails. A note if anything is left."""
     steps: tuple[Callable[[], object], ...] = (
         lambda: git(wt, "worktree", "unlock", str(tmp)),
         lambda: git(wt, "worktree", "remove", "--force", "--force", str(tmp)),
@@ -96,12 +97,14 @@ def _remove(wt: Path, tmp: Path) -> None:
         listed = set(git(wt, "worktree", "list", "--porcelain").stdout.splitlines())
     except subprocess.TimeoutExpired:
         listed = names
-    if names & listed:
-        _LOG.warning("pull-back could not unregister temporary worktree %s; run `git worktree prune`", tmp)
+    if names & listed or os.path.lexists(tmp):
+        _LOG.warning("pull-back could not remove temporary worktree %s", tmp)
+        return f"temporary worktree {tmp} was not removed; delete it and run `git worktree prune`"
+    return ""
 
 
-def replay(wt: Path, base: str, old: str, remote: str) -> str:
-    """Cherry-pick ``base..old`` onto *remote* in a temporary detached worktree; the new head.
+def replay(wt: Path, base: str, old: str, remote: str) -> tuple[str, str]:
+    """Cherry-pick ``base..old`` onto *remote* in a temporary detached worktree: the new head, and a cleanup note.
 
     Raises:
         BehindError: Local merges, a conflict or any other failure; the temporary worktree is removed.
@@ -117,9 +120,10 @@ def replay(wt: Path, base: str, old: str, remote: str) -> str:
             conflict = bool(git(tmp, "ls-files", "-u").stdout.strip())
             git(tmp, "cherry-pick", "--abort")
             raise BehindError("your local commits conflict with the merged change" if conflict else first(done.stderr))
-        return must(tmp, "rev-parse", "HEAD").strip()
+        head = must(tmp, "rev-parse", "HEAD").strip()
     finally:
-        _remove(wt, tmp)
+        note = _remove(wt, tmp)
+    return head, note
 
 
 def _in_tree(wt: Path, commit: str, paths: list[str]) -> set[str]:
@@ -137,24 +141,90 @@ def _left(wt: Path, old: str, paths: list[str]) -> list[str]:
     return sorted(_diff(wt, old, "--", *paths) | _diff(wt, "--cached", old, "--", *paths) | extra)
 
 
-def _reconcile(wt: Path, ref: str, old: str, paths: list[str], error: str) -> NoReturn:
-    """Undo a failed ``read-tree`` for *paths*, which the guard found clean, if only working files changed.
+def _blobs(wt: Path, commit: str, paths: list[str]) -> dict[str, str]:
+    """Object id of each of *paths* in *commit*."""
+    found: dict[str, str] = {}
+    for entry in split_z(must(wt, "--literal-pathspecs", "ls-tree", "-r", "-z", commit, "--", *paths)):
+        meta, _, path = entry.partition("\t")
+        found[path] = meta.split()[2]
+    return found
+
+
+def _hash(wt: Path, rel: str) -> str | None:
+    """The object id Git would store for the entry at *rel*: None if absent, empty if not a file or link."""
+    file = wt / rel
+    if file.is_symlink():
+        done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
+            [worktree.GIT, "hash-object", "--stdin", "--no-filters"],
+            cwd=wt,
+            input=str(file.readlink()).encode(),
+            capture_output=True,
+            check=True,
+            timeout=120,
+        )
+        return done.stdout.decode().strip()
+    if not file.exists():
+        return None
+    return must(wt, "hash-object", "--", rel).strip() if file.is_file() else ""
+
+
+def _undo(wt: Path, old: str, new: str, paths: list[str]) -> list[str]:
+    """Put back from *old* each path that holds exactly what *new* has; the paths holding anything else."""
+    was, wrote, kept, restore = _blobs(wt, old, paths), _blobs(wt, new, paths), [], []
+    for rel in paths:
+        now = _hash(wt, rel)
+        if now == was.get(rel):
+            continue
+        if now != wrote.get(rel):
+            kept.append(rel)  # neither old nor new: written by someone else during pull-back
+        elif rel in was:
+            restore.append(rel)
+        else:
+            (wt / rel).unlink()
+    if restore:
+        git(wt, "--literal-pathspecs", "checkout", old, "--", *restore)
+    return kept
+
+
+def _reconcile(wt: Path, ref: str, span: tuple[str, str], paths: list[str], error: str) -> NoReturn:
+    """Undo what a failed ``read-tree`` from ``span`` (old, new) wrote to *paths*, if the index is untouched.
 
     Raises:
-        BehindError: Always; *error* if the local copy is as before, else the paths to restore.
+        BehindError: Always; *error*, the local changes that appeared meanwhile, or the paths left to check.
     """
+    old, new = span
+    kept: list[str] = []
     if rev(wt, ref) == old and not _diff(wt, "--cached", old, "--", *paths):
-        known = _in_tree(wt, old, paths)
-        for rel in paths:
-            if rel not in known and ((wt / rel).is_symlink() or (wt / rel).is_file()):
-                (wt / rel).unlink()
-        if known:
-            git(wt, "--literal-pathspecs", "checkout", old, "--", *sorted(known))
-    if left := _left(wt, old, paths):
+        kept = _undo(wt, old, new, paths)
+    if left := [p for p in _left(wt, old, paths) if p not in kept]:
         shown = " ".join(left[:SHOWN])
-        msg = f"partial update: {shown} changed; run `git checkout -- {shown}` after fixing {error}"
+        msg = f"partial update: {shown} differ from {old[:12]}; check them, then retry after fixing {error}"
         raise BehindError(msg)
+    if kept:
+        error = f"{error}; local changes to {' '.join(kept[:SHOWN])} appeared during pull-back and were kept"
     raise BehindError(error)
+
+
+def _unapply(wt: Path, ref: str, old: str, new: str, why: str) -> NoReturn:
+    """The ref did not move: reverse the tree update if it is still safe, else name the exact recovery.
+
+    Raises:
+        BehindError: Always.
+    """
+    if rev(wt, ref) == old and git(wt, "symbolic-ref", "-q", "HEAD").stdout.strip() == ref:
+        try:
+            back = git(wt, "read-tree", "-m", "-u", new, old).returncode == 0
+        except subprocess.TimeoutExpired:
+            back = False
+        if back:
+            msg = f"{ref} did not move ({why}); the local copy was put back"
+            raise BehindError(msg)
+    at = (rev(wt, ref) or "?")[:12]
+    msg = (
+        f"manual check needed: index and files are at {new[:12]} but {ref} is at {at} ({why}); "
+        f"finish with `git update-ref {ref} {new} {old}` or undo with `git read-tree -m -u {new} {old}`"
+    )
+    raise BehindError(msg)
 
 
 def apply(wt: Path, ref: str, old: str, new: str, guard: Callable[[list[str]], Local]) -> Local:
@@ -175,15 +245,17 @@ def apply(wt: Path, ref: str, old: str, new: str, guard: Callable[[list[str]], L
     try:
         done = git(wt, "read-tree", "-m", "-u", old, new)
     except subprocess.TimeoutExpired:
-        _reconcile(wt, ref, old, paths, "git timed out")
+        _reconcile(wt, ref, (old, new), paths, "git timed out")
     if done.returncode != 0:
-        _reconcile(wt, ref, old, paths, first(done.stderr))
+        _reconcile(wt, ref, (old, new), paths, first(done.stderr))
     try:
         done = git(wt, "update-ref", "-m", "pull-back: update to the merged change", ref, new, old)
-        why = "" if done.returncode == 0 and rev(wt, "HEAD") == new else first(done.stderr)
+        why = "" if done.returncode == 0 else first(done.stderr)
     except subprocess.TimeoutExpired:
         why = "git timed out"
     if why:
-        msg = f"manual check needed: files are at {new} but {ref} may not have moved: {why}"
+        _unapply(wt, ref, old, new, why)
+    if rev(wt, "HEAD") != new:
+        msg = f"manual check needed: {ref} moved to {new[:12]} but HEAD is now elsewhere"
         raise BehindError(msg)
     return before

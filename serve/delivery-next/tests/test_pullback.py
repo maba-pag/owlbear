@@ -476,3 +476,96 @@ def test_a_locked_temporary_worktree_is_removed_even_if_remove_times_out(repos, 
     merged(other)
     result = pullback.run(repo, "main", NOW)
     assert (result.state, worktrees(repo)) == ("updated", wts)
+
+
+def test_work_written_while_the_tree_update_runs_is_never_rolled_back(repos, monkeypatch):
+    repo, other = repos
+    commit(repo, "a.txt", "one\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    commit(other, "a.txt", "ONE\n")
+    merged(other)
+    guard = pullback._guard  # noqa: SLF001 - the last step before mutation
+
+    def edit_after_guard(wt, paths, *, fold):
+        found = guard(wt, paths, fold=fold)
+        (repo / "a.txt").write_text("mine\n")
+        (repo / "b.txt").write_text("also mine\n")
+        return found
+
+    monkeypatch.setattr(pullback, "_guard", edit_after_guard)
+    head = git(repo, "rev-parse", "HEAD")
+    result = pullback.run(repo, "main", NOW)
+    assert result.state == "behind"
+    assert "appeared during pull-back and were kept" in result.reason
+    assert ((repo / "a.txt").read_text(), (repo / "b.txt").read_text()) == ("mine\n", "also mine\n")
+    assert git(repo, "rev-parse", "HEAD") == head
+
+
+def test_a_ref_that_fails_to_move_puts_the_local_copy_back(repos, monkeypatch):
+    repo, other = repos
+    (repo / ".gitignore").write_text("edited\n")
+    real, before = pullback.pullback_replay.git, full(repo)
+
+    def locked(path, *args):
+        if args[:1] == ("update-ref",):
+            return subprocess.CompletedProcess(args, 1, "", "fatal: cannot lock ref 'refs/heads/main'\n")
+        return real(path, *args)
+
+    monkeypatch.setattr(pullback.pullback_replay, "git", locked)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "the local copy was put back" in result.reason) == ("behind", True)
+    assert full(repo) == before
+
+
+def test_a_switch_to_a_branch_containing_the_merge_does_not_count_as_updated(repos, monkeypatch):
+    repo, other = repos
+    head, real = git(repo, "rev-parse", "HEAD"), pullback.holders
+
+    def switch_after(path, target):
+        found = real(path, target)
+        git(repo, "switch", "-q", "-c", "other", "origin/main")
+        return found
+
+    monkeypatch.setattr(pullback, "holders", switch_after)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, result.reason) == ("behind", f"local main is behind: main is no longer checked out in {repo}")
+    assert git(repo, "rev-parse", "main") == head
+
+
+def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypatch):
+    repo, other = repos
+    commit(repo, "local.txt")
+    real, left = pullback.pullback_replay.git, []
+
+    def stuck(path, *args):
+        if args[:2] in {("worktree", "remove"), ("worktree", "prune")}:
+            left.append(args[-1])
+            return subprocess.CompletedProcess(args, 1, "", "fatal: busy\n")
+        return real(path, *args)
+
+    monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
+    monkeypatch.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    monkeypatch.undo()
+    git(repo, "worktree", "remove", "--force", left[0])
+    assert result.state == "updated"
+    assert "was not removed" in result.reason
+
+
+def test_a_filesystem_error_leaves_the_target_behind(repos, monkeypatch):
+    repo, other = repos
+    commit(repo, "local.txt")
+    before = full(repo)
+
+    def full_disk(*_args, **_kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(pullback.pullback_replay.tempfile, "mkdtemp", full_disk)
+    merged(other)
+    result = pullback.run(repo, "main", NOW)
+    assert (result.state, "No space left" in result.reason) == ("behind", True)
+    assert full(repo) == before

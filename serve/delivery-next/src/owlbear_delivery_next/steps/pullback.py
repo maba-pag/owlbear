@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 _IN_PROGRESS = ("MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
 _HELD = ("rebase-merge/head-name", "rebase-apply/head-name", "BISECT_START")
-_FAILURES = (subprocess.TimeoutExpired, RemoteGitError, BehindError)
+_FAILURES = (subprocess.TimeoutExpired, RemoteGitError, BehindError, OSError)
 
 
 def _held(path: str) -> str | None:
@@ -172,7 +172,11 @@ def _pull(wt: Path, target: str) -> tuple[str, str]:
     """
     if reason := _busy(wt):
         raise BehindError(reason)
-    ref, old = f"refs/heads/{target}", must(wt, "rev-parse", "--verify", "HEAD").strip()
+    ref = f"refs/heads/{target}"
+    if git(wt, "symbolic-ref", "-q", "HEAD").stdout.strip() != ref:
+        msg = f"{target} is no longer checked out in {wt}"
+        raise BehindError(msg)
+    old = must(wt, "rev-parse", "--verify", f"{ref}^{{commit}}").strip()
     remote = must(wt, "rev-parse", "--verify", f"origin/{target}^{{commit}}").strip()
     if engine.contains(wt, remote, old):
         return "updated", "already up to date"
@@ -185,9 +189,10 @@ def _pull(wt: Path, target: str) -> tuple[str, str]:
     if base == old:
         return _checked(wt, "fast-forwarded", pullback_replay.apply(wt, ref, old, remote, guard))
     count = must(wt, "rev-list", "--count", f"{base}..{old}").strip()
-    new = pullback_replay.replay(wt, base, old, remote)
+    new, note = pullback_replay.replay(wt, base, old, remote)
     before = pullback_replay.apply(wt, ref, old, new, guard)
-    return _checked(wt, f"replayed {count} local commits onto the merged change", before)
+    state, reason = _checked(wt, f"replayed {count} local commits onto the merged change", before)
+    return state, "; ".join(filter(None, (reason, note)))
 
 
 def _ref_only(repo: Path, target: str) -> tuple[str, str]:
