@@ -41,7 +41,7 @@ def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
     person = next((p for p in c.checks if p.id == e.check), None)
     known = person is not None or e.check == VISUAL
     stale = (c.step.kind, c.step.task) != (StepKind.CHECK, e.check)
-    if c.finished_at or not known or stale or loop.usage_gated(c):  # a gated check relaunches on its rerun
+    if c.finished_at or not known or stale or loop.owner_gated(c):  # a gated check relaunches on its rerun
         return "dispose"
     if person is None:
         if c.intent.abandoned_at or c.stop is not None:

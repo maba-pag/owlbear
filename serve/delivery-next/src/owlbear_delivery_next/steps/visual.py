@@ -304,29 +304,61 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     raised = [f"{e.state} at {e.width}px: new {e.kind} error: {e.text[:300]}" for e in new]
     if not found and verdict is not None:
         found = [*raised, *(f"{f.place}: {f.problem} - fix: {f.fix}" for f in verdict.findings)]
-        if verdict.verdict != "pass" and not verdict.findings:
+        if verdict.verdict == "fix" and not verdict.findings:
             found.append("the reviewer did not accept the screenshots")
     elif not found:
         found = [*raised, "the screenshots were not judged"]
     else:
         found += raised  # a failed shot does not hide the errors the others raised
+    doubts = [f"{d.place}: {d.question}" for d in getattr(verdict, "doubts", [])] if not found else []
     passed = not found and verdict is not None and verdict.verdict == "pass"
     files = [s.file for s in shots if s.file]
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     c.visual = VisualResult(
         head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=passed, findings=found,
-        errors=errors, at=now,
+        errors=errors, doubts=doubts, at=now,
     )  # fmt: skip
     if passed:
         reason = f"visual check of {head[:7]} passed: {len(files)} screenshots"
         return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))
+    if doubts:  # nothing is definitely wrong; only the owner can decide (N6)
+        return c, _ask_owner(head, doubts)
     shot = next((s for s in shots if s.error), None) or next((s for s in shots if s.file), None)
     named = f" (see {shot.file or f'{shot.state} at {shot.width}px'})" if shot else ""
-    title = f"Fix: the visual check of {head[:7]} failed: {found[0][:200]}{named}"
-    parts = review.pack([f"- {f}" for f in found])
+    return c, _repair(c, f"Fix: the visual check of {head[:7]} failed: {found[0][:200]}{named}", found)
+
+
+def _repair(c: Change, title: str, lines: Sequence[str]) -> StepResult:
+    """Back to build with every line in repair tasks, packed, none cut."""
+    parts = review.pack([f"- {f}" for f in lines])
     fix = engine.task(c, title, "review", parts[0])
     more = [engine.task(c, title, "review", d, f"t{int(fix.id[1:]) + i}") for i, d in enumerate(parts[1:], 1)]
     cause = cause_key(ErrorKind.CHECKS, StepKind.CHECK, VISUAL)
-    return c, StepResult(
-        exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=title, fix_task=fix, more_fixes=more
-    )
+    return StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=title, fix_task=fix, more_fixes=more)
+
+
+def _ask_owner(head: str, doubts: Sequence[str]) -> StepResult:
+    """The reviewer could not decide; the merge waits for the owner's answer about this capture (N6)."""
+    text = f"The visual reviewer is unsure about the capture of {head[:7]}: {'; '.join(doubts)[:1500]}"
+    options = [
+        Option(id="accept", label="The screenshots are right: accept them", next="accept"),
+        Option(id="repair", label="Have it repaired (say what is wrong)", next="repair"),
+        Option(id="pause", label="Pause", next="pause"),
+    ]
+    return engine.ask(StepKind.CHECK, text, cause_key(ErrorKind.REVIEW, StepKind.CHECK, "visual-unsure"), options)
+
+
+def decided(c: Change, head: str, tree_id: str) -> tuple[Change, StepResult] | None:
+    """The owner's answer to the reviewer's doubts, applied only to the exact capture it was about."""
+    v = c.visual
+    if v is None or v.decision is None or v.passed:
+        return None
+    states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
+    if (v.head, v.tree, v.states, v.criteria) != (head, tree_id, states, criteria):
+        return None  # the Change moved on; the capture is taken and judged again
+    if v.decision == "accept":
+        c.visual = v.model_copy(update={"passed": True})
+        reason = f"visual check of {head[:7]} accepted by the owner: {len(v.files)} screenshots"
+        return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))
+    lines = [*v.doubts, *([f"owner: {v.note}"] if v.note else [])]
+    return c, _repair(c, f"Fix: the owner rejected the visual check of {head[:7]}", lines)

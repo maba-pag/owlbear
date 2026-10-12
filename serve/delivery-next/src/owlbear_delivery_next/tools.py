@@ -129,6 +129,27 @@ class ReviewResult(Args):
     )
 
 
+class Doubt(Args):
+    """One screenshot the reviewer cannot judge, and what only the owner can decide about it."""
+
+    place: str = _f(300, "The screenshot file name", "home-1280.png")
+    question: str = _f(500, "What you cannot decide from the brief", "Is the greeting meant to wrap at 1280px?")
+
+
+class VisualReviewResult(ReviewResult):
+    """``submit_result`` for the visual review: a reviewer who cannot decide says so (N6)."""
+
+    verdict: Literal["pass", "fix", "unsure"] = Field(  # type: ignore[assignment]
+        description="pass, fix for a definite problem, or unsure when only the owner can decide", examples=["pass"]
+    )
+    doubts: list[Doubt] = Field(
+        default_factory=list,
+        max_length=10,
+        description="For unsure: each screenshot you cannot judge and why; empty otherwise",
+        examples=[[{"place": "home-1280.png", "question": "Is the greeting meant to wrap at 1280px?"}]],
+    )
+
+
 class CheckRecipe(Args):
     """``submit_result`` for check preparation: how the host starts the environment the owner checks."""
 
@@ -307,6 +328,9 @@ PREMISE = Spec(
 )
 SPECS = (SUBMIT, ASK, PREMISE)
 REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")
+VISUAL_REVIEW = Spec(
+    "submit_result", "Submit your verdict once, after looking at each screenshot.", VisualReviewResult, "result"
+)
 RECIPE = Spec(
     "submit_result",
     "Submit the verified launch recipe once, after you stopped everything you started.",
@@ -431,6 +455,8 @@ def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) 
         errors.append("findings: empty - a fix verdict names each problem with place, problem and fix")
     if review.verdict == "pass" and review.findings:
         errors.append("verdict: pass with findings - use fix, or drop findings that need no change")
+    if review.verdict == "unsure" and not getattr(review, "doubts", None):
+        errors.append("doubts: empty - an unsure verdict names each screenshot and what you cannot decide")
     if visual and (missing := sorted(set(tree.changed) - set(review.covered_paths))):
         errors.append(f"covered_paths: missing {_few(missing)} - look at every screenshot and list it")
     return errors

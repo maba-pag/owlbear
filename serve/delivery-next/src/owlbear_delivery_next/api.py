@@ -320,6 +320,8 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
             raise HTTPException(403, T6)
         if body.option is not None and body.option not in {o.id for o in q.options}:
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
+        if body.option is None and {o.next for o in q.options} & loop.DECISIONS - {"retry"}:
+            raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")
         item = AnswerItem(at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text)
         return put(slug, item)
 

@@ -125,6 +125,9 @@ class VisualResult(Record):
     files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
     widths: list[int] = Field(default_factory=list)  # the desktop widths captured; a before's fix the after's
     errors: list[PageError] = Field(default_factory=list)  # every console and page error the capture saw
+    doubts: list[str] = Field(default_factory=list)  # what the reviewer could not decide (N6)
+    decision: Literal["accept", "repair"] | None = None  # the owner's answer to those doubts, for this capture only
+    note: str = ""  # what the owner said with that answer
     passed: bool = False
     findings: list[str] = Field(default_factory=list)
     at: datetime
@@ -194,7 +197,7 @@ class Option(Record):
 
     id: str
     label: str
-    next: StepKind | Literal["done", "pause", "abandon", "retry"] | None = None
+    next: StepKind | Literal["done", "pause", "abandon", "retry", "accept", "repair"] | None = None
 
 
 class Answer(Record):

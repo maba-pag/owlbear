@@ -198,8 +198,8 @@ def _reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session
     return _review_run(store, lock, change, cfg, label)[0]
 
 
-def _review_run(
-    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str
+def _review_run(  # noqa: PLR0913 - the visual review has its own result schema
+    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str, *, submit: tools.Spec = tools.REVIEW
 ) -> tuple[Result, session_result.Run]:
     """The reviewer session's verdict and its run, whose payload is the submitted review."""
     role = roles.chosen(store.settings(), label)
@@ -208,7 +208,7 @@ def _review_run(
         kind=StepKind.REVIEW,
         session_id=f"{lock.slug}-{label}-{uuid.uuid4().hex[:8]}",
         resume=False,
-        submit=tools.REVIEW,
+        submit=submit,
         checks=(),
         model=role.model,
         effort=role.effort,
@@ -230,6 +230,9 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     try:
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
+        if owned := visual.decided(change, head, tree):  # the owner answered the reviewer's doubts (N6)
+            store.write(lock, loop.apply(owned[0], owned[1], datetime.now(UTC)))
+            return
         widths = (change.before.widths if change.before else None) or store.settings().widths  # pairs with before
         shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths))
     except visual.BrowserMissingError as exc:
@@ -255,7 +258,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
                 attachments=visual.attachments(out, shots),
             )
-            result, run = _review_run(store, lock, change, cfg, "visual-review")
+            result, run = _review_run(store, lock, change, cfg, "visual-review", submit=tools.VISUAL_REVIEW)
             stopped = result.exit == Exit.STOP  # a session that did not end cleanly outranks its verdict
             judgement = run.payload if isinstance(run.payload, tools.ReviewResult) and not stopped else None
         if judgement is not None or result is None:

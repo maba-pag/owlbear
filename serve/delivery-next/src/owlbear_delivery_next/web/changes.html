@@ -316,10 +316,14 @@ function image(slug, kind, name, at, alt) {
 }
 
 function visualSection(slug, v, b, existing) {
-  const verdict = el("p-tag", v.passed ? "Passed" : "Failed", { variant: v.passed ? "success" : "error" });
+  const state = v.passed ? ["Passed", "success"] : v.doubts.length ? ["Undecided", "warning"] : ["Failed", "error"];
+  const verdict = el("p-tag", state[0], { variant: state[1] });
   const title = text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" });
   const box = panel("Before and after", row(title, verdict));
   if (v.findings.length) box.append(list(v.findings));
+  if (v.doubts.length) {
+    box.append(text("The reviewer could not decide:", { size: "xs" }), list(v.doubts));
+  }
   if (existing.length) {
     box.append(text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" }));
   }

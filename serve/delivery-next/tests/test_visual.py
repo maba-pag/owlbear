@@ -277,6 +277,29 @@ def test_the_review_cap_keeps_each_shots_errors(tmp_path):
     assert visual.capped(tmp_path, [shot])[0].errors == (err("boom"),)
 
 
+def test_doubt_is_only_offered_when_nothing_is_definitely_wrong(clone):
+    head = commit(clone, "web/app.css")
+    good = [visual.Shot("home", 1280, "home-1280.png")]
+    c, result = visual.judged(change(clone), head, "t", good, verdict=unsure(), now=NOW)
+    assert (result.exit, c.visual.passed, result.question.options[0].next) == (Exit.ASK, False, "accept")
+    noisy = [visual.Shot("home", 1280, "home-1280.png", errors=(err("boom", kind="page"),))]
+    c, result = visual.judged(change(clone), head, "t", noisy, verdict=unsure(), now=NOW)
+    assert (result.exit, c.visual.findings) == (Exit.BACK, ["home at 1280px: new page error: boom"])
+    broken = [visual.Shot("home", 1280, error="/ answered 500")]
+    assert visual.judged(change(clone), head, "t", broken, verdict=unsure(), now=NOW)[1].exit == Exit.BACK
+
+
+def test_only_the_visual_review_may_be_unsure_and_it_must_say_why():
+    tree = tools.Worktree("h", "b", changed=("home-1280.png",))
+    bare = tools.VisualReviewResult(verdict="unsure", covered_paths=["home-1280.png"])
+    assert tools.check_review(bare, tree, visual=True) == [
+        "doubts: empty - an unsure verdict names each screenshot and what you cannot decide"
+    ]
+    assert tools.check_review(unsure(), tree, visual=True) == []
+    with pytest.raises(ValidationError):
+        tools.ReviewResult(verdict="unsure")
+
+
 def test_a_failed_shot_keeps_the_new_errors_in_the_findings_and_long_details_split_not_cut(clone):
     head = commit(clone, "web/app.css")
     shots = [visual.Shot("home", 1280, error="/ answered 500", errors=(err("boom", kind="page"),))]
@@ -311,7 +334,13 @@ class FakeReview:
 
     async def __call__(self, cfg):
         self.calls.append(cfg)
-        return Run(cfg.session_id, ending="result", payload=rv(self.verdict), termination=self.termination)
+        payload = unsure() if self.verdict == "unsure" else rv(self.verdict)
+        return Run(cfg.session_id, ending="result", payload=payload, termination=self.termination)
+
+
+def unsure():
+    doubt = {"place": "home-1280.png", "question": "Is the greeting meant to wrap at 1280px?"}
+    return tools.VisualReviewResult(verdict="unsure", doubts=[doubt], covered_paths=["home-1280.png"])
 
 
 def checking(store, clone):
@@ -399,6 +428,50 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
     assert merge.visual_ok(after, head, [])
 
 
+def test_an_unsure_reviewer_makes_the_owner_decide_and_acceptance_holds_only_for_that_capture(flow):
+    flow.review.verdict = "unsure"
+    c = checking(flow.store, flow.clone)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    q = loop.open_question(asked)
+    assert (asked.visual.passed, asked.visual.doubts, [o.next for o in q.options]) == (
+        False,
+        ["home-1280.png: Is the greeting meant to wrap at 1280px?"],
+        ["accept", "repair", "pause"],
+    )
+    assert not loop.ordinary(q)  # a Changes-page decision (T6)
+    assert check.action(asked, live=False, paths={}) == "dispose"  # nothing relaunches before the owner answers
+    for empty in (AnswerItem(at=NOW, question=q.id), AnswerItem(at=NOW, question=q.id, text="hmm")):
+        still, step = loop.schedule(asked, [empty], NOW)
+        assert (step, loop.open_question(still).id, still.visual.decision) == (None, q.id, None)
+    client = TestClient(
+        api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    refused = client.post("/api/next/changes/c1/answers", json={"question": q.id, "text": "hmm"})
+    assert (refused.status_code, "choose one of" in refused.json()["detail"]) == (422, True)
+    accepted, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
+    assert (accepted.visual.decision, step) == ("accept", accepted.step)
+    flow.store.write(Lock("c1"), accepted)
+    runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
+    done = flow.store.read("c1")
+    head = git(flow.clone, "rev-parse", "HEAD")
+    assert (len(flow.review.calls), done.visual.passed, done.step.kind) == (1, True, StepKind.MERGE)
+    assert merge.visual_ok(done, head, [])
+
+
+def test_an_acceptance_never_passes_a_capture_of_another_head(flow):
+    flow.review.verdict = "unsure"
+    c = checking(flow.store, flow.clone)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=asked.outcome.question, option="accept")], NOW)
+    flow.store.write(Lock("c1"), accepted)
+    commit(flow.clone, "web/app.css", "moved\n")
+    flow.review.verdict = "pass"
+    runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
+    assert len(flow.review.calls) == 2  # captured and judged again at the new head
+
+
 def test_a_verdict_whose_usage_stayed_unread_is_never_recorded_and_the_owner_reruns_the_check(flow):
     c = checking(flow.store, flow.clone)
     plain = flow.review.__call__
@@ -439,7 +512,7 @@ def test_the_reviewer_must_cover_every_screenshot(flow):
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     st = sdk_adapter._Step(flow.review.calls[0], SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     args = {"verdict": "pass", "findings": [], "covered_paths": ["home-1280.png"]}
-    reply = st._handle(tools.REVIEW, SimpleNamespace(arguments=args))  # noqa: SLF001
+    reply = st._handle(st.cfg.submit, SimpleNamespace(arguments=args))  # noqa: SLF001
     assert "home-1920.png" in str(reply)
     assert st.run.payload is None
 

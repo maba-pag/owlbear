@@ -257,7 +257,8 @@ def visual(
             (
                 "Findings only for a screenshot that does not show what its state expects, or a layout that is "
                 "broken at that width (overlap, cut-off or unreadable content). Place: the screenshot file name. "
-                "covered_paths: every screenshot file name you looked at."
+                "covered_paths: every screenshot file name you looked at. If only the owner can decide whether a "
+                "screenshot is right, use verdict unsure with a doubt per screenshot instead of guessing."
             ),
             "",
             "## Finish",

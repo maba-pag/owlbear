@@ -127,6 +127,15 @@ def usage_gated(c: Change) -> bool:
     return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
 
 
+DECISIONS = frozenset({"retry", "accept", "repair"})  # engine decisions an answer can only choose, never type
+
+
+def owner_gated(c: Change) -> bool:
+    """An open question only the owner settles by choosing an option; the step's environment waits for it."""
+    q = open_question(c)
+    return bool(q and q.options and {o.next for o in q.options} & DECISIONS)
+
+
 def brief_ready(c: Change) -> bool:
     """Planning starts only from the approved current brief version its reviewer judged (J2)."""
     b = c.brief
@@ -256,6 +265,12 @@ def _intent(c: Change, item: IntentItem) -> None:
             c.intent.words, c.intent.hold = item.text, True
 
 
+def _visual_decision(c: Change, decision: str, note: str) -> None:
+    """Record the owner's answer to the visual reviewer's doubts on the capture it was about (N6)."""
+    if c.visual and c.visual.doubts and not c.visual.passed:
+        c.visual = c.visual.model_copy(update={"decision": decision, "note": note})
+
+
 def _target(q: Question, option: str | None) -> str | None:
     """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
     if q.options and all(o.next == "retry" for o in q.options):
@@ -268,16 +283,17 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     if q is None:
         return
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
+    target = _target(q, item.option)
+    if target is None and {o.next for o in q.options} & DECISIONS:
+        q.answer = None  # such a question is settled only by one of its options
+        return
     gate = bool(c.outcome and c.outcome.question == q.id)
     if gate:
         c.outcome = None
-    target = _target(q, item.option)
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
-    if target == "retry":
-        q.effect_observed_at = item.at  # the answer is never resumed into the session it rejected
-        if gate:
-            go(c, c.step.kind, c.step.task, c.step.mode)
+    if target in {"retry", "accept", "repair"}:
+        _decided(c, q, item, target, gate=gate)
     elif target == "pause":
         c.intent.paused_at, c.intent.pause_reason = now, q.text
     elif target == "done":
@@ -286,6 +302,17 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         c.intent.abandoned_at = item.at
     elif target is not None:
         enter(c, StepKind(target))
+
+
+def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: bool) -> None:
+    """An engine decision about the open step; its answer is never resumed into a worker session."""
+    q.effect_observed_at = item.at
+    if not gate:
+        return  # the Change moved on since it asked
+    if target == "retry":
+        go(c, c.step.kind, c.step.task, c.step.mode)
+    else:
+        _visual_decision(c, target, item.text)
 
 
 def answer_delivered(change: Change, question_id: str, now: datetime) -> Change:
