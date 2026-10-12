@@ -763,7 +763,9 @@ throwaway folders and are cleaned up.
 9. **C7 attachments**, bounded by the measured limits. Proof: one real Sol screenshot review in a
    window. Normal runs stay where they are (TD-50, R4).
 
-**Deferred to the owner:** where the global config file lives; any rule allowing subagent models
+**Deferred to the owner:** where the global config file lives (once decided, the runners must read
+the same global layer the settings page edits; today the host passes none, so global saves are
+refused); any rule allowing subagent models
 beyond each agent's own; how the old `runtime=vscode` setting migrates, given TD-50; plus watcher
 design and model, benchmark choices, switching routing on, and watching SDK steps.
 
