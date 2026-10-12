@@ -549,6 +549,107 @@ Research questions from the readings (step 3), on top of the unknowns U1 to U5:
   read when needed, and how big is the risk that a needed skill goes unread? The owner wants
   research plus the assistant's and Sol's opinions.
 
+### 3.13 Runtime, tools and visibility: design draft, 2026-10-12
+
+Draft for Sol's challenge and the owner's approval; not a decision. It builds on TD-34, TD-35,
+TD-36, TD-48 and TD-49, readings R1 to R8, and runtime research P10 to P18.
+
+**Runtimes.** A catalogue on the config page; each entry can be switched off.
+
+| Runtime | What it is | Tools beyond the shared baseline | MCP servers | Live view for the owner | Outside-write control |
+| --- | --- | --- | --- | --- | --- |
+| `sdk` | Copilot runtime process Delivery starts | none | only those Delivery passes (K2) | no (VS Code shows a snapshot at most, K4) | Delivery's hard guard (TD-45) |
+| `window` | Chat in a VS Code window, started per TD-48 | window tools: browser, tasks, problems | owner's VS Code `mcp.json` | yes | the watcher (D6) |
+
+- The shared baseline is the runtime's own tools (files, edit, shell) and Delivery's result tools.
+- Left out:
+  - an agent-host session without a window: TD-35 puts visible steps in windows, and nothing else needs it;
+  - the CLI: the same engine as the SDK;
+  - cloud: not examined.
+- Unknown and to be measured at build: whether both runtimes offer the same models and web search.
+
+**Tool categories (R5).** Baseline always. Extra categories are coarse; today only `browser`
+(TD-49's exploring reviewer), provided by `window`.
+- The agent file lists the most the agent may ever use (R3).
+- A step's allowlist is the baseline plus the agent's default categories and its task's additions.
+- Delivery passes that allowlist per step:
+  - SDK: `available_tools`;
+  - window: the `tools:` line of the agent file Delivery writes per step, which works for runtime
+    tools (K5).
+- Open: whether `tools:` also filters a window's own tools and MCP tools. TD-35 accepts window tools
+  "if that works"; the build tests it first.
+
+**Agent definitions (Q-A, Q-B), the assistant's opinion.**
+- Q-A: model, effort and context size leave the agent files and live in OwlBear's config, per agent
+  (R3). They are passed per session (SDK) or per message (window), which both runtimes support (P15).
+  - Context size maps to the window's `contextSize` and the SDK's `context_tier` (`long_context`),
+    so the SDK has only two choices. To be confirmed at build.
+  - The tool list stays in the agent file as the maximum (R3). Delivery narrows it per step.
+- Q-B: one source file per agent.
+  - Its core text names only baseline tools.
+  - Instructions for an extra category live in a skill that Delivery preloads only when the step
+    has that category: the SDK's per-agent `skills`, or written into the window's per-step agent
+    file.
+  - So there are no near-identical files to maintain, no extra context in the ~80% of steps
+    without the category, and no "read when needed" risk, since the skill is loaded exactly when
+    its tools are present.
+  - Evidence so far: in K5 an agent asked for an absent tool said so and stopped.
+  - R4's quality question is measured in the N2 benchmark: the same tasks with and without a
+    category.
+
+**Visibility (TD-35, R1).** A step is visible if its agent "needs visibility" (config, e.g. roles that
+ask the owner, D4), its Change is "always visible" (a toggle on the Changes page), or the global
+switch is on (config page). Visible steps run in `window`. Changes apply from the next session.
+
+**Routing (TD-34).** A step runs in its agent's default runtime, unless:
+- it is visible: then `window`;
+- its allowlist needs a category the default runtime lacks: then the first enabled runtime that has
+  it.
+
+If no enabled runtime fits, TD-36's "needs the owner's setup" case applies: enable a runtime.
+
+**Missing tools (TD-36).**
+- The prompt's "if something you need is missing, call `ask_question`" is replaced by a "missing
+  tool" result: the tool or category, and what failed.
+- Delivery decides the case:
+  - temporary error: retry now, then once later;
+  - in another enabled runtime: one rerun there;
+  - owner setup: a decision request naming the action;
+  - nowhere: back to planning, which changes the task.
+- Guard denials stay denials.
+
+**Screenshots (TD-49).**
+- Widths come from config: default 1280, 1920, 2400; none below 1280.
+- Recipe states may contain clicks and typing before the shot.
+- Playwright collects console errors and page errors for "before" and "after". Errors new since
+  "before" fail the check (R8).
+- The reviewer gets images and errors. A task may add `browser` for the reviewer.
+
+**Window start (TD-48)** as recorded.
+
+**Config page (R3).** A new page in Delivery's web UI, beside `changes.html`:
+- the global visibility switch;
+- runtimes on or off, with their catalogue rows;
+- per agent: needs visibility, default runtime, model, effort, context size, default categories;
+- a runtime picker showing the tools it adds over the baseline, and the agent's listed tools it
+  lacks.
+
+Today the profile holds per-project role models (`Profile.roles`) and one global `runtime` switch;
+both move into this structure.
+
+**Open for the owner:** whether the config page's values are global, per project, or global with
+per-project overrides.
+
+**Build order (proposal).**
+1. Config structure and page.
+2. Routing and allowlists.
+3. TD-48 window start, with the window-tool filter test.
+4. The missing-tool result.
+5. TD-49 capture changes.
+6. C7 attachments.
+
+The watcher (N1) comes after these, per §3.12 phase 3, and must cover both runtimes.
+
 ## 4. Recommendation, Confidence, and Limits
 
 **Recommendation:** treat this as a re-founding with the weight on design. Let the open Changes
