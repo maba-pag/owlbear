@@ -268,6 +268,9 @@ A denial by Delivery's guard never leads to more tools (R6) | `decided`: chose "
 - The proof covers Opus, Sol and a full step.
 
 Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `autonomous`: the owner chose "take your recommendation" among four variants and the TD-41 closing options. The assistant picked "as recorded, made complete" because it is the only fully tested variant (sign-in plus wait, 3 of 3 runs). A restart cannot undo a turn already billed to another model, and the cancelled first turn starts on the window's model. Risk: a later drop of the model list stops the step. The original choice of 2026-10-11 came from a question that carried a recommendation mark, against TD-41 | 2026-10-12 |
+| TD-50 | Watching and the SDK guard: until the watcher exists, steps that normally run in the SDK cannot be watched. Afterwards watching may change only how writes outside the worktree are controlled (the guard in the SDK, the watcher in a window); everything else stays the same | `decided`: chose "Until the watcher exists, steps that normally run in the SDK can't be watched; afterwards, as in the first option" among four options and the TD-41 closing options | 2026-10-12 |
+| TD-51 | Page errors (uncaught exceptions) count as console errors in the visual check: new ones fail, existing ones are reported | `decided`: chose "Page errors count as console errors: new ones fail, existing ones are reported" among three options and the closing options | 2026-10-12 |
+| TD-52 | Config values are global, with overrides per project for single values | `decided`: chose "Global with overrides per project: one config for all projects; a project may override single values" among three options and the closing options | 2026-10-12 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
@@ -589,10 +592,10 @@ TD-35, TD-36, TD-48 and TD-49, readings R1 to R8, and runtime research P10 to P1
 - Open: which names each runtime's allowlist uses. The SDK allowlist covers built-in, MCP and
   Delivery's tools; K5 showed four runtime tools that are always present. The build maps categories
   to concrete names per runtime.
-- **Tension for the owner:** R5 says a watched step behaves exactly as unwatched, "permissions"
-  included. But a visible step runs in `window`, which has no SDK guard (TD-45); there the watcher
-  governs outside writes (D6, TD-46). A watched step that would otherwise run in the SDK therefore
-  loses the hard guard.
+- **Settled by TD-50:** R5 says a watched step behaves exactly as unwatched, "permissions" included,
+  but a visible step runs in `window`, which has no SDK guard (TD-45). Until the watcher exists, steps
+  that normally run in the SDK cannot be watched. Afterwards watching may change only how writes
+  outside the worktree are controlled.
 
 **Agent definitions (Q-A, Q-B), the assistant's opinion.**
 - Q-A: model, effort and context size leave the agent files and live in OwlBear's config, per agent
@@ -663,8 +666,7 @@ If no enabled runtime fits, Delivery tells the cases apart:
 - Recipe states may contain clicks and typing before the shot.
 - Playwright collects console errors for "before" and "after". Errors new since "before" fail the
   check; existing ones are reported (R8).
-  - Proposal beyond R8: uncaught page errors (exceptions) count as console errors. The owner
-    decides at approval.
+  - Uncaught page errors count as console errors (TD-51).
 - The reviewer gets images and errors. A task may add `browser` for the reviewer.
 - When the reviewer is unsure about a state, the merge waits for the owner (N6).
 - Screenshots reach a reviewer in `window` as attachments (C7), before visible visual reviews are
@@ -689,10 +691,8 @@ Both move into this structure, and the migration keeps every effective role sett
 - The whole-Change visual review takes the categories of TD-49 (`browser` only when a task asks for
   it).
 
-**Open for the owner:**
-- the R5 permission tension above;
-- page errors (Screenshots);
-- whether the config values are global, per project, or global with per-project overrides.
+**Settled since the draft:** TD-50 (watching and the guard), TD-51 (page errors), TD-52 (config is
+global with per-project overrides).
 
 **Build order (proposal, after Sol).**
 1. Facts that gate routing:
