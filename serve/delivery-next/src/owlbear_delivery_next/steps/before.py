@@ -23,7 +23,7 @@ from owlbear_delivery_next.models import VISUAL, Environment, StepKind, VisualRe
 from owlbear_delivery_next.steps import check, visual, worktree
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.profile_record import Profile
@@ -80,8 +80,8 @@ def _remove(repo: Path, tmp: Path) -> None:
             step()
 
 
-def _serve(
-    c: Change, root: Path, out: Path, log: Callable[[dict[str, Any]], None], notes: list[str]
+def _serve(  # noqa: PLR0913 - the widths come from the settings
+    c: Change, root: Path, out: Path, log: Callable[[dict[str, Any]], None], notes: list[str], *, widths: Sequence[int]
 ) -> list[visual.Shot]:
     """Launch the Change's recipe in *root*, capture its states once it answers, dispose of it whatever happens."""
     r = c.env
@@ -103,14 +103,20 @@ def _serve(
             return []
         e = e.model_copy(update={"pids": pids})
         _journal(log, pids)
-        return visual.CAPTURE(visual.root(e.ready_url), c.brief.visual, out)
+        return visual.CAPTURE(visual.root(e.ready_url), c.brief.visual, out, widths)
     finally:
         if left := check.dispose(e):
             notes.append(f"preview processes {sorted(left)} did not stop")
 
 
-def capture(
-    c: Change, repo: Path, out_for: Callable[[str], Path], profile: Profile, log: Callable[[dict[str, Any]], None]
+def capture(  # noqa: PLR0913 - the capture's widths come from the settings, like the visual check's
+    c: Change,
+    repo: Path,
+    out_for: Callable[[str], Path],
+    profile: Profile,
+    log: Callable[[dict[str, Any]], None],
+    *,
+    widths: Sequence[int],
 ) -> VisualResult:
     """Render the brief's states at the merge-base; the findings say why any state is missing (B25)."""
     path, now, e = Path(c.names.worktree), datetime.now(UTC), c.env
@@ -135,7 +141,7 @@ def capture(
                 notes.append(note)
                 break
         else:
-            shots = _serve(c, tmp, out, log, notes)
+            shots = _serve(c, tmp, out, log, notes, widths=widths)
     except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
         notes.append(f"{type(exc).__name__}: {exc}"[:300])
     finally:
@@ -144,4 +150,4 @@ def capture(
     notes += [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error]
     states = {s.name: s.version for s in c.brief.visual}
     files = [s.file for s in shots if s.file]
-    return VisualResult(head=base, tree=tree, states=states, files=files, findings=notes, at=now)
+    return VisualResult(head=base, tree=tree, states=states, files=files, widths=list(widths), findings=notes, at=now)

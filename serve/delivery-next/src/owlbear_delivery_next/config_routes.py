@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.store import Store
 
-APPLIED = ["agents.*.effort", "agents.*.model"]  # the settings Delivery uses today; the page marks the rest
+APPLIED = ["agents.*.effort", "agents.*.model", "widths"]  # the settings Delivery uses today; the page marks the rest
 # What each runtime offers beyond the shared baseline (runtime research P15 to P19); shown, not used for routing yet.
 CATALOGUE: dict[str, Any] = {
     "baseline": "the runtime's own tools (files, edit, shell) and Delivery's result tools",

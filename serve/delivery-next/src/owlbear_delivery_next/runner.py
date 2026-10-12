@@ -230,7 +230,8 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     try:
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
-        shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out))
+        widths = (change.before.widths if change.before else None) or store.settings().widths  # pairs with before
+        shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths))
     except visual.BrowserMissingError as exc:
         result = visual.missing_browser(str(exc))
     except Exception as exc:  # noqa: BLE001 - a capture error is never a pass
@@ -266,6 +267,7 @@ def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         lambda base: store.before_dir(change.slug, base),
         store.read_profile() or Profile(),
         lambda e: store.log(lock, change.slug, e),
+        widths=store.settings().widths,
     )
     store.write(lock, change)
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))

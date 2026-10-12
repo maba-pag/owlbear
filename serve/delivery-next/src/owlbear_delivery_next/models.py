@@ -112,6 +112,7 @@ class VisualResult(Record):
     states: dict[str, int] = Field(default_factory=dict)  # state name -> version judged
     criteria: dict[str, int] = Field(default_factory=dict)  # criterion id -> version judged
     files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
+    widths: list[int] = Field(default_factory=list)  # the desktop widths captured; a before's fix the after's
     passed: bool = False
     findings: list[str] = Field(default_factory=list)
     at: datetime

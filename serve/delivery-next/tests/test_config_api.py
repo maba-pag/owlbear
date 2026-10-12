@@ -43,7 +43,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
     assert got["settings"]["sources"]["agents.builder.model"] == "default"
-    assert got["applied"] == ["agents.*.effort", "agents.*.model"]
+    assert got["applied"] == ["agents.*.effort", "agents.*.model", "widths"]
     assert len(got["project_rev"]) == 64
 
 

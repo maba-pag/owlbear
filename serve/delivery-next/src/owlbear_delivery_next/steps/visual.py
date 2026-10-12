@@ -35,7 +35,7 @@ UI_SUFFIXES = frozenset(
     | {".mdx", ".svg"}
 )
 UI_DIRS = frozenset({"components", "pages", "views", "templates", "layouts", "styles", "static", "public"})
-VIEWPORTS = ((1280, 800), (390, 844))
+HEIGHT = 800  # px of each desktop viewport; the widths come from the settings (TD-49, R7)
 MAX_HEIGHT = 6000  # px per capture; the width is the viewport's
 MAX_BYTES = 12 * 2**20  # screenshot bytes attached to one review
 SETTLE_MS = 15_000
@@ -62,13 +62,13 @@ class Shot:
     error: str = ""
 
 
-type Capturer = Callable[[str, Sequence[VisualState], Path], list[Shot]]
+type Capturer = Callable[[str, Sequence[VisualState], Path, Sequence[int]], list[Shot]]
 
 
 def capture(  # noqa: C901 - one finding per failure of the nested shot
-    base: str, states: Sequence[VisualState], out: Path, timeout_ms: int = SETTLE_MS
+    base: str, states: Sequence[VisualState], out: Path, widths: Sequence[int], timeout_ms: int = SETTLE_MS
 ) -> list[Shot]:
-    """Render every state at each viewport, full page after network idle; an unanswered URL is a failed shot.
+    """Render every state at each width, full page after network idle; an unanswered URL is a failed shot.
 
     Raises:
         BrowserMissingError: no installed Chrome or Edge, and Playwright's Chromium is not installed.
@@ -123,7 +123,7 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
             return away() or Shot(s.name, width, file=name)
 
         try:
-            return [shot(s, w, h) for s in states for w, h in VIEWPORTS]
+            return [shot(s, w, HEIGHT) for s in states for w in widths]
         finally:
             browser.close()
 

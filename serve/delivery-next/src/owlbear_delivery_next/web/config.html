@@ -93,8 +93,8 @@
 </section>
 <section class="panel" aria-labelledby="general-title">
   <p-heading size="xl"><h2 id="general-title">General</h2></p-heading>
-  <p-table caption="General settings: not applied yet; they take effect once routing, visibility and
-    screenshot changes are switched on">
+  <p-table caption="General settings: screenshot widths apply to the next visual check; the others take effect
+    once routing and visibility are switched on">
     <p-table-head><p-table-head-row>
       <p-table-head-cell>Setting</p-table-head-cell>
       <p-table-head-cell>Value</p-table-head-cell>
@@ -138,7 +138,12 @@ function notify(message) {
 
 function problem(response, data, body) {
   const detail = data?.detail;
-  if (Array.isArray(detail)) return detail.map((e) => `${(e.loc ?? []).slice(1).join(".")}: ${e.msg}`).join("; ");
+  if (Array.isArray(detail)) {
+    return detail.map((e) => {
+      const at = (e.loc ?? []).filter((p, i) => !(i === 0 && p === "body")).join(".");
+      return at ? `${at}: ${e.msg}` : e.msg;
+    }).join("; ");
+  }
   if (typeof detail === "string") return detail;
   return `Delivery answered ${response.status} ${response.statusText} ${body.slice(0, 200)}`.trim();
 }
@@ -199,8 +204,19 @@ function row(...cells) {
 }
 
 function saved(layer, key) {
+  if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
   const [role, field] = key.split(".");
   return loaded[layer]?.agents?.[role]?.[field] ?? "";
+}
+
+function widths() {
+  const value = "widths" in drafts[rendered] ? drafts[rendered].widths : saved(rendered, "widths");
+  const below = loaded.inherited[rendered].widths.join(", ");
+  const label = "Screenshot widths in px, comma-separated (1280 to 2400)";
+  const input = el("p-input-text", undefined, { label, "hide-label": "true", placeholder: `inherit (${below})` });
+  input.value = value;
+  input.dataset.key = "widths";
+  return cell(input, source("widths", loaded.settings.widths));
 }
 
 function editable(role, field) {
@@ -281,22 +297,28 @@ function render() {
   document.getElementById("categories").replaceChildren(...Object.entries(categories).map(([name, c]) => row(
     ...[name, c.runtime, c.tools.join(", ")].map((v) => cell(el("p-text", v))))));
   const general = [["Always visible (global switch)", loaded.settings.visible, "visible"],
-    ["Screenshot widths", loaded.settings.widths, "widths"],
     ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
-  document.getElementById("general").replaceChildren(...general.map(([label, value, key]) => row(
-    cell(el("p-text", label)), inactive(label, value, key))));
+  document.getElementById("general").replaceChildren(
+    row(cell(el("p-text", "Screenshot widths")), widths()),
+    ...general.map(([label, value, key]) => row(
+      cell(el("p-text", `${label} (not applied yet)`)), inactive(label, value, key))),
+  );
   pending();
 }
 
 function lock(on) {
   saving = on;
   document.getElementById("save").loading = on;
-  for (const input of document.querySelectorAll("#scope, #agents [data-key]")) input.disabled = on;
+  for (const input of document.querySelectorAll("#scope, main [data-key]")) input.disabled = on;
 }
 
 function edited(layer) {
   const next = structuredClone(loaded[layer]);
   for (const [key, value] of Object.entries(drafts[layer])) {
+    if (key === "widths") {
+      next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
+      continue;
+    }
     const [role, field] = key.split(".");
     const agent = next.agents[role] ?? {};
     agent[field] = value || null;
@@ -344,7 +366,9 @@ async function start() {
   // PDS loads from its CDN (TD-39); the controls are read and written only once they are defined.
   const used = ["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"];
   await Promise.all(used.map((t) => customElements.whenDefined(t)));
-  for (const type of ["input", "change"]) document.getElementById("agents").addEventListener(type, edit);
+  for (const type of ["input", "change"]) {
+    for (const id of ["agents", "general"]) document.getElementById(id).addEventListener(type, edit);
+  }
   document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });
   document.getElementById("save").addEventListener("click", save);
   if (await reload()) render();

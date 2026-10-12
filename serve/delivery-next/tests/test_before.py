@@ -82,21 +82,26 @@ def ui(tmp_path, monkeypatch):
     return c
 
 
-def fetching(base, states, out):
+def fetching(base, states, out, widths):
     """A capturer that stores what each state's URL answers, so a test can see which commit was rendered."""
     shots = []
     for s in states:
         with _LOCAL.open(base + s.path, timeout=5) as response:
             body = response.read()
-        for w, _h in visual.VIEWPORTS:
+        for w in widths:
             (out / f"{s.name}-{w}.png").write_bytes(body)
             shots.append(visual.Shot(s.name, w, f"{s.name}-{w}.png"))
     return shots
 
 
-def run(c, tmp_path, events, profile=None):
+def run(c, tmp_path, events, profile=None, widths=(1280, 1920)):
     return before.capture(
-        c, Path(c.names.worktree), lambda b: tmp_path / "out" / b[:7], profile or Profile(), events.append
+        c,
+        Path(c.names.worktree),
+        lambda b: tmp_path / "out" / b[:7],
+        profile or Profile(),
+        events.append,
+        widths=widths,
     )
 
 
@@ -122,8 +127,8 @@ def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_ever
     events = []
     shots = run(ui, tmp_path, events)
     base = git(Path(ui.names.worktree), "merge-base", "HEAD", "origin/main")
-    assert (shots.head, shots.files, shots.findings) == (base, ["home-1280.png", "home-390.png"], [])
-    assert (tmp_path / "out" / base[:7] / "home-390.png").read_text() == "before"
+    assert (shots.head, shots.files, shots.findings) == (base, ["home-1280.png", "home-1920.png"], [])
+    assert (tmp_path / "out" / base[:7] / "home-1920.png").read_text() == "before"
     pids = [int(p) for e in events if e["event"] == "pids" for p in e["pids"]]
     assert pids
     assert not any(psutil.pid_exists(p) and psutil.Process(p).status() != psutil.STATUS_ZOMBIE for p in pids)
@@ -174,7 +179,7 @@ def gone(pid):
 
 
 def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(ui, tmp_path, monkeypatch):
-    def broken(_base, _states, _out):
+    def broken(_base, _states, _out, _widths):
         missing = "no Chromium"
         raise RuntimeError(missing)
 
@@ -188,7 +193,8 @@ def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(
 
 def test_an_unwritable_screenshot_folder_is_a_note_not_a_crash(ui, tmp_path):
     (tmp_path / "blocked").write_text("a file where the folder should be")
-    shots = before.capture(ui, Path(ui.names.worktree), lambda b: tmp_path / "blocked" / b[:7], Profile(), [].append)
+    out = lambda b: tmp_path / "blocked" / b[:7]  # noqa: E731
+    shots = before.capture(ui, Path(ui.names.worktree), out, Profile(), [].append, widths=(1280,))
     assert shots.files == []
     assert shots.findings[0].startswith(("FileExistsError", "NotADirectoryError"))
     assert worktrees(ui) == 1
@@ -218,7 +224,11 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
     store.write(Lock("c1"), ui)
     runner._before(store, Lock("c1"), ui, Path(ui.names.worktree))  # noqa: SLF001
     c = store.read("c1")
-    assert (c.before.files, c.before.findings, before.due(c)) == (["home-1280.png", "home-390.png"], [], False)
+    assert (c.before.files, c.before.findings, before.due(c)) == (
+        ["home-1280.png", "home-1920.png", "home-2400.png"],
+        [],
+        False,
+    )
     client = TestClient(
         api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
     )

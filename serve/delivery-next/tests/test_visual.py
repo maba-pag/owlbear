@@ -275,18 +275,35 @@ def flow(tmp_path, clone, monkeypatch):
     monkeypatch.setattr(runner.sdk_adapter, "run", review)
     seen = []
 
-    def fake(base, states, out):
+    def fake(base, states, out, widths):
         seen.append(base)
+        flow.widths.append(list(widths))
         out.mkdir(parents=True, exist_ok=True)
         shots = []
         for s in states:
-            for w, _h in visual.VIEWPORTS:
+            for w in widths:
                 (out / f"{s.name}-{w}.png").write_bytes(PNG)
                 shots.append(visual.Shot(s.name, w, f"{s.name}-{w}.png"))
         return shots
 
     monkeypatch.setattr(visual, "CAPTURE", fake)
-    return SimpleNamespace(store=store, review=review, clone=clone, seen=seen, mp=monkeypatch)
+    flow = SimpleNamespace(store=store, review=review, clone=clone, seen=seen, mp=monkeypatch, widths=[])
+    return flow
+
+
+def test_the_capture_uses_the_widths_the_settings_name(flow):
+    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    assert (flow.widths, flow.store.read("c1").visual.files) == ([[1600]], ["home-1600.png"])
+
+
+def test_a_changes_before_screenshots_fix_its_widths_so_every_after_shot_has_its_pair(flow):
+    c = checking(flow.store, flow.clone)
+    c.before = VisualResult(head="b", tree="t", files=["home-1280.png"], widths=[1280], at=NOW)
+    flow.store.write(Lock("c1"), c)
+    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    assert (flow.widths, flow.store.read("c1").visual.files) == ([[1280]], ["home-1280.png"])
 
 
 def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
@@ -294,16 +311,17 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
     runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
     assert flow.seen == ["http://127.0.0.1:4173"]
-    assert (after.visual.passed, after.visual.files) == (True, ["home-1280.png", "home-390.png"])
+    assert (after.visual.passed, after.visual.files) == (True, ["home-1280.png", "home-1920.png", "home-2400.png"])
     cfg = flow.review.calls[0]
     assert [(a["type"], a["mimeType"], a["displayName"]) for a in cfg.attachments] == [
         ("blob", "image/png", "home-1280.png"),
-        ("blob", "image/png", "home-390.png"),
+        ("blob", "image/png", "home-1920.png"),
+        ("blob", "image/png", "home-2400.png"),
     ]
     assert base64.b64decode(cfg.attachments[0]["data"]) == PNG
     assert "The greeting is centred" in cfg.message
     head = git(flow.clone, "rev-parse", "HEAD")
-    assert (flow.store.visual_dir("c1", head) / "home-390.png").read_bytes() == PNG
+    assert (flow.store.visual_dir("c1", head) / "home-2400.png").read_bytes() == PNG
     assert merge.visual_ok(after, head, [])
 
 
@@ -348,7 +366,7 @@ def test_the_reviewer_must_cover_every_screenshot(flow):
     st = sdk_adapter._Step(flow.review.calls[0], SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     args = {"verdict": "pass", "findings": [], "covered_paths": ["home-1280.png"]}
     reply = st._handle(tools.REVIEW, SimpleNamespace(arguments=args))  # noqa: SLF001
-    assert "home-390.png" in str(reply)
+    assert "home-1920.png" in str(reply)
     assert st.run.payload is None
 
 
@@ -537,12 +555,12 @@ def test_the_installed_browser_is_tried_first_and_only_missing_browsers_fall_thr
     pw = _Missing(gone | {None: "Executable doesn't exist at /z; run playwright install"})
     monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
     with pytest.raises(visual.BrowserMissingError):
-        visual.capture("http://127.0.0.1:1", [HOME], tmp_path)
+        visual.capture("http://127.0.0.1:1", [HOME], tmp_path, (1280,))
     assert pw.tried == ["chrome", "msedge", None]
     pw = _Missing({"chrome": "Target page, context or browser has been closed"})
     monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
     with pytest.raises(playwright.sync_api.Error):  # another launch failure is not a missing browser
-        visual.capture("http://127.0.0.1:1", [HOME], tmp_path)
+        visual.capture("http://127.0.0.1:1", [HOME], tmp_path, (1280,))
     assert pw.tried == ["chrome"]
 
 
@@ -556,18 +574,20 @@ def test_a_real_capture_of_a_local_page(tmp_path):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     states = [HOME, VisualState(name="gone", path="/missing", expect="nothing")]
     try:
-        shots = visual.capture(f"http://127.0.0.1:{server.server_port}", states, tmp_path / "out", timeout_ms=5000)
+        shots = visual.capture(
+            f"http://127.0.0.1:{server.server_port}", states, tmp_path / "out", (1280, 1920), timeout_ms=5000
+        )
     except visual.BrowserMissingError as exc:
         pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
     finally:
         server.shutdown()
     assert [(s.state, s.width, bool(s.file)) for s in shots] == [
         ("home", 1280, True),
-        ("home", 390, True),
+        ("home", 1920, True),
         ("gone", 1280, False),
-        ("gone", 390, False),
+        ("gone", 1920, False),
     ]
-    assert (tmp_path / "out" / "home-390.png").read_bytes().startswith(b"\x89PNG")
+    assert (tmp_path / "out" / "home-1920.png").read_bytes().startswith(b"\x89PNG")
     assert shots[2].error == "/missing answered 404"
 
 
@@ -596,7 +616,9 @@ def test_a_state_that_leaves_the_preview_is_a_finding(tmp_path):
     for server in (other, preview):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        shots = visual.capture(f"http://127.0.0.1:{preview.server_port}", [HOME], tmp_path / "out", timeout_ms=5000)
+        shots = visual.capture(
+            f"http://127.0.0.1:{preview.server_port}", [HOME], tmp_path / "out", (1280,), timeout_ms=5000
+        )
     except visual.BrowserMissingError as exc:
         pytest.skip(f"Chromium is not installed: {exc}")
     finally:
@@ -614,7 +636,9 @@ def test_a_page_over_the_height_cap_is_a_finding(tmp_path):
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        shots = visual.capture(f"http://127.0.0.1:{server.server_port}", [HOME], tmp_path / "out", timeout_ms=5000)
+        shots = visual.capture(
+            f"http://127.0.0.1:{server.server_port}", [HOME], tmp_path / "out", (1280,), timeout_ms=5000
+        )
     except visual.BrowserMissingError as exc:
         pytest.skip(f"Chromium is not installed: {exc}")
     finally:
