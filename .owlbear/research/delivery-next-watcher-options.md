@@ -155,6 +155,11 @@ source files; no code run, as the research rules require).
 
 ## 4. Recommendation, Confidence, and Limits
 
+**Owner, 2026-10-12, after reading this:** intervention after the fact is accepted, prevention is not
+needed (TD-55: G-b only). claude-mem is out for the watcher and ignored for Delivery for now; it may
+later supplement or replace the memory MCP, which would be a separate memory topic. For Copilot that
+needs a capture path first, since its shipped Copilot support only searches (L12).
+
 Options to put to the owner, not decisions:
 
 1. Watcher inside the runner (P-a), on a feed built from the live event streams both routes already receive

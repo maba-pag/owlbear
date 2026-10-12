@@ -206,7 +206,7 @@ the countable rules from M4 on.
 
 | Rule | Limit |
 | --- | --- |
-| Agent-facing Delivery tools (T7, TD-1) | 6 in total, at most 3 per role; a tool with one fixed result schema per session counts once |
+| Agent-facing Delivery tools (T7, re-decided as TD-63) | No count limit; each tool serves one named process action; every field described; about six fields, one nesting level |
 | Step kinds | 10 |
 | Exit kinds | 5, plus pending |
 | Error kinds shown to users or agents | 15 |
