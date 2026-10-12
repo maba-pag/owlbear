@@ -18,9 +18,10 @@ from typing import TYPE_CHECKING, Any
 from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next import loop, profile
+from owlbear_delivery_next.config import CONFIG_FORMAT, Agent, GlobalLayer, Layer, Settings, resolve
 from owlbear_delivery_next.inbox import InboxItem
-from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Stop
-from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile
+from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Role, Stop
+from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, RoleModel
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 
 if TYPE_CHECKING:
@@ -31,11 +32,21 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.models import Step
 
 STORE_DIR = "owlbear-delivery"
+CONFIG = "config.json"  # the project's settings layer (TD-52)
 ACTIVITY_LIMIT = 200
 type Migrations = dict[int, Callable[[dict[str, Any]], dict[str, Any]]]
+_ROLES: TypeAdapter[dict[Role, RoleModel]] = TypeAdapter(dict[Role, RoleModel])
+
+
+def _roles_moved(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile format 1 to 2: the role overrides moved to the project settings; each is checked, then dropped."""
+    _ROLES.validate_python(data.pop("roles", {}))
+    return data
+
+
 # Forward migrations of a Change or profile record, keyed by the format they upgrade from.
 MIGRATIONS: Migrations = {}
-PROFILE_MIGRATIONS: Migrations = {}
+PROFILE_MIGRATIONS: Migrations = {1: _roles_moved}
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
 HANDLE = re.compile(r"c\d{1,4}")  # the only handle shape the host issues
@@ -121,6 +132,27 @@ def _load[T: Record](path: Path, model: type[T], current: int, migrations: Migra
         raise StoreError(msg) from exc
 
 
+def read_layer[T: Layer](path: Path, model: type[T]) -> T:
+    """One settings layer under its format gate; an empty layer before the first save."""
+    return _load(path, model, CONFIG_FORMAT, {}) if path.exists() else model()
+
+
+def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T]) -> T:
+    """Read, change and write one layer under its own lock, so no concurrent save is lost; invalid writes nothing."""
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    dir_fd = os.open(path.parent, _DIR_FLAGS)
+    try:
+        fd = open_lock(dir_fd, blocking=True, name=f".{path.name}.lock")
+    finally:
+        os.close(dir_fd)
+    try:
+        new = model.model_validate(change(read_layer(path, model)).model_dump())
+        atomic_write(path, new.model_dump_json(indent=1))
+        return new
+    finally:
+        os.close(fd)
+
+
 class Store:
     """Change records, locks, inboxes and activity logs of one clone."""
 
@@ -143,7 +175,38 @@ class Store:
             raise FormatTooNewError(msg)
         if found < FORMAT:
             atomic_write(marker, f"{FORMAT}\n")
+        store.move_roles()
         return store
+
+    def move_roles(self) -> None:
+        """Copy a format-1 profile's role overrides into the project settings, which its first load then drops.
+
+        Only while no settings file exists: from then on the settings are the authority, so an override cleared
+        there never returns. An unreadable or invalid profile is left to ``read_profile`` to report.
+        """
+        path, config = self.root / "profile.json", self.root / CONFIG
+        if config.exists() or not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text())
+            found = _ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
+        except AttributeError, OSError, TypeError, ValueError:
+            return
+        if found:
+            agents = {role: Agent(model=rm.model, effort=rm.effort) for role, rm in found.items()}
+            update_layer(config, Layer, lambda cur: cur if config.exists() else Layer(agents=agents))
+
+    def read_config(self) -> Layer:
+        """The project's settings layer."""
+        return read_layer(self.root / CONFIG, Layer)
+
+    def update_config(self, change: Callable[[Layer], Layer]) -> Layer:
+        """Change the project's settings layer under its lock."""
+        return update_layer(self.root / CONFIG, Layer, change)
+
+    def settings(self, glob: GlobalLayer | None = None) -> Settings:
+        """The resolved settings; the caller passes the global layer, whose location is the owner's decision."""
+        return resolve(glob, self.read_config())
 
     def _dir(self, slug: str) -> Path:
         path = self.root / "changes" / slug

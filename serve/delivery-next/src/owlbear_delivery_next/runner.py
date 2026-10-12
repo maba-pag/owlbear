@@ -121,7 +121,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         store.write(lock, change)
         return change.step.session
 
-    role = roles.chosen(profile, s.kind)
+    role = roles.chosen(store.settings(), s.kind)
     cfg = sdk_adapter.Session(
         kind=s.kind,
         worktree=path,
@@ -188,7 +188,7 @@ def _review_run(
     store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str
 ) -> tuple[Result, session_result.Run]:
     """The reviewer session's verdict and its run, whose payload is the submitted review."""
-    role = roles.chosen(store.read_profile(), label)
+    role = roles.chosen(store.settings(), label)
     review_cfg = dataclasses.replace(
         cfg,
         kind=StepKind.REVIEW,

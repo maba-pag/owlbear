@@ -7,10 +7,23 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from owlbear_delivery_next.models import Effort, Record, Role
+from owlbear_delivery_next.models import Effort, Record
 
-PROFILE_FORMAT = 1
+PROFILE_FORMAT = 2  # format 2 moved the role overrides into the project settings (config.json)
 type Runtime = Literal["managed", "vscode"]
+
+
+def named(model: str) -> str:
+    """A named model, never empty and never ``auto`` (TD-32).
+
+    Raises:
+        ValueError: The model is empty or ``auto``.
+    """
+    if not model.strip():
+        raise ValueError("model must not be empty")  # noqa: EM101, TRY003
+    if model.strip().lower() == "auto":
+        raise ValueError("model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
+    return model
 
 
 class ProfileEntry(Record):
@@ -30,10 +43,7 @@ class RoleModel(Record):
     @model_validator(mode="after")
     def _valid(self) -> RoleModel:
         """A named model, never ``auto`` (TD-32)."""
-        if not self.model.strip():
-            raise ValueError("model must not be empty")  # noqa: EM101, TRY003
-        if self.model.strip().lower() == "auto":
-            raise ValueError("model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
+        named(self.model)
         return self
 
 
@@ -44,5 +54,4 @@ class Profile(Record):
     version: int = 0
     confirmed_at: datetime | None = None
     entries: dict[str, ProfileEntry] = Field(default_factory=dict)
-    roles: dict[Role, RoleModel] = Field(default_factory=dict)  # per-project overrides of the role defaults
     runtime: Runtime = "managed"  # TD-35: managed runs agent steps through the SDK; vscode runs them in VS Code

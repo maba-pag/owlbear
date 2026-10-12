@@ -12,7 +12,7 @@ from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.loop import StepResult, apply
 from owlbear_delivery_next.models import Brief, Change, Exit, Question, Step, StepKind
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -85,10 +85,10 @@ def test_profile_has_its_own_format_gate(store, monkeypatch):
     assert store.read_profile() is None
     store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))
     assert store.read_profile().entries["rules"].state == "unknown"
-    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", 2)
+    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", PROFILE_FORMAT + 1)
     with pytest.raises(StoreError, match="cannot be migrated"):
         store.read_profile()
-    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", 0)
+    monkeypatch.setattr(store_mod, "PROFILE_FORMAT", PROFILE_FORMAT - 1)
     with pytest.raises(FormatTooNewError):
         store.read_profile()
 

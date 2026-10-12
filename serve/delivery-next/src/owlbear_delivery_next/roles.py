@@ -1,13 +1,16 @@
-"""Model and reasoning effort per session role (TD-27): the role of each session, defaults and project overrides."""
+"""Model and reasoning effort per session role (TD-27): the role of each session, its defaults, the settings table."""
 
 from __future__ import annotations
 
-from typing import get_args
+from typing import TYPE_CHECKING, get_args
 
 from pydantic import ValidationError
 
 from owlbear_delivery_next.models import Effort, Role, StepKind
-from owlbear_delivery_next.profile_record import Profile, RoleModel
+from owlbear_delivery_next.profile_record import RoleModel
+
+if TYPE_CHECKING:
+    from owlbear_delivery_next.config import Settings
 
 DEFAULTS: dict[Role, RoleModel] = {
     "planner": RoleModel(model="claude-opus-5.5", effort="high"),
@@ -27,14 +30,10 @@ SESSIONS: dict[str, Role] = {
 }
 
 
-def effective(profile: Profile | None, role: Role) -> RoleModel:
-    """The project's override for *role*, else its default."""
-    return (profile.roles.get(role) if profile else None) or DEFAULTS[role]
-
-
-def chosen(profile: Profile | None, session: str) -> RoleModel:
-    """The model and effort a session kind or reviewer label runs with."""
-    return effective(profile, SESSIONS[session])
+def chosen(settings: Settings, session: str) -> RoleModel:
+    """The model and effort a session kind or reviewer label runs with, from the resolved settings."""
+    agent = settings.agents[SESSIONS[session]]
+    return RoleModel(model=agent.model, effort=agent.effort)
 
 
 def parse(text: str) -> tuple[Role, RoleModel]:
@@ -55,10 +54,10 @@ def parse(text: str) -> tuple[Role, RoleModel]:
         raise ValueError(msg) from exc
 
 
-def table(profile: Profile | None) -> str:
-    """The effective role table, marking project overrides."""
+def table(settings: Settings) -> str:
+    """The effective role table, marking values set in the global or project settings."""
     lines = ["Models"]
-    for role in DEFAULTS:
-        rm, own = effective(profile, role), bool(profile and role in profile.roles)
-        lines.append(f"  {role}: {rm.model} effort {rm.effort}{' (project)' if own else ''}")
+    for role, agent in settings.agents.items():
+        set_in = sorted({settings.sources[f"agents.{role}.{f}"] for f in ("model", "effort")} - {"default"})
+        lines.append(f"  {role}: {agent.model} effort {agent.effort}{f' ({"/".join(set_in)})' if set_in else ''}")
     return "\n".join(lines)

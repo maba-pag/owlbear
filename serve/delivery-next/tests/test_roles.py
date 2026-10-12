@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, cli, profile, roles, sdk_adapter
+from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -30,22 +31,21 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
     ],
 )
 def test_each_session_runs_with_its_roles_model_and_effort(session, model, effort):
-    assert roles.chosen(None, session) == RoleModel(model=model, effort=effort)
+    assert roles.chosen(resolve(None, Layer()), session) == RoleModel(model=model, effort=effort)
 
 
 def test_plan_review_is_the_challenger_not_the_planner():
-    planner = RoleModel(model="p", effort="low")
-    prof = Profile(roles={"planner": planner})
-    assert roles.chosen(prof, StepKind.PLAN) == planner
-    assert roles.chosen(prof, "plan-review") == roles.DEFAULTS["challenger"]
+    settings = resolve(None, Layer(agents={"planner": Agent(model="p", effort="low")}))
+    assert roles.chosen(settings, StepKind.PLAN) == RoleModel(model="p", effort="low")
+    assert roles.chosen(settings, "plan-review") == roles.DEFAULTS["challenger"]
 
 
 def test_a_project_override_wins_and_is_marked_in_the_table():
-    prof = Profile(roles={"builder": RoleModel(model="m-1", effort="low")})
-    assert roles.chosen(prof, StepKind.BUILD) == RoleModel(model="m-1", effort="low")
-    assert roles.chosen(prof, StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
-    assert "builder: m-1 effort low (project)" in roles.table(prof)
-    assert "reviewer: gpt-6.1-sol effort xhigh\n" in roles.table(prof)
+    settings = resolve(None, Layer(agents={"builder": Agent(model="m-1", effort="low")}))
+    assert roles.chosen(settings, StepKind.BUILD) == RoleModel(model="m-1", effort="low")
+    assert roles.chosen(settings, StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
+    assert "builder: m-1 effort low (project)" in roles.table(settings)
+    assert "reviewer: gpt-6.1-sol effort xhigh\n" in roles.table(settings)
 
 
 def test_a_role_override_parses_a_model_with_colons():
@@ -80,7 +80,7 @@ def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort)
     refused = r"model must not be empty|must be named|literal_error|Input"
     with pytest.raises(ValueError, match=refused):
         RoleModel(model=model, effort=effort)
-    raw = Profile().model_dump(mode="json") | {"roles": {"builder": {"model": model, "effort": effort}}}
+    raw = Profile().model_dump(mode="json") | {"format": 1, "roles": {"builder": {"model": model, "effort": effort}}}
     (tmp_path / "profile.json").write_text(json.dumps(raw))
     with pytest.raises(StoreError, match="cannot be migrated"):
         Store(tmp_path).read_profile()
@@ -93,7 +93,7 @@ def test_luna_low_and_haiku_medium_load_and_the_defaults_are_valid():
 
 
 def test_sdk_options_carry_the_model_and_reasoning_effort():
-    rm = roles.chosen(None, StepKind.BUILD)
+    rm = roles.chosen(resolve(None, Layer()), StepKind.BUILD)
     cfg = sdk_adapter.Session(
         StepKind.BUILD, Path(), "s1", "m", resume=False, policy=Policy(Path(), ()), observe=Worktree, checks=(),
         model=rm.model, effort=rm.effort,

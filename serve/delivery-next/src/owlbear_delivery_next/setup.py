@@ -383,7 +383,7 @@ def run(  # noqa: PLR0913 - one answer per consent
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     say(render(prof))
-    say(roles.table(prof))
+    say(roles.table(store.settings()))
     for tip in recommendations(prof):
         say(f"TIP {tip}")
     prof, unknown = confirm(prof, ask, yes=yes)

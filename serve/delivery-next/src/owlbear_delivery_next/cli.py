@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from owlbear_delivery_next import host, profile, roles, setup
+from owlbear_delivery_next.config import Agent, Layer
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
     Brief,
@@ -52,7 +53,7 @@ def seed(store: Store, a: argparse.Namespace) -> None:
             entries[f"allow:{kind}"] = ProfileEntry(state="known", value="\n".join(cmds), evidence="dev seed")
     old = store.read_profile() or Profile()
     entries = {k: v for k, v in old.entries.items() if not k.startswith(("install:", "allow:"))} | entries
-    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, roles=old.roles))
+    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, runtime=old.runtime))
     criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(a.criterion, 1)]
     brief = Brief(version=1, outcome=a.outcome, scope=a.scope, criteria=criteria)
     brief.approved = [brief.model_copy(deep=True)]
@@ -85,7 +86,7 @@ def show_status(store: Store, now: datetime) -> str:
             f"{slug}: {s.line}"
             + (f"\n  next: {action}" + (f" ({s.actor})" if s.actor != "you" else "") if action else "")
         )
-    return "\n".join([*lines, roles.table(store.read_profile())])
+    return "\n".join([*lines, roles.table(store.settings())])
 
 
 def show_profile(
@@ -95,15 +96,25 @@ def show_profile(
     overrides: list[tuple[Role, RoleModel]] | None = None,
     runtime: Runtime | None = None,
 ) -> str:
-    """Detect the profile, apply the owner's confirmations, role overrides and runtime; return all of it."""
+    """Detect the profile, apply the owner's confirmations and runtime, and role overrides to the project settings."""
     prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
-    prof = prof.model_copy(update={"roles": prof.roles | dict(overrides or []), "runtime": runtime or prof.runtime})
+    prof = prof.model_copy(update={"runtime": runtime or prof.runtime})
     store.write_profile(prof)
+    if overrides:
+        store.update_config(lambda cur: _overridden(cur, overrides))
     lines = [f"profile v{prof.version}"]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
-    return "\n".join([*lines, roles.table(prof), f"Runtime: {prof.runtime}"])
+    return "\n".join([*lines, roles.table(store.settings()), f"Runtime: {prof.runtime}"])
+
+
+def _overridden(layer: Layer, overrides: list[tuple[Role, RoleModel]]) -> Layer:
+    """Set model and effort per role; the agent's other settings stay."""
+    agents = dict(layer.agents)
+    for role, rm in overrides:
+        agents[role] = (agents.get(role) or Agent()).model_copy(update={"model": rm.model, "effort": rm.effort})
+    return layer.model_copy(update={"agents": agents})
 
 
 def _role(text: str) -> tuple[Role, RoleModel]:
