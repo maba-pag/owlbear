@@ -551,8 +551,16 @@ Research questions from the readings (step 3), on top of the unknowns U1 to U5:
 
 ### 3.13 Runtime, tools and visibility: design draft, 2026-10-12
 
-Draft for Sol's challenge and the owner's approval; not a decision. It builds on TD-34, TD-35,
-TD-36, TD-48 and TD-49, readings R1 to R8, and runtime research P10 to P18.
+Draft, revised after Sol's challenge; for the owner's approval, not a decision. It builds on TD-34,
+TD-35, TD-36, TD-48 and TD-49, readings R1 to R8, and runtime research P10 to P18. It keeps binding:
+- TD-32: every turn on the named model, both runtimes;
+- TD-44: SDK steps may run before the watcher exists, logs read afterwards;
+- TD-45: the SDK guard;
+- TD-46: allowed outside writes;
+- D4, N4 and N10: modes;
+- D6: retry once with the reason, then the owner;
+- N3: Luna `low` for throwaway turns, Haiku `medium` for small tasks;
+- N6: the merge waits when the visual reviewer is unsure.
 
 **Runtimes.** A catalogue on the config page; each entry can be switched off.
 
@@ -577,53 +585,90 @@ TD-36, TD-48 and TD-49, readings R1 to R8, and runtime research P10 to P18.
   - window: the `tools:` line of the agent file Delivery writes per step, which works for runtime
     tools (K5).
 - Open: whether `tools:` also filters a window's own tools and MCP tools. TD-35 accepts window tools
-  "if that works"; the build tests it first.
+  "if that works"; the build tests it before routing is switched on.
+- Open: which names each runtime's allowlist uses. The SDK allowlist covers built-in, MCP and
+  Delivery's tools; K5 showed four runtime tools that are always present. The build maps categories
+  to concrete names per runtime.
+- **Tension for the owner:** R5 says a watched step behaves exactly as unwatched, "permissions"
+  included. But a visible step runs in `window`, which has no SDK guard (TD-45); there the watcher
+  governs outside writes (D6, TD-46). A watched step that would otherwise run in the SDK therefore
+  loses the hard guard.
 
 **Agent definitions (Q-A, Q-B), the assistant's opinion.**
 - Q-A: model, effort and context size leave the agent files and live in OwlBear's config, per agent
   (R3). They are passed per session (SDK) or per message (window), which both runtimes support (P15).
-  - Context size maps to the window's `contextSize` and the SDK's `context_tier` (`long_context`),
-    so the SDK has only two choices. To be confirmed at build.
+  - The window takes a numeric `contextSize` per model; the SDK only has a default or long-context
+    tier. The config stores the size; Delivery checks per model what each runtime can do and
+    records the effective setting.
+  - TD-32 in the SDK: today's check flags another model only when the named model is entirely
+    absent from the usage (`sdk_adapter._usage`). A mixed turn passes, and the flag invalidates
+    nothing. The build must stop any step whose usage names another model, for every turn: start,
+    resume, reminder.
   - The tool list stays in the agent file as the maximum (R3). Delivery narrows it per step.
+  - Confidence: high. Sol agrees: high.
 - Q-B: one source file per agent.
-  - Its core text names only baseline tools.
-  - Instructions for an extra category live in a skill that Delivery preloads only when the step
-    has that category: the SDK's per-agent `skills`, or written into the window's per-step agent
-    file.
-  - So there are no near-identical files to maintain, no extra context in the ~80% of steps
-    without the category, and no "read when needed" risk, since the skill is loaded exactly when
-    its tools are present.
-  - Evidence so far: in K5 an agent asked for an absent tool said so and stopped.
-  - R4's quality question is measured in the N2 benchmark: the same tasks with and without a
-    category.
+  - Its core text never tells the agent to use a tool it might lack.
+  - Mandatory material for an extra category, and for the workflow, loads at session start. Only
+    situational references stay on demand.
+  - Category material lives in a skill that Delivery preloads when the step has that category. The
+    SDK's per-agent `skills` and the agent file's `skills:` line, which the agent host forwards
+    (P18), both take skill names. That is from the source; untested.
+  - Open for the build:
+    - how preloaded skill names resolve, and what happens when one is missing;
+    - skills the runtime discovers on its own;
+    - relative references inside skills.
+  - So there are no near-identical files to maintain and no extra context in the ~80% of steps
+    without the category. The "read when needed" risk is reduced for the preloaded material, not
+    removed in general.
+  - Evidence so far: one run (K5), in which an agent asked for an absent tool said so and stopped.
+  - R4 needs its own comparison: the same role, model, effort, context and effective tools in `sdk`
+    and in `window`, before any role moves runtime. N2's model benchmark stays as decided, and
+    TD-47's watcher choice follows N2.
+  - Confidence: one source file high; equal behaviour across runtimes medium.
 
-**Visibility (TD-35, R1).** A step is visible if its agent "needs visibility" (config, e.g. roles that
-ask the owner, D4), its Change is "always visible" (a toggle on the Changes page), or the global
-switch is on (config page). Visible steps run in `window`. Changes apply from the next session.
+**Visibility (TD-35, R1).** A step is visible if its agent "needs visibility" (config), its Change is
+"always visible" (a toggle on the Changes page), or the global switch is on (config page). Visible
+steps run in `window`. Changes apply from the next session.
+
+**Modes (D4, N4, N10), unchanged by watching.**
+- An agent whose definition has the question tool (`askQuestions`) runs interactive, and needs
+  visibility, since the owner answers in the chat. Its question tool is always in its allowlist.
+- Every other agent runs autopilot. When only the owner can settle something, it uses Delivery's
+  decision or action request, which blocks its whole task (N10). That tool is always in its
+  allowlist.
+- Watching never changes an agent's mode.
 
 **Routing (TD-34).** A step runs in its agent's default runtime, unless:
 - it is visible: then `window`;
 - its allowlist needs a category the default runtime lacks: then the first enabled runtime that has
   it.
 
-If no enabled runtime fits, TD-36's "needs the owner's setup" case applies: enable a runtime.
+If no enabled runtime fits, Delivery tells the cases apart:
+- a runtime that has the category is switched off: owner setup (enable it);
+- the category needs setup, for example a missing browser install: owner setup (that action);
+- the category exists nowhere: back to planning (TD-36).
 
 **Missing tools (TD-36).**
 - The prompt's "if something you need is missing, call `ask_question`" is replaced by a "missing
   tool" result: the tool or category, and what failed.
 - Delivery decides the case:
-  - temporary error: retry now, then once later;
+  - temporary error: retry now, then later; how often and how long is a proposal for the build;
   - in another enabled runtime: one rerun there;
   - owner setup: a decision request naming the action;
   - nowhere: back to planning, which changes the task.
 - Guard denials stay denials.
 
 **Screenshots (TD-49).**
-- Widths come from config: default 1280, 1920, 2400; none below 1280.
+- Widths come from config: default 1280, 1920, 2400, each between 1280 and 2400 (R7).
 - Recipe states may contain clicks and typing before the shot.
-- Playwright collects console errors and page errors for "before" and "after". Errors new since
-  "before" fail the check (R8).
+- Playwright collects console errors for "before" and "after". Errors new since "before" fail the
+  check; existing ones are reported (R8).
+  - Proposal beyond R8: uncaught page errors (exceptions) count as console errors. The owner
+    decides at approval.
 - The reviewer gets images and errors. A task may add `browser` for the reviewer.
+- When the reviewer is unsure about a state, the merge waits for the owner (N6).
+- Screenshots reach a reviewer in `window` as attachments (C7), before visible visual reviews are
+  switched on.
 
 **Window start (TD-48)** as recorded.
 
@@ -634,21 +679,36 @@ If no enabled runtime fits, TD-36's "needs the owner's setup" case applies: enab
 - a runtime picker showing the tools it adds over the baseline, and the agent's listed tools it
   lacks.
 
-Today the profile holds per-project role models (`Profile.roles`) and one global `runtime` switch;
-both move into this structure.
+Today the profile holds per-project role models (`Profile.roles`) and one global `runtime` switch.
+Both move into this structure, and the migration keeps every effective role setting.
 
-**Open for the owner:** whether the config page's values are global, per project, or global with
-per-project overrides.
+**Task categories.**
+- The planner writes a task's added categories into the task (a new field) and Delivery validates
+  them.
+- Review and fix tasks inherit them.
+- The whole-Change visual review takes the categories of TD-49 (`browser` only when a task asks for
+  it).
 
-**Build order (proposal).**
-1. Config structure and page.
-2. Routing and allowlists.
-3. TD-48 window start, with the window-tool filter test.
-4. The missing-tool result.
-5. TD-49 capture changes.
-6. C7 attachments.
+**Open for the owner:**
+- the R5 permission tension above;
+- page errors (Screenshots);
+- whether the config values are global, per project, or global with per-project overrides.
 
-The watcher (N1) comes after these, per §3.12 phase 3, and must cover both runtimes.
+**Build order (proposal, after Sol).**
+1. Facts that gate routing:
+   - the window-tool and MCP filter test;
+   - tool-name mapping per runtime;
+   - model, effort and context support per runtime;
+   - the R4 comparison for a role before it may move.
+2. Config structure, migration, then the page.
+3. TD-48 window start, and TD-32 checks on every turn in both runtimes.
+4. Routing, allowlists, task categories, modes and preloaded skills.
+5. The missing-tool result.
+6. TD-49 capture changes and C7 attachments.
+
+§3.12 keeps the watcher (N1) in phase 3, before visual work and runtime routing. Meanwhile TD-44
+applies (SDK steps, logs read afterwards), and window steps are unguarded until the watcher exists
+(D6). Real cost per runtime is measured with the R4 comparison.
 
 ## 4. Recommendation, Confidence, and Limits
 
