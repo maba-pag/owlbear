@@ -39,6 +39,13 @@ class Gate:
         if not self.done:
             self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
 
+    def revoke(self, detail: str) -> None:
+        """End the step as an error even after an accepted result: a turn on another model voids it (TD-32)."""
+        with self._lock:
+            self.done = True
+            self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail[:300]
+        self.ended()
+
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
         """The three tools of this step: its submit tool, ``ask_question`` and ``report_wrong_premise``."""

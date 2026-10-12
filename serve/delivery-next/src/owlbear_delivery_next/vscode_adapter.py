@@ -132,12 +132,12 @@ class _Driver:
             with Inbox(self.gate, inbox):
                 conn = self.env.connect(cfg.worktree)
                 out = self.drive(conn)
-                _ending(out, self.run, self.gate)
+                _ending(out, self.gate)
                 return out
         except (OSError, KeyError, TypeError, wf.SettingsError, ahp.HostError, subprocess.SubprocessError) as exc:
             end = "closed" if self.control.started.is_set() else "error"
             out = Outcome(end, f"{type(exc).__name__}: {exc}"[:300])
-            _ending(out, self.run, self.gate)
+            _ending(out, self.gate)
             return out
         finally:
             if close := getattr(conn, "close", None):
@@ -146,12 +146,10 @@ class _Driver:
                 self.log(event="window-file", problem=problem)
 
 
-def _ending(out: Outcome, run: Run, gate: Gate) -> None:
+def _ending(out: Outcome, gate: Gate) -> None:
     """Close the gate with the runtime's ending; a model mismatch voids any result, else an accepted call stands."""
     if out.end == "wrong-model":
-        detail = f"wrong model: {out.detail}"[:300]
-        gate.finish("error", None, detail)
-        run.ending, run.payload, run.head, run.detail = "error", None, None, detail
+        gate.revoke(f"wrong model: {out.detail}")
     elif out.end == "complete":
         gate.finish("no-result", None, "the turn ended without a result")
     elif out.end == "timeout":

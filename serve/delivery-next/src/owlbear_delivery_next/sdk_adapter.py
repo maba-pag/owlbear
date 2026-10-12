@@ -121,6 +121,8 @@ class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
         self.turn = self.idle = False
+        self.subagent_models: set[str] = set()
+        self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
         self.gate = Gate(cfg, self.run, self.log, self._wake)
         self.changed = asyncio.Event()
         self.shown = float("-inf")  # monotonic time of the last now-line write
@@ -142,6 +144,7 @@ class _Step:
         kind = getattr(ev.type, "value", str(ev.type))
         if kind == "assistant.turn_start":
             self.turn = True
+            self.model_seen(getattr(ev.data, "model", None), getattr(ev.data, "parent_tool_call_id", None))
         elif kind == "session.idle" and self.turn:
             self.turn, self.idle = False, True
             self._wake()
@@ -149,6 +152,20 @@ class _Step:
             self.now(getattr(ev.data, "tool_name", "") or "tool", getattr(ev.data, "arguments", None))
         elif kind in {"session.quota_observation", "session.error"}:
             note_quota(self.run, kind, ev.data)
+        elif kind == "session.auto_mode_resolved":
+            self.gate.revoke("wrong model: the runtime resolved auto")
+        elif kind == "assistant.message":
+            self.model_seen(getattr(ev.data, "model", None), getattr(ev.data, "parent_tool_call_id", None))
+
+    def model_seen(self, model: str | None, parent: str | None) -> None:
+        """Void the step when its own agent runs on another model; a subagent's model is only logged."""
+        if not model or not self.cfg.model or model == self.cfg.model:
+            return
+        if parent:
+            self.subagent_models.add(model)
+            self.log(event="subagent-model", model=model)
+        else:
+            self.gate.revoke(f"wrong model: a turn ran on {model}, the step needs {self.cfg.model}")
 
     def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
         """Overwrite the now line with this tool call, at most once per ``NOW_EVERY`` seconds."""
@@ -249,6 +266,8 @@ class _Step:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self.changed.wait(), min(POLL, left))
             self.changed.clear()
+            if self.done:
+                break
             await self.snapshot(session)
             if self.idle and not self.done:
                 self.idle = False
@@ -265,6 +284,20 @@ async def _call[T](aw: Awaitable[T], what: str, limit: float = CALL) -> T:
         return await asyncio.wait_for(aw, limit)
     except TimeoutError as exc:
         raise TimeoutError(f"{what} did not answer within {limit:.0f} s") from exc  # noqa: TRY003, EM102
+
+
+def unexpected_models(
+    before: dict[str, Any], after: dict[str, Any], model: str | None, subagents: set[str]
+) -> list[str]:
+    """Models billed during this invocation that are neither the step's nor a logged subagent's.
+
+    An unknown baseline (a failed read on resume) or a failed final read checks nothing; the events still do.
+    """
+    if "error" in before or "error" in after:
+        return []
+    old, new = before.get("models") or {}, after.get("models") or {}
+    grew = {m for m, v in new.items() if m not in old or (v or {}).get("tokens") != (old[m] or {}).get("tokens")}
+    return sorted(grew - {model} - subagents)
 
 
 async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]:
@@ -371,6 +404,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             st.run.session_id = sid
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
     st.log(event="session", id=sid, resumed=resumed, resent=message != prompts.CONTINUE, runtime=st.run.runtime_pid)
+    st.billed = await _usage(session, cfg.model) if resumed else {}
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
     await _call(session.send(message, **extra), "send")
     cfg.journal.delivered()
@@ -380,6 +414,10 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
 async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, wait for the result boundary, then tear down within bounds."""
     st = _Step(cfg, asyncio.get_running_loop())
+    if not cfg.model:
+        st.finish("error", detail="wrong model: the step names no model (TD-32)")
+        st.run.termination = Termination(confirmed=True)
+        return st.run
     client, session = None, None
     try:
         async with asyncio.timeout(DEADLINES.get(cfg.kind, 1200.0) + START + CALL):
@@ -394,5 +432,7 @@ async def run(cfg: Session) -> Run:
     except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     st.run.usage = await _usage(session, cfg.model) if session else {}
+    if wrong := unexpected_models(st.billed, st.run.usage, cfg.model, st.subagent_models):
+        st.gate.revoke(f"wrong model: the usage names {', '.join(wrong)}, the step needs {cfg.model}")
     st.run.termination = await _teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run

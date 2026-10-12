@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import psutil
+import pytest
 
 from owlbear_delivery_next import processes, prompts, sdk_adapter, session_result, tools
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
@@ -270,6 +271,54 @@ def test_a_late_call_never_changes_the_accepted_result_or_its_head() -> None:
     assert (accepted.result_type, late.result_type) == ("success", "rejected")
     assert (st.run.ending, st.run.head, st.run.payload.summary) == ("result", HEAD, "Added greet().")
     assert [e["accepted"] for e in st.events if e.get("event") == "tool"] == [True, False]
+
+
+def test_a_turn_on_another_model_voids_even_an_accepted_result_but_a_subagent_model_is_only_logged() -> None:
+    def message(model: str, parent: str | None = None) -> SimpleNamespace:
+        data = SimpleNamespace(content="", model=model, parent_tool_call_id=parent)
+        return SimpleNamespace(type=SimpleNamespace(value="assistant.message"), data=data)
+
+    def accepted() -> sdk_adapter._Step:
+        trees = iter([Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",))])
+        st = step()
+        st.cfg = dataclasses.replace(st.cfg, model="gpt-6-luna", observe=lambda: next(trees), checks=("npm test",))
+        st.gate.cfg = st.cfg
+        st._handle(tools.SUBMIT, SimpleNamespace(arguments=GOOD))  # noqa: SLF001
+        return st
+
+    st = accepted()
+    st.on_event(message("gpt-6-luna"))
+    st.on_event(message("claude-haiku-5.5", parent="call-1"))
+    assert (st.run.ending, st.run.head) == ("result", HEAD)
+    assert [e["model"] for e in st.events if e.get("event") == "subagent-model"] == ["claude-haiku-5.5"]
+    st.on_event(message("mai-code-1.1-flash"))
+    assert (st.run.ending, st.run.payload, st.run.head) == ("error", None, None)
+    assert st.run.detail == "wrong model: a turn ran on mai-code-1.1-flash, the step needs gpt-6-luna"
+    st = accepted()
+    st.on_event(SimpleNamespace(type=SimpleNamespace(value="session.auto_mode_resolved"), data=SimpleNamespace()))
+    assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, "wrong model: the runtime resolved auto")
+    st = accepted()
+    turn = SimpleNamespace(turn_id="t", model="gpt-6-sol", parent_tool_call_id=None)
+    st.on_event(SimpleNamespace(type=SimpleNamespace(value="assistant.turn_start"), data=turn))
+    assert (st.run.ending, st.run.detail) == (
+        "error",
+        "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna",
+    )
+
+
+def test_usage_naming_an_unattributed_model_voids_the_result_and_an_unnamed_model_never_starts(monkeypatch) -> None:
+    usage = {"models": {"gpt-6-luna": {}, "claude-haiku-5.5": {}, "mai-code-1.1-flash": {}}}
+    assert sdk_adapter.unexpected_models({}, usage, "gpt-6-luna", {"claude-haiku-5.5"}) == ["mai-code-1.1-flash"]
+    assert sdk_adapter.unexpected_models({}, {"models": {"gpt-6-luna": {}}}, "gpt-6-luna", set()) == []
+    before = {"models": {"claude-haiku-5.5": {"tokens": 100}, "gpt-6-luna": {"tokens": 50}}}
+    resumed = {"models": {"claude-haiku-5.5": {"tokens": 100}, "gpt-6-luna": {"tokens": 90}}}
+    assert sdk_adapter.unexpected_models(before, resumed, "gpt-6-luna", set()) == []
+    grown = {"models": {**resumed["models"], "claude-haiku-5.5": {"tokens": 130}}}
+    assert sdk_adapter.unexpected_models(before, grown, "gpt-6-luna", set()) == ["claude-haiku-5.5"]
+    assert sdk_adapter.unexpected_models({"error": "RuntimeError"}, grown, "gpt-6-luna", set()) == []
+    monkeypatch.setattr(sdk_adapter, "CopilotClient", lambda **_: pytest.fail("no runtime may start"))
+    run = asyncio.run(sdk_adapter.run(step().cfg))
+    assert (run.ending, run.detail) == ("error", "wrong model: the step names no model (TD-32)")
 
 
 def test_a_missing_session_is_replaced_only_once_earlier_processes_are_gone(monkeypatch) -> None:
