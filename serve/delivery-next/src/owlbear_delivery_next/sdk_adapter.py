@@ -156,9 +156,29 @@ class _Step:
             self.gate.revoke("wrong model: the runtime resolved auto")
         elif kind == "assistant.message":
             self.model_seen(getattr(ev.data, "model", None), getattr(ev.data, "parent_tool_call_id", None))
+        elif kind == "assistant.usage":
+            self.call_seen(ev.data)
+        elif kind == "subagent.started":
+            source = getattr(ev.data, "model_selection_source", None)
+            model = getattr(ev.data, "model", None)
+            if model and model.lower() == "auto":
+                self.gate.revoke("wrong model: a subagent ran on auto")
+            else:  # logged only; the subagent's own calls and messages decide what it may use
+                self.log(event="subagent-start", model=model, source=getattr(source, "value", source))
+
+    def call_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK usage event data
+        """One billed call: Auto voids the step for anyone (TD-53); the main agent's own calls name its model."""
+        parent = getattr(data, "parent_tool_call_id", None)
+        if getattr(data, "is_auto", None):
+            self.gate.revoke(f"wrong model: a {'subagent ' if parent else ''}call ran on auto")
+            return
+        self.model_seen(getattr(data, "model", None), parent)
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
-        """Void the step when its own agent runs on another model; a subagent's model is only logged."""
+        """Void the step when its own agent runs on another model; a subagent may use any named model (TD-53)."""
+        if model and parent and model.lower() == "auto":
+            self.gate.revoke("wrong model: a subagent ran on auto")
+            return
         if not model or not self.cfg.model or model == self.cfg.model:
             return
         if parent:

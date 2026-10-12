@@ -306,6 +306,51 @@ def test_a_turn_on_another_model_voids_even_an_accepted_result_but_a_subagent_mo
     )
 
 
+def test_a_subagent_on_auto_voids_the_step_and_a_runtime_chosen_subagent_model_is_logged() -> None:
+    def started(model: str | None, source: str) -> SimpleNamespace:
+        data = SimpleNamespace(agent_name="general-purpose", model=model, model_selection_source=source)
+        return SimpleNamespace(type=SimpleNamespace(value="subagent.started"), data=data)
+
+    def usage(model: str, parent: str | None = None, *, auto: bool | None = False) -> SimpleNamespace:
+        data = SimpleNamespace(model=model, parent_tool_call_id=parent, is_auto=auto)
+        return SimpleNamespace(type=SimpleNamespace(value="assistant.usage"), data=data)
+
+    def accepted() -> sdk_adapter._Step:
+        trees = iter([Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",))])
+        st = step()
+        st.cfg = dataclasses.replace(st.cfg, model="gpt-6-luna", observe=lambda: next(trees), checks=("npm test",))
+        st.gate.cfg = st.cfg
+        st._handle(tools.SUBMIT, SimpleNamespace(arguments=GOOD))  # noqa: SLF001
+        return st
+
+    st = accepted()
+    st.on_event(started("claude-haiku-5.5", "agent_definition_default"))
+    st.on_event(started("mai-code-1.1-flash", "runtime_policy"))  # "runtime policy, Auto mode, or an experiment"
+    st.on_event(usage("gpt-6-luna", auto=None))
+    st.on_event(usage("claude-haiku-5.5", parent="call-1"))
+    assert (st.run.ending, st.run.head) == ("result", HEAD)
+    assert [(e["model"], e["source"]) for e in st.events if e.get("event") == "subagent-start"] == [
+        ("claude-haiku-5.5", "agent_definition_default"),
+        ("mai-code-1.1-flash", "runtime_policy"),
+    ]
+    assert st.subagent_models == {"claude-haiku-5.5"}  # a start alone never excuses a model in the final usage
+    st.on_event(started("auto", "explicit_override"))
+    assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, "wrong model: a subagent ran on auto")
+
+    for event, detail in [
+        (usage("mai-code-1.1-flash", parent="call-2", auto=True), "wrong model: a subagent call ran on auto"),
+        (usage("gpt-6-luna", auto=True), "wrong model: a call ran on auto"),
+        (usage("mai-code-1.1-flash"), "wrong model: a turn ran on mai-code-1.1-flash, the step needs gpt-6-luna"),
+    ]:
+        st = accepted()
+        st.on_event(event)
+        assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, detail)
+    st = accepted()
+    message = SimpleNamespace(content="", model="auto", parent_tool_call_id="call-1")
+    st.on_event(SimpleNamespace(type=SimpleNamespace(value="assistant.message"), data=message))
+    assert (st.run.ending, st.run.detail) == ("error", "wrong model: a subagent ran on auto")
+
+
 def test_usage_naming_an_unattributed_model_voids_the_result_and_an_unnamed_model_never_starts(monkeypatch) -> None:
     usage = {"models": {"gpt-6-luna": {}, "claude-haiku-5.5": {}, "mai-code-1.1-flash": {}}}
     assert sdk_adapter.unexpected_models({}, usage, "gpt-6-luna", {"claude-haiku-5.5"}) == ["mai-code-1.1-flash"]
