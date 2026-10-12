@@ -721,6 +721,65 @@ global with per-project overrides).
 applies (SDK steps, logs read afterwards), and window steps are unguarded until the watcher exists
 (D6). Real cost per runtime is measured with the R4 comparison.
 
+**Overnight build plan, 2026-10-12** (owner scope: the build items that do not need the watcher,
+plus the config page; routing stays off). Each item is built test first: a failing test, the
+change, ruff, the full delivery-next suite, a Sol review of the diff, then a commit and push to
+`next/m4-slice1` (PR #449). Live proofs use throwaway folders and are cleaned up.
+
+1. **TD-32 in the SDK.** `_usage` today flags only a missing named model.
+   - New rule: a session fails if its usage names any model the step did not allow (the step's
+     model, plus subagent models named in config), or if the runtime resolved `auto`.
+   - The run ends as an error with the reason, like the window route's "wrong-model".
+   - First check which models a normal SDK step's usage lists (old step journals), to avoid false
+     stops from runtime-internal models.
+2. **TD-48 window start in `vscode_step`.**
+   - Replace the bootstrap prompt and cancel with `code chat "!echo OWLBEAR-<nonce>"` and bind by the
+     nonce.
+   - Wait for the shell turn to end, then open a new agent-host connection (the tested sign-in) and
+     wait until the step's model is listed. Model never listed: end "model-unavailable" with the
+     reason.
+   - Steering and reminder messages carry model, effort and agent.
+   - Live proof: Luna `low`, then short Opus and Sol turns, then one full builder step, plus the
+     window-tool filter test (does `tools:` hide window tools).
+3. **C7 attachments in the window.** Visual attachments become `embeddedResource` parts of the first
+   message. The SDK-only rule in `runner._session` and `vscode_adapter` goes. Live proof: one reviewer
+   step with real screenshots.
+4. **Config structure and migration (TD-52).**
+   - A global config file under `~/Library/Application Support/OwlBear/` holds: the visibility
+     switch, runtimes on or off, desktop widths, and per agent needs-visibility, default runtime,
+     model, effort, context size, default categories.
+   - Per-project overrides live in the project profile.
+   - Migration: `Profile.roles` becomes project overrides of model and effort, and
+     `Profile.runtime = vscode` becomes a project override of the visibility switch. Effective
+     settings stay identical, and a test proves it.
+   - Model and effort resolution reads the new structure. Context size is stored but not yet passed;
+     the per-runtime mapping is a gating fact.
+5. **Config page.** `web/config.html` at `/config`, with GET and PUT `/api/next/config` (global) and
+   project overrides; same token and local-only rules as the Changes page.
+   - Shows the switch, runtimes with their catalogue rows, and per agent fields.
+   - The runtime picker shows categories now; concrete tool lists once mapped (gating fact).
+6. **Missing-tool result (TD-36).** A new result tool `report_missing_tool` (tool or category, what
+   failed) and an ending that Delivery classifies:
+   - a temporary error retries;
+   - with routing off, a category another runtime has becomes an owner-setup request;
+   - setup the owner can do (for example a browser install) becomes a decision request naming the
+     action;
+   - a category that exists nowhere goes back to planning.
+
+   `FINISH` keeps `ask_question` for decisions and missing information; tools go through the new
+   result.
+7. **TD-49 capture.**
+   - Widths come from config (default 1280, 1920, 2400, each 1280 to 2400; phone size gone).
+   - Console and page errors are collected per state and width for "before" and "after"; errors new
+     since "before" fail the check, existing ones are reported (TD-51); the reviewer prompt lists
+     them.
+   - Recipe states may carry simple steps (click, type) run before the shot, and the brief schema
+     follows.
+   - The reviewer's optional `browser` category waits for routing.
+
+Then research for the next session: watcher design options and reusable implementations, grounded in
+existing code and Sol-challenged.
+
 ## 4. Recommendation, Confidence, and Limits
 
 **Recommendation:** treat this as a re-founding with the weight on design. Let the open Changes
