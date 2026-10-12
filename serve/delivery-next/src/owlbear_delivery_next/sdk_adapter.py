@@ -48,6 +48,7 @@ STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
 NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
+USAGE_PAUSE = 2.0  # seconds before the one repeated usage read (TD-54)
 
 
 def cli_path() -> str:
@@ -123,6 +124,8 @@ class _Step:
         self.turn = self.idle = False
         self.subagent_models: set[str] = set()
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
+        self.session: CopilotSession | None = None  # kept as soon as it opens, even if the first send fails
+        self.sending = False  # a first message was sent or attempted, so a model may have run
         self.gate = Gate(cfg, self.run, self.log, self._wake)
         self.changed = asyncio.Event()
         self.shown = float("-inf")  # monotonic time of the last now-line write
@@ -337,6 +340,24 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
     return {"credits": None if nano is None else nano / 1e9, "models": models, "model_mismatch": mismatch}
 
 
+async def _usage_read(session: CopilotSession, requested: str | None) -> dict[str, Any]:
+    """The usage, read once more after a pause when the first read fails (TD-54)."""
+    usage = await _usage(session, requested)
+    if "error" in usage:
+        await asyncio.sleep(USAGE_PAUSE)
+        usage = await _usage(session, requested)
+    return usage
+
+
+def unread(before: dict[str, Any], after: dict[str, Any]) -> str:
+    """Why the model check cannot run for this invocation; empty when both reads it needs worked (TD-54)."""
+    if "error" in before:
+        return f"the usage before the resumed turn could not be read ({before['error']})"
+    if "error" in after:
+        return f"the usage at the step's end could not be read ({after['error']})"
+    return ""
+
+
 async def _settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
     end = time.monotonic() + (SETTLE if limit is None else limit)
     # Polls the OS process table; there is no event to wait on.
@@ -408,7 +429,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     sid, message, resumed = cfg.session_id, cfg.message, False
     if cfg.resume and await _call(client.get_session_metadata(sid), "session lookup") is not None:
         session = await _call(client.resume_session(sid, **opts), "session resume", START)
-        resumed = True
+        st.session, resumed = session, True
         try:
             events = await _call(session.get_events(), "transcript read")
         except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
@@ -423,9 +444,11 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             sid, message = new, cfg.fresh
             st.run.session_id = sid
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
+        st.session = session
     st.log(event="session", id=sid, resumed=resumed, resent=message != prompts.CONTINUE, runtime=st.run.runtime_pid)
-    st.billed = await _usage(session, cfg.model) if resumed else {}
+    st.billed = await _usage_read(session, cfg.model) if resumed else {}
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
+    st.sending = True
     await _call(session.send(message, **extra), "send")
     cfg.journal.delivered()
     return session
@@ -451,7 +474,11 @@ async def run(cfg: Session) -> Run:
         st.finish("deadline", detail=str(exc) or "step deadline")
     except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
-    st.run.usage = await _usage(session, cfg.model) if session else {}
+    session = st.session
+    st.run.usage = await _usage_read(session, cfg.model) if session else {}
+    st.run.usage_unread = unread(st.billed, st.run.usage) if st.sending else ""
+    if st.run.usage_unread:
+        st.log(event="usage-unread", reason=st.run.usage_unread)
     if wrong := unexpected_models(st.billed, st.run.usage, cfg.model, st.subagent_models):
         st.gate.revoke(f"wrong model: the usage names {', '.join(wrong)}, the step needs {cfg.model}")
     st.run.termination = await _teardown(client, session, st) if client else Termination(confirmed=True)

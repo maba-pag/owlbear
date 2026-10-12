@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from owlbear_delivery_next import tools
-from owlbear_delivery_next.failures import QUOTA, cause_key, quota, transient
+from owlbear_delivery_next.failures import QUOTA, UNREAD, cause_key, quota, transient
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 from owlbear_delivery_next.processes import Termination
@@ -32,6 +32,15 @@ class Run:
     invalid: int = 0
     quota: bool = False  # the runtime reported the Copilot quota exhausted
     quota_reset: datetime | None = None  # when it said the quota resets
+    usage_unread: str = ""  # why the model check could not run; such a run is never processed (TD-54)
+
+
+def usage_gate(run: Run, kind: StepKind) -> StepResult:
+    """TD-54: the step's result is not accepted; the Change waits until the owner runs the step again."""
+    text = f"The model check could not run: {run.usage_unread}. The step's result was not accepted."
+    retry = Option(id="retry", label="Run this step again", next="retry")
+    question = Question(step=kind, text=text, options=[retry], cause=cause_key(ErrorKind.LIVENESS, kind, UNREAD))
+    return StepResult(exit=Exit.ASK, reason=text, question=question)
 
 
 def missing_cause(kind: StepKind) -> str:

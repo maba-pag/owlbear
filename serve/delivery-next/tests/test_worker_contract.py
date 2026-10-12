@@ -366,6 +366,70 @@ def test_usage_naming_an_unattributed_model_voids_the_result_and_an_unnamed_mode
     assert (run.ending, run.detail) == ("error", "wrong model: the step names no model (TD-32)")
 
 
+def test_usage_is_read_once_more_and_a_still_unread_read_names_why_the_check_cannot_run(monkeypatch) -> None:
+    class Usage:
+        def __init__(self, fails: int) -> None:
+            self.fails = fails
+
+        async def get_metrics(self) -> SimpleNamespace:
+            if self.fails:
+                self.fails -= 1
+                raise RuntimeError
+            tokens = SimpleNamespace(input_tokens=5, output_tokens=7)
+            luna = SimpleNamespace(total_nano_aiu=2e9, usage=tokens)
+            return SimpleNamespace(total_nano_aiu=2e9, model_metrics={"gpt-6-luna": luna})
+
+    monkeypatch.setattr(sdk_adapter, "USAGE_PAUSE", 0)
+    once = SimpleNamespace(rpc=SimpleNamespace(usage=Usage(1)))
+    assert asyncio.run(sdk_adapter._usage_read(once, "gpt-6-luna"))["models"]["gpt-6-luna"]["tokens"] == 12  # noqa: SLF001
+    twice = SimpleNamespace(rpc=SimpleNamespace(usage=Usage(2)))
+    after = asyncio.run(sdk_adapter._usage_read(twice, "gpt-6-luna"))  # noqa: SLF001
+    assert after == {"error": "RuntimeError"}
+    assert sdk_adapter.unread({}, after) == "the usage at the step's end could not be read (RuntimeError)"
+    before = sdk_adapter.unread({"error": "TimeoutError"}, {"models": {}})
+    assert before == "the usage before the resumed turn could not be read (TimeoutError)"
+    assert sdk_adapter.unread({}, {}) == sdk_adapter.unread({}, {"models": {}}) == ""
+
+
+def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(monkeypatch) -> None:
+    class Session:
+        def __init__(self) -> None:
+            self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
+
+        async def metrics(self) -> None:
+            raise RuntimeError
+
+        async def send(self, *_a, **_k) -> None:
+            raise ConnectionError
+
+    class Client:
+        opens = True
+
+        def __init__(self, **_k) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **_k) -> Session:
+            if not Client.opens:
+                raise ConnectionError
+            return Session()
+
+    async def teardown(*_a) -> Termination:
+        return Termination(confirmed=True)
+
+    monkeypatch.setattr(sdk_adapter, "CopilotClient", Client)
+    monkeypatch.setattr(sdk_adapter, "cli_path", lambda: "copilot")
+    monkeypatch.setattr(sdk_adapter, "_teardown", teardown)
+    monkeypatch.setattr(sdk_adapter, "USAGE_PAUSE", 0)
+    cfg = dataclasses.replace(step().cfg, model="gpt-6-luna", resume=False)
+    run = asyncio.run(sdk_adapter.run(cfg))
+    assert (run.ending, run.usage_unread) == ("error", "the usage at the step's end could not be read (RuntimeError)")
+    Client.opens = False  # nothing opened, so no model ran
+    assert asyncio.run(sdk_adapter.run(cfg)).usage_unread == ""
+
+
 def test_a_missing_session_is_replaced_only_once_earlier_processes_are_gone(monkeypatch) -> None:
     monkeypatch.setattr(processes, "alive", lambda pid, _c: pid == 7)
     st = step(replaced=lambda: "s2")

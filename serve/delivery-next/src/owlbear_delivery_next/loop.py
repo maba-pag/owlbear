@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import Field
 
 from owlbear_delivery_next import budgets, evidence
-from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, kind_of
+from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, kind_of
 from owlbear_delivery_next.inbox import (
     AnswerItem,
     BriefApproval,
@@ -119,6 +119,12 @@ def open_question(c: Change) -> Question | None:
 def ordinary(q: Question) -> bool:
     """A worker's question, answerable in chat; engine-raised decisions with a cause stay Changes-page actions (T6)."""
     return q.cause is None
+
+
+def usage_gated(c: Change) -> bool:
+    """The step's model check could not read its usage; nothing of it runs until the owner reruns it (TD-54)."""
+    o = c.outcome
+    return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
 
 
 def brief_ready(c: Change) -> bool:
@@ -250,17 +256,29 @@ def _intent(c: Change, item: IntentItem) -> None:
             c.intent.words, c.intent.hold = item.text, True
 
 
+def _target(q: Question, option: str | None) -> str | None:
+    """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
+    if q.options and all(o.next == "retry" for o in q.options):
+        return "retry"
+    return next((o.next for o in q.options if o.id == option), None)
+
+
 def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
     if q is None:
         return
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
-    if c.outcome and c.outcome.question == q.id:
+    gate = bool(c.outcome and c.outcome.question == q.id)
+    if gate:
         c.outcome = None
-    target = next((o.next for o in q.options if o.id == item.option), None)
+    target = _target(q, item.option)
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
-    if target == "pause":
+    if target == "retry":
+        q.effect_observed_at = item.at  # the answer is never resumed into the session it rejected
+        if gate:
+            go(c, c.step.kind, c.step.task, c.step.mode)
+    elif target == "pause":
         c.intent.paused_at, c.intent.pause_reason = now, q.text
     elif target == "done":
         _done(c, None, now)

@@ -45,10 +45,21 @@ from owlbear_delivery_next.steps import (
 from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
 
 if TYPE_CHECKING:
-    from owlbear_delivery_next.models import Change
+    from owlbear_delivery_next.models import Change, Step
     from owlbear_delivery_next.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
+TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
+
+
+class UsageUnreadError(Exception):
+    """A session whose model check could not run; its run is never processed (TD-54)."""
+
+    def __init__(self, run: session_result.Run) -> None:
+        super().__init__(run.usage_unread)
+        self.run = run
+
+
 type Result = loop.StepResult
 
 
@@ -86,7 +97,10 @@ def _session(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
     """Run one agent session where the profile's runtime says (TD-35); screenshots go through the SDK only."""
     if (store.read_profile() or Profile()).runtime == "vscode" and not cfg.attachments:
         return vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
-    return asyncio.run(sdk_adapter.run(cfg))
+    run = asyncio.run(sdk_adapter.run(cfg))
+    if run.usage_unread and run.termination and run.termination.confirmed:  # else the termination stop wins
+        raise UsageUnreadError(run)
+    return run
 
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -159,7 +173,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             change.overlaps = overlap.found(result.plan, others, overlap.generated(path))
         end = datetime.now(UTC)
     result = overlap.integrated(store, change, path, (start, run.ending), result)
-    if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "target" and s.kind == StepKind.BUILD:
+    if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     if answer and session_result.effect_seen(run):
         change = budgets.effect_observed(change, answer.id, end)
@@ -331,22 +345,33 @@ def main(argv: list[str] | None = None) -> int:
         with store.lock(args.change) as lock:
             state, moved = engine.observe(store, repo, args.change)
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved)
-            if step is not None and check.capturing(change):
-                _visual(store, lock, change, repo)
-            elif step is not None and before.due(change):
-                _before(store, lock, change, repo)
-            elif step is None or change.env is not None:
-                _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
-            elif step.kind in AGENT:
-                _agent(store, lock, change, repo)
-            elif step.kind == StepKind.SHAPE and loop.brief_due(change):
-                _brief_review(store, lock, change, repo)
-            else:
-                _engine(store, lock, change, repo)
+            _step(store, lock, change, step, repo)
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:
         _out(f"{args.change}: {exc}; another runner holds it")
     return 0
+
+
+def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
+    """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
+    try:
+        if step is not None and check.capturing(change):
+            _visual(store, lock, change, repo)
+        elif step is not None and before.due(change):
+            _before(store, lock, change, repo)
+        elif step is None or change.env is not None:
+            _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
+        elif step.kind in AGENT:
+            _agent(store, lock, change, repo)
+        elif step.kind == StepKind.SHAPE and loop.brief_due(change):
+            _brief_review(store, lock, change, repo)
+        else:
+            _engine(store, lock, change, repo)
+    except UsageUnreadError as exc:
+        held = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
+        gated = loop.apply(held, session_result.usage_gate(exc.run, held.step.kind), datetime.now(UTC))
+        store.write(lock, gated)
+        _log(store, lock, gated, exc.run, {"kind": held.step.kind, "exit": Exit.ASK})
 
 
 if __name__ == "__main__":

@@ -1475,6 +1475,25 @@ def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
     assert (c.step.kind, c.step.task) == (StepKind.BUILD, "t1")
 
 
+def test_a_target_premise_from_a_session_whose_processes_remain_is_never_acted_on(tmp_path, clone, monkeypatch):
+    cx = ctx(tmp_path, FakeGh(pr(head=A)))
+    c = change(StepKind.BUILD, worktree=str(clone))
+    c.step.task = "t1"
+    cx.store.write(cx.lock, c)
+    premise, _ = tools.parse(
+        tools.WrongPremise, {"stage": "target", "reason": "greet() exists only on main", "evidence": ["main"]}
+    )
+
+    async def build(cfg):
+        return Run(cfg.session_id, "premise", premise, termination=processes.Termination(confirmed=False, unknown=(7,)))
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", build)
+    runner._agent(cx.store, cx.lock, cx.store.read("c1"), clone)  # noqa: SLF001
+    after = cx.store.read("c1")
+    assert (after.outcome.exit, [t.id for t in after.plan.tasks]) == (Exit.STOP, ["t1"])
+
+
 def commit(cwd, name):
     (cwd / name).write_text(f"{name}\n")
     git(cwd, "add", name)

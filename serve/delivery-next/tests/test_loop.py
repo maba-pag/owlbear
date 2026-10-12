@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next import budgets, evidence, failures, loop
+from owlbear_delivery_next import budgets, evidence, failures, loop, session_result
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, Recovery
 from owlbear_delivery_next.loop import StepResult
@@ -27,6 +27,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
+from owlbear_delivery_next.session_result import Run
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 LATER = NOW + timedelta(hours=1)
@@ -261,6 +262,21 @@ def test_third_round_of_findings_asks_and_accepting_moves_on():
     assert c.outcome.exit == Exit.ASK
     c, step = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="accept")], NOW)
     assert (step.kind, step.task) == (K.BUILD, "t2")
+
+
+def test_unread_usage_blocks_until_the_owner_runs_the_same_step_again_fresh():
+    run = Run("s1", ending="result", usage_unread="the usage at the step's end could not be read (RuntimeError)")
+    c = change(K.REVIEW)
+    c.step.session = "s1"
+    c = loop.apply(c, session_result.usage_gate(run, K.REVIEW), NOW)
+    q = loop.open_question(c)
+    assert (c.outcome.exit, loop.ordinary(q), [o.next for o in q.options]) == (Exit.ASK, False, ["retry"])
+    assert "could not be read (RuntimeError)" in q.text
+    assert loop.next_step(c, LATER) is None
+    for item in (AnswerItem(at=LATER, question=q.id, option="retry"), AnswerItem(at=LATER, question=q.id, text="go")):
+        after, step = loop.schedule(c, [item], LATER)
+        assert (step.kind, step.task, step.mode, step.session) == (K.REVIEW, "t1", None, None)
+        assert after.questions[-1].effect_observed_at == LATER  # never resumed as a worker's answer
 
 
 def test_renamed_task_with_the_same_scope_keeps_its_review_rounds():

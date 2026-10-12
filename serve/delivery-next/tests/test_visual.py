@@ -307,6 +307,42 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
     assert merge.visual_ok(after, head, [])
 
 
+def test_a_verdict_whose_usage_stayed_unread_is_never_recorded_and_the_owner_reruns_the_check(flow):
+    c = checking(flow.store, flow.clone)
+    plain = flow.review.__call__
+
+    async def unread(cfg):
+        run = await plain(cfg)
+        run.usage_unread = "the usage at the step's end could not be read (RuntimeError)"
+        return run
+
+    flow.mp.setattr(runner.sdk_adapter, "run", unread)
+    flow.mp.setattr(flow.store, "log", lambda *_a: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    with pytest.raises(OSError, match="No space"):  # the gate is written before anything that can fail
+        runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    q = loop.open_question(after)
+    assert (after.visual, after.outcome.exit, [o.next for o in q.options]) == (c.visual, Exit.ASK, ["retry"])
+    assert "could not be read (RuntimeError)" in q.text
+    assert check.action(after, live=True, paths={}) == "dispose"  # no capture resumes before the owner answers
+
+
+def test_a_session_whose_processes_remain_stops_on_them_even_with_its_usage_unread(flow):
+    c = checking(flow.store, flow.clone)
+    flow.review.termination = processes.Termination(confirmed=False, survivors=(7,))
+    plain = flow.review.__call__
+
+    async def unread(cfg):
+        run = await plain(cfg)
+        run.usage_unread = "the usage at the step's end could not be read (RuntimeError)"
+        return run
+
+    flow.mp.setattr(runner.sdk_adapter, "run", unread)
+    runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    assert (after.outcome.exit, after.stop.reason) == (Exit.STOP, "termination unverified: processes 7 still present")
+
+
 def test_the_reviewer_must_cover_every_screenshot(flow):
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     st = sdk_adapter._Step(flow.review.calls[0], SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001

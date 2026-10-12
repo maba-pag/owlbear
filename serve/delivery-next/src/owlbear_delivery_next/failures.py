@@ -20,6 +20,7 @@ SPLITTABLE = frozenset(
     {ErrorKind.CHECKS, ErrorKind.REVIEW, ErrorKind.SCOPE, ErrorKind.COMMIT_POLICY, ErrorKind.CONFLICT}
 )
 QUOTA = "quota"  # the cause subject of an exhausted Copilot quota: waited out, never asked about
+UNREAD = "usage-unread"  # the cause subject of a step whose model check could not read its usage (TD-54)
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _NETWORK = re.compile(

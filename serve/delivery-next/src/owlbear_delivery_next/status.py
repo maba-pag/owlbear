@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next import loop
 from owlbear_delivery_next.budgets import EPISODE_QUIET, RETRY_LIMIT, episode
 from owlbear_delivery_next.failures import QUOTA
 from owlbear_delivery_next.loop import CONSENT
@@ -176,6 +177,8 @@ def status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return Status(f"{s} · paused by you {_age(now - c.intent.paused_at)} ago", "Resume", "you")
     if c.intent.hold and activity.runner_alive:
         return Status(f"{s} · holding for your change: finishing {c.step.kind}", None, "delivery")
+    if loop.usage_gated(c):
+        return Status(f"{s} · stopped: {o.reason}", "Run this step again", "you")
     if o and o.exit == Exit.ASK:
         return Status(f"{s} · waiting for you: {o.reason}", "Approve merge" if o.cause == CONSENT else "Answer", "you")
     if o and o.exit == Exit.STOP and c.stop:

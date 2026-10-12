@@ -87,6 +87,11 @@ def test_finished_change_is_not_overlaid():
             Activity(host_up=True, runner_alive=True, last_event_at=NOW),
             Status("Build 2/2 · implementing: rate limiter · last denied: docker compose up", None, "delivery"),
         ),
+        (
+            build(outcome=Outcome(exit=Exit.ASK, cause="liveness:build:usage-unread", reason="no usage", at=NOW)),
+            Activity(host_up=True),
+            Status("Build 2/2 · stopped: no usage", "Run this step again", "you"),
+        ),
     ],
 )
 def test_first_matching_rule_gives_line_action_and_actor(change, activity, expected):

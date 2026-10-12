@@ -177,11 +177,11 @@ class Decision(Record):
 
 
 class Option(Record):
-    """One answer option; ``next`` names the step it leads to, or ``done``, ``pause`` or ``abandon``."""
+    """One answer option; ``next`` names the step it leads to, or ``done``, ``pause``, ``abandon`` or ``retry``."""
 
     id: str
     label: str
-    next: StepKind | Literal["done", "pause", "abandon"] | None = None
+    next: StepKind | Literal["done", "pause", "abandon", "retry"] | None = None
 
 
 class Answer(Record):
