@@ -260,7 +260,14 @@ A denial by Delivery's guard never leads to more tools (R6) | `decided`: chose "
 | TD-45 | The SDK route keeps its hard guard against writes outside the worktree permanently; in VS Code the watcher governs such writes (D6) | `decided`: "Keep it permanently on the SDK route" (chosen among three) | 2026-10-11 |
 | TD-46 | Intended writes outside the worktree: Delivery's own state, temporary files and the user's tool caches; anything else is stopped by the watcher unless the brief names it | `decided`: "Allowed: Delivery's own state, temporary files, the user's tool caches; anything else is stopped unless the brief names it" (chosen among three) | 2026-10-11 |
 | TD-47 | The watcher agent's model and effort are chosen after the benchmark of TD-27 | `decided`: "Decide after the benchmark (N2)" | 2026-10-11 |
-| TD-48 | A VS Code window step starts with a shell-only first turn (`code chat "!echo <nonce>"`, no model call), so the window owns the chat and serves its tools. Delivery waits until the agent host lists the step's model, then sends every turn with model and effort. Guards: a turn on any other model stops the step; a model that never appears ends it with a reason. Replaces the cancelled first turn; resolves C6 ([runtime research P14](delivery-next-agent-runtime.md)) | `decided`: "Build this route with the guards" (chosen among five, the recommendation) | 2026-10-11 |
+| TD-48 | Starting a window step (read-back of 2026-10-12; applies to every visible step and every step with window tools, TD-35).
+- The window's first turn is shell-only (`code chat "!echo <nonce>"`, no model call), so the window owns the chat and serves its tools.
+- Delivery signs in to the agent host again and waits until it lists the step's model.
+- Every turn, including steering messages and reminders, names model and effort.
+- A turn on any other model stops the step; a model that never appears ends it with a reason.
+- The proof covers Opus, Sol and a full step.
+
+Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `autonomous`: the owner chose "take your recommendation" among four variants and the TD-41 closing options. The assistant picked "as recorded, made complete" because it is the only fully tested variant (sign-in plus wait, 3 of 3 runs). A restart cannot undo a turn already billed to another model, and the cancelled first turn starts on the window's model. Risk: a later drop of the model list stops the step. The original choice of 2026-10-11 came from a question that carried a recommendation mark, against TD-41 | 2026-10-12 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
