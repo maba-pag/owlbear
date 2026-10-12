@@ -461,13 +461,13 @@ widened).
 | 1 Settled repairs | TD-27 roles, N3 | `roles.py`: builder `claude-opus-5.5` `medium` (also the default), reviewer `gpt-6.1-sol` `xhigh`, challenger `gpt-6.1-sol` `high`; planner stays Opus `high`. `RoleModel` drops the rule that Luna and Haiku run only at `max`, keeps the refusal of `auto` | A configured `gpt-6-luna` `low` and `claude-haiku-5.5` `medium` load; `auto` is refused; the next useful real review reports `gpt-6.1-sol` `xhigh` |
 | 1 | C4 human replies (TD-30) | `no-action` refused for every human-authored item, not only review threads | A human issue comment answered `no-action` is rejected; a bot notice still passes |
 | 1 | N9 outside writes (D6, TD-45) | Delete the rule from `agents/builder.md`; the SDK route's hard guard stays | Deletion inspected |
-| 2 Probes | C6 first turn (TD-32) | P7, P9 and P11 showed a cold window's first turn ignores the agent file's model and effort. Probe instead: create the working chat over the agent host in the window's session with `initialMessage.model` and its thinking level, without a bootstrap turn, and check that VS Code's tools still attach | For every turn, including any cancelled one, the requested model and effort equal the ones the host reports running; billing corroborates; VS Code tools listed |
-| 2 | C7 screenshots in VS Code (TD-35) | An agent host message with an `EmbeddedResource` PNG attachment that holds a fact absent from the prompt and file name | The model states that fact |
+| 2 Probes | C6 first turn (TD-32) | Done (P14). The planned probe (no bootstrap turn) gave the right model but no window tools. The route chosen instead is TD-48 | P14 runs 3 to 5, Sol-verified host records |
+| 2 | C7 screenshots in VS Code (TD-35) | Done (P14): an `embeddedResource` PNG over the agent host reaches the model | Colours named in all runs; position swapped in 2 of 7 at Luna `low` |
 | 3 Watcher | N1 design | Ideation and design with the owner, Read-Back included: what it reads (SDK events, agent host chat), how it steers (steering message) and stops (turn cancel and the session's processes), which outside actions are allowed or stopped, D6's retry once then ask, its model and effort | Owner-approved design |
 | 3 | N2 benchmark (TD-27, TD-47) | Luna `max` vs Haiku `high`, Haiku `xhigh` vs Sol `low` on OwlBear's own tasks, quality and cost; informs the cheap tier and the watcher's model, chosen with the owner | Results table; owner's choice |
 | 3 | N1 build | Watcher for both runtimes, on the model chosen after N2; stops writes outside the worktree except Delivery's state, temporary files, tool caches and what the brief names (TD-46) | Live: it reads a running step, steers it once, stops an unwanted outside write, the step is retried once with its reason, a second stop asks the owner |
 | 4 Visual baseline | C1, C2, N6 | [Visual-baseline plan](delivery-next-visual-baseline.md) slices 1 to 5; until the watcher exists, steps may run outside VS Code with their logs read afterwards (TD-44) | As in that plan |
-| 5 Runtime | TD-34 dispatch, N5 (TD-36), N4/N10 (D4) | Steps needing VS Code tools start there; a session reporting missing tools is retried once in VS Code. Agent mode follows the role's question tool instead of the fixed `autopilot` in `vscode_adapter.CONFIG`; Delivery's `ask_question` (which already blocks the task until answered) stays available to all roles; an action-request kind is added only if missing | Per item |
+| 5 Runtime | TD-34, TD-35, TD-36, TD-50 (read back 2026-10-12), N4/N10 (D4) | Superseded by the approved design §3.13 and its build order | Per item of §3.13 |
 | 5 | TD-41 to TD-43 in Delivery | Read-back before brief approval in the delivery skill; free-text answers to Delivery questions offered as readings to choose from, with the question tool's option limit raised from five to eight | An unconfirmed free-text answer is not recorded as authority; the chosen reading is |
 | 6 Design first | C3 collision test, C5 change of mind | Short design each, Sol-challenged, then build | Per design |
 | Later | N7 account split, N8 documents repository, TD-10 review | When the first real project starts | — |
@@ -494,13 +494,24 @@ Phase 2 status, 2026-10-11 ([runtime research P14](delivery-next-agent-runtime.m
   passed in 2 runs in a Delivery-created session and 3 in window chats. The fix is to send VS Code
   steps' screenshots that way instead of through the SDK. Left and right were swapped in 2 of 7
   runs at Luna `low`, so position claims need a stronger model or a labelled image.
-- C6: probably caused by the agent host offering only Auto for a moment after each new window opens.
-  TD-48 decides the route: a shell-only first turn, wait for the model list, then turns that name
-  model and effort. It passed 3 of 3 with a window tool and an image, and Sol verified the host
-  records. Build items: TD-48 in `vscode_step`, C7 attachments, and a proof covering Opus, Sol and a
-  full step.
+- C6: probably caused by the agent host offering only Auto for a moment after each new window opens
+  (strongly supported, not proven).
+  - TD-48, read back 2026-10-12, sets the route: a shell-only first turn, sign in again and wait
+    for the model list, then every turn names model and effort.
+  - The 3 passing runs did sign-in plus wait; waiting alone is untested.
+  - Chosen, not built. Build items: TD-48 in `vscode_step` with steering and reminders naming the
+    model, C7 attachments, and a proof covering Opus, Sol and a full step.
 - Open: TD-35's wording, now worked as a planned topic (steps 0 to 7, approved by the owner;
-  builds of TD-48 and C7 held until it is through). Step 1 cleanup: 45 probe sessions and ten probe
+  builds of TD-48 and C7 held until it is through). Result on 2026-10-12:
+  - TD-34, TD-35, TD-36 and TD-48 were read back;
+  - TD-49 to TD-52 were decided;
+  - the design §3.13 was approved as written.
+
+  The owner allowed overnight work: the §3.13 build items that do not need the watcher, plus the
+  config page, with routing kept off. Each item gets a failing test, a Sol review and a push.
+  Afterwards, research for the next session (watcher, reusable implementations). Live runs, windows
+  and models as needed. Decisions the assistant takes alone are Sol-challenged; owner decisions
+  wait. Step 1 cleanup: 45 probe sessions and ten probe
   folders removed with consent; disposing a session also deletes its host record, so the six P14
   records were copied first to `.owlbear/scratch/ahp/c6/records/`.
 

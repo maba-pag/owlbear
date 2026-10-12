@@ -227,8 +227,10 @@ transitions, re-entry by observation, the lock, state migration and exported too
 assertions on agent prose wording; agent definitions get structural checks only (TD-3).
 
 UI changes always get a visual check (TD-14): the host launches the preview from the brief's render
-recipe (start command, URL or entry, up to six UI states to capture), takes screenshots at desktop
-and phone sizes, and a reviewer judges them against the criteria. "Before" screenshots of the same
+recipe (start command, URL or entry, up to six UI states to capture), takes screenshots at the
+configured desktop widths (default 1280, 1920 and 2400 px, all between 1280 and 2400), collects
+console and page errors, and a reviewer judges them against the criteria (amended by TD-49, TD-51,
+R7, R8 on 2026-10-12: no phone sizes; errors new since "before" fail the check). "Before" screenshots of the same
 states are captured in shaping, before approval, and serve as the design reference; when the
 target's UI paths changed by the visual check, "before" is retaken from the new starting point. They
 are shown beside the "after" ones on the card without interrupting the run (TD-24, timing TD-38); if

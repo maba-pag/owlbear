@@ -137,7 +137,7 @@ route is a Playwright snippet, and it works (P1): an agent in VS Code can test a
 | Setting | VS Code chat | SDK or CLI |
 | --- | --- | --- |
 | Session model | Picker (W9); `initialMessage` model through AHP (W16) | `model` per session (X7, X2) |
-| Agent-file model for the main agent | `code chat -m <agent>` selects the agent; its `model:` sets the model, so selection is indirect (W7, W13) | SDK `agent=`: not enforced; the session model wins, else `auto` (P2). CLI `--agent`: enforced (P2) |
+| Agent-file model for the main agent | `code chat -m <agent>` selects the agent, but the window ignored its `model:` (P7, P11, P13). The agent host forwards a selected agent's `model` to the runtime (P18, source only) | SDK `agent=`: not enforced; the session model wins, else `auto` (P2). CLI `--agent`: enforced (P2) |
 | Subagent model | `model` in the agent file (W7) | Own model per custom agent (X7, X8) |
 | Effort | Picker (W9); per-model user configuration, global (X5, P9). Header `reasoning-effort` ignored by `code chat` on the Copilot harness (P9). AHP `thinkingLevel` per turn works (P7) | `reasoning_effort` per session and per agent (X7) |
 | Context tier | Picker group; forwarded on session creation and `session.setModel`; undocumented (X4, R1) | `context_tier` and `--context` (X7, X2) |
@@ -248,8 +248,9 @@ Corrections from the review (R2), all accepted:
   agent must match. Anything ambiguous means no action, so the user's own chats are never touched.
 - Each probe showed one part. The correlated run (P11) has now passed: concurrent user chat, nonce
   binding, cancel, browser plus result, steering, window reload and stop.
-- The result channel is the Delivery MCP server, as TD-36 decided. A client tool over AHP also
-  worked (P6); using it instead needs the user's re-decision.
+- The result channel is the Delivery MCP server (step relay, P12 and P13). This was recorded as an
+  owner decision under TD-36, but TD-36 concerns missing tools; corrected 2026-10-12. A client tool
+  over AHP also worked (P6); using it instead needs the user's decision.
 
 **Driver status (`autonomous`):** a stdlib AHP client (`ahp.py`) and a C+ step driver
 (`vscode_step.py`) exist on PR #449 with fake-host tests. A second review by Sol found the driver
