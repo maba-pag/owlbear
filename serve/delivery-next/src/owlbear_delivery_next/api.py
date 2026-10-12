@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import evidence, loop, profile
+from owlbear_delivery_next import config_routes, evidence, loop, profile
 from owlbear_delivery_next.briefs import save_brief
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, PullItem
 from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
@@ -151,11 +151,20 @@ def new_chat(
 
 
 def create_app(  # noqa: C901, PLR0915 - one closure per route
-    store: Store, token: str, host: Host, *, launch: Callable[[], dict[str, Any]] | None = None
+    store: Store,
+    token: str,
+    host: Host,
+    *,
+    launch: Callable[[], dict[str, Any]] | None = None,
+    global_path: Path | None = None,
 ) -> FastAPI:
-    """Return the host's app: the Changes page without data, and a token-guarded API under ``/api/next``."""
+    """Return the host's app: the Changes and Settings pages without data, and a token-guarded API under ``/api/next``.
+
+    ``global_path`` is where the global settings layer lives; None until the owner decides that location.
+    """
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
-    page = files("owlbear_delivery_next").joinpath("web", "changes.html").read_text(encoding="utf-8")
+    web = files("owlbear_delivery_next").joinpath("web")
+    page, settings_page = (web.joinpath(n).read_text(encoding="utf-8") for n in ("changes.html", "config.html"))
     expected = f"Bearer {token}".encode()
     launched, launching = [-LAUNCH_GAP], threading.Lock()
 
@@ -194,6 +203,10 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return page
+
+    @app.get("/config", response_class=HTMLResponse)
+    def settings() -> str:
+        return settings_page
 
     @app.get("/assets/pds/{name}")
     def pds(name: str) -> Response:
@@ -342,5 +355,6 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         read(slug)
         return put(slug, PullItem(at=datetime.now(UTC)))
 
+    router.include_router(config_routes.router(store, global_path))
     app.include_router(router)
     return app

@@ -112,6 +112,9 @@ def test_write_keeps_prev_and_restore_brings_it_back(store):
         (store.root / "changes" / "c1" / "change.json").write_text("{broken")
         with pytest.raises(StoreError, match="unreadable"):
             store.read("c1")
+        (store.root / "changes" / "c1" / "change.json").write_bytes(b'{"slug": "c1\xff"}')
+        with pytest.raises(StoreError, match="unreadable"):
+            store.read("c1")
         store.restore(lock, "c1")
     assert store.read("c1").profile_version == 1
     with pytest.raises(RuntimeError, match="not held"):

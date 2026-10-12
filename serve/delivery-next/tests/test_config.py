@@ -131,6 +131,14 @@ def test_the_global_layer_is_read_and_saved_where_the_caller_says(tmp_path):
         read_layer(path, GlobalLayer)
 
 
+@pytest.mark.parametrize("damaged", [b"", b'{"format": 1, "agents": {"builder": {"model": "x\xff"}}}'])
+def test_an_existing_layer_that_is_empty_or_not_utf8_is_refused_not_read_as_defaults(tmp_path, damaged):
+    path = tmp_path / "config.json"
+    path.write_bytes(damaged)
+    with pytest.raises(StoreError, match="unreadable"):
+        read_layer(path, Layer)
+
+
 def _old_profile(root, roles_: object, fmt: object = 1) -> None:
     root.mkdir(parents=True, exist_ok=True)
     raw = {

@@ -113,9 +113,18 @@ def _load[T: Record](path: Path, model: type[T], current: int, migrations: Migra
     """Read one versioned record, refusing a newer format and migrating an older one forward."""
     name = path.parent.name if path.name == "change.json" else path.stem
     try:
-        data = json.loads(path.read_text())
+        raw = path.read_text()
+    except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
+        msg = f"state of {name} is unreadable"
+        raise StoreError(msg) from exc
+    return _parse(raw, name, model, current, migrations)
+
+
+def _parse[T: Record](raw: str, name: str, model: type[T], current: int, migrations: Migrations) -> T:
+    try:
+        data = json.loads(raw)
         version = int(data.get("format", 0))
-    except (AttributeError, OSError, TypeError, ValueError) as exc:
+    except (AttributeError, TypeError, ValueError) as exc:
         msg = f"state of {name} is unreadable"
         raise StoreError(msg) from exc
     if version > current:
@@ -134,7 +143,20 @@ def _load[T: Record](path: Path, model: type[T], current: int, migrations: Migra
 
 def read_layer[T: Layer](path: Path, model: type[T]) -> T:
     """One settings layer under its format gate; an empty layer before the first save."""
-    return _load(path, model, CONFIG_FORMAT, {}) if path.exists() else model()
+    return read_layer_bytes(path, model)[0]
+
+
+def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
+    """One settings layer and the exact bytes it was parsed from; an absent file is the empty layer."""
+    try:
+        raw = path.read_bytes()
+        text = raw.decode()
+    except FileNotFoundError:
+        return model(), b""
+    except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
+        msg = f"state of {path.stem} is unreadable"
+        raise StoreError(msg) from exc
+    return _parse(text, path.stem, model, CONFIG_FORMAT, {}), raw
 
 
 def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T]) -> T:
