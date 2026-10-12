@@ -136,6 +136,14 @@ def test_the_relay_entry_keeps_the_projects_servers() -> None:
     assert '"--inbox",\n        "/s/x.json"' in text
 
 
+def test_each_step_names_its_relay_server_apart() -> None:
+    """The agent host disables a server whose name an earlier window's session still holds (P21)."""
+    first = json.loads(wf.mcp(Path("/s/1a2b3c4d5e6f7a8b9c.json"))(None))["mcpServers"]
+    second = json.loads(wf.mcp(Path("/s/9f8e7d6c5b4a3f2e1d.json"))(None))["mcpServers"]
+    assert list(first) == ["owlbear-step-1a2b3c4d5e6f7a8b"]
+    assert list(second) == ["owlbear-step-9f8e7d6c5b4a3f2e"]
+
+
 def gate(log: list | None = None, observe=None) -> Gate:
     cfg = session(**({"observe": observe} if observe else {}))
     return Gate(cfg, Run("s1"), lambda **e: (log if log is not None else []).append(e), lambda: None)

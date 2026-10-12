@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 
 HARNESS, DEFAULT_MODEL = "chat.defaultToCopilotHarness", "chat.defaultModel"
 SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
-SERVER = "owlbear-step"
+SERVER = "owlbear-step"  # a step's relay is SERVER-<inbox>: the host disables a name another session holds (P21)
 RESULTS = (
-    "Your result tools come from the `owlbear-step` MCP server: `submit_result`, `ask_question` and "
+    "Your result tools come from Delivery's `owlbear-step-…` MCP server: `submit_result`, `ask_question` and "
     "`report_wrong_premise`. Never push."
 )
 
@@ -82,7 +82,8 @@ def mcp(inbox: Path) -> Render:
             raise SettingsError(f"{MCP} has no mcpServers object")  # noqa: EM102, TRY003
         args = ["-m", "owlbear_delivery_next.step_mcp", "--inbox", str(inbox)]
         server = {"type": "stdio", "command": sys.executable, "args": args, "tools": ["*"]}
-        return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}, indent=2) + "\n"
+        name = f"{SERVER}-{inbox.stem[:16]}"
+        return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), name: server}}, indent=2) + "\n"
 
     return render
 
