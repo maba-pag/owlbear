@@ -303,7 +303,7 @@ def test_the_profile_runtime_chooses_where_sessions_run(tmp_path: Path, monkeypa
     store.write_profile(Profile(runtime="vscode"))
     runner._session(store, session())  # noqa: SLF001
     runner._session(store, session(attachments=({"type": "blob"},)))  # noqa: SLF001
-    assert [c[0] for c in calls] == ["sdk", "vscode", "sdk"]
+    assert [c[0] for c in calls] == ["sdk", "vscode", "vscode"]  # screenshots follow the runtime too (C7)
     inbox = calls[1][1]
     assert (inbox.parent, inbox.suffix) == (tmp_path / "steps", ".json")
 

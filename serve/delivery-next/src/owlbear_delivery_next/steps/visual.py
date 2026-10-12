@@ -39,6 +39,7 @@ UI_DIRS = frozenset({"components", "pages", "views", "templates", "layouts", "st
 HEIGHT = 800  # px of each desktop viewport; the widths come from the settings (TD-49, R7)
 MAX_HEIGHT = 6000  # px per capture; the width is the viewport's
 MAX_BYTES = 12 * 2**20  # screenshot bytes attached to one review
+MAX_SHOTS = 24  # images one agent-host message was measured to take within MAX_BYTES (item 9)
 SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
 CHANNELS = ("chrome", "msedge", None)  # the installed browser first; None is Playwright's own Chromium
@@ -168,9 +169,17 @@ def capped(out: Path, shots: Sequence[Shot]) -> list[Shot]:
     total, kept = 0, []
     for s in shots:
         total += (out / s.file).stat().st_size if s.file else 0
-        over = f"state {s.state} takes the screenshots over the {MAX_BYTES // 2**20} MB review cap"
-        kept.append(Shot(s.state, s.width, error=over, errors=s.errors) if s.file and total > MAX_BYTES else s)
+        over = _over(s.state, total, sum(1 for k in kept if k.file)) if s.file else ""
+        kept.append(Shot(s.state, s.width, error=over, errors=s.errors) if over else s)
     return kept
+
+
+def _over(state: str, total: int, attached: int) -> str:
+    if total > MAX_BYTES:
+        return f"state {state} takes the screenshots over the {MAX_BYTES // 2**20} MB review cap"
+    if attached >= MAX_SHOTS:
+        return f"state {state} takes the screenshots over the {MAX_SHOTS} images one review takes"
+    return ""
 
 
 def classify(errors: Sequence[PageError], before: VisualResult | None) -> tuple[list[PageError], list[PageError]]:

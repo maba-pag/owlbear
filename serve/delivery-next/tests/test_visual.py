@@ -534,6 +534,14 @@ def test_screenshots_over_the_review_budget_are_findings(tmp_path):
     ]
 
 
+def test_screenshots_past_the_measured_count_are_findings(tmp_path):
+    (tmp_path / "s.png").write_bytes(PNG)
+    shots = visual.capped(tmp_path, [visual.Shot(f"s{n}", 1280, "s.png") for n in range(visual.MAX_SHOTS + 1)])
+    assert [s.file for s in shots[:-1]] == ["s.png"] * visual.MAX_SHOTS
+    last = f"state s{visual.MAX_SHOTS} takes the screenshots over the {visual.MAX_SHOTS} images one review takes"
+    assert (shots[-1].file, shots[-1].error) == ("", last)
+
+
 def test_the_launch_recipe_follows_the_worker_path_policy(tmp_path):
     def errors(command):
         fields = {"directory": ".", "command": command, "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}

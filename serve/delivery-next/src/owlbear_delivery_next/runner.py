@@ -94,8 +94,8 @@ def _others(store: Store, slug: str) -> dict[str, list[str]]:
 
 
 def _session(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
-    """Run one agent session where the profile's runtime says (TD-35); screenshots go through the SDK only."""
-    if (store.read_profile() or Profile()).runtime == "vscode" and not cfg.attachments:
+    """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7)."""
+    if (store.read_profile() or Profile()).runtime == "vscode":
         return vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
     run = asyncio.run(sdk_adapter.run(cfg))
     if run.usage_unread and run.termination and run.termination.confirmed:  # else the termination stop wins

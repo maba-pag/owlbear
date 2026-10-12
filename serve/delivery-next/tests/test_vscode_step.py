@@ -1,4 +1,5 @@
 import base64
+import dataclasses
 import hashlib
 import json
 import queue
@@ -880,6 +881,21 @@ class Adapted:
 
     def texts(self) -> list[str]:
         return [a["message"]["text"] for _, a in self.host.actions("chat/turnStarted")]
+
+
+def test_screenshots_go_to_the_window_as_embedded_images_with_the_first_turn_only(wt: Path, tmp_path: Path) -> None:
+    done = [USAGE, {"type": "chat/turnComplete"}]
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [done, done], [None, GOOD])
+    png = base64.b64encode(b"\x89PNG").decode()
+    shot = {"type": "blob", "data": png, "mimeType": "image/png", "displayName": "home-1280.png"}
+    a.cfg = dataclasses.replace(a.cfg, attachments=(shot,))
+    run = a.run()
+
+    first, reminder = (action["message"] for _, action in a.host.actions("chat/turnStarted"))
+    image = {"type": "embeddedResource", "label": "home-1280.png", "displayKind": "image", "data": png}
+    assert first["attachments"] == [image | {"contentType": "image/png"}]
+    assert "attachments" not in reminder
+    assert run.ending == "result"
 
 
 def test_a_vscode_session_returns_the_gated_result_and_leaves_no_window_files(wt: Path, tmp_path: Path) -> None:

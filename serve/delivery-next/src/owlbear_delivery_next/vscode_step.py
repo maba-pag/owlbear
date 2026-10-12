@@ -106,7 +106,7 @@ class Step:
                 return out
             agent = {"uri": self.spec.agent_uri}
             deadline = self.clock() + limit
-            self._turn(out, agent, control, deadline, self.spec.prompt)
+            self._turn(out, agent, control, deadline, self.spec.prompt, attachments=self.spec.attachments)
             if out.end == "complete" and self.spec.reminder and not (control.stop.is_set() or control.settled.is_set()):
                 self._turn(out, agent, control, deadline, self.spec.reminder)
             return out
@@ -273,7 +273,7 @@ class Step:
             self.conn.next_event(0.2)
         return False
 
-    def _message(self, text: str, agent: Json | None) -> Json:
+    def _message(self, text: str, agent: Json | None, attachments: tuple[Json, ...] = ()) -> Json:
         """Every message Delivery sends names the step's model, effort and agent, so none falls back to Auto."""
         message: Json = {
             "text": text,
@@ -282,21 +282,32 @@ class Step:
         }
         if agent:
             message["agent"] = agent
+        if attachments:
+            message["attachments"] = list(attachments)
         return message
 
-    def _start(self, out: Outcome, agent: Json | None, text: str) -> None:
+    def _start(self, out: Outcome, agent: Json | None, text: str, attachments: tuple[Json, ...] = ()) -> None:
         turn = str(uuid.uuid4())
-        message = self._message(text, agent)
+        message = self._message(text, agent, attachments)
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
         self.conn.dispatch(
             out.chat or "", {"type": "chat/turnStarted", "turnId": turn, "startedAt": stamp, "message": message}
         )
         out.turns.append(turn)
 
-    def _turn(self, out: Outcome, agent: Json | None, control: Control, deadline: float, text: str) -> None:
+    def _turn(  # noqa: PLR0913 - the prompt's turn carries the step's attachments
+        self,
+        out: Outcome,
+        agent: Json | None,
+        control: Control,
+        deadline: float,
+        text: str,
+        *,
+        attachments: tuple[Json, ...] = (),
+    ) -> None:
         """Follow the turn and each steering follow-up; a turn Delivery did not ask for ends Delivery's part."""
         chat = out.chat or ""
-        self._start(out, agent, text)
+        self._start(out, agent, text, attachments)
         control.started.set()
         pending: list[str] = []  # steering texts sent but not yet started as a turn, oldest first
         running, grace = True, None

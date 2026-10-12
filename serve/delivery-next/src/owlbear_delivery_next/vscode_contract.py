@@ -57,6 +57,7 @@ class StepSpec:
     config: Json = field(default_factory=dict)  # e.g. autoApprove or sandboxEnabled; the user's choice (TD-29)
     nonce: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     reminder: str = ""  # sent once as a new turn when the real turn completes before Delivery stops it
+    attachments: tuple[Json, ...] = ()  # sent with the prompt's turn only, e.g. screenshots (C7)
 
     @property
     def marker(self) -> str:

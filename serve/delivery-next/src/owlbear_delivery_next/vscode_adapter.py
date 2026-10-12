@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from owlbear_delivery_next.ahp import Json
     from owlbear_delivery_next.sdk_adapter import Session
 
 CONFIG = {"autoApprove": "autoApprove", "sandboxEnabled": "off", "mode": "autopilot"}  # the owner's D2, D4, D5
@@ -66,6 +67,20 @@ def reopen(conn: ahp.Transport) -> ahp.Transport:
     if not isinstance(conn, ahp.Connection):
         raise ahp.HostError("only a host connection can be reopened")  # noqa: EM101, TRY003
     return conn.reopen(_token())
+
+
+def embedded(attachments: tuple[dict[str, str], ...]) -> tuple[Json, ...]:
+    """The session's image blobs as the agent host's embedded images, which reach the model (P14, C7)."""
+    return tuple(
+        {
+            "type": "embeddedResource",
+            "label": blob.get("displayName") or f"image-{number}.png",
+            "displayKind": "image",
+            "data": blob["data"],
+            "contentType": blob["mimeType"],
+        }
+        for number, blob in enumerate(attachments, 1)
+    )
 
 
 @dataclass(frozen=True)
@@ -132,6 +147,7 @@ class _Driver:
             prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
             config=CONFIG,
             reminder=self.env.reminder,
+            attachments=embedded(cfg.attachments),
         )
         out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=DEADLINES.get(cfg.kind, 1200.0))
         self.log(event="vscode-step", end=out.end, detail=out.detail, session=out.session)
@@ -190,10 +206,6 @@ def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termin
 def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     """Run the session in a VS Code window; ``inbox`` is this step's own path outside the worktree."""
     env, result, since = env or Env(), Run(cfg.session_id), datetime.now(UTC)
-    if cfg.attachments:
-        result.ending, result.detail = "error", "attachments are sent only through the SDK"
-        result.termination = Termination(confirmed=True)
-        return result
     driver = _Driver(cfg, env, result)
     out = driver.step(inbox)
     started = driver.control.started.is_set()
