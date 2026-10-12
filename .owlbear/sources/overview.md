@@ -24,6 +24,9 @@ External repos and resources studied during OwlBear development.
 | T3 Code | <https://github.com/pingdotgg/t3code> | Open-source agent control surface; supported providers; maturity | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
 | Copilot CLI ACP server | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server> | GitHub-documented route for custom front-ends to drive Copilot | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
 | OpenCode providers | <https://opencode.ai/docs/providers/> | Third-party GitHub Copilot provider via device login | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
+| claude-mem | <https://github.com/thedotmack/claude-mem> | Agent memory system (Apache-2.0): lifecycle hooks, model-compressed observations, progressive-disclosure search, transcript watching, File Read Gate, Copilot CLI MCP-only install, telemetry defaults | [watcher options](../research/delivery-next-watcher-options.md) | 2026-10-12 |
+| claude-mem docs | <https://docs.claude-mem.ai/architecture/overview> | Architecture, hook lifecycle, platform integration, telemetry pages | [watcher options](../research/delivery-next-watcher-options.md) | 2026-10-12 |
+| VS Code approvals | <https://code.visualstudio.com/docs/agents/run/approvals> | Permission levels (Assisted, Allow all), Autopilot auto-approval, terminal rules, outside-write detection | [watcher options](../research/delivery-next-watcher-options.md) | 2026-10-12 |
 
 ## OwlBear Distribution Under the Agent Host
 
