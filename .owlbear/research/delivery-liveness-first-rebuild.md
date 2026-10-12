@@ -721,61 +721,49 @@ global with per-project overrides).
 applies (SDK steps, logs read afterwards), and window steps are unguarded until the watcher exists
 (D6). Real cost per runtime is measured with the R4 comparison.
 
-**Overnight build plan, 2026-10-12** (owner scope: the build items that do not need the watcher,
-plus the config page; routing stays off). Each item is built test first: a failing test, the
-change, ruff, the full delivery-next suite, a Sol review of the diff, then a commit and push to
-`next/m4-slice1` (PR #449). Live proofs use throwaway folders and are cleaned up.
+**Overnight build plan, 2026-10-12, revised after Sol's challenge** (owner scope: the build items
+that do not need the watcher, plus the config page; routing stays off). Every item: a failing test,
+the change, ruff, the full delivery-next suite, a Sol review of the diff, then a commit and push to
+`next/m4-slice1` (PR #449). Choices the assistant makes alone are Sol-challenged. Live proofs use
+throwaway folders and are cleaned up.
 
-1. **TD-32 in the SDK.** `_usage` today flags only a missing named model.
-   - New rule: a session fails if its usage names any model the step did not allow (the step's
-     model, plus subagent models named in config), or if the runtime resolved `auto`.
-   - The run ends as an error with the reason, like the window route's "wrong-model".
-   - First check which models a normal SDK step's usage lists (old step journals), to avoid false
-     stops from runtime-internal models.
-2. **TD-48 window start in `vscode_step`.**
-   - Replace the bootstrap prompt and cancel with `code chat "!echo OWLBEAR-<nonce>"` and bind by the
-     nonce.
-   - Wait for the shell turn to end, then open a new agent-host connection (the tested sign-in) and
-     wait until the step's model is listed. Model never listed: end "model-unavailable" with the
-     reason.
-   - Steering and reminder messages carry model, effort and agent.
-   - Live proof: Luna `low`, then short Opus and Sol turns, then one full builder step, plus the
-     window-tool filter test (does `tools:` hide window tools).
-3. **C7 attachments in the window.** Visual attachments become `embeddedResource` parts of the first
-   message. The SDK-only rule in `runner._session` and `vscode_adapter` goes. Live proof: one reviewer
-   step with real screenshots.
-4. **Config structure and migration (TD-52).**
-   - A global config file under `~/Library/Application Support/OwlBear/` holds: the visibility
-     switch, runtimes on or off, desktop widths, and per agent needs-visibility, default runtime,
-     model, effort, context size, default categories.
-   - Per-project overrides live in the project profile.
-   - Migration: `Profile.roles` becomes project overrides of model and effort, and
-     `Profile.runtime = vscode` becomes a project override of the visibility switch. Effective
-     settings stay identical, and a test proves it.
-   - Model and effort resolution reads the new structure. Context size is stored but not yet passed;
-     the per-runtime mapping is a gating fact.
-5. **Config page.** `web/config.html` at `/config`, with GET and PUT `/api/next/config` (global) and
-   project overrides; same token and local-only rules as the Changes page.
-   - Shows the switch, runtimes with their catalogue rows, and per agent fields.
-   - The runtime picker shows categories now; concrete tool lists once mapped (gating fact).
-6. **Missing-tool result (TD-36).** A new result tool `report_missing_tool` (tool or category, what
-   failed) and an ending that Delivery classifies:
-   - a temporary error retries;
-   - with routing off, a category another runtime has becomes an owner-setup request;
-   - setup the owner can do (for example a browser install) becomes a decision request naming the
-     action;
-   - a category that exists nowhere goes back to planning.
+1. **Gating facts, no activation.** Concrete tool names per runtime; whether `tools:` hides window and
+   MCP tools; model, effort and context support per runtime; attachment size limits.
+2. **TD-32 in the SDK.**
+   - Each agent checked against its own configured model: start, resume and reminder turns, plus
+     `auto` resolution.
+   - A mismatch, even one seen after the result was submitted, clears the accepted result and ends
+     the step with the reason.
+3. **TD-48 window start.**
+   - Bootstrap `!echo` bound by nonce, folder and uniqueness; its finished shell turn is accepted.
+   - The bootstrap's own shell confirmation is handled without changing global approvals.
+   - Reconnect to the same host, restore subscriptions, close both connections.
+   - Steering and reminders carry model, effort and agent.
+   - Proof: Luna `low`, short Opus and Sol turns, then one full builder step with a window tool, a
+     result and confirmed cleanup.
+4. **Config schema** with per-field global and project resolution, and an idempotent migration,
+   tested in throwaway storage. The file location and the visibility activation stay unresolved.
+5. **Config page:** global and project GET and PUT behind the existing token and local-host checks;
+   controls for settings not yet applied are shown as inactive; one browser save and read-back proof.
+6. **Modes and skills:**
+   - D4, N4 and N10 modes: question tool → interactive; otherwise autopilot with Delivery's blocking
+     request.
+   - Mandatory skills preloaded, with one minimal check of a missing skill.
+7. **Missing-tool result** with the full TD-36 classification, all cases tested. Rerunning in another
+   runtime is not switched on.
+8. **TD-49 capture.**
+   - Desktop widths with height 800 kept.
+   - Click and type steps through draft schema, stored state, `briefs.drafted` and versioning.
+   - Console and page errors kept per state and width, with listeners attached before navigation.
+   - New errors fail, existing ones are reported. A missing "before" is never a clean baseline.
+   - Reviewer uncertainty blocks per N6. The 390 px assertions are updated.
+   - Proof: one page with an existing and a new error.
+9. **C7 attachments**, bounded by the measured limits. Proof: one real Sol screenshot review in a
+   window. Normal runs stay where they are (TD-50, R4).
 
-   `FINISH` keeps `ask_question` for decisions and missing information; tools go through the new
-   result.
-7. **TD-49 capture.**
-   - Widths come from config (default 1280, 1920, 2400, each 1280 to 2400; phone size gone).
-   - Console and page errors are collected per state and width for "before" and "after"; errors new
-     since "before" fail the check, existing ones are reported (TD-51); the reviewer prompt lists
-     them.
-   - Recipe states may carry simple steps (click, type) run before the shot, and the brief schema
-     follows.
-   - The reviewer's optional `browser` category waits for routing.
+**Deferred to the owner:** where the global config file lives; any rule allowing subagent models
+beyond each agent's own; how the old `runtime=vscode` setting migrates, given TD-50; plus watcher
+design and model, benchmark choices, switching routing on, and watching SDK steps.
 
 Then research for the next session: watcher design options and reusable implementations, grounded in
 existing code and Sol-challenged.
