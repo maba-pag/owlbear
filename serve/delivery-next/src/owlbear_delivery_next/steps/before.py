@@ -150,4 +150,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     notes += [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error]
     states = {s.name: s.version for s in c.brief.visual}
     files = [s.file for s in shots if s.file]
-    return VisualResult(head=base, tree=tree, states=states, files=files, widths=list(widths), findings=notes, at=now)
+    errors = [e for s in shots for e in s.errors]
+    return VisualResult(
+        head=base, tree=tree, states=states, files=files, widths=list(widths), errors=errors, findings=notes, at=now
+    )

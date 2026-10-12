@@ -17,6 +17,7 @@ from owlbear_delivery_next.models import (
     Change,
     Environment,
     Names,
+    PageError,
     Plan,
     Step,
     StepKind,
@@ -90,7 +91,8 @@ def fetching(base, states, out, widths):
             body = response.read()
         for w in widths:
             (out / f"{s.name}-{w}.png").write_bytes(body)
-            shots.append(visual.Shot(s.name, w, f"{s.name}-{w}.png"))
+            seen = (PageError(state=s.name, version=s.version, width=w, kind="console", text="old"),)
+            shots.append(visual.Shot(s.name, w, f"{s.name}-{w}.png", errors=seen))
     return shots
 
 
@@ -128,6 +130,7 @@ def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_ever
     shots = run(ui, tmp_path, events)
     base = git(Path(ui.names.worktree), "merge-base", "HEAD", "origin/main")
     assert (shots.head, shots.files, shots.findings) == (base, ["home-1280.png", "home-1920.png"], [])
+    assert [(e.width, e.text) for e in shots.errors] == [(1280, "old"), (1920, "old")]
     assert (tmp_path / "out" / base[:7] / "home-1920.png").read_text() == "before"
     pids = [int(p) for e in events if e["event"] == "pids" for p in e["pids"]]
     assert pids

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import dataclasses
 import functools
 import http.server
 import subprocess
@@ -23,6 +24,7 @@ from owlbear_delivery_next.models import (
     ErrorKind,
     Exit,
     Names,
+    PageError,
     PersonCheck,
     Plan,
     Step,
@@ -235,6 +237,59 @@ def test_a_fix_verdict_becomes_a_builder_repair_task(clone):
     assert any(t.id == result.fix_task.id for t in after.plan.tasks)
 
 
+def err(text, width=1280, kind="console", state="home"):
+    return PageError(state=state, version=1, width=width, kind=kind, text=text)
+
+
+def test_an_error_is_existing_only_if_a_good_before_shot_of_that_state_version_and_width_had_it():
+    seen = [err("TypeError: x is undefined", kind="page"), err("404 /a.png", 1920)]
+    before = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=seen, at=NOW)
+    after = [err("TypeError: x is undefined", kind="page"), err("404 /a.png"), err("404 /b.png")]
+    new, old = visual.classify(after, before)
+    assert old == [after[0]]  # same state, version, width, kind and text
+    assert new == after[1:]  # seen only at another width; never seen
+    assert visual.classify(after, None) == (after, [])  # no before: never a clean baseline
+    failed = before.model_copy(update={"files": []})  # the before shot of that width failed
+    assert visual.classify(after, failed) == (after, [])
+
+
+def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fail(clone):
+    head = commit(clone, "web/app.css")
+    shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"),))]
+    before = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=[err("old")], at=NOW)
+    c, result = visual.judged(change(clone, before=before), head, "t", shots, verdict=rv("pass"), now=NOW)
+    assert (result.exit, c.visual.passed, c.visual.errors) == (Exit.DONE, True, [err("old")])
+    shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"), err("boom", kind="page")))]
+    verdict = rv("fix", [tools.Finding(place="home-1280.png", problem="text overflows", fix="wrap it")])
+    c, result = visual.judged(change(clone, before=before), head, "t", shots, verdict=verdict, now=NOW)
+    assert (result.exit, c.visual.passed) == (Exit.BACK, False)
+    assert c.visual.findings == [
+        "home at 1280px: new page error: boom",
+        "home-1280.png: text overflows - fix: wrap it",
+    ]
+    assert "new page error: boom" in result.fix_task.detail
+    assert "text overflows" in result.fix_task.detail
+
+
+def test_the_review_cap_keeps_each_shots_errors(tmp_path):
+    (tmp_path / "home-1280.png").write_bytes(PNG)
+    shot = visual.Shot("home", 1280, "home-1280.png", errors=(err("boom"),))
+    assert visual.capped(tmp_path, [shot])[0].errors == (err("boom"),)
+
+
+def test_a_failed_shot_keeps_the_new_errors_in_the_findings_and_long_details_split_not_cut(clone):
+    head = commit(clone, "web/app.css")
+    shots = [visual.Shot("home", 1280, error="/ answered 500", errors=(err("boom", kind="page"),))]
+    c, _ = visual.judged(change(clone), head, "t", shots, verdict=None, now=NOW)
+    assert c.visual.findings == ["home at 1280px: / answered 500", "home at 1280px: new page error: boom"]
+    noisy = [visual.Shot("home", 1280, "home-1280.png", errors=tuple(err(f"e{i} " + "x" * 250) for i in range(30)))]
+    verdict = rv("fix", [tools.Finding(place="home-1280.png", problem="text overflows", fix="wrap it")])
+    c, result = visual.judged(change(clone), head, "t", noisy, verdict=verdict, now=NOW)
+    details = [result.fix_task.detail, *(t.detail for t in result.more_fixes)]
+    assert all(len(d) <= 4000 for d in details)
+    assert "text overflows" in details[-1]  # the reviewer's finding survives the error noise
+
+
 def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_passes(clone):
     head = commit(clone, "web/app.css")
     c = change(clone)
@@ -289,6 +344,25 @@ def flow(tmp_path, clone, monkeypatch):
     monkeypatch.setattr(visual, "CAPTURE", fake)
     flow = SimpleNamespace(store=store, review=review, clone=clone, seen=seen, mp=monkeypatch, widths=[])
     return flow
+
+
+def test_the_reviewer_is_told_each_new_and_existing_error_as_data(flow):
+    c = checking(flow.store, flow.clone)
+    c.before = VisualResult(head="b", tree="t", files=["home-1280.png"], widths=[1280], errors=[err("old")], at=NOW)
+    flow.store.write(Lock("c1"), c)
+    plain = visual.CAPTURE
+
+    def noisy(base, states, out, widths):
+        return [
+            dataclasses.replace(s, errors=(err("old"), err("boom", kind="page")))
+            for s in plain(base, states, out, widths)
+        ]
+
+    flow.mp.setattr(visual, "CAPTURE", noisy)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    message = flow.review.calls[0].message
+    assert "- new, home at 1280px, page error: boom" in message
+    assert "- existing, home at 1280px, console error: old" in message
 
 
 def test_the_capture_uses_the_widths_the_settings_name(flow):
@@ -497,6 +571,20 @@ class Host:
         return Activity(host_up=True)
 
 
+def test_the_change_detail_reports_the_errors_that_existed_before_the_change(tmp_path):
+    store = Store(tmp_path / "store")
+    c = change()
+    c.before = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=[err("old")], at=NOW)
+    errors = [err("old"), err("boom", kind="page")]
+    c.visual = VisualResult(head="a" * 40, tree="t", files=["home-1280.png"], errors=errors, at=NOW)
+    store.write(Lock("c1"), c)
+    client = TestClient(
+        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    existing = client.get("/api/next/changes/c1").json()["visual_existing_errors"]
+    assert existing == ["home at 1280px, console error: old"]
+
+
 def test_the_screenshot_endpoint_serves_only_this_changes_recorded_files(tmp_path):
     store, head = Store(tmp_path / "store"), "a" * 40
     for slug, files in (("c1", ["home-1280.png"]), ("c2", ["home-1280.png", "other-1280.png"])):
@@ -589,6 +677,33 @@ def test_a_real_capture_of_a_local_page(tmp_path):
     ]
     assert (tmp_path / "out" / "home-1920.png").read_bytes().startswith(b"\x89PNG")
     assert shots[2].error == "/missing answered 404"
+
+
+@pytest.mark.browser
+def test_a_real_capture_records_console_and_page_errors_and_only_new_ones_fail(tmp_path):
+    site = tmp_path / "site"
+    site.mkdir()
+    script = "<script>console.error('old warning'); {}</script>"
+    (site / "index.html").write_text("<!doctype html><title>t</title><h1>Hi</h1>" + script.format(""))
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        before = visual.capture(url, [HOME], tmp_path / "before", (1280,), timeout_ms=5000)
+        (site / "index.html").write_text(
+            "<!doctype html><title>t</title><h1>Hi</h1>" + script.format("undefined_call();")
+        )
+        after = visual.capture(url, [HOME], tmp_path / "after", (1280,), timeout_ms=5000)
+    except visual.BrowserMissingError as exc:
+        pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
+    finally:
+        server.shutdown()
+    base = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=list(before[0].errors), at=NOW)
+    new, old = visual.classify(list(after[0].errors), base)
+    assert [(e.kind, e.text) for e in old] == [("console", "old warning")]
+    assert [e.kind for e in new] == ["page"]
+    assert "undefined_call" in new[0].text
 
 
 class Redirect(http.server.BaseHTTPRequestHandler):

@@ -243,7 +243,11 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 kind=StepKind.REVIEW,
                 worktree=path,
                 session_id="",
-                message=prompts.visual(change, [(s.state, s.width, s.file) for s in shots]),
+                message=prompts.visual(
+                    change,
+                    [(s.state, s.width, s.file) for s in shots],
+                    visual.classify([e for s in shots for e in s.errors], change.before),
+                ),
                 resume=False,
                 policy=permissions.Policy(path, prompts.GIT_READ, write=False),
                 observe=lambda: tools.Worktree(head, head, changed=tuple(s.file for s in shots)),

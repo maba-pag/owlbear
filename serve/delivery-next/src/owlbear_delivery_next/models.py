@@ -104,6 +104,17 @@ class VisualState(Record):
     version: int = 1
 
 
+class PageError(Record):
+    """One console error or uncaught page error a capture saw for one state version at one width (TD-49, TD-51)."""
+
+    state: str
+    version: int
+    width: int
+    kind: Literal["console", "page"]
+    text: str
+    location: str = ""  # where the browser says it came from; not part of its identity
+
+
 class VisualResult(Record):
     """One judged capture of the brief's visual states at an exact head and tree."""
 
@@ -113,6 +124,7 @@ class VisualResult(Record):
     criteria: dict[str, int] = Field(default_factory=dict)  # criterion id -> version judged
     files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
     widths: list[int] = Field(default_factory=list)  # the desktop widths captured; a before's fix the after's
+    errors: list[PageError] = Field(default_factory=list)  # every console and page error the capture saw
     passed: bool = False
     findings: list[str] = Field(default_factory=list)
     at: datetime

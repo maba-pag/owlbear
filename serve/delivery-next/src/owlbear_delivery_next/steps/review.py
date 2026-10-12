@@ -27,8 +27,13 @@ def findings(review: tools.ReviewResult, limit: int = 4000) -> list[str]:
 
     A finding's bounded fields keep each line far below a task's detail limit.
     """
+    return pack(lines(review), limit)
+
+
+def pack(items: list[str], limit: int = 4000) -> list[str]:
+    """Lines packed into parts of at most *limit* characters, in order; none is cut or dropped."""
     parts: list[str] = []
-    for line in lines(review):
+    for line in items:
         if parts and len(parts[-1]) + 1 + len(line) <= limit:
             parts[-1] += "\n" + line
         else:

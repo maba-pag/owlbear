@@ -7,6 +7,7 @@ seen here; the brief's ``ui`` flag covers that residual.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import re
 import subprocess
@@ -17,14 +18,14 @@ from urllib.parse import urlsplit
 
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, StepKind, VisualResult
+from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, PageError, StepKind, VisualResult
 from owlbear_delivery_next.steps import check, engine, review, worktree
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from datetime import datetime
 
-    from playwright.sync_api import Route
+    from playwright.sync_api import ConsoleMessage, Page, Route
 
     from owlbear_delivery_next import tools
     from owlbear_delivery_next.models import Change, VisualState
@@ -42,6 +43,7 @@ SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
 CHANNELS = ("chrome", "msedge", None)  # the installed browser first; None is Playwright's own Chromium
 MISSING = ("playwright install", "Executable doesn't exist", "is not found at")  # Playwright's launch errors
+CONSOLE = frozenset({"error", "assert"})  # console message types that count as errors (R8)
 FILE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}-\d{3,4}\.png$")
 NOT_UI = "not-ui"
 _SHOWN = 5
@@ -60,6 +62,7 @@ class Shot:
     width: int
     file: str = ""
     error: str = ""
+    errors: tuple[PageError, ...] = ()  # console and page errors seen from navigation to the screenshot
 
 
 type Capturer = Callable[[str, Sequence[VisualState], Path, Sequence[int]], list[Shot]]
@@ -91,6 +94,7 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
 
         def shot(s: VisualState, width: int, height: int) -> Shot:
             page, origin, left = browser.new_page(viewport={"width": width, "height": height}), root(base), []
+            seen: list[PageError] = []
 
             def guard(route: Route) -> None:  # main-frame navigation off the preview origin is aborted
                 r = route.request
@@ -104,23 +108,33 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
                 gone = left[0] if left else root(page.url) if root(page.url) != origin else ""
                 return Shot(s.name, width, error=f"state {s.name} left the preview ({gone})") if gone else None
 
+            def rendered() -> Shot:
+                try:
+                    response = page.goto(base + s.path, wait_until="networkidle", timeout=timeout_ms)
+                    if failed := away():
+                        return failed
+                    if response is None or response.status >= _HTTP_ERROR:
+                        answered = response.status if response else "nothing"
+                        return Shot(s.name, width, error=f"{s.path} answered {answered}")
+                    tall = page.evaluate("() => document.documentElement.scrollHeight")
+                    if tall > MAX_HEIGHT:
+                        return Shot(
+                            s.name, width, error=f"state {s.name} is {tall}px tall, over the {MAX_HEIGHT}px cap"
+                        )
+                    name, clip = f"{s.name}-{width}.png", {"x": 0, "y": 0, "width": width, "height": max(tall, height)}
+                    page.screenshot(path=str(out / name), full_page=True, clip=clip, timeout=timeout_ms)
+                except Error as exc:
+                    first = str(exc).splitlines()[0][:200]
+                    return away() or Shot(s.name, width, error=f"{s.path} did not answer: {first}")
+                return away() or Shot(s.name, width, file=name)
+
+            _listen(page, s, width, seen)  # before navigation, so load-time errors count
             page.route("**/*", guard)
             try:
-                response = page.goto(base + s.path, wait_until="networkidle", timeout=timeout_ms)
-                if failed := away():
-                    return failed
-                if response is None or response.status >= _HTTP_ERROR:
-                    return Shot(s.name, width, error=f"{s.path} answered {response.status if response else 'nothing'}")
-                tall = page.evaluate("() => document.documentElement.scrollHeight")
-                if tall > MAX_HEIGHT:
-                    return Shot(s.name, width, error=f"state {s.name} is {tall}px tall, over the {MAX_HEIGHT}px cap")
-                name, clip = f"{s.name}-{width}.png", {"x": 0, "y": 0, "width": width, "height": max(tall, height)}
-                page.screenshot(path=str(out / name), full_page=True, clip=clip, timeout=timeout_ms)
-            except Error as exc:
-                return away() or Shot(s.name, width, error=f"{s.path} did not answer: {str(exc).splitlines()[0][:200]}")
+                result = rendered()
+                return dataclasses.replace(result, errors=tuple(seen))  # what was seen up to the screenshot
             finally:
                 page.close()
-            return away() or Shot(s.name, width, file=name)
 
         try:
             return [shot(s, w, HEIGHT) for s in states for w in widths]
@@ -131,14 +145,47 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
 CAPTURE: Capturer = capture
 
 
+def _listen(page: Page, s: VisualState, width: int, seen: list[PageError]) -> None:
+    """Record console errors and uncaught page errors until the page closes (R8, TD-51)."""
+
+    def console(m: ConsoleMessage) -> None:
+        if m.type in CONSOLE:
+            where = m.location or {}
+            at = f"{where.get('url', '')}:{where.get('lineNumber', '')}" if where.get("url") else ""
+            seen.append(
+                PageError(state=s.name, version=s.version, width=width, kind="console", text=m.text, location=at)
+            )
+
+    def uncaught(e: Exception) -> None:
+        seen.append(PageError(state=s.name, version=s.version, width=width, kind="page", text=str(e)))
+
+    page.on("console", console)
+    page.on("pageerror", uncaught)
+
+
 def capped(out: Path, shots: Sequence[Shot]) -> list[Shot]:
     """Shots past the review's attachment budget become findings naming their state; never a pass."""
     total, kept = 0, []
     for s in shots:
         total += (out / s.file).stat().st_size if s.file else 0
         over = f"state {s.state} takes the screenshots over the {MAX_BYTES // 2**20} MB review cap"
-        kept.append(Shot(s.state, s.width, error=over) if s.file and total > MAX_BYTES else s)
+        kept.append(Shot(s.state, s.width, error=over, errors=s.errors) if s.file and total > MAX_BYTES else s)
     return kept
+
+
+def classify(errors: Sequence[PageError], before: VisualResult | None) -> tuple[list[PageError], list[PageError]]:
+    """New and existing errors: existing only if a good before shot of that state version and width had it (R8).
+
+    A missing or failed before shot is never a clean baseline, so its errors are all new.
+    """
+
+    def key(e: PageError) -> tuple[str, int, int, str, str]:
+        return e.state, e.version, e.width, e.kind, e.text
+
+    good = set(before.files) if before else set()
+    seen = {key(e) for e in before.errors if f"{e.state}-{e.width}.png" in good} if before else set()
+    new = [e for e in errors if key(e) not in seen]
+    return new, [e for e in errors if key(e) in seen]
 
 
 def root(ready_url: str) -> str:
@@ -252,25 +299,31 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     found = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
     if not shots:
         found.append("no screenshot was captured")
+    errors = [e for s in shots for e in s.errors]
+    new, _old = classify(errors, c.before)
+    raised = [f"{e.state} at {e.width}px: new {e.kind} error: {e.text[:300]}" for e in new]
     if not found and verdict is not None:
-        found = [f"{f.place}: {f.problem} - fix: {f.fix}" for f in verdict.findings]
-        if verdict.verdict != "pass" and not found:
-            found = ["the reviewer did not accept the screenshots"]
+        found = [*raised, *(f"{f.place}: {f.problem} - fix: {f.fix}" for f in verdict.findings)]
+        if verdict.verdict != "pass" and not verdict.findings:
+            found.append("the reviewer did not accept the screenshots")
     elif not found:
-        found = ["the screenshots were not judged"]
+        found = [*raised, "the screenshots were not judged"]
+    else:
+        found += raised  # a failed shot does not hide the errors the others raised
     passed = not found and verdict is not None and verdict.verdict == "pass"
     files = [s.file for s in shots if s.file]
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     c.visual = VisualResult(
-        head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=passed, findings=found, at=now
-    )
+        head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=passed, findings=found,
+        errors=errors, at=now,
+    )  # fmt: skip
     if passed:
         reason = f"visual check of {head[:7]} passed: {len(files)} screenshots"
         return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))
     shot = next((s for s in shots if s.error), None) or next((s for s in shots if s.file), None)
     named = f" (see {shot.file or f'{shot.state} at {shot.width}px'})" if shot else ""
     title = f"Fix: the visual check of {head[:7]} failed: {found[0][:200]}{named}"
-    parts = review.findings(verdict) if verdict and verdict.findings else ["\n".join(f"- {f}" for f in found)[:4000]]
+    parts = review.pack([f"- {f}" for f in found])
     fix = engine.task(c, title, "review", parts[0])
     more = [engine.task(c, title, "review", d, f"t{int(fix.id[1:]) + i}") for i, d in enumerate(parts[1:], 1)]
     cause = cause_key(ErrorKind.CHECKS, StepKind.CHECK, VISUAL)

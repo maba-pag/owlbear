@@ -315,11 +315,14 @@ function image(slug, kind, name, at, alt) {
   return link;
 }
 
-function visualSection(slug, v, b) {
+function visualSection(slug, v, b, existing) {
   const verdict = el("p-tag", v.passed ? "Passed" : "Failed", { variant: v.passed ? "success" : "error" });
   const title = text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" });
   const box = panel("Before and after", row(title, verdict));
   if (v.findings.length) box.append(list(v.findings));
+  if (existing.length) {
+    box.append(text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" }));
+  }
   if (b && b.findings.length) {
     box.append(text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" }));
   }
@@ -341,6 +344,10 @@ function visualSection(slug, v, b) {
 function beforeSection(slug, b) {
   const box = panel(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`);
   if (b.findings.length) box.append(text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }));
+  if (b.errors.length) {
+    const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
+    box.append(text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }));
+  }
   const grid = el("div", undefined, { class: "shots" });
   for (const name of b.files) grid.append(image(slug, "before", name, b.at, `${name} before the Change`));
   box.append(grid);
@@ -367,7 +374,7 @@ async function showDetail() {
   if (d.question) parts.push(questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
-  if (d.visual) parts.push(visualSection(d.slug, d.visual, d.before));
+  if (d.visual) parts.push(visualSection(d.slug, d.visual, d.before, d.visual_existing_errors));
   else if (d.before) parts.push(beforeSection(d.slug, d.before));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const items = [

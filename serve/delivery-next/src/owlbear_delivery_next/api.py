@@ -283,6 +283,10 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
             "consent": c.consent.model_dump(mode="json") if c.consent else None,
             "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
             "visual": c.visual.model_dump(mode="json") if c.visual else None,
+            "visual_existing_errors": [
+                f"{e.state} at {e.width}px, {e.kind} error: {e.text}"
+                for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
+            ],
             "before": c.before.model_dump(mode="json") if c.before else None,
             "activity": events[-20:],
         }
