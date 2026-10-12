@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 
 STORE_DIR = "owlbear-delivery"
 CONFIG = "config.json"  # the project's settings layer (TD-52)
+ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into CONFIG
 ACTIVITY_LIMIT = 200
 type Migrations = dict[int, Callable[[dict[str, Any]], dict[str, Any]]]
 _ROLES: TypeAdapter[dict[Role, RoleModel]] = TypeAdapter(dict[Role, RoleModel])
@@ -42,6 +43,15 @@ def _roles_moved(data: dict[str, Any]) -> dict[str, Any]:
     """Profile format 1 to 2: the role overrides moved to the project settings; each is checked, then dropped."""
     _ROLES.validate_python(data.pop("roles", {}))
     return data
+
+
+def _with_roles(layer: Layer, found: dict[Role, RoleModel]) -> Layer:
+    """The layer with old role overrides filling only the model and effort fields it leaves empty."""
+    agents = dict(layer.agents)
+    for role, old in found.items():
+        own = agents.get(role, Agent())
+        agents[role] = own.model_copy(update={"model": own.model or old.model, "effort": own.effort or old.effort})
+    return layer.model_copy(update={"agents": agents})
 
 
 # Forward migrations of a Change or profile record, keyed by the format they upgrade from.
@@ -201,22 +211,36 @@ class Store:
         return store
 
     def move_roles(self) -> None:
-        """Copy a format-1 profile's role overrides into the project settings, which its first load then drops.
+        """Merge a format-1 profile's role overrides into the project settings, once.
 
-        Only while no settings file exists: from then on the settings are the authority, so an override cleared
-        there never returns. An unreadable or invalid profile is left to ``read_profile`` to report.
+        Fields the settings already set win; the old values fill only the empty ones. A marker then records the
+        move, so an override cleared later never returns while the old profile is still on disk. An unreadable or
+        invalid profile or settings file is left to ``read_profile`` and ``read_config`` to report.
         """
-        path, config = self.root / "profile.json", self.root / CONFIG
-        if config.exists() or not path.exists():
+        path, config, marker = self.root / "profile.json", self.root / CONFIG, self.root / ROLES_MOVED
+        if marker.exists() or not path.exists():
             return
+        dir_fd = os.open(self.root, _DIR_FLAGS)
         try:
-            data = json.loads(path.read_text())
-            found = _ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
-        except AttributeError, OSError, TypeError, ValueError:
-            return
-        if found:
-            agents = {role: Agent(model=rm.model, effort=rm.effort) for role, rm in found.items()}
-            update_layer(config, Layer, lambda cur: cur if config.exists() else Layer(agents=agents))
+            fd = open_lock(dir_fd, blocking=True, name=f".{ROLES_MOVED}.lock")
+        finally:
+            os.close(dir_fd)
+        try:
+            if marker.exists():  # another opener finished the move while this one waited
+                return
+            try:
+                data = json.loads(path.read_text())
+                found = _ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
+            except AttributeError, OSError, TypeError, ValueError:
+                return  # read_profile reports the damaged profile
+            if found:
+                try:
+                    update_layer(config, Layer, lambda cur: _with_roles(cur, found))
+                except StoreError:
+                    return  # refused before writing; read_config reports the damaged settings
+            atomic_write(marker, "the format-1 profile's role overrides are merged into config.json\n")
+        finally:
+            os.close(fd)
 
     def read_config(self) -> Layer:
         """The project's settings layer."""

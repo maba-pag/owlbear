@@ -174,6 +174,71 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == roles.DEFAULTS["builder"]
 
 
+def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}})
+    own = Layer(agents={"builder": Agent(model="own")}, widths=[1600])
+    (root / "config.json").write_text(own.model_dump_json())
+    store = Store.open(repo)
+
+    assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="own", effort="low")
+    assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
+    assert store.read_config().widths == [1600]
+
+    store.update_config(lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
+    assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
+
+
+def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real, raced = store_mod.open_lock, []
+
+    def other_opener_first(fd, **kw):
+        if kw.get("name") == f".{store_mod.ROLES_MOVED}.lock" and not raced:
+            raced.append(True)  # another process moves the roles, then the owner clears them through its page
+            Store(root).move_roles()
+            Store(root).update_config(lambda _cur: Layer())
+        return real(fd, **kw)
+
+    monkeypatch.setattr(store_mod, "open_lock", other_opener_first)
+    Store(root).move_roles()
+
+    assert raced
+    assert roles.chosen(Store(root).settings(), StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
+
+
+def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = store_mod.atomic_write
+
+    def no_marker(target, content):
+        if target.name == store_mod.ROLES_MOVED:
+            raise OSError(28, "No space left on device")
+        real(target, content)
+
+    monkeypatch.setattr(store_mod, "atomic_write", no_marker)
+    with pytest.raises(OSError, match="No space"):
+        Store(root).move_roles()
+
+
+def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monkeypatch):
+    root = repo / ".git" / "owlbear-delivery"
+    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
+    real = store_mod.atomic_write
+
+    def replaced_then_failed(target, content):
+        real(target, content)
+        if target.name == store_mod.CONFIG:
+            raise OSError(5, "Input/output error")  # e.g. the folder sync after the rename
+
+    monkeypatch.setattr(store_mod, "atomic_write", replaced_then_failed)
+    with pytest.raises(OSError, match="Input/output"):
+        Store(root).move_roles()
+    assert not (root / store_mod.ROLES_MOVED).exists()
+
+
 @pytest.mark.parametrize(
     "bad",
     [
