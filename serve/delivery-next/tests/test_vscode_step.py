@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import queue
+import re
 import socket
 import subprocess
 import tempfile
@@ -18,14 +19,8 @@ from owlbear_delivery_next.models import Exit, StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.tools import Worktree
-from owlbear_delivery_next.vscode_step import (
-    ACK,
-    Control,
-    Hooks,
-    Step,
-    StepSpec,
-    ToolCall,
-)
+from owlbear_delivery_next.vscode_contract import Control, Hooks, StepSpec, ToolCall
+from owlbear_delivery_next.vscode_step import ACK, Step
 from owlbear_delivery_next.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
 
 MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agent.md"
@@ -42,7 +37,10 @@ class FakeHost:
         self.on_launch, self.scripts = sessions_on_launch, scripts
         self.accept_config = True
         self.ignore_cancel = False
-        self.boot_active = True
+        self.boot_active = False  # the shell-only bootstrap turn has usually finished by binding time
+        self.boot_script: list[dict] = []  # actions the bootstrap turn plays after launch
+        self.models, self.models_at = [MODEL], 0.0  # models the host lists, from this clock time on
+        self.reconnects, self.closed, self.twin = 0, 0, None
         self.listed = [(folder / AGENT).resolve().as_uri()]  # agent files the sessions list
         self.listed_at = 0.0  # host clock time from which the sessions list them
         self.pinned: list[tuple[Path, str]] = []
@@ -59,25 +57,41 @@ class FakeHost:
 
     def launch(self, args: list[str], _cwd: Path) -> None:
         self.launched.append(args)
-        nonce = args[-1].split()[2].rstrip(":")
+        nonce = re.search(r"OWLBEAR-(\w+)", args[-1]).group(1)
         for spec in self.on_launch:
-            self.add(nonce=nonce, **spec)
+            resource = self.add(nonce=nonce, **spec)
+            if self.boot_script:
+                n = resource.rsplit("s", 1)[1]
+                self.play(f"ahp-chat://default/c{n}", f"boot{n}", self.boot_script)
 
-    def add(
+    def reconnect(self) -> Twin:
+        self.reconnects += 1
+        self.twin = Twin(self)
+        return self.twin
+
+    def close(self) -> None:
+        self.closed += 1
+
+    def add(  # noqa: PLR0913 - one keyword per scripted session property
         self,
         *,
         nonce: str,
         folder: Path | None = None,
         model: str = MODEL,
         text: str | None = None,
+        billed: str | None = None,
+        pending: str | None = None,
     ) -> str:
         n = len(self.items)
         resource, chat = f"copilotcli:/s{n}", f"ahp-chat://default/c{n}"
         msg = {
-            "text": text if text is not None else f"OwlBear step {nonce}: wait for Delivery's instructions.",
+            "text": text if text is not None else f"!echo OWLBEAR-{nonce}",
             "model": {"id": model, "config": {"thinkingLevel": "high"}},
         }
-        turn = {"id": f"boot{n}", "message": msg}
+        turn = {"id": f"boot{n}", "message": msg, "usage": {"model": billed} if billed else None}
+        if pending is not None:
+            call = {"status": "pending-confirmation", "toolCallId": "p1", "toolInput": pending}
+            turn["responseParts"] = [{"kind": "toolCall", "toolCall": call}]
         self.items.append(
             {
                 "resource": resource,
@@ -93,6 +107,9 @@ class FakeHost:
         if method == "listSessions":
             return {"items": list(self.items)}
         channel = params["channel"]
+        if channel == "ahp-root://":
+            listed = [{"id": m} for m in self.models] if self.t >= self.models_at else []
+            return {"snapshot": {"state": {"agents": [{"provider": "copilotcli", "models": listed}]}}}
         if channel in self.chats:
             return {"snapshot": {"state": self.chats[channel]}}
         agents = [{"type": "agent", "uri": u} for u in self.listed] if self.t >= self.listed_at else []
@@ -114,6 +131,8 @@ class FakeHost:
             self.chats[channel]["activeTurn"] = {"id": action["turnId"], "message": action["message"]}
             if self.scripts:
                 self.play(channel, action["turnId"], self.scripts.pop(0))
+        elif kind == "chat/toolCallConfirmed" and str(action["turnId"]).startswith("boot") and action["approved"]:
+            self.chats[channel]["activeTurn"] = None  # the confirmed echo runs and the bootstrap ends
         elif kind == "chat/pendingMessageSet" and self.scripts:
             started = {"type": "chat/turnStarted", "message": action["message"]}
             self.play(channel, "follow-up", [started, *self.scripts.pop(0)])
@@ -136,6 +155,28 @@ class FakeHost:
         return [(c, a) for c, a in self.sent if a["type"] == kind]
 
 
+class Twin:
+    """A second connection to the same fake host; it records what went through it."""
+
+    def __init__(self, host: FakeHost) -> None:
+        self.host, self.closed = host, 0
+        self.calls: list[tuple[str, str]] = []
+
+    def request(self, method: str, params: dict, timeout: float = 60) -> dict:
+        self.calls.append((method, params.get("channel", "")))
+        return self.host.request(method, params, timeout)
+
+    def dispatch(self, channel: str, action: dict) -> None:
+        self.calls.append((action["type"], channel))
+        self.host.dispatch(channel, action)
+
+    def next_event(self, timeout: float) -> dict | None:
+        return self.host.next_event(timeout)
+
+    def close(self) -> None:
+        self.closed += 1
+
+
 def spec(folder: Path, **kw: object) -> StepSpec:
     return StepSpec(
         folder=folder,
@@ -149,13 +190,14 @@ def spec(folder: Path, **kw: object) -> StepSpec:
 
 
 def step(host: FakeHost, s: StepSpec, approve=lambda _c: True) -> Step:
-    return Step(host, s, approve, hooks=Hooks(launch=host.launch, clock=host.clock, settings=host.pin))
+    hooks = Hooks(launch=host.launch, clock=host.clock, settings=host.pin, reconnect=host.reconnect)
+    return Step(host, s, approve, hooks=hooks)
 
 
 DONE = [{"type": "chat/usage", "usage": {"model": MODEL}}, {"type": "chat/turnComplete"}]
 
 
-def test_step_binds_its_session_cancels_bootstrap_and_runs_named_model(tmp_path: Path) -> None:
+def test_step_binds_its_session_after_a_shell_only_bootstrap_and_runs_named_model(tmp_path: Path) -> None:
     host = FakeHost(
         tmp_path,
         [{}],
@@ -175,11 +217,13 @@ def test_step_binds_its_session_cancels_bootstrap_and_runs_named_model(tmp_path:
     assert out.end == "complete"
     assert host.pinned == [(tmp_path, MODEL)]
     assert json.loads((tmp_path / ".vscode" / "settings.json").read_text())[DEFAULT_MODEL] == MODEL
-    assert out.cancel_confirmed is True
-    assert host.launched == [["code", "chat", "-m", "agent", "OwlBear step n0nce: wait for Delivery's instructions."]]
-    assert host.actions("chat/turnCancelled") == [
-        ("ahp-chat://default/c0", {"type": "chat/turnCancelled", "turnId": "boot0", "duration": 0})
-    ]
+    assert (out.cancel_confirmed, host.reconnects) == (None, 1)
+    chat = "ahp-chat://default/c0"
+    calls = host.twin.calls
+    assert calls.index(("subscribe", chat)) < calls.index(("chat/turnStarted", chat))
+    assert (host.twin.closed, host.closed) == (1, 0)
+    assert host.launched == [["code", "chat", "-m", "agent", "!echo OWLBEAR-n0nce"]]
+    assert host.actions("chat/turnCancelled") == []
     assert host.config["copilotcli:/s0"] == {"sandboxEnabled": "on"}
     ((_, started),) = host.actions("chat/turnStarted")
     assert started["message"]["model"] == {"id": MODEL, "config": {"thinkingLevel": EFFORT}}
@@ -231,13 +275,58 @@ def test_a_turn_billed_to_another_model_is_cancelled(tmp_path: Path) -> None:
     assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == started["turnId"]
 
 
-def test_a_bootstrap_that_already_ran_fails_closed(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [DONE])
-    host.boot_active = False
+def test_a_bootstrap_that_called_a_model_fails_closed(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{"billed": "mai-code-1.1-flash"}], [DONE])
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
 
-    assert out.end == "bootstrap-ran"
-    assert host.sent == []
+    assert (out.end, out.detail) == ("bootstrap-model", "the window's first turn called mai-code-1.1-flash")
+    assert host.actions("chat/turnStarted") == []
+
+
+def test_only_the_bootstraps_own_echo_is_confirmed(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.boot_active = True
+    host.boot_script = [
+        {"type": "chat/toolCallReady", "toolCallId": "b1", "toolInput": "echo OWLBEAR-n0nce", "confirmed": None},
+        {"type": "chat/turnComplete"},
+    ]
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    ((_, confirm),) = host.actions("chat/toolCallConfirmed")[:1]
+    assert (out.end, confirm["toolCallId"], confirm["approved"]) == ("complete", "b1", True)
+
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.boot_active = True
+    host.boot_script = [
+        {"type": "chat/toolCallReady", "toolCallId": "b1", "toolInput": "rm -rf ~", "confirmed": None},
+        {"type": "chat/turnComplete"},
+    ]
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    ((_, confirm),) = host.actions("chat/toolCallConfirmed")
+    assert (out.end, confirm["approved"], host.actions("chat/turnStarted")) == ("bootstrap-unexpected", False, [])
+
+
+def test_a_pending_echo_seen_in_the_snapshot_and_as_an_event_is_confirmed_once(tmp_path: Path) -> None:
+    for script in ([], [{"type": "chat/toolCallReady", "toolCallId": "p1", "toolInput": "echo OWLBEAR-n0nce"}]):
+        host = FakeHost(tmp_path, [{"pending": "echo OWLBEAR-n0nce"}], [DONE])
+        host.boot_active = True
+        host.boot_script = script
+        out = step(host, spec(tmp_path)).run(Control(), limit=60)
+
+        confirms = [(a["turnId"], a["toolCallId"], a["approved"]) for _, a in host.actions("chat/toolCallConfirmed")]
+        assert (out.end, confirms) == ("complete", [("boot0", "p1", True)])
+
+
+def test_the_step_waits_until_the_host_lists_its_model_and_never_starts_without_it(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.models_at = 5.0
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    assert (out.end, len(host.actions("chat/turnStarted"))) == ("complete", 1)
+
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.models = ["mai-code-1.1-flash"]
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    assert (out.end, out.detail) == ("model-unavailable", f"the agent host does not list {MODEL}")
+    assert host.actions("chat/turnStarted") == []
 
 
 def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> None:
@@ -246,7 +335,7 @@ def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> No
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
 
     assert (out.end, out.detail) == ("no-agent", f"the session does not list {(tmp_path / AGENT).resolve().as_uri()}")
-    assert [a["turnId"] for _, a in host.actions("chat/turnCancelled")] == ["boot0"]
+    assert host.actions("chat/turnCancelled") == []
     assert host.actions("chat/turnStarted") == []
 
 
@@ -262,6 +351,7 @@ def test_the_turn_waits_until_the_session_lists_the_agent(tmp_path: Path) -> Non
 
 def test_a_turn_still_running_in_the_folder_launches_nothing(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
+    host.boot_active = True
     host.add(nonce="earlier")
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
 
@@ -345,13 +435,18 @@ def test_auto_is_refused_before_anything_launches(tmp_path: Path) -> None:
     assert (host.launched, host.sent) == ([], [])
 
 
-def test_an_unacknowledged_bootstrap_cancel_starts_no_turn(tmp_path: Path) -> None:
+def test_a_bootstrap_that_never_finishes_is_cancelled_and_starts_no_turn(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
+    host.boot_active = True
     host.ignore_cancel = True
     out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    assert (out.end, out.cancel_confirmed) == ("cancel-unconfirmed", False)
+    assert host.actions("chat/turnStarted") == []
 
-    assert out.end == "cancel-unconfirmed"
-    assert out.cancel_confirmed is False
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.boot_active = True
+    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    assert (out.end, out.cancel_confirmed) == ("bootstrap-stuck", True)
     assert host.actions("chat/turnStarted") == []
 
 
@@ -361,11 +456,11 @@ def test_a_user_turn_in_the_bound_chat_blocks_the_start(tmp_path: Path) -> None:
 
     def dispatch(channel: str, action: dict) -> None:
         original(channel, action)
-        if action["type"] == "chat/turnCancelled":
-            host.chats[channel]["activeTurn"] = {"id": "user", "message": {"text": "mine"}}
+        if action["type"] == "session/configChanged":
+            host.chats["ahp-chat://default/c0"]["activeTurn"] = {"id": "user", "message": {"text": "mine"}}
 
     host.dispatch = dispatch
-    out = step(host, spec(tmp_path)).run(Control(), limit=60)
+    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).run(Control(), limit=60)
 
     assert out.end == "busy"
     assert host.actions("chat/turnStarted") == []
@@ -384,7 +479,7 @@ def test_a_turn_delivery_did_not_start_ends_delivery_s_part(tmp_path: Path) -> N
 
     assert out.end == "user-turn"
     assert host.actions("chat/toolCallConfirmed") == []
-    assert [a["turnId"] for _, a in host.actions("chat/turnCancelled")] == ["boot0"]
+    assert host.actions("chat/turnCancelled") == []
 
 
 def test_steering_that_never_runs_is_not_a_success(tmp_path: Path) -> None:
@@ -436,6 +531,8 @@ def test_steering_runs_as_a_follow_up_turn_that_the_step_waits_for(tmp_path: Pat
     assert out.end == "complete"
     ((_, steer),) = host.actions("chat/pendingMessageSet")
     assert steer["message"]["text"].startswith("Also check 1280px.\n\n(OwlBear steering n0nce-")
+    assert steer["message"]["model"] == {"id": MODEL, "config": {"thinkingLevel": EFFORT}}
+    assert steer["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
     assert out.turns[-1] == "follow-up"
 
 
@@ -549,26 +646,81 @@ def _ws_recv(conn: socket.socket) -> dict:
     return json.loads(_ws_frame(conn)[1])
 
 
-def _host(serve: Callable[[socket.socket], None], *, valid_accept: bool = True) -> tuple[Path, socket.socket]:
+def _host(
+    serve: Callable[[socket.socket], None], *, valid_accept: bool = True, accepts: int = 1
+) -> tuple[Path, socket.socket]:
     path = Path(tempfile.mkdtemp(dir="/tmp")) / "h.sock"
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(str(path))
-    server.listen(1)
+    server.listen(accepts)
 
     def accept() -> None:
-        conn, _ = server.accept()
-        head = b""
-        while b"\r\n\r\n" not in head:
-            head += conn.recv(1)
-        assert b"tkn=secret" in head
-        key = next(h.split(":", 1)[1].strip() for h in head.decode().split("\r\n") if h.startswith("Sec-WebSocket-Key"))
-        digest = hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()  # noqa: S324 - RFC 6455
-        accept_key = base64.b64encode(digest).decode() if valid_accept else "wrong"
-        conn.sendall(f"HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: {accept_key}\r\n\r\n".encode())
-        serve(conn)
+        for _ in range(accepts):
+            conn, _ = server.accept()
+            head = b""
+            while b"\r\n\r\n" not in head:
+                head += conn.recv(1)
+            assert b"tkn=secret" in head
+            key = next(
+                h.split(":", 1)[1].strip() for h in head.decode().split("\r\n") if h.startswith("Sec-WebSocket-Key")
+            )
+            digest = hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()  # noqa: S324
+            accept_key = base64.b64encode(digest).decode() if valid_accept else "wrong"
+            conn.sendall(f"HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: {accept_key}\r\n\r\n".encode())
+            threading.Thread(target=serve, args=(conn,), daemon=True).start()
 
     threading.Thread(target=accept, daemon=True).start()
     return path, server
+
+
+def _sign_in(conn: socket.socket, *, refuse: bool = False) -> list[tuple[str, str | None]]:
+    """Answer ``initialize`` and ``authenticate``; return the methods and tokens seen."""
+    seen = []
+    for _ in range(2):
+        msg = _ws_recv(conn)
+        seen.append((msg["method"], msg["params"].get("token")))
+        failed = refuse and msg["method"] == "authenticate"
+        reply = {"error": {"message": "bad token"}} if failed else {"result": {}}
+        _ws_send(conn, {"jsonrpc": "2.0", "id": msg["id"], **reply})
+    return seen
+
+
+def test_a_reconnect_reaches_the_same_socket_and_signs_in_again() -> None:
+    seen: list[list[tuple[str, str | None]]] = []
+
+    def serve(conn: socket.socket) -> None:
+        seen.append(_sign_in(conn))
+        conn.recv(1)
+
+    path, server = _host(serve, accepts=2)
+    first = ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh-1")
+    second = first.reopen("gh-2")
+    try:
+        assert second is not first
+        assert seen == [
+            [("initialize", None), ("authenticate", "gh-1")],
+            [("initialize", None), ("authenticate", "gh-2")],
+        ]
+    finally:
+        first.close()
+        second.close()
+        server.close()
+
+
+def test_a_failed_sign_in_closes_the_connection() -> None:
+    ended: queue.Queue[bytes] = queue.Queue()
+
+    def serve(conn: socket.socket) -> None:
+        _sign_in(conn, refuse=True)
+        ended.put(conn.recv(1))
+
+    path, server = _host(serve)
+    try:
+        with pytest.raises(ahp.HostError, match="bad token"):
+            ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh")
+        assert ended.get(timeout=5) == b""
+    finally:
+        server.close()
 
 
 def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
@@ -716,6 +868,7 @@ class Adapted:
         self.settled = Termination(confirmed=True)
         self.env = vscode_adapter.Env(
             connect=lambda _f: self.host,
+            reconnect=lambda _c: self.host.reconnect(),
             launch=self.host.launch,
             clock=self.host.clock,
             settle=lambda *_a: self.settled,
@@ -783,6 +936,7 @@ def test_an_unlisted_agent_ends_the_step_and_restores_the_users_settings(wt: Pat
 
 def test_an_unconfirmed_bootstrap_cancel_is_a_termination_problem(wt: Path, tmp_path: Path) -> None:
     a = Adapted(wt, tmp_path / "steps" / "7.json", [], [])
+    a.host.boot_active = True
     a.host.ignore_cancel = True
     run = a.run()
 

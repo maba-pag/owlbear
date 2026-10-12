@@ -24,7 +24,8 @@ from owlbear_delivery_next.results import Gate
 from owlbear_delivery_next.sdk_adapter import DEADLINES, ROLES
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.step_inbox import Inbox
-from owlbear_delivery_next.vscode_step import Control, Hooks, Outcome, Step, StepSpec, ToolCall, launch_code_chat
+from owlbear_delivery_next.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall, launch_code_chat
+from owlbear_delivery_next.vscode_step import Step
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,11 +61,19 @@ def connect(folder: Path) -> ahp.Connection:
     raise ahp.HostError(f"VS Code published no agent host within {START:.0f} s")  # noqa: EM102, TRY003
 
 
+def reopen(conn: ahp.Transport) -> ahp.Transport:
+    """Sign in again on the step's own host (TD-48): a new window lists no models until then (P14)."""
+    if not isinstance(conn, ahp.Connection):
+        raise ahp.HostError("only a host connection can be reopened")  # noqa: EM101, TRY003
+    return conn.reopen(_token())
+
+
 @dataclass(frozen=True)
 class Env:
     """The step's contact with the editor and the machine; tests replace it."""
 
     connect: Callable[[Path], ahp.Transport] = connect
+    reconnect: Callable[[ahp.Transport], ahp.Transport] = reopen
     launch: Callable[[list[str], Path], None] = launch_code_chat
     clock: Callable[[], float] = time.monotonic
     settle: Callable[[Path, datetime], Termination] = leftovers.settle
@@ -109,7 +118,12 @@ class _Driver:
 
     def drive(self, conn: ahp.Transport) -> Outcome:
         cfg = self.cfg
-        hooks = Hooks(launch=self.env.launch, clock=self.env.clock, settings=self.pin)
+        hooks = Hooks(
+            launch=self.env.launch,
+            clock=self.env.clock,
+            settings=self.pin,
+            reconnect=lambda: self.env.reconnect(conn),
+        )
         spec = StepSpec(
             folder=cfg.worktree,
             agent=cfg.worktree / wf.agent_path(self.role),

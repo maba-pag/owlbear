@@ -1,123 +1,41 @@
 """Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harness window, then driven over AHP.
 
 ``code chat`` opens or reuses the window on its working directory, which gives the step VS Code's tools (P6).
-Delivery pins the model in the folder's settings before launch, binds only the session it launched (nonce and
-folder; R2), cancels the window's first turn and waits for the host to confirm it, and runs the real turn with an
-explicit model, effort and agent file (TD-27, TD-32). The host ignores an agent it does not list, so the step
-fails closed unless the session lists the agent file. A turn billed to any other model fails closed. ``folder``
-must be a Delivery-owned worktree: the settings apply to every chat in that folder. The step's result travels
-through the step's MCP relay (TD-36), not through this module.
+Delivery pins the model in the folder's settings before launch and binds only the session it launched (nonce and
+folder; R2). The window's first turn is a shell-only ``!echo`` that calls no model (TD-48); Delivery confirms only
+that echo, waits for it to end, signs in again over a new connection and waits until the host lists the step's
+model, since a new window may start with none and resolve Auto (P14). The real turn, each reminder and each steering
+message carry an explicit model, effort and agent file (TD-27, TD-32). The host ignores an agent it does not list,
+so the step fails closed unless the session lists the agent file. A turn billed to any other model fails closed.
+``folder`` must be a Delivery-owned worktree: the settings apply to every chat in that folder. The step's result
+travels through the step's MCP relay (TD-36), not through this module.
 """
 
 from __future__ import annotations
 
 import json
-import queue
-import subprocess
-import threading
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from owlbear_delivery_next.ahp import ROOT, HostError
-from owlbear_delivery_next.window_files import SettingsError, write_window_settings
+from owlbear_delivery_next.vscode_contract import Control, End, Hooks, Outcome, StepSpec, ToolCall
+from owlbear_delivery_next.window_files import SettingsError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.ahp import Json, Transport
 
 _TERMINAL = ("chat/turnComplete", "chat/turnCancelled", "chat/error")
+_UNSTOPPED: tuple[End, str] = ("cancel-unconfirmed", "the window's first turn did not stop")
 FOLLOW_UP_GRACE = 10.0  # seconds to wait for a steering message to start its own turn (P8)
 ACK = 10.0  # seconds to wait for the host to confirm a cancel or a config change
 LISTED = 10.0  # seconds to wait for the session to list the step's agent file; the host took 0.4 s live
-
-type End = Literal[
-    "complete",
-    "cancelled",
-    "error",
-    "timeout",
-    "stopped",
-    "closed",
-    "unbound",
-    "wrong-model",
-    "config-refused",
-    "settings-refused",
-    "cancel-unconfirmed",
-    "bootstrap-ran",
-    "no-agent",
-    "folder-busy",
-    "busy",
-    "user-turn",
-    "steering-unrun",
-]
-
-
-@dataclass(frozen=True)
-class StepSpec:
-    """One VS Code step: where, which agent, which model and effort, what to do, and the session config."""
-
-    folder: Path
-    agent: Path  # the agent file inside ``folder``; the host lists only agents in watched folders
-    model: str
-    effort: str
-    prompt: str
-    config: Json = field(default_factory=dict)  # e.g. autoApprove or sandboxEnabled; the user's choice (TD-29)
-    nonce: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
-    reminder: str = ""  # sent once as a new turn when the real turn completes before Delivery stops it
-
-    @property
-    def bootstrap(self) -> str:
-        """The ``code chat`` prompt; its nonce identifies the session Delivery may act on."""
-        return f"OwlBear step {self.nonce}: wait for Delivery's instructions."
-
-    @property
-    def agent_uri(self) -> str:
-        """The agent file as the host names it in a session's customizations."""
-        return self.agent.resolve().as_uri()
-
-
-@dataclass(frozen=True)
-class ToolCall:
-    """One tool call that waits for Delivery's confirmation."""
-
-    name: str
-    input: str
-    client: str | None
-
-
-@dataclass
-class Control:
-    """The watcher's levers while a step runs: stop it, or steer it."""
-
-    stop: threading.Event = field(default_factory=threading.Event)
-    steering: queue.Queue[str] = field(default_factory=queue.Queue)
-    started: threading.Event = field(default_factory=threading.Event)  # set once Delivery's first turn started
-    settled: threading.Event = field(default_factory=threading.Event)  # set once Delivery holds the step's result
-
-
-@dataclass
-class Outcome:
-    """How the step ended and what it touched; the result itself arrives through the Delivery MCP server."""
-
-    end: End
-    detail: str = ""
-    session: str | None = None
-    chat: str | None = None
-    turns: list[str] = field(default_factory=list)
-    tools: dict[str, str] = field(default_factory=dict)  # tool call id -> tool name, in call order
-    denied: list[str] = field(default_factory=list)
-    usage: Json | None = None
-    tokens: dict[str, int] = field(default_factory=dict)  # billed model -> input plus output tokens of Delivery's turns
-    cancel_confirmed: bool | None = None  # set when Delivery cancelled a turn: did the host confirm it?
-
-
-def launch_code_chat(args: list[str], cwd: Path) -> None:
-    """Start ``code chat``; it returns once the window has the prompt."""
-    subprocess.Popen(args, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603
+BOOT = 30.0  # seconds to wait for the shell-only first turn to end
+MODELS = 30.0  # seconds to wait, after signing in again, until the host lists the step's model (P14)
 
 
 def _action_in(ev: Json | None, chat: str) -> Json:
@@ -133,13 +51,26 @@ def _ended(out: Outcome, action: Json) -> None:
     out.detail = json.dumps(action.get("part") or action.get("error") or "")[:300] if out.end == "error" else ""
 
 
-@dataclass(frozen=True)
-class Hooks:
-    """The step's contact with the machine; tests replace them."""
+def _command(tool_input: object) -> str:
+    """The shell command of a terminal tool call, whether the host sends it as text or as JSON with ``command``."""
+    text = str(tool_input or "").strip()
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        return text
+    return str(parsed.get("command") or "").strip() if isinstance(parsed, dict) else text
 
-    launch: Callable[[list[str], Path], None] = launch_code_chat
-    clock: Callable[[], float] = time.monotonic
-    settings: Callable[[Path, str], None] = write_window_settings
+
+def _asks(active: Json, action: Json, boot: str) -> list[tuple[str, object]]:
+    """The bootstrap's calls awaiting confirmation, from its snapshot and from the latest event.
+
+    The snapshot matters because a request sent before Delivery subscribed is not replayed as an event.
+    """
+    calls = [p.get("toolCall") or p for p in active.get("responseParts") or []]
+    asks = [(str(c.get("toolCallId")), c.get("toolInput")) for c in calls if c.get("status") == "pending-confirmation"]
+    if action.get("turnId") == boot and action.get("type") == "chat/toolCallReady" and not action.get("confirmed"):
+        asks.append((str(action.get("toolCallId")), action.get("toolInput")))
+    return asks
 
 
 @dataclass(frozen=True)
@@ -147,7 +78,6 @@ class _Bound:
     session: str
     chat: str
     turn: Json
-    active: bool
 
 
 class Step:
@@ -165,18 +95,25 @@ class Step:
         self.conn, self.spec, self.approve = conn, spec, approve
         hooks = hooks or Hooks()
         self.launch, self.clock, self.settings = hooks.launch, hooks.clock, hooks.settings
+        self.reconnect = hooks.reconnect
+        self.opened: list[Transport] = []  # connections this step opened; it closes them when it ends
 
     def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome:
-        """Pin, launch, bind, cancel the bootstrap, check the model, configure, run; act only on the bound session."""
-        out, bound = self._open(control, bind_limit)
-        if bound is None or not self._ready(out, bound, control):
+        """Pin, launch, bind, let the bootstrap end, sign in again, check the model, configure, run."""
+        try:
+            out, bound = self._open(control, bind_limit)
+            if bound is None or not self._ready(out, bound, control):
+                return out
+            agent = {"uri": self.spec.agent_uri}
+            deadline = self.clock() + limit
+            self._turn(out, agent, control, deadline, self.spec.prompt)
+            if out.end == "complete" and self.spec.reminder and not (control.stop.is_set() or control.settled.is_set()):
+                self._turn(out, agent, control, deadline, self.spec.reminder)
             return out
-        agent = {"uri": self.spec.agent_uri}
-        deadline = self.clock() + limit
-        self._turn(out, agent, control, deadline, self.spec.prompt)
-        if out.end == "complete" and self.spec.reminder and not (control.stop.is_set() or control.settled.is_set()):
-            self._turn(out, agent, control, deadline, self.spec.reminder)
-        return out
+        finally:
+            for conn in self.opened:
+                if close := getattr(conn, "close", None):
+                    close()
 
     def _open(self, control: Control, bind_limit: float) -> tuple[Outcome, _Bound | None]:
         if control.stop.is_set():
@@ -195,11 +132,13 @@ class Step:
         return Outcome("complete", session=bound.session, chat=bound.chat), bound
 
     def _ready(self, out: Outcome, bound: _Bound, control: Control) -> bool:  # noqa: PLR0911 - one guard each
-        if not bound.active:
-            out.end, out.detail = "bootstrap-ran", "the window's first turn ran before Delivery could cancel it"
+        if not self._booted(out, bound):
             return False
-        if not self._cancel(out, bound.turn["id"]):
-            out.end, out.detail = "cancel-unconfirmed", "the window's first turn did not stop"
+        if self.reconnect:
+            self.conn = self.reconnect()
+            self.opened.append(self.conn)
+        if not self._model_listed():
+            out.end, out.detail = "model-unavailable", f"the agent host does not list {self.spec.model}"
             return False
         if not self._configure(bound.session):
             out.end, out.detail = "config-refused", f"host did not apply {self.spec.config}"
@@ -220,6 +159,46 @@ class Step:
 
     def _chat(self, chat: str) -> Json:
         return self.conn.request("subscribe", {"channel": chat})["snapshot"]["state"]
+
+    def _booted(self, out: Outcome, bound: _Bound) -> bool:
+        """Wait for the shell-only first turn to end, confirming only its own echo; it must have billed no model."""
+        boot, chat = bound.turn["id"], bound.chat
+        deadline, handled = self.clock() + BOOT, set[str]()
+        while (active := self._chat(chat).get("activeTurn") or {}).get("id") == boot:
+            if self.clock() >= deadline:
+                stuck = ("bootstrap-stuck", f"the window's first turn did not end within {BOOT:.0f} s")
+                out.end, out.detail = stuck if self._cancel(out, boot) else _UNSTOPPED
+                return False
+            for call, command in _asks(active, _action_in(self.conn.next_event(0.2), chat), boot):
+                if call in handled:
+                    continue
+                handled.add(call)
+                mine = _command(command) == f"echo {self.spec.marker}"
+                self._confirm(chat, {"turnId": boot, "toolCallId": call}, allowed=mine)
+                if not mine:
+                    other = ("bootstrap-unexpected", "the window's first turn asked to run something else")
+                    out.end, out.detail = other if self._cancel(out, boot) else _UNSTOPPED
+                    return False
+        done = next((t for t in self._chat(chat).get("turns") or [] if t.get("id") == boot), None)
+        if done is None:
+            out.end, out.detail = "bootstrap-unexpected", "the window's first turn is missing from its chat"
+            return False
+        if billed := (done.get("usage") or {}).get("model"):
+            out.end, out.detail = "bootstrap-model", f"the window's first turn called {billed}"
+            return False
+        return True
+
+    def _model_listed(self) -> bool:
+        """Wait, at most ``MODELS`` seconds, until the host lists the step's model for Copilot sessions."""
+        deadline = self.clock() + MODELS
+        while True:
+            root = self.conn.request("subscribe", {"channel": ROOT})["snapshot"]["state"]
+            agents = (a for a in root.get("agents") or [] if a.get("provider") == "copilotcli")
+            if any(m.get("id") == self.spec.model for a in agents for m in a.get("models") or []):
+                return True
+            if self.clock() >= deadline:
+                return False
+            self.conn.next_event(0.5)
 
     def _listed(self, session: str) -> bool:
         """Wait, at most ``LISTED`` seconds, until the session's customizations list the step's agent file."""
@@ -255,10 +234,9 @@ class Step:
                     continue
                 chat = s.get("defaultChat")
                 state = self.conn.request("subscribe", {"channel": chat})["snapshot"]["state"] if chat else {}
-                active = state.get("activeTurn")
-                turn = active or next(iter(state.get("turns") or []), None)
+                turn = state.get("activeTurn") or next(iter(state.get("turns") or []), None)
                 if turn and self.spec.nonce in ((turn.get("message") or {}).get("text") or ""):
-                    found.append(_Bound(s["resource"], chat, turn, active is not None))
+                    found.append(_Bound(s["resource"], chat, turn))
             if len(found) == 1:
                 return found[0]
             if len(found) > 1:
@@ -295,8 +273,8 @@ class Step:
             self.conn.next_event(0.2)
         return False
 
-    def _start(self, out: Outcome, agent: Json | None, text: str) -> None:
-        turn = str(uuid.uuid4())
+    def _message(self, text: str, agent: Json | None) -> Json:
+        """Every message Delivery sends names the step's model, effort and agent, so none falls back to Auto."""
         message: Json = {
             "text": text,
             "origin": {"kind": "user"},
@@ -304,6 +282,11 @@ class Step:
         }
         if agent:
             message["agent"] = agent
+        return message
+
+    def _start(self, out: Outcome, agent: Json | None, text: str) -> None:
+        turn = str(uuid.uuid4())
+        message = self._message(text, agent)
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
         self.conn.dispatch(
             out.chat or "", {"type": "chat/turnStarted", "turnId": turn, "startedAt": stamp, "message": message}
@@ -320,7 +303,7 @@ class Step:
         while True:
             if self._halted(out, control, deadline, running=running):
                 return
-            pending += self._steer(chat, control)
+            pending += self._steer(chat, agent, control)
             if grace is not None and self.clock() >= grace:
                 out.end, out.detail = "steering-unrun", f"{len(pending)} steering message(s) never ran"
                 return
@@ -367,13 +350,13 @@ class Step:
         out.turns.append(action["turnId"])
         return True
 
-    def _steer(self, chat: str, control: Control) -> list[str]:
+    def _steer(self, chat: str, agent: Json | None, control: Control) -> list[str]:
         """Send queued steering; each text carries a step-unique tag so a user's identical text never matches."""
         sent: list[str] = []
         while not control.steering.empty():
             tag = uuid.uuid4().hex[:8]
             text = f"{control.steering.get_nowait()}\n\n(OwlBear steering {self.spec.nonce}-{tag})"
-            message = {"text": text, "origin": {"kind": "user"}}
+            message = self._message(text, agent)
             self.conn.dispatch(
                 chat,
                 {"type": "chat/pendingMessageSet", "kind": "steering", "id": str(uuid.uuid4()), "message": message},
@@ -403,15 +386,18 @@ class Step:
             allowed = self.approve(call)
             if not allowed:
                 out.denied.append(call.name)
-            confirm: Json = {
-                "type": "chat/toolCallConfirmed",
-                "turnId": action.get("turnId"),
-                "toolCallId": action.get("toolCallId"),
-                "approved": allowed,
-            }
-            confirm |= (
-                {"confirmed": "user-action"}
-                if allowed
-                else {"reason": "denied", "reasonMessage": "Delivery policy: not allowed in this step"}
-            )
-            self.conn.dispatch(chat, confirm)
+            self._confirm(chat, action, allowed=allowed)
+
+    def _confirm(self, chat: str, action: Json, *, allowed: bool) -> None:
+        confirm: Json = {
+            "type": "chat/toolCallConfirmed",
+            "turnId": action.get("turnId"),
+            "toolCallId": action.get("toolCallId"),
+            "approved": allowed,
+        }
+        confirm |= (
+            {"confirmed": "user-action"}
+            if allowed
+            else {"reason": "denied", "reasonMessage": "Delivery policy: not allowed in this step"}
+        )
+        self.conn.dispatch(chat, confirm)

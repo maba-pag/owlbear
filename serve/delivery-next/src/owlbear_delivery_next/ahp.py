@@ -48,6 +48,7 @@ class Connection:
     def __init__(self, path: str, token: str, client_id: str) -> None:
         """Connect and upgrade; raises ``HostError`` when the host refuses."""
         self.client_id = client_id
+        self._path, self._token = path, token
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.settimeout(IO_TIMEOUT)  # bounds connect, upgrade and every send; an idle read just waits again
         self._sock.connect(path)
@@ -82,6 +83,11 @@ class Connection:
     def close(self) -> None:
         """Close the socket; the reader thread ends with a ``closed`` event."""
         self._sock.close()
+
+    def reopen(self, github_token: str) -> Connection:
+        """A new, signed-in connection to this same host socket; no discovery, so it cannot reach another host."""
+        entry = {"endpoint": {"path": self._path}, "connectionToken": self._token}
+        return connect(entry, f"{self.client_id}-again", github_token)
 
     def _exact(self, n: int) -> bytes:
         buf = b""
@@ -196,15 +202,19 @@ class Connection:
 def connect(entry: Json, client_id: str, github_token: str) -> Connection:
     """Connect, initialize and authenticate; the model list fills only after ``authenticate`` (P3)."""
     conn = Connection(entry["endpoint"]["path"], entry["connectionToken"], client_id)
-    conn.request(
-        "initialize",
-        {
-            "channel": ROOT,
-            "protocolVersions": [PROTOCOL],
-            "clientId": client_id,
-            "clientInfo": {"name": "owlbear-delivery"},
-            "initialSubscriptions": [ROOT],
-        },
-    )
-    conn.request("authenticate", {"channel": ROOT, "resource": "https://api.github.com", "token": github_token})
+    try:
+        conn.request(
+            "initialize",
+            {
+                "channel": ROOT,
+                "protocolVersions": [PROTOCOL],
+                "clientId": client_id,
+                "clientInfo": {"name": "owlbear-delivery"},
+                "initialSubscriptions": [ROOT],
+            },
+        )
+        conn.request("authenticate", {"channel": ROOT, "resource": "https://api.github.com", "token": github_token})
+    except BaseException:
+        conn.close()
+        raise
     return conn
