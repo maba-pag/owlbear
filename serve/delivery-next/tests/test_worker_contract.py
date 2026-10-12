@@ -411,7 +411,8 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
         async def start(self) -> None:
             pass
 
-        async def create_session(self, **_k) -> Session:
+        async def create_session(self, **opts) -> Session:
+            Client.excluded = opts["excluded_tools"]
             if not Client.opens:
                 raise ConnectionError
             return Session()
@@ -426,6 +427,7 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
     cfg = dataclasses.replace(step().cfg, model="gpt-6-luna", resume=False)
     run = asyncio.run(sdk_adapter.run(cfg))
     assert (run.ending, run.usage_unread) == ("error", "the usage at the step's end could not be read (RuntimeError)")
+    assert Client.excluded == ["ask_user"]
     Client.opens = False  # nothing opened, so no model ran
     assert asyncio.run(sdk_adapter.run(cfg)).usage_unread == ""
 

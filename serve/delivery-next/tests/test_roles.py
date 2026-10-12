@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, profile, roles, sdk_adapter
+from owlbear_delivery_next import api, cli, profile, roles, sdk_adapter, tools, vscode_adapter
 from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.models import StepKind
@@ -100,6 +100,28 @@ def test_sdk_options_carry_the_model_and_reasoning_effort():
     )  # fmt: skip
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
     assert (opts["model"], opts["reasoning_effort"]) == ("claude-opus-5.5", "medium")
+
+
+@pytest.mark.parametrize("kind", sorted(sdk_adapter.ROLES))
+def test_every_role_runs_autopilot_and_only_delivery_can_ask_the_owner(kind):
+    cfg = sdk_adapter.Session(
+        kind, Path(), "s1", "m", resume=True, policy=Policy(Path(), ()), observe=Worktree, checks=()
+    )
+    opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
+    assert opts["excluded_tools"] == ["ask_user"]  # the runtime's own question tool; N10's request is ask_question
+    assert "on_user_input_request" not in opts
+    assert opts["agent"] == sdk_adapter.ROLES[kind]
+    assert tools.ASK.name in {t.name for t in opts["tools"]}
+    assert vscode_adapter.CONFIG["mode"] == "autopilot"
+    st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+    question = {
+        "question": "Which key?",
+        "why": "owner's",
+        "options": [{"label": "A", "effect": "a"}, {"label": "B", "effect": "b"}],
+    }
+    asked = st._handle(tools.ASK, SimpleNamespace(arguments=question))  # noqa: SLF001
+    late = st._handle(tools.ASK, SimpleNamespace(arguments=question))  # noqa: SLF001
+    assert (asked.result_type, late.result_type, st.run.ending) == ("success", "rejected", "ask")
 
 
 def rules(strict: str, resolution: str) -> Profile:

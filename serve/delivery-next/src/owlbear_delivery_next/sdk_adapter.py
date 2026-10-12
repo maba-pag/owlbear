@@ -260,6 +260,7 @@ class _Step:
             "tools": self.tools(),
             "custom_agents": [role],
             "agent": role["name"],
+            "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,
