@@ -1,6 +1,6 @@
 import pytest
 
-from owlbear_delivery_next import design_pack
+from owlbear_delivery_next import design_pack, model_choices
 
 
 @pytest.fixture(autouse=True)
@@ -9,6 +9,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("OWLBEAR_HOME", str(tmp_path_factory.mktemp("owlbear-home")))
     monkeypatch.delenv("OWLBEAR_COMMON", raising=False)
     monkeypatch.setattr(design_pack, "fetch", _offline)
+    monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))
 
 
 def _offline(url: str, *_args: object, **_kwargs: object) -> bytes:

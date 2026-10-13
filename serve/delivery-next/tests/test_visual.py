@@ -55,7 +55,13 @@ from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, decision, judges, merge, visual
 from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan, JudgeVerdict, VisualRound
+from owlbear_delivery_next.visual_records import (
+    DetectorFinding,
+    DetectorScan,
+    JudgeFinding,
+    JudgeVerdict,
+    VisualRound,
+)
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -591,6 +597,34 @@ def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, s
     assert [lens for lens, seen in has.items() if seen] == sent
 
 
+def test_a_fail_proposes_only_what_a_failing_judge_found_the_change_introduced_worth_a_fix() -> None:
+    def found(n: int, severity: str | None, *, introduced: bool | None) -> JudgeFinding:
+        return JudgeFinding(
+            id=f"design-{n}", state="home", width=1280, text=f"problem {n}", severity=severity, introduced=introduced
+        )
+
+    made = [
+        found(1, "P1", introduced=True),
+        found(2, "P3", introduced=True),
+        found(3, "P0", introduced=False),
+        found(4, "P2", introduced=None),
+        found(5, "P3", introduced=True).model_copy(update={"rule": "owner-1"}),
+    ]
+    design = JudgeVerdict(lens="design", verdict="fail", usage_verified=True, findings=made)
+    note = JudgeFinding(id="correctness-1", state="home", text="wraps late")
+    correct = JudgeVerdict(lens="correctness", verdict="pass", usage_verified=True, findings=[note])
+    kept = VisualRound(
+        number=1, head="a" * 40, tree="b" * 40, states={"home": 1}, widths=[1280], pack="p",
+        design_failures="back", verdicts=[correct, design], at=NOW,
+    )  # fmt: skip
+    assert decision.proposed(kept) == ["design-1", "design-4", "design-5"]  # an owner's criterion, never polish
+    passed = tools.ReviewResult.model_construct(verdict="pass", findings=[])
+    route, sent = decision.route(kept, [], passed, broken=False)
+    assert (route, [line.rsplit(": ", 1)[1] for line in sent]) == ("back", ["problem 1", "problem 4", "problem 5"])
+    polish = kept.model_copy(update={"verdicts": [correct, design.model_copy(update={"findings": made[1:3]})]})
+    assert decision.route(polish, [], passed, broken=False) == ("ask", [])  # nothing to fix: the owner looks
+
+
 def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):
     flow.review.verdict = "unsure"
     c = checking(flow.store, flow.clone)
@@ -618,6 +652,7 @@ def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):
     assert (unknown.status_code, "design-9" in unknown.json()["detail"]) == (422, True)
     detail = client.get("/api/next/changes/c1").json()
     assert (detail["visual_round"]["number"], detail["owner_criteria"]) == (kept.number, [])
+    assert detail["visual_round"]["proposed"] == decision.proposed(kept)  # what the page ticks for the owner
     passed, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="pass", round=kept.number)], NOW)
     assert (passed.visual_rounds[-1].decision.outcome, step) == ("pass", passed.step)
     flow.store.write(Lock("c1"), passed)

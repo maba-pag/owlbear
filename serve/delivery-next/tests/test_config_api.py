@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api
+from owlbear_delivery_next import api, model_choices
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import Store
 
@@ -189,3 +189,43 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
 
     assert r.status_code == 503
     assert r.json()["detail"] == "the settings could not be saved: No space left on device"
+
+
+def offered_model(model_id: str, efforts: list[str] | None, policy: str | None = "enabled") -> SimpleNamespace:
+    limits = SimpleNamespace(max_context_window_tokens=200_000)
+    return SimpleNamespace(
+        id=model_id, name=model_id.title(), supported_reasoning_efforts=efforts,
+        default_reasoning_effort=efforts[1] if efforts else None,
+        capabilities=SimpleNamespace(limits=limits), policy=policy and SimpleNamespace(state=policy),
+    )  # fmt: skip
+
+
+def test_the_settings_offer_the_enabled_models_with_their_efforts_and_context_read_once(store, monkeypatch):
+    reads = []
+
+    def read() -> list[SimpleNamespace]:
+        reads.append(1)
+        return [offered_model("claude-opus-5.5", ["none", "low", "medium", "high"]), offered_model("tiny", None, None),
+                offered_model("blocked", ["low", "high"], "disabled"), offered_model("auto", None)]  # fmt: skip
+
+    monkeypatch.setattr(model_choices, "_read", read)
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config/models").json()
+    assert got == {
+        "models": [
+            {"id": "claude-opus-5.5", "name": "Claude-Opus-5.5", "efforts": ["low", "medium", "high"],
+             "default_effort": "low", "context": 200_000},
+            {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000},
+        ],
+        "error": "",
+    }  # fmt: skip
+    assert c.get("/api/next/config/models").json() == got
+    assert len(reads) == 1  # the runtime starts once an hour at most
+
+
+def test_unreadable_models_leave_typing_and_are_read_again_next_time(store):
+    c = client(store, headers=AUTH)
+    first = c.get("/api/next/config/models").json()
+    assert (first["models"], first["error"]) == ([], "OSError: offline in tests: models.list")
+    assert c.get("/api/next/config/models").json() == first  # a failure is not kept: read again, still offline
+    assert client(store).get("/api/next/config/models").status_code == 401

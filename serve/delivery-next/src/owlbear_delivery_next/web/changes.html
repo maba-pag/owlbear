@@ -40,6 +40,19 @@
     display: block; width: 100%; height: auto;
     border: 1px solid var(--p-color-contrast-lower); border-radius: var(--p-radius-md);
   }
+  .zoom { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+  .zoom:focus-visible { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }
+  dialog.lightbox {
+    width: 96vw; max-width: none; max-height: 96vh; padding: var(--p-spacing-static-sm); border: 0;
+    border-radius: var(--p-radius-lg); background: var(--p-color-canvas); color: var(--p-color-primary);
+  }
+  dialog.lightbox::backdrop { background: var(--p-color-backdrop, rgb(0 0 0 / .7)); }
+  .lightbox .frame { overflow: auto; max-height: calc(96vh - 5rem); margin-top: var(--p-spacing-static-sm); }
+  .lightbox img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  .lightbox .caption { flex: 1; margin: 0; text-align: center; font-size: var(--p-typescale-sm); }
+  .finding { display: grid; gap: var(--p-spacing-static-xs); padding-block: var(--p-spacing-static-xs); }
+  .finding + .finding { border-top: 1px solid var(--p-color-contrast-lower); }
+  details > summary { cursor: pointer; font-size: var(--p-typescale-sm); }
   .missing {
     display: grid; place-items: center; min-height: 6rem; padding: var(--p-spacing-static-sm);
     border: 1px dashed var(--p-color-contrast-low); border-radius: var(--p-radius-md);
@@ -128,8 +141,7 @@ function el(tag, text, attrs = {}) {
   return node;
 }
 
-function send(path, body) {
-  const origin = shown;  // the rendered detail whose form the person used
+function send(path, body, origin = shown) {  // origin: the rendered detail whose form the person used
   call(`/changes/${origin.slug}${path}`, body).then(() => {
     if (shown === origin) {  // a later detail keeps its own draft
       draft = false;
@@ -253,49 +265,180 @@ function questionForm(q) {
   return box;
 }
 
-function tick(label) {
+function tick(label, checked = false) {
   if (pds) {
-    const node = el("p-checkbox", undefined, { label });
+    const node = el("p-checkbox", undefined, checked ? { label, checked: "true" } : { label });
     return [node, () => node.checked === true];
   }
   const node = el("label"), input = el("input", undefined, { type: "checkbox" });
+  input.checked = checked;
   node.append(input, ` ${label}`);
   return [node, () => input.checked];
 }
 
-// The owner's decision on one visual round (TD-79): both verdicts, the findings he ticks, a comment, Pass or Fail.
-function decisionForm(q, r) {
-  const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, text(q.text, { weight: "semibold" }));
-  const ticked = [];
+function disclosure(summary, ...children) {
+  const node = el("details");
+  node.append(el("summary", summary), ...children);
+  return node;
+}
+
+// An "are you sure" before a step that is costly or cannot be undone; true when the person confirms.
+function confirmed(title, body, yes) {
+  if (!pds) return Promise.resolve(window.confirm([title, ...body.map((n) => n.textContent)].join("\n\n")));
+  return new Promise((resolve) => {
+    const modal = el("p-modal"), head = heading(2, title, "lg"), footer = row();
+    let answered = false;
+    const done = (answer) => {
+      if (answered) return;
+      answered = true;
+      modal.open = false;
+      setTimeout(() => modal.remove(), 1000);
+      resolve(answer);
+    };
+    head.slot = "header";
+    footer.slot = "footer";
+    footer.append(button(yes, () => done(true)), button("Cancel", () => done(false), { variant: "secondary" }));
+    modal.append(head, ...body, footer);
+    modal.addEventListener("dismiss", () => done(false));
+    document.body.append(modal);
+    modal.open = true;
+  });
+}
+
+const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
+const DIALOG = "{ 'aria-haspopup': 'dialog' }";  // PDS's aria property, for a button that opens a dialog
+const SEVERITY = { P0: ["Blocks the task", "error"], P1: ["Serious", "error"], P2: ["Annoying", "warning"],
+  P3: ["Polish", "secondary"] };
+
+function widthsOf(items) {
+  return [...new Set(items.map((f) => f.width).filter(Boolean))].sort((a, b) => a - b);
+}
+
+function where(state, widths) {
+  return widths.length ? `${state} at ${widths.join(", ")} px` : state;
+}
+
+// One problem per entry: the same judge, state, rule, severity and origin, at every width it was seen.
+function problems(r) {
+  const groups = new Map();
   for (const v of r.verdicts) {
-    const before = v.unanchored && v.unanchored !== v.verdict ? ` (before the detector: ${v.unanchored})` : "";
-    const judge = v.lens === "design" ? "Design" : "Correctness";
-    box.append(text(`${judge} judge: ${v.verdict ?? "no verified verdict"}${before}`, { weight: "semibold" }));
-    if (v.reason) box.append(text(v.reason, { size: "xs", color: "contrast-medium" }));
     for (const f of v.findings) {
-      const made = f.introduced === false ? "existing" : f.introduced ? "new" : "";
-      const tags = [f.severity, f.rule, made].filter(Boolean).join(", ");
-      const [node, on] = tick(`${f.state}${f.width ? ` at ${f.width}px` : ""}: ${f.text}${tags ? ` (${tags})` : ""}`);
-      ticked.push([f.id, on]);
+      const key = JSON.stringify([v.lens, f.state, f.rule, f.severity, f.introduced]);
+      if (!groups.has(key)) groups.set(key, { lens: v.lens, first: f, items: [] });
+      groups.get(key).items.push(f);
+    }
+  }
+  return [...groups.values()];
+}
+
+function problemRow(p, proposed) {
+  const ids = p.items.map((f) => f.id), widths = widthsOf(p.items), [label, variant] = SEVERITY[p.first.severity] ?? [];
+  const [box, on] = tick(p.first.text, ids.some((id) => proposed.includes(id)));
+  const meta = [JUDGE[p.lens], where(p.first.state, widths), p.first.rule].filter(Boolean).join(" \u00b7 ");
+  const node = el("div", undefined, { class: "finding" });
+  node.append(box, row(...(label ? [el("p-tag", label, { variant, compact: "true" })] : []),
+    text(meta, { size: "xs", color: "contrast-medium" })));
+  if (new Set(p.items.map((f) => f.text)).size > 1) {
+    node.append(disclosure("What the judge wrote at each width",
+      list(p.items.map((f) => `${f.width ? `${f.width} px: ` : ""}${f.text}`))));
+  }
+  return [node, () => (on() ? ids : [])];
+}
+
+function verdictLine(v) {
+  const said = v.verdict ?? "no verified verdict";
+  const first = v.unanchored && v.unanchored !== v.verdict
+    ? `, ${v.unanchored} before it saw the detector's findings` : "";
+  const node = el("div");
+  node.append(text(`${JUDGE[v.lens]}: ${said}${first}`, { weight: "semibold" }));
+  if (v.reason) node.append(text(v.reason, { size: "xs", color: "contrast-medium" }));
+  return node;
+}
+
+// The design judge's blind preferences, mapped back to before and after.
+function comparison(r) {
+  const sides = new Map();
+  for (const v of r.verdicts) {
+    for (const [pair, side] of Object.entries(v.preferences || {})) {
+      const cut = pair.lastIndexOf("-"), state = pair.slice(0, cut);
+      if (!sides.has(side)) sides.set(side, new Map());
+      if (!sides.get(side).has(state)) sides.get(side).set(state, []);
+      sides.get(side).get(state).push(Number(pair.slice(cut + 1)));
+    }
+  }
+  const said = [...sides].flatMap(([side, states]) => [...states].map(([state, widths]) =>
+    `${side === "equal" ? "no difference" : `${side} better`} for ${where(state, widths.sort((a, b) => a - b))}`));
+  return said.length ? `Without knowing which was which, the design judge found ${said.join("; ")}.` : "";
+}
+
+function detectorLines(r) {
+  const seen = new Map();
+  for (const s of r.detector) {
+    for (const f of s.findings) {
+      const key = `${f.rule} (${f.freshness})|${s.state}`;
+      if (!seen.has(key)) seen.set(key, []);
+      if (s.width) seen.get(key).push(s.width);
+    }
+  }
+  return [...seen].map(([key, widths]) => {
+    const [rule, state] = key.split("|");
+    return `${rule} on ${where(state, [...new Set(widths)].sort((a, b) => a - b))}`;
+  });
+}
+
+// The owner's decision on one visual round (TD-79): both verdicts, the problems he sends back, a comment, Pass or Fail.
+function decisionForm(q, r) {
+  const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`,
+    text("Look at the screenshots above and the judges' verdicts, then pass the round or send it back."));
+  box.append(...r.verdicts.map(verdictLine));
+  const all = problems(r), picks = [];
+  const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
+  if (made.length) {
+    box.append(heading(4, "Problems this Change introduced", "sm"), text("A Fail sends the ticked problems to the "
+      + "build. The serious ones are ticked for you; untick any you disagree with.", { size: "xs" }));
+    for (const p of made) {
+      const [node, ids] = problemRow(p, r.proposed || []);
+      picks.push([p, ids]);
       box.append(node);
     }
-    const better = Object.entries(v.preferences || {})
-      .map(([p, s]) => `${p}: ${s === "equal" ? "equal" : `${s} better`}`);
-    if (better.length) box.append(text(`Blind comparison: ${better.join("; ")}`, { size: "xs" }));
   }
-  const seen = r.detector.flatMap((s) => s.findings.map((f) =>
-    `${s.state}${s.width ? ` at ${s.width}px` : ""}: ${f.rule} at ${f.where} (${f.freshness})`));
-  if (seen.length) {
-    box.append(text("Design detector (evidence only):", { size: "xs" }), list(seen.slice(0, 30)));
+  if (old.length) {
+    box.append(disclosure(`Already there before the Change: ${old.length} (never sent to the build)`,
+      list(old.map((p) => `${where(p.first.state, widthsOf(p.items))}: ${p.first.text}`))));
   }
-  const [words, said] = field("Comment: a Fail's comment is checked by every later review until you withdraw it");
-  const decide = (option) => send("/answers", {
-    question: q.id, option, text: said(), round: r.number, head: r.head, pack: r.pack,
-    findings: ticked.filter(([, on]) => on()).map(([id]) => id),
-  });
+  const preferred = comparison(r), evidence = detectorLines(r);
+  if (preferred) box.append(text(preferred, { size: "xs" }));
+  if (evidence.length) {
+    box.append(disclosure("What the design detector found (evidence for the judges)", list(evidence)));
+  }
+  const [words, said] = field("Comment: on a Fail, every later review checks it until you withdraw it");
+  const decide = async (option) => {
+    const origin = shown, comment = said().trim(), chosen = picks.filter(([, ids]) => ids().length);
+    const findings = chosen.flatMap(([, ids]) => ids());
+    if (option === "fail" && !findings.length && !comment) {
+      return notify("To fail the round, tick a problem or write a comment.");
+    }
+    const instructions = chosen.flatMap(([p]) => (new Set(p.items.map((f) => f.text)).size > 1
+      ? p.items.map((f) => `${where(f.state, widthsOf([f]))}: ${f.text}`) : [p.first.text]));
+    const ok = option === "fail"
+      ? await confirmed("Send the Change back to the build?", [
+        text("The builder gets a fix task with:"),
+        list([...instructions, ...(comment ? [`Your comment: ${comment}`] : [])]),
+        text("The Change is then checked and both judges look again, which uses more requests."
+          + (comment ? " Your comment becomes a criterion every later review checks until you withdraw it." : "")),
+      ], "Send back")
+      : await confirmed("Accept how this looks?", [
+        text("Delivery continues with this Change towards merging; no problem is sent to the build."
+          + (comment ? " Your comment is kept as a note." : "")),
+      ], "Pass");
+    if (ok) {
+      const round = { round: r.number, head: r.head, pack: r.pack };
+      send("/answers", { question: q.id, option, text: comment, ...round, findings }, origin);
+    }
+  };
   box.append(words, row(
-    button("Pass", () => decide("pass"), { icon: "check" }),
-    button("Fail", () => decide("fail"), { variant: "secondary", icon: "close" }),
+    button("Pass", () => decide("pass"), { icon: "check", aria: DIALOG }),
+    button("Fail", () => decide("fail"), { variant: "secondary", icon: "close", aria: DIALOG }),
   ));
   return box;
 }
@@ -363,12 +506,55 @@ function shot(slug, kind, name, at) {
   return shots.get(key);
 }
 
-function image(slug, kind, name, at, alt) {
-  const link = el("a", undefined, { target: "_blank", rel: "noopener" });
-  const img = el("img", undefined, { alt, loading: "lazy" });
-  link.append(img);
-  shot(slug, kind, name, at).then((url) => { img.src = link.href = url; }, () => { img.alt += " (not available)"; });
-  return link;
+// One screenshot in a gallery: a button that enlarges it, in the order before then after at each width.
+function zoomable(entry, gallery) {
+  const index = gallery.push(entry) - 1, side = entry.side === "before" ? "before the Change" : "with the Change";
+  entry.alt = `${entry.state} at ${entry.width}px ${side}, at ${entry.commit}`;
+  const trigger = el("button", undefined, { type: "button", class: "zoom", "aria-haspopup": "dialog" });
+  const img = el("img", undefined, { alt: `Enlarge: ${entry.alt}`, loading: "lazy" });
+  trigger.append(img);
+  trigger.onclick = () => lightbox(gallery, index);
+  shot(entry.slug, entry.kind, entry.name, entry.at).then((url) => { img.src = url; },
+    () => { img.alt += " (not available)"; });
+  return trigger;
+}
+
+// The enlarged screenshots: arrow keys or buttons step through them, Escape or Close ends.
+function lightbox(gallery, start) {
+  const dialog = el("dialog", undefined, { class: "lightbox", "aria-label": "Screenshots" });
+  const img = el("img", undefined, { alt: "" }), frame = el("div", undefined, { class: "frame" });
+  const caption = el("p", undefined, { class: "caption", "aria-live": "polite" });
+  let at = start;
+  const show = () => {
+    const e = gallery[at];
+    caption.replaceChildren(el("strong", e.side === "before" ? "Before" : "After"),
+      ` at ${e.commit} \u00b7 ${e.state} \u00b7 ${e.width} px wide \u00b7 ${at + 1} of ${gallery.length}`);
+    img.alt = e.alt;
+    img.removeAttribute("src");
+    shot(e.slug, e.kind, e.name, e.at).then((url) => { if (gallery[at] === e) img.src = url; },
+      () => caption.append(" \u00b7 not available"));
+  };
+  img.onload = () => caption.append(` \u00b7 ${img.naturalWidth} \u00d7 ${img.naturalHeight} px`);
+  const go = (step) => {
+    at = (at + step + gallery.length) % gallery.length;
+    show();
+  };
+  frame.append(img);
+  dialog.append(row(
+    button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary" }), caption,
+    button("Next", () => go(1), { icon: "arrow-right", variant: "secondary" }),
+    button("Close", () => dialog.close(), { icon: "close", variant: "secondary" }),
+  ), frame);
+  dialog.addEventListener("keydown", (k) => {
+    if (k.key !== "ArrowLeft" && k.key !== "ArrowRight") return;
+    k.preventDefault();
+    go(k.key === "ArrowLeft" ? -1 : 1);
+  });
+  dialog.addEventListener("click", (k) => { if (k.target === dialog) dialog.close(); });
+  dialog.addEventListener("close", () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  show();
 }
 
 function visualSection(slug, v, b, existing, deciding) {
@@ -387,21 +573,24 @@ function visualSection(slug, v, b, existing, deciding) {
   if (b && b.findings.length) {
     box.append(text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" }));
   }
-  const grid = el("div", undefined, { class: "shots" });
+  const grid = el("div", undefined, { class: "shots" }), gallery = [];
   for (const name of v.files) {
     const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
-    const shot = b && b.files.includes(name);
-    const comparable = shot && b.states[state] === v.states[state];  // a revised state's old shot is no baseline
+    const kept = b && b.files.includes(name);
+    const comparable = kept && b.states[state] === v.states[state];  // a revised state's old shot is no baseline
+    const one = (kind, side, at, head) => zoomable(
+      { slug, kind, name, at, side, state, width, commit: head.slice(0, 7) }, gallery);
     const before = comparable
-      ? image(slug, "before", name, b.at, `${state} at ${width}px before the Change, at ${b.head.slice(0, 7)}`)
-      : text(shot ? "Before not comparable: the state changed since" : "Before not available",
+      ? one("before", "before", b.at, b.head)
+      : text(kept ? "Before not comparable: the state changed since" : "Before not available",
         { class: "missing", size: "xs", color: "contrast-medium" });
     const fig = el("figure", undefined, { class: "pair" });
-    const after = image(slug, "visual", name, v.at, `${state} at ${width}px with the Change, at ${v.head.slice(0, 7)}`);
-    fig.append(before, after, el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));
+    fig.append(before, one("visual", "after", v.at, v.head),
+      el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));
     grid.append(fig);
   }
-  box.append(grid);
+  box.append(text("Select a screenshot to enlarge it; the arrow keys step through before and after at each width.",
+    { size: "xs", color: "contrast-medium" }), grid);
   return box;
 }
 
@@ -412,8 +601,12 @@ function beforeSection(slug, b) {
     const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
     box.append(text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }));
   }
-  const grid = el("div", undefined, { class: "shots" });
-  for (const name of b.files) grid.append(image(slug, "before", name, b.at, `${name} before the Change`));
+  const grid = el("div", undefined, { class: "shots" }), gallery = [];
+  for (const name of b.files) {
+    const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
+    grid.append(zoomable({ slug, kind: "before", name, at: b.at, side: "before", state, width,
+      commit: (b.head || "").slice(0, 7) }, gallery));
+  }
   box.append(grid);
   return box;
 }
@@ -436,11 +629,13 @@ async function showDetail() {
   ];
   if (d.pullback) parts.push(pullbackNote(d.pullback));
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
+  const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
+    : d.before ? beforeSection(d.slug, d.before) : null;
+  if (pictures && deciding) parts.push(pictures);  // the owner looks first, then decides
   if (d.question) parts.push(deciding ? decisionForm(d.question, r) : questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
-  if (d.visual) parts.push(visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding));
-  else if (d.before) parts.push(beforeSection(d.slug, d.before));
+  if (pictures && !deciding) parts.push(pictures);
   if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const items = [
@@ -458,8 +653,11 @@ async function showDetail() {
     d.pullback?.state, d.paused, r?.number, r?.outcome, d.owner_criteria.map((k) => k.id)]);
   const editing = target.contains(document.activeElement)
     && document.activeElement.matches("textarea, input, p-textarea, p-radio-group, p-radio-group-option, p-checkbox");
-  if ((editing || draft) && forms === shown.forms) return;  // keep unsent input while the same forms are shown
+  const overlay = document.querySelector("dialog.lightbox, p-modal");  // its launcher and focus return stay
+  if ((editing || draft || overlay) && forms === shown.forms) return;  // keep unsent input while the same forms show
+  const opened = new Set([...target.querySelectorAll("details[open] > summary")].map((s) => s.textContent));
   target.replaceChildren(...parts);
+  for (const s of target.querySelectorAll("details > summary")) if (opened.has(s.textContent)) s.parentNode.open = true;
   shown = { slug: d.slug, forms };
   draft = false;
 }
@@ -530,6 +728,9 @@ async function refresh() {
 
 async function newChange(event) {
   const trigger = event.currentTarget, result = document.getElementById("started");
+  const wanted = await confirmed("Start a new Change?", [text("Delivery opens a chat in VS Code where you shape the "
+    + "new Change's brief with the assistant. Nothing is built until you approve the brief.")], "Open the chat");
+  if (!wanted) return;
   waiting(trigger, true);
   result.textContent = "Opening a chat…";
   try {
@@ -555,7 +756,7 @@ async function start() {
     document.documentElement.classList.add("no-pds");
     document.getElementById("offline").hidden = false;
   }
-  document.querySelector("header").append(button("New Change", newChange, { icon: "add" }));
+  document.querySelector("header").append(button("New Change", newChange, { icon: "add", aria: DIALOG }));
   for (const type of ["input", "change"]) {
     document.getElementById("detail").addEventListener(type, () => { draft = true; });
   }

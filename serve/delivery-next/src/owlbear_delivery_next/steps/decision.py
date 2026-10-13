@@ -25,7 +25,23 @@ if TYPE_CHECKING:
 
 CAUSE = cause_key(ErrorKind.REVIEW, StepKind.CHECK, "visual-decision")
 AGAIN = cause_key(ErrorKind.REVIEW, StepKind.CHECK, "visual-judge")
+FIX = frozenset({"P0", "P1", "P2"})  # severities worth a fix; P3 is polish
+OWNER = "owner-"  # an owner criterion's id, which a finding cites as its rule
 type Route = Literal["merge", "back", "ask", "again"]
+
+
+def proposed(kept: VisualRound) -> list[str]:
+    """What a fail sends back unless the owner unticks it: what a failing judge found the Change introduced, P0-P2.
+
+    A missed owner criterion is always sent, whatever its severity.
+    """
+    return [
+        f.id
+        for v in kept.verdicts
+        if v.verdict != "pass"
+        for f in v.findings
+        if f.introduced is not False and (not f.severity or f.severity in FIX or f.rule.startswith(OWNER))
+    ]
 
 
 def route(
@@ -38,8 +54,9 @@ def route(
     a design fail goes back or to the owner by the setting; any unsure goes to the owner (N6).
     """
     design = kept.verdicts[1] if kept else None
-    back = kept is not None and design is not None and kept.design_failures == "back" and design.verdict == "fail"
-    sent = lines([design], [f.id for f in design.findings]) if back and design else []
+    by_setting = kept is not None and design is not None and kept.design_failures == "back" and design.verdict == "fail"
+    sent = lines([design], proposed(kept)) if by_setting and kept else []
+    back = bool(sent)  # a design fail with nothing to fix goes to the owner
     if broken:
         return "back", [*found, *sent]
     if verdict is None or design is None or design.verdict is None or kept is None:
@@ -109,7 +126,7 @@ def decided(c: Change, head: str, tree_id: str) -> tuple[Change, StepResult] | N
     if d.comment:
         number = len(c.owner_criteria) + 1
         criterion = OwnerCriterion(
-            id=f"owner-{number}", text=d.comment, round=kept.number, brief_version=c.brief.version, at=d.at
+            id=f"{OWNER}{number}", text=d.comment, round=kept.number, brief_version=c.brief.version, at=d.at
         )
         c.owner_criteria.append(criterion)
     kept.outcome = "back"

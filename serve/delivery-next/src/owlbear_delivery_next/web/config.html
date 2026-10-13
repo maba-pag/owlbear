@@ -64,6 +64,7 @@
     </p-table-head-row></p-table-head>
     <p-table-body id="agents"></p-table-body>
   </p-table>
+  <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite"></p-text>
   <div class="row">
     <p-button id="save" type="button" compact="true">Save</p-button>
     <p-text id="pending" size="xs" color="contrast-medium" aria-live="polite"></p-text>
@@ -130,6 +131,7 @@ const INHERIT = "inherit";  // the effort option that clears the layer's own val
 const SOURCES = { default: "built-in default", global: "global", project: "this project" };
 const LAYERS = { project: "This project", global: "All projects" };
 let loaded = null, rendered = "project", saving = false;
+let offered = null;  // the models this machine's Copilot offers, once read; null while reading or unreadable
 // Unsaved edits per layer ("role.field" -> typed value); a save applies them over the newest saved layer.
 const drafts = { project: {}, global: {} };
 
@@ -162,11 +164,11 @@ function problem(response, data, body) {
   return `Delivery answered ${response.status} ${response.statusText} ${body.slice(0, 200)}`.trim();
 }
 
-async function call(path, method = "GET", body = undefined) {
+async function call(path, method = "GET", body = undefined, wait = undefined) {
   if (!token) throw new Error("Open the URL the host printed, including #token=…");
   // a save commits and pushes the shared settings repository (TD-64), which can take a network round trip
-  const wait = method === "GET" ? 5000 : 60000;
-  const init = { method, headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(wait) };
+  const timeout = AbortSignal.timeout(wait ?? (method === "GET" ? 5000 : 60000));
+  const init = { method, headers: { Authorization: `Bearer ${token}` }, signal: timeout };
   if (body) {
     init.body = JSON.stringify(body);
     init.headers["Content-Type"] = "application/json";
@@ -259,22 +261,68 @@ function widths() {
   return cell(input, source("widths", loaded.settings.widths));
 }
 
+function tokens(n) {
+  return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
+}
+
+// The model a role runs with in the edited layer: its own draft or saved value, else what it inherits.
+function modelOf(role) {
+  const key = `${role}.model`;
+  const own = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  return own || loaded.inherited[rendered].agents[role].model;
+}
+
+// Why the role's effort, its own or inherited, cannot run with its model; empty when it can or nothing is known.
+function mismatch(role) {
+  const key = `${role}.effort`, model = offered?.find((m) => m.id === modelOf(role));
+  const own = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  const effort = own || loaded.inherited[rendered].agents[role].effort;
+  if (!model || !model.efforts.length || model.efforts.includes(effort)) return "";
+  return `${model.id} does not offer effort ${effort}${own ? "" : " (inherited)"}; choose one it offers`;
+}
+
+function flag(input, wrong) {
+  input.setAttribute("state", wrong ? "error" : "none");
+  input.setAttribute("message", wrong);
+}
+
 function editable(role, field) {
   const key = `${role}.${field}`, below = loaded.inherited[rendered].agents[role][field];
   const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
   const label = `${field === "model" ? "Model" : "Effort"} for ${role}`;
+  const model = offered?.find((m) => m.id === modelOf(role));
   let input;
   if (field === "effort") {
     input = el("p-select", undefined, { label, "hide-label": "true" });
     input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
-    for (const e of EFFORTS) input.append(el("p-select-option", e, { value: e }));
+    const efforts = model ? model.efforts : EFFORTS;
+    for (const e of efforts) {
+      input.append(el("p-select-option", e === model?.default_effort ? `${e} (model default)` : e, { value: e }));
+    }
+    if (value && !efforts.includes(value)) {
+      input.append(el("p-select-option", `${value} (not offered by ${model?.id ?? "this model"})`, { value }));
+    }
+    input.value = value || INHERIT;
+    flag(input, mismatch(role));
+  } else if (offered?.length) {
+    input = el("p-select", undefined, { label, "hide-label": "true", filter: "true" });
+    input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
+    for (const m of offered) {
+      const context = m.context ? ` · ${tokens(m.context)} context` : "";
+      input.append(el("p-select-option", `${m.name} (${m.id})${context}`, { value: m.id }));
+    }
+    if (value && !offered.some((m) => m.id === value)) {
+      input.append(el("p-select-option", `${value} (not offered here)`, { value }));
+    }
     input.value = value || INHERIT;
   } else {
     input = el("p-input-text", undefined, { label, "hide-label": "true", placeholder: `inherit (${below})` });
     input.value = value;
   }
   input.dataset.key = key;
-  return cell(input, source(`agents.${key}`, loaded.settings.agents[role][field]));
+  const efforts = field === "effort" && model && !model.efforts.length
+    ? [el("p-text", `${model.id} takes no effort setting`, { size: "xs", color: "contrast-medium" })] : [];
+  return cell(input, ...efforts, source(`agents.${key}`, loaded.settings.agents[role][field]));
 }
 
 // A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
@@ -305,6 +353,12 @@ function edit(event) {
   const key = input.dataset.key, value = input.value === INHERIT ? "" : (input.value ?? "").trim();
   if (value === saved(rendered, key)) delete drafts[rendered][key];
   else drafts[rendered][key] = value;
+  const [role, field] = key.split(".");
+  if (offered && field === "model") {  // the effort choices follow the model
+    document.querySelector(`[data-key="${role}.effort"]`).closest("p-table-cell").replaceWith(editable(role, "effort"));
+  } else if (offered && field === "effort") {
+    flag(input, mismatch(role));
+  }
   pending();
 }
 
@@ -396,6 +450,11 @@ async function reload() {
 
 async function save() {
   if (saving || !loaded) return;
+  const wrong = Object.keys(loaded.settings.agents).map(mismatch).filter(Boolean);
+  if (wrong.length) {
+    notify(`Not saved: ${wrong.join("; ")}.`);
+    return;
+  }
   const layer = rendered, sent = { ...drafts[layer] };
   lock(true);
   say("Saving…");
@@ -428,6 +487,29 @@ async function start() {
   document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });
   document.getElementById("save").addEventListener("click", save);
   if (await reload()) render();
+  await readModels();
+}
+
+// The offered models replace typing once read; the runtime starts for it, so this can take a while.
+async function readModels() {
+  const note = document.getElementById("models-note");
+  note.textContent = "Reading the models this machine's Copilot offers…";
+  try {
+    const answer = await call("/config/models", "GET", undefined, 45000);
+    offered = answer.models.length ? answer.models : null;
+    note.textContent = offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
+      : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
+  } catch (e) {
+    note.textContent = `Could not read the offered models (${e.message}); type a model name.`;
+  }
+  if (!loaded || !offered || saving) return;
+  renderIdle();
+}
+
+// Render once no setting holds the focus, so arriving choices never replace the control being used.
+function renderIdle() {
+  if (!document.activeElement?.closest?.("main [data-key]")) return render();
+  document.querySelector("main").addEventListener("focusout", () => setTimeout(renderIdle), { once: true });
 }
 
 start();

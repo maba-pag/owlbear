@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
-from owlbear_delivery_next import calibration, pack_update
+from owlbear_delivery_next import calibration, model_choices, pack_update
 from owlbear_delivery_next.catalogue import CATALOGUE
 from owlbear_delivery_next.common import CommonError
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
@@ -99,11 +99,15 @@ def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: 
 
 def router(store: Store) -> APIRouter:
     """The settings routes; the caller adds the token check."""
-    routes = APIRouter()
+    routes, offered = APIRouter(), model_choices.Offered()
 
     @routes.get("/config")
     def read() -> dict[str, Any]:
         return _state(store)
+
+    @routes.get("/config/models")
+    def models() -> dict[str, Any]:
+        return offered()
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:

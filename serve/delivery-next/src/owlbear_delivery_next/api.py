@@ -323,7 +323,10 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
                 for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
             ],
             "before": c.before.model_dump(mode="json") if c.before else None,
-            "visual_round": c.visual_rounds[-1].model_dump(mode="json") if c.visual_rounds else None,
+            "visual_round": c.visual_rounds[-1].model_dump(mode="json")
+            | {"proposed": decision.proposed(c.visual_rounds[-1])}
+            if c.visual_rounds
+            else None,
             "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
             "activity": events[-20:],
         }
