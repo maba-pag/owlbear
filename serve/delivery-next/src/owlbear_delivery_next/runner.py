@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import dataclasses
 import json
 import sys
@@ -23,14 +22,15 @@ from owlbear_delivery_next import (
     roles,
     sdk_adapter,
     session_result,
+    sessions,
     setup,
     tools,
-    vscode_adapter,
 )
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.profile_record import Profile
+from owlbear_delivery_next.sessions import UsageUnreadError
 from owlbear_delivery_next.steps import (
     before,
     check,
@@ -39,6 +39,7 @@ from owlbear_delivery_next.steps import (
     design,
     engine,
     follow,
+    judges,
     merge,
     publish,
     review,
@@ -53,15 +54,6 @@ if TYPE_CHECKING:
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
 TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
-
-
-class UsageUnreadError(Exception):
-    """A session whose model check could not run; its run is never processed unless the owner accepts it."""
-
-    def __init__(self, run: session_result.Run) -> None:
-        super().__init__(run.usage_unread)
-        self.run = run
-        self.worktree: Path | None = None  # set for an agent step's own session, whose result may be held (TD-56)
 
 
 type Result = loop.StepResult
@@ -80,10 +72,7 @@ ENGINE: dict[StepKind, engine.Step] = {
     StepKind.MERGE: merge.run,
     StepKind.CLEANUP: cleanup.run,
 }
-
-
-def _out(text: str) -> None:
-    sys.stdout.write(text + "\n")
+_out = sessions.out
 
 
 def _previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]:
@@ -95,25 +84,6 @@ def _previous(store: Store, slug: str, session: str | None) -> dict[int, float |
 def _others(store: Store, slug: str) -> dict[str, list[str]]:
     """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
     return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
-
-
-def _memory(store: Store) -> Path | None:
-    """The project's memory folder in the shared repository (TD-72); none without one, so the clone stays clean."""
-    if store.shared is None:
-        return None
-    folder = store.shared.memory_path(store.name)
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
-
-
-def _session(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
-    """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7)."""
-    if (store.read_profile() or Profile()).runtime == "vscode":
-        return vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
-    run = asyncio.run(sdk_adapter.run(cfg))
-    if run.usage_unread and run.termination and run.termination.confirmed:  # else the termination stop wins
-        raise UsageUnreadError(run)
-    return run
 
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -174,7 +144,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
         ),
         item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
-        memory=_memory(store),
+        memory=sessions.memory(store),
         ui=change.brief.ui,
     )
     run = accepted or _kept(cfg, store)
@@ -184,7 +154,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
-    _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {}))
+    sessions.logged(
+        store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
+    )
     if s.kind == StepKind.PLAN and result.plan:
         message = prompts.plan_challenge(change, result.plan, profile, path, others)
         result = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
@@ -204,7 +176,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 def _kept(cfg: sdk_adapter.Session, store: Store) -> session_result.Run:
     """The step's own session; an unread one names its worktree so the gate can hold its result (TD-56)."""
     try:
-        return _session(store, cfg)
+        return sessions.run(store, cfg)
     except UsageUnreadError as exc:
         exc.worktree = cfg.worktree
         raise
@@ -223,45 +195,6 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
     return _others(store, slug)
 
 
-def _log(store: Store, lock: Lock, change: Change, run: session_result.Run, fields: dict[str, object]) -> None:
-    """Log one session's step event and add its usage to the Change's spend, which the log may later drop."""
-    step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": run.session_id}
-    step |= fields | {"ending": run.ending, "head": run.head, "usage": run.usage}
-    step["termination"] = dataclasses.asdict(run.termination) if run.termination else None
-    change.spend = change.spend.plus(run.usage, run.session_id)
-    store.write(lock, change)
-    store.log(lock, change.slug, step)
-    _out(json.dumps(step, default=str))
-
-
-def _reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str) -> Result:
-    """One fresh read-only reviewer session over ``cfg.message``; its verdict as a step result."""
-    return _review_run(store, lock, change, cfg, label)[0]
-
-
-def _review_run(  # noqa: PLR0913 - the visual review has its own result schema
-    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str, *, submit: tools.Spec = tools.REVIEW
-) -> tuple[Result, session_result.Run]:
-    """The reviewer session's verdict and its run, whose payload is the submitted review."""
-    role = roles.chosen(store.settings(), label)
-    review_cfg = dataclasses.replace(
-        cfg,
-        kind=StepKind.REVIEW,
-        session_id=f"{lock.slug}-{label}-{uuid.uuid4().hex[:8]}",
-        resume=False,
-        submit=submit,
-        checks=(),
-        model=role.model,
-        effort=role.effort,
-        fresh=cfg.message,
-        previous={},
-    )
-    run = _session(store, review_cfg)
-    verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
-    _log(store, lock, change, run, {"kind": label, "exit": verdict.exit})
-    return verdict, run
-
-
 def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     """B23: capture the brief's states from the ready environment and judge the screenshots in a reviewer session."""
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
@@ -269,15 +202,16 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, change)
     url = change.env.ready_url if change.env else ""
     try:
+        settings = store.settings()  # one snapshot: what the round records is what it ran with
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
         if owned := visual.decided(change, head, tree):  # the owner answered the reviewer's doubts (N6)
             store.write(lock, loop.apply(owned[0], owned[1], datetime.now(UTC)))
             return
-        widths = (change.before.widths if change.before else None) or store.settings().widths  # pairs with before
-        visual.seed(change, path, store.settings().seed, lambda e: store.log(lock, change.slug, e))  # TD-65
+        widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
+        visual.seed(change, path, settings.seed, lambda e: store.log(lock, change.slug, e))  # TD-65
         pack = design.pack()
-        shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
+        shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
         states = {s.name: s.version for s in change.brief.visual}
         source = design.sources(path, visual.ui_paths(change, head), pack)
         found = [s.design for s in shots if s.design] + ([source] if source else [])
@@ -291,26 +225,37 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     else:
         result, judgement = None, None
         if shots and all(s.file for s in shots):  # a failed shot is a finding without a reviewer
-            cfg = sdk_adapter.Session(
-                kind=StepKind.REVIEW,
-                worktree=path,
-                session_id="",
-                message=prompts.visual(
-                    change,
-                    [(s.state, s.width, s.file) for s in shots],
-                    visual.classify([e for s in shots for e in s.errors], change.before),
-                ),
-                resume=False,
+            errors = visual.classify([e for s in shots for e in s.errors], change.before)
+            base = sdk_adapter.Session(
+                kind=StepKind.REVIEW, worktree=path, session_id="", message="", resume=False,
                 policy=permissions.Policy(path, prompts.GIT_READ, write=False),
-                observe=lambda: tools.Worktree(head, head, changed=tuple(s.file for s in shots)),
-                checks=(),
-                journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
-                attachments=visual.attachments(out, shots),
-                memory=_memory(store),
+                observe=lambda: tools.Worktree(head, head), checks=(), submit=tools.VISUAL_REVIEW,
+                journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)), memory=sessions.memory(store),
+            )  # fmt: skip
+            images = judges.blind(
+                change, shots, out, store.before_dir(change.slug, change.before.head) if change.before else None
             )
-            result, run = _review_run(store, lock, change, cfg, "visual-review", submit=tools.VISUAL_REVIEW)
-            stopped = result.exit == Exit.STOP  # a session that did not end cleanly outranks its verdict
-            judgement = run.payload if isinstance(run.payload, tools.ReviewResult) and not stopped else None
+            given = {"errors": errors, "scans": scans}
+            mine = [("visual-review", r) for r in judges.reviews(base, change, head, shots, out, **given)]
+            theirs = [("design-review", d) for d in judges.sessions(base, change, head, images, **given)]
+            ran = sessions.judges(store, lock, change, [*mine, *theirs], settings)
+            reviewed, designed = ran[: len(mine)], ran[len(mine) :]
+            stop = next((r for r, _ in ran if r.exit == Exit.STOP), None)  # any judge left running stops the Change
+            result = stop or next((r for r, run in reviewed if not isinstance(run.payload, tools.ReviewResult)), None)
+            judgement = None if result else judges.merged([run.payload for _, run in reviewed])
+            runs = ([run for _, run in reviewed], [run for _, run in designed])
+            kept = judges.recorded(
+                change,
+                head,
+                tree,
+                widths,
+                runs=runs,
+                scans=scans,
+                images=images,
+                settings=settings,
+                now=datetime.now(UTC),
+            )
+            change.visual_rounds.append(kept)  # recorded only: routing on both verdicts comes with slice 6's page
         if judgement is not None or result is None:
             change, result = visual.judged(
                 change, head, tree, shots, verdict=judgement, now=datetime.now(UTC), scans=scans
@@ -337,7 +282,7 @@ def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Sessio
     """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
     if planned.exit != Exit.DONE or planned.plan is None:
         return planned
-    verdict = _reviewer(store, lock, change, cfg, "plan-challenge")
+    verdict = sessions.reviewer(store, lock, change, cfg, "plan-challenge")
     if verdict.exit == Exit.DONE:
         return planned
     if verdict.exit in {Exit.ASK, Exit.STOP} or (verdict.operational and verdict.exit == Exit.BACK):
@@ -363,9 +308,9 @@ def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> No
         observe=lambda: worktree.observe(path, change.names.target),
         checks=(),
         journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
-        memory=_memory(store),
+        memory=sessions.memory(store),
     )
-    change, result = loop.brief_challenge(change, _reviewer(store, lock, change, cfg, "brief-challenge"))
+    change, result = loop.brief_challenge(change, sessions.reviewer(store, lock, change, cfg, "brief-challenge"))
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 
@@ -453,7 +398,7 @@ def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
     store.write(lock, gated)
     if head:  # after its question exists: a hold no question offers is never taken
         held.keep(store, lock, gated, exc.run, head)
-    _log(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK})
+    sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK})
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

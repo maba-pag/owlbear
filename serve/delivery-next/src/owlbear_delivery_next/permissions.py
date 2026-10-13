@@ -176,7 +176,11 @@ def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) 
     if req.kind == "mcp" and f"{req.server}/{req.tool.removeprefix(f'{req.server}-')}" in offered:
         return None
     if req.kind == "custom-tool":
-        return None if req.tool in {s.name for s in tools.SPECS} else f"tool {req.tool} is not allowed"
+        return (
+            None
+            if req.tool in {*(s.name for s in tools.SPECS), tools.FIRST_LOOK}
+            else f"tool {req.tool} is not allowed"
+        )
     if req.kind in {"read", "write"}:
         if req.kind == "write" and not policy.write:
             return "writes are not allowed in this step"

@@ -24,6 +24,7 @@ class Run:
     session_id: str
     ending: Ending = "error"
     payload: tools.Args | None = None
+    first: tools.Args | None = None  # a judge's first look, before its final result (design judge, slice 5)
     detail: str = ""
     head: str | None = None
     runtime_pid: int | None = None

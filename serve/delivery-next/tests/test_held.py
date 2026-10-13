@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, held, loop, runner, session_result, tools
+from owlbear_delivery_next import api, held, loop, runner, session_result, sessions, tools
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
@@ -198,7 +198,7 @@ def test_a_result_whose_commit_is_no_longer_head_is_not_held(tmp_path, clone, mo
 def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypatch):
     store = Store(tmp_path / "store")
     run = Run("r1", ending="result", usage_unread=UNREAD, termination=Termination(confirmed=True))
-    monkeypatch.setattr(runner, "_session", lambda *_a: (_ for _ in ()).throw(runner.UsageUnreadError(run)))
+    monkeypatch.setattr(sessions, "run", lambda *_a: (_ for _ in ()).throw(sessions.UsageUnreadError(run)))
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.PLAN))
     store.write(Lock("c1"), change)
     cfg = runner.sdk_adapter.Session(
@@ -211,6 +211,6 @@ def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypat
         observe=tools.Worktree,
         checks=(),
     )
-    with pytest.raises(runner.UsageUnreadError) as caught:
-        runner._review_run(store, Lock("c1"), change, cfg, "plan-challenge")  # noqa: SLF001
+    with pytest.raises(sessions.UsageUnreadError) as caught:
+        sessions.review_run(store, Lock("c1"), change, cfg, "plan-challenge")
     assert caught.value.worktree is None  # so the gate offers only to run the step again

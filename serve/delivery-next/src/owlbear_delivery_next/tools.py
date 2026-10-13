@@ -259,6 +259,14 @@ MISSING = Spec(
     "missing-tool",
 )
 SPECS = (SUBMIT, ASK, PREMISE, MISSING)
+FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
+
+
+def results(role: str) -> list[str]:
+    """The result tools a role's agent is offered: every step's four, and the design judge's first look."""
+    return [*(s.name for s in SPECS), *([FIRST_LOOK] if role == "designer" else [])]
+
+
 REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")
 VISUAL_REVIEW = Spec(
     "submit_result", "Submit your verdict once, after looking at each screenshot.", VisualReviewResult, "result"
@@ -391,6 +399,9 @@ def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) 
         errors.append("doubts: empty - an unsure verdict names each screenshot and what you cannot decide")
     if visual and (missing := sorted(set(tree.changed) - set(review.covered_paths))):
         errors.append(f"covered_paths: missing {_few(missing)} - look at every screenshot and list it")
+    places = [f.place for f in review.findings] + [d.place for d in getattr(review, "doubts", [])]
+    if visual and (unknown := sorted({p for p in places if p not in tree.changed})):
+        errors.append(f"place: {_few(unknown)} is not a screenshot - name the screenshot file it is seen in")
     return errors
 
 

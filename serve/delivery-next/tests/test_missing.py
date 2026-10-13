@@ -181,10 +181,10 @@ def test_the_quota_never_overrides_a_report() -> None:
 def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premise_its_own(monkeypatch) -> None:
     planned = StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
     nowhere = to_result(run(report("matlab", "license server unknown")), K.REVIEW, NOW, K.PLAN)
-    monkeypatch.setattr(runner, "_reviewer", lambda *_: nowhere)
+    monkeypatch.setattr(runner.sessions, "reviewer", lambda *_: nowhere)
     assert runner._challenge(None, None, change(K.PLAN), None, planned) is nowhere  # noqa: SLF001
     premise = nowhere.model_copy(update={"operational": False})
-    monkeypatch.setattr(runner, "_reviewer", lambda *_: premise)
+    monkeypatch.setattr(runner.sessions, "reviewer", lambda *_: premise)
     kept = runner._challenge(None, None, change(K.PLAN), None, planned)  # noqa: SLF001
     assert (kept.exit, kept.plan) == (Exit.RETRY, planned.plan)
 

@@ -6,7 +6,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import tools
+from owlbear_delivery_next import design_tools, tools
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,8 +48,9 @@ class Gate:
 
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
-        """The step's tools: its submit tool, ``ask_question``, ``report_wrong_premise`` and ``report_missing_tool``."""
-        return self.cfg.submit, tools.ASK, tools.PREMISE, tools.MISSING
+        """The step's tools: its submit tool, a first look if it has one, and the three every step has."""
+        first = (self.cfg.first_look,) if self.cfg.first_look else ()
+        return self.cfg.submit, *first, tools.ASK, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""
@@ -66,7 +67,8 @@ class Gate:
         args, errors = tools.parse(spec.model, arguments)
         if args is not None:
             errors = tools.check_question(args) if isinstance(args, tools.AskQuestion) else []
-            errors += self._check_result(args) if spec is self.cfg.submit else []
+            if spec is self.cfg.submit or spec is self.cfg.first_look:
+                errors += self._order(spec) or self._check_result(args)
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
         if errors:
@@ -75,8 +77,22 @@ class Gate:
                 self._finish("invalid", None, "; ".join(errors)[:300])
             lines = "\n".join(f"- {e}" for e in errors)
             return f"Rejected. Fix each field, then call again:\n{lines}", False
+        if spec is self.cfg.first_look:  # recorded, and the turn goes on with what it releases
+            self.run.first = args
+            return f"Recorded. {self.cfg.reveal}".strip(), True
         self._finish(spec.ending, args, "")
         return ACCEPTED, True
+
+    def _order(self, spec: tools.Spec) -> list[str]:
+        """A first look comes once, and before the final result."""
+        first, submit = self.cfg.first_look, self.cfg.submit
+        if first is None:
+            return []
+        if spec is first and self.run.first is not None:
+            return [f"{first.name}: already recorded - submit your final verdict with {submit.name}"]
+        if spec is submit and self.run.first is None:
+            return [f"{submit.name}: first submit your own verdict with {first.name}"]
+        return []
 
     def _check_result(self, args: tools.Args) -> list[str]:
         try:
@@ -84,8 +100,11 @@ class Gate:
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
         cfg = self.cfg
-        errors = tools.check_result(
-            args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
-        )
+        if isinstance(args, design_tools.DesignLook):
+            errors = design_tools.check(args, tree)
+        else:
+            errors = tools.check_result(
+                args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
+            )
         self.run.head = None if errors else tree.head
         return errors

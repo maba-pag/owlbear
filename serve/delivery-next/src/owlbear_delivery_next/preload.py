@@ -19,6 +19,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "builder": ("owlbear-module-design", "owlbear-acceptance"),
     "planner": ("owlbear-acceptance", "owlbear-module-design"),
     "reviewer": ("owlbear-acceptance", "owlbear-module-design"),
+    "designer": ("owlbear-ui-design", "owlbear-ui-review"),
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-ui-design",)}  # added when the brief has a UI (TD-76)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>

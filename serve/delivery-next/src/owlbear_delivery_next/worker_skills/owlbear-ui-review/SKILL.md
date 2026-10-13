@@ -53,16 +53,19 @@ product. Correctness against the brief is another judge's question; you judge de
 
 ## Findings
 
-- Each finding names the state and width, what is wrong, why it matters, the rule or principle it breaks (a
-  section of `owlbear-ui-design` or a detector rule id), its severity, and whether the Change introduced it or it
-  was there before.
+- Each finding names the image, what is wrong, why it matters, the rule or principle it breaks (a section of
+  `owlbear-ui-design`, a detector rule id, or an owner's criterion by its id) and its severity. Report a problem
+  on every image that shows it, A and B alike: Delivery maps them back, so a problem both show is one the Change
+  did not cause.
 - Taste alone is not a finding. "I would prefer" without a cited rule is not reported.
 
 ## Verdict
 
-- **Fail:** the Change introduces a P0 or P1 finding, makes a state clearly worse than before on a cited rule,
-  or misses one of the owner's criteria.
-- **Pass:** nothing above. Existing problems the Change did not cause are reported as existing and never fail it.
+You judge the images; Delivery maps A and B back and decides what the Change did.
+
+- **Fail:** an image has a P0 or P1 problem or misses one of the owner's criteria, or one image of a pair is
+  clearly worse than the other on a cited rule.
+- **Pass:** nothing above.
 - **Unsure:** the evidence cannot decide: a state cannot be compared and the rubric alone is not enough, images
   are unreadable, or the brief and a rule conflict in a way only the owner can settle. Say exactly what would
   decide it.

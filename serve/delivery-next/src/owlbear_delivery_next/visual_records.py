@@ -28,6 +28,7 @@ class JudgeFinding(_Strict):
     id: str  # unique within its round, such as ``design-3``
     state: str
     width: int | None = None
+    image: str = ""  # the image the judge saw it in; the round's ``blind`` names its side
     text: str
     rule: str = ""  # a section of the design skill or a detector rule id
     severity: Literal["P0", "P1", "P2", "P3"] | None = None
@@ -46,6 +47,8 @@ class JudgeVerdict(_Strict):
     usage_verified: bool = False
     unanchored: Verdict | None = None  # the design judge's verdict before it saw the detector (phase 1)
     false_positives: list[str] = Field(default_factory=list)  # detector findings the judge set aside, by rule
+    agreed: list[str] = Field(default_factory=list)  # detector rules the judge's findings share
+    preferences: dict[str, Literal["before", "after", "equal"]] = Field(default_factory=dict)  # per state-width
     at: datetime | None = None
 
 
@@ -90,6 +93,7 @@ class VisualRound(_Strict):
     states: dict[str, int] = Field(default_factory=dict)
     widths: list[int] = Field(default_factory=list)
     pack: str = ""  # the design pack's identity
+    blind: dict[str, Literal["before", "after"]] = Field(default_factory=dict)  # the design judge's image names
     design_failures: DesignFailures = "ask"  # the setting in force when the round began
     verdicts: list[JudgeVerdict] = Field(default_factory=list)
     detector: list[DetectorScan] = Field(default_factory=list)

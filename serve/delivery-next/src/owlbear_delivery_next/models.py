@@ -17,7 +17,7 @@ FORMAT = 2
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
-type Role = Literal["planner", "builder", "reviewer", "challenger"]
+type Role = Literal["planner", "builder", "reviewer", "challenger", "designer"]
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 

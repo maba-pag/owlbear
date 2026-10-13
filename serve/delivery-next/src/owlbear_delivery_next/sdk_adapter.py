@@ -58,17 +58,22 @@ def cli_path() -> str:
     return path
 
 
-def agent(kind: StepKind, *, ui: bool = False) -> dict[str, Any]:
+def agent(kind: StepKind, *, ui: bool = False, role: str = "") -> dict[str, Any]:
     """Return the role's custom agent from the package's ``agents/`` prose, with its tools and preloaded skills."""
-    role = ROLES[kind]
+    role = role or ROLES[kind]
     meta, body = preload.agent_file(role)
     return {
         "name": meta["name"],
         "description": meta["description"],
         "prompt": body.strip(),
-        "tools": [*preload.tools(role), *(s.name for s in tools.SPECS)],  # nothing else is offered (TD-69)
+        "tools": [*preload.tools(role), *tools.results(role)],  # nothing else is offered (TD-69)
         "skills": list(preload.required(role, ui=ui)),
     }
+
+
+def role_of(cfg: Session) -> str:
+    """The session's agent role: its own, else its step kind's."""
+    return cfg.role or ROLES[cfg.kind]
 
 
 @dataclass(frozen=True)
@@ -116,6 +121,9 @@ class Session:
     attachments: tuple[dict[str, str], ...] = ()  # blob attachments sent with the first message
     memory: Path | None = None  # the project's memory folder in the shared repository (TD-70, TD-72)
     ui: bool = False  # the Change has a user interface, so the role's design skills load too (TD-76)
+    role: str = ""  # the agent role when not the step kind's, such as the design judge's
+    first_look: tools.Spec | None = None  # a judgement submitted before the final result, which does not end it
+    reveal: str = ""  # what the first look's reply releases, such as the detector's findings
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
@@ -205,7 +213,7 @@ class _Step:
         if self.checked or not self.created:
             return
         self.checked = True
-        if absent := [s for s in preload.required(ROLES[self.cfg.kind], ui=self.cfg.ui) if s not in self.preloaded]:
+        if absent := [s for s in preload.required(role_of(self.cfg), ui=self.cfg.ui) if s not in self.preloaded]:
             self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
@@ -232,7 +240,7 @@ class _Step:
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = view(request)
-        reason = decide(self.cfg.policy, req, frozenset(preload.tools(ROLES[self.cfg.kind])))
+        reason = decide(self.cfg.policy, req, frozenset(preload.tools(role_of(self.cfg))))
         if reason is None:
             for name in identities(req):  # a later allowed use supersedes an earlier denial of the same program
                 self.run.denied.pop(name, None)
@@ -251,10 +259,10 @@ class _Step:
         return ToolResult(text_result_for_llm=text, result_type="rejected" if text == ENDED else "failure")
 
     def tools(self) -> list[Tool]:
+        on = self.cfg.first_look  # after a first look, the turn goes on
+        made = partial(Tool, skip_permission=True)
         return [
-            Tool(
-                s.name, s.description, partial(self._handle, s), tools.schema(s), skip_permission=True, is_terminal=True
-            )
+            made(s.name, s.description, partial(self._handle, s), tools.schema(s), is_terminal=s is not on)
             for s in self.gate.specs
         ]
 
@@ -288,7 +296,7 @@ class _Step:
         self.record_tree()
 
     def options(self) -> dict[str, Any]:
-        role = agent(self.cfg.kind, ui=self.cfg.ui)
+        role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role)
         return {
             "on_permission_request": self.permission,
             "tools": self.tools(),
@@ -452,7 +460,7 @@ def _refused(cfg: Session) -> str:
     """Why the step cannot start: it names no model (TD-32), or Delivery's skills for its role are missing."""
     if not cfg.model:
         return "wrong model: the step names no model (TD-32)"
-    if gaps := preload.missing(ROLES[cfg.kind], ui=cfg.ui):
+    if gaps := preload.missing(role_of(cfg), ui=cfg.ui):
         return f"Delivery's worker skills are missing: {', '.join(gaps)}"
     return ""
 

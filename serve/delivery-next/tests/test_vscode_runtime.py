@@ -14,7 +14,7 @@ import psutil
 import pytest
 from mcp import Client, StdioServerParameters
 
-from owlbear_delivery_next import ahp, cli, leftovers, runner, sdk_adapter, step_mcp, tools, vscode_adapter
+from owlbear_delivery_next import ahp, cli, leftovers, sdk_adapter, sessions, step_mcp, tools, vscode_adapter
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -305,17 +305,17 @@ def test_settle_terminates_leftovers_and_confirms_only_an_empty_scan(tmp_path: P
 
 def test_the_profile_runtime_chooses_where_sessions_run(tmp_path: Path, monkeypatch) -> None:
     store, calls = Store(tmp_path), []
-    monkeypatch.setattr(runner.vscode_adapter, "run", lambda _cfg, inbox: calls.append(("vscode", inbox)) or Run("v"))
+    monkeypatch.setattr(sessions.vscode_adapter, "run", lambda _cfg, inbox: calls.append(("vscode", inbox)) or Run("v"))
 
     async def sdk(_cfg) -> Run:
         calls.append(("sdk", None))
         return Run("s")
 
-    monkeypatch.setattr(runner.sdk_adapter, "run", sdk)
-    runner._session(store, session())  # noqa: SLF001
+    monkeypatch.setattr(sessions.sdk_adapter, "run", sdk)
+    sessions.run(store, session())
     store.write_profile(Profile(runtime="vscode"))
-    runner._session(store, session())  # noqa: SLF001
-    runner._session(store, session(attachments=({"type": "blob"},)))  # noqa: SLF001
+    sessions.run(store, session())
+    sessions.run(store, session(attachments=({"type": "blob"},)))
     assert [c[0] for c in calls] == ["sdk", "vscode", "vscode"]  # screenshots follow the runtime too (C7)
     inbox = calls[1][1]
     assert (inbox.parent, inbox.suffix) == (tmp_path / "steps", ".json")

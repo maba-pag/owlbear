@@ -21,7 +21,7 @@ from owlbear_delivery_next import ahp, leftovers, prompts
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import Gate
-from owlbear_delivery_next.sdk_adapter import DEADLINES, ROLES
+from owlbear_delivery_next.sdk_adapter import DEADLINES, role_of
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.step_inbox import Inbox
 from owlbear_delivery_next.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall, launch_code_chat
@@ -111,7 +111,7 @@ def _grace(control: Control) -> Callable[[], None]:
 class _Driver:
     def __init__(self, cfg: Session, env: Env, run: Run) -> None:
         self.cfg, self.env, self.run = cfg, env, run
-        self.role = ROLES[cfg.kind]
+        self.role = role_of(cfg)
         self.control = Control()
         self.placed: list[wf.Placed] = []
         self.gate = Gate(cfg, run, self.log, _grace(self.control))

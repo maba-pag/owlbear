@@ -6,7 +6,6 @@ seen here; the brief's ``ui`` flag covers that residual.
 
 from __future__ import annotations
 
-import base64
 import dataclasses
 import hashlib
 import re
@@ -188,22 +187,15 @@ def seed(c: Change, path: Path, command: str, log: Callable[[dict[str, Any]], No
         raise SeedError(broken(f"the seed command {note}"))
 
 
-def capped(out: Path, shots: Sequence[Shot]) -> list[Shot]:
-    """Shots past the review's attachment budget become findings naming their state; never a pass."""
-    total, kept = 0, []
-    for s in shots:
-        total += (out / s.file).stat().st_size if s.file else 0
-        over = _over(s.state, total, sum(1 for k in kept if k.file)) if s.file else ""
-        kept.append(dataclasses.replace(s, file="", error=over) if over else s)
-    return kept
-
-
-def _over(state: str, total: int, attached: int) -> str:
-    if total > MAX_BYTES:
-        return f"state {state} takes the screenshots over the {MAX_BYTES // 2**20} MB review cap"
-    if attached >= MAX_SHOTS:
-        return f"state {state} takes the screenshots over the {MAX_SHOTS} images one review takes"
-    return ""
+def oversize(out: Path, shots: Sequence[Shot]) -> list[Shot]:
+    """A screenshot larger than one review takes becomes a finding naming its state; the rest are judged in batches."""
+    cap = f"over the {MAX_BYTES // 2**20} MB one review takes"
+    return [
+        dataclasses.replace(s, file="", error=f"state {s.state} at {s.width}px is {cap}")
+        if s.file and (out / s.file).stat().st_size > MAX_BYTES
+        else s
+        for s in shots
+    ]
 
 
 def classify(errors: Sequence[PageError], before: VisualResult | None) -> tuple[list[PageError], list[PageError]]:
@@ -290,16 +282,6 @@ def held(c: Change, head: str, ui: Sequence[str]) -> StepResult:
     ]
     text = f"This Change touches UI files ({shown}) but its brief has no visual check"
     return engine.ask(StepKind.MERGE, text, _cause(c, ui), options)
-
-
-def attachments(out: Path, shots: Sequence[Shot]) -> tuple[dict[str, str], ...]:
-    """Each screenshot as a base64 PNG blob attachment for the reviewer session."""
-    return tuple(
-        {"type": "blob", "data": base64.b64encode((out / s.file).read_bytes()).decode(), "mimeType": "image/png"}
-        | {"displayName": s.file}
-        for s in shots
-        if s.file
-    )
 
 
 def missing_browser(reason: str) -> StepResult:

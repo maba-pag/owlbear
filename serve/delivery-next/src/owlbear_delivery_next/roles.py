@@ -17,6 +17,7 @@ DEFAULTS: dict[Role, RoleModel] = {
     "builder": RoleModel(model="claude-opus-5.5", effort="medium"),
     "reviewer": RoleModel(model="gpt-6.1-sol", effort="xhigh"),
     "challenger": RoleModel(model="gpt-6.1-sol", effort="high"),
+    "designer": RoleModel(model="claude-opus-5.5", effort="high"),  # the visual review's design judge
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
 SESSIONS: dict[str, Role] = {
@@ -25,6 +26,7 @@ SESSIONS: dict[str, Role] = {
     StepKind.CHECK: "builder",
     StepKind.REVIEW: "reviewer",  # task and final review
     "visual-review": "reviewer",
+    "design-review": "designer",
     "plan-challenge": "challenger",
     "brief-challenge": "challenger",
 }

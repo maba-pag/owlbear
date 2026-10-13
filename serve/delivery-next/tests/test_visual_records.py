@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import calibration, runner
+from owlbear_delivery_next import calibration, sessions
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.models import Change
 from owlbear_delivery_next.store import Store
@@ -160,4 +160,4 @@ def test_without_a_shared_repository_nothing_is_kept_anywhere(tmp_path) -> None:
     git(tmp_path, "init", "-q", "-b", "main", str(repo))
     git(repo, "commit", "--allow-empty", "-qm", "start")
     assert Store.open(repo).shared is None
-    assert runner._memory(Store.open(repo)) is None  # noqa: SLF001
+    assert sessions.memory(Store.open(repo)) is None

@@ -18,6 +18,7 @@ from owlbear_delivery_next import (
     brief_tools,
     briefs,
     design_pack,
+    design_tools,
     detector,
     host,
     loop,
@@ -51,7 +52,7 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, merge, visual
+from owlbear_delivery_next.steps import check, judges, merge, visual
 from owlbear_delivery_next.store import Lock, Store
 from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
 
@@ -286,10 +287,10 @@ def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fai
     assert "text overflows" in result.fix_task.detail
 
 
-def test_the_review_cap_keeps_each_shots_errors(tmp_path):
-    (tmp_path / "home-1280.png").write_bytes(PNG)
+def test_an_oversize_screenshot_keeps_its_errors(tmp_path):
+    (tmp_path / "home-1280.png").write_bytes(b"x" * (visual.MAX_BYTES + 1))
     shot = visual.Shot("home", 1280, "home-1280.png", errors=(err("boom"),))
-    assert visual.capped(tmp_path, [shot])[0].errors == (err("boom"),)
+    assert visual.oversize(tmp_path, [shot])[0].errors == (err("boom"),)
 
 
 def test_doubt_is_only_offered_when_nothing_is_definitely_wrong(clone):
@@ -346,8 +347,14 @@ def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_pa
 class FakeReview:
     def __init__(self, verdict="pass"):
         self.calls, self.verdict, self.termination = [], verdict, processes.Termination(confirmed=True)
+        self.designs, self.design = [], None  # the design judge's sessions, and its run if set
 
     async def __call__(self, cfg):
+        if cfg.role == "designer":
+            self.designs.append(cfg)
+            return (
+                self.design(cfg) if self.design else Run(cfg.session_id, ending="error", termination=self.termination)
+            )
         self.calls.append(cfg)
         payload = unsure() if self.verdict == "unsure" else rv(self.verdict)
         return Run(cfg.session_id, ending="result", payload=payload, termination=self.termination)
@@ -451,6 +458,58 @@ def test_the_detectors_findings_are_recorded_as_evidence_and_never_fail_the_chec
         ("home", "page", [("old", ".card", "existing"), ("fresh", ".card", "new")]),
         ("sources", "source", [("tiny-text", "web/app.css:1", "new")]),  # the file is new on the Change
     ]
+
+
+def test_both_judges_run_and_the_round_keeps_the_design_judges_blind_two_phase_verdict(flow):
+    c = checking(flow.store, flow.clone)
+    old = flow.store.before_dir("c1", "b" * 40)
+    old.mkdir(parents=True)
+    (old / "home-1280.png").write_bytes(PNG + b"before")
+    c.before = VisualResult(head="b" * 40, tree="t", states={"home": 1}, files=["home-1280.png"], widths=[1280], at=NOW)
+    flow.store.write(Lock("c1"), c)
+    flow.mp.setattr(judges, "SHUFFLE", SimpleNamespace(random=lambda: 0.9))  # "before" comes first, as A
+    seen = {"image": "home-1280-B.png", "problem": "cramped", "rule": "Layout & Space", "severity": "P1"}
+    first = design_tools.DesignLook(
+        verdict="fail",
+        findings=[seen],
+        preferences=[{"pair": "home-1280", "better": "A", "why": "B crowds the card"}],
+        covered_paths=["home-1280-A.png", "home-1280-B.png"],
+    )
+    final = design_tools.DesignResult(**first.model_dump(), false_positives=["side-tab"])
+    done = processes.Termination(confirmed=True)
+    flow.review.design = lambda cfg: Run(cfg.session_id, ending="result", payload=final, first=first, termination=done)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    [cfg] = flow.review.designs
+    assert (cfg.role, cfg.first_look, cfg.submit) == ("designer", design_tools.FIRST, design_tools.FINAL)
+    assert [(a["displayName"], base64.b64decode(a["data"])) for a in cfg.attachments] == [
+        ("home-1280-A.png", PNG + b"before"),
+        ("home-1280-B.png", PNG),
+    ]
+    assert "detector" not in cfg.message.lower().split("## judge")[0]  # held back until the first look
+    assert "design detector's findings" in cfg.reveal
+    [kept] = after.visual_rounds
+    assert kept.blind == {"home-1280-A.png": "before", "home-1280-B.png": "after"}
+    correct, design_verdict = kept.verdicts
+    assert (correct.lens, correct.verdict, correct.usage_verified) == ("correctness", "pass", True)
+    assert (design_verdict.verdict, design_verdict.unanchored, design_verdict.preferences) == (
+        "fail",
+        "fail",
+        {"home-1280": "before"},
+    )
+    assert design_verdict.false_positives == ["side-tab"]
+    assert [(f.state, f.width, f.severity, f.introduced) for f in design_verdict.findings] == [
+        ("home", 1280, "P1", True)
+    ]
+    assert (design_verdict.model, design_verdict.effort) == ("claude-opus-5.5", "high")
+    assert after.visual.passed  # routing still follows the correctness judge until the decision page (slice 6)
+
+
+def test_a_design_judge_without_a_verified_result_is_recorded_as_such(flow):
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    [kept] = flow.store.read("c1").visual_rounds
+    assert (kept.verdicts[1].verdict, kept.verdicts[1].usage_verified) == (None, False)
+    assert kept.blind == {"home-1280-A.png": "after", "home-1920-A.png": "after", "home-2400-A.png": "after"}
 
 
 def test_the_capture_uses_the_widths_the_settings_name(flow):
@@ -593,22 +652,27 @@ def test_an_unconfirmed_termination_wins_over_a_passing_verdict(flow):
     assert (after.outcome.exit, after.visual) == (Exit.STOP, None)
 
 
-def test_screenshots_over_the_review_budget_are_findings(tmp_path):
-    (tmp_path / "a.png").write_bytes(b"x" * (visual.MAX_BYTES - 10))
-    (tmp_path / "b.png").write_bytes(b"x" * 20)
-    shots = visual.capped(tmp_path, [visual.Shot("home", 1280, "a.png"), visual.Shot("about", 1280, "b.png")])
+def test_only_a_screenshot_larger_than_one_review_takes_is_a_finding(tmp_path):
+    (tmp_path / "a.png").write_bytes(b"x" * (visual.MAX_BYTES + 1))
+    (tmp_path / "b.png").write_bytes(b"x" * (visual.MAX_BYTES - 1))
+    shots = visual.oversize(tmp_path, [visual.Shot("home", 1280, "a.png"), visual.Shot("about", 1280, "b.png")])
     assert [(s.file, s.error) for s in shots] == [
-        ("a.png", ""),
-        ("", "state about takes the screenshots over the 12 MB review cap"),
+        ("", "state home at 1280px is over the 12 MB one review takes"),
+        ("b.png", ""),
     ]
 
 
-def test_screenshots_past_the_measured_count_are_findings(tmp_path):
-    (tmp_path / "s.png").write_bytes(PNG)
-    shots = visual.capped(tmp_path, [visual.Shot(f"s{n}", 1280, "s.png") for n in range(visual.MAX_SHOTS + 1)])
-    assert [s.file for s in shots[:-1]] == ["s.png"] * visual.MAX_SHOTS
-    last = f"state s{visual.MAX_SHOTS} takes the screenshots over the {visual.MAX_SHOTS} images one review takes"
-    assert (shots[-1].file, shots[-1].error) == ("", last)
+def test_a_capture_over_one_reviews_budget_is_judged_in_batches_by_both_judges(flow):
+    flow.mp.setattr(judges, "batches", lambda images, **_k: [[i] for i in images])  # one image per session
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    assert [[a["displayName"] for a in c.attachments] for c in flow.review.calls] == [
+        ["home-1280.png"],
+        ["home-1920.png"],
+        ["home-2400.png"],
+    ]
+    assert len(flow.review.designs) == 3
+    assert (after.visual.passed, after.visual.files) == (True, ["home-1280.png", "home-1920.png", "home-2400.png"])
 
 
 def test_the_launch_recipe_follows_the_worker_path_policy(tmp_path):

@@ -115,7 +115,7 @@ def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = Fals
         for name in preload.tools(role)
         if served or not name.startswith(f"{preload.MEMORY}/")
     ]
-    tools = ", ".join([*own, *(f"{relay}/{s.name}" for s in tool_specs.SPECS)])
+    tools = ", ".join([*own, *(f"{relay}/{name}" for name in tool_specs.results(role))])
     skills = ", ".join(preload.required(role, ui=ui))
     head = f"---\nname: {agent_name(role)}\ndescription: {meta['description']}\ntools: [{tools}]\n"
     return lambda _old: f"{head}skills: [{skills}]\n---\n\n{body.strip()}\n\n{RESULTS}\n"
