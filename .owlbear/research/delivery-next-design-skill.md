@@ -268,7 +268,33 @@ Known gaps:
 - Findings that contradict each other are not detected.
 - The window runtime's two-phase turn has not run live.
 - `sdk_adapter.py` is at the 500-line module limit.
-- The plan's end-to-end proof, a correct change that looks worse in a sandbox project, is still to run.
+
+### 3.8 End-to-end proof and owner feedback, 2026-10-13
+
+**Proof** in the sandbox (`promo-hero`, PR merged): the brief asked for gray `#9ca3af` text on indigo, which is
+correct but hard to read.
+- Round 1: correctness pass; design fail on a 2.5:1 contrast the Change introduced (detector: the same four
+  rules, new). The owner failed it on the decision page with the contrast findings and a comment.
+- The fix task carried both; the comment became `owner-1`. Round 2's design judge received `owner-1`. The
+  contrast rules were gone, and Delivery derived pass: the judge's own "fail" rested on "before"-only problems.
+  Both judges passed, and the Change merged and was cleaned up. Round 1 is kept for calibration in the shared
+  repository.
+
+**Owner feedback** after deciding, built in `2716f9c3b`:
+- Screenshots above the decision. A screenshot enlarges in place and steps before, then after, at each width,
+  with side, commit, width and size shown.
+- One readable row per problem instead of a checkbox per finding and width. "Before"-only problems are collapsed
+  and never sent.
+- Pass, Fail and New Change ask first.
+- Settings offer the models, efforts and context sizes this machine's Copilot lists.
+
+**Decisions:**
+- `decided` (2026-10-13): a Fail pre-ticks what a failing judge found the Change introduced at P0 to P2. The
+  owner unticks what he disagrees with, and the `back` setting sends the same set.
+- `decided`: Pass, Fail and New Change all confirm first.
+- `autonomous`: a missed owner criterion is always proposed, whatever its severity. A design fail with nothing
+  to fix goes to the owner even under `back`. `auto` and disabled models are not offered, because Delivery
+  pins each role's model and checks the billed one. An effort the chosen model does not offer is refused.
 
 ## 4. Recommendation, Confidence, and Limits
 
