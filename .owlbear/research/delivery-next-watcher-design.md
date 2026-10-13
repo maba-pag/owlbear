@@ -170,6 +170,44 @@ stage are shown.
 
 Confidence: medium. The rules need a check against real records of each role.
 
+### 3.4a Context advice from compactions (owner's idea, 2026-10-13)
+
+Every role starts on its model's default context tier (`decided`, 2026-10-13). The Copilot runtime
+has a long tier for some models: the SDK pins it with `context_tier="long_context"` when a session is
+created, resumed or switched. Its size and token rates come from the runtime's `models.list`. For
+example, Claude Opus 5.5 goes from 200K to 1M at the same rates. GPT-6.1 Sol goes from 272K to 922K
+and costs ×2 for input and ×1.5 for output.
+
+The watcher recommends the long tier where a role needs it.
+
+**Evidence from the feed.** `session.compaction_start` and `session.compaction_complete` carry:
+- the trigger: threshold, context limit hit, manual, memory pressure or model switch;
+- the token limit, and the tokens before and after;
+- the model.
+
+`session.usage_info` reports current tokens against the limit, and `session.truncation` reports
+dropped messages.
+
+**What counts:**
+- A threshold compaction early in the attempt, or a context-limit retry, is a sign the window is too
+  small.
+- A stage helps tell early from late (§3.4): before Finalizing, or during Working, is early.
+- Manual, memory-pressure and model-switch compactions are not.
+
+**What the owner sees.** Per role and model, across recent attempts: how often the role compacted
+and how early. Where a long tier exists and the role is not on it, the watcher recommends switching,
+with the size change and the rate factors.
+
+The recommendation never switches the tier itself. The owner switches it in Settings. A role whose
+long tier costs more per token needs stronger evidence before it is recommended.
+
+**Open until probed:**
+- whether subagent compactions arrive in the SDK stream marked with their agent;
+- whether the window runtime shows compactions at all;
+- whether a window session can be pinned to a tier.
+
+Without the first two, advice covers SDK main agents only.
+
 ### 3.5 Placement, concurrency and lifecycle
 
 - **Where.** One watcher per running step, inside that step's runner (P-a). The host starts a runner
@@ -209,7 +247,9 @@ Confidence: medium. The rules need a check against real records of each role.
 5. Stop latch, late-stop override, persistent watcher-stop count, the owner question with a brief
    amendment.
 6. Stages and the Cockpit field.
-7. After N2: model judgement for unknown calls, steering, status summary.
+7. Context advice (§3.4a): compaction events per role, attempt and model, kept across attempts. The
+   recommendation shown beside the role's context setting.
+8. After N2: model judgement for unknown calls, steering, status summary.
 
 Proof, as in §3.12's row, in a throwaway repository: the watcher reads a running window step and
 stops an outside write. The step is retried with its reason, a second stop asks the owner, and one
