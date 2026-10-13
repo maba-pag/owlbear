@@ -40,11 +40,12 @@ def test_the_settings_need_the_token_and_a_local_host(store):
 def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_applied(store):
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
-    assert got["project"] == {"format": 1, "agents": {}, "runtimes": {}, "widths": None}
+    assert got["project"] == {"format": 1, "agents": {}, "runtimes": {}, "widths": None, "seed": None}
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
     assert got["settings"]["sources"]["agents.builder.model"] == "default"
-    assert got["applied"] == ["agents.*.effort", "agents.*.model", "widths"]
+    assert (got["settings"]["seed"], got["settings"]["sources"]["seed"]) == ("", "default")
+    assert got["applied"] == ["agents.*.effort", "agents.*.model", "widths", "seed"]
     assert len(got["project_rev"]) == 64
 
 
@@ -84,6 +85,8 @@ def test_a_project_save_needs_the_revision_it_was_based_on(store):
         {"widths": [999]},
         {"agents": {"builder": {"context": True}}},
         {"visible": True},
+        {"seed": "  "},
+        {"seed": "npm run 'seed"},
     ],
 )
 def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
@@ -106,7 +109,9 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
     assert (got["global"], got["global_location"]) == ({"format": 1, "agents": {}, "runtimes": {}, "widths": None,
-                                                         "visible": None}, True)  # fmt: skip
+                                                         "seed": None, "visible": None}, True)  # fmt: skip
+    seeded = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": 1, "seed": "x"}})
+    assert seeded.status_code == 422  # the seed command is a project setting (TD-65)
     layer = {"format": 1, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
     r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": layer})
     assert r.status_code == 200

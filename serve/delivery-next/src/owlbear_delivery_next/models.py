@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
+from owlbear_delivery_next.spend import ModelSpend, Spend
+
+__all__ = ["ModelSpend", "Spend"]  # kept importable from here, where every other record lives
 
 FORMAT = 1
 
@@ -95,12 +96,21 @@ class Criterion(Record):
 VISUAL = "visual"  # the reserved check-step task id of the engine's visual check
 
 
+class VisualStep(Record):
+    """One owner-authored action before a state's screenshot (TD-49), on seeded test data only (TD-60, TD-65)."""
+
+    do: Literal["click", "type"]
+    target: str  # the control's accessible name: a button or link to click, a field's label to type into
+    text: str = ""  # what to type
+
+
 class VisualState(Record):
-    """One page state the visual check renders: a path under the preview root and what it must show."""
+    """One page state the visual check renders: a path under the preview root, steps, and what it must show."""
 
     name: str
     path: str
     expect: str
+    steps: list[VisualStep] = Field(default_factory=list)
     version: int = 1
 
 
@@ -415,44 +425,6 @@ class Names(Record):
     worktree: str = ""
     pr: int | None = None  # kept to find a merged or closed PR; its state is always read from GitHub
     preserved: list[str] = Field(default_factory=list)
-
-
-class ModelSpend(Record):
-    """Credits and tokens one model used for a Change."""
-
-    credits: float = 0.0
-    tokens: int = 0
-
-
-class Spend(Record):
-    """Cumulative usage of a Change's sessions; kept here because the activity log drops old events."""
-
-    credits: float = 0.0
-    models: dict[str, ModelSpend] = Field(default_factory=dict)
-    last: dict[str, Spend] = Field(default_factory=dict)  # each session's high-water marks, per field
-
-    def plus(self, usage: Mapping[str, Any], session: str = "") -> Spend:
-        """Return the total after one session's usage report; a failed report adds nothing.
-
-        A session's report is cumulative, so a resumed session adds only its growth over its high-water marks;
-        a field a report omits or lowers keeps its mark.
-        """
-        if "error" in usage:
-            return self
-        was = self.last.get(session, Spend()) if session else Spend()
-        marks, models = dict(was.models), {k: v.model_copy() for k, v in self.models.items()}
-        for name, m in (usage.get("models") or {}).items():
-            prior = marks.get(name, ModelSpend())
-            marks[name] = high = ModelSpend(
-                credits=max(prior.credits, m.get("credits") or 0.0), tokens=max(prior.tokens, m.get("tokens") or 0)
-            )
-            old = models.get(name, ModelSpend())
-            models[name] = ModelSpend(
-                credits=old.credits + high.credits - prior.credits, tokens=old.tokens + high.tokens - prior.tokens
-            )
-        mark = Spend(credits=max(was.credits, usage.get("credits") or 0.0), models=marks)
-        last = self.last | ({session: mark} if session else {})
-        return Spend(credits=self.credits + mark.credits - was.credits, models=models, last=last)
 
 
 class Overlap(Record):

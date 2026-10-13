@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.store import Store
 
-APPLIED = ["agents.*.effort", "agents.*.model", "widths"]  # the settings Delivery uses today; the page marks the rest
+APPLIED = ["agents.*.effort", "agents.*.model", "widths", "seed"]  # the settings Delivery uses today
 
 
 class Save(BaseModel):

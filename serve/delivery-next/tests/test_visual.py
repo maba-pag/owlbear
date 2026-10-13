@@ -119,7 +119,7 @@ def test_a_ui_brief_needs_states_or_a_person_check_and_states_stay_under_the_pre
     person = {"name": "look", "steps": ["Open the page"], "expect": "Hallo"}
     assert any("visual: true" in e for e in check_brief(draft(ui=True, person_checks=[person])))
     assert check_brief(draft(ui=True, person_checks=[person | {"visual": True}])) == []
-    assert check_brief(draft(ui=True, visual=[HOME.model_dump(exclude={"version"})])) == []
+    assert check_brief(draft(ui=True, visual=[HOME.model_dump(exclude={"version", "steps"})])) == []
     bad = [{"name": "a", "path": "/../x", "expect": "e"}, {"name": "a", "path": "//evil", "expect": "e"}]
     errors = check_brief(draft(visual=bad))
     assert sum("must stay under the preview root" in e for e in errors) == 2

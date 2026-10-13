@@ -211,7 +211,7 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
         f"open({str(child)!r}, 'w').write(str(p.pid)); time.sleep(60)"
     )
     slow = f"{sys.executable} -c {shlex.quote(spawn)}"
-    monkeypatch.setattr(before, "INSTALL_WITHIN", 1.5)
+    monkeypatch.setattr(before.check, "WITHIN", 1.5)
     monkeypatch.setattr(before.worktree, "installs", lambda _p, _scope: [(".", slow)])
     events = []
     shots = run(ui, tmp_path, events)

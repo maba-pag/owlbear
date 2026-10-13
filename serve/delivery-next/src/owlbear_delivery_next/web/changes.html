@@ -333,9 +333,12 @@ function visualSection(slug, v, b, existing) {
   const grid = el("div", undefined, { class: "shots" });
   for (const name of v.files) {
     const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
-    const before = b && b.files.includes(name)
+    const shot = b && b.files.includes(name);
+    const comparable = shot && b.states[state] === v.states[state];  // a revised state's old shot is no baseline
+    const before = comparable
       ? image(slug, "before", name, b.at, `${state} at ${width}px before the Change, at ${b.head.slice(0, 7)}`)
-      : text("Before not available", { class: "missing", size: "xs", color: "contrast-medium" });
+      : text(shot ? "Before not comparable: the state changed since" : "Before not available",
+        { class: "missing", size: "xs", color: "contrast-medium" });
     const fig = el("figure", undefined, { class: "pair" });
     const after = image(slug, "visual", name, v.at, `${state} at ${width}px with the Change, at ${v.head.slice(0, 7)}`);
     fig.append(before, after, el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));

@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import config_routes, evidence, held, loop, profile
-from owlbear_delivery_next.briefs import save_brief
+from owlbear_delivery_next.briefs import save_brief, save_visual
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, PullItem
 from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.profile_record import Profile
@@ -190,8 +190,10 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         host.wake.set()
         return {"accepted": item.kind}
 
-    def save(body: object) -> tuple[int, dict[str, Any]]:
-        code, out = save_brief(store, body)
+    def save(
+        body: object, write: Callable[[Store, object], tuple[int, dict[str, Any]]] = save_brief
+    ) -> tuple[int, dict[str, Any]]:
+        code, out = write(store, body)
         if code == 200:  # noqa: PLR2004 - HTTP OK
             out["next"] = f"Approve brief v{out['version']} of {out['change']} in the Changes page: {link(host.record)}"
         return code, out
@@ -220,6 +222,15 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         except ValueError:
             body = ""
         code, out = save(body)
+        return JSONResponse(out, status_code=code)
+
+    @router.post("/briefs/visual")
+    async def brief_visual(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except ValueError:
+            body = ""
+        code, out = save(body, save_visual)
         return JSONResponse(out, status_code=code)
 
     @router.get("/changes")
@@ -265,6 +276,8 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
                 "approved": c.brief.approved_version,
                 "title": c.brief.title,
                 "outcome": c.brief.outcome,
+                "ui": c.brief.ui,
+                "visual": [s.model_dump() for s in c.brief.visual],
             },
             "criteria": [k.model_dump() for k in c.brief.criteria],
             "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],

@@ -7,13 +7,15 @@ seen here; the brief's ``ui`` flag covers that residual.
 from __future__ import annotations
 
 import base64
+import contextlib
 import dataclasses
 import hashlib
 import re
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from owlbear_delivery_next.failures import cause_key
@@ -25,10 +27,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from datetime import datetime
 
-    from playwright.sync_api import ConsoleMessage, Page, Route
+    from playwright.sync_api import ConsoleMessage, Page, Route, WebSocketRoute
 
     from owlbear_delivery_next import tools
-    from owlbear_delivery_next.models import Change, VisualState
+    from owlbear_delivery_next.models import Change, VisualState, VisualStep
 
 UI_SUFFIXES = frozenset(
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".tsx", ".jsx", ".vue", ".svelte", ".astro"}
@@ -97,14 +99,6 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
             page, origin, left = browser.new_page(viewport={"width": width, "height": height}), root(base), []
             seen: list[PageError] = []
 
-            def guard(route: Route) -> None:  # main-frame navigation off the preview origin is aborted
-                r = route.request
-                if r.is_navigation_request() and r.frame == page.main_frame and root(r.url) != origin:
-                    left.append(root(r.url))
-                    route.abort()
-                else:
-                    route.continue_()
-
             def away() -> Shot | None:
                 gone = left[0] if left else root(page.url) if root(page.url) != origin else ""
                 return Shot(s.name, width, error=f"state {s.name} left the preview ({gone})") if gone else None
@@ -117,6 +111,8 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
                     if response is None or response.status >= _HTTP_ERROR:
                         answered = response.status if response else "nothing"
                         return Shot(s.name, width, error=f"{s.path} answered {answered}")
+                    if why := _steps(page, s, timeout_ms):
+                        return away() or Shot(s.name, width, error=why)
                     tall = page.evaluate("() => document.documentElement.scrollHeight")
                     if tall > MAX_HEIGHT:
                         return Shot(
@@ -130,7 +126,7 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
                 return away() or Shot(s.name, width, file=name)
 
             _listen(page, s, width, seen)  # before navigation, so load-time errors count
-            page.route("**/*", guard)
+            _confine(page, origin, left, stepped=bool(s.steps))  # before navigation, like the listeners
             try:
                 result = rendered()
                 return dataclasses.replace(result, errors=tuple(seen))  # what was seen up to the screenshot
@@ -144,6 +140,119 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
 
 
 CAPTURE: Capturer = capture
+
+
+def _confine(page: Page, origin: str, left: list[str], *, stepped: bool) -> None:
+    """Guard one shot's context, so a page a step opens is covered too; whatever is stopped is noted in *left*.
+
+    Main-frame navigation off the preview origin is stopped. A state with steps reaches only static files off it,
+    and no WebSocket there, so no click or typing sends anything outside the seeded preview (TD-60).
+    """
+    from playwright.sync_api import Error  # noqa: PLC0415 - optional browser runtime
+
+    def guard(route: Route) -> None:
+        r = route.request
+        if root(r.url) == origin:
+            route.continue_()
+            return
+        fetched = r.method in {"GET", "HEAD"} and r.resource_type in STATIC
+        try:
+            navigating = r.is_navigation_request() and r.frame == page.main_frame
+        except Error:  # a page a step opened has no frame yet: it leaves the preview
+            navigating = True
+        if navigating or (stepped and not fetched):
+            left.append(root(r.url))
+            route.abort()
+        else:
+            route.continue_()
+
+    def socket(ws: WebSocketRoute) -> None:
+        if urlsplit(ws.url).netloc == urlsplit(origin).netloc:
+            ws.connect_to_server()
+        else:
+            left.append(root(ws.url))
+            ws.close()
+
+    page.context.route("**/*", guard)
+    if stepped:
+        page.context.route_web_socket(lambda _url: True, socket)
+
+
+CLICKABLE = ("button", "link", "tab", "menuitem", "checkbox", "radio", "switch", "option")
+EDITABLE = (
+    "input:not([type=button],[type=submit],[type=reset],[type=checkbox],[type=radio],[type=image],[type=hidden]),"
+    " textarea, [contenteditable]:not([contenteditable=false])"
+)
+STATIC = frozenset({"stylesheet", "font", "image", "media", "script"})  # files a page may fetch from elsewhere
+STEP_SETTLE_MS = 750  # after each step, for debounced handlers before the network settles
+
+
+def _steps(page: Page, s: VisualState, timeout_ms: int) -> str:
+    """Run the state's steps in order; why one failed, else empty."""
+    for i, step in enumerate(s.steps, 1):
+        if why := _act(page, step, timeout_ms):
+            return f"state {s.name} step {i} ({step.do} '{step.target}'): {why}"
+    return ""
+
+
+def _act(page: Page, step: VisualStep, timeout_ms: int) -> str:
+    """One step on the one control its exact name finds; why it failed, else empty. A repeated name never guesses."""
+    from playwright.sync_api import Error  # noqa: PLC0415 - optional browser runtime
+
+    if step.do == "click":
+        found = page.get_by_role(CLICKABLE[0], name=step.target, exact=True)
+        for role in CLICKABLE[1:]:
+            found = found.or_(page.get_by_role(role, name=step.target, exact=True))  # type: ignore[arg-type]
+    else:  # only a field takes typing, whether its label or its placeholder names it
+        named = page.get_by_label(step.target, exact=True).or_(page.get_by_placeholder(step.target, exact=True))
+        found = named.and_(page.locator(EDITABLE))
+    try:
+        with contextlib.suppress(Error):  # a control a previous step brings in may still be on its way
+            found.first.wait_for(state="visible", timeout=timeout_ms)
+        if (count := found.count()) != 1:
+            return f"{count} controls are named '{step.target}'; name exactly one" if count else "no control named it"
+        if step.do == "click":
+            found.click(timeout=timeout_ms)
+        else:
+            found.fill(step.text, timeout=timeout_ms)
+        page.wait_for_timeout(STEP_SETTLE_MS)
+        page.wait_for_load_state("networkidle", timeout=timeout_ms)
+    except Error as exc:
+        return str(exc).splitlines()[0][:200]
+    return ""
+
+
+class SeedError(Exception):
+    """The capture cannot start on seeded data; its result says why (TD-65)."""
+
+    def __init__(self, result: StepResult) -> None:
+        super().__init__(result.reason)
+        self.result = result
+
+
+def seed(c: Change, path: Path, command: str, log: Callable[[dict[str, Any]], None]) -> None:
+    """Reset the test data before a capture whose states have steps; none of them run without the seed command.
+
+    Raises:
+        SeedError: The project names no seed command, or it failed.
+    """
+    if not any(s.steps for s in c.brief.visual):
+        return
+    if not command:
+        text = (
+            "The visual check has states with clicks or typing, which run only on seeded test data (TD-60), and "
+            "this project names no seed command. Set one in the project settings, or revise the brief's states."
+        )
+        options = [
+            Option(id="done", label="Seed command set, continue", next=StepKind.CHECK),
+            Option(id="brief", label="Revise the brief", next=StepKind.SHAPE),
+            Option(id="pause", label="Pause", next="pause"),
+        ]
+        raise SeedError(
+            engine.ask(StepKind.CHECK, text, cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "seed"), options)
+        )
+    if note := check.run(shlex.split(command), path, log):
+        raise SeedError(broken(f"the seed command {note}"))
 
 
 def _listen(page: Page, s: VisualState, width: int, seen: list[PageError]) -> None:

@@ -10,8 +10,9 @@ import subprocess
 import threading
 import time
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import psutil
 
@@ -21,16 +22,49 @@ from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
-    from datetime import datetime
 
     from owlbear_delivery_next.models import Change, Environment, PersonCheck
 
 READY_WITHIN = 60.0
 GRACE = 5.0
+WITHIN = 600.0  # seconds per install or seed command
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
+
+
+def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
+    """Persist started PIDs first, so the host finds them if this runner dies."""
+    log({"event": "pids", "at": datetime.now(UTC).isoformat(), "pids": {str(p): t for p, t in pids.items()}})
+
+
+def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None]) -> str:
+    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
+    within = WITHIN
+    try:
+        proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
+            argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )  # fmt: skip
+    except OSError as exc:
+        return f"`{shlex.join(argv)}` did not start: {exc}"
+    born = created(proc.pid)
+    try:
+        journal(log, {proc.pid: born})
+        out, _ = proc.communicate(timeout=within)
+    except subprocess.TimeoutExpired:
+        return f"`{shlex.join(argv)}` took over {within:.0f} s"
+    finally:  # timed out, interrupted or done: nothing of its group outlives the command
+        if members(proc.pid, born):  # not once its id names a newer group
+            with contextlib.suppress(OSError):
+                os.killpg(proc.pid, signal.SIGKILL)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.communicate(timeout=5)  # an escaped child may hold the pipe open
+    if proc.returncode:
+        last = next((x for x in reversed(out.decode(errors="replace").splitlines()) if x.strip()), "")
+        return f"`{shlex.join(argv)}` failed: {last.strip()[:200]}"
+    return ""
 
 
 def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:

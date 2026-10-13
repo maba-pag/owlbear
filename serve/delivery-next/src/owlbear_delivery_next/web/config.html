@@ -207,8 +207,19 @@ function row(...cells) {
 
 function saved(layer, key) {
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
+  if (key === "seed") return loaded[layer]?.seed ?? "";
   const [role, field] = key.split(".");
   return loaded[layer]?.agents?.[role]?.[field] ?? "";
+}
+
+// TD-65: one command, run without a shell in the worktree root, that resets the test data before a capture.
+function seed() {
+  const value = "seed" in drafts.project ? drafts.project.seed : saved("project", "seed");
+  const label = "Seed command that resets this project's test data before screenshots with clicks or typing";
+  const input = el("p-input-text", undefined, { label, "hide-label": "true", placeholder: "none: only static states" });
+  input.value = value;
+  input.dataset.key = "seed";
+  return cell(input, source("seed", loaded.settings.seed || "none"));
 }
 
 function widths() {
@@ -303,6 +314,7 @@ function render() {
     ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
   document.getElementById("general").replaceChildren(
     row(cell(el("p-text", "Screenshot widths")), widths()),
+    ...(rendered === "project" ? [row(cell(el("p-text", "Seed command")), seed())] : []),
     ...general.map(([label, value, key]) => row(
       cell(el("p-text", `${label} (not applied yet)`)), inactive(label, value, key))),
   );
@@ -320,6 +332,10 @@ function edited(layer) {
   for (const [key, value] of Object.entries(drafts[layer])) {
     if (key === "widths") {
       next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
+      continue;
+    }
+    if (key === "seed") {
+      next.seed = value || null;
       continue;
     }
     const [role, field] = key.split(".");

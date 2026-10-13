@@ -263,7 +263,10 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             store.write(lock, loop.apply(owned[0], owned[1], datetime.now(UTC)))
             return
         widths = (change.before.widths if change.before else None) or store.settings().widths  # pairs with before
+        visual.seed(change, path, store.settings().seed, lambda e: store.log(lock, change.slug, e))  # TD-65
         shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths))
+    except visual.SeedError as exc:
+        result = exc.result
     except visual.BrowserMissingError as exc:
         result = visual.missing_browser(str(exc))
     except Exception as exc:  # noqa: BLE001 - a capture error is never a pass
@@ -304,6 +307,7 @@ def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         store.read_profile() or Profile(),
         lambda e: store.log(lock, change.slug, e),
         widths=store.settings().widths,
+        seed=store.settings().seed,
     )
     store.write(lock, change)
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))

@@ -7,6 +7,7 @@ are stored for the config page and stay inactive until routing, visibility and c
 
 from __future__ import annotations
 
+import shlex
 from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator
@@ -22,6 +23,7 @@ type Context = int | Literal["default"]  # tokens, or the runtime's own default
 type Source = Literal["default", "global", "project"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
+SEED_LIMIT = 300
 
 
 class Agent(Record):
@@ -58,6 +60,7 @@ class Layer(Record):
     agents: dict[Role, Agent] = Field(default_factory=dict)
     runtimes: dict[RuntimeName, bool] = Field(default_factory=dict)  # a runtime switched off or on
     widths: list[int] | None = None
+    seed: str | None = None  # TD-65: resets the test data before each capture with steps; one command, no shell
 
     @field_validator("format")
     @classmethod
@@ -73,11 +76,25 @@ class Layer(Record):
             raise ValueError(f"widths must be a non-empty list, each {WIDTHS[0]} to {WIDTHS[1]}")  # noqa: EM102, TRY003
         return v
 
+    @field_validator("seed")
+    @classmethod
+    def _seed(cls, v: str | None) -> str | None:
+        if v is not None and not (0 < len(v.strip()) <= SEED_LIMIT and shlex.split(v)):
+            raise ValueError(f"seed must be one command of 1 to {SEED_LIMIT} characters")  # noqa: EM102, TRY003
+        return v
+
 
 class GlobalLayer(Layer):
-    """The global settings; the visibility switch is global only (TD-35)."""
+    """The global settings; the visibility switch is global only (TD-35), the seed command per project (TD-65)."""
 
     visible: bool | None = None
+
+    @field_validator("seed")
+    @classmethod
+    def _project_only(cls, v: str | None) -> str | None:
+        if v is not None:
+            raise ValueError("seed is a project setting")  # noqa: EM101, TRY003
+        return v
 
 
 class Effective(Record):
@@ -98,6 +115,7 @@ class Settings(Record):
     agents: dict[Role, Effective]
     runtimes: dict[RuntimeName, bool]
     widths: list[int]
+    seed: str = ""
     sources: dict[str, Source]
 
 
@@ -151,4 +169,5 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
     }
     widths = _pick("widths", sources, ("project", project.widths), ("global", glob.widths), ("default", base.widths))
     visible = _pick("visible", sources, ("global", glob.visible), ("default", base.visible))
-    return Settings(visible=visible, agents=agents, runtimes=runtimes, widths=widths, sources=sources)
+    seed = _pick("seed", sources, ("project", project.seed), ("default", ""))
+    return Settings(visible=visible, agents=agents, runtimes=runtimes, widths=widths, seed=seed, sources=sources)

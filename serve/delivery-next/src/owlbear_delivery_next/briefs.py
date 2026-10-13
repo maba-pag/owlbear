@@ -16,6 +16,7 @@ from owlbear_delivery_next.models import (
     PersonCheck,
     StepKind,
     VisualState,
+    VisualStep,
     Waiting,
 )
 from owlbear_delivery_next.profile_record import Profile
@@ -34,14 +35,16 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     for i, text in enumerate(d.criteria, 1):
         prev = before.get(f"AC-{i}")
         criteria.append(Criterion(id=f"AC-{i}", text=text, version=prev.version + (prev.text != text) if prev else 1))
-    shown_states = {s.name: s for s in c.brief.visual}
+    shown_states, v = {s.name: s for s in c.brief.visual}, c.brief.version + 1
     visual = []
     for s in d.visual:
-        prev_state = shown_states.get(s.name)
-        moved = prev_state and (prev_state.path, prev_state.expect) != (s.path, s.expect)
-        version = prev_state.version + bool(moved) if prev_state else 1
-        visual.append(VisualState(name=s.name, path=s.path, expect=s.expect, version=version))
-    v = c.brief.version + 1
+        steps = [VisualStep(do=x.do, target=x.target, text=x.text) for x in d.steps if x.state == s.name]
+        prev = shown_states.get(s.name)
+        same = prev and (prev.path, prev.expect, prev.steps) == (s.path, s.expect, steps)
+        # a new or changed state takes the new brief version: no earlier draft, removed or not, ever had it
+        visual.append(
+            VisualState(name=s.name, path=s.path, expect=s.expect, steps=steps, version=prev.version if same else v)
+        )
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
     fields |= {"ui": d.ui, "visual": visual}
     c.brief = c.brief.model_copy(update=fields)
@@ -65,19 +68,43 @@ def new_slug(title: str, taken: list[str]) -> str:
     return next(s for n in range(1, 1000) if (s := base if n == 1 else f"{base}-{n}") not in taken)
 
 
+def _handles(store: Store) -> dict[str, str]:
+    """Each issued handle and its Change; an unloadable Change still holds its number."""
+    handles = {}
+    for s in store.slugs():
+        try:
+            handles[store.read(s).handle] = s
+        except StoreError:
+            if raw := store.raw_handle(s):
+                handles.setdefault(raw, s)
+    return handles
+
+
+def _visual_of(c: Change) -> dict[str, Any]:
+    """A Change's visual check as draft fields."""
+    states = [{"name": s.name, "path": s.path, "expect": s.expect} for s in c.brief.visual]
+    steps = [{"state": s.name} | x.model_dump() for s in c.brief.visual for x in s.steps]
+    return {"ui": c.brief.ui, "visual": states, "steps": steps}
+
+
+def _kept(store: Store, body: object) -> object:
+    """A revision that sends no visual check keeps the Change's; the chat's brief tool never sends one."""
+    if not (isinstance(body, dict) and body.get("change")) or {"ui", "visual", "steps"} & body.keys():
+        return body
+    try:
+        slug = _handles(store).get(body["change"])
+        return body | _visual_of(store.read(slug)) if slug else body
+    except StoreError:
+        return body
+
+
 def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     """Validate a brief draft and write a new Change, or a new version of a shaping one, awaiting approval."""
-    draft, errors = tools.parse(brief_tools.BriefDraft, body)
+    draft, errors = tools.parse(brief_tools.BriefDraft, _kept(store, body))
     errors = brief_tools.check_brief(draft) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
-    handles = {}
-    for s in (slugs := store.slugs()):
-        try:
-            handles[store.read(s).handle] = s
-        except StoreError:  # an unloadable Change still holds its number
-            if raw := store.raw_handle(s):
-                handles.setdefault(raw, s)
+    handles, slugs = _handles(store), store.slugs()
     slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
     if slug is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
@@ -95,3 +122,21 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     except (LockHeldError, StoreError) as exc:
         return 409, {"errors": [f"change: {exc}; try again"]}
     return 200, {"change": c.handle, "version": c.brief.version, "slug": slug}
+
+
+def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
+    """Set a shaping Change's UI flag, states and steps as a new brief version; the rest of its brief stays."""
+    draft, errors = tools.parse(brief_tools.VisualDraft, body)
+    if draft is None:
+        return 422, {"errors": errors}
+    if (slug := _handles(store).get(draft.change)) is None:
+        return 422, {"errors": [f"change: {draft.change} is not a Change here - use a handle from show_status"]}
+    try:
+        c = store.read(slug)
+    except StoreError as exc:
+        return 409, {"errors": [f"change: {exc}"]}
+    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "visual": p.visual} for p in c.checks]
+    brief = {"change": draft.change, "title": c.brief.title, "outcome": c.brief.outcome, "scope": c.brief.scope}
+    brief |= {"criteria": [k.text for k in c.brief.criteria], "person_checks": checks, "ui": draft.ui}
+    brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
+    return save_brief(store, brief)

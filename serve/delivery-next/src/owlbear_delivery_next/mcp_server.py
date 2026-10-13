@@ -53,9 +53,9 @@ class Chat:
         except (urllib.error.URLError, OSError) as exc:
             return 503, {"error": f"{down} ({exc})"}
 
-    def save_brief(self, fields: dict[str, Any]) -> dict[str, Any]:
+    def save_brief(self, fields: dict[str, Any], path: str = "/briefs") -> dict[str, Any]:
         """Create or revise a brief draft; the host returns the handle or one error per field."""
-        code, out = self.call("POST", "/briefs", fields)
+        code, out = self.call("POST", path, fields)
         return {"saved": code == OK, **out}
 
     def show_status(self, change: str = "") -> dict[str, Any]:
@@ -103,7 +103,8 @@ def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # n
 
 mcp = MCPServer(
     "owlbear-delivery",
-    instructions="Shape a Change with the owner, save its brief, show Delivery status, answer a worker's question.",
+    instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
+    "worker's question.",
 )
 
 
@@ -121,6 +122,18 @@ def save_brief(  # noqa: PLR0913 - the brief's six fields
     fields = {"title": title, "outcome": outcome, "criteria": criteria or [], "scope": scope or []}
     checks = [p.model_dump() for p in person_checks or []]
     return _STATE["chat"].save_brief(fields | {"person_checks": checks, "change": change})
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def save_visual_check(
+    change: Annotated[str, _d("change", brief_tools.VisualDraft)],
+    ui: Annotated[bool, _d("ui", brief_tools.VisualDraft)],
+    states: Annotated[list[brief_tools.VisualStateDraft] | None, _d("states", brief_tools.VisualDraft)] = None,
+    steps: Annotated[list[brief_tools.VisualStepDraft] | None, _d("steps", brief_tools.VisualDraft)] = None,
+) -> dict[str, Any]:
+    """Set a Change's UI flag, the page states Delivery screenshots, and the clicks or typing before each."""
+    body = {"change": change, "ui": ui, "states": [s.model_dump() for s in states or []]}
+    return _STATE["chat"].save_brief(body | {"steps": [s.model_dump() for s in steps or []]}, "/briefs/visual")
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
