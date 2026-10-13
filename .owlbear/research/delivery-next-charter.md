@@ -188,13 +188,14 @@ demonstrate answer → runner → resume with the original runner gone.
 
 - Agents author content, never identities (T2). Workers return one typed result per step; the
   loop, not the agent, records exits and advances.
-- Each step type has a default-deny permission policy with an explicit allow list; denials appear in
-  the status line. Allow-all is never used.
+- SDK steps allow every shell command except hook or signing bypass and force push; read-only steps
+  (plan, reviews, challenges, judges) may not write (TD-82, superseding the earlier default-deny
+  allow lists). Denials appear in the status line.
 - Models and reasoning effort are chosen per role (TD-27): planner `claude-opus-5.5` high; builder
   `gpt-6-luna` max (build and check preparation); reviewer `gpt-6.1-sol` high (task, final and
   visual review); challenger `gpt-6.1-sol` medium (brief and plan review). A project overrides a role
-  with `profile --role ROLE=MODEL:EFFORT`. Shaping happens in the owner's own VS Code chat with the
-  model he chooses. The `maba-pag` probe (TD-17, 2026-10-10) showed requested models and efforts are
+  with `profile --role ROLE=MODEL:EFFORT`. Shaping runs in a Copilot session New Change starts, on the
+  `shaper` role (TD-83). The `maba-pag` probe (TD-17, 2026-10-10) showed requested models and efforts are
   billed as requested. Credits are shown per Change and step, never used to stop or ask (TD-21).
 - Platform preview features (agent merge, Agents-window PR form, dynamic workflows) are optional
   conveniences and never required for the journey.
