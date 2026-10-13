@@ -174,6 +174,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         ),
         item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
         memory=_memory(store),
+        ui=change.brief.ui,
     )
     run = accepted or _kept(cfg, store)
     end = datetime.now(UTC)

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import preload, sdk_adapter, vscode_adapter
+from owlbear_delivery_next import design_pack, preload, sdk_adapter, vscode_adapter
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -79,7 +79,8 @@ def test_each_role_has_its_skills_in_delivery_folder_apart_from_the_chat_skill()
         assert preload.REQUIRED[role]
         assert preload.missing(role) == []
     shipped = {p.name for p in preload.directory().iterdir() if p.is_dir()}
-    assert shipped == {s for r in ROLES for s in preload.REQUIRED[r]}
+    roles = {s for r in ROLES for s in preload.required(r, ui=True)}
+    assert shipped == roles | set(design_pack.manifest()["skills"])
     assert preload.CHAT not in shipped
     for kind in sdk_adapter.ROLES:
         assert sdk_adapter.agent(kind)["skills"] == list(preload.REQUIRED[sdk_adapter.ROLES[kind]])

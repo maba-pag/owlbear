@@ -158,10 +158,12 @@ class _Driver:
         """Run the attempts and close the gate before the inbox stops, so nothing is accepted afterwards."""
         cfg, conn = self.cfg, None
         try:
-            for rel, render in wf.skills(self.role):
+            for rel, render in wf.skills(self.role, ui=cfg.ui):
                 self.placed.append(wf.place(cfg.worktree, rel, render))
             self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox, cfg.memory)))
-            self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), wf.agent(self.role, inbox, cfg.memory)))
+            self.placed.append(
+                wf.place(cfg.worktree, wf.agent_path(self.role), wf.agent(self.role, inbox, cfg.memory, ui=cfg.ui))
+            )
             with Inbox(self.gate, inbox):
                 conn = self.env.connect(cfg.worktree)
                 out = self.drive(conn)

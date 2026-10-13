@@ -20,6 +20,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "planner": ("owlbear-acceptance", "owlbear-module-design"),
     "reviewer": ("owlbear-acceptance", "owlbear-module-design"),
 }
+UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-ui-design",)}  # added when the brief has a UI (TD-76)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
@@ -67,6 +68,11 @@ def _named(name: str) -> bool:
     return any(line.split(":", 1)[1].strip() == name for line in head.splitlines() if line.startswith("name:"))
 
 
-def missing(role: str) -> list[str]:
+def required(role: str, *, ui: bool = False) -> tuple[str, ...]:
+    """The skills a session of *role* preloads; a Change with a user interface adds the role's design skills."""
+    return (*REQUIRED.get(role, ()), *(UI.get(role, ()) if ui else ()))
+
+
+def missing(role: str, *, ui: bool = False) -> list[str]:
     """The role's skills Delivery cannot preload: absent, or named otherwise in their front matter."""
-    return [name for name in REQUIRED.get(role, ()) if not _named(name)]
+    return [name for name in required(role, ui=ui) if not _named(name)]

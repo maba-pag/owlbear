@@ -100,7 +100,7 @@ def agent_path(role: str) -> str:
     return f".github/agents/{agent_name(role)}.agent.md"
 
 
-def agent(role: str, inbox: Path, memory: Path | None = None) -> Render:
+def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False) -> Render:
     """The role's agent from the package prose, renamed for the window, with its tools, skills and result note.
 
     Its tools are the role's, under the same names as in the SDK runtime (the window runs the same harness), with
@@ -116,7 +116,7 @@ def agent(role: str, inbox: Path, memory: Path | None = None) -> Render:
         if served or not name.startswith(f"{preload.MEMORY}/")
     ]
     tools = ", ".join([*own, *(f"{relay}/{s.name}" for s in tool_specs.SPECS)])
-    skills = ", ".join(preload.REQUIRED.get(role, ()))
+    skills = ", ".join(preload.required(role, ui=ui))
     head = f"---\nname: {agent_name(role)}\ndescription: {meta['description']}\ntools: [{tools}]\n"
     return lambda _old: f"{head}skills: [{skills}]\n---\n\n{body.strip()}\n\n{RESULTS}\n"
 
@@ -131,11 +131,11 @@ def skill_path(name: str) -> str:
     return f".github/skills/{name}/SKILL.md"
 
 
-def skills(role: str) -> list[tuple[str, Render]]:
+def skills(role: str, *, ui: bool = False) -> list[tuple[str, Render]]:
     """The role's worker skills to place, as the package ships them; a missing one refuses the step."""
-    if gaps := preload.missing(role):
+    if gaps := preload.missing(role, ui=ui):
         raise SettingsError(f"Delivery's worker skills are missing: {', '.join(gaps)}")  # noqa: EM102, TRY003
-    texts = {name: preload.text(name) for name in preload.REQUIRED.get(role, ())}
+    texts = {name: preload.text(name) for name in preload.required(role, ui=ui)}
     return [(skill_path(name), lambda _old, t=text: t) for name, text in texts.items()]
 
 

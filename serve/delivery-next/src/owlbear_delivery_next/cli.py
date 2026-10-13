@@ -7,7 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from owlbear_delivery_next import common, host, profile, roles, setup
+from owlbear_delivery_next import common, design_pack, host, profile, roles, setup
 from owlbear_delivery_next.config import Agent, Layer
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
@@ -39,6 +39,18 @@ def show_common(path: Path | None) -> str:
     if shared is None:
         return "No shared settings repository; settings stay in each clone. Set one: `owlbear-next common PATH`"
     return f"Shared settings repository: {shared.root} (pointer {common.pointer()}). Restart a running host to use it."
+
+
+def show_pack(*, install: bool) -> int:
+    """Print the design pack's state; with ``install``, download and verify what is missing first."""
+    if install:
+        try:
+            design_pack.install()
+        except design_pack.PackError as exc:
+            sys.stdout.write(f"Not installed: {exc}\n")
+            return 1
+    sys.stdout.write(design_pack.status() + "\n")
+    return 0
 
 
 def describe(change: Change) -> str:
@@ -136,7 +148,7 @@ def _role(text: str) -> tuple[Role, RoleModel]:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
-def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser and one branch per command
+def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one parser and one branch per command
     """Run one command."""
     parser = argparse.ArgumentParser(prog="owlbear-next")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
@@ -178,10 +190,14 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     show.add_argument("change")
     shared = sub.add_parser("common", help="show or set the shared settings repository (TD-57)")
     shared.add_argument("path", nargs="?", type=Path)
+    pack = sub.add_parser("design-pack", help="show or install the pinned design detector (TD-76)")
+    pack.add_argument("--install", action="store_true", help="download and verify what is missing")
     a = parser.parse_args(argv)
     if a.command == "common":
         sys.stdout.write(show_common(a.path) + "\n")
         return 0
+    if a.command == "design-pack":
+        return show_pack(install=a.install)
     if a.command == "host":
         return host.serve(a.repo.resolve())
     if a.command == "setup":

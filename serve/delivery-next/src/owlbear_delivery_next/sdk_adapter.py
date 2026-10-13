@@ -58,7 +58,7 @@ def cli_path() -> str:
     return path
 
 
-def agent(kind: StepKind) -> dict[str, Any]:
+def agent(kind: StepKind, *, ui: bool = False) -> dict[str, Any]:
     """Return the role's custom agent from the package's ``agents/`` prose, with its tools and preloaded skills."""
     role = ROLES[kind]
     meta, body = preload.agent_file(role)
@@ -67,7 +67,7 @@ def agent(kind: StepKind) -> dict[str, Any]:
         "description": meta["description"],
         "prompt": body.strip(),
         "tools": [*preload.tools(role), *(s.name for s in tools.SPECS)],  # nothing else is offered (TD-69)
-        "skills": list(preload.REQUIRED[role]),
+        "skills": list(preload.required(role, ui=ui)),
     }
 
 
@@ -115,6 +115,7 @@ class Session:
     journal: Journal = field(default_factory=Journal)
     attachments: tuple[dict[str, str], ...] = ()  # blob attachments sent with the first message
     memory: Path | None = None  # the project's memory folder in the shared repository (TD-70, TD-72)
+    ui: bool = False  # the Change has a user interface, so the role's design skills load too (TD-76)
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
@@ -204,7 +205,7 @@ class _Step:
         if self.checked or not self.created:
             return
         self.checked = True
-        if absent := [s for s in preload.REQUIRED[ROLES[self.cfg.kind]] if s not in self.preloaded]:
+        if absent := [s for s in preload.required(ROLES[self.cfg.kind], ui=self.cfg.ui) if s not in self.preloaded]:
             self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
@@ -287,7 +288,7 @@ class _Step:
         self.record_tree()
 
     def options(self) -> dict[str, Any]:
-        role = agent(self.cfg.kind)
+        role = agent(self.cfg.kind, ui=self.cfg.ui)
         return {
             "on_permission_request": self.permission,
             "tools": self.tools(),
@@ -451,7 +452,7 @@ def _refused(cfg: Session) -> str:
     """Why the step cannot start: it names no model (TD-32), or Delivery's skills for its role are missing."""
     if not cfg.model:
         return "wrong model: the step names no model (TD-32)"
-    if gaps := preload.missing(ROLES[cfg.kind]):
+    if gaps := preload.missing(ROLES[cfg.kind], ui=cfg.ui):
         return f"Delivery's worker skills are missing: {', '.join(gaps)}"
     return ""
 
