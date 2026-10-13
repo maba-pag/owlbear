@@ -17,6 +17,8 @@ from owlbear_delivery_next import (
     api,
     brief_tools,
     briefs,
+    design_pack,
+    detector,
     host,
     loop,
     permissions,
@@ -51,6 +53,7 @@ from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import check, merge, visual
 from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -371,7 +374,7 @@ def flow(tmp_path, clone, monkeypatch):
     monkeypatch.setattr(runner.sdk_adapter, "run", review)
     seen = []
 
-    def fake(base, states, out, widths):
+    def fake(base, states, out, widths, **_k):
         seen.append(base)
         flow.widths.append(list(widths))
         out.mkdir(parents=True, exist_ok=True)
@@ -383,6 +386,7 @@ def flow(tmp_path, clone, monkeypatch):
         return shots
 
     monkeypatch.setattr(visual, "CAPTURE", fake)
+    monkeypatch.setattr(runner.design, "pack", lambda: None)  # never this machine's design pack
     flow = SimpleNamespace(store=store, review=review, clone=clone, seen=seen, mp=monkeypatch, widths=[])
     return flow
 
@@ -393,10 +397,10 @@ def test_the_reviewer_is_told_each_new_and_existing_error_as_data(flow):
     flow.store.write(Lock("c1"), c)
     plain = visual.CAPTURE
 
-    def noisy(base, states, out, widths):
+    def noisy(base, states, out, widths, **k):
         return [
             dataclasses.replace(s, errors=(err("old"), err("boom", kind="page")))
-            for s in plain(base, states, out, widths)
+            for s in plain(base, states, out, widths, **k)
         ]
 
     flow.mp.setattr(visual, "CAPTURE", noisy)
@@ -404,6 +408,49 @@ def test_the_reviewer_is_told_each_new_and_existing_error_as_data(flow):
     message = flow.review.calls[0].message
     assert "- new, home at 1280px, page error: boom" in message
     assert "- existing, home at 1280px, console error: old" in message
+
+
+def test_the_detectors_findings_are_recorded_as_evidence_and_never_fail_the_check(flow):
+    def scan(*rules):
+        found = [DetectorFinding(rule=r, category="quality", advisory=False, where=".card") for r in rules]
+        return DetectorScan(state="home", width=1280, kind="page", scanned=True, findings=found)
+
+    c = checking(flow.store, flow.clone)
+    sources = DetectorScan(state="sources", kind="source", scanned=True, covered=["web/app.css"])  # absent there
+    c.before = VisualResult(
+        head="b",
+        tree="t",
+        states={"home": 1},
+        files=["home-1280.png"],
+        widths=[1280],
+        design=[scan("old"), sources],
+        at=NOW,
+    )
+    flow.store.write(Lock("c1"), c)
+    plain = visual.CAPTURE
+
+    def scanned(base, states, out, widths, **k):
+        assert k["pack"] is pack
+        return [dataclasses.replace(s, design=scan("old", "fresh")) for s in plain(base, states, out, widths)]
+
+    pack = design_pack.Installed(Path("/nowhere"), "0" * 64, "")
+    flow.mp.setattr(visual, "CAPTURE", scanned)
+    flow.mp.setattr(runner.design, "pack", lambda: pack)
+    flow.mp.setattr(
+        detector,
+        "scan_source",
+        lambda _p, paths, _cwd: [
+            detector.Finding("tiny-text", "quality", advisory=False, name="Tiny text", where=f"{p}:1", detail="")
+            for p in paths
+        ],
+    )
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1").visual
+    assert after.passed  # evidence only: the reviewer's pass stands (TD-77)
+    assert [(s.state, s.kind, [(f.rule, f.where, f.freshness) for f in s.findings]) for s in after.design] == [
+        ("home", "page", [("old", ".card", "existing"), ("fresh", ".card", "new")]),
+        ("sources", "source", [("tiny-text", "web/app.css:1", "new")]),  # the file is new on the Change
+    ]
 
 
 def test_the_capture_uses_the_widths_the_settings_name(flow):
@@ -601,7 +648,7 @@ def test_a_visual_environment_is_disposed_on_stop_or_abandon_and_its_runner_cras
 
 
 def test_a_missing_chromium_asks_with_the_install_command(flow):
-    def missing(*_a):
+    def missing(*_a, **_k):
         raise visual.BrowserMissingError(MISSING)
 
     flow.mp.setattr(visual, "CAPTURE", missing)
@@ -614,7 +661,7 @@ def test_a_missing_chromium_asks_with_the_install_command(flow):
 
 
 def test_a_capture_error_is_never_a_pass(flow):
-    def crash(*_a):
+    def crash(*_a, **_k):
         raise RuntimeError(CRASHED)
 
     flow.mp.setattr(visual, "CAPTURE", crash)
@@ -626,7 +673,7 @@ def test_a_capture_error_is_never_a_pass(flow):
 
 
 def test_a_failed_shot_skips_the_reviewer_and_becomes_a_repair_task(flow):
-    flow.mp.setattr(visual, "CAPTURE", lambda *_a: [visual.Shot("home", 1280, error="/ answered 500")])
+    flow.mp.setattr(visual, "CAPTURE", lambda *_a, **_k: [visual.Shot("home", 1280, error="/ answered 500")])
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
     assert flow.review.calls == []

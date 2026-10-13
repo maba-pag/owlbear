@@ -36,6 +36,7 @@ from owlbear_delivery_next.steps import (
     check,
     cleanup,
     conversation,
+    design,
     engine,
     follow,
     merge,
@@ -275,7 +276,12 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             return
         widths = (change.before.widths if change.before else None) or store.settings().widths  # pairs with before
         visual.seed(change, path, store.settings().seed, lambda e: store.log(lock, change.slug, e))  # TD-65
-        shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths))
+        pack = design.pack()
+        shots = visual.capped(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
+        states = {s.name: s.version for s in change.brief.visual}
+        source = design.sources(path, visual.ui_paths(change, head), pack)
+        found = [s.design for s in shots if s.design] + ([source] if source else [])
+        scans = design.marked(found, change.before, states)
     except visual.SeedError as exc:
         result = exc.result
     except visual.BrowserMissingError as exc:
@@ -306,7 +312,9 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             stopped = result.exit == Exit.STOP  # a session that did not end cleanly outranks its verdict
             judgement = run.payload if isinstance(run.payload, tools.ReviewResult) and not stopped else None
         if judgement is not None or result is None:
-            change, result = visual.judged(change, head, tree, shots, verdict=judgement, now=datetime.now(UTC))
+            change, result = visual.judged(
+                change, head, tree, shots, verdict=judgement, now=datetime.now(UTC), scans=scans
+            )
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 

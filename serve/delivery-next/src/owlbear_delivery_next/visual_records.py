@@ -68,6 +68,7 @@ class DetectorScan(_Strict):
     kind: Literal["page", "url", "source"]
     scanned: bool
     reason: str = ""  # why it was not scanned
+    covered: list[str] = Field(default_factory=list)  # a source scan's paths, whether or not the tree had them
     findings: list[DetectorFinding] = Field(default_factory=list)
 
 

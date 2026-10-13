@@ -15,7 +15,7 @@ from owlbear_delivery_next import brief_tools, briefs, loop
 from owlbear_delivery_next.inbox import BriefApproval
 from owlbear_delivery_next.models import Change, Exit, StepKind, VisualState, VisualStep
 from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.steps import before, visual
+from owlbear_delivery_next.steps import before, browse, visual
 from owlbear_delivery_next.store import Store
 
 NOW = datetime(2026, 10, 13, 6, tzinfo=UTC)
@@ -181,7 +181,7 @@ def test_a_stepped_shot_stops_off_origin_sockets_and_a_framed_less_popup():
     )
     page = SimpleNamespace(context=context, main_frame=object())
     left: list[str] = []
-    visual._confine(page, "http://127.0.0.1:4173", left, stepped=True)  # noqa: SLF001
+    browse.confine(page, "http://127.0.0.1:4173", left, stepped=True)
     done: list[str] = []
     for url in ("ws://127.0.0.1:4173/live", "wss://api.example.com/orders"):
         ws = SimpleNamespace(
@@ -214,7 +214,9 @@ def test_the_before_capture_renders_only_static_states_without_a_seed(monkeypatc
     monkeypatch.setattr(before.check, "start", lambda *_a: subprocess.Popen([sys.executable, "-c", "pass"]))
     monkeypatch.setattr(before.check, "ready", lambda *_a: {})
     monkeypatch.setattr(before.check, "dispose", lambda _e: {})
-    monkeypatch.setattr(before.visual, "CAPTURE", lambda _u, states, *_a: rendered.extend(s.name for s in states) or [])
+    monkeypatch.setattr(
+        before.visual, "CAPTURE", lambda _u, states, *_a, **_k: rendered.extend(s.name for s in states) or []
+    )
     c.env = c.env or before.Environment(check="visual", command="serve", directory=".", ready_url="http://127.0.0.1:1/")
     notes: list[str] = []
     before._serve(c, tmp_path, tmp_path, lambda _e: None, notes, widths=[1280])  # noqa: SLF001

@@ -7,7 +7,6 @@ seen here; the brief's ``ui`` flag covers that residual.
 from __future__ import annotations
 
 import base64
-import contextlib
 import dataclasses
 import hashlib
 import re
@@ -16,21 +15,21 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlsplit
 
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, PageError, StepKind, VisualResult
-from owlbear_delivery_next.steps import check, engine, review, worktree
+from owlbear_delivery_next.steps import browse, check, design, engine, review, worktree
+from owlbear_delivery_next.steps.browse import root
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from datetime import datetime
 
-    from playwright.sync_api import ConsoleMessage, Page, Route, WebSocketRoute
-
     from owlbear_delivery_next import tools
-    from owlbear_delivery_next.models import Change, VisualState, VisualStep
+    from owlbear_delivery_next.design_pack import Installed
+    from owlbear_delivery_next.models import Change, VisualState
+    from owlbear_delivery_next.visual_records import DetectorScan
 
 UI_SUFFIXES = frozenset(
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".tsx", ".jsx", ".vue", ".svelte", ".astro"}
@@ -46,7 +45,6 @@ SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
 CHANNELS = ("chrome", "msedge", None)  # the installed browser first; None is Playwright's own Chromium
 MISSING = ("playwright install", "Executable doesn't exist", "is not found at")  # Playwright's launch errors
-CONSOLE = frozenset({"error", "assert"})  # console message types that count as errors (R8)
 FILE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}-\d{3,4}\.png$")
 NOT_UI = "not-ui"
 _SHOWN = 5
@@ -66,15 +64,24 @@ class Shot:
     file: str = ""
     error: str = ""
     errors: tuple[PageError, ...] = ()  # console and page errors seen from navigation to the screenshot
+    design: DetectorScan | None = None  # the design detector's evidence on the screenshot's page (TD-77)
 
 
-type Capturer = Callable[[str, Sequence[VisualState], Path, Sequence[int]], list[Shot]]
+type Capturer = Callable[..., list[Shot]]
 
 
-def capture(  # noqa: C901 - one finding per failure of the nested shot
-    base: str, states: Sequence[VisualState], out: Path, widths: Sequence[int], timeout_ms: int = SETTLE_MS
+def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot; the pack is optional
+    base: str,
+    states: Sequence[VisualState],
+    out: Path,
+    widths: Sequence[int],
+    timeout_ms: int = SETTLE_MS,
+    *,
+    pack: Installed | None = None,
 ) -> list[Shot]:
     """Render every state at each width, full page after network idle; an unanswered URL is a failed shot.
+
+    With a design pack, each screenshot's page is then scanned by the design detector (``design.rendered``).
 
     Raises:
         BrowserMissingError: no installed Chrome or Edge, and Playwright's Chromium is not installed.
@@ -94,6 +101,7 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
                 missing = str(exc)
         if browser is None:
             raise BrowserMissingError(missing)
+        engine_browser = pw.chromium.executable_path if Path(pw.chromium.executable_path).is_file() else ""
 
         def shot(s: VisualState, width: int, height: int) -> Shot:
             page, origin, left = browser.new_page(viewport={"width": width, "height": height}), root(base), []
@@ -111,7 +119,7 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
                     if response is None or response.status >= _HTTP_ERROR:
                         answered = response.status if response else "nothing"
                         return Shot(s.name, width, error=f"{s.path} answered {answered}")
-                    if why := _steps(page, s, timeout_ms):
+                    if why := browse.steps(page, s, timeout_ms):
                         return away() or Shot(s.name, width, error=why)
                     tall = page.evaluate("() => document.documentElement.scrollHeight")
                     if tall > MAX_HEIGHT:
@@ -125,11 +133,16 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
                     return away() or Shot(s.name, width, error=f"{s.path} did not answer: {first}")
                 return away() or Shot(s.name, width, file=name)
 
-            _listen(page, s, width, seen)  # before navigation, so load-time errors count
-            _confine(page, origin, left, stepped=bool(s.steps))  # before navigation, like the listeners
+            browse.listen(page, s, width, seen)  # before navigation, so load-time errors count
+            browse.confine(page, origin, left, stepped=bool(s.steps))  # before navigation, like the listeners
             try:
-                result = rendered()
-                return dataclasses.replace(result, errors=tuple(seen))  # what was seen up to the screenshot
+                result = dataclasses.replace(rendered(), errors=tuple(seen))  # what was seen up to the screenshot
+                if result.file:  # after the errors are taken: the scan's own refusals are not the page's
+                    scan = design.rendered(
+                        page, pack, s, width=width, url=base + s.path, browser=engine_browser, cwd=out
+                    )
+                    result = dataclasses.replace(result, design=scan)
+                return result
             finally:
                 page.close()
 
@@ -140,86 +153,6 @@ def capture(  # noqa: C901 - one finding per failure of the nested shot
 
 
 CAPTURE: Capturer = capture
-
-
-def _confine(page: Page, origin: str, left: list[str], *, stepped: bool) -> None:
-    """Guard one shot's context, so a page a step opens is covered too; whatever is stopped is noted in *left*.
-
-    Main-frame navigation off the preview origin is stopped. A state with steps reaches only static files off it,
-    and no WebSocket there, so no click or typing sends anything outside the seeded preview (TD-60).
-    """
-    from playwright.sync_api import Error  # noqa: PLC0415 - optional browser runtime
-
-    def guard(route: Route) -> None:
-        r = route.request
-        if root(r.url) == origin:
-            route.continue_()
-            return
-        fetched = r.method in {"GET", "HEAD"} and r.resource_type in STATIC
-        try:
-            navigating = r.is_navigation_request() and r.frame == page.main_frame
-        except Error:  # a page a step opened has no frame yet: it leaves the preview
-            navigating = True
-        if navigating or (stepped and not fetched):
-            left.append(root(r.url))
-            route.abort()
-        else:
-            route.continue_()
-
-    def socket(ws: WebSocketRoute) -> None:
-        if urlsplit(ws.url).netloc == urlsplit(origin).netloc:
-            ws.connect_to_server()
-        else:
-            left.append(root(ws.url))
-            ws.close()
-
-    page.context.route("**/*", guard)
-    if stepped:
-        page.context.route_web_socket(lambda _url: True, socket)
-
-
-CLICKABLE = ("button", "link", "tab", "menuitem", "checkbox", "radio", "switch", "option")
-EDITABLE = (
-    "input:not([type=button],[type=submit],[type=reset],[type=checkbox],[type=radio],[type=image],[type=hidden]),"
-    " textarea, [contenteditable]:not([contenteditable=false])"
-)
-STATIC = frozenset({"stylesheet", "font", "image", "media", "script"})  # files a page may fetch from elsewhere
-STEP_SETTLE_MS = 750  # after each step, for debounced handlers before the network settles
-
-
-def _steps(page: Page, s: VisualState, timeout_ms: int) -> str:
-    """Run the state's steps in order; why one failed, else empty."""
-    for i, step in enumerate(s.steps, 1):
-        if why := _act(page, step, timeout_ms):
-            return f"state {s.name} step {i} ({step.do} '{step.target}'): {why}"
-    return ""
-
-
-def _act(page: Page, step: VisualStep, timeout_ms: int) -> str:
-    """One step on the one control its exact name finds; why it failed, else empty. A repeated name never guesses."""
-    from playwright.sync_api import Error  # noqa: PLC0415 - optional browser runtime
-
-    if step.do == "click":
-        found = page.get_by_role(CLICKABLE[0], name=step.target, exact=True)
-        for role in CLICKABLE[1:]:
-            found = found.or_(page.get_by_role(role, name=step.target, exact=True))  # type: ignore[arg-type]
-    else:  # only a field takes typing, whether its label or its placeholder names it
-        named = page.get_by_label(step.target, exact=True).or_(page.get_by_placeholder(step.target, exact=True))
-        found = named.and_(page.locator(EDITABLE))
-    try:
-        with contextlib.suppress(Error):  # a control a previous step brings in may still be on its way
-            found.first.wait_for(state="visible", timeout=timeout_ms)
-        if (count := found.count()) != 1:
-            return f"{count} controls are named '{step.target}'; name exactly one" if count else "no control named it"
-        if step.do == "click":
-            found.click(timeout=timeout_ms)
-        else:
-            found.fill(step.text, timeout=timeout_ms)
-        page.wait_for_timeout(STEP_SETTLE_MS)
-        page.wait_for_load_state("networkidle", timeout=timeout_ms)
-    except Error as exc:
-        return str(exc).splitlines()[0][:200]
-    return ""
 
 
 class SeedError(Exception):
@@ -255,31 +188,13 @@ def seed(c: Change, path: Path, command: str, log: Callable[[dict[str, Any]], No
         raise SeedError(broken(f"the seed command {note}"))
 
 
-def _listen(page: Page, s: VisualState, width: int, seen: list[PageError]) -> None:
-    """Record console errors and uncaught page errors until the page closes (R8, TD-51)."""
-
-    def console(m: ConsoleMessage) -> None:
-        if m.type in CONSOLE:
-            where = m.location or {}
-            at = f"{where.get('url', '')}:{where.get('lineNumber', '')}" if where.get("url") else ""
-            seen.append(
-                PageError(state=s.name, version=s.version, width=width, kind="console", text=m.text, location=at)
-            )
-
-    def uncaught(e: Exception) -> None:
-        seen.append(PageError(state=s.name, version=s.version, width=width, kind="page", text=str(e)))
-
-    page.on("console", console)
-    page.on("pageerror", uncaught)
-
-
 def capped(out: Path, shots: Sequence[Shot]) -> list[Shot]:
     """Shots past the review's attachment budget become findings naming their state; never a pass."""
     total, kept = 0, []
     for s in shots:
         total += (out / s.file).stat().st_size if s.file else 0
         over = _over(s.state, total, sum(1 for k in kept if k.file)) if s.file else ""
-        kept.append(Shot(s.state, s.width, error=over, errors=s.errors) if over else s)
+        kept.append(dataclasses.replace(s, file="", error=over) if over else s)
     return kept
 
 
@@ -306,12 +221,6 @@ def classify(errors: Sequence[PageError], before: VisualResult | None) -> tuple[
     return new, [e for e in errors if key(e) in seen]
 
 
-def root(ready_url: str) -> str:
-    """The preview root (scheme and host) under which every state's path is opened."""
-    parts = urlsplit(ready_url)
-    return f"{parts.scheme}://{parts.netloc}"
-
-
 def tree(path: Path, head: str) -> str:
     """The tree of *head*: a visual result holds for exactly this content."""
     return worktree.git(path, "rev-parse", f"{head}^{{tree}}").strip()
@@ -326,16 +235,22 @@ def is_ui(path: str) -> bool:
 def ui_paths(c: Change, head: str) -> list[str]:
     """UI paths the Change's diff touches, both ends of a rename; an unreadable diff counts as UI (fail-closed)."""
     try:
-        diff = ["diff", "--name-status", "-M", f"origin/{c.names.target}...{head}"]
-        out = worktree.git(Path(c.names.worktree), *diff)
-    except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
+        diff = [worktree.GIT, "diff", "--name-status", "-z", "-M", f"origin/{c.names.target}...{head}"]
+        done = subprocess.run(diff, cwd=c.names.worktree, capture_output=True, check=True, timeout=60)  # noqa: S603
+        fields = done.stdout.decode("utf-8").split("\0")  # bytes: no newline in a name is translated
+    except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, UnicodeDecodeError:
         return ["(the diff could not be read)"]
-    return sorted({p for line in out.splitlines() for p in line.split("\t")[1:] if is_ui(p)})
+    paths, i = set(), 0
+    while i < len(fields) and fields[i]:  # a status, then one path, or two for a rename or copy
+        n = 2 if fields[i][:1] in {"R", "C"} else 1
+        paths.update(fields[i + 1 : i + 1 + n])
+        i += 1 + n
+    return sorted(p for p in paths if is_ui(p))
 
 
 def digest(ui: Sequence[str]) -> str:
-    """The identity of one sorted set of UI paths."""
-    return hashlib.sha256("\n".join(sorted(set(ui))).encode()).hexdigest()[:12]
+    """The identity of one sorted set of UI paths; NUL never occurs in a path, so no two sets share it."""
+    return hashlib.sha256("\0".join(sorted(set(ui))).encode()).hexdigest()[:12]
 
 
 def _cause(c: Change, ui: Sequence[str]) -> str:
@@ -411,9 +326,19 @@ def broken(reason: str) -> StepResult:
 
 
 def judged(  # noqa: PLR0913 - one result from every visual input
-    c: Change, head: str, tree_id: str, shots: Sequence[Shot], *, verdict: tools.ReviewResult | None, now: datetime
+    c: Change,
+    head: str,
+    tree_id: str,
+    shots: Sequence[Shot],
+    *,
+    verdict: tools.ReviewResult | None,
+    now: datetime,
+    scans: Sequence[DetectorScan] = (),
 ) -> tuple[Change, StepResult]:
-    """Record the visual result; a pass moves on, a failed shot or a fix verdict becomes a repair task (B23)."""
+    """Record the visual result; a pass moves on, a failed shot or a fix verdict becomes a repair task (B23).
+
+    The detector's scans are recorded as evidence only (TD-77).
+    """
     found = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
     if not shots:
         found.append("no screenshot was captured")
@@ -434,7 +359,7 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     c.visual = VisualResult(
         head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=passed, findings=found,
-        errors=errors, doubts=doubts, at=now,
+        errors=errors, doubts=doubts, design=list(scans), at=now,
     )  # fmt: skip
     if passed:
         reason = f"visual check of {head[:7]} passed: {len(files)} screenshots"

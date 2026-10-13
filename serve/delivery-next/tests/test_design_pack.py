@@ -164,7 +164,7 @@ def test_the_in_page_detector_runs_without_overlay_and_a_refusing_page_is_an_err
     calls: list[str] = []
     groups = [{"selector": "h1", "findings": [{"type": "gradient-text", "category": "slop", "advisory": False}]}]
     page = SimpleNamespace(
-        evaluate=lambda js: calls.append(js) or (groups if js == detector.PAGE else None),
+        evaluate=lambda js, *arg: calls.append(js) or (groups if (js, arg) == (detector.PAGE, (60_000,)) else None),
         add_script_tag=lambda content: calls.append(f"script {content}"),
     )
     pack = design_pack.Installed(tmp_path / "e", "0" * 64, "window.detector = 1")

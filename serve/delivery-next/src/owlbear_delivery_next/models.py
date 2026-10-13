@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.spend import ModelSpend, Spend
-from owlbear_delivery_next.visual_records import OwnerCriterion, VisualRound
+from owlbear_delivery_next.visual_records import DetectorScan, OwnerCriterion, VisualRound
 
 __all__ = ["ModelSpend", "Spend"]  # kept importable from here, where every other record lives
 
@@ -136,6 +136,7 @@ class VisualResult(Record):
     files: list[str] = Field(default_factory=list)  # screenshot names inside the Change's visual directory
     widths: list[int] = Field(default_factory=list)  # the desktop widths captured; a before's fix the after's
     errors: list[PageError] = Field(default_factory=list)  # every console and page error the capture saw
+    design: list[DetectorScan] = Field(default_factory=list)  # the design detector's evidence (TD-77)
     doubts: list[str] = Field(default_factory=list)  # what the reviewer could not decide (N6)
     decision: Literal["accept", "repair"] | None = None  # the owner's answer to those doubts, for this capture only
     note: str = ""  # what the owner said with that answer

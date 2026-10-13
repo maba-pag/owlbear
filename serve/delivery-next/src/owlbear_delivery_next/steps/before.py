@@ -18,13 +18,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.models import VISUAL, Environment, StepKind, VisualResult
-from owlbear_delivery_next.steps import check, visual, worktree
+from owlbear_delivery_next.steps import check, design, visual, worktree
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.profile_record import Profile
+    from owlbear_delivery_next.visual_records import DetectorScan
 
 
 def due(c: Change) -> bool:
@@ -79,7 +80,7 @@ def _serve(  # noqa: PLR0913 - the widths and seed come from the settings
         if seed and any(s.steps for s in states) and (note := check.run(shlex.split(seed), root, log)):
             notes.append(f"the seed command at the merge-base: {note}")
             return []
-        return visual.CAPTURE(visual.root(e.ready_url), states, out, widths)
+        return visual.CAPTURE(visual.root(e.ready_url), states, out, widths, pack=design.pack())
     finally:
         if left := check.dispose(e):
             notes.append(f"preview processes {sorted(left)} did not stop")
@@ -106,6 +107,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
         return VisualResult(head="", tree="", findings=[f"the merge-base could not be read: {exc}"[:300]], at=now)
     shots: list[visual.Shot] = []
     notes: list[str] = []
+    sources: list[DetectorScan] = []
     tmp: Path | None = None
     try:
         out = out_for(base)
@@ -121,6 +123,8 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
                 break
         else:
             shots = _serve(c, tmp, out, log, notes, widths=widths, seed=seed)
+        if scan := design.sources(tmp, visual.ui_paths(c, worktree.head(path)), design.pack()):
+            sources.append(scan)  # the Change's UI paths in the merge-base's whole tree, after the screenshots
     except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
         notes.append(f"{type(exc).__name__}: {exc}"[:300])
     finally:
@@ -130,6 +134,15 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     states = {s.name: s.version for s in c.brief.visual}
     files = [s.file for s in shots if s.file]
     errors = [e for s in shots for e in s.errors]
+    scans = [s.design for s in shots if s.design] + sources
     return VisualResult(
-        head=base, tree=tree, states=states, files=files, widths=list(widths), errors=errors, findings=notes, at=now
+        head=base,
+        tree=tree,
+        states=states,
+        files=files,
+        widths=list(widths),
+        errors=errors,
+        design=scans,
+        findings=notes,
+        at=now,
     )

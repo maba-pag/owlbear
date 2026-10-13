@@ -83,7 +83,7 @@ def ui(tmp_path, monkeypatch):
     return c
 
 
-def fetching(base, states, out, widths):
+def fetching(base, states, out, widths, **_k):
     """A capturer that stores what each state's URL answers, so a test can see which commit was rendered."""
     shots = []
     for s in states:
@@ -182,7 +182,7 @@ def gone(pid):
 
 
 def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(ui, tmp_path, monkeypatch):
-    def broken(_base, _states, _out, _widths):
+    def broken(_base, _states, _out, _widths, **_k):
         missing = "no Chromium"
         raise RuntimeError(missing)
 

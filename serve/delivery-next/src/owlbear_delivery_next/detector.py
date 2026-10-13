@@ -24,7 +24,11 @@ if TYPE_CHECKING:
 
 QUIET = {"IMPECCABLE_NO_UPDATE_CHECK": "1", "IMPECCABLE_NO_TELEMETRY": "1", "DO_NOT_TRACK": "1"}
 SECONDS = 120.0  # one engine scan
-PAGE = "async () => await window.impeccableDetectAsync()"
+PAGE_MS = 60_000  # one in-page scan; evaluate itself has no timeout
+PAGE = (
+    "async ms => await Promise.race([window.impeccableDetectAsync(),"
+    " new Promise((_, no) => setTimeout(() => no(new Error(`no answer within ${ms} ms`)), ms))])"
+)
 
 
 class DetectorError(RuntimeError):
@@ -43,14 +47,15 @@ class Finding:
     detail: str
 
 
-def _from_engine(raw: dict[str, Any]) -> Finding:
+def _from_engine(raw: dict[str, Any], *, by_file: bool) -> Finding:
     line = raw.get("line") or 0
+    at = f"{raw.get('file', '')}:{line}" if line else str(raw.get("file", ""))
     return Finding(
         rule=str(raw.get("antipattern", "")),
         category=str(raw.get("category", "")),
         advisory=raw.get("severity") == "advisory",
         name=str(raw.get("name", "")),
-        where=str(raw.get("selector") or (f"{raw.get('file', '')}:{line}" if line else raw.get("file", ""))),
+        where=at if by_file else str(raw.get("selector") or at),
         detail=str(raw.get("snippet", "")),
     )
 
@@ -75,12 +80,15 @@ def _run(command: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, str, 
     return proc.returncode, out, err
 
 
-def _engine(pack: Installed, args: Sequence[str], cwd: Path, browser: str | None = None) -> list[Finding]:
+def _engine(
+    pack: Installed, args: Sequence[str], cwd: Path, browser: str | None = None, *, by_file: bool = False
+) -> list[Finding]:
     env = os.environ | QUIET | ({"IMPECCABLE_BROWSER": browser} if browser else {})
     try:
         engine = pack.verified_engine()
-    except PackError as exc:
-        raise DetectorError(str(exc)) from exc
+    except (PackError, OSError) as exc:  # a changed, missing or unreadable engine is never run
+        msg = f"the design detector cannot be verified: {exc}"
+        raise DetectorError(msg) from exc
     code, out, err = _run([str(engine), "detect", "--json", "--no-config", *args], cwd, env)
     if code not in {0, 2}:  # 2 means findings; anything else, a target was not scanned
         msg = f"the design detector failed ({code}): {err.strip()[-300:]}"
@@ -93,15 +101,15 @@ def _engine(pack: Installed, args: Sequence[str], cwd: Path, browser: str | None
     if not isinstance(raw, list) or not all(isinstance(f, dict) for f in raw):
         msg = "the design detector's answer is not a list of findings"
         raise DetectorError(msg)
-    return [_from_engine(f) for f in raw]
+    return [_from_engine(f, by_file=by_file) for f in raw]
 
 
 def scan_source(pack: Installed, paths: Sequence[Path], cwd: Path) -> list[Finding]:
-    """The detector's rules over UI source files (HTML, CSS, JSX, TSX, Vue, Svelte), offline."""
+    """The detector's rules over UI source files (HTML, CSS, JSX, TSX, Vue, Svelte), offline; found by file."""
     if relative := [p for p in paths if not p.is_absolute()]:
         msg = f"source scans take absolute paths, not {relative[0]}"
         raise DetectorError(msg)
-    return _engine(pack, [str(p) for p in paths], cwd) if paths else []
+    return _engine(pack, [str(p) for p in paths], cwd, by_file=True) if paths else []
 
 
 def scan_url(pack: Installed, url: str, width: int, browser: str, cwd: Path) -> list[Finding]:
@@ -120,12 +128,18 @@ def scan_page(page: Any, pack: Installed) -> list[Finding]:  # noqa: ANN401 - a 
     try:
         page.evaluate("window.__IMPECCABLE_CONFIG__ = {autoScan: false}")  # no overlay
         page.add_script_tag(content=pack.bundle)  # the verified text, not a path that could change
-        groups = page.evaluate(PAGE)
+        groups = page.evaluate(PAGE, PAGE_MS)
     except Exception as exc:  # Playwright's own errors: the page refused the detector
         msg = f"the page refused the design detector: {str(exc)[:300]}"
         raise DetectorError(msg) from exc
-    if not isinstance(groups, list):
-        msg = "the in-page detector's answer is not a list"
+    shaped = isinstance(groups, list) and all(
+        isinstance(g, dict)
+        and isinstance(g.get("findings", []), list)
+        and all(isinstance(f, dict) for f in g.get("findings", []))
+        for g in groups
+    )
+    if not shaped:
+        msg = "the in-page detector's answer is not a list of findings by element"
         raise DetectorError(msg)
     return [
         Finding(
