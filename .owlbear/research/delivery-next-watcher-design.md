@@ -29,49 +29,47 @@ The decided requirements are listed in the options research §1. Since then:
 | S2 | Live feed checks, 2026-10-14: `.owlbear/scratch/ahp/watch/live_feed.py`, throwaway repos, builder steps, `gpt-6-luna` `low`; three window runs, two SDK runs (runtime research P26) | The host's session record `~/.copilot/session-state/<id>/events.jsonl` held every tool call with full arguments in both runtimes. That covered shell calls, two parallel shell calls, `apply_patch` (its argument is the raw patch, with target paths in `*** Add File:` style headers), and a subagent's own calls, marked with `parentToolCallId`. Each line was readable 0.03 to 0.21 s after its own timestamp, polling every 50 ms. A shell call's line was readable 2.9 s before its command's write (the command slept 3 s) | About 35 events, one model. The delay includes the poll. A write in the first milliseconds of a command is seen after the fact, as TD-55 accepts |
 | S3 | [Runtime research](delivery-next-agent-runtime.md) P21, P25 | SDK sessions write the same record family. P21: a window subagent's messages and usage are in the parent's record. P25: tool names in both runtimes | Subagent tool calls in the record not checked separately |
 | S4 | `vscode_step.py` `_observe` (lines 378-400), `_steer`, `_cancel` (worktree `next/m4-slice1`, `a068a6cf7`) | The window route reads tool names on `chat/toolCallStart`, and inputs only on unconfirmed `chat/toolCallReady` (cut to 2,000 characters). That is what the code reads, not what the protocol sends (S7). It steers with `chat/pendingMessageSet` and cancels with `chat/turnCancelled`, with acknowledgement | — |
-| S7 | Live stream check, 2026-10-14: `.owlbear/scratch/ahp/watch/live_stream.py`, throwaway repo, window builder step, `gpt-6-luna` `low` (runtime research P27) | The agent-host protocol pushes `chat/toolCallStart`, `chat/toolCallDelta`, `chat/toolCallReady` and `chat/toolCallComplete` for every main-agent call. `chat/toolCallReady` carries the full `toolInput` also for auto-approved calls (`confirmed: "not-needed"`): shell, `apply_patch`, `task`, `read_agent` and the relay tools. The subagent's own `ls` did not appear in the parent chat's stream | One run; whether a subagent's chat can be subscribed was not tried |
+| S7 | Live stream check, 2026-10-14: `.owlbear/scratch/ahp/watch/live_stream.py`, throwaway repo, window builder step, `gpt-6-luna` `low` (runtime research P27) | The agent-host protocol pushes `chat/toolCallStart`, `chat/toolCallDelta`, `chat/toolCallReady` and `chat/toolCallComplete` for every main-agent call. `chat/toolCallReady` carries the full `toolInput` also for auto-approved calls (`confirmed: "not-needed"`): shell, `apply_patch`, `task`, `read_agent` and the relay tools. A subagent's calls are not in the parent chat's stream (see S8) | One run |
+| S8 | VS Code's agent host, installed build: `out/vs/platform/agentHost/node/agentHostMain.js`, `_handleSubagentStarted`. Live checks 2026-10-14: `.owlbear/scratch/ahp/watch/live_subagent.py` and `live_subagent_sdk.py`, throwaway repos, `gpt-6-luna` `low` (runtime research P28) | The host gives each subagent its own chat, `ahp-chat://subagent/<session>/<toolCallId>`, and announces it on the parent's `task` call with `chat/toolCallContentChanged`, content `{type: "subagent", resource, title, agentName, description}`. That is how VS Code's chat shows a subagent's calls nested under the parent's. Live: Delivery subscribed to that chat when it was announced, before the subagent's first call. It then received the subagent's `chat/toolCallReady` with the full command (`ls && git status`) and its `chat/turnComplete`. In the SDK the subagent's calls reach the same event callback as the parent's, marked with the subagent's `agent_id` | One run per runtime; a subagent's own subagents were not tried, though the host code handles them the same way (`parentToolCallId`) |
 | S5 | `sdk_adapter.py` `_Step.on_event`, `permission`; `permissions.py`, `confinement.py` | The SDK gets the same runtime events live. The guard classifies shell words, paths and URLs with `inside`, `outside`, `resolve` and `_reach`. No TD-46 allowed-outside list exists | — |
 | S6 | `budgets.py`, `held.py`, `store.py` (`now`, `log`), `status.py` (`stage`) | The retry and ask patterns, the gate question with options, the "now" line `{tool, summary, at}`, and the activity log. Cockpit shows "Build 3/5" from the plan position | — |
 
 ## 3. Analysis
 
-### 3.1 Feed: the runtime's session record, for both runtimes
+### 3.1 Feed: each runtime's live stream, subagents included
 
 | Option | Inputs available | Same shape in both runtimes | Survives a runner restart |
 | --- | --- | --- | --- |
-| F-a Each runtime's live stream: SDK `on_event`, window agent-host protocol | Pushed as they happen. SDK: the runtime's events. Window: full inputs for the main agent's calls (S7), but a subagent's calls are not in the parent chat's stream | No | No: a stream does not replay what passed while the runner was down |
+| F-a Each runtime's live stream: SDK `on_event`, window agent-host protocol | Pushed as they happen, with full inputs (S7). Subagents: in the SDK, the same callback, marked by `agent_id`. In a window, the subagent's own chat, which Delivery subscribes to when the parent's `task` call announces it (S8) | No: two formats, normalised into one event | No: a stream does not replay what passed while the runner was down |
 | F-b Read the host's session record (S2) | Full arguments for every call, subagents included | Yes, the same harness writes both | Yes, with a stored read offset |
 
-Proposal: **F-b** as the one feed for both runtimes. It is the only source found that holds a window
-subagent's calls and what happened while the runner was down. The routes keep their streams for their
-own gates. F-a is the better live interface for the main agent, and the fallback if the record's
-format changes. This revises the options research §3.1, which put live streams first. It is
-claude-mem's transcript-tailing pattern (S1, L9), rebuilt in a few lines.
+Proposal: **F-a** for live watching in both runtimes, subagents included. **F-b** only catches up on
+what happened while the runner was down. This is the split the options research proposed (R-a and
+R-b).
 
-How the reader works:
-- It keeps a byte offset. Each read seeks to the offset and reads only the lines appended since, so
-  no line is read twice: after the first ten lines the next read starts at line eleven.
-- Instead of polling, it waits for the operating system's file notification (`kqueue` on macOS, in
-  Python's standard library), so a new line is read as soon as it is written. The 50 ms poll of S2
-  is only the probe's.
+An earlier revision of this draft chose F-b as the only feed: one run had shown no subagent calls
+in the parent chat's stream. Not checked then was how VS Code itself shows them. Its agent host puts
+each subagent in its own chat and names that chat on the parent's call (S8), and Delivery can
+subscribe to it like any chat.
 
-Conditions before F-b is relied on, measured in S2 within its limits:
-- complete records in both runtimes for file tools, parallel calls and subagents' tool calls: met
-  for shell, `apply_patch`, parallel shell calls and a foreground subagent. Background subagents
-  are not yet checked;
-- the delay from a call's start to its readable line: 0.03 to 0.21 s over about 35 events, polling
-  included.
+How the feed works:
+- **SDK:** the runner's existing event callback passes every tool start, with `agent_id`, to the
+  watcher.
+- **Window:** the runner already holds the agent-host connection. It reads `toolInput` from every
+  `chat/toolCallReady`, not only unconfirmed ones. On a `subagent` content part it subscribes to the
+  named chat, recursively, and unsubscribes when that chat's turn completes.
+- **Catch-up after a restart:** the session record is read from a stored byte offset. Each read
+  seeks to it and reads only lines appended since, so after ten lines the next read starts at line
+  eleven. Incomplete last lines wait for the next read. A truncated or replaced record is detected.
+- The window's events are about 0.1 to 0.4 s behind the call's start (S7). The SDK's arrive in the
+  same process as they happen.
 
-The reader must:
-- bind the exact record of the step's session, whose identity is stored before work starts (§3.3);
-- keep incomplete last lines for the next read, and detect a record that is truncated or replaced;
-- report its own failure.
+A feed failure (connection closed, subscription refused, record unreadable on catch-up) stops a
+window step with an operational cause. That never counts as a watcher stop, and its retries are
+bounded like other environment failures.
 
-The record is the runtime's internal format. A schema test on recorded fixtures guards it. A feed
-failure stops a window step with an operational cause, which never counts as a watcher stop; its
-retries are bounded like other environment failures.
-
-Confidence: medium-high for the feed; one model, background subagents unchecked.
+Confidence: high for the main agent and one level of subagents in both runtimes (S7, S8, P26); one
+model.
 
 ### 3.2 Judging: rules first, a model for the rest
 
@@ -179,9 +177,10 @@ Recovery after a runner restart is in §3.3.
 
 ### 3.6 Build slices
 
-1. Measurements left: background subagents, and a second model.
-2. Feed reader: bound record, offset, partial lines, truncation, reader failure, and a normalised
-   event (kind, tool, arguments, parent, time), with the schema test on recorded fixtures.
+1. Measurements left: background subagents, a subagent's own subagents, and a second model.
+2. Feed: the SDK callback and the window's tool-call actions with subagent chats subscribed, both
+   normalised into one event (kind, tool, arguments, agent, parent, time). The session-record
+   catch-up (offset, partial lines, truncation) comes with restart recovery.
 3. Attempt identity stored before work; per-step watcher state; restart recovery of identified
    attempts.
 4. Window policy: write targets, TD-46 classes with precedence, transfer evidence, Git in the owned
@@ -202,8 +201,8 @@ stages appear in Cockpit.
 Proposals for the owner (all `autonomous` until decided). Sol challenged the first draft; 17
 findings are folded in above.
 
-- O1 The watcher reads the host's session record in both runtimes (F-b). Completeness and delay
-  passed in S2; background subagents are still to check.
+- O1 The watcher follows each runtime's live stream, including subagents' own chats, and reads the
+  session record only to catch up after a runner restart (§3.1).
 - O2 Switch on a rules-only watcher for window steps before N2, with unknown calls logged and shown?
   Or keep it off until the model judge exists after N2? The first guards window steps sooner. The
   second keeps D5's judgement complete. Either way the interim of TD-44 and TD-50 changes only by

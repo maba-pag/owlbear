@@ -27,20 +27,19 @@ confirmation.
 
 | Term | Proposed meaning | Separating property |
 | --- | --- | --- |
-| Review | An independent judgement of a finished work product by the reviewer role, in a fresh session that did not make it. It ends in a verdict that Delivery records and that decides the Change's path (pass, or findings that become work) | Judges finished work; its verdict is kept and changes the path |
-| Challenge | A test of a work product while its step is still making it: Delivery's challenger role, or a subagent the worker starts. Its findings go back into that step (another round, or the owner while shaping). Delivery keeps no verdict of it (TD-71) | Judges work in progress; consumed inside the step, not kept |
+| Review | An independent judgement of finished work by the reviewer role, in a fresh session that did not make it: the task review after each task, and the final review of the whole Change before publication. Its verdict decides the Change's path: pass, or findings that become work | Judges finished work, in a step of its own |
+| Challenge | A test of a work product while its step is still making it: the plan challenge and the brief challenge (TD-73) on the challenger role, or a subagent the worker starts. Its findings go back into that step: another round, or to the owner while shaping. "Accept" never applies to it (TD-71) | Judges work in progress, inside the step that makes it |
 | Check | A verification by fixed means rather than judgement: the project's check commands, the visual check's capture and error comparison, a person-only check (`PersonCheck`) | Mechanical or human procedure, not a model's opinion |
 | Test | A check written as code in the project | A kind of check, never a review |
 
 Conflicts found in the code (G2):
-- The plan challenge runs on the challenger role, but its session label is `plan-review`
-  (`runner._challenge`, `roles.SESSIONS`).
-- The brief review runs on the challenger role and its docstring says it "challenges", but Delivery
-  binds its verdict to the brief version (`loop.brief_review`). By role it is a challenge; by its kept
-  verdict, a review. **Open for the owner.**
-- The visual review runs on the reviewer role and its verdict decides the merge (N6), so it is a
-  review. TD-56's narrowing listed it with the challenges as rerun-only. **Open for the owner:** does
-  "accept" (TD-56) apply to it?
+- The plan challenge's session label is `plan-review` (`runner._challenge`, `roles.SESSIONS`).
+  Renamed to `plan-challenge` with TD-73.
+- The brief review is a challenge (TD-73) and becomes the brief challenge. Delivery still binds its
+  verdict to the brief version (`loop.brief_review`), so that a changed brief is challenged again.
+- The screenshot judgement after publication runs on the reviewer role, and its verdict decides the
+  merge (N6). **Open for the owner:** is it a review, or the judging part of the visual check? The
+  answer decides only whether "accept" (TD-56) can apply when its model cannot be verified.
 
 ### 3.2 The owner's part
 
@@ -130,8 +129,8 @@ Conflicts found in the code (G2):
 
 - Confirm, change or strike each row. Then the code, prompts and agents follow the confirmed words in
   one pass, starting with `plan-review` → `plan-challenge` and the watcher's "interrupt".
-- Open for the owner: the brief review (challenge or review) and whether "accept" covers the visual
-  review (§3.1).
+- Open for the owner: whether the screenshot judgement is a review or part of the visual check
+  (§3.1).
 - Confidence: high where a row cites code or a decision; medium where it proposes a new word.
 - Limit: the list covers words found in Delivery-next's code and records. The old Delivery's terms
   (packet, proposal, admission) are left out.
