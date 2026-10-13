@@ -785,8 +785,22 @@ throwaway folders and are cleaned up.
   re-plans; planning starts on a clean tree (leftover edits stashed, a failed stash asks); the TD-63
   per-tool shape test replaces the tool count;
 - item 6 `199695546`: two cleaned skills preloaded for every role in both runtimes (P22).
+- TD-56 `c8ea1ac47`: an agent step's own result with unread usage is held, bound to its gate
+  question, and offered for "accept" only while step, brief version and commit still match.
+  Reviewer sessions inside a step (plan challenge, brief review, visual review) stay rerun-only:
+  their verdicts depend on inputs Delivery does not hold. That narrows TD-56; it goes to the owner.
+- item 8c `190968bca`: click and type steps (exact names, editable fields only, no reach outside
+  the preview but static files); a separate chat tool `save_visual_check` keeps both chat tools
+  within T5; a new or changed state takes the brief version; the seed command (TD-65) is a project
+  setting; without it the after capture asks and the before renders only static states.
+- Live: a Luna `low` builder told to use an uninstalled tool called `report_missing_tool` with the
+  exact error, and Delivery asked the owner to set it up (P24).
 - Found: window steps offer the runtime's `ask_user` and the owner's MCP tools, which a read-only
   Luna reviewer used to write files (P23). The window `tools:` allowlist (P19 F2) fixes it; item 4.
+- Autonomous choices made overnight, each Sol-reviewed: planning first stashes edits an earlier
+  step left (the read-only planner rejects a dirty tree); a stepped state's network reach is
+  limited to the preview plus static files; the chat brief tool keeps the visual check it does not
+  send.
 
 **Deferred to the owner:** where the global config file lives (once decided, the runners must read
 the same global layer the settings page edits; today the host passes none, so global saves are
