@@ -253,6 +253,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             result = result or next((r for r, run in designed if r.exit != Exit.DONE and not run.payload), None)
             judgement = None if result else judges.merged([run.payload for _, run in reviewed])
             runs = ([run for _, run in reviewed], [run for _, run in designed])
+            inputs = [judges.given(cfg) for _, cfg in theirs]  # kept, so a calibration replay judges the same
             kept = judges.recorded(
                 change,
                 head,
@@ -263,6 +264,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 images=images,
                 settings=settings,
                 now=datetime.now(UTC),
+                inputs=inputs,
             )
             change.visual_rounds.append(kept)
         if judgement is not None or result is None:

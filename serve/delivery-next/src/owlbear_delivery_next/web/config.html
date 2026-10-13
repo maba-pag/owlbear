@@ -102,6 +102,7 @@
     <p-table-body id="general"></p-table-body>
   </p-table>
   <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
+  <p-text id="design-pack" size="xs"></p-text>
   <p-text id="agreement-note" size="xs" color="contrast-medium"></p-text>
   <p-table caption="How often each judge's verdict matched your Pass or Fail, per model">
     <p-table-head><p-table-head-row>
@@ -352,6 +353,7 @@ function render() {
   document.getElementById("agreement-note").textContent = loaded.agreement.length
     ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
     : "No decided visual rounds yet, or no shared repository is set up.";
+  document.getElementById("design-pack").textContent = loaded.design_pack;
   pending();
 }
 

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next import design_pack, design_tools, prompts, roles, tools
 from owlbear_delivery_next.steps import visual
-from owlbear_delivery_next.visual_records import JudgeFinding, JudgeVerdict, Verdict, VisualRound
+from owlbear_delivery_next.visual_records import DesignInput, JudgeFinding, JudgeVerdict, Verdict, VisualRound
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -154,18 +154,52 @@ def sessions(  # noqa: PLR0913 - one session per batch, from the correctness jud
 ) -> list[Session]:
     """The design judge's sessions: one per batch, each two-phase, its detector findings held back."""
     return [
-        dataclasses.replace(
+        _designer(
             base,
-            role="designer",
-            message=_message(c, batch, errors),
-            submit=design_tools.FINAL,
-            first_look=design_tools.FIRST,
-            reveal=_reveal(scans, {i.state for i in batch}),
-            attachments=_attached(batch),
-            observe=lambda names=tuple(i.name for i in batch): tools.Worktree(head, head, changed=names),
+            head,
+            DesignInput(
+                message=_message(c, batch, errors),
+                reveal=_reveal(scans, {i.state for i in batch}),
+                images=[i.name for i in batch],
+            ),
+            batch,
         )
         for batch in batches(images)
     ]
+
+
+def given(cfg: Session) -> DesignInput:
+    """A design session's inputs as the round keeps them."""
+    return DesignInput(message=cfg.message, reveal=cfg.reveal, images=list(cfg.observe().changed))
+
+
+def replayed(base: Session, kept: VisualRound, images: Sequence[Image]) -> list[Session]:
+    """The design sessions of a kept round again, with its exact messages and images (calibration replay, §3.5).
+
+    Raises:
+        ValueError: The kept inputs do not show each of the round's images once, in batches within the budget.
+    """
+    named = {i.name: i for i in images}
+    parts = [[named[n] for n in sent.images if n in named] for sent in kept.design_inputs]
+    if sorted(n for sent in kept.design_inputs for n in sent.images) != sorted(named) or not all(
+        p and _fits(p, visual.MAX_SHOTS, visual.MAX_BYTES) for p in parts
+    ):
+        msg = f"round {kept.number}'s design inputs do not show its {len(named)} images once each within the budget"
+        raise ValueError(msg)
+    return [_designer(base, kept.head, sent, p) for sent, p in zip(kept.design_inputs, parts, strict=True)]
+
+
+def _designer(base: Session, head: str, sent: DesignInput, batch: Sequence[Image]) -> Session:
+    return dataclasses.replace(
+        base,
+        role="designer",
+        message=sent.message,
+        submit=design_tools.FINAL,
+        first_look=design_tools.FIRST,
+        reveal=sent.reveal,
+        attachments=_attached(batch),
+        observe=lambda names=tuple(sent.images): tools.Worktree(head, head, changed=names),
+    )
 
 
 def _message(c: Change, images: Sequence[Image], errors: Errors) -> str:
@@ -343,6 +377,7 @@ def recorded(  # noqa: PLR0913 - one round from every judged input
     images: Sequence[Image],
     settings: Settings,
     now: datetime,
+    inputs: Sequence[DesignInput] = (),
 ) -> VisualRound:
     """The round both judges judged: its capture, the pack and the settings it ran with, the blind mapping, evidence."""
     correct, designs = runs
@@ -355,6 +390,7 @@ def recorded(  # noqa: PLR0913 - one round from every judged input
         pack=design_pack.identity(),
         design_failures=settings.design_failures,
         blind={i.name: i.side for i in images},
+        design_inputs=list(inputs),
         verdicts=[
             correctness(correct, roles.chosen(settings, "visual-review"), now),
             design(designs, images, roles.chosen(settings, "design-review"), now),

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
-from owlbear_delivery_next import calibration
+from owlbear_delivery_next import calibration, pack_update
 from owlbear_delivery_next.catalogue import CATALOGUE
 from owlbear_delivery_next.common import CommonError
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
@@ -63,6 +63,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "applied": APPLIED,
         "catalogue": CATALOGUE,
         "agreement": _agreement(store),
+        "design_pack": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
     }
 
 

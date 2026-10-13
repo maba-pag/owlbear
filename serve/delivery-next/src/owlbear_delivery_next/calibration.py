@@ -10,10 +10,11 @@ from __future__ import annotations
 import re
 import shutil
 from collections import Counter
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.storage_io import atomic_write
-from owlbear_delivery_next.visual_records import VisualRound
+from owlbear_delivery_next.visual_records import Verdict, VisualRound
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
 
 FOLDER, RECORD = "visual", "round.json"
 ROUNDS = 50  # decided rounds whose screenshots are kept
+LEAST = 20  # replayed rounds below which a replay only informs the owner's choice
+MARGIN = 10  # percentage points a new pack's design judge may agree with the owner less often than the old one did
 PART = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")  # one path component: a project, a Change or a screenshot
 
 
@@ -78,6 +81,44 @@ def agreement(decided: Sequence[VisualRound]) -> list[dict[str, Any]]:
         {"judge": judge, "model": model, "decided": c.total(), **{k: c[k] for k in ("agreed", "disagreed", "unsure")}}
         for (judge, model), c in sorted(rows.items())
     ]
+
+
+@dataclass(frozen=True)
+class Replay:
+    """The design judge with a candidate pack, on decided rounds, against the verdicts recorded then (§3.5)."""
+
+    rounds: int
+    agreed_before: int  # recorded design verdicts that matched the owner's decision
+    agreed_after: int  # replayed ones that did; a replay without a verified verdict did not
+    left_out: int = 0  # kept rounds that could not be replayed: no screenshots, or inputs that do not match them
+
+    @property
+    def before(self) -> float:
+        """The share of recorded design verdicts that agreed with the owner."""
+        return self.agreed_before / self.rounds if self.rounds else 0.0
+
+    @property
+    def after(self) -> float:
+        """The share of replayed design verdicts that agreed with the owner."""
+        return self.agreed_after / self.rounds if self.rounds else 0.0
+
+    @property
+    def advisory(self) -> bool:
+        """Too few rounds to hold an update back."""
+        return self.rounds < LEAST
+
+    @property
+    def ok(self) -> bool:
+        """The candidate may be activated as far as calibration goes."""
+        return self.advisory or 100 * self.agreed_after >= 100 * self.agreed_before - MARGIN * self.rounds
+
+
+def replayed(pairs: Sequence[tuple[VisualRound, Verdict | None]]) -> Replay:
+    """Compare each decided round's replayed design verdict with the one it recorded."""
+    decided = [(r.decision.outcome, r, v) for r, v in pairs if r.decision]
+    recorded = [next((v.verdict for v in r.verdicts if v.lens == "design"), None) for _, r, _ in decided]
+    before = sum(old == owner for old, (owner, _, _) in zip(recorded, decided, strict=True))
+    return Replay(len(decided), before, sum(new == owner for owner, _, new in decided))
 
 
 def _cases(shared: Common, name: str) -> list[tuple[VisualRound, list[Path]]]:

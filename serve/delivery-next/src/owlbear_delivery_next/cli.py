@@ -6,9 +6,11 @@ import argparse
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from subprocess import CalledProcessError
 
-from owlbear_delivery_next import common, design_pack, host, profile, roles, setup
+from owlbear_delivery_next import common, design_pack, host, pack_replay, pack_update, profile, roles, setup
 from owlbear_delivery_next.config import Agent, Layer
+from owlbear_delivery_next.detector import DetectorError
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
     Brief,
@@ -51,6 +53,50 @@ def show_pack(*, install: bool) -> int:
             return 1
     sys.stdout.write(design_pack.status() + "\n")
     return 0
+
+
+def update_pack(a: argparse.Namespace, repo: Path) -> int:
+    """The update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
+    try:
+        if a.diff:
+            sys.stdout.write(pack_update.diff(a.diff.resolve(), a.to) + "\n")
+            return 0
+        if a.golden:
+            return _golden()
+        if a.replay:
+            r = pack_replay.replay(Store.open(repo))
+            verdict = "advisory: too few rounds" if r.advisory else "within the margin" if r.ok else "below the margin"
+            sys.stdout.write(
+                f"calibration replay: {r.rounds} decided rounds, {r.left_out} left out; the design judge agreed with "
+                f"the owner {r.before:.0%} as recorded, {r.after:.0%} with this pack ({verdict})\n"
+            )
+            return 0 if r.ok else 1
+        sys.stdout.write(pack_update.said(pack_update.notice(refresh=True)) + "\n")
+    except (
+        design_pack.PackError,
+        pack_replay.ReplayError,
+        DetectorError,
+        common.CommonError,
+        CalledProcessError,
+        OSError,
+        ValueError,
+    ) as exc:
+        sys.stdout.write(f"design pack: {type(exc).__name__}: {exc}\n")
+        return 1
+    return 0
+
+
+def _golden() -> int:
+    pack = design_pack.installed()
+    if pack is None:
+        sys.stdout.write("design pack not installed: run `owlbear-next design-pack --install`\n")
+        return 1
+    wrong = pack_update.golden(pack)
+    for page, w in wrong.items():
+        missing, unexpected = ", ".join(w["missing"]) or "none", ", ".join(w["unexpected"]) or "none"
+        sys.stdout.write(f"golden page {page}: missing {missing}; unexpected {unexpected}\n")
+    sys.stdout.write("golden pages: " + ("differ" if wrong else "as expected") + "\n")
+    return 1 if wrong else 0
 
 
 def describe(change: Change) -> str:
@@ -190,14 +236,24 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     show.add_argument("change")
     shared = sub.add_parser("common", help="show or set the shared settings repository (TD-57)")
     shared.add_argument("path", nargs="?", type=Path)
-    pack = sub.add_parser("design-pack", help="show or install the pinned design detector (TD-76)")
+    pack = sub.add_parser("design-pack", help="show, install or update the pinned design pack (TD-76)")
     pack.add_argument("--install", action="store_true", help="download and verify what is missing")
+    pack.add_argument("--check", action="store_true", help="count upstream releases since the pinned one")
+    pack.add_argument(
+        "--diff", type=Path, metavar="CLONE", help="rules and skill files changed, from an upstream clone"
+    )
+    pack.add_argument("--to", metavar="TAG", help="the candidate tag --diff compares with")
+    pack.add_argument("--golden", action="store_true", help="run the engine and the in-page bundle on the golden pages")
+    pack.add_argument("--replay", action="store_true", help="rerun the design judge on decided rounds (costs requests)")
     a = parser.parse_args(argv)
+    if a.command == "design-pack" and bool(a.diff) != bool(a.to):
+        parser.error("--diff and --to go together")
     if a.command == "common":
         sys.stdout.write(show_common(a.path) + "\n")
         return 0
     if a.command == "design-pack":
-        return show_pack(install=a.install)
+        updating = a.check or a.diff or a.golden or a.replay
+        return update_pack(a, a.repo.resolve()) if updating else show_pack(install=a.install)
     if a.command == "host":
         return host.serve(a.repo.resolve())
     if a.command == "setup":

@@ -120,9 +120,10 @@ def installed() -> Installed | None:
     return Installed(target / ENGINE, wanted[ENGINE][1], bundle.decode("utf-8"))
 
 
-def _fetch(url: str) -> bytes:
+def fetch(url: str, seconds: float = SECONDS) -> bytes:
+    """One HTTPS download through the system's trust store, bounded in time."""
     https = urllib.request.HTTPSHandler(context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
-    with urllib.request.build_opener(https).open(url, timeout=SECONDS) as response:
+    with urllib.request.build_opener(https).open(url, timeout=seconds) as response:
         return response.read()
 
 
@@ -139,8 +140,9 @@ def _keep(target: Path, name: str, data: bytes) -> None:
         raise
 
 
-def install(fetch: Callable[[str], bytes] = _fetch) -> Installed:
+def install(download: Callable[[str], bytes] | None = None) -> Installed:
     """Download what is missing or changed, refuse any file that does not match its digest, and keep the rest."""
+    download = download or fetch
     target = folder()
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     target.mkdir(mode=0o700, exist_ok=True)
@@ -152,7 +154,7 @@ def install(fetch: Callable[[str], bytes] = _fetch) -> Installed:
         if path.exists() and _sha256(path) == digest:
             continue
         try:
-            data = fetch(url)
+            data = download(url)
         except OSError as exc:
             msg = f"cannot download {url}: {exc}"
             raise PackError(msg) from exc

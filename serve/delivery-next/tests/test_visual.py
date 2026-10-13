@@ -528,6 +528,9 @@ def test_both_judges_run_and_the_round_keeps_the_design_judges_blind_two_phase_v
     assert "design detector's findings" in cfg.reveal
     [kept] = after.visual_rounds
     assert kept.blind == {"home-1280-A.png": "before", "home-1280-B.png": "after"}
+    assert [(i.message, i.reveal, i.images) for i in kept.design_inputs] == [
+        (cfg.message, cfg.reveal, ["home-1280-A.png", "home-1280-B.png"])
+    ]  # what a calibration replay sends again
     correct, design_verdict = kept.verdicts
     assert (correct.lens, correct.verdict, correct.usage_verified) == ("correctness", "pass", True)
     assert (design_verdict.verdict, design_verdict.unanchored, design_verdict.preferences) == (

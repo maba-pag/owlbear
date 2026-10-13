@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import truststore
 
-from owlbear_delivery_next import design_pack, profile, roles
+from owlbear_delivery_next import design_pack, pack_update, profile, roles
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
 from owlbear_delivery_next.store import Store, StoreError, git_common_dir
@@ -188,7 +188,8 @@ def check(repo: Path, prof: Profile | None) -> list[Check]:
         copilot: str | None = cli_path()
     except FileNotFoundError:
         copilot = None
-    return readiness(host, probe_in(repo), reach(host), copilot)
+    updates = Check("design pack updates", ok=True, detail=pack_update.said(pack_update.notice(refresh=True)))
+    return [*readiness(host, probe_in(repo), reach(host), copilot), updates]
 
 
 def install_skill(home: Path) -> str:

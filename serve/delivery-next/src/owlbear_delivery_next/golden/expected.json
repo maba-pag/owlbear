@@ -1,0 +1,18 @@
+{
+  "source": {
+    "bad.html": [
+      "cramped-padding",
+      "gradient-text",
+      "gray-on-color",
+      "low-contrast",
+      "marketing-buzzword",
+      "overused-font",
+      "side-tab"
+    ],
+    "good.html": []
+  },
+  "page": {
+    "bad.html": ["gradient-text", "gray-on-color", "low-contrast", "side-tab"],
+    "good.html": []
+  }
+}

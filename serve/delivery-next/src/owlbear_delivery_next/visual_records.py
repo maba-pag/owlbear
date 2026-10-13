@@ -75,6 +75,14 @@ class DetectorScan(_Strict):
     findings: list[DetectorFinding] = Field(default_factory=list)
 
 
+class DesignInput(_Strict):
+    """One design judge session's inputs, kept so a calibration replay judges exactly the same (§3.5)."""
+
+    message: str
+    reveal: str
+    images: list[str]  # the neutral image names, in attachment order
+
+
 class OwnerDecision(_Strict):
     """The owner's answer on the decision page, bound to the capture and pack it was given for."""
 
@@ -94,6 +102,7 @@ class VisualRound(_Strict):
     widths: list[int] = Field(default_factory=list)
     pack: str = ""  # the design pack's identity
     blind: dict[str, Literal["before", "after"]] = Field(default_factory=dict)  # the design judge's image names
+    design_inputs: list[DesignInput] = Field(default_factory=list)  # each design session's message and images
     design_failures: DesignFailures = "ask"  # the setting in force when the round began
     verdicts: list[JudgeVerdict] = Field(default_factory=list)
     detector: list[DetectorScan] = Field(default_factory=list)
