@@ -387,11 +387,13 @@ Findings, not fixed:
 
 ### Gaps against architecture §3.7 (hand-triggered and M4 demonstration items)
 
+Updated after the [owner session](#owner-session-new-change-sleep-and-overlap-2026-10-13-times-utc).
+
 | Item | Status |
 | --- | --- |
 | Killed runner | Shown today (review step, publish) |
 | Killed host | Shown 2026-10-10 (scenario 6) |
-| Sleep | **Not shown**: needs the owner's laptop asleep during a step |
+| Sleep | Shown in the owner session: two builds across 77 s of sleep |
 | Network loss | Shown today (follow); not during an agent step |
 | Two windows | Second host refused today; two chats continuing one Change not shown |
 | CI failure, PR comment, target conflict | Shown 2026-10-10 (slice 2 failure (a); scenario 2 and PR #8 thread; scenario 5) |
@@ -399,8 +401,115 @@ Findings, not fixed:
 | Dirty local target at pull-back | Shown today |
 | Failed visual check | Shown today (`promo-hero` round 1) |
 | One interruption with an unconfirmed push or PR (M4 exit) | Shown today (push landed, no PR yet). An interruption after PR creation but before its readback was not hit |
-| New Change, folder-open task, workspace trust | **Not shown**: New Change with the owner; the folder-open task was never exercised in a real VS Code start |
-| Overlap display | **Not shown**: with the owner |
+| New Change | Shown in the owner session, with findings 2 and 3 |
+| Folder-open task, workspace trust | **Not shown**: the folder-open task was never exercised in a real VS Code start |
+| Overlap display | **Not shown**: the plan-time notice was missed and the integration merged cleanly (findings 4 and 11) |
 
 Afterwards the host and the proxy were stopped, ask-before-merge was set back to `no`, and the temporary role
 overrides were removed: the owner's roles apply again. Sandbox `main` is at `7fd36e2`.
+
+## Owner session: New Change, sleep and overlap, 2026-10-13, times UTC
+
+Sandbox `boecht/owlbear-sandbox`, `main` at `7fd36e2`. The host started at 20:10:42 from `944a6b09e` and was restarted
+at 20:40:53 and 20:41:56 on the working tree that became `d39178183`. Roles as the owner set them: planner, builder
+and designer `claude-opus-5.5`, reviewer and challenger `gpt-6.1-sol`. The owner pressed New Change on the Changes
+page and shaped the brief in the chat it opened. I seeded a second Change, `overlap-footer`, on the same files.
+
+### `add-a-notes-textarea-with-an-800-charact` (PR #16)
+
+| Time | Event |
+| --- | --- |
+| 20:14:03 → 20:21:14 | New Change opened a chat in the sandbox window (`code chat -m agent`). One turn on `claude-opus-5.5` asked the owner five questions and saved the brief and one visual state (`notes-empty`) |
+| 20:22:04 | The owner approved brief v2 on the Changes page; the brief challenge passed at 20:22:32 |
+| 20:22:51 → 20:23:31 | Plan: one task on `page.ts` and its test. The first submission was refused (a task goal over 1,000 characters), the second accepted. The plan challenge passed |
+| 20:23:33 → 20:26:02 | Build `eeca262` across the sleep below; task and final review passed by 20:27:42 |
+| 20:27:53 → 20:28:38 | PR #16 ready; CI `test` passed |
+| 20:28:59 | Check prep asked: `submit_result` refused `npm run preview` ("use one of none") and the agent reported a missing tool. My `seed` of `overlap-footer` had removed the profile's `allow:check` (finding 6); I restored it at 20:30:37 (profile v24) |
+| 20:32:02 → 20:32:36 | The owner answered Pause, then resumed the Change. The check session received "Pause" as its answer and asked again (findings 7 and 8) |
+| 20:35:16 → 20:35:33 | The owner chose the agent's option "Allow npm run preview"; the recipe was accepted and the environment was ready at `127.0.0.1:4173` |
+| 20:36:16 | Round 1: correctness pass, design pass |
+| 20:36:21 → 20:38:15 | Merge gate went back, "updating with origin/main" (PR #15 had merged). Task t2 merged `main` without a conflict (`9cc4f8c`); task and final review passed |
+| 20:38:24 | Publish pending ("GitHub still shows the PR at eeca262"). A runner started from my edited source had written spend fields the running host could not read, and the host marked the Change "cannot be migrated to format 3" (finding 10). Two host restarts; nothing lost |
+| 20:41:00 → 20:41:30 | PR #16 at `9cc4f8c`, CI passed; a new check-prep session submitted the same recipe, environment ready |
+| 20:42:24 | Round 2: both judges pass |
+| 20:42:40 | Squash merge `58e08aa` without consent (ask-before-merge off) |
+| 20:45:02 | Cleanup after CI on `main`; pull-back fast-forwarded the checked-out `main` and left the local `.mcp.json` edit and the untracked `.vscode/` untouched; worktree removed |
+
+| Session | Model | Credits |
+| --- | --- | --- |
+| Brief challenge | `gpt-6.1-sol` | 4.37 |
+| Plan | `claude-opus-5.5` | 17.19 |
+| Plan challenge | `gpt-6.1-sol` | 4.37, not counted in the Change's spend (finding 13) |
+| Build t1 | `claude-opus-5.5` | 32.99 |
+| Task and final review | `gpt-6.1-sol` | 5.20 + 6.87 |
+| Check prep, round 1: one session, three runs | `claude-opus-5.5` | 24.26 (20.64, then +1.96 and +1.66 on resume) |
+| Round 1 judges: correctness, design | `gpt-6.1-sol`, `claude-opus-5.5` | 5.55, 25.32 |
+| Task t2 (merge `main`) | `claude-opus-5.5` | 26.30 |
+| Task and final review | `gpt-6.1-sol` | 5.66 + 5.03 |
+| Check prep, round 2 | `claude-opus-5.5` | 20.11 |
+| Round 2 judges: correctness, design | `gpt-6.1-sol`, `claude-opus-5.5` | 4.53, 27.88 |
+
+The Change shows 211.25 credits (`claude-opus-5.5` 174.05, `gpt-6.1-sol` 37.20); with the plan challenge it cost
+215.62. Check prep took 44.37 (21 %). Correction to my chat report: the two check-prep runs that ended in a
+question cost 22.59, not about 43. A session's usage is cumulative, so the resumed runs added only 1.96 and 1.66.
+
+### `overlap-footer` (PR #15)
+
+Seeded pre-approved at 20:23:35 with scope `packages/app` and a footer line in the same `page.ts` and test, 4 s after
+the owner's plan challenge passed, so it never planned. Build 20:23:35 → 20:25:49 across the sleep, reviews passed
+at 20:27:05, PR #15 at 20:27:16, CI passed at 20:27:43, squash merge `a5a0478` at 20:27:57, pull-back at 20:28:41.
+Credits 34.04 (`claude-opus-5.5` 22.23, `gpt-6.1-sol` 11.81).
+
+### Sleep during agent steps
+
+| Scenario | Journey row | Observed | Verdict |
+| --- | --- | --- | --- |
+| Mac asleep during two builds | X1 | Software sleep at 20:24:27, a background wake from 20:24:30 to 20:25:15, full wake at 20:25:44 (`pmset -g log`). The owner's build ran 20:23:33 → 20:26:02, `overlap-footer`'s 20:23:35 → 20:25:49. Both ended with a result: no retry, no extra runner, termination confirmed | pass |
+
+Limits: one sleep of 77 s, with a 45 s background wake inside it.
+
+### Findings, not fixed
+
+1. **Browser tab on `127.0.0.1:8765`:** the window New Change opened showed VS Code's built-in browser with
+   "connection refused". The sandbox workspace's saved editor layout holds that browser tab from an earlier
+   session, and VS Code restores it. Not Delivery's; closing the tab removes it.
+2. **New Change chat settings:** the button runs only `code chat -m agent "<start prompt>"`. The chat ran as a
+   local agent session with default permissions instead of allow-all, on the window's last model
+   (`claude-opus-5.5` at the 1M tier, extra-high thinking) instead of the default tier the roles use. `code chat`
+   offers mode, files, window and profile only; its mode can name a custom agent, which can pin a model.
+3. **Slug cut mid-word:** `briefs.py` takes the first 40 characters of the joined title words
+   (`…-with-an-800-charact`).
+4. **Plan-time overlap notice not reached:** `overlap-footer` was seeded pre-approved after the owner's plan had
+   passed, so neither Change planned while the other was open. A setup gap of this run, not a defect.
+5. **Refused launch command asked badly:** the agent reported the refused `npm run preview` as a missing tool, and
+   `missing.classify` routed it to "no runtime here provides". The question offered only "Plan again without npm
+   run preview" and "Pause". Its text strung the agent's report into a template sentence: "The step needs npm run
+   preview for Launch command for the owner's visual check: … The step's allowed launch command list is empty, so
+   no recipe can be submitted., which no runtime here provides." For a repeatedly denied command, the architecture
+   (§3.5) asks the owner whether to allow it for the step kind in the profile; this question had no such option.
+6. **`seed` drops profile entries:** it replaces every `install:` and `allow:` entry with its own (`cli.py`), so
+   seeding `overlap-footer` without `--launch` removed `allow:check`. Dev tool only.
+7. **Pause reached the agent:** `loop._answer` sets the pause but leaves the answer unconsumed, and the runner
+   resumes a session with the newest unconsumed answer. After Resume, the check session got "Pause" as its
+   answer; its next question began "You chose "Pause"."
+8. **Stale allow list in a resumed session:** its first message had said the allowed launch commands were "none".
+   The resume message carried only the answer, so the agent asked again instead of submitting. The guard and
+   `submit_result` already used the restored profile.
+9. **Check prep on the builder role:** each fresh check-prep session read about 170k tokens on `claude-opus-5.5`
+   for about 20 credits. Round 2 only resubmitted round 1's recipe.
+10. **Mixed code versions:** host and runners run from one source tree, so a runner started after a source edit
+    wrote fields the running host forbids. The store reports any validation failure as "cannot be migrated", also
+    within one format.
+11. **Overlap display not shown in any form:** besides finding 4, the integration merged `page.ts` cleanly, so no
+    collision question was due (D7). It needs a Change that plans while an overlapping one is open, and a
+    conflicting edit.
+12. **Design judge logged as `retry`:** `session_result._exit` has no case for `DesignResult`, so each design
+    judge's step event reads `exit: retry`, "no valid result", on a passing verdict (also in `promo-hero`). The
+    round reads the payload, so only the log is wrong.
+13. **Plan challenge not in the spend:** the challenge reuses the plan step's session settings, whose delivery
+    callback replaces the runner's Change with a copy. The challenge's usage is added to the old object and the
+    copy is saved: the step event shows 4.37 credits, the spend has none.
+14. **Denied shell reads:** six requests were outside their step's allow list (`tail -3`, `tail -5` twice,
+    `tail -15`, `tail -20`, `cat`), in build, check and merge-task steps; each cost the agent a turn.
+
+Afterwards no host was running. Sandbox `main` is at `58e08aa`: the footer (#15), then the Notes field (#16).
