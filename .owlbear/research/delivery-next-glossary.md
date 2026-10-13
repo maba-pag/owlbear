@@ -27,7 +27,7 @@ confirmation.
 
 | Term | Proposed meaning | Separating property |
 | --- | --- | --- |
-| Review | An independent judgement of finished work by the reviewer role, in a fresh session that did not make it: the task review after each task, and the final review of the whole Change before publication (TD-74, `decided`). Its verdict decides the Change's path: pass, or findings that become work | Judges finished work, in a step of its own |
+| Review | An independent judgement of finished work in fresh sessions that did not make it: the task review after each task, the final review of the whole Change before publication, and the visual review of the screenshots after it (TD-74, `decided`). Its verdict decides the Change's path: pass, or findings that become work | Judges finished work |
 | Challenge | A test of a work product while its step is still making it: the plan challenge and the brief challenge (TD-73) on the challenger role, or a subagent the worker starts. Its findings go back into that step: another round, or to the owner while shaping. "Accept" never applies to it (TD-71) | Judges work in progress, inside the step that makes it |
 | Check | A verification by fixed means rather than judgement: the project's check commands, the visual check's capture and error comparison, a person-only check (`PersonCheck`) | Mechanical or human procedure, not a model's opinion |
 | Test | A check written as code in the project | A kind of check, never a review |
@@ -37,10 +37,8 @@ Conflicts found in the code (G2):
   Renamed to `plan-challenge` with TD-73.
 - The brief review is a challenge (TD-73) and becomes the brief challenge. Delivery still binds its
   verdict to the brief version (`loop.brief_review`), so that a changed brief is challenged again.
-- The screenshot judgement after publication runs on the reviewer role, and its verdict decides the
-  merge (N6). **Open for the owner:** is it a review, or the judging part of the visual check? TD-74
-  leans to "not a review". It gets no "accept" (TD-75). How it judges is proposed in the
-  [design skill research](delivery-next-design-skill.md).
+- The screenshot judgement is the visual review (TD-74). Its capture, console errors and detector run are the
+  visual check; the two judges' verdicts are the review (TD-78).
 
 ### 3.2 The owner's part
 
@@ -130,8 +128,7 @@ Conflicts found in the code (G2):
 
 - Confirm, change or strike each row. Then the code, prompts and agents follow the confirmed words in
   one pass, starting with `plan-review` → `plan-challenge` and the watcher's "interrupt".
-- Open for the owner: whether the screenshot judgement is a review or part of the visual check
-  (§3.1).
+- Open for the owner: none in §3.1.
 - Confidence: high where a row cites code or a decision; medium where it proposes a new word.
 - Limit: the list covers words found in Delivery-next's code and records. The old Delivery's terms
   (packet, proposal, admission) are left out.

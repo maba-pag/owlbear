@@ -63,12 +63,125 @@ Confidence: medium-high for the direction; whether the detector's rules match th
 disagree or either is unsure, the owner decides (N6) on a side-by-side page with both verdicts. J4 is always
 available there, and J6 records every decision, so the default models can change on evidence.
 
+### 3.4 The owner's decisions, 2026-10-14
+
+TD-74 amended, TD-76 to TD-79 in [the rebuild](delivery-liveness-first-rebuild.md):
+- The screenshot judgement is a review. Delivery has three: after each task, at the end of a Change, and the
+  visual review.
+- Impeccable is extracted, not installed. "The runner and the extracted design rules" are updated together and
+  regularly, by a structured plan (§3.5). "Runner" is read as the detector engine together with Delivery's code
+  that runs it; the pack covers both.
+- Two judges always judge: correctness and design. There is no "another verdict" button.
+- The detector's findings are evidence for the judges, never a fail on their own.
+- A correctness fail goes back to the build automatically. A design fail goes back or to the owner, by a setting.
+- The owner decides on one page: the screenshot comparison, both verdicts, then Pass or Fail, with finding
+  checkboxes and an optional comment. A Fail comment becomes a criterion of the next visual review; a Pass
+  comment is kept as a note.
+
+### 3.5 Plan
+
+Sol challenged the first version of this plan; its 20 findings are folded in.
+
+**The design pack.** One versioned unit in Delivery's package that changes only as a whole:
+- the engine executable per platform Delivery supports (macOS arm64 and x86_64 first), with its checksum from the
+  release's own published checksums. If a release publishes none, the pack records hashes reviewed at extraction;
+- the upstream tag, commit and engine version (`ENGINE_VERSION`);
+- Delivery's detector adapter;
+- the extracted skill with its critique rubric;
+- the map from detector rule IDs to skill sections, and the default ignores;
+- the licence material: upstream `LICENSE` and `NOTICE`, plus an attribution and modification notice for the
+  extracted text.
+
+The pack's identity is a hash over all of it. Every visual review records the pack it used, and a review in
+progress keeps that pack even if a new one is activated.
+
+**Verdict matrix.** Each judge ends in pass, fail, unsure, or no verified result.
+
+| Correctness | Design | Round ends in |
+| --- | --- | --- |
+| pass | pass | merge |
+| fail | anything verified | back to the build with the correctness findings, plus the design findings when the setting is `back`. With `ask`, a design fail is judged again in the next round |
+| pass | fail | `back`: back to the build with the design findings. `ask`: the owner decides |
+| pass or unsure | unsure | the owner decides (N6) |
+| unsure | pass or fail | the owner decides (N6) |
+| findings that contradict each other (one asks to change what the other requires) | | the owner decides |
+| no verified result from either judge | | that judge reruns under the existing budgets. Unread usage only reruns (TD-54, TD-75), and unconfirmed termination stops. A round is decided only on two verified verdicts |
+
+Repeated fails are bounded by the existing repair budget, which then asks the owner. A missing or
+non-comparable "before" is never read as an improvement: the design judge then judges the state against the
+rubric alone and says so.
+
+**Update procedure.** Monthly, and at once on a security advisory:
+1. **Notice.** Delivery's readiness check compares the pinned tag with upstream's latest release; offline means
+   "unknown", never a failure. The config page shows "design pack N releases behind".
+2. **Diff and choice.** In a direct chat, never through Delivery itself, the assistant lists new, changed and
+   removed rules and skill text between the tags. The owner approves what to adopt or skip.
+3. **Engine.** The assistant downloads the assets and verifies them against the published checksums.
+4. **Golden pages.** A fixture set of good and bad pages with expected findings. The new engine must produce
+   exactly the expected changes.
+5. **Calibration replay.** With a fixed model and inputs, the design judge reruns on stored decided rounds.
+   Below 20 rounds the result is advisory. Above, agreement with the owner must not drop by more than a set
+   margin, or activation waits for the owner.
+6. **Activation.** The new pack becomes active in one switch. Rollback restores the whole previous pack.
+
+**Build slices** (each test-first and Sol-reviewed, with live proof where marked):
+1. **Extraction study, read-only.** At a pinned tag, read the skill text, the 59 rules, the release assets and
+   checksums, and the engine's options: page width, hidden browser, scanning a page Delivery already rendered.
+2. **Pack and detector adapter.**
+   - The skill file, licence material and golden pages.
+   - The adapter: download at setup, checksum, store outside every project; run with `IMPECCABLE_BIN`,
+     `IMPECCABLE_BROWSER` (Playwright's Chromium), `IMPECCABLE_NO_UPDATE_CHECK=1` and `IMPECCABLE_NO_TELEMETRY=1`.
+   - Exit 0 and 2 both yield findings. Exit 1, a timeout or malformed output is an operational failure with
+     bounded retries, never a clean scan.
+   - Live: one scan of a sandbox preview.
+3. **Records and setting.**
+   - One record per judge per round: verdict, findings with IDs, model and effort, usage check, capture and pack
+     identity, the setting in force.
+   - Owner criteria with their origin.
+   - The calibration store in the shared repository's project folder, outside consumer repositories. It keeps the
+     last 50 decided rounds with images; older rounds keep verdicts only.
+   - `design_failures` as a nullable setting in the layers (TD-52), resolved with its source and shown on the
+     config page as inherit, back or ask. The default `ask` is `autonomous`.
+4. **Detector in the visual check.**
+   - URL scans of each static state at the capture widths, on "before" and "after".
+   - Source scans of the changed UI files on the target and on the Change, under the same pack and ignores.
+   - Findings are new, existing or unknown. States reached by clicks and typing are scanned in the page Delivery
+     rendered if the engine allows it; otherwise "not scanned" is recorded.
+   - New browser errors still fail the check on their own (R8).
+5. **Design judge.**
+   - A new session role with its own agent file, tools list and preloaded skill, carried through both runtimes.
+     A new model label alone would still run the reviewer's agent.
+   - Both judges get the screenshots, errors, detector findings and owner criteria. The design judge also gets
+     "before", in a blind order with neutral IDs whose mapping Delivery keeps.
+   - Images are budgeted per judge. If a judge's images exceed the limit, it judges in batches by state, never
+     dropping one.
+   - SDK judges run in parallel. Window judges run one after the other, because their window files share one
+     worktree. State writes are serialized under the Change lock.
+6. **Routing and decision page, switched on together.**
+   - The matrix above, plus the page: screenshot pairs per state and width, findings, errors, both verdicts with
+     checkboxes, Pass or Fail, and a comment.
+   - The server checks that a Fail has a finding or a comment, and refuses an answer whose capture or pack
+     changed since the page was shown.
+   - On Fail, the ticked findings and the comment become the fix task. The comment becomes an owner criterion
+     until the owner withdraws it.
+7. **Calibration view and the builder's scan.**
+   - Agreement per judge, beside the setting.
+   - A Delivery tool `scan_design` for the builder on UI tasks, bounded to its worktree and preview, so the SDK
+     guard need not widen.
+8. **Update tooling,** before the first pack update: the notice, diff report, golden-page run, replay and
+   activation switch.
+
+Proof: in a sandbox project, a change that is correct but looks worse. The design judge fails it, the owner
+decides on the page, the fix task carries the comment, and the next review checks it.
+
 ## 4. Recommendation, Confidence, and Limits
 
-- Extract for builds and judging. Adopt the detector unmodified and pinned, as a mechanical check.
-- Judge screenshots with two lenses, add the owner's "Another verdict" with a model choice, and record
-  agreement.
+- Extract for builds and judging. Adopt the detector unmodified and pinned, as a mechanical check that only
+  supplies evidence. Keep detector and rules in one pack that is updated together (§3.5).
+- Judge screenshots with two judges every time. The owner decides on one page with Pass or Fail, findings and a
+  comment. Design fails are routed by a setting, and agreement is recorded.
 - Limits:
-  - Impeccable was read from its README only. The skill text, the 59 rules and the engine's network
-    behaviour must be read before adoption, together with a pinned run of `detect` on a real preview.
-  - "Opus is better at UI" is the owner's expectation; J6 measures it.
+  - Impeccable was read from its README, privacy page and npm page only. The skill text, the 59 rules and
+    the engine's behaviour (widths, hidden browser) are read in slice 1, with a pinned run on a real preview in
+    slice 2.
+  - "Opus is better at UI" is the owner's expectation; calibration measures it.
