@@ -233,6 +233,43 @@ Consequences for the plan:
     cognitive load checklist, and the before/after comparison.
   - Both build on OwlBear's `h-frontend-design` (TD-58).
 
+### 3.7 Build progress, slices 2 to 8, 2026-10-14
+
+Built on the PR branch `next/m4-slice1` (PR #449), each slice test-first, Sol-reviewed with its findings fixed
+under tests, then pushed. The package suite went from 815 to 876 tests.
+
+| Slice | Commit | Result | Live proof |
+| --- | --- | --- | --- |
+| 2. Pack and adapter | `a808988c0` | Two extracted skills with licence and NOTICE; pins in `design_pack.json`; private install outside every project; source, URL and in-page scans | Install verified; the three scans of a sample page agree |
+| 3. Records and setting | `0d6585719` | Rounds, verdicts, owner decisions and criteria; `design_failures`; calibration store with 50 rounds of local screenshots | Config page saves and reloads the setting |
+| 4. Detector in the check | `0d5578fad` | In-page scans after each screenshot, CSP fallback, source scans on both sides, findings new, existing or unknown | Scans, CSP fallback and a hung scan ended in time |
+| 5. Design judge | `13522198a` | `designer` role in both runtimes, two phases in one session, blind A/B, image batches | A real SDK designer session through both phases |
+| 6. Routing and decision page | `f3caf83e5` | Verdict matrix; Pass or Fail page with findings and comment; stale or empty answers refused; owner criteria | Page renders and posts a Fail with a ticked finding |
+| 7. Agreement and builder scan | `687899845` | Agreement per judge and model on the settings page; `scan_design` for UI builders | Agreement table from two decided rounds |
+| 8. Update tooling | `043bbdab6` | Notice, field-level rule diff, golden pages, calibration replay, activation by manifest | Engine and bundle on the golden pages; parser on upstream's 59 rules |
+
+Choices made during the build, all `autonomous`:
+- **Delivery derives the design verdict** from the blind evidence mapped back to "before" and "after": a state
+  made worse, or a serious or owner-criterion problem that "before" did not have. The judge's own verdict is
+  kept beside it.
+- **`scan_design` scans sources only.** The engine's own browser runs outside Delivery's guard, so a page the
+  builder made could reach outside. Rendered pages are scanned in Delivery's capture page instead.
+- **A judge without a verified verdict** reruns both judges on a new capture, within the step's budget.
+- **Notice.** The readiness check, run by setup and at every host start, refreshes it at most daily with one
+  10-second request. Offline clears it to "unknown"; the settings page only reads it.
+- **Golden pages** are checked twice: by the engine on their source and by the pack's bundle in the rendered page.
+- **Calibration replay** reruns only rounds judged by the same model and effort, so only the pack differs. Each
+  round keeps the design judge's messages, detector reveals and image names for it. Not fixed: the judge's
+  worktree is empty and its memory is today's.
+- **Activation** is one reviewed commit of the manifest and skills. Reverting it rolls the whole pack back;
+  each pack installs into its own folder, so a rollback downloads nothing.
+
+Known gaps:
+- Findings that contradict each other are not detected.
+- The window runtime's two-phase turn has not run live.
+- `sdk_adapter.py` is at the 500-line module limit.
+- The plan's end-to-end proof, a correct change that looks worse in a sandbox project, is still to run.
+
 ## 4. Recommendation, Confidence, and Limits
 
 - Extract for builds and judging. Adopt the detector unmodified and pinned, as a mechanical check that only
