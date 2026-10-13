@@ -318,12 +318,15 @@ function where(state, widths) {
   return widths.length ? `${state} at ${widths.join(", ")} px` : state;
 }
 
-// One problem per entry: the same judge, state, rule, severity and origin, at every width it was seen.
+// One problem per entry: the same judge, state, rule, severity and origin at other widths; two at one width stay two.
 function problems(r) {
   const groups = new Map();
   for (const v of r.verdicts) {
     for (const f of v.findings) {
-      const key = JSON.stringify([v.lens, f.state, f.rule, f.severity, f.introduced]);
+      const base = JSON.stringify([v.lens, f.state, f.rule, f.severity, f.introduced]);
+      let n = 0;
+      while (groups.get(`${base}#${n}`)?.items.some((seen) => seen.width === f.width)) n += 1;
+      const key = `${base}#${n}`;
       if (!groups.has(key)) groups.set(key, { lens: v.lens, first: f, items: [] });
       groups.get(key).items.push(f);
     }
@@ -395,7 +398,8 @@ function decisionForm(q, r) {
   const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
   if (made.length) {
     box.append(heading(4, "Problems this Change introduced", "sm"), text("A Fail sends the ticked problems to the "
-      + "build. The serious ones are ticked for you; untick any you disagree with.", { size: "xs" }));
+      + "build. Those worth fixing (blocking, serious, annoying) and any missed criterion of yours are ticked for you; "
+      + "untick any you disagree with.", { size: "xs" }));
     for (const p of made) {
       const [node, ids] = problemRow(p, r.proposed || []);
       picks.push([p, ids]);

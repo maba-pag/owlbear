@@ -24,7 +24,14 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.store import Store
 
-APPLIED = ["agents.*.effort", "agents.*.model", "widths", "seed", "design_failures"]  # the settings Delivery uses today
+APPLIED = [
+    "agents.*.context",
+    "agents.*.effort",
+    "agents.*.model",
+    "widths",
+    "seed",
+    "design_failures",
+]  # the settings Delivery uses today
 
 
 class Save(BaseModel):

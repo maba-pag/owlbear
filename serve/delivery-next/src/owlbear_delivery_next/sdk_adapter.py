@@ -89,11 +89,8 @@ class Journal:
 def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
     """One short, redacted line for a tool call: ``ran <command>`` or ``<tool> <target>``."""
     args = arguments if isinstance(arguments, dict) else {}
-    if command := args.get("command"):
-        text = f"ran {command}"
-    else:
-        target = next((args[k] for k in ("path", "file_path", "pattern", "query", "url") if args.get(k)), "")
-        text = f"{tool} {target}"
+    target = next((args[k] for k in ("path", "file_path", "pattern", "query", "url") if args.get(k)), "")
+    text = f"ran {args['command']}" if args.get("command") else f"{tool} {target}"
     text = " ".join(redact(str(text)).split())
     return text if len(text) <= NOW_LIMIT else text[: NOW_LIMIT - 1] + "…"
 
@@ -115,6 +112,7 @@ class Session:
     item: ItemRef | None = None  # the conversation item a build task answers, if any
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
+    context: str = "default"  # the model's context tier: "long" pins its long-context tier, else the runtime chooses
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
@@ -312,6 +310,7 @@ class _Step:
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,
+            "context_tier": "long_context" if self.cfg.context == "long" else None,
             "on_event": self.on_event,
         }
 

@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from owlbear_delivery_next.models import Effort, Record
+from owlbear_delivery_next.models import Context, Effort, Record
 
 PROFILE_FORMAT = 2  # format 2 moved the role overrides into the project settings (config.json)
 type Runtime = Literal["managed", "vscode"]
@@ -35,10 +35,11 @@ class ProfileEntry(Record):
 
 
 class RoleModel(Record):
-    """The model and reasoning effort one session role runs with (TD-27)."""
+    """The model, reasoning effort and context tier one session role runs with (TD-27)."""
 
     model: str
     effort: Effort
+    context: Context = "default"
 
     @model_validator(mode="after")
     def _valid(self) -> RoleModel:

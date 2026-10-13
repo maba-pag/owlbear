@@ -44,6 +44,7 @@ class JudgeVerdict(_Strict):
     reason: str = ""  # why unsure, or why no verified result
     model: str = ""
     effort: str = ""
+    context: str = "default"  # the context tier the judge ran with
     usage_verified: bool = False
     unanchored: Verdict | None = None  # the design judge's verdict before it saw the detector (phase 1)
     false_positives: list[str] = Field(default_factory=list)  # detector findings the judge set aside, by rule

@@ -41,7 +41,7 @@ def test_each_field_comes_from_the_project_else_the_global_layer_else_the_defaul
 
 def test_an_empty_list_clears_false_disables_and_only_none_inherits():
     glob = GlobalLayer(
-        agents={"reviewer": Agent(categories=["browser"], context=400_000, visible=True)}, runtimes={"window": False}
+        agents={"reviewer": Agent(categories=["browser"], context="long", visible=True)}, runtimes={"window": False}
     )
     proj = Layer(agents={"reviewer": Agent(categories=[], context="default", visible=False)})
     r = resolve(glob, proj).agents["reviewer"]
@@ -58,7 +58,7 @@ def test_an_empty_list_clears_false_disables_and_only_none_inherits():
         {"agents": {"builder": {"model": " "}}},
         {"agents": {"boss": {"effort": "low"}}},
         {"agents": {"builder": {"effort": "extreme"}}},
-        {"agents": {"builder": {"context": 0}}},
+        {"agents": {"builder": {"context": 400_000}}},
         {"agents": {"builder": {"categories": ["teleport"]}}},
         {"agents": {"builder": {"runtime": "cloud"}}},
         {"runtimes": {"cloud": True}},

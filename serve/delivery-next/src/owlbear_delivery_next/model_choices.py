@@ -1,4 +1,7 @@
-"""The models this machine's Copilot runtime offers, with their efforts and context windows, for the settings page."""
+"""The models this machine's Copilot runtime offers, with efforts, context tiers and token rates, for the settings page.
+
+Rates are the runtime's AI credits per batch of tokens, a batch being 1M tokens for every model listed so far.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +12,13 @@ import time
 from typing import TYPE_CHECKING, Any, get_args
 
 from copilot import CopilotClient, RuntimeConnection
+from copilot.generated.rpc import ModelsListRequest
 
 from owlbear_delivery_next.models import Effort
 from owlbear_delivery_next.sdk_adapter import cli_path
 
 if TYPE_CHECKING:
-    from copilot.client import ModelInfo
+    from copilot.generated.rpc import Model, ModelBillingTokenPrices, ModelBillingTokenPricesLongContext
 
 FRESH = 3600.0  # seconds one successful read is reused
 WAIT = 30.0  # seconds one read may take, the runtime's start included
@@ -35,7 +39,9 @@ class Offered:
                 return {"models": self._kept[1], "error": ""}
             try:
                 models = [
-                    shown(m) for m in _read() if m.id != AUTO and (m.policy is None or m.policy.state == "enabled")
+                    shown(m)
+                    for m in _read()
+                    if m.id != AUTO and (m.policy is None or _value(m.policy.state) == "enabled")
                 ]
             except Exception as exc:  # noqa: BLE001 - without the list the page keeps a typed model
                 return {"models": [], "error": f"{type(exc).__name__}: {exc}"[:200]}
@@ -43,28 +49,44 @@ class Offered:
             return {"models": models, "error": ""}
 
 
-def shown(m: ModelInfo) -> dict[str, Any]:
-    """One model as the page offers it, with only the efforts a setting can hold."""
+def shown(m: Model) -> dict[str, Any]:
+    """One model as the page offers it: efforts a setting can hold, and each context tier's size and rates."""
+    prices = m.billing.token_prices if m.billing else None
+    long = prices.long_context if prices else None
     return {
         "id": m.id,
         "name": m.name,
         "efforts": [e for e in m.supported_reasoning_efforts or [] if e in EFFORTS],
         "default_effort": m.default_reasoning_effort or "",
-        "context": m.capabilities.limits.max_context_window_tokens,
+        "context": (prices.context_max if prices else None) or m.capabilities.limits.max_context_window_tokens,
+        "rates": _rates(prices),
+        "long": {"context": long.context_max, "rates": _rates(long)} if long and long.context_max else None,
     }
 
 
-def _read() -> list[ModelInfo]:
+def _rates(p: ModelBillingTokenPrices | ModelBillingTokenPricesLongContext | None) -> dict[str, float | None] | None:
+    """Input, output, cache read and cache write rates; a rate the runtime does not state stays ``None``."""
+    if p is None or p.input_price is None or p.output_price is None:
+        return None
+    cache = p.cache_read_price if p.cache_read_price is not None else p.cache_price
+    return {"input": p.input_price, "output": p.output_price, "cache": cache, "cache_write": p.cache_write_price}
+
+
+def _value(state: object) -> object:
+    return getattr(state, "value", state)
+
+
+def _read() -> list[Model]:
     return asyncio.run(_listed())
 
 
-async def _listed() -> list[ModelInfo]:
+async def _listed() -> list[Model]:
     """Start the runtime, list, and stop it, each step bounded: at most ``WAIT`` plus 10 seconds in all."""
     client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
     try:
         async with asyncio.timeout(WAIT):
             await client.start()
-            return await client.list_models()
+            return (await client.rpc.models.list(ModelsListRequest())).models
     finally:
         try:
             async with asyncio.timeout(5):

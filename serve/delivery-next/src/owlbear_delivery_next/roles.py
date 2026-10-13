@@ -33,9 +33,9 @@ SESSIONS: dict[str, Role] = {
 
 
 def chosen(settings: Settings, session: str) -> RoleModel:
-    """The model and effort a session kind or reviewer label runs with, from the resolved settings."""
+    """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings."""
     agent = settings.agents[SESSIONS[session]]
-    return RoleModel(model=agent.model, effort=agent.effort)
+    return RoleModel(model=agent.model, effort=agent.effort, context=agent.context)
 
 
 def parse(text: str) -> tuple[Role, RoleModel]:

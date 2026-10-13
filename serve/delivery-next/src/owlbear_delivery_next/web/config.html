@@ -52,12 +52,14 @@
 </section>
 <section class="panel" aria-labelledby="agents-title">
   <p-heading size="xl"><h2 id="agents-title">Agents</h2></p-heading>
-  <p-table caption="Agents: model and effort apply to the next session; the other columns are not applied yet">
+  <p-table caption="Agents: model, effort and context apply to the next session (context in SDK sessions only;
+    VS Code window sessions use VS Code's own); the other columns are not applied yet">
     <p-table-head><p-table-head-row>
       <p-table-head-cell>Agent</p-table-head-cell>
       <p-table-head-cell>Model</p-table-head-cell>
       <p-table-head-cell>Effort</p-table-head-cell>
-      <p-table-head-cell>Context (not applied yet)</p-table-head-cell>
+      <p-table-head-cell>Context</p-table-head-cell>
+      <p-table-head-cell>AI credits per 1M tokens</p-table-head-cell>
       <p-table-head-cell>Runtime (not applied yet)</p-table-head-cell>
       <p-table-head-cell>Needs visibility (not applied yet)</p-table-head-cell>
       <p-table-head-cell>Categories (not applied yet)</p-table-head-cell>
@@ -281,6 +283,97 @@ function mismatch(role) {
   return `${model.id} does not offer effort ${effort}${own ? "" : " (inherited)"}; choose one it offers`;
 }
 
+function ownTier(role) {
+  const key = `${role}.context`;
+  return key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+}
+
+function tierOf(role) {
+  return ownTier(role) || loaded.inherited[rendered].agents[role].context;
+}
+
+// Why the role's context tier cannot run with its model; empty when it can or nothing is known.
+function tierMismatch(role) {
+  const model = offered?.find((m) => m.id === modelOf(role));
+  if (!model || model.long || tierOf(role) !== "long") return "";
+  return `${model.id} has no long context${ownTier(role) ? "" : " (inherited)"}; choose its default`;
+}
+
+// The long tier costs more per token: higher input or output rates than the default tier.
+function dearer(model) {
+  const [base, long] = [model.rates, model.long?.rates];
+  return Boolean(base && long && (long.input > base.input || long.output > base.output));
+}
+
+function contextCell(role) {
+  const key = `${role}.context`, own = ownTier(role), model = offered?.find((m) => m.id === modelOf(role));
+  const parts = [];
+  if (model?.long) {
+    const up = dearer(model), more = up ? "higher rates per token" : "same rates per token";
+    const label = `Context for ${role}`;
+    const input = el("p-segmented-control", undefined, { label, "hide-label": "true", compact: "true", columns: "2" });
+    input.append(
+      el("p-segmented-control-item", tokens(model.context),
+        { value: "default", aria: `{ 'aria-label': '${tokens(model.context)}, default context' }` }),
+      el("p-segmented-control-item", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
+        { value: "long", aria: `{ 'aria-label': '${tokens(model.long.context)}, long context, ${more}' }` }),
+    );
+    input.value = tierOf(role);
+    input.dataset.key = key;
+    parts.push(input);
+  } else if (model) {
+    const node = el("p-text", `${tokens(model.context)} \u00b7 only tier`, { size: "sm" });
+    const wrong = tierMismatch(role);
+    const fix = { type: "button", size: "x-small", icon: "reset", "data-tier": role };
+    parts.push(node, ...(wrong ? [el("p-text", wrong, { size: "xs", color: "error" }),
+      el("p-button-pure", "Use the default tier", fix)] : []));
+  } else {
+    const input = el("p-select", undefined, { label: `Context for ${role}`, "hide-label": "true" });
+    const below = loaded.inherited[rendered].agents[role].context;
+    input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }),
+      el("p-select-option", "default", { value: "default" }), el("p-select-option", "long", { value: "long" }));
+    input.value = own || INHERIT;
+    input.dataset.key = key;
+    parts.push(input);
+  }
+  if (model) {
+    const reset = { type: "button", size: "x-small", icon: "reset", "data-inherit": role };
+    const node = el("p-button-pure", "Use inherited", reset);
+    node.hidden = !own;
+    parts.push(node);
+  }
+  const node = cell(...parts, source(`agents.${key}`, loaded.settings.agents[role].context));
+  node.dataset.cell = key;
+  return node;
+}
+
+function amount(n) {
+  return n.toLocaleString("en", { maximumFractionDigits: 2 });
+}
+
+function ratesCell(role) {
+  const model = offered?.find((m) => m.id === modelOf(role)), long = tierOf(role) === "long" && model?.long;
+  const rates = long ? model.long.rates : model?.rates;
+  const node = el("p-table-cell", undefined, { multiline: "true", "data-cell": `${role}.rates` });
+  if (!rates) {
+    node.append(el("p-text", "\u2014"), el("p-text", "not known", { size: "xs", color: "contrast-medium" }));
+    return node;
+  }
+  const write = rates.cache_write ? ` \u00b7 cache write ${amount(rates.cache_write)}` : "";
+  const flow = `in ${amount(rates.input)} \u00b7 out ${amount(rates.output)}`;
+  const line = `${flow} \u00b7 cache ${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
+  node.append(el("p-text", line),
+    el("p-text", `${model.id}, ${long ? "long" : "default"} context`, { size: "xs", color: "contrast-medium" }));
+  return node;
+}
+
+function refreshRow(role, fields) {
+  const make = {
+    effort: () => editable(role, "effort"), context: () => contextCell(role), rates: () => ratesCell(role),
+  };
+  for (const field of fields) document.querySelector(`[data-cell="${role}.${field}"]`)?.replaceWith(make[field]());
+}
+
 function flag(input, wrong) {
   input.setAttribute("state", wrong ? "error" : "none");
   input.setAttribute("message", wrong);
@@ -308,8 +401,9 @@ function editable(role, field) {
     input = el("p-select", undefined, { label, "hide-label": "true", filter: "true" });
     input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
     for (const m of offered) {
-      const context = m.context ? ` · ${tokens(m.context)} context` : "";
-      input.append(el("p-select-option", `${m.name} (${m.id})${context}`, { value: m.id }));
+      const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
+      const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
+      input.append(el("p-select-option", `${m.name} (${m.id})${sizes}`, { value: m.id }));
     }
     if (value && !offered.some((m) => m.id === value)) {
       input.append(el("p-select-option", `${value} (not offered here)`, { value }));
@@ -322,7 +416,9 @@ function editable(role, field) {
   input.dataset.key = key;
   const efforts = field === "effort" && model && !model.efforts.length
     ? [el("p-text", `${model.id} takes no effort setting`, { size: "xs", color: "contrast-medium" })] : [];
-  return cell(input, ...efforts, source(`agents.${key}`, loaded.settings.agents[role][field]));
+  const node = cell(input, ...efforts, source(`agents.${key}`, loaded.settings.agents[role][field]));
+  node.dataset.cell = key;
+  return node;
 }
 
 // A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
@@ -354,11 +450,26 @@ function edit(event) {
   if (value === saved(rendered, key)) delete drafts[rendered][key];
   else drafts[rendered][key] = value;
   const [role, field] = key.split(".");
-  if (offered && field === "model") {  // the effort choices follow the model
-    document.querySelector(`[data-key="${role}.effort"]`).closest("p-table-cell").replaceWith(editable(role, "effort"));
+  if (offered && field === "model") {  // the effort, context and rates follow the model
+    refreshRow(role, ["effort", "context", "rates"]);
   } else if (offered && field === "effort") {
     flag(input, mismatch(role));
+  } else if (field === "context") {
+    refreshRow(role, ["rates"]);
+    const reset = document.querySelector(`[data-inherit="${role}"]`);
+    if (reset) reset.hidden = !ownTier(role);
   }
+  pending();
+}
+
+function inherit(event) {
+  const found = event.target.closest("[data-inherit], [data-tier]");
+  if (!found) return;
+  const role = found.dataset.inherit ?? found.dataset.tier, key = `${role}.context`;
+  const value = found.dataset.tier ? "default" : "";  // the default tier overrides an inherited long one
+  if (saved(rendered, key) === value) delete drafts[rendered][key];
+  else drafts[rendered][key] = value;
+  refreshRow(role, ["context", "rates"]);
   pending();
 }
 
@@ -380,8 +491,8 @@ function render() {
     ? "" : "No shared settings location is set up (run owlbear-next common PATH), so only this project's settings "
       + "can be saved, in this clone.";
   const agents = Object.entries(loaded.settings.agents).map(([role, eff]) => row(
-    cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"),
-    ...[["context", "Context"], ["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]]
+    cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"), contextCell(role), ratesCell(role),
+    ...[["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]]
       .map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`)),
   ));
   document.getElementById("agents").replaceChildren(...agents);
@@ -450,7 +561,7 @@ async function reload() {
 
 async function save() {
   if (saving || !loaded) return;
-  const wrong = Object.keys(loaded.settings.agents).map(mismatch).filter(Boolean);
+  const wrong = Object.keys(loaded.settings.agents).flatMap((r) => [mismatch(r), tierMismatch(r)]).filter(Boolean);
   if (wrong.length) {
     notify(`Not saved: ${wrong.join("; ")}.`);
     return;
@@ -484,6 +595,7 @@ async function start() {
   for (const type of ["input", "change"]) {
     for (const id of ["agents", "general"]) document.getElementById(id).addEventListener(type, edit);
   }
+  document.getElementById("agents").addEventListener("click", inherit);
   document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });
   document.getElementById("save").addEventListener("click", save);
   if (await reload()) render();

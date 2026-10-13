@@ -272,7 +272,7 @@ def merged(payloads: Sequence[tools.Args | None]) -> tools.VisualReviewResult | 
 
 def correctness(runs: Sequence[Run], role: RoleModel, now: datetime) -> JudgeVerdict:
     """The correctness judge's record over its batches, or why there is no verified verdict."""
-    who = {"model": role.model, "effort": role.effort, "at": now}
+    who = {"model": role.model, "effort": role.effort, "context": role.context, "at": now}
     missing = [r for r in runs if not verified(r)]
     if not runs or missing or (p := merged([r.payload for r in runs])) is None:
         return JudgeVerdict(lens="correctness", reason=_why(missing[0] if missing else None)[:300], **who)
@@ -300,7 +300,7 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
     The verdict is Delivery's, from the blind evidence mapped back: the Change fails a state it made worse, or one
     where "after" has a serious problem or misses an owner's criterion that "before" did not have.
     """
-    who = {"model": role.model, "effort": role.effort, "at": now}
+    who = {"model": role.model, "effort": role.effort, "context": role.context, "at": now}
     missing = [r for r in runs if not (verified(r) and isinstance(r.first, design_tools.DesignLook))]
     if not runs or missing:
         return JudgeVerdict(lens="design", reason=_why(missing[0] if missing else None)[:300], **who)

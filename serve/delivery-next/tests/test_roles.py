@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -92,14 +93,18 @@ def test_luna_low_and_haiku_medium_load_and_the_defaults_are_valid():
     assert all(RoleModel.model_validate(rm.model_dump()) == rm for rm in roles.DEFAULTS.values())
 
 
-def test_sdk_options_carry_the_model_and_reasoning_effort():
+def test_sdk_options_carry_the_model_reasoning_effort_and_context_tier():
     rm = roles.chosen(resolve(None, Layer()), StepKind.BUILD)
     cfg = sdk_adapter.Session(
         StepKind.BUILD, Path(), "s1", "m", resume=False, policy=Policy(Path(), ()), observe=Worktree, checks=(),
-        model=rm.model, effort=rm.effort,
+        model=rm.model, effort=rm.effort, context=rm.context,
     )  # fmt: skip
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
-    assert (opts["model"], opts["reasoning_effort"]) == ("claude-opus-5.5", "medium")
+    assert (opts["model"], opts["reasoning_effort"], opts["context_tier"]) == ("claude-opus-5.5", "medium", None)
+    long = roles.chosen(resolve(None, Layer(agents={"builder": Agent(context="long")})), StepKind.BUILD)
+    cfg = dataclasses.replace(cfg, context=long.context)
+    opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
+    assert opts["context_tier"] == "long_context"  # the default tier is left to the runtime, as before
 
 
 @pytest.mark.parametrize("kind", sorted(sdk_adapter.ROLES))

@@ -1,8 +1,8 @@
 """Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, resolved field by field.
 
 A layer leaves a field at ``None`` to inherit it: project, else global, else the built-in default. Any other
-value overrides, including ``[]`` and ``False``. Only model and effort are applied today (TD-27); the other fields
-are stored for the config page and stay inactive until routing, visibility and capture use them (TD-50).
+value overrides, including ``[]`` and ``False``. Only model, effort and context are applied today (TD-27); the other
+fields are stored for the config page and stay inactive until routing, visibility and capture use them (TD-50).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator
 
-from owlbear_delivery_next.models import Effort, Record, Role
+from owlbear_delivery_next.models import Context, Effort, Record, Role
 from owlbear_delivery_next.profile_record import named
 from owlbear_delivery_next.roles import DEFAULTS
 from owlbear_delivery_next.visual_records import DesignFailures  # noqa: TC001 - pydantic resolves it at runtime
@@ -20,7 +20,6 @@ from owlbear_delivery_next.visual_records import DesignFailures  # noqa: TC001 -
 CONFIG_FORMAT = 1
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
-type Context = int | Literal["default"]  # tokens, or the runtime's own default
 type Source = Literal["default", "global", "project"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
@@ -43,13 +42,6 @@ class Agent(Record):
     @classmethod
     def _named(cls, v: str | None) -> str | None:
         return None if v is None else named(v)
-
-    @field_validator("context")
-    @classmethod
-    def _positive(cls, v: Context | None) -> Context | None:
-        if isinstance(v, int) and v <= 0:
-            raise ValueError("context must be a positive token count or 'default'")  # noqa: EM101, TRY003
-        return v
 
 
 class Layer(Record):

@@ -233,8 +233,14 @@ def test_the_manifest_activates_a_pack_in_one_switch_and_a_rollback_needs_no_dow
     assert sorted(p.name for p in design_pack.folder().parent.iterdir()) == ["impeccable-1", "impeccable-2"]
 
 
-def kept_round(
-    number: int, owner: str, recorded: str, *, inputs: bool = True, model: str = "claude-opus-5.5"
+def kept_round(  # noqa: PLR0913 - one round, varied by each case
+    number: int,
+    owner: str,
+    recorded: str,
+    *,
+    inputs: bool = True,
+    model: str = "claude-opus-5.5",
+    tier: str = "default",
 ) -> VisualRound:
     names = ["home-1280-A.png", "home-1280-B.png"]
     return VisualRound(
@@ -250,7 +256,9 @@ def kept_round(
         else [],
         verdicts=[
             JudgeVerdict(lens="correctness", verdict="pass", usage_verified=True),
-            JudgeVerdict(lens="design", verdict=recorded, usage_verified=True, model=model, effort="high"),
+            JudgeVerdict(
+                lens="design", verdict=recorded, usage_verified=True, model=model, effort="high", context=tier
+            ),
         ],
         decision=OwnerDecision(outcome=owner, at=NOW + timedelta(minutes=number)),
         outcome="back" if owner == "fail" else "merge",
@@ -288,6 +296,7 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     (secret := tmp_path / "private.png").write_bytes(b"private")
     linked.symlink_to(secret)  # a screenshot leading out of the calibration folder is never attached
     other = kept_round(6, "pass", "pass", model="gpt-6.1-sol")  # judged by another model: not the pack's doing
+    calibration.keep(store.shared, store.name, "c6", kept_round(7, "pass", "pass", tier="long"), shots)  # or tier
     calibration.keep(store.shared, store.name, "c5", other, shots)
     seen = []
 
@@ -304,7 +313,7 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
 
     result = pack_replay.replay(store, run)
     assert (result.rounds, result.agreed_before, result.agreed_after) == (1, 0, 1)  # the after's new problem fails
-    assert result.left_out == 5
+    assert result.left_out == 6
     [cfg] = seen
     assert (cfg.role, cfg.message, cfg.reveal, cfg.model) == (
         "designer",

@@ -105,7 +105,7 @@ def judges(
         cfgs.append(
             dataclasses.replace(
                 cfg, kind=StepKind.REVIEW, session_id=session_id, resume=False, checks=(), model=model,
-                effort=effort, fresh=cfg.message, previous={},
+                effort=effort, context=role.context, fresh=cfg.message, previous={},
             )
         )  # fmt: skip
     if len(cfgs) == 1 or (store.read_profile() or Profile()).runtime == "vscode":

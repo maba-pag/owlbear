@@ -47,7 +47,9 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
     assert got["settings"]["sources"]["agents.builder.model"] == "default"
     assert (got["settings"]["seed"], got["settings"]["sources"]["seed"]) == ("", "default")
-    assert got["applied"] == ["agents.*.effort", "agents.*.model", "widths", "seed", "design_failures"]
+    assert got["applied"] == [
+        "agents.*.context", "agents.*.effort", "agents.*.model", "widths", "seed", "design_failures"
+    ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 
 
@@ -191,36 +193,55 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     assert r.json()["detail"] == "the settings could not be saved: No space left on device"
 
 
-def offered_model(model_id: str, efforts: list[str] | None, policy: str | None = "enabled") -> SimpleNamespace:
-    limits = SimpleNamespace(max_context_window_tokens=200_000)
+def prices(context: int | None, inp: float, out: float, long: SimpleNamespace | None = None) -> SimpleNamespace:
     return SimpleNamespace(
-        id=model_id, name=model_id.title(), supported_reasoning_efforts=efforts,
-        default_reasoning_effort=efforts[1] if efforts else None,
-        capabilities=SimpleNamespace(limits=limits), policy=policy and SimpleNamespace(state=policy),
+        context_max=context, input_price=inp, output_price=out, cache_read_price=inp / 20, cache_price=None,
+        cache_write_price=0.0, long_context=long,
     )  # fmt: skip
 
 
-def test_the_settings_offer_the_enabled_models_with_their_efforts_and_context_read_once(store, monkeypatch):
+def offered_model(
+    model_id: str, efforts: list[str] | None, policy: str | None = "enabled", tiers: SimpleNamespace | None = None
+) -> SimpleNamespace:
+    limits = SimpleNamespace(max_context_window_tokens=200_000)
+    return SimpleNamespace(
+        id=model_id, name=model_id.title(), supported_reasoning_efforts=efforts,
+        default_reasoning_effort=efforts[1] if efforts else None, billing=SimpleNamespace(token_prices=tiers),
+        capabilities=SimpleNamespace(limits=limits),
+        policy=policy and SimpleNamespace(state=SimpleNamespace(value=policy)),
+    )  # fmt: skip
+
+
+def test_the_settings_offer_the_enabled_models_with_efforts_context_tiers_and_rates_read_once(store, monkeypatch):
     reads = []
+    sol = prices(272_000, 200.0, 1000.0, prices(922_000, 400.0, 1500.0))
 
     def read() -> list[SimpleNamespace]:
         reads.append(1)
-        return [offered_model("claude-opus-5.5", ["none", "low", "medium", "high"]), offered_model("tiny", None, None),
-                offered_model("blocked", ["low", "high"], "disabled"), offered_model("auto", None)]  # fmt: skip
+        return [offered_model("gpt-6.1-sol", ["none", "low", "medium", "high"], tiers=sol),
+                offered_model("tiny", None, None), offered_model("blocked", ["low", "high"], "disabled"),
+                offered_model("auto", None)]  # fmt: skip
 
     monkeypatch.setattr(model_choices, "_read", read)
     c = client(store, headers=AUTH)
     got = c.get("/api/next/config/models").json()
     assert got == {
         "models": [
-            {"id": "claude-opus-5.5", "name": "Claude-Opus-5.5", "efforts": ["low", "medium", "high"],
-             "default_effort": "low", "context": 200_000},
-            {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000},
+            {"id": "gpt-6.1-sol", "name": "Gpt-6.1-Sol", "efforts": ["low", "medium", "high"],
+             "default_effort": "low", "context": 272_000,
+             "rates": {"input": 200.0, "output": 1000.0, "cache": 10.0, "cache_write": 0.0},
+             "long": {"context": 922_000,
+                      "rates": {"input": 400.0, "output": 1500.0, "cache": 20.0, "cache_write": 0.0}}},
+            {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
+             "long": None},
         ],
         "error": "",
     }  # fmt: skip
     assert c.get("/api/next/config/models").json() == got
     assert len(reads) == 1  # the runtime starts once an hour at most
+    unstated = SimpleNamespace(input_price=1.0, output_price=2.0, cache_read_price=None, cache_price=None,
+                               cache_write_price=None)  # fmt: skip
+    assert model_choices._rates(unstated)["cache"] is None  # noqa: SLF001 - shown as not known, never as free
 
 
 def test_unreadable_models_leave_typing_and_are_read_again_next_time(store):

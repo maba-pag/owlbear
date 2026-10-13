@@ -62,7 +62,7 @@ def replay(store: Store, run: Callable[[sdk_adapter.Session], Run] | None = None
         base = sdk_adapter.Session(
             kind=StepKind.REVIEW, worktree=Path(tmp), session_id="", message="", resume=False,
             policy=Policy(Path(tmp), (), write=False), observe=lambda: tools.Worktree("", ""), checks=(),
-            model=role.model, effort=role.effort, memory=memory,
+            model=role.model, effort=role.effort, context=role.context, memory=memory,
         )  # fmt: skip
         for kept, kept_files in calibration.cases(store.shared, store.name):
             images = _images(kept, {f.name: f for f in kept_files if _inside(f, root)})
@@ -90,10 +90,12 @@ def _ran(run: Callable[[sdk_adapter.Session], Run], cfgs: list[sdk_adapter.Sessi
 
 
 def _same(kept: VisualRound, role: RoleModel) -> bool:
-    """The round was judged with inputs kept and the model and effort the replay runs, so only the pack differs."""
+    """The round was judged with inputs kept and the replay's model, effort and tier, so only the pack differs."""
     design = next((v for v in kept.verdicts if v.lens == "design"), None)
     return (
-        bool(kept.design_inputs) and design is not None and (design.model, design.effort) == (role.model, role.effort)
+        bool(kept.design_inputs)
+        and design is not None
+        and (design.model, design.effort, design.context) == (role.model, role.effort, role.context)
     )
 
 
