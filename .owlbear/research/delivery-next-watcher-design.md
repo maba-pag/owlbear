@@ -57,7 +57,7 @@ How the feed works:
   watcher.
 - **Window:** the runner already holds the agent-host connection. It reads `toolInput` from every
   `chat/toolCallReady`, not only unconfirmed ones. On a `subagent` content part it subscribes to the
-  named chat, recursively, and unsubscribes when that chat's turn completes.
+  named chat, recursively. It keeps each subscription until the step's attempt ends (§3.5).
 - **Catch-up after a restart:** the session record is read from a stored byte offset. Each read
   seeks to it and reads only lines appended since, so after ten lines the next read starts at line
   eleven. Incomplete last lines wait for the next read. A truncated or replaced record is detected.
@@ -170,10 +170,30 @@ stage are shown.
 
 Confidence: medium. The rules need a check against real records of each role.
 
-### 3.5 Placement
+### 3.5 Placement, concurrency and lifecycle
 
-Inside the runner (P-a): one watcher thread per running step, tailing that step's bound record.
-Recovery after a runner restart is in §3.3.
+- **Where.** One watcher per running step, inside that step's runner (P-a). The host starts a runner
+  per Change, so Changes in parallel have watchers in parallel, each with its own state and nothing
+  shared.
+- **Several chats at once.** A step's watcher follows every chat the step owns at the same time:
+  - the main chat;
+  - each subagent's chat, including parallel and nested subagents. In a window these are
+    subscriptions on one connection, and each event names its chat. In the SDK all of them arrive in
+    one stream, each marked with its agent.
+
+  Rules judge each call as it arrives, whichever chat it comes from. After N2, model judgements of
+  unknown calls run concurrently, up to a limit.
+- **A finished turn is not the end.** A turn completing ends nothing. Steering and reminders start
+  new turns in the same chat, the host resumes a finished subagent when the agent writes to it again
+  (`write_agent`; the host's `_resumeSubagentSession`), and background subagents outlive the turn
+  that started them. So the watcher keeps every subscription while the attempt lasts.
+- **Start.** The runner starts the watcher after it has stored the attempt's identity (§3.3) and
+  before the first message, so the first call is seen.
+- **End.** The watcher ends with the attempt: when Delivery accepts its result, the deadline passes,
+  it is interrupted, or it ends waiting for the owner (`Exit.ASK`). Every chat of the attempt must be
+  idle and its processes confirmed gone. It then unsubscribes and writes the final stage.
+- **Owner's answer.** Answering starts a new attempt, and with it a new watcher.
+- **Runner restart.** Recovery after a runner restart is in §3.3.
 
 ### 3.6 Build slices
 

@@ -292,6 +292,8 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 | TD-71 | TD-56 scope: Delivery does not keep what challengers and subagents judge, because those are challenges, not reviews. Their sessions inside a step stay rerun-only | `decided`: free text "no we dont keep what challenger and subagent judge, as these are not reviews, those are challenges" (2026-10-14). Open: the visual review runs on the reviewer role (`roles.py`), so whether it counts as a review falls to the glossary | 2026-10-14 |
 | TD-72 | Agent memory moves to the shared repository (TD-57): one memory folder per project, in the project's folder there. A folder for lessons that span projects may follow. The working repository holds no memory files | `decided`: "yes, move memory to the common repo" (2026-10-14), answering the assistant's proposal | 2026-10-14 |
 | TD-73 | The brief review is a challenge, not a review, and is named "brief challenge" | `decided`: "for me it feels like a challenge" (2026-10-14); the assistant agreed: it runs on the challenger role while the brief is still being shaped, and its findings go back to the owner | 2026-10-14 |
+| TD-74 | Delivery has two reviews: one after each task's build and one at the end of a Change. Other judgements are most probably challenges; the screenshot judgement stays open | `decided`: "agree theres a review for each task build and at the end of a change. the rest are most probably challenges only" (2026-10-14) | 2026-10-14 |
+| TD-75 | The screenshot judgement gets no "accept" for a result whose model cannot be verified; it is run again | `decided`: "i dont think we need an accept button there" (2026-10-14). How screenshots are judged is open ([design skill research](delivery-next-design-skill.md)) | 2026-10-14 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
@@ -304,7 +306,8 @@ Amends charter §3.10's "desktop and phone sizes" | `decided`: chose "As the fir
 **User direction, not yet decisions** (2026-10-14):
 - Memory may move into the shared repository (TD-57), so it neither dirties the working repository
   nor needs files in a consumer repository: one memory folder per project, and perhaps a common
-  folder for lessons that span projects. Decided as TD-72.
+  folder for lessons that span projects. Decided as TD-72. The 101 entries moved on 2026-10-14
+  (owlbear-common `fec1f8e`, dev `543a12fc0`).
 - The project needs a glossary that defines word pairs which feel similar but are not, starting
   with review and challenge. The owner's own description of that pair was deliberately
   exaggerated and is not to be used as wording. Draft:
