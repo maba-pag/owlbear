@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next import loop, profile
+from owlbear_delivery_next import common, loop, profile
 from owlbear_delivery_next.config import CONFIG_FORMAT, Agent, GlobalLayer, Layer, Settings, resolve
 from owlbear_delivery_next.inbox import InboxItem
 from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Role, Stop
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
+    from owlbear_delivery_next.common import Common
     from owlbear_delivery_next.loop import PrState
     from owlbear_delivery_next.models import Step
 
@@ -86,6 +87,13 @@ class FormatTooNewError(StoreError):
 
     action = "Upgrade OwlBear"
     resume = "State loads on the newer OwlBear"
+
+
+class SharedError(StoreError):
+    """The shared settings repository could not be locked or found for a save (TD-57)."""
+
+    action = "Check the shared settings repository, then try again"
+    resume = "A settings save completes"
 
 
 class LockHeldError(RuntimeError):
@@ -188,13 +196,20 @@ def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T])
 class Store:
     """Change records, locks, inboxes and activity logs of one clone."""
 
-    def __init__(self, root: Path) -> None:
-        self.root = root
+    def __init__(self, root: Path, shared: Common | None = None, name: str = "") -> None:
+        self.root, self.shared, self.name = root, shared, name
+        self.config_path = shared.project_path(name) if shared else root / CONFIG
+        self.global_path = shared.global_path if shared else None
 
     @classmethod
     def open(cls, cwd: Path) -> Store:
         """Open or create the store for the clone containing *cwd* and gate its format."""
-        store = cls(git_common_dir(cwd) / STORE_DIR)
+        try:
+            shared = common.locate()
+            name = common.project_name(cwd) if shared else ""
+        except common.CommonError as exc:
+            raise StoreError(str(exc)) from exc
+        store = cls(git_common_dir(cwd) / STORE_DIR, shared, name)
         store.root.mkdir(mode=0o700, exist_ok=True)
         marker = store.root / "format"
         try:
@@ -207,6 +222,10 @@ class Store:
             raise FormatTooNewError(msg)
         if found < FORMAT:
             atomic_write(marker, f"{FORMAT}\n")
+        try:
+            store.adopt(common.identity(cwd) if shared else "")
+        except common.CommonError as exc:
+            raise StoreError(str(exc)) from exc
         store.move_roles()
         return store
 
@@ -217,7 +236,7 @@ class Store:
         move, so an override cleared later never returns while the old profile is still on disk. An unreadable or
         invalid profile or settings file is left to ``read_profile`` and ``read_config`` to report.
         """
-        path, config, marker = self.root / "profile.json", self.root / CONFIG, self.root / ROLES_MOVED
+        path, marker = self.root / "profile.json", self.root / ROLES_MOVED
         if marker.exists() or not path.exists():
             return
         dir_fd = os.open(self.root, _DIR_FLAGS)
@@ -235,23 +254,60 @@ class Store:
                 return  # read_profile reports the damaged profile
             if found:
                 try:
-                    update_layer(config, Layer, lambda cur: _with_roles(cur, found))
+                    self.update_config(lambda cur: _with_roles(cur, found), "role overrides from the old profile")
+                except SharedError:
+                    raise  # the old roles move later; never mark a move that did not happen
                 except StoreError:
                     return  # refused before writing; read_config reports the damaged settings
             atomic_write(marker, "the format-1 profile's role overrides are merged into config.json\n")
         finally:
             os.close(fd)
 
+    def adopt(self, identity: str) -> None:
+        """Claim the project's shared folder, then move the clone's own settings there once; the old file stays.
+
+        A publication that fails stays visible on the settings page (``Common.pending``) until a later save sends it.
+        """
+        if not self.shared:
+            return
+        local, claim = self.root / CONFIG, self.shared.root / self.name / common.CLAIM
+        moving = local.exists() and not self.config_path.exists()
+        if not moving and claim.exists() and claim.read_text().strip() == identity:
+            return  # nothing to do, so no wait for a save that holds the lock
+        with self.shared.locked():
+            if self.shared.claim(self.name, identity):
+                self.shared.publish(claim, f"settings: the folder {self.name} is {identity}")
+            if not local.exists() or self.config_path.exists():
+                return
+            read_layer(local, Layer)  # a damaged clone file is reported, never copied
+            atomic_write(self.config_path, local.read_text())
+            self.shared.publish(self.config_path, f"settings: {self.name} moved from its clone")
+            local.replace(local.with_name(f"{CONFIG}.moved"))  # kept as the recovery copy
+
+    def save[T: Layer](self, path: Path, model: type[T], change: Callable[[T], T], what: str) -> str:
+        """Change one settings layer and publish it; what the owner should know about the publication, else nothing."""
+        if not self.shared:
+            update_layer(path, model, change)
+            return ""
+        try:
+            until = time.monotonic() + common.SAVE_SECONDS  # the lock wait and every git command share it
+            with self.shared.locked():
+                update_layer(path, model, change)
+                return self.shared.publish(path, f"settings: {what}", until)
+        except common.CommonError as exc:
+            raise SharedError(str(exc)) from exc
+
     def read_config(self) -> Layer:
         """The project's settings layer."""
-        return read_layer(self.root / CONFIG, Layer)
+        return read_layer(self.config_path, Layer)
 
-    def update_config(self, change: Callable[[Layer], Layer]) -> Layer:
-        """Change the project's settings layer under its lock."""
-        return update_layer(self.root / CONFIG, Layer, change)
+    def update_config(self, change: Callable[[Layer], Layer], what: str = "project layer") -> str:
+        """Change and publish the project's settings layer; the publication notice, else nothing."""
+        return self.save(self.config_path, Layer, change, f"{self.name or 'the project'}: {what}")
 
-    def settings(self, glob: GlobalLayer | None = None) -> Settings:
-        """The resolved settings; the caller passes the global layer, whose location is the owner's decision."""
+    def settings(self) -> Settings:
+        """The resolved settings: the project layer over the global one over the defaults."""
+        glob = read_layer(self.global_path, GlobalLayer) if self.global_path else None
         return resolve(glob, self.read_config())
 
     def _dir(self, slug: str) -> Path:

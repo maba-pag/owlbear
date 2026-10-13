@@ -156,12 +156,8 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     host: Host,
     *,
     launch: Callable[[], dict[str, Any]] | None = None,
-    global_path: Path | None = None,
 ) -> FastAPI:
-    """Return the host's app: the Changes and Settings pages without data, and a token-guarded API under ``/api/next``.
-
-    ``global_path`` is where the global settings layer lives; None until the owner decides that location.
-    """
+    """Return the host's app: the Changes and Settings pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
     web = files("owlbear_delivery_next").joinpath("web")
     page, settings_page = (web.joinpath(n).read_text(encoding="utf-8") for n in ("changes.html", "config.html"))
@@ -361,6 +357,6 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         read(slug)
         return put(slug, PullItem(at=datetime.now(UTC)))
 
-    router.include_router(config_routes.router(store, global_path))
+    router.include_router(config_routes.router(store))
     app.include_router(router)
     return app

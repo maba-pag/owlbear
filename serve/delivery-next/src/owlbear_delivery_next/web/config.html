@@ -150,7 +150,9 @@ function problem(response, data, body) {
 
 async function call(path, method = "GET", body = undefined) {
   if (!token) throw new Error("Open the URL the host printed, including #token=…");
-  const init = { method, headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
+  // a save commits and pushes the shared settings repository (TD-64), which can take a network round trip
+  const wait = method === "GET" ? 5000 : 60000;
+  const init = { method, headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(wait) };
   if (body) {
     init.body = JSON.stringify(body);
     init.headers["Content-Type"] = "application/json";
@@ -283,7 +285,8 @@ function render() {
   if (!loaded.global_location && scope.value === "global") scope.value = "project";
   rendered = scope.value;
   document.getElementById("scope-note").textContent = loaded.global_location
-    ? "" : "No global settings location is configured yet, so only this project's settings can be saved.";
+    ? "" : "No shared settings location is set up (run owlbear-next common PATH), so only this project's settings "
+      + "can be saved, in this clone.";
   const agents = Object.entries(loaded.settings.agents).map(([role, eff]) => row(
     cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"),
     ...[["context", "Context"], ["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]]
@@ -331,6 +334,7 @@ function edited(layer) {
 async function reload() {
   try {
     loaded = await call("/config");
+    notify(loaded.notice || "");
     return true;
   } catch (e) {
     notify(e.message);
@@ -346,7 +350,7 @@ async function save() {
   try {
     loaded = await call(`/config/${layer}`, "PUT", { rev: loaded[`${layer}_rev`], layer: edited(layer) });
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
-    notify("");
+    notify(loaded.notice || "");
     say(`Saved ${layer === "global" ? "the global" : "this project's"} settings. They apply to the next session.`);
   } catch (e) {
     say("");

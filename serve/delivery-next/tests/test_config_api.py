@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, config_routes
+from owlbear_delivery_next import api
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import Store
 
@@ -24,7 +24,8 @@ def store(tmp_path: Path) -> Store:
 
 
 def client(store: Store, global_path: Path | None = None, **kw: object) -> TestClient:
-    return TestClient(api.create_app(store, "t", Host(), global_path=global_path), base_url="http://127.0.0.1", **kw)
+    store.global_path = global_path
+    return TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", **kw)
 
 
 def test_the_settings_need_the_token_and_a_local_host(store):
@@ -173,7 +174,7 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     def full(*_a: object, **_k: object) -> None:
         raise OSError(28, "No space left on device")
 
-    monkeypatch.setattr(config_routes, "update_layer", full)
+    monkeypatch.setattr("owlbear_delivery_next.store.update_layer", full)
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
     r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 1}})

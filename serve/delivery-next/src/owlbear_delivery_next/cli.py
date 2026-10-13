@@ -7,7 +7,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from owlbear_delivery_next import host, profile, roles, setup
+from owlbear_delivery_next import common, host, profile, roles, setup
 from owlbear_delivery_next.config import Agent, Layer
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
@@ -28,6 +28,17 @@ from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.store import Store, StoreError
 
 START = "run `owlbear-next host`"
+
+
+def show_common(path: Path | None) -> str:
+    """Record the shared settings repository when given, then say which one this machine uses."""
+    try:
+        shared = common.point(path) if path else common.locate()
+    except common.CommonError as exc:
+        return f"Not set: {exc}"
+    if shared is None:
+        return "No shared settings repository; settings stay in each clone. Set one: `owlbear-next common PATH`"
+    return f"Shared settings repository: {shared.root} (pointer {common.pointer()}). Restart a running host to use it."
 
 
 def describe(change: Change) -> str:
@@ -102,9 +113,10 @@ def show_profile(
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     prof = prof.model_copy(update={"runtime": runtime or prof.runtime})
     store.write_profile(prof)
-    if overrides:
-        store.update_config(lambda cur: _overridden(cur, overrides))
-    lines = [f"profile v{prof.version}"]
+    notice = (
+        store.update_config(lambda cur: _overridden(cur, overrides), "role overrides from the CLI") if overrides else ""
+    )
+    lines = [f"profile v{prof.version}", *([f"Notice: {notice}"] if notice else [])]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
     return "\n".join([*lines, roles.table(store.settings()), f"Runtime: {prof.runtime}"])
 
@@ -124,7 +136,7 @@ def _role(text: str) -> tuple[Role, RoleModel]:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser and one branch per command
     """Run one command."""
     parser = argparse.ArgumentParser(prog="owlbear-next")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
@@ -164,7 +176,12 @@ def main(argv: list[str] | None = None) -> int:
     ans.add_argument("--text", default="")
     show = sub.add_parser("show", help="print the Change's step, exit and open question")
     show.add_argument("change")
+    shared = sub.add_parser("common", help="show or set the shared settings repository (TD-57)")
+    shared.add_argument("path", nargs="?", type=Path)
     a = parser.parse_args(argv)
+    if a.command == "common":
+        sys.stdout.write(show_common(a.path) + "\n")
+        return 0
     if a.command == "host":
         return host.serve(a.repo.resolve())
     if a.command == "setup":

@@ -492,6 +492,16 @@ def test_a_verdict_whose_usage_stayed_unread_is_never_recorded_and_the_owner_rer
     assert check.action(after, live=True, paths={}) == "dispose"  # no capture resumes before the owner answers
 
 
+def test_damaged_settings_stop_the_change_once_instead_of_crashing_each_runner(flow):
+    c = checking(flow.store, flow.clone)
+    flow.store.config_path.parent.mkdir(parents=True, exist_ok=True)
+    flow.store.config_path.write_text("{not json")
+    runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    assert (after.outcome.exit, after.stop.kind) == (Exit.STOP, ErrorKind.STATE)
+    assert flow.review.calls == []
+
+
 def test_a_session_whose_processes_remain_stops_on_them_even_with_its_usage_unread(flow):
     c = checking(flow.store, flow.clone)
     flow.review.termination = processes.Termination(confirmed=False, survivors=(7,))

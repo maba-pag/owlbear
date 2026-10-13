@@ -42,7 +42,7 @@ from owlbear_delivery_next.steps import (
     visual,
     worktree,
 )
-from owlbear_delivery_next.store import LockHeldError, Store, git_common_dir
+from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change, Step
@@ -363,6 +363,14 @@ def main(argv: list[str] | None = None) -> int:
 
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
+    if step is not None:
+        try:
+            store.settings()
+        except StoreError as exc:  # damaged settings stop the Change once, not every runner the host starts
+            now = datetime.now(UTC)
+            stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
+            store.write(lock, loop.apply(change, stop, now))
+            return
     try:
         if step is not None and check.capturing(change):
             _visual(store, lock, change, repo)
