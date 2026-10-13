@@ -321,3 +321,86 @@ worded as running (`98be1d6b4`).
 
 Limits: one run; the visual check, overlap display, "ask before merge" and the New Change button were not part of it
 (covered by tests; the button's `code chat` call was checked against `code chat --help` only).
+
+## Visual review, window runtime and G2 failures, 2026-10-13, times UTC
+
+Sandbox `boecht/owlbear-sandbox`, Copilot use on `maba-pag`'s business seat (SDK login `maba-pag`), branch
+`next/m4-slice1`. Details of the visual review: [design skill research §3.8](../../.owlbear/research/delivery-next-design-skill.md).
+
+### Visual review: `promo-hero` (PR #12)
+
+Roles as the owner set them: planner and builder `claude-opus-5.5`, reviewer `gpt-6.1-sol` `xhigh`, designer
+`claude-opus-5.5` `high`. The brief asked for gray `#9ca3af` text on indigo (2.5:1).
+
+| Time | Event |
+| --- | --- |
+| 16:24:57 → 16:31:27 | Build asked once, then done at `6bc8ec4`; task and final review passed by 16:34:10 |
+| 16:34:13 | Publish asked: branch rules differed from the profile (`strict-checks`, `conversation-resolution` unknown); confirmed |
+| 16:34:52 → 16:35:30 | PR #12 ready; CI `test` passed |
+| 16:36:58 | Round 1: correctness pass, design fail on the contrast the Change introduced (detector rules new). The owner pressed Fail on the decision page with the contrast findings and a comment |
+| 16:55:41 → 16:57:26 | Fix task with the findings and criterion `owner-1`, `22b3627`, reviews passed, PR updated |
+| 16:59:20 | Round 2: both judges pass (the design judge's own "fail" rested on "before"-only problems) |
+| 16:59:34 | Squash merge `2ad675f` without consent (ask-before-merge off) |
+| 17:00:15 | Pull-back fast-forwarded the checked-out `main`; worktree removed |
+
+Credits 217.23 (`claude-opus-5.5` 180.53, `gpt-6.1-sol` 36.70); one Opus build step alone cost 44.31.
+
+### Window runtime: design judge (calibration replay of round 1)
+
+`claude-opus-5.5` `high` in a VS Code window, six images, two-phase (first look, detector reveal, final).
+
+| Run | Result |
+| --- | --- |
+| 1 | The replay's empty worktree was not a repository, so the window refused to place its files. Fixed: the replay runs `git init` and reports a failure |
+| 2 | The judge's first look was rejected once (`doubt` over 500 characters), then accepted, and its final result was accepted. The agent host had started the session at the 1M tier. After the result, autopilot nudged the agent ("not yet marked the task as complete") on Auto, which chose `mai-code-1.1-flash`. Delivery voided the result as wrong-model. About 35.4 credits |
+| 3 | No chat session started in the new window within 60 s (`unbound`); no model ran. Cause unknown |
+| 4 | With the fixes in `37e915828` (window messages send `contextSize`, and `thinkingLevel` only when the model offers it; the window's acceptance reply asks for `task_complete`): default tier, one model, `task_complete` called, result kept. 361,848 tokens, about 35.1 credits. Verdict `unsure` with a doubt about the brief's contrast, so the replay agreed 0 of 1 against the owner's decision |
+
+Finding, not fixed: 26 minutes after run 4, the VS Code agent host (`copilot-run`) still kept that session's step relay
+(`step_mcp`) and memory server running, although the step had ended and its worktree was deleted. Delivery's
+termination scan covers the worktree's processes only, so it does not see them. I stopped them by hand.
+
+### G2 failures: `g2exit` (PR #13) and `g2head`
+
+The sandbox project layer was set to `gpt-6-luna` for every role except the designer for these runs. The host's
+traffic went through a local CONNECT proxy that could be switched off. A local edit to
+`packages/app/src/math.ts` was left uncommitted on the checked-out `main`.
+
+| Scenario | Journey row | Observed | Verdict |
+| --- | --- | --- | --- |
+| Two hosts on one clone | X5 | A second `owlbear-next host` printed "Delivery is already running:" with the running host's URL, and exited | pass |
+| Runner killed during an agent step | X1, DR10 | `SIGKILL` to runner 78483 three seconds into the task review (19:52:44). The host recorded "ended without recording an exit" (one liveness retry) and started no writer while the session's `node`, `copilot` and `python3.14` processes were present. They exited by themselves within 4 s; a new runner reviewed in a fresh session and passed at 19:53:09 | pass |
+| Interruption with an unconfirmed push (M4 exit) | P6, DR5 | `SIGKILL` to the publishing runner the moment `owlbear/g2exit` appeared on the remote (19:53:39), before the push was read back and before a PR existed. The host waited for the orphaned `gh` (80944) to end, and the next runner published in 7.0 s. Exactly one PR (#13, created 19:53:46) at the reviewed head `bd6e50c`; no second push of a different head | pass |
+| Network loss while CI is followed | S8 | Network cut 19:53:49 → 19:55:19. Follow went `pending` (`waiting: network`) with "network failing for 12 s, attempt 1"; the second try at 19:54:50 failed, and the next was due at 19:56:50. It resumed at that time without help: CI passed (19:56:56), merged `9c632eb` (19:57:10) | pass, with the pause still running 91 s after the network returned |
+| Dirty local target at pull-back | M7, DR16 | Pull-back at 19:57:51: "local main is behind: your local changes to packages/app/src/math.ts overlap the merged change"; the edit and `HEAD` untouched. After I removed the edit, `POST …/pull` fast-forwarded `main` to `9c632eb` (19:58:32) | pass |
+| Head change after the gate passed | P3, merge gate | `g2head` (PR #14), ask-before-merge on. At 20:02:00 the offer was "approve merging 3d765d0". I pushed an owner commit (`bc43d0e`, `LERP.md`) to the PR branch from a temporary clone and at 20:02:03 gave consent for `3d765d0`; the API accepted it, since the state still showed that head. **Defect:** the merge gate read the new head's tree from the worktree, which did not hold it, and three runners crashed (`CalledProcessError`, three liveness retries). Fixed in `0bf98e052` with a test: such a head is unreviewed. The runner after my first edit went back to publish ("local head 3d765d0 is not the PR head bc43d0e"); publish integrated the branch (task t2), reviews passed, and at 20:06:41 the offer read "approve merging 11df2e5, changed since 3d765d0 (2 commit(s): docs: describe lerp …; Complete g2head merge task · files: packages/app/LERP.md)". Consent for `11df2e5` merged `7fd36e2` (20:07:20); the stale consent never merged anything | pass after fix |
+
+Credits for `g2exit`: 1.03 and for `g2head`: 2.11 (`gpt-6-luna`). The killed review session's usage is not counted,
+because usage is read at a step's end.
+
+Findings, not fixed:
+
+- `owlbear-next status` printed "Done · merged PR #13" while pull-back was behind. The Changes page shows the
+  "behind" note with Pull (`changes.html`), but the status line has no such note.
+- A network wait resumes only when its pause ends; the host does not probe the network to resume earlier.
+- The simulated outage answered `502 Bad Gateway` from the proxy; DNS failure or a dropped route were not tried.
+
+### Gaps against architecture §3.7 (hand-triggered and M4 demonstration items)
+
+| Item | Status |
+| --- | --- |
+| Killed runner | Shown today (review step, publish) |
+| Killed host | Shown 2026-10-10 (scenario 6) |
+| Sleep | **Not shown**: needs the owner's laptop asleep during a step |
+| Network loss | Shown today (follow); not during an agent step |
+| Two windows | Second host refused today; two chats continuing one Change not shown |
+| CI failure, PR comment, target conflict | Shown 2026-10-10 (slice 2 failure (a); scenario 2 and PR #8 thread; scenario 5) |
+| Head change after the gate passed | Before the reshape: slice 2 failure (b). After: `g2head` today (one defect fixed) |
+| Dirty local target at pull-back | Shown today |
+| Failed visual check | Shown today (`promo-hero` round 1) |
+| One interruption with an unconfirmed push or PR (M4 exit) | Shown today (push landed, no PR yet). An interruption after PR creation but before its readback was not hit |
+| New Change, folder-open task, workspace trust | **Not shown**: New Change with the owner; the folder-open task was never exercised in a real VS Code start |
+| Overlap display | **Not shown**: with the owner |
+
+Afterwards the host and the proxy were stopped, ask-before-merge was set back to `no`, and the temporary role
+overrides were removed: the owner's roles apply again. Sandbox `main` is at `7fd36e2`.
