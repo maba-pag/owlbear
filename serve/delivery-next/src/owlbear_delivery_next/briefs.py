@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import evidence, profile, tools
+from owlbear_delivery_next import brief_tools, evidence, profile, tools
 from owlbear_delivery_next.models import (
     Change,
     Criterion,
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.store import Store
 
 
-def drafted(old: Change | None, d: tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change:
+def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change:
     """The Change with its new brief draft version, waiting for the owner's approval; criteria and checks versioned."""
     names = Names(branch=f"owlbear/{slug}", target=profile.value(prof, profile.DEFAULT, "main"))
     c = old or Change(slug=slug, handle=handle, profile_version=prof.version, names=names)
@@ -67,8 +67,8 @@ def new_slug(title: str, taken: list[str]) -> str:
 
 def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     """Validate a brief draft and write a new Change, or a new version of a shaping one, awaiting approval."""
-    draft, errors = tools.parse(tools.BriefDraft, body)
-    errors = tools.check_brief(draft) if draft else errors
+    draft, errors = tools.parse(brief_tools.BriefDraft, body)
+    errors = brief_tools.check_brief(draft) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
     handles = {}

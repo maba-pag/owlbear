@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
+from owlbear_delivery_next.catalogue import CATALOGUE
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.store import StoreError, read_layer_bytes
 
@@ -22,43 +23,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.store import Store
 
 APPLIED = ["agents.*.effort", "agents.*.model", "widths"]  # the settings Delivery uses today; the page marks the rest
-# What each runtime offers beyond the shared baseline (runtime research P15 to P19); shown, not used for routing yet.
-CATALOGUE: dict[str, Any] = {
-    "baseline": "the runtime's own tools (files, edit, shell) and Delivery's result tools",
-    "runtimes": [
-        {
-            "runtime": "sdk",
-            "adds": "nothing beyond the baseline",
-            "mcp": "only servers Delivery passes",
-            "live_view": "no (VS Code shows a snapshot at most)",
-            "outside_writes": "Delivery's hard guard (TD-45)",
-        },
-        {
-            "runtime": "window",
-            "adds": "the VS Code window's tools: browser, tasks, problems",
-            "mcp": "your VS Code mcp.json",
-            "live_view": "yes",
-            "outside_writes": "the watcher, once it exists (D6)",
-        },
-    ],
-    "categories": {
-        "browser": {
-            "runtime": "window",
-            "tools": [
-                "openBrowserPage",
-                "readPage",
-                "screenshotPage",
-                "navigatePage",
-                "clickElement",
-                "typeInPage",
-                "hoverElement",
-                "dragElement",
-                "handleDialog",
-                "runPlaywrightCode",
-            ],
-        },
-    },
-}
 
 
 class Save(BaseModel):

@@ -166,7 +166,12 @@ def test_the_inbox_serves_only_with_its_token_and_vanishes_with_the_step(tmp_pat
         assert request(where, "/tools", where["token"]) == 200
         assert request(where, "/tools", "guess") == 401
         listed = step_mcp.forward(path, "GET", "/tools")
-        assert [t["name"] for t in listed["tools"]] == ["submit_result", "ask_question", "report_wrong_premise"]
+        assert [t["name"] for t in listed["tools"]] == [
+            "submit_result",
+            "ask_question",
+            "report_wrong_premise",
+            "report_missing_tool",
+        ]
         bad = step_mcp.forward(path, "POST", "/call", {"name": "submit_result", "arguments": {"summary": "x"}})
         assert (bad["ok"], bad["text"].startswith("Rejected.")) == (False, True)
         good = step_mcp.forward(path, "POST", "/call", {"name": "submit_result", "arguments": GOOD})
@@ -191,7 +196,7 @@ def test_the_harness_reaches_the_step_through_the_stdio_relay(tmp_path: Path) ->
 
     with Inbox(g, path):
         names, done, late = asyncio.run(talk())
-    assert names == ["submit_result", "ask_question", "report_wrong_premise"]
+    assert names == ["submit_result", "ask_question", "report_wrong_premise", "report_missing_tool"]
     assert (done.is_error, late.is_error) == (False, True)
     assert late.content[0].text == "The step has already ended. Stop now."
     assert g.run.payload.summary == "Added greet()."

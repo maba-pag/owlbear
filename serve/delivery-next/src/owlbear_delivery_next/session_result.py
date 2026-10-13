@@ -6,13 +6,15 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from owlbear_delivery_next import tools
+from owlbear_delivery_next import missing, tools
 from owlbear_delivery_next.failures import QUOTA, UNREAD, cause_key, quota, transient
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 from owlbear_delivery_next.processes import Termination
 
-type Ending = Literal["result", "ask", "premise", "invalid", "no-result", "deadline", "missing", "unread", "error"]
+type Ending = Literal[
+    "result", "ask", "premise", "missing-tool", "invalid", "no-result", "deadline", "missing", "unread", "error"
+]
 
 
 @dataclass
@@ -29,6 +31,8 @@ class Run:
     usage: dict[str, Any] = field(default_factory=dict)
     termination: Termination | None = None
     denials: list[str] = field(default_factory=list)
+    denied: dict[str, str] = field(default_factory=dict)  # each denied tool or program, lower case: its last denial
+    runtime: str = "sdk"  # the catalogue's runtime the session ran in
     invalid: int = 0
     quota: bool = False  # the runtime reported the Copilot quota exhausted
     quota_reset: datetime | None = None  # when it said the quota resets
@@ -68,13 +72,18 @@ def note_quota(run: Run, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK ev
         run.quota_reset = datetime.fromtimestamp(ms / 1000, UTC)
 
 
-def to_result(run: Run, kind: StepKind, now: datetime) -> StepResult:
-    """Map one session's ending to the loop's step result, carrying the last permission denial."""
-    result = _exit(run, kind, now)
-    return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials else result
+def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | None = None) -> StepResult:
+    """Map one session's ending to the loop's step result, carrying the last permission denial.
+
+    *enclosing* is the step a reviewer session ran for; a missing-tool report is that step's to handle.
+    """
+    result = _exit(run, kind, now, enclosing or kind)
+    return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials and not result.denial else result
 
 
-def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901, PLR0911, PLR0912 - one case per ending
+def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
+    run: Run, kind: StepKind, now: datetime, enclosing: StepKind
+) -> StepResult:
     """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
     if not t.confirmed:
@@ -89,7 +98,7 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
         )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     p = run.payload
-    if run.quota and run.ending not in {"result", "ask", "premise"}:  # the quota ended it, whatever it reported
+    if run.quota and run.ending not in {"result", "ask", "premise", "missing-tool"}:  # the quota ended it
         reason = run.detail or "Copilot quota exhausted"
         return StepResult(
             exit=Exit.RETRY, cause=cause_key(ErrorKind.CAPACITY, kind, QUOTA), reason=reason, wake_at=run.quota_reset
@@ -117,6 +126,8 @@ def _exit(run: Run, kind: StepKind, now: datetime) -> StepResult:  # noqa: C901,
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
             back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)
             return StepResult(exit=Exit.BACK, back_to=back, cause=cause, reason=p.reason[:200])
+        case "missing-tool" if isinstance(p, tools.MissingTool):
+            return missing.classify(run, p, enclosing, now)
         case "deadline":  # an unanswered runtime start is the environment's; the step's own deadline is liveness
             env = transient(run.detail) if run.detail != "step deadline" else None
             cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")

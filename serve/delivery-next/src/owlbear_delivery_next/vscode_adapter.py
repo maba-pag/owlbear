@@ -127,7 +127,8 @@ class _Driver:
 
     def deny(self, call: ToolCall) -> bool:
         """The harness asked Delivery to confirm a call: refuse it, since nothing a step needs asks (D2)."""
-        self.run.denials.append(f"{call.name} asked for confirmation; Delivery refuses")
+        self.run.denials.append(text := f"{call.name} asked for confirmation; Delivery refuses")
+        self.run.denied[call.name.lower()] = text
         self.log(event="denied", tool=call.name, request=call.input[:200])
         return False
 
@@ -205,7 +206,7 @@ def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termin
 
 def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     """Run the session in a VS Code window; ``inbox`` is this step's own path outside the worktree."""
-    env, result, since = env or Env(), Run(cfg.session_id), datetime.now(UTC)
+    env, result, since = env or Env(), Run(cfg.session_id, runtime="window"), datetime.now(UTC)
     driver = _Driver(cfg, env, result)
     out = driver.step(inbox)
     started = driver.control.started.is_set()

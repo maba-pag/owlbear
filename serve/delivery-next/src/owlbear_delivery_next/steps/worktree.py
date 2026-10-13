@@ -94,6 +94,31 @@ def head(path: Path) -> str:
     return git(path, "rev-parse", "HEAD").strip()
 
 
+class ShelveError(Exception):
+    """Uncommitted edits could not be set aside; the worktree is as the earlier step left it."""
+
+
+def shelve(path: Path, message: str) -> bool:
+    """Keep uncommitted edits, new files included, in a Git stash; whether there were any.
+
+    Raises:
+        ShelveError: Git failed, or files stayed uncommitted after the stash.
+    """
+    try:
+        if not git(path, "status", "--porcelain").strip():
+            return False
+        git(path, "stash", "push", "--include-untracked", "--message", message)
+        left = git(path, "status", "--porcelain").strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        detail = str(getattr(exc, "stderr", "") or exc).strip()
+        msg = f"git stash failed in {path}: {detail[:300]}"
+        raise ShelveError(msg) from exc
+    if left:
+        msg = f"files stay uncommitted in {path} after git stash: {left[:300]}"
+        raise ShelveError(msg)
+    return True
+
+
 def observe(path: Path, target: str, since: str | None = None) -> Worktree:
     """Read the worktree's head, its base, uncommitted paths and paths changed since the base.
 

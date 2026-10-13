@@ -138,11 +138,14 @@ def _environment(c: Change, r: StepResult, now: datetime) -> None:
     b = b.model_copy(update={"attempts": b.attempts + 1, "at": now})
     c.budgets.causes[cause] = b
     if not quota and now - (b.since or now) >= EPISODE_ASK:
-        text = f"{kind} keeps failing for {c.step.kind} since {b.since:%Y-%m-%d %H:%M}; last error: {r.reason}"
+        last = r.detail or r.reason
+        text = f"{kind} keeps failing for {c.step.kind} since {b.since:%Y-%m-%d %H:%M}; last error: {last}"
         ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(), cause=cause), now)
         return
     if kind == ErrorKind.CAPACITY and r.wake_at and r.wake_at > now:
         wake = r.wake_at  # a quota or rate limit resets at its own time
+    elif b.attempts == 1 and r.wake_at and r.wake_at <= now:
+        wake = now  # a failure the result asks to retry now: once at once, then the growing pauses (TD-36)
     else:
         base = r.wake_at - now if r.wake_at and r.wake_at > now else PAUSE
         wake = now + min(base * 2 ** min(b.attempts - 1, 10), PAUSE_CAP)

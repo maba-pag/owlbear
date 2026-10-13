@@ -52,6 +52,9 @@ End the step with exactly one call:
 - `report_wrong_premise`: the task cannot be built as written, with the evidence. Use stage
   `target` when it needs a commit or API that is on the target branch but not in this branch yet:
   Delivery merges the target in first, then resumes the task.
+- `report_missing_tool`: a tool, command or capability you need is missing or keeps failing, for
+  example an install that fails outside the task's control. Name it as you tried it, what you need
+  it for, and the exact error. Delivery retries, asks the owner to set it up, or plans without it.
 
 Neither a question nor a report needs a commit. Never end a turn without one of these calls.
 

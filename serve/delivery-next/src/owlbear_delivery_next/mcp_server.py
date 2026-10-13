@@ -14,7 +14,7 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from owlbear_delivery_next import api, host, loop, tools
+from owlbear_delivery_next import api, brief_tools, host, loop, tools
 from owlbear_delivery_next.store import Store, StoreError
 
 NOT_RUNNING = (
@@ -96,7 +96,7 @@ class Chat:
         return {"answered": code == OK, **out}
 
 
-def _d(name: str, model: type[tools.Args] = tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
+def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
     field = model.model_fields[name]
     return Field(description=field.description, examples=field.examples)
 
@@ -114,12 +114,13 @@ def save_brief(  # noqa: PLR0913 - the brief's six fields
     outcome: Annotated[str, _d("outcome")] = "",
     criteria: Annotated[list[str] | None, _d("criteria")] = None,
     scope: Annotated[list[str] | None, _d("scope")] = None,
-    person_checks: Annotated[list[dict[str, Any]] | None, _d("person_checks")] = None,
+    person_checks: Annotated[list[brief_tools.PersonCheckDraft] | None, _d("person_checks")] = None,
     change: Annotated[str, _d("change")] = "",
 ) -> dict[str, Any]:
     """Create or revise one Change's brief draft; the reply gives its handle or one error per field to fix."""
     fields = {"title": title, "outcome": outcome, "criteria": criteria or [], "scope": scope or []}
-    return _STATE["chat"].save_brief(fields | {"person_checks": person_checks or [], "change": change})
+    checks = [p.model_dump() for p in person_checks or []]
+    return _STATE["chat"].save_brief(fields | {"person_checks": checks, "change": change})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

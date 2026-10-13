@@ -13,7 +13,18 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, briefs, host, loop, permissions, processes, runner, sdk_adapter, tools
+from owlbear_delivery_next import (
+    api,
+    brief_tools,
+    briefs,
+    host,
+    loop,
+    permissions,
+    processes,
+    runner,
+    sdk_adapter,
+    tools,
+)
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
     VISUAL,
@@ -96,23 +107,24 @@ def rv(verdict, findings=()):
 
 def draft(**fields):
     base = {"title": "Greet", "outcome": "The page greets the owner.", "criteria": ["The page greets Ada"]}
-    return tools.BriefDraft(**(base | {"scope": ["web"]} | fields))
+    return brief_tools.BriefDraft(**(base | {"scope": ["web"]} | fields))
 
 
 # Brief
 
 
 def test_a_ui_brief_needs_states_or_a_person_check_and_states_stay_under_the_preview_root():
-    assert any("empty for a UI Change" in e for e in tools.check_brief(draft(ui=True)))
+    check_brief = brief_tools.check_brief
+    assert any("empty for a UI Change" in e for e in check_brief(draft(ui=True)))
     person = {"name": "look", "steps": ["Open the page"], "expect": "Hallo"}
-    assert any("visual: true" in e for e in tools.check_brief(draft(ui=True, person_checks=[person])))
-    assert tools.check_brief(draft(ui=True, person_checks=[person | {"visual": True}])) == []
-    assert tools.check_brief(draft(ui=True, visual=[HOME.model_dump(exclude={"version"})])) == []
+    assert any("visual: true" in e for e in check_brief(draft(ui=True, person_checks=[person])))
+    assert check_brief(draft(ui=True, person_checks=[person | {"visual": True}])) == []
+    assert check_brief(draft(ui=True, visual=[HOME.model_dump(exclude={"version"})])) == []
     bad = [{"name": "a", "path": "/../x", "expect": "e"}, {"name": "a", "path": "//evil", "expect": "e"}]
-    errors = tools.check_brief(draft(visual=bad))
+    errors = check_brief(draft(visual=bad))
     assert sum("must stay under the preview root" in e for e in errors) == 2
     assert "visual: names repeat - give each state its own name" in errors
-    reserved = tools.check_brief(draft(person_checks=[person | {"name": VISUAL}]))
+    reserved = check_brief(draft(person_checks=[person | {"name": VISUAL}]))
     assert any("reserved for the visual check" in e for e in reserved)
     with pytest.raises(ValidationError):
         draft(visual=[{"name": f"s{i}", "path": "/", "expect": "e"} for i in range(7)])

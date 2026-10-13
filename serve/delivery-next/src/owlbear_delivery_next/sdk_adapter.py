@@ -22,7 +22,7 @@ from copilot.tools import Tool, ToolInvocation, ToolResult
 from owlbear_delivery_next import processes, prompts, tools
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import decide, view
+from owlbear_delivery_next.permissions import decide, identities, view
 from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.results import ENDED, Gate
 from owlbear_delivery_next.session_result import Run, note_quota
@@ -203,9 +203,12 @@ class _Step:
         req = view(request)
         reason = decide(self.cfg.policy, req)
         if reason is None:
+            for name in identities(req):  # a later allowed use supersedes an earlier denial of the same program
+                self.run.denied.pop(name, None)
             return PermissionDecisionApproveOnce()
         reason = redact(reason)
         self.run.denials.append(reason)
+        self.run.denied |= dict.fromkeys(identities(req), reason)
         request = [redact(t) for t, _ in req.commands] or [redact(str(p)) for p in req.paths]
         self.log(event="denied", kind=req.kind, request=request, reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")

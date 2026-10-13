@@ -42,6 +42,17 @@ class Request:
     tool: str = ""
 
 
+def identities(req: Request) -> set[str]:
+    """The tools a request names, lower case: each shell command's program, else its tool or kind (TD-36)."""
+    programs = {
+        words[0].rsplit("/", 1)[-1].lower()
+        for text, _ in req.commands
+        for part in re.split(r"[;&|]+", text)
+        if (words := part.split()) and words[0] != "cd"
+    }
+    return programs or {(req.tool or req.kind).lower()}
+
+
 def metachars(text: str) -> set[str]:
     """Shell operators of *text* outside quotes, and command substitution outside single quotes."""
     found: set[str] = set()

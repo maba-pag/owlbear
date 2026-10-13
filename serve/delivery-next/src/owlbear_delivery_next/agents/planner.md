@@ -40,6 +40,7 @@ End the step with exactly one call:
   call again.
 - `ask_question`: an owner decision the plan depends on.
 - `report_wrong_premise`: the brief cannot be delivered as written, with the evidence.
+- `report_missing_tool`: a tool you need to plan is missing or keeps failing, with the exact error.
 
 Never end a turn without one of these calls.
 

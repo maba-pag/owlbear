@@ -6,12 +6,11 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from owlbear_delivery_next import confinement, evidence, permissions
-from owlbear_delivery_next.models import VISUAL
+from owlbear_delivery_next import confinement, permissions
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -32,6 +31,9 @@ class Args(BaseModel):
 def _f(limit: int, description: str, example: object, least: int = 1) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
     """A bounded field with its description and one example (T5)."""
     return Field(min_length=least, max_length=limit, description=description, examples=[example])
+
+
+bounded = _f  # the same helper for the owner chat's brief schema (brief_tools)
 
 
 class CheckRun(Args):
@@ -99,6 +101,14 @@ class WrongPremise(Args):
     )
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
     evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
+
+
+class MissingTool(Args):
+    """``report_missing_tool``: a tool, command or capability the step needs is missing or keeps failing."""
+
+    tool: str = _f(100, "The tool, command or capability, by the name you tried", "docker")
+    need: str = _f(300, "What you need it for", "Run the integration tests the task's checks name")
+    error: str = _f(1000, "The exact error, or what happened when you tried", "zsh: command not found: docker")
 
 
 class Finding(Args):
@@ -178,94 +188,10 @@ class PlanResult(Args):
     )
 
 
-type Criterion = Annotated[str, Field(min_length=10, max_length=500)]
-NAME = r"^[a-z0-9][a-z0-9-]{0,39}$"
-
-
-class PersonCheckDraft(Args):
-    """One check only the owner can perform, done after the PR's CI passes."""
-
-    name: str = Field(pattern=NAME, description="Short id of the check", examples=["preview"])
-    steps: list[str] = _f(10, "What the owner does, step by step", ["Open the preview page"])
-    expect: str = _f(300, "What the owner should see", "The page shows 'Hallo, Ada!'")
-    visual: bool = Field(default=False, description="Whether the owner judges how the UI looks", examples=[True])
-
-
-class VisualStateDraft(Args):
-    """One page state the visual check renders and a reviewer judges from screenshots."""
-
-    name: str = Field(pattern=NAME, description="Short id of the state", examples=["home"])
-    path: str = Field(pattern=r"^/\S{0,199}$", description="URL path under the preview root", examples=["/settings"])
-    expect: str = _f(300, "What the rendered page must show", "The greeting is centred and readable")
-
-
-class BriefDraft(Args):
-    """``save_brief``: create or revise one Change's brief draft; the host returns its handle or field errors."""
-
-    change: str = Field(
-        default="",
-        pattern=r"^(c\d{1,4})?$",
-        description="Handle of the Change to revise; empty for new",
-        examples=["c3"],
-    )
-    title: str = _f(100, "Short title of the Change", "Add a farewell function")
-    outcome: str = _f(2000, "What the owner has when it is done, in a few sentences", "farewell(name) exists", 20)
-    criteria: list[Criterion] = _f(
-        10, "Acceptance criteria, each checkable by a test or command", ["farewell('Ada') returns 'Bye, Ada!'"]
-    )
-    scope: list[str] = _f(20, "Repository-relative paths or directories the Change may touch", ["packages/app"])
-    person_checks: list[PersonCheckDraft] = Field(
-        default_factory=list,
-        max_length=5,
-        description="Checks only the owner can perform; empty when tests prove every criterion",
-        examples=[[{"name": "preview", "steps": ["Open the preview"], "expect": "The greeting shows"}]],
-    )
-    ui: bool = Field(default=False, description="Whether the Change changes what a page shows", examples=[True])
-    visual: list[VisualStateDraft] = Field(
-        default_factory=list,
-        max_length=6,
-        description="Page states Delivery renders and a reviewer judges; required for a UI Change without "
-        "a person-only check",
-        examples=[[{"name": "home", "path": "/", "expect": "The greeting is centred"}]],
-    )
-
-
 def relative(path: str) -> bool:
     """Whether *path* is repository-relative and stays inside the repository."""
     p = PurePosixPath(path)
     return bool(path.strip()) and not p.is_absolute() and ".." not in p.parts and not path.startswith("~")
-
-
-def check_brief(brief: BriefDraft) -> list[str]:
-    """Return field errors the schema cannot express: paths outside the repository, repeated entries."""
-    errors = [
-        f'scope[{i}]: {p} is not repository-relative - e.g. "packages/app"'
-        for i, p in enumerate(brief.scope)
-        if not relative(p)
-    ]
-    if len({c.strip().lower() for c in brief.criteria}) < len(brief.criteria):
-        errors.append("criteria: repeated criterion - state each one once")
-    if len({p.name for p in brief.person_checks}) < len(brief.person_checks):
-        errors.append("person_checks: names repeat - give each check its own name")
-    errors += [
-        f'person_checks[{i}].name: "{VISUAL}" is reserved for the visual check - choose another name'
-        for i, p in enumerate(brief.person_checks)
-        if p.name == VISUAL
-    ]
-    if len({v.name for v in brief.visual}) < len(brief.visual):
-        errors.append("visual: names repeat - give each state its own name")
-    errors += [
-        f'visual[{i}].path: {v.path} must stay under the preview root - e.g. "/settings"'
-        for i, v in enumerate(brief.visual)
-        if v.path.startswith("//") or ".." in PurePosixPath(v.path.split("?")[0]).parts
-    ]
-    person = any(p.visual for p in brief.person_checks)
-    if evidence.need(ui=brief.ui, states=bool(brief.visual), person=person) == "unmet":
-        errors.append(
-            'visual: empty for a UI Change - add a state, e.g. {"name": "home", "path": "/", "expect": "..."}, '
-            "or a person-only check with visual: true"
-        )
-    return errors
 
 
 def within(path: str, scope: Sequence[str]) -> bool:
@@ -302,7 +228,7 @@ class Spec:
     name: str
     description: str
     model: type[Args]
-    ending: Literal["result", "ask", "premise"]
+    ending: Literal["result", "ask", "premise", "missing-tool"]
 
 
 SUBMIT = Spec(
@@ -314,8 +240,7 @@ SUBMIT = Spec(
 )
 ASK = Spec(
     "ask_question",
-    "Ask the owner one question when a decision is theirs or something you need is missing. Your step ends; "
-    "it resumes with the answer.",
+    "Ask the owner one question when a decision is theirs. Your step ends; it resumes with the answer.",
     AskQuestion,
     "ask",
 )
@@ -326,7 +251,14 @@ PREMISE = Spec(
     WrongPremise,
     "premise",
 )
-SPECS = (SUBMIT, ASK, PREMISE)
+MISSING = Spec(
+    "report_missing_tool",
+    "Report a tool, command or capability you need that is missing or keeps failing, with the exact error. "
+    "Delivery retries it, asks the owner to set it up, or plans without it. Your step ends.",
+    MissingTool,
+    "missing-tool",
+)
+SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")
 VISUAL_REVIEW = Spec(
     "submit_result", "Submit your verdict once, after looking at each screenshot.", VisualReviewResult, "result"

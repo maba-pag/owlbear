@@ -97,6 +97,8 @@ class StepResult(Record):
     denial: str | None = None
     head: str | None = None  # the pull-request head a passing CI observation was for
     score: Score | None = None  # how far a work failure got; better than the streak's best is progress
+    detail: str = ""  # the raw error behind a stable reason; shown when the owner is asked, never part of a signature
+    operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
 
 
 def waiting_consent(c: Change) -> bool:

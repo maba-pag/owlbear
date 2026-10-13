@@ -48,8 +48,8 @@ class Gate:
 
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
-        """The three tools of this step: its submit tool, ``ask_question`` and ``report_wrong_premise``."""
-        return self.cfg.submit, tools.ASK, tools.PREMISE
+        """The step's tools: its submit tool, ``ask_question``, ``report_wrong_premise`` and ``report_missing_tool``."""
+        return self.cfg.submit, tools.ASK, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""

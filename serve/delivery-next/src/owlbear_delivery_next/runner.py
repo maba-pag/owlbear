@@ -27,7 +27,8 @@ from owlbear_delivery_next import (
     vscode_adapter,
 )
 from owlbear_delivery_next.cli import describe
-from owlbear_delivery_next.models import Environment, Exit, StepKind, Waiting
+from owlbear_delivery_next.failures import cause_key
+from owlbear_delivery_next.models import Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.steps import (
     before,
@@ -120,7 +121,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
-    others = _others(store, slug) if s.kind == StepKind.PLAN else {}
+    others = _planning(store, lock, slug, path) if s.kind == StepKind.PLAN else {}
     parts = prompts.session(change, profile, path, others)
 
     def delivered() -> None:
@@ -182,6 +183,19 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, loop.apply(change, result, end))
 
 
+def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:
+    """The read-only planner needs a clean tree: edits an earlier step left are kept in a stash first.
+
+    Returns:
+        The other open Changes' scopes the planner avoids.
+    """
+    message = f"owlbear {slug}: uncommitted edits before planning"
+    if worktree.shelve(path, message):
+        store.log(lock, slug, {"event": "shelved", "at": datetime.now(UTC).isoformat(timespec="seconds")})
+        _out(f"{slug}: uncommitted edits kept in `git stash list` as '{message}'")
+    return _others(store, slug)
+
+
 def _log(store: Store, lock: Lock, change: Change, run: session_result.Run, fields: dict[str, object]) -> None:
     """Log one session's step event and add its usage to the Change's spend, which the log may later drop."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": run.session_id}
@@ -216,7 +230,7 @@ def _review_run(  # noqa: PLR0913 - the visual review has its own result schema
         previous={},
     )
     run = _session(store, review_cfg)
-    verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC))
+    verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
     _log(store, lock, change, run, {"kind": label, "exit": verdict.exit})
     return verdict, run
 
@@ -287,7 +301,7 @@ def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Sessio
     verdict = _reviewer(store, lock, change, cfg, "plan-review")
     if verdict.exit == Exit.DONE:
         return planned
-    if verdict.exit in {Exit.ASK, Exit.STOP}:
+    if verdict.exit in {Exit.ASK, Exit.STOP} or (verdict.operational and verdict.exit == Exit.BACK):
         return verdict
     return verdict.model_copy(
         update={"exit": Exit.RETRY, "plan": planned.plan, "reason": f"plan review: {verdict.reason}"}
@@ -389,6 +403,15 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         gated = loop.apply(held, session_result.usage_gate(exc.run, held.step.kind), datetime.now(UTC))
         store.write(lock, gated)
         _log(store, lock, gated, exc.run, {"kind": held.step.kind, "exit": Exit.ASK})
+    except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
+        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
+
+
+def _unshelved(exc: worktree.ShelveError) -> Result:
+    """The owner clears the worktree the planner would find dirty, then planning runs again."""
+    text = f"Delivery could not set aside the uncommitted edits before planning ({exc}). Commit, stash or discard them."
+    cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
+    return engine.ask(StepKind.PLAN, text, cause, engine.continue_or_pause(StepKind.PLAN))
 
 
 if __name__ == "__main__":

@@ -195,21 +195,34 @@ def respond(task: Task | None, payload: object, head: str | None, exit_: Exit) -
         task.response = Response(how=r.how, text=r.text, commit=head)
 
 
+DECLINE = Option(id="decline", label="Do not implement it; reply with my reason (type it)", next=StepKind.BUILD)
+
+
 def disputed(task: Task | None, payload: object, result: StepResult) -> StepResult:
-    """A conversation task never re-plans the Change: a reported wrong brief or plan asks the owner instead."""
+    """A conversation task never re-plans the Change; it asks the owner instead.
+
+    That holds for a reported wrong brief or plan and for a tool no runtime here provides; a missing-tool question
+    offers a reply without the tool where it would offer a new plan.
+    """
     p = payload
-    if task is None or task.item is None or result.exit != Exit.BACK or not isinstance(p, tools.WrongPremise):
+    if task is None or task.item is None:
         return result
-    if p.stage == "target":
+    if isinstance(p, tools.MissingTool) and result.exit == Exit.ASK and (q := result.question):
+        options = [DECLINE if o.next == StepKind.PLAN else o for o in q.options]
+        return result.model_copy(update={"question": q.model_copy(update={"options": options})})
+    if result.exit != Exit.BACK:
+        return result
+    if isinstance(p, tools.WrongPremise) and p.stage != "target":
+        said = f"{p.reason[:300]} ({'; '.join(p.evidence)[:300]})"
+    elif isinstance(p, tools.MissingTool):
+        said = result.reason[:600]
+    else:
         return result
     request = task.detail.split("\n\n")[0][:300]
-    text = (
-        f"A reviewer asks: {request} ({task.item.url}). The Builder reports: {p.reason[:300]} "
-        f"({'; '.join(p.evidence)[:300]}). How should Delivery respond?"
-    )
+    text = f"A reviewer asks: {request} ({task.item.url}). The Builder reports: {said}. How should Delivery respond?"
     options = [
         Option(id="implement", label="Implement the request", next=StepKind.BUILD),
-        Option(id="decline", label="Do not implement it; reply with my reason (type it)", next=StepKind.BUILD),
+        DECLINE,
         Option(id="pause", label="Pause", next="pause"),
     ]
     cause = cause_key(ErrorKind.REVIEW, StepKind.BUILD, f"dispute-{task.item.id}")

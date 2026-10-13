@@ -23,8 +23,8 @@ HARNESS, DEFAULT_MODEL = "chat.defaultToCopilotHarness", "chat.defaultModel"
 SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
 SERVER = "owlbear-step"  # a step's relay is SERVER-<inbox>: the host disables a name another session holds (P21)
 RESULTS = (
-    "Your result tools come from Delivery's `owlbear-step-…` MCP server: `submit_result`, `ask_question` and "
-    "`report_wrong_premise`. Never push."
+    "Your result tools come from Delivery's `owlbear-step-…` MCP server: `submit_result`, `ask_question`, "
+    "`report_wrong_premise` and `report_missing_tool`. Never push."
 )
 
 type Render = Callable[[str | None], str]

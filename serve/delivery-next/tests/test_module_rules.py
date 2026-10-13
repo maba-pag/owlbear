@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,7 +13,7 @@ from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
 LIMIT = 500
-SUBMITS = (tools.SUBMIT, tools.REVIEW, tools.RECIPE, tools.PLAN)  # one per worker role and step
+FIELDS = 6  # T5: about six fields per object
 
 
 @pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))
@@ -28,8 +29,39 @@ def test_vocabularies_stay_small() -> None:
     assert len(Exit) == 6
 
 
-def test_agent_tools_stay_few() -> None:
-    per_role = [{s.name for s in (submit, tools.ASK, tools.PREMISE)} for submit in SUBMITS]
-    chat = {t.name for t in asyncio.run(mcp_server.mcp.list_tools())}
-    assert len(set().union(*per_role) | chat) <= 6
-    assert all(len(names) <= 3 for names in [*per_role, chat])
+def _resolve(node: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+    while "$ref" in node:
+        node = defs[node["$ref"].rsplit("/", 1)[-1]]
+    return node
+
+
+def _objects(node: dict[str, Any], defs: dict[str, Any]) -> list[dict[str, Any]]:
+    """The object schemas a field holds: itself, its array items, or its union members."""
+    node = _resolve(node, defs)
+    if "properties" in node or node.get("type") == "object":
+        return [node]
+    subs = [node["items"]] if "items" in node else []
+    return [o for s in [*subs, *node.get("anyOf", []), *node.get("oneOf", [])] for o in _objects(s, defs)]
+
+
+def _shape(name: str, obj: dict[str, Any], defs: dict[str, Any], depth: int = 0) -> list[str]:
+    """T4/T5 problems of one object: an undescribed or opaque field, more than about six fields, deep nesting."""
+    fields = obj.get("properties", {})
+    problems = [f"{name}: {len(fields)} fields"] if len(fields) > FIELDS else []
+    problems += [f"{name}: nested {depth} levels"] if depth > 1 else []
+    problems += [f"{name}: an object without declared fields"] if not fields else []
+    for field, node in fields.items():
+        if not (node.get("description") or _resolve(node, defs).get("description")):
+            problems.append(f"{name}.{field}: no description")
+        problems += [p for o in _objects(node, defs) for p in _shape(f"{name}.{field}", o, defs, depth + 1)]
+    return problems
+
+
+def test_every_agent_tool_is_described_small_and_flat() -> None:
+    """TD-63: no count of tools; each agent-facing tool has described fields, about six, one nesting level."""
+    specs = [v for v in vars(tools).values() if isinstance(v, tools.Spec)]
+    schemas = [(f"{s.name}:{s.model.__name__}", s.model.model_json_schema()) for s in specs]
+    schemas += [(t.name, t.input_schema) for t in asyncio.run(mcp_server.mcp.list_tools())]
+    assert {s.name for s in specs} >= {"submit_result", "ask_question", "report_wrong_premise", "report_missing_tool"}
+    problems = [p for name, schema in schemas for p in _shape(name, schema, schema.get("$defs", {}))]
+    assert problems == []
