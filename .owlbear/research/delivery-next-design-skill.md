@@ -296,6 +296,23 @@ correct but hard to read.
   to fix goes to the owner even under `back`. `auto` and disabled models are not offered, because Delivery
   pins each role's model and checks the billed one. An effort the chosen model does not offer is refused.
 
+**Context tiers**, built in `f00e2f928`:
+- **Source.** The Copilot runtime's `models.list` gives each model a default context tier and, for many models, a
+  long one, each with its own size and rates in AI credits per 1M tokens. Opus 5.5 goes from 200K to 1M at the
+  same rates. GPT-6.1 Sol goes from 272K to 922K at input ×2 and output ×1.5. Haiku 4.5 has one tier only.
+- **Sessions.** The SDK pins a tier with `context_tier`. Before this change Delivery never set it, so every
+  session ran on the default tier. The tier applies to SDK sessions only; VS Code window sessions use VS Code's
+  own.
+- **Settings.** Each agent has a two-way switch labelled with the real sizes. An up arrow marks the long side
+  when its rates are higher, and a rates column shows the credits per 1M tokens for the chosen model and tier.
+  - `decided` (2026-10-13): the owner chose this layout, with no popover.
+  - `autonomous`: Sol's alternative put the rate change on a line under the switch. It was not chosen because
+    it would leave only the context cell with an extra line.
+- **Default tier.** `decided` (2026-10-13): every role starts on the default tier. The watcher recommends the
+  long tier from early compactions ([watcher design §3.4a](delivery-next-watcher-design.md)).
+- **Replay.** Verdicts record the tier, and the calibration replay compares only rounds judged on the same model,
+  effort and tier.
+
 ## 4. Recommendation, Confidence, and Limits
 
 - Extract for builds and judging. Adopt the detector unmodified and pinned, as a mechanical check that only
