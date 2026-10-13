@@ -289,6 +289,7 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 | TD-68 | Night of 2026-10-13, owner away: the assistant may push all branches of all repositories, commit others' changes after checking they are worth keeping, rebase, manipulate and reload other VS Code windows (never the one running this chat), kill stray MCP servers, touch `share/` where necessary, and spend credits on live runs by judgement. No old Delivery runs anywhere | `decided`: free text "you may push all branches of all repos you like, yours or not, and you may even commit others changes if that helps you, but only after you checked them and decide they are worth keeping", "nothing is running except this chat … there is def no old system running anywhere … you may kill it if neccessary. you may touch share/ if you think its neccessary", chose "No cap, use judgement" and "Reloading other windows is fine, never this one" | 2026-10-13 |
 | TD-69 | Each Delivery agent's file lists its tools, as the old OwlBear agents do; each runtime offers exactly those plus Delivery's result tools. This settles item 4's allowlists and P23 | `decided`: "ofc you need to define tools for eac agent… you are makig this unneccessarily hard" (2026-10-14) | 2026-10-14 |
 | TD-70 | Delivery's agents keep using the project's owlbear-memory: recall at the start, save non-obvious lessons, curated as before | `decided`: "the agents will still use owlbear-memory" (2026-10-14) | 2026-10-14 |
+| TD-71 | TD-56 scope: Delivery does not keep what challengers and subagents judge, because those are challenges, not reviews. Their sessions inside a step stay rerun-only | `decided`: free text "no we dont keep what challenger and subagent judge, as these are not reviews, those are challenges" (2026-10-14). Open: the visual review runs on the reviewer role (`roles.py`), so whether it counts as a review falls to the glossary | 2026-10-14 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
@@ -297,6 +298,15 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 - A task can add the tool category "browser use" for the reviewer, to explore in a window beyond the states; console access there is untested.
 
 Amends charter §3.10's "desktop and phone sizes" | `decided`: chose "As the first, plus: a task can add 'browser use' for the reviewer, to explore in a window beyond the states (console there untested)" among four variants and the TD-41 closing options, after the readings R7 and R8 | 2026-10-12 |
+
+**User direction, not yet decisions** (2026-10-14):
+- Memory may move into the shared repository (TD-57), so it neither dirties the working repository
+  nor needs files in a consumer repository: one memory folder per project, and perhaps a common
+  folder for lessons that span projects.
+- The project needs a glossary that defines word pairs which feel similar but are not, starting
+  with review and challenge. The owner's own description of that pair was deliberately
+  exaggerated and is not to be used as wording. Draft:
+  [glossary](delivery-next-glossary.md).
 
 **User direction, not yet decisions** (2026-10-10, cornerstone walkthrough): whether three roles are
 enough is open ("i dont want to actively decide that three roles are enough"); the brief and plan
@@ -791,6 +801,7 @@ throwaway folders and are cleaned up.
   question, and offered for "accept" only while step, brief version and commit still match.
   Reviewer sessions inside a step (plan challenge, brief review, visual review) stay rerun-only:
   their verdicts depend on inputs Delivery does not hold. That narrows TD-56; it goes to the owner.
+  Settled by TD-71.
 - item 8c `190968bca`: click and type steps (exact names, editable fields only, no reach outside
   the preview but static files); a separate chat tool `save_visual_check` keeps both chat tools
   within T5; a new or changed state takes the brief version; the seed command (TD-65) is a project
