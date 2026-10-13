@@ -287,6 +287,8 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 | TD-66 | TD-61's stages are inferred by the watcher | `decided`: chose "The watcher infers it" among four options and the closing options | 2026-10-13 |
 | TD-67 | The prototype's per-project `runtime=vscode` switch keeps working until routing is switched on; then it is removed, with a one-time notice naming the projects that used it, so the owner can turn visibility on | `autonomous`: owner chose "Take your recommendation" after the explanation. Reason: mapping it to the global switch would widen a project setting to all projects, and "always visible" per Change misses new Changes; it is the only window path until routing exists | 2026-10-13 |
 | TD-68 | Night of 2026-10-13, owner away: the assistant may push all branches of all repositories, commit others' changes after checking they are worth keeping, rebase, manipulate and reload other VS Code windows (never the one running this chat), kill stray MCP servers, touch `share/` where necessary, and spend credits on live runs by judgement. No old Delivery runs anywhere | `decided`: free text "you may push all branches of all repos you like, yours or not, and you may even commit others changes if that helps you, but only after you checked them and decide they are worth keeping", "nothing is running except this chat … there is def no old system running anywhere … you may kill it if neccessary. you may touch share/ if you think its neccessary", chose "No cap, use judgement" and "Reloading other windows is fine, never this one" | 2026-10-13 |
+| TD-69 | Each Delivery agent's file lists its tools, as the old OwlBear agents do; each runtime offers exactly those plus Delivery's result tools. This settles item 4's allowlists and P23 | `decided`: "ofc you need to define tools for eac agent… you are makig this unneccessarily hard" (2026-10-14) | 2026-10-14 |
+| TD-70 | Delivery's agents keep using the project's owlbear-memory: recall at the start, save non-obvious lessons, curated as before | `decided`: "the agents will still use owlbear-memory" (2026-10-14) | 2026-10-14 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
@@ -801,6 +803,16 @@ throwaway folders and are cleaned up.
   step left (the read-only planner rejects a dirty tree); a stepped state's network reach is
   limited to the preview plus static files; the chat brief tool keeps the visual check it does not
   send.
+- TD-69 and TD-70 `a068a6cf7` (2026-10-14):
+  - Each agent file names its tools in the runtime's own names. Only the builder can create or
+    edit, and the reviewer only recalls memory.
+  - The window accepts the same names, so one list serves both runtimes. It gets a per-step memory
+    server with the workspace as its working directory.
+  - The SDK approves an MCP request only for the role's own MCP tools.
+  - Live (P25): both runtimes offered exactly those tools, with no `ask_user` and none of the
+    owner's MCP tools. Recall and save worked in both.
+  - Rejected Sol finding: saved memories land untracked in the main checkout, as with the old
+    agents (TD-70).
 
 **Deferred to the owner:** where the global config file lives (once decided, the runners must read
 the same global layer the settings page edits; today the host passes none, so global saves are
