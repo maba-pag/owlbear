@@ -3,11 +3,12 @@ import dataclasses
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import psutil
 import pytest
 
-from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_usage, session_result, tools
+from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy, Request, decide
 from owlbear_delivery_next.processes import Termination, verdict
@@ -422,7 +423,7 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
 
     monkeypatch.setattr(sdk_adapter, "CopilotClient", Client)
     monkeypatch.setattr(sdk_adapter, "cli_path", lambda: "copilot")
-    monkeypatch.setattr(sdk_adapter, "_teardown", teardown)
+    monkeypatch.setattr(sdk_teardown, "teardown", teardown)
     monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     cfg = dataclasses.replace(step().cfg, model="gpt-6-luna", resume=False)
     run = asyncio.run(sdk_adapter.run(cfg))
@@ -430,6 +431,46 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
     assert Client.excluded == ["ask_user"]
     Client.opens = False  # nothing opened, so no model ran
     assert asyncio.run(sdk_adapter.run(cfg)).usage_unread == ""
+
+
+def test_a_model_without_reasoning_efforts_is_opened_without_one(monkeypatch) -> None:
+    class Client:
+        listed: ClassVar[list | Exception] = []
+        opts: ClassVar[dict] = {}
+
+        def __init__(self, **_k) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def list_models(self) -> list:
+            if isinstance(Client.listed, Exception):
+                raise Client.listed
+            return Client.listed
+
+        async def create_session(self, **opts) -> None:
+            Client.opts = opts
+            raise ConnectionError
+
+    async def teardown(*_a) -> Termination:
+        return Termination(confirmed=True)
+
+    monkeypatch.setattr(sdk_adapter, "CopilotClient", Client)
+    monkeypatch.setattr(sdk_adapter, "cli_path", lambda: "copilot")
+    monkeypatch.setattr(sdk_teardown, "teardown", teardown)
+    cfg = dataclasses.replace(step().cfg, model="claude-haiku-4.5", effort="medium", resume=False)
+
+    def effort(listed: list | Exception) -> str | None:
+        Client.listed, Client.opts = listed, {}
+        asyncio.run(sdk_adapter.run(cfg))
+        return Client.opts.get("reasoning_effort", "omitted")
+
+    haiku = SimpleNamespace(id="claude-haiku-4.5", supported_reasoning_efforts=None)
+    assert effort([haiku]) == "omitted"
+    assert effort([SimpleNamespace(id="claude-haiku-4.5", supported_reasoning_efforts=["low", "medium"])]) == "medium"
+    assert effort([]) == "medium"  # an unlisted model is trusted
+    assert effort(RuntimeError()) == "medium"  # an unread list leaves the refusal to the runtime
 
 
 def test_a_missing_session_is_replaced_only_once_earlier_processes_are_gone(monkeypatch) -> None:
@@ -490,11 +531,11 @@ def test_a_hung_runtime_stop_is_bounded_and_falls_back_to_signals(monkeypatch) -
 
     proc = SimpleNamespace(pid=None, terminate=lambda: calls.append("term"), kill=lambda: calls.append("kill"))
     client = SimpleNamespace(_cli_process=proc, stop=hang)
-    monkeypatch.setattr(sdk_adapter, "STOP_CALL", 0.05)
-    monkeypatch.setattr(sdk_adapter, "GRACE", 0.05)
-    monkeypatch.setattr(sdk_adapter, "SETTLE", 0.05)
+    monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.05)
+    monkeypatch.setattr(sdk_teardown, "GRACE", 0.05)
+    monkeypatch.setattr(sdk_teardown, "SETTLE", 0.05)
     st = step()
-    t = asyncio.run(sdk_adapter._teardown(client, None, st))  # noqa: SLF001
+    t = asyncio.run(sdk_teardown.teardown(client, None, st))
     assert (t.confirmed, t.problems, calls) == (False, ("runtime PID unknown",), ["term", "kill"])
     assert st.events[-1]["reason"] == "runtime stop failed (TimeoutError)"
 

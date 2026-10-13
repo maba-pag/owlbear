@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import os
 import shutil
-import signal
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -16,20 +15,22 @@ from typing import TYPE_CHECKING, Any
 
 import psutil
 from copilot import CopilotClient, RuntimeConnection
-from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject, TasksCancelRequest
+from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next import preload, processes, prompts, tools
+from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, tools
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import decide, identities, view
 from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.results import ENDED, Gate
+from owlbear_delivery_next.sdk_teardown import CALL
+from owlbear_delivery_next.sdk_teardown import call as _call
 from owlbear_delivery_next.sdk_usage import unexpected_models, unread, usage_read
 from owlbear_delivery_next.session_result import Run, note_quota
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable
+    from collections.abc import Callable, Iterable
 
     from copilot.session import CopilotSession
 
@@ -41,11 +42,7 @@ if TYPE_CHECKING:
 DEADLINES = {StepKind.PLAN: 900.0, StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "builder"}
 POLL = 5.0
-SETTLE = 10.0
 START = 60.0  # runtime start, session create or resume
-CALL = 30.0  # one request while the step runs
-STOP_CALL = 10.0  # one teardown request
-GRACE = 5.0  # between terminate and kill
 NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
 
@@ -350,72 +347,14 @@ class _Step:
                     await _call(session.send(prompts.REMINDER), "send")
 
 
-async def _call[T](aw: Awaitable[T], what: str, limit: float = CALL) -> T:
+async def _efforts(client: CopilotClient, model: str) -> bool:
+    """Whether the model takes a reasoning effort; a model missing from the list, or an unread list, is trusted to."""
     try:
-        return await asyncio.wait_for(aw, limit)
-    except TimeoutError as exc:
-        raise TimeoutError(f"{what} did not answer within {limit:.0f} s") from exc  # noqa: TRY003, EM102
-
-
-async def _settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
-    end = time.monotonic() + (SETTLE if limit is None else limit)
-    # Polls the OS process table; there is no event to wait on.
-    while (  # noqa: ASYNC110
-        not (result := verdict(recorded, processes.alive, problems)).confirmed and time.monotonic() < end
-    ):
-        await asyncio.sleep(0.5)
-    return result
-
-
-async def _force(st: _Step, why: str) -> None:
-    """Runtime-stop fallback: terminate, then kill the runtime (an unreaped child), recorded PIDs and their groups."""
-    st.log(event="force-stop", reason=why, runtime_pid=st.run.runtime_pid)
-    with contextlib.suppress(OSError, AttributeError):
-        st.proc.terminate()
-    processes.kill(st.run.pids, signal.SIGTERM)
-    await _settle(st.run.pids, [], GRACE)
-    with contextlib.suppress(OSError, AttributeError):
-        st.proc.kill()
-    processes.kill(st.run.pids, signal.SIGKILL)
-
-
-async def _teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination:  # noqa: C901
-    """(1) list, (2) cancel tasks, (3) wait, (4) disconnect, (5) stop, else signal; all bounded, then observe PIDs."""
-    problems: list[str] = []
-    st.runtime(client)
-    if session is not None:
-        listed: dict[int, float | None] = {}
-        try:
-            tasks = (await _call(session.rpc.tasks.list(), "tasks.list", STOP_CALL)).tasks
-        except Exception as exc:  # noqa: BLE001 - any failure leaves termination unverified
-            problems.append(f"tasks.list failed ({type(exc).__name__})")
-            tasks = []
-        for task in tasks:
-            st.record(getattr(task, "pid", None))
-            if pid := getattr(task, "pid", None):
-                listed[pid] = st.run.pids.get(pid)
-            if str(getattr(task.status, "value", task.status)) in {"running", "idle"}:
-                try:
-                    await _call(session.rpc.tasks.cancel(TasksCancelRequest(id=task.id)), "tasks.cancel", STOP_CALL)
-                except Exception as exc:  # noqa: BLE001
-                    problems.append(f"tasks.cancel {task.id} failed ({type(exc).__name__})")
-        st.record_tree()
-        st.log(event="tasks", listed=sorted(listed), problems=list(problems))
-        await _settle(listed, [])
-        try:
-            await _call(session.disconnect(), "disconnect", STOP_CALL)
-        except Exception as exc:  # noqa: BLE001
-            problems.append(f"disconnect failed ({type(exc).__name__})")
-    try:
-        await _call(client.stop(), "runtime stop", STOP_CALL)
-    except Exception as exc:  # noqa: BLE001 - errors and timeouts alike fall back to signals
-        await _force(st, f"runtime stop failed ({type(exc).__name__})")
-    rt = st.run.runtime_pid
-    if rt is None:
-        problems.append("runtime PID unknown")
-    elif processes.alive(rt, st.run.pids.get(rt)) is not False:
-        await _force(st, "runtime still present after stop")
-    return await _settle(dict(st.run.pids), problems)
+        listed = await _call(client.list_models(), "model list")
+    except Exception:  # noqa: BLE001 - the session create then reports a refused effort itself
+        return True
+    found = next((m for m in listed if m.id == model), None)
+    return found is None or bool(found.supported_reasoning_efforts)
 
 
 async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
@@ -425,6 +364,9 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     an unread transcript sends nothing.
     """
     cfg, opts = st.cfg, st.options()
+    if cfg.effort and not await _efforts(client, cfg.model):
+        opts.pop("reasoning_effort")  # the runtime refuses any effort for such a model
+        st.log(event="effort-omitted", model=cfg.model, effort=cfg.effort)
     sid, message, resumed = cfg.session_id, cfg.message, False
     if cfg.resume and await _call(client.get_session_metadata(sid), "session lookup") is not None:
         session = await _call(client.resume_session(sid, **opts), "session resume", START)
@@ -495,5 +437,5 @@ async def run(cfg: Session) -> Run:
         st.log(event="usage-unread", reason=st.run.usage_unread)
     if wrong := unexpected_models(st.billed, st.run.usage, cfg.model, st.subagent_models):
         st.gate.revoke(f"wrong model: the usage names {', '.join(wrong)}, the step needs {cfg.model}")
-    st.run.termination = await _teardown(client, session, st) if client else Termination(confirmed=True)
+    st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run
