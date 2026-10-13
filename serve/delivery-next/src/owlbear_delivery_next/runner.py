@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import (
     budgets,
+    held,
     loop,
     overlap,
     permissions,
@@ -54,11 +55,12 @@ TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target pr
 
 
 class UsageUnreadError(Exception):
-    """A session whose model check could not run; its run is never processed (TD-54)."""
+    """A session whose model check could not run; its run is never processed unless the owner accepts it."""
 
     def __init__(self, run: session_result.Run) -> None:
         super().__init__(run.usage_unread)
         self.run = run
+        self.worktree: Path | None = None  # set for an agent step's own session, whose result may be held (TD-56)
 
 
 type Result = loop.StepResult
@@ -109,11 +111,15 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
-    open_ = [q for q in change.questions if q.step == s.kind and q.answer and not q.effect_observed_at]
-    answer = open_[-1] if open_ else None
+    answer = next(
+        (q for q in reversed(change.questions) if q.step == s.kind and q.answer and not q.effect_observed_at), None
+    )
+    accepted = held.take(store, lock, change)  # TD-56: processed in place of a new session
     resume = bool(answer and s.session)
     if not resume:
-        s.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}"
+        s.session = (
+            accepted.session_id if accepted else f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}"
+        )
     s.started_at = now
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     if s.kind == StepKind.BUILD and task and task.base is None:
@@ -159,14 +165,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         ),
         item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
     )
-    run = _session(store, cfg)
+    run = accepted or _kept(cfg, store)
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
-    _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit})
+    _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {}))
     if s.kind == StepKind.PLAN and result.plan:
         message = prompts.plan_review(change, result.plan, profile, path, others)
         result = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
@@ -181,6 +187,15 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     store.write(lock, loop.apply(change, result, end))
+
+
+def _kept(cfg: sdk_adapter.Session, store: Store) -> session_result.Run:
+    """The step's own session; an unread one names its worktree so the gate can hold its result (TD-56)."""
+    try:
+        return _session(store, cfg)
+    except UsageUnreadError as exc:
+        exc.worktree = cfg.worktree
+        raise
 
 
 def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:
@@ -399,12 +414,21 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         else:
             _engine(store, lock, change, repo)
     except UsageUnreadError as exc:
-        held = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
-        gated = loop.apply(held, session_result.usage_gate(exc.run, held.step.kind), datetime.now(UTC))
-        store.write(lock, gated)
-        _log(store, lock, gated, exc.run, {"kind": held.step.kind, "exit": Exit.ASK})
+        _gate_unread(store, lock, exc)
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
+
+
+def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
+    """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56)."""
+    kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
+    head = held.head(exc.worktree) if exc.worktree else None
+    head = head if head and exc.run.head in {None, head} else None  # the result's own commit is still HEAD
+    gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=bool(head)), datetime.now(UTC))
+    store.write(lock, gated)
+    if head:  # after its question exists: a hold no question offers is never taken
+        held.keep(store, lock, gated, exc.run, head)
+    _log(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK})
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

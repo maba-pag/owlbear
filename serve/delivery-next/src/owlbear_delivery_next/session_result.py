@@ -39,11 +39,21 @@ class Run:
     usage_unread: str = ""  # why the model check could not run; such a run is never processed (TD-54)
 
 
-def usage_gate(run: Run, kind: StepKind) -> StepResult:
-    """TD-54: the step's result is not accepted; the Change waits until the owner runs the step again."""
-    text = f"The model check could not run: {run.usage_unread}. The step's result was not accepted."
+def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult:
+    """TD-54: the step's result is not accepted; the Change waits until the owner runs the step again.
+
+    TD-56: a held result may instead be accepted while the step, brief version and commit it depends on match.
+    """
+    text = f"The model check could not run: {run.usage_unread}. The step's result was not accepted"
+    text += "; it is held, so you can accept it without the model check." if accept else "."
     retry = Option(id="retry", label="Run this step again", next="retry")
-    question = Question(step=kind, text=text, options=[retry], cause=cause_key(ErrorKind.LIVENESS, kind, UNREAD))
+    take = Option(id="accept", label="Accept the held result without the model check", next="accept")
+    question = Question(
+        step=kind,
+        text=text,
+        options=[take, retry] if accept else [retry],
+        cause=cause_key(ErrorKind.LIVENESS, kind, UNREAD),
+    )
     return StepResult(exit=Exit.ASK, reason=text, question=question)
 
 

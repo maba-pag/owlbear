@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import config_routes, evidence, loop, profile
+from owlbear_delivery_next import config_routes, evidence, held, loop, profile
 from owlbear_delivery_next.briefs import save_brief
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, PullItem
 from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
@@ -122,7 +122,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out["spend"] = c.spend.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):
-        options = [o.model_dump(include={"id", "label"}) for o in q.options]
+        options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
         where = "chat" if loop.ordinary(q) else "changes-page"
         out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "options": options, "answer_in": where}
     return out
@@ -245,6 +245,7 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         events = store.events(slug)
         merge = offer(c, events)
         q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
+        q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [
             {
@@ -314,7 +315,9 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
             raise HTTPException(409, "consent to merge goes through merge-consent with the exact head")
         if body.channel == "chat" and not loop.ordinary(q):
             raise HTTPException(403, T6)
-        if body.option is not None and body.option not in {o.id for o in q.options}:
+        if body.option is not None and body.option not in {o.id for o in held.offered(store, c, q)}:
+            if body.option in {o.id for o in q.options}:  # an accept its hold no longer supports
+                raise HTTPException(409, "the held result no longer matches its step, brief or commit; run it again")
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
         if body.option is None and {o.next for o in q.options} & loop.DECISIONS - {"retry"}:
             raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")

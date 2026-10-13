@@ -311,7 +311,7 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     q.effect_observed_at = item.at
     if not gate:
         return  # the Change moved on since it asked
-    if target == "retry":
+    if target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
         go(c, c.step.kind, c.step.task, c.step.mode)
     else:
         _visual_decision(c, target, item.text)
