@@ -96,7 +96,7 @@ def test_luna_low_and_haiku_medium_load_and_the_defaults_are_valid():
 def test_sdk_options_carry_the_model_reasoning_effort_and_context_tier():
     rm = roles.chosen(resolve(None, Layer()), StepKind.BUILD)
     cfg = sdk_adapter.Session(
-        StepKind.BUILD, Path(), "s1", "m", resume=False, policy=Policy(Path(), ()), observe=Worktree, checks=(),
+        StepKind.BUILD, Path(), "s1", "m", resume=False, policy=Policy(Path()), observe=Worktree, checks=(),
         model=rm.model, effort=rm.effort, context=rm.context,
     )  # fmt: skip
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
@@ -109,9 +109,7 @@ def test_sdk_options_carry_the_model_reasoning_effort_and_context_tier():
 
 @pytest.mark.parametrize("kind", sorted(sdk_adapter.ROLES))
 def test_every_role_runs_autopilot_and_only_delivery_can_ask_the_owner(kind):
-    cfg = sdk_adapter.Session(
-        kind, Path(), "s1", "m", resume=True, policy=Policy(Path(), ()), observe=Worktree, checks=()
-    )
+    cfg = sdk_adapter.Session(kind, Path(), "s1", "m", resume=True, policy=Policy(Path()), observe=Worktree, checks=())
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
     assert opts["excluded_tools"] == ["ask_user"]  # the runtime's own question tool; N10's request is ask_question
     assert "on_user_input_request" not in opts

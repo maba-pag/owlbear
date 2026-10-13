@@ -173,7 +173,7 @@ def start(e: Environment, root: Path, log: Path) -> subprocess.Popen[bytes] | No
     """Spawn the recipe as leader of its own session and group; the caller records it before waiting."""
     try:
         with log.open("ab") as out:
-            proc = subprocess.Popen(  # noqa: S603 - argument vector of an allow-listed launch command
+            proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
                 shlex.split(e.command),
                 cwd=root / e.directory,
                 stdin=subprocess.DEVNULL,

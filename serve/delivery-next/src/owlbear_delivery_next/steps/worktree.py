@@ -64,12 +64,6 @@ def tracking(cwd: Path, target: str) -> str:
     return f"origin/{target}" if found.returncode == 0 else target
 
 
-def allowed(profile: Profile, kind: str) -> list[str]:
-    """Return the profile's extra shell commands for one step kind; for ``check`` they are the launch commands."""
-    extra = profile.entries.get(f"allow:{kind}")
-    return extra.value.split("\n") if extra else []
-
-
 def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]:
     """Return ``(package, command)`` per known install entry holding a scope path; the Builder runs them (DR3)."""
     found = []

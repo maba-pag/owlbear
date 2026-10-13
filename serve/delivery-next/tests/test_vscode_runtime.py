@@ -63,7 +63,7 @@ def session(**kw) -> sdk_adapter.Session:
         "session_id": "s1",
         "message": "m",
         "resume": False,
-        "policy": Policy(Path(), ()),
+        "policy": Policy(Path()),
         "observe": lambda: Worktree(HEAD, BASE, changed=("src/greet.ts",)),
         "checks": (),
     }

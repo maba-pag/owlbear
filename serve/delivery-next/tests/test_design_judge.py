@@ -28,7 +28,7 @@ def session(**fields):
         "session_id": "s1",
         "message": "judge",
         "resume": False,
-        "policy": Policy(Path(), (), write=False),
+        "policy": Policy(Path(), write=False),
         "observe": lambda: tools.Worktree("h", "h", changed=IMAGES),
         "checks": (),
         "role": "designer",

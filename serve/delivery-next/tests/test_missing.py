@@ -219,7 +219,7 @@ def test_pause_is_never_delivered_to_the_session_after_resume() -> None:
 
 def shell(text: str) -> SimpleNamespace:
     """One SDK shell permission request for *text*."""
-    command = SimpleNamespace(identifier=text.split(maxsplit=1)[0], read_only=False)
+    command = SimpleNamespace(identifier=text.split(maxsplit=1)[0])
     segment = SimpleNamespace(full_command_text=text)
     return SimpleNamespace(
         kind="shell",
@@ -232,7 +232,7 @@ def shell(text: str) -> SimpleNamespace:
 
 
 def test_denials_record_the_programs_they_name() -> None:
-    piped = permissions.Request("shell", (("cd web && /usr/local/bin/docker ps | grep api", False),))
+    piped = permissions.Request("shell", ("cd web && /usr/local/bin/docker ps | grep api",))
     assert permissions.identities(piped) == {"docker", "grep"}
     assert permissions.identities(permissions.Request("mcp", tool="Fetch")) == {"fetch"}
     assert permissions.identities(permissions.Request("url")) == {"url"}
@@ -242,13 +242,13 @@ def test_denials_record_the_programs_they_name() -> None:
         "s1",
         "m",
         resume=False,
-        policy=Policy(Path(), ("docker ps",)),
+        policy=Policy(Path(), write=False),
         observe=tools.Worktree,
         checks=(),
         journal=sdk_adapter.Journal(event=lambda _e: None),
     )
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
-    st.permission(shell("docker compose up"), None)
+    st.permission(shell("docker compose up > log"), None)
     assert list(st.run.denied) == ["docker"]
     assert st.run.denied["docker"] == st.run.denials[-1]
     st.permission(shell("docker ps"), None)

@@ -117,11 +117,8 @@ def seed(store: Store, a: argparse.Namespace) -> None:
     """Write a minimal confirmed profile and one Change whose approved brief and one-task plan start at build."""
     now = datetime.now(UTC)
     entries = {f"install:{pkg}": ProfileEntry(state="known", value=cmd, evidence="dev seed") for pkg, cmd in a.install}
-    for kind, cmds in ((StepKind.BUILD, a.allow), (StepKind.CHECK, a.launch)):
-        if cmds:
-            entries[f"allow:{kind}"] = ProfileEntry(state="known", value="\n".join(cmds), evidence="dev seed")
     old = store.read_profile() or Profile()
-    entries = {k: v for k, v in old.entries.items() if not k.startswith(("install:", "allow:"))} | entries
+    entries = old.entries | entries
     store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, runtime=old.runtime))
     criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(a.criterion, 1)]
     brief = Brief(version=1, outcome=a.outcome, scope=a.scope, criteria=criteria)
@@ -221,8 +218,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     s.add_argument("--scope", action="append", default=[])
     s.add_argument("--check", action="append", default=[])
     s.add_argument("--install", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="DIR=CMD")
-    s.add_argument("--allow", action="append", default=[], help="extra shell command allowed in build")
-    s.add_argument("--launch", action="append", default=[], help="launch command allowed for check environments")
     s.add_argument(
         "--person-check", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="ID=STEPS"
     )

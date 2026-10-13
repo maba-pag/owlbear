@@ -736,12 +736,8 @@ def test_a_builder_response_survives_the_session_replacing_the_change_and_is_rep
     tid = opened.fix_task.id
     cx.store.write(cx.lock, loop.apply(c, opened, NOW))
     built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Done."})
-    entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
-    cx.store.write_profile(Profile(version=1, entries={"check:packages/app": entry}))
-    policies = []
 
     async def build(cfg):
-        policies.append(cfg.policy)
         getattr(cfg.journal, callback)()  # rebinds the runner's ``change`` to a copy mid-session
         commit(clone, "fix.txt")
         head = git(clone, "rev-parse", "HEAD")
@@ -750,7 +746,6 @@ def test_a_builder_response_survives_the_session_replacing_the_change_and_is_rep
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: clone)
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._agent(cx.store, cx.lock, cx.store.read("c1"), clone)  # noqa: SLF001
-    assert policies[0].checks == (("packages/app", "npm test"),)  # the Builder may run a check in its package
     after, head = cx.store.read("c1"), git(clone, "rev-parse", "HEAD")
     task = next(t for t in after.plan.tasks if t.id == tid)
     assert task.response == Response(how="fixed", text="Done.", commit=head)

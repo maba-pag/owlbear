@@ -244,7 +244,7 @@ class _Step:
         reason = redact(reason)
         self.run.denials.append(reason)
         self.run.denied |= dict.fromkeys(identities(req), reason)
-        request = [redact(t) for t, _ in req.commands] or [redact(str(p)) for p in req.paths]
+        request = [redact(t) for t in req.commands] or [redact(str(p)) for p in req.paths]
         self.log(event="denied", kind=req.kind, request=request, reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")
 

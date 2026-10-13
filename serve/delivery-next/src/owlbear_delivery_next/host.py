@@ -22,7 +22,6 @@ from pydantic import ValidationError
 from owlbear_delivery_next import api, common, failures, loop, processes, setup, tools
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
-from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import before, check, engine, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
@@ -291,9 +290,9 @@ class Host:
         if (left := self._clear(c, e)) is None or left:
             self._mark(c, left, now)  # never a second group beside one that may still run
             return c
-        root, launch = Path(c.names.worktree), worktree.allowed(self.store.read_profile() or Profile(), StepKind.CHECK)
+        root = Path(c.names.worktree)
         recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
-        errors = tools.check_recipe(recipe, tools.Worktree("", ""), launch, root)
+        errors = tools.check_recipe(recipe, tools.Worktree("", ""), root)
         if errors:
             c.env = c.recipe = None
             self.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")

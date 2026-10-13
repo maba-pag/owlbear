@@ -207,7 +207,7 @@ def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypat
         session_id="",
         message="review the plan",
         resume=False,
-        policy=Policy(clone, ()),
+        policy=Policy(clone),
         observe=tools.Worktree,
         checks=(),
     )

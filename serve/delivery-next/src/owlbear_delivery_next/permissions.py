@@ -1,44 +1,134 @@
-"""Permission decisions for one step's worker session: allow list, denials and their reasons (D4 §3.6)."""
+"""Permission decisions for one step's worker session and their reasons (D4 §3.6, TD-82, TD-86).
+
+Every shell command and file access is allowed, except in every step a hook or signing bypass or a force push,
+and in a read-only step any write. The read-only shell rule is ported from the old agents' deny-writes guard.
+"""
 
 from __future__ import annotations
 
-import itertools
 import re
-import shlex
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass, field
+from pathlib import PurePath
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from owlbear_delivery_next import tools
-from owlbear_delivery_next.confinement import GIT_OUTPUT, NULL_PATHS, git_subcommand, inside, outside, resolve
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-DENIED = ("git push", "git config", "git -c", "gh", "sudo")
-VALUE_FLAGS = "mFCctSuo"  # short options of git commit and push that take a value
-GIT_READ_ONLY = frozenset(("log", "show", "diff", "status", "blame", "grep", "ls-files", "rev-parse"))
-_HARMLESS = re.compile(r"\d*>>?\s*/dev/null\b|\d*>&\d+")  # discarded output or a descriptor copy
+_HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
+_REDIRECTION = re.compile(r"&?[<>]+[&|]?")
+_PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "time", "until", "while"})
+_ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
+_READ_ONLY_GIT = frozenset(
+    {
+        "cat-file",
+        "describe",
+        "diff",
+        "diff-tree",
+        "for-each-ref",
+        "grep",
+        "log",
+        "ls-files",
+        "ls-tree",
+        "merge-base",
+        "name-rev",
+        "rev-list",
+        "rev-parse",
+        "show",
+        "show-ref",
+        "status",
+    }
+)
+_GIT_GLOBAL_FLAGS = frozenset(
+    {
+        "--bare",
+        "--exec-path",
+        "--glob-pathspecs",
+        "--help",
+        "--html-path",
+        "--icase-pathspecs",
+        "--info-path",
+        "--literal-pathspecs",
+        "--man-path",
+        "--no-advice",
+        "--no-lazy-fetch",
+        "--no-optional-locks",
+        "--no-pager",
+        "--no-replace-objects",
+        "--noglob-pathspecs",
+        "--paginate",
+        "--version",
+        "-P",
+        "-h",
+        "-p",
+        "-v",
+    }
+)
+_GIT_GLOBAL_OPTIONS = frozenset(
+    {"-C", "-c", "--attr-source", "--config-env", "--git-dir", "--namespace", "--work-tree"}
+)
+_GIT_GLOBAL_ATTACHED = _GIT_GLOBAL_OPTIONS | {"--exec-path", "--list-cmds", "--super-prefix"}  # as --option=value
+_GIT_VALUES = {  # short options taking the next word or only an attached value, and long ones taking a value
+    "commit": (
+        "mFCct",
+        "Su",
+        frozenset(
+            {
+                "--author",
+                "--cleanup",
+                "--date",
+                "--file",
+                "--fixup",
+                "--message",
+                "--pathspec-from-file",
+                "--reedit-message",
+                "--reuse-message",
+                "--squash",
+                "--template",
+                "--trailer",
+            }
+        ),
+    ),
+    "push": ("o", "", frozenset({"--exec", "--push-option", "--receive-pack", "--recurse-submodules", "--repo"})),
+}
+_NO_VALUES: tuple[str, str, frozenset[str]] = ("", "", frozenset())
+_GIT_FALSE = frozenset({"", "0", "false", "no", "off"})
+_GIT_WRITE_OPTIONS = frozenset(
+    {
+        "--output",
+        "--output-indicator-context",
+        "--output-indicator-new",
+        "--output-indicator-old",
+    }
+)
+_REDIRECT = re.compile(r"(?:^|[^>])(?:&>|>>?|\d+>>?)(?![>&])")
+_SHELL_MUTATION = re.compile(
+    r"(?:^|[\s;&|])(?:chmod|chown|chflags|cp|dd|install|ln|mkdir|mv|patch|rm|rmdir|tee|touch|truncate)\b"
+    r"|\bsed\s+[^\n;&|]*-[^\s]*i\b"
+    r"|\bperl\s+[^\n;&|]*-[^\s]*[pi][^\s]*\b"
+    r"|(?<![<>&])>(?![>&])"
+    r"|\.(?:chmod|rename|replace|unlink|write_bytes|write_text)\s*\("
+    r"|\bopen\s*\([^\n)]*,\s*['\"][wax+]"
+)
 
 
 @dataclass(frozen=True)
 class Policy:
-    """Allow list of one step kind; every other request is denied and logged (D4 §3.6)."""
+    """One step's permission policy: its worktree, and whether the step may write (D4 §3.6)."""
 
     root: Path
-    commands: tuple[str, ...]
     write: bool = True
-    checks: tuple[tuple[str, str], ...] = ()  # the profile's (package directory, check command) pairs
 
 
 @dataclass(frozen=True)
 class Request:
-    """The parts of a permission request the policy judges; shell commands carry the runtime's read-only flag."""
+    """The parts of a permission request the policy judges."""
 
     kind: str
-    commands: tuple[tuple[str, bool], ...] = ()
+    commands: tuple[str, ...] = ()
     paths: tuple[str, ...] = ()
-    urls: bool = False
     tool: str = ""
     server: str = ""  # an MCP request's server
 
@@ -47,123 +137,230 @@ def identities(req: Request) -> set[str]:
     """The tools a request names, lower case: each shell command's program, else its tool or kind (TD-36)."""
     programs = {
         words[0].rsplit("/", 1)[-1].lower()
-        for text, _ in req.commands
-        for part in re.split(r"[;&|]+", text)
+        for text in req.commands
+        for part in re.split(r"[;&|\n]+", text)
         if (words := part.split()) and words[0] != "cd"
     }
     return programs or {(req.tool or req.kind).lower()}
 
 
-def metachars(text: str) -> set[str]:
-    """Shell operators of *text* outside quotes, and command substitution outside single quotes."""
-    found: set[str] = set()
-    quote, escaped = "", False
-    for i, ch in enumerate(text):
-        if escaped or (ch == "\\" and quote != "'"):
-            escaped = not escaped
-        elif quote == "'":
-            quote = "" if ch == "'" else quote
-        elif ch == "`" or text.startswith("$(", i):
-            found.add("`" if ch == "`" else "$(")
-        elif quote:
-            quote = "" if ch == '"' else quote
-        elif ch in "'\"":
-            quote = ch
-        elif ch in ";|&<>":
-            found.add(ch)
-    return found
+@dataclass
+class _Level:
+    """The command being read at one nesting level of shell text."""
+
+    words: list[str] = field(default_factory=list)
+    word: str | None = None
+    quote: str = ""
+    redirect: bool = False  # the next word is a redirection's target, not an argument
+
+    def add(self, chars: str) -> None:
+        self.word = (self.word or "") + chars
+
+    def end_word(self) -> None:
+        if self.word is not None:
+            if not self.redirect:
+                self.words.append(self.word)
+            self.redirect = False
+        self.word = None
+
+    def end_command(self, commands: list[list[str]]) -> None:
+        self.end_word()
+        if self.words:
+            commands.append(self.words)
+        self.words, self.redirect = [], False
 
 
-def _prefixed(text: str, prefixes: Sequence[str]) -> bool:
-    words = text.split()
-    if words[:2] == ["git", "--no-pager"] and words[2:3] and words[2] in GIT_READ_ONLY:
-        words = ["git", *words[2:]]
-    return any(words[: len(p.split())] == p.split() for p in prefixes)
+class _Lexer:
+    """Splits shell text into each command's words at unquoted operators and newlines, and into substitutions."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.commands: list[list[str]] = []
+
+    def level(self, i: int, close: str = "") -> int:
+        """Read text[i:] up to the unquoted *close*, or to the end without one; return the index after it.
+
+        Raises:
+            ValueError: A quote, subshell or substitution is not closed.
+        """
+        s = _Level()
+        while i < len(self.text) and (s.quote or self.text[i] != close):
+            i = self._step(s, i)
+        if s.quote or (close and i >= len(self.text)):
+            raise ValueError
+        s.end_command(self.commands)
+        return i + 1
+
+    def _step(self, s: _Level, i: int) -> int:
+        text, ch = self.text, self.text[i]
+        if s.quote == "'" or (s.quote and ch == '"'):
+            if ch == s.quote:
+                s.quote = ""
+            else:
+                s.add(ch)
+            return i + 1
+        if ch == "\\":
+            nxt = text[i + 1 : i + 2]
+            if nxt != "\n":
+                s.add(nxt if not s.quote or nxt in '"\\`$' else ch + nxt)
+            return i + 2
+        if ch == "`" or text.startswith("$(", i):
+            s.add("$")  # the substitution's commands are checked on their own
+            return self.level(i + 1, "`") if ch == "`" else self.level(i + 2, ")")
+        if s.quote:
+            s.add(ch)
+            return i + 1
+        return self._unquoted(s, i)
+
+    def _unquoted(self, s: _Level, i: int) -> int:
+        text, ch = self.text, self.text[i]
+        if ch in "'\"":
+            s.quote = ch
+            s.add("")
+        elif ch == "#" and s.word is None:
+            end = text.find("\n", i)
+            return len(text) if end < 0 else end
+        elif match := _REDIRECTION.match(text, i):
+            if s.word is not None and s.word.isdigit():
+                s.word = None  # a file descriptor
+            s.end_word()
+            s.redirect = True
+            return match.end()
+        elif ch == "(":
+            s.end_command(self.commands)
+            return self.level(i + 1, ")")
+        elif ch in ";&|\n)":
+            s.end_command(self.commands)
+        elif ch in " \t":
+            s.end_word()
+        else:
+            s.add(ch)
+        return i + 1
 
 
-def _package_check(text: str, checks: Sequence[tuple[str, str]], root: Path | None) -> bool:
-    """``cd <package> && <check>`` and nothing more, the package resolving inside *root* to a profile package."""
-    head, _, tail = text.partition("&&")
-    cd = head.split()
-    if root is None or len(cd) != 2 or metachars(head) or metachars(tail):  # noqa: PLR2004 - ``cd`` and its target
-        return False
-    target, rest = resolve(root, cd[1]), tail.split()
-    return target.is_relative_to(root.resolve()) and any(
-        target == resolve(root, p) and rest[: len(c.split())] == c.split() for p, c in checks
+def _commands(text: str) -> list[list[str]]:
+    """The words of each command in *text*, including those of subshells and command substitutions.
+
+    Raises:
+        ValueError: The text cannot be parsed.
+    """
+    lexer = _Lexer(text)
+    lexer.level(0)
+    return lexer.commands
+
+
+class _GitCall(NamedTuple):
+    config: tuple[str, ...]  # the -c settings
+    sub: str | None
+    arguments: tuple[str, ...]  # the subcommand's, or the unparsed rest without one
+
+
+def _parse_git(words: Sequence[str]) -> _GitCall:
+    """Parse the words after git: its global options, then the subcommand and its arguments."""
+    config: list[str] = []
+    i = 0
+    while i < len(words):
+        w = words[i]
+        if w in _GIT_GLOBAL_OPTIONS:
+            config += words[i + 1 : i + 2] if w == "-c" else []
+            i += 2
+        elif w in _GIT_GLOBAL_FLAGS or ("=" in w and w.partition("=")[0] in _GIT_GLOBAL_ATTACHED):
+            i += 1
+        else:
+            break
+    rest = tuple(words[i:])
+    if rest and not rest[0].startswith("-"):
+        return _GitCall(tuple(config), rest[0], rest[1:])
+    return _GitCall(tuple(config), None, rest)
+
+
+def _disables(setting: str) -> bool:
+    """Whether a git -c setting replaces the hooks or turns commit or tag signing off."""
+    key, eq, value = setting.partition("=")
+    key = key.lower()
+    return key == "core.hookspath" or (
+        key in {"commit.gpgsign", "tag.gpgsign"} and bool(eq) and value.lower() in _GIT_FALSE
     )
 
 
-def allowed(
-    text: str, prefixes: Sequence[str], checks: Sequence[tuple[str, str]] = (), root: Path | None = None
-) -> bool:
-    """Whether *text* starts with the words of one of *prefixes*: the one allow-list rule for commands.
-
-    ``git --no-pager <read-only subcommand>`` counts as that subcommand when it is allowed. The tail may hold
-    no shell operator or substitution except a redirect to ``/dev/null`` or a descriptor, so a prefix cannot
-    smuggle a second command. ``cd <package> && <check>`` is allowed when *checks* names that check for the
-    package directory *cd* resolves to inside *root*.
-    """
-    if text.split()[:1] == ["cd"] and "&&" in text:
-        return _package_check(text, checks, root)
-    return not metachars(_HARMLESS.sub("", text)) and _prefixed(text, prefixes)
+def _short(cluster: str, required: str, optional: str) -> tuple[str, bool]:
+    """The flags of a short-option cluster before an option taking a value, and whether that value is the next word."""
+    for j, ch in enumerate(cluster):
+        if ch in required or ch in optional:
+            return cluster[:j], ch in required and j == len(cluster) - 1
+    return cluster, False
 
 
-def _read_only_write(text: str, words: Sequence[str]) -> str | None:
-    """The redirect or git option by which a command would write in a read-only step."""
-    if ">" in metachars(text):
-        return "a redirect"
-    sub = git_subcommand(words)
-    for w in words[1:] if sub else ():
-        flag = w.partition("=")[0]
-        if flag in {"--output", "--ext-diff"} or (flag == "-o" and sub in GIT_OUTPUT):
+def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
+    """Return the option or refspec of a git subcommand that skips hooks or signing or forces a push."""
+    required, optional, long_values = _GIT_VALUES.get(sub or "", _NO_VALUES)
+    forbidden = {"commit": "n", "push": "f"}.get(sub or "", "")
+    i = 0
+    while i < len(arguments) and (w := arguments[i]) != "--":
+        name, eq, _ = w.partition("=")
+        flags, takes = _short(w[1:], required, optional) if re.fullmatch(r"-[^-].*", w) else ("", False)
+        if w in {"--no-verify", "--no-gpg-sign"} or set(flags) & set(forbidden):
             return w
+        if sub == "push" and w.startswith(("--force", "+")):
+            return w
+        i += 2 if takes or (name in long_values and not eq) else 1
     return None
 
 
 def _bypass(words: Sequence[str]) -> str | None:
-    """Return the flag of a git command that skips hooks or signing, or forces a push."""
-    sub = next((w for w in words if w in {"commit", "push"}), "") if words[:1] == ["git"] else None
-    for w in words[1:] if sub is not None else ():
-        short = re.fullmatch(r"-([a-zA-Z]+)", w)  # a cluster sets a flag only before an option taking a value
-        flags = re.split(f"[{VALUE_FLAGS}]", short[1])[0] if short else ""
-        if w in {"--no-verify", "--no-gpg-sign"} or (sub == "commit" and "n" in flags):
-            return w
-        if sub == "push" and (w.startswith(("--force", "+")) or "f" in flags):
-            return w
+    """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
+    i = next((i for i, w in enumerate(words) if w not in _PREFIX_WORDS and not _ASSIGNMENT.match(w)), len(words))
+    if i == len(words) or PurePath(words[i]).name != "git":
+        return None
+    call = _parse_git(words[i + 1 :])
+    if setting := next((s for s in call.config if _disables(s)), None):
+        return f"-c {setting}"
+    return _sub_bypass(call.sub, call.arguments)
+
+
+def _is_read_only_branch(arguments: Sequence[str]) -> bool:
+    if list(arguments) in ([], ["--show-current"]):
+        return True
+    return arguments[0] == "--list" and not any(a.startswith("-") for a in arguments[1:])  # else it creates one
+
+
+def _git_mutation(words: Sequence[str]) -> str | None:
+    """How a git command anywhere in one command's words would write."""
+    for i in (i for i, w in enumerate(words) if PurePath(w).name == "git"):
+        call = _parse_git(words[i + 1 :])
+        if option := next((a for a in call.arguments if a.partition("=")[0] in _GIT_WRITE_OPTIONS), None):
+            return f"Git output option {option}"
+        if call.sub == "branch" and _is_read_only_branch(call.arguments):
+            continue
+        if call.sub not in _READ_ONLY_GIT and (call.sub or call.arguments):
+            return f"Git command '{call.sub or ' '.join(words[i:])}'"
     return None
 
 
-def _reach(policy: Policy, base: Path, words: Sequence[str], *, read_only: bool) -> tuple[str | None, Path]:
-    """The first place outside the worktree each ``&&`` part reaches, and the directory the command ends in."""
-    for part in (list(g) for amp, g in itertools.groupby(words, lambda w: w == "&&") if not amp):
-        if (reached := outside(policy.root, base, part, mutating=not read_only)) is not None:
-            return str(reached), base
-        base = resolve(base, part[1]) if part[:1] == ["cd"] and len(part) > 1 else base
-    return None, base
+def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
+    """How a shell command would write files or change Git state; discarded output does not count."""
+    if found := next(filter(None, map(_git_mutation, commands)), None):
+        return found
+    text = _HARMLESS.sub("", text)
+    if _REDIRECT.search(text):
+        return "a redirect"
+    if match := _SHELL_MUTATION.search(text):
+        return f"filesystem mutation '{match[0].strip(' \t;&|')}'"
+    return None
 
 
-def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one reason per check
-    if req.urls:
-        return "shell commands that reach URLs are not allowed"
-    base = policy.root
-    if out := next((p for p in req.paths if p not in NULL_PATHS and not inside(policy.root, p)), None):
-        return f"the command reaches {out}, outside the worktree"
-    for text, read_only in req.commands or (("", False),):
+def _shell(policy: Policy, req: Request) -> str | None:
+    for text in req.commands or ("",):
         try:
-            words = shlex.split(text)
+            commands = _commands(text)
         except ValueError:
             return f"`{text}` cannot be parsed"
-        if flag := _bypass(words):
+        if not commands:
+            return "the shell request names no command"
+        if flag := next(filter(None, map(_bypass, commands)), None):
             return f"`{text}` uses {flag}, which skips hooks or signing or forces history"
-        reached, base = _reach(policy, base, words, read_only=read_only)
-        if reached is not None:
-            return f"`{text}` reaches {reached}, outside the worktree"
-        if not policy.write and (flag := _read_only_write(text, words)):
-            return f"`{text}` uses {flag}, which writes in a read-only step"
-        if _prefixed(text, DENIED):
-            return f"`{text}` is denied"
-        if not (allowed(text, policy.commands, policy.checks, policy.root) or read_only):
-            return f"`{text}` is not in this step's allow list"
+        if not policy.write and (found := _mutation(text, commands)):
+            return f"`{text}` uses {found}, which writes in a read-only step"
     return None
 
 
@@ -182,10 +379,9 @@ def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) 
             else f"tool {req.tool} is not allowed"
         )
     if req.kind in {"read", "write"}:
-        if req.kind == "write" and not policy.write:
-            return "writes are not allowed in this step"
-        out = [p for p in req.paths if not inside(policy.root, p)]
-        return f"{req.kind} outside the worktree: {out[0]}" if out else None if req.paths else "no path"
+        return "writes are not allowed in this step" if req.kind == "write" and not policy.write else None
+    if req.kind == "url":
+        return None
     return _shell(policy, req) if req.kind == "shell" else f"{req.kind} requests are not allowed in this step"
 
 
@@ -193,10 +389,8 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
     """Normalise one SDK permission request into a Request."""
     kind = getattr(r, "kind", type(r).__name__)
     if kind == "shell":
-        ro = tuple(c.identifier for c in r.commands if c.read_only)
         texts = [s.full_command_text for s in r.command_segments or ()] or [c.identifier for c in r.commands]
-        commands = tuple((t, allowed(t, ro)) for t in texts or [r.full_command_text])
-        return Request(kind, commands, tuple(r.possible_paths or ()), bool(r.possible_urls))
+        return Request(kind, tuple(texts or [r.full_command_text]), tuple(r.possible_paths or ()))
     if kind in {"read", "write"}:
         path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
         return Request(kind, paths=(path,) if path else ())

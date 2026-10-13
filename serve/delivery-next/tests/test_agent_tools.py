@@ -27,7 +27,7 @@ FIELDS = {
     "session_id": "s1",
     "message": "m",
     "resume": False,
-    "policy": Policy(Path(), ()),
+    "policy": Policy(Path()),
     "observe": lambda: Worktree("a" * 40, "b" * 40),
     "checks": (),
     "model": "gpt-6-luna",

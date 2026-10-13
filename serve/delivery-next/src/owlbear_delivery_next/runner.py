@@ -133,9 +133,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         session_id=s.session or "",
         message=prompts.answer(answer) if resume and answer else parts.message,
         resume=resume,
-        policy=permissions.Policy(
-            path, parts.allowed, write=parts.write, checks=tuple(worktree.checks(profile)) if parts.write else ()
-        ),
+        policy=permissions.Policy(path, write=parts.write),
         observe=lambda: worktree.observe(path, change.names.target, since),
         checks=parts.checks,
         submit=parts.submit,
@@ -237,7 +235,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             errors = visual.classify([e for s in shots for e in s.errors], change.before)
             base = sdk_adapter.Session(
                 kind=StepKind.REVIEW, worktree=path, session_id="", message="", resume=False,
-                policy=permissions.Policy(path, prompts.GIT_READ, write=False),
+                policy=permissions.Policy(path, write=False),
                 observe=lambda: tools.Worktree(head, head), checks=(), submit=tools.VISUAL_REVIEW,
                 journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)), memory=sessions.memory(store),
             )  # fmt: skip
@@ -324,14 +322,13 @@ def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> No
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
     store.write(lock, change)
-    extra = worktree.allowed(store.read_profile() or Profile(), StepKind.REVIEW)
     cfg = sdk_adapter.Session(
         kind=StepKind.REVIEW,
         worktree=path,
         session_id="",
         message=prompts.brief_challenge(change, path),
         resume=False,
-        policy=permissions.Policy(path, (*prompts.GIT_READ, *extra), write=False),
+        policy=permissions.Policy(path, write=False),
         observe=lambda: worktree.observe(path, change.names.target),
         checks=(),
         journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
@@ -369,20 +366,16 @@ def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
 
 def _reused(store: Store, lock: Lock, change: Change) -> bool:
-    """Check prep without an agent: this check's last launched recipe, while allowed and its inputs are unchanged.
+    """Check prep without an agent: this check's last launched recipe, while still valid and its inputs unchanged.
 
     Otherwise the recipe is forgotten and an agent prepares again.
     """
     r, s, now = change.recipe, change.step, datetime.now(UTC)
     if s.kind != StepKind.CHECK or r is None:
         return False
-    root, launch = Path(change.names.worktree), worktree.allowed(store.read_profile() or Profile(), StepKind.CHECK)
+    root = Path(change.names.worktree)
     recipe = tools.CheckRecipe(command=r.command, directory=r.directory, ready_url=r.ready_url, summary="reused")
-    held = (
-        r.check == (s.task or "")
-        and root.is_dir()
-        and not tools.check_recipe(recipe, tools.Worktree("", ""), launch, root)
-    )
+    held = r.check == (s.task or "") and root.is_dir() and not tools.check_recipe(recipe, tools.Worktree("", ""), root)
     if not (held and r.inputs and worktree.launch_inputs(root, r.directory) == r.inputs):
         change.recipe = None
         store.write(lock, change)

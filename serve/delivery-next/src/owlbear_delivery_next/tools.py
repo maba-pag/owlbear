@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from owlbear_delivery_next import confinement, permissions
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
@@ -163,7 +161,7 @@ class VisualReviewResult(ReviewResult):
 class CheckRecipe(Args):
     """``submit_result`` for check preparation: how the host starts the environment the owner checks."""
 
-    command: str = _f(200, "One allowed launch command", "npm run preview")
+    command: str = _f(200, "The command that starts it", "npm run preview")
     directory: str = _f(300, "Repository-relative directory to run it in", "packages/app")
     ready_url: str = _f(300, "Local URL that answers once the environment is ready", "http://127.0.0.1:4173/")
     summary: str = _f(1000, "How you verified it", "Ran it, fetched the page, stopped it")
@@ -407,16 +405,12 @@ def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) 
     return errors
 
 
-def check_recipe(recipe: CheckRecipe, tree: Worktree, launch: Sequence[str], root: Path) -> list[str]:
-    """Return field errors for a recipe the host could not run: outside the worktree, unlisted or not local."""
+def check_recipe(recipe: CheckRecipe, tree: Worktree, root: Path) -> list[str]:
+    """Return field errors for a recipe the host could not run: uncommitted, outside the worktree or not local."""
     errors = [f"changes: uncommitted files ({_few(tree.dirty)}); commit or revert them"] if tree.dirty else []
     where = (root / recipe.directory).resolve()
     if not (where.is_relative_to(root.resolve()) and where.is_dir()):
         errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')
-    if not permissions.allowed(recipe.command, launch):
-        errors.append(f"command: not an allowed launch command - use one of {', '.join(launch) or 'none'}")
-    if (outside := confinement.escape(root, where, recipe.command)) is not None:
-        errors.append(f"command: {outside} is outside the worktree - keep every path argument inside it")
     if not LOCAL_URL.fullmatch(recipe.ready_url):
         errors.append('ready_url: must be local with a port, e.g. "http://127.0.0.1:4173/"')
     return errors
@@ -439,7 +433,7 @@ def check_result(  # noqa: PLR0913, PLR0917 - the result, its worktree and four 
         case ReviewResult():
             return check_review(args, tree, visual=visual)
         case CheckRecipe():
-            return check_recipe(args, tree, checks, root)
+            return check_recipe(args, tree, root)
         case PlanResult():
             return check_plan(args, tree, checks, scope)
     return []

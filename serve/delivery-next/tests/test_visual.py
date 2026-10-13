@@ -22,7 +22,6 @@ from owlbear_delivery_next import (
     detector,
     host,
     loop,
-    permissions,
     processes,
     prompts,
     runner,
@@ -833,26 +832,15 @@ def test_a_capture_over_one_reviews_budget_is_judged_in_batches_by_both_judges(f
     assert (after.visual.passed, after.visual.files) == (True, ["home-1280.png", "home-1920.png", "home-2400.png"])
 
 
-def test_the_launch_recipe_follows_the_worker_path_policy(tmp_path):
-    def errors(command):
-        fields = {"directory": ".", "command": command, "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}
-        recipe = tools.CheckRecipe(**fields)
-        return tools.check_recipe(recipe, tools.Worktree("h", "h"), ["npm run preview"], tmp_path)
+def test_the_launch_recipe_needs_a_clean_worktree_directory_and_a_local_url(tmp_path):
+    def errors(dirty=(), **fields):
+        base = {"directory": ".", "command": "npm run x", "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}
+        return tools.check_recipe(tools.CheckRecipe(**base | fields), tools.Worktree("h", "h", dirty), tmp_path)
 
-    assert any("/outside is outside the worktree" in e for e in errors("npm run preview --prefix /outside"))
-    assert errors("npm run preview -- --port 4173") == []
-
-
-@pytest.mark.parametrize("command", ["npm run preview", "npm  run preview --port 1", "npm run previews", "npm run"])
-def test_the_launch_allow_list_and_the_permission_policy_share_one_rule(tmp_path, command, monkeypatch):
-    fields = {"directory": ".", "command": command, "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}
-    errs = tools.check_recipe(tools.CheckRecipe(**fields), tools.Worktree("h", "h"), ["npm run preview"], tmp_path)
-    assert (not any(e.startswith("command: not an allowed") for e in errs)) is permissions.allowed(
-        command, ["npm run preview"]
-    )
-    monkeypatch.setattr(permissions, "allowed", lambda *_a: False)
-    errs = tools.check_recipe(tools.CheckRecipe(**fields), tools.Worktree("h", "h"), ["npm run preview"], tmp_path)
-    assert any(e.startswith("command: not an allowed") for e in errs)  # the recipe check asks the policy's rule
+    assert errors(command="npm run preview --prefix /outside") == []
+    assert errors(("a",))[0].startswith("changes: uncommitted files (a)")
+    assert errors(directory="../")[0].startswith("directory: ../ is not a directory in the worktree")
+    assert errors(ready_url="https://example.com/")[0].startswith("ready_url: must be local")
 
 
 def test_a_visual_environment_is_disposed_on_stop_or_abandon_and_its_runner_crash_is_charged(flow):
@@ -921,7 +909,7 @@ def test_attachments_are_sent_with_the_first_message_only_when_present():
             "s1",
             "look",
             resume=False,
-            policy=Policy(Path(), (), write=False),
+            policy=Policy(Path(), write=False),
             observe=tools.Worktree,
             checks=(),
             journal=sdk_adapter.Journal(event=lambda _e: None),

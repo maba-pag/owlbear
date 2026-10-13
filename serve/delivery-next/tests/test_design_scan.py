@@ -273,7 +273,7 @@ def test_the_scan_answers_without_ending_the_builders_step_in_both_runtimes(tmp_
     helper = (design_tools.SCAN, lambda args: calls.append(args) or "No design detector findings.")
     cfg = sdk_adapter.Session(
         kind=StepKind.BUILD, worktree=tmp_path, session_id="s", message="m", resume=False,
-        policy=Policy(tmp_path, ()), observe=lambda: tools.Worktree("h", "h"), checks=(), helpers=(helper,),
+        policy=Policy(tmp_path), observe=lambda: tools.Worktree("h", "h"), checks=(), helpers=(helper,),
     )  # fmt: skip
     run = Run("s")
     gate = Gate(cfg, run, lambda **_e: None, lambda: None)

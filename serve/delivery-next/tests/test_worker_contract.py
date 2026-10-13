@@ -10,7 +10,7 @@ import pytest
 
 from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
-from owlbear_delivery_next.permissions import Policy, Request, decide
+from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.session_result import Run, to_result
@@ -90,141 +90,6 @@ def test_question_options_must_differ() -> None:
     assert tools.check_question(q) == ["options: labels repeat - give each option a distinct answer"]
 
 
-def shell(*texts: str, read_only: bool = False, **kw) -> Request:
-    return Request("shell", tuple((t, read_only) for t in texts), **kw)
-
-
-def test_permission_allows_listed_commands_and_worktree_paths_only(tmp_path: Path) -> None:
-    policy = Policy(tmp_path, ("git add", "git commit", "npm test", "cd"))
-    (tmp_path / "pkg").mkdir()
-    assert decide(policy, shell("cd pkg", "npm test -- --x", f"cd '{tmp_path}/pkg'", "cd ..", "npm test")) is None
-    assert decide(policy, shell("git push origin x")) == "`git push origin x` is denied"
-    assert decide(policy, shell("npm test", "rm -rf src")) == "`rm -rf src` is not in this step's allow list"
-    assert decide(policy, shell("ls", read_only=True, paths=("src",))) is None
-    assert decide(policy, shell("cat", read_only=True, paths=("/etc/passwd",))) is not None
-    assert decide(policy, shell("npm test", urls=True)) is not None
-    assert decide(policy, Request("write", paths=(str(tmp_path / "a.ts"),))) is None
-    assert decide(policy, Request("write", paths=("../escape.ts",))) == "write outside the worktree: ../escape.ts"
-    assert decide(Policy(tmp_path, (), write=False), Request("write", paths=("a.ts",))) is not None
-    assert decide(policy, Request("url")) == "url requests are not allowed in this step"
-    assert decide(policy, Request("custom-tool", tool="submit_result")) is None
-
-
-def test_commands_reaching_outside_the_worktree_are_denied_before_the_allow_list(tmp_path: Path) -> None:
-    policy = Policy(tmp_path, ("git add", "git commit", "npm test", "cd"))
-    for text, target in [
-        ("cd /opt", "/opt"),
-        ("cd ../other", "../other"),
-        ("git -C /elsewhere commit -m x", "/elsewhere"),
-        ("npm test --prefix=../x", "../x"),
-        ("git add ~/notes.txt", "~/notes.txt"),
-        ("npm test >/srv/out", "/srv/out"),
-    ]:
-        assert decide(policy, shell(text)) == f"`{text}` reaches {target}, outside the worktree"
-    assert decide(policy, shell("cd pkg", "cd ../..")) == "`cd ../..` reaches ../.., outside the worktree"
-    assert decide(policy, shell("npm test 2>/dev/null")) is None
-
-
-def test_patterns_messages_and_comments_are_not_paths(tmp_path: Path) -> None:
-    policy = Policy(tmp_path, ("git commit", "git -C", "grep", "sed"))
-    for text in [
-        "grep -qxF '// keep in sync' src/a.ts",
-        "grep -c /api/ src/a.ts",
-        "grep -e /x -e /y src",
-        "git commit -m '/api: fix'",
-        "sed -i '/^debug/d' src/a.ts",
-    ]:
-        assert decide(policy, shell(text)) is None, text
-    for text, target in [
-        ("grep -e x /etc/passwd", "/etc/passwd"),
-        ("sed -i s/a/b/ /etc/hosts", "/etc/hosts"),
-        ("grep -qxF '// x' //etc/hosts", "//etc/hosts"),
-        ("git -C /elsewhere commit -m '// x'", "/elsewhere"),
-    ]:
-        assert decide(policy, shell(text)) == f"`{text}` reaches {target}, outside the worktree"
-
-
-def test_hook_signing_and_force_bypasses_are_denied(tmp_path: Path) -> None:
-    policy = Policy(tmp_path, ("git add", "git commit", "git merge", "git push"))
-    for text, flag in [
-        ("git commit --no-verify -m x", "--no-verify"),
-        ("git commit -n -m x", "-n"),
-        ("git commit -anm x", "-anm"),
-        ("git commit --no-gpg-sign -m x", "--no-gpg-sign"),
-        ("git merge --no-verify main", "--no-verify"),
-    ]:
-        assert decide(policy, shell(text)) == f"`{text}` uses {flag}, which skips hooks or signing or forces history"
-    assert "uses --force-with-lease" in decide(policy, shell("git push --force-with-lease"))
-    assert "uses -f" in decide(policy, shell("git push -f origin x"))
-    assert decide(policy, shell("git commit -m 'fix -n handling'", "git commit -mn")) is None
-
-
-def test_allowed_commands_cannot_write_through_a_symlink_or_output_option(tmp_path: Path) -> None:
-    root, away = tmp_path / "wt", tmp_path / "away"
-    root.mkdir()
-    away.mkdir()
-    (root / "link").symlink_to(away)
-    text = "git --no-pager diff --output=link/out"
-    for write in (True, False):
-        policy = Policy(root, ("git diff", "git add"), write=write)
-        assert decide(policy, shell(text, read_only=True)) == f"`{text}` reaches link/out, outside the worktree"
-        assert decide(policy, shell("git diff", read_only=True, paths=(str(away / "x"),))) is not None
-    assert (
-        decide(Policy(root, ("git add",)), shell("git add link/x"))
-        == "`git add link/x` reaches link/x, outside the worktree"
-    )
-    read = Policy(root, ("git diff", "git log"), write=False)
-    assert decide(read, shell("git diff --output=x", read_only=True)) == (
-        "`git diff --output=x` uses --output=x, which writes in a read-only step"
-    )
-    assert "uses -o" in decide(read, shell("git log -o x", read_only=True))
-    assert "uses --ext-diff" in decide(read, shell("git diff --ext-diff", read_only=True))
-    assert "uses a redirect" in decide(read, shell("git log >> notes", read_only=True))
-    assert decide(read, shell("git diff --textconv HEAD", read_only=True)) is None
-
-
-def test_a_prefix_cannot_smuggle_a_second_command(tmp_path: Path) -> None:
-    policy = Policy(tmp_path, ("npm test", "git commit"))
-    for text in [
-        "npm test; rm -rf src",
-        "npm test || rm x",
-        "npm test | sh",
-        "npm test & rm x",
-        "npm test > x",
-        "npm test < x",
-        "npm test $(rm x)",
-        "npm test `rm x`",
-        'npm test "$(rm x)"',
-    ]:
-        assert decide(policy, shell(text)) == f"`{text}` is not in this step's allow list", text
-    for text in ["npm test 2>/dev/null", "npm test 2>&1", "git commit -m 'a; b | `c` $(d)'"]:
-        assert decide(policy, shell(text)) is None, text
-
-
-def test_a_package_check_runs_only_in_its_package_and_alone(tmp_path: Path) -> None:
-    root, away = tmp_path / "wt", tmp_path / "away"
-    (root / "packages" / "app").mkdir(parents=True)
-    away.mkdir()
-    (root / "escape").symlink_to(away)
-    checks = (("packages/app", "npm test"), ("escape", "npm test"))
-    policy = Policy(root, ("git add",), checks=checks)
-    assert decide(policy, shell("cd packages/app && npm test")) is None
-    assert decide(policy, shell("cd packages/app/ && npm test -- --run")) is None
-    for text in [
-        "cd packages/app && npm test && rm x",
-        "cd packages/app && npm test; rm x",
-        "cd packages/app && npm test | sh",
-        "cd packages/app && npm test > x",
-        "cd packages/app && FOO=1 npm test",
-        "cd packages/app && npm test $(rm x)",
-        "cd packages && npm test",
-        "cd . && npm test",
-    ]:
-        assert decide(policy, shell(text)) == f"`{text}` is not in this step's allow list", text
-    assert "outside the worktree" in decide(policy, shell("cd escape && npm test"))
-    assert decide(Policy(root, ("git add",)), shell("cd packages/app && npm test")) is not None
-
-
 def step(**cfg) -> sdk_adapter._Step:
     log: list[dict] = []
     journal = sdk_adapter.Journal(event=log.append, **cfg)
@@ -234,7 +99,7 @@ def step(**cfg) -> sdk_adapter._Step:
         "s1",
         "m",
         resume=True,
-        policy=Policy(Path(), ()),
+        policy=Policy(Path()),
         observe=Worktree,
         checks=(),
         journal=journal,

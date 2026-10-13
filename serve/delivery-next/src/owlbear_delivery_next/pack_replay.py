@@ -65,7 +65,7 @@ def replay(store: Store, run: Callable[[sdk_adapter.Session], Run] | None = None
             raise design_pack.PackError(msg)
         base = sdk_adapter.Session(
             kind=StepKind.REVIEW, worktree=Path(tmp), session_id="", message="", resume=False,
-            policy=Policy(Path(tmp), (), write=False), observe=lambda: tools.Worktree("", ""), checks=(),
+            policy=Policy(Path(tmp), write=False), observe=lambda: tools.Worktree("", ""), checks=(),
             model=role.model, effort=role.effort, context=role.context, memory=memory,
         )  # fmt: skip
         for kept, kept_files in calibration.cases(store.shared, store.name):

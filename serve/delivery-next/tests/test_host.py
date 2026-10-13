@@ -29,7 +29,7 @@ from owlbear_delivery_next.models import (
     VisualState,
 )
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity, status
 from owlbear_delivery_next.steps import check, worktree
 from owlbear_delivery_next.store import Store
@@ -274,8 +274,7 @@ def test_disposal_is_verified_over_recorded_pids_and_the_whole_group_without_its
 
 
 def environment(store, fake, monkeypatch, **env):
-    entry = ProfileEntry(state="known", value="npm run preview")
-    store.write_profile(Profile(version=1, entries={"allow:check": entry}))
+    store.write_profile(Profile(version=1))
     c = checking(**env)
     c.names.worktree = fake.worktree
     save(store, c)
@@ -337,10 +336,6 @@ def test_a_later_check_reuses_the_recipe_that_launched_without_an_agent(store, t
     assert store.read("c1").env.ready_at is not None  # the host launched it as an agent's recipe
 
 
-def _revoked(store, _tmp_path):
-    store.write_profile(Profile(version=2, entries={}))
-
-
 def _other_check(store, _tmp_path):
     c = store.read("c1")
     c.recipe = c.recipe.model_copy(update={"check": VISUAL})
@@ -365,8 +360,8 @@ def test_a_symlinked_launch_directory_is_read_at_its_target(store, tmp_path):
     assert worktree.launch_inputs(tmp_path, "../outside") is None
 
 
-@pytest.mark.parametrize("change", [_revoked, _other_check, _launch_file])
-def test_a_recipe_no_longer_allowed_or_for_other_inputs_is_forgotten_and_an_agent_prepares(
+@pytest.mark.parametrize("change", [_other_check, _launch_file])
+def test_a_recipe_for_another_check_or_other_inputs_is_forgotten_and_an_agent_prepares(
     store, tmp_path, reusable, change
 ):
     _fake, agents = reusable

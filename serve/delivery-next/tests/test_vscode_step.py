@@ -881,7 +881,7 @@ class Adapted:
         self.host.dispatch = dispatch
         journal = sdk_adapter.Journal(event=self.events.append, delivered=lambda: self.delivered.append(1))
         self.cfg = sdk_adapter.Session(
-            StepKind.BUILD, folder, "s1", "Build it.", resume=False, policy=Policy(folder, ()),
+            StepKind.BUILD, folder, "s1", "Build it.", resume=False, policy=Policy(folder),
             observe=lambda: Worktree(HEAD, BASE, changed=("src/greet.ts",)), checks=(), model=MODEL, effort=EFFORT,
             journal=journal,
         )  # fmt: skip
