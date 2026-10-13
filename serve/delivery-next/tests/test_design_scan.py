@@ -1,5 +1,7 @@
 """Visual review slice 4: the design detector in the visual check, as evidence that never fails it (TD-77)."""
 
+import asyncio
+import dataclasses
 import functools
 import http.server
 import subprocess
@@ -10,9 +12,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
-from owlbear_delivery_next import design_pack, detector
-from owlbear_delivery_next.models import Change, Names, VisualResult, VisualState, VisualStep
+from owlbear_delivery_next import design_pack, design_tools, detector, sdk_adapter, tools, window_files
+from owlbear_delivery_next.models import Change, Names, StepKind, VisualResult, VisualState, VisualStep
+from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.results import Gate
+from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.steps import design, visual
 from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
 
@@ -228,3 +234,74 @@ def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, m
     assert time.monotonic() - start < 30  # the deadline, not the 60 s in-page timer
     assert [(bool(s.file), s.design.scanned, s.errors) for s in shots] == [(True, False, ())] * 2  # the next page too
     assert all("refused" in s.design.reason for s in shots)
+
+
+def scan_args(**fields):
+    return design_tools.ScanDesign(**fields)
+
+
+def test_the_builders_scan_reads_only_ui_sources_of_its_worktree(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "work"
+    (root / "web").mkdir(parents=True)
+    (root / "web" / "app.css").write_text(".card{border-left:4px solid red}")
+    (tmp_path / "outside.css").write_text("x")
+    (root / "web" / "link.css").symlink_to(tmp_path / "outside.css")
+    assert "not installed" in design.builder_scan(root, scan_args(paths=["web/app.css"]))
+    monkeypatch.setattr(design, "pack", lambda: PACK)
+    asked = []
+    monkeypatch.setattr(
+        detector, "scan_source", lambda _p, paths, _cwd: asked.append(paths) or [found("side-tab", f"{paths[0]}:1")]
+    )
+    reply = design.builder_scan(root, scan_args(paths=["web/app.css"]))
+    assert reply.splitlines() == [
+        "1 design detector findings (hints to weigh, never a verdict):",
+        "- side-tab at web/app.css:1: d",
+    ]
+    assert asked == [[root.resolve() / "web/app.css"]]
+    for bad in (["../outside.css"], ["/etc/hosts"], ["web/missing.css"], ["web/app.py"], ["web/link.css"]):
+        assert "is not a UI file of the worktree" in design.builder_scan(root, scan_args(paths=bad))
+    assert "name the UI files to scan" in design.builder_scan(root, scan_args(paths=[]))
+    with pytest.raises(ValidationError):
+        scan_args(
+            paths=["web/app.css"], url="http://127.0.0.1:4173/"
+        )  # no page scan: the engine's browser is unguarded
+    assert len(asked) == 1  # nothing outside the worktree was scanned
+
+
+def test_the_scan_answers_without_ending_the_builders_step_in_both_runtimes(tmp_path) -> None:
+    calls = []
+    helper = (design_tools.SCAN, lambda args: calls.append(args) or "No design detector findings.")
+    cfg = sdk_adapter.Session(
+        kind=StepKind.BUILD, worktree=tmp_path, session_id="s", message="m", resume=False,
+        policy=Policy(tmp_path, ()), observe=lambda: tools.Worktree("h", "h"), checks=(), helpers=(helper,),
+    )  # fmt: skip
+    run = Run("s")
+    gate = Gate(cfg, run, lambda **_e: None, lambda: None)
+    assert design_tools.SCAN in gate.specs
+    for _ in range(tools.INVALID_LIMIT + 1):  # a wrong scan call is never counted toward ending the step
+        assert gate.call(design_tools.SCAN, {"width": 5})[1] is False
+    assert gate.call(design_tools.SCAN, {"paths": ["web/app.css"]}) == ("No design detector findings.", True)
+    assert (gate.done, run.invalid, len(calls)) == (False, 0, 1)
+    st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+    assert {t.name: t.is_terminal for t in st.tools()}[tools.SCAN_DESIGN] is False
+    loop_thread, ran = threading.get_ident(), []
+    st.cfg = dataclasses.replace(
+        cfg, helpers=((design_tools.SCAN, lambda _a: ran.append(threading.get_ident()) or "ok"),)
+    )
+    st.gate = Gate(st.cfg, Run("s"), lambda **_e: None, lambda: None)
+    answer = asyncio.run(st._helped(design_tools.SCAN, SimpleNamespace(arguments={"paths": ["a.css"]})))  # noqa: SLF001
+    assert (answer.text_result_for_llm, ran[0] != loop_thread) == ("ok", True)
+    assert tools.SCAN_DESIGN in sdk_adapter.agent(StepKind.BUILD, ui=True)["tools"]
+    assert tools.SCAN_DESIGN not in sdk_adapter.agent(StepKind.BUILD)["tools"]
+    relay, _ = window_files.names(tmp_path / "inbox.json")
+    assert f"{relay}/{tools.SCAN_DESIGN}" in window_files.agent("builder", tmp_path / "inbox.json", ui=True)(None)
+
+
+def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OWLBEAR_HOME", str(Path.home() / ".owlbear"))  # this machine's pack, read only
+    if design_pack.installed() is None:
+        pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
+    (tmp_path / "index.html").write_text(BAD)
+    reply = design.builder_scan(tmp_path, scan_args(paths=["index.html"]))
+    assert "design detector findings" in reply, reply
+    assert "at index.html" in reply  # relative to the worktree, never the absolute path

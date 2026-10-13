@@ -101,6 +101,19 @@
     </p-table-head-row></p-table-head>
     <p-table-body id="general"></p-table-body>
   </p-table>
+  <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
+  <p-text id="agreement-note" size="xs" color="contrast-medium"></p-text>
+  <p-table caption="How often each judge's verdict matched your Pass or Fail, per model">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Judge</p-table-head-cell>
+      <p-table-head-cell>Model</p-table-head-cell>
+      <p-table-head-cell>Decided</p-table-head-cell>
+      <p-table-head-cell>Agreed</p-table-head-cell>
+      <p-table-head-cell>Disagreed</p-table-head-cell>
+      <p-table-head-cell>Unsure</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="agreement"></p-table-body>
+  </p-table>
 </section>
 </main>
 <script>
@@ -332,6 +345,13 @@ function render() {
     ...general.map(([label, value, key]) => row(
       cell(el("p-text", `${label} (not applied yet)`)), inactive(label, value, key))),
   );
+  const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
+  document.getElementById("agreement").replaceChildren(...loaded.agreement.map((a) => row(
+    ...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided), share(a.disagreed, a.decided),
+      share(a.unsure, a.decided)].map((v) => cell(el("p-text", v))))));
+  document.getElementById("agreement-note").textContent = loaded.agreement.length
+    ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
+    : "No decided visual rounds yet, or no shared repository is set up.";
   pending();
 }
 

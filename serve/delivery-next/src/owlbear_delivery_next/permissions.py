@@ -178,7 +178,7 @@ def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) 
     if req.kind == "custom-tool":
         return (
             None
-            if req.tool in {*(s.name for s in tools.SPECS), tools.FIRST_LOOK}
+            if req.tool in {*(s.name for s in tools.SPECS), tools.FIRST_LOOK, tools.SCAN_DESIGN}
             else f"tool {req.tool} is not allowed"
         )
     if req.kind in {"read", "write"}:

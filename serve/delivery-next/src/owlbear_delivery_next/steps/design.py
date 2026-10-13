@@ -16,13 +16,14 @@ from typing import TYPE_CHECKING, Any
 
 import psutil
 
-from owlbear_delivery_next import design_pack, detector
+from owlbear_delivery_next import design_pack, detector, tools
 from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from owlbear_delivery_next.design_pack import Installed
+    from owlbear_delivery_next.design_tools import ScanDesign
     from owlbear_delivery_next.models import VisualResult, VisualState
     from owlbear_delivery_next.visual_records import Freshness
 
@@ -32,12 +33,43 @@ SOURCES = frozenset(  # the UI files the engine reads (its SCANNABLE_EXTENSIONS)
 SOURCE_STATE = "sources"
 NO_PACK = "not scanned: the design pack is not installed (owlbear-next design-pack --install)"
 DETAIL = 300
+SHOWN = 60  # findings one scan_design reply lists
 PAGE_SECONDS = detector.PAGE_MS / 1000 + 15  # the in-page timer, plus injecting the bundle
 
 
 def pack() -> Installed | None:
     """The verified design pack on this machine, if installed."""
     return design_pack.installed()
+
+
+def builder_scan(root: Path, args: ScanDesign) -> str:
+    """The builder's scan (``scan_design``): its worktree's UI sources, offline; the findings as hints.
+
+    No page scan: the engine's own browser is not guarded, so a page the builder made could reach outside.
+    """
+    installed, root = pack(), root.resolve()
+    if installed is None:
+        return "The design detector is not installed on this machine; go on without it."
+    errors = [
+        f"paths: {p} is not a UI file of the worktree"
+        for p in args.paths
+        if not (tools.relative(p) and Path(p).suffix.lower() in SOURCES and _inside(root, p))
+    ]
+    if errors or not args.paths:
+        lines = [f"- {e}" for e in errors or ["paths: name the UI files to scan"]]
+        return "Rejected. Fix each field, then call again:\n" + "\n".join(lines)
+    try:
+        found = detector.scan_source(installed, [root / p for p in args.paths], root)
+    except detector.DetectorError as exc:
+        return f"The design detector failed ({exc}); go on without it."
+    lines = [f"- {f.rule} at {f.where.removeprefix(f'{root}/')}: {f.detail or f.name}" for f in found]
+    head = f"{len(lines)} design detector findings (hints to weigh, never a verdict):"
+    return "\n".join([head, *lines[:SHOWN]]) if lines else "No design detector findings."
+
+
+def _inside(root: Path, path: str) -> bool:
+    target = (root / path).resolve()
+    return target.is_relative_to(root) and target.is_file()
 
 
 def _kept(findings: Sequence[detector.Finding], root: Path | None = None) -> list[DetectorFinding]:

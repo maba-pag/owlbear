@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next.tools import FIRST_LOOK, Args, Spec, bounded
+from owlbear_delivery_next.tools import FIRST_LOOK, SCAN_DESIGN, Args, Spec, bounded
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -93,6 +93,23 @@ FIRST = Spec(
     "result",
 )
 FINAL = Spec("submit_result", "Submit your final verdict once, after the detector's findings.", DesignResult, "result")
+
+
+class ScanDesign(Args):
+    """``scan_design``: UI source files of the worktree, offline."""
+
+    paths: list[str] = Field(
+        max_length=40, description="Repository-relative UI files to scan", examples=[["web/app.css"]]
+    )
+
+
+SCAN = Spec(
+    SCAN_DESIGN,
+    "Scan UI source files you changed with Delivery's design detector. Its findings are hints to weigh against "
+    "owlbear-ui-design, never a verdict; the visual check scans the rendered pages. Your turn goes on.",
+    ScanDesign,
+    "result",
+)
 
 
 def pairs(images: Sequence[str]) -> list[str]:

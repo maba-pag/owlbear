@@ -8,12 +8,14 @@ import json
 import sys
 import uuid
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import (
     budgets,
     calibration,
+    design_tools,
     held,
     loop,
     overlap,
@@ -148,6 +150,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
         memory=sessions.memory(store),
         ui=change.brief.ui,
+        helpers=((design_tools.SCAN, partial(design.builder_scan, path)),)
+        if s.kind == StepKind.BUILD and change.brief.ui  # the builder's design detector (slice 7)
+        else (),
     )
     run = accepted or _kept(cfg, store)
     end = datetime.now(UTC)

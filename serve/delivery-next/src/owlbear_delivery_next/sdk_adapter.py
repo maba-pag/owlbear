@@ -66,7 +66,7 @@ def agent(kind: StepKind, *, ui: bool = False, role: str = "") -> dict[str, Any]
         "name": meta["name"],
         "description": meta["description"],
         "prompt": body.strip(),
-        "tools": [*preload.tools(role), *tools.results(role)],  # nothing else is offered (TD-69)
+        "tools": [*preload.tools(role), *tools.results(role, ui=ui)],  # nothing else is offered (TD-69)
         "skills": list(preload.required(role, ui=ui)),
     }
 
@@ -124,6 +124,7 @@ class Session:
     role: str = ""  # the agent role when not the step kind's, such as the design judge's
     first_look: tools.Spec | None = None  # a judgement submitted before the final result, which does not end it
     reveal: str = ""  # what the first look's reply releases, such as the detector's findings
+    helpers: tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...] = ()  # Delivery tools that answer, not end
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
@@ -254,17 +255,20 @@ class _Step:
 
     def _handle(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:
         text, ok = self.gate.call(spec, inv.arguments)
-        if ok:
-            return ToolResult(text_result_for_llm=text)
-        return ToolResult(text_result_for_llm=text, result_type="rejected" if text == ENDED else "failure")
+        kind = "success" if ok else "rejected" if text == ENDED else "failure"
+        return ToolResult(text_result_for_llm=text, result_type=kind)
+
+    async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # off the loop: deadlines hold
+        return ToolResult(text_result_for_llm=(await asyncio.to_thread(self.gate.call, spec, inv.arguments))[0])
 
     def tools(self) -> list[Tool]:
-        on = self.cfg.first_look  # after a first look, the turn goes on
+        helped = {spec for spec, _ in self.cfg.helpers}  # these answer, and the turn goes on; so does a first look
         made = partial(Tool, skip_permission=True)
         return [
-            made(s.name, s.description, partial(self._handle, s), tools.schema(s), is_terminal=s is not on)
+            made(s.name, s.description, partial(self._helped if s in helped else self._handle, s), tools.schema(s),
+                 is_terminal=s not in helped and s is not self.cfg.first_look)
             for s in self.gate.specs
-        ]
+        ]  # fmt: skip
 
     def record(self, *pids: int | None, keep: bool = False) -> None:
         """Keep each new PID with its start time, None when unreadable, and persist it at once (F4)."""

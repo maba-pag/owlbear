@@ -48,17 +48,35 @@ class Gate:
 
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
-        """The step's tools: its submit tool, a first look if it has one, and the three every step has."""
+        """The step's tools: its submit tool, a first look if it has one, its helpers, and the three every step has."""
         first = (self.cfg.first_look,) if self.cfg.first_look else ()
-        return self.cfg.submit, *first, tools.ASK, tools.PREMISE, tools.MISSING
+        helpers = tuple(spec for spec, _ in self.cfg.helpers)
+        return self.cfg.submit, *first, *helpers, tools.ASK, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""
+        if (helper := dict(self.cfg.helpers).get(spec)) is not None:
+            return self._help(spec, helper, arguments)
         with self._lock:
             text, ok = self._call(spec, arguments)
         if self.done:
             self.ended()
         return text, ok
+
+    def _help(
+        self,
+        spec: tools.Spec,
+        helper: Callable[[tools.Args], str],
+        arguments: Any,  # noqa: ANN401 - the agent's JSON arguments
+    ) -> tuple[str, bool]:
+        """A helper answers and the step goes on; its rejected calls never count toward ending the step."""
+        if self.done:
+            return ENDED, False
+        args, errors = tools.parse(spec.model, arguments)
+        self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors)
+        if args is None:
+            return "Rejected. Fix each field, then call again:\n" + "\n".join(f"- {e}" for e in errors), False
+        return helper(args), True
 
     def _call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         if self.done:  # before any check: a late call never touches the accepted head

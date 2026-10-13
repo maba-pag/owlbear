@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import calibration, runner, sessions
+from owlbear_delivery_next import calibration, config_routes, runner, sessions
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.models import Change, VisualResult
 from owlbear_delivery_next.store import Lock, Store
@@ -179,6 +179,29 @@ def test_a_change_stored_before_round_decisions_loads_without_its_old_answer(tmp
     data["visual"] |= {"decision": "accept", "note": "fine"}
     path.write_text(json.dumps(data))
     assert store.read("c1").visual.head == "h"
+
+
+def test_each_judge_s_agreement_with_the_owner_is_counted_per_lens_and_model(shared_repo) -> None:
+    def judged(n, owner, correct, design, unanchored):
+        r = decided(n, NOW + timedelta(minutes=n))
+        verdicts = [
+            r.verdicts[0].model_copy(update={"verdict": correct, "model": "gpt-6.1-sol"}),
+            r.verdicts[1].model_copy(update={"verdict": design, "unanchored": unanchored, "model": "claude-opus-5.5"}),
+        ]
+        return r.model_copy(update={"verdicts": verdicts, "decision": r.decision.model_copy(update={"outcome": owner})})
+
+    rounds = [judged(1, "fail", "pass", "fail", "pass"), judged(2, "pass", "pass", "unsure", "unsure")]
+    assert calibration.agreement(rounds) == [
+        {"judge": "correctness", "model": "gpt-6.1-sol", "decided": 2, "agreed": 1, "disagreed": 1, "unsure": 0},
+        {"judge": "design", "model": "claude-opus-5.5", "decided": 2, "agreed": 1, "disagreed": 0, "unsure": 1},
+        {"judge": "design before the detector", "model": "claude-opus-5.5", "decided": 2, "agreed": 0,
+         "disagreed": 1, "unsure": 1},
+    ]  # fmt: skip
+    _root, repo = shared_repo
+    store = Store.open(repo)
+    assert config_routes._state(store)["agreement"] == []  # noqa: SLF001
+    calibration.keep(store.shared, store.name, "c1", rounds[0], {})
+    assert [a["agreed"] for a in config_routes._state(store)["agreement"]] == [0, 1, 0]  # noqa: SLF001
 
 
 def test_without_a_shared_repository_nothing_is_kept_anywhere(tmp_path) -> None:

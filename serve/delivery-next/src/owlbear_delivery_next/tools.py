@@ -260,11 +260,13 @@ MISSING = Spec(
 )
 SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
+SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 
 
-def results(role: str) -> list[str]:
-    """The result tools a role's agent is offered: every step's four, and the design judge's first look."""
-    return [*(s.name for s in SPECS), *([FIRST_LOOK] if role == "designer" else [])]
+def results(role: str, *, ui: bool = False) -> list[str]:
+    """Delivery's tools a role's agent is offered: every step's four, the design judge's first look, the UI scan."""
+    extra = [FIRST_LOOK] if role == "designer" else [SCAN_DESIGN] if role == "builder" and ui else []
+    return [*(s.name for s in SPECS), *extra]
 
 
 REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")

@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
+from owlbear_delivery_next import calibration
 from owlbear_delivery_next.catalogue import CATALOGUE
+from owlbear_delivery_next.common import CommonError
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.store import StoreError, read_layer_bytes
 
@@ -60,7 +62,18 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         },
         "applied": APPLIED,
         "catalogue": CATALOGUE,
+        "agreement": _agreement(store),
     }
+
+
+def _agreement(store: Store) -> list[dict[str, Any]]:
+    """Each judge's agreement with the owner's visual decisions; none without a shared repository, or while busy."""
+    if store.shared is None:
+        return []
+    try:
+        return calibration.agreement([r for r, _ in calibration.cases(store.shared, store.name, wait=2.0)])
+    except CommonError, OSError, ValueError:
+        return []
 
 
 def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: str) -> str:
