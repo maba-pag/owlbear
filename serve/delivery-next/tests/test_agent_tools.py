@@ -1,11 +1,11 @@
-"""TD-69/TD-70: each worker role is offered only the tools its agent file names, in both runtimes, and the
-project's owlbear-memory."""
+"""TD-69/TD-70/TD-72: each worker role is offered only the tools its agent file names, in both runtimes, and the
+project's owlbear-memory in the shared repository."""
 
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from owlbear_delivery_next import preload, runner, sdk_adapter, tools
+from owlbear_delivery_next import preload, sdk_adapter, tools
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -68,16 +68,13 @@ def test_the_sdk_agent_is_offered_its_own_tools_and_the_result_tools() -> None:
     assert options(kind=StepKind.REVIEW)["custom_agents"][0]["tools"] == [*preload.tools("reviewer"), *RESULT_TOOLS]
 
 
-def test_an_owlbear_workspace_gives_the_agents_its_memory(tmp_path) -> None:
-    (tmp_path / ".owlbear").mkdir()
-    assert runner._memory(tmp_path) == tmp_path  # noqa: SLF001
+def test_the_projects_memory_folder_is_given_to_the_memory_server(tmp_path) -> None:
     server = options(memory=tmp_path)["mcp_servers"][preload.MEMORY]
     assert server["args"] == ["-m", preload.MEMORY_MODULE]
-    assert server["working_directory"] == str(tmp_path)
+    assert server["env"] == {preload.MEMORY_DIR: str(tmp_path)}
 
 
-def test_without_a_workspace_or_the_memory_server_the_agents_go_on_without_memory(tmp_path, monkeypatch) -> None:
-    assert runner._memory(tmp_path) is None  # noqa: SLF001
+def test_without_a_memory_folder_or_the_memory_server_the_agents_go_on_without_memory(tmp_path, monkeypatch) -> None:
     assert options()["mcp_servers"] == {}
     monkeypatch.setattr(preload, "find_spec", lambda _name: None)
     assert options(memory=tmp_path)["mcp_servers"] == {}
@@ -102,14 +99,14 @@ def test_the_window_agent_offers_the_same_tools_and_this_steps_servers_tools(tmp
     relay, memory = wf.names(INBOX)
     servers = json.loads(wf.mcp(INBOX, tmp_path)(None))["mcpServers"]
     assert list(servers) == [relay, memory]  # unique to the step: the host disables a name another holds (P21)
-    assert servers[memory]["cwd"] == str(tmp_path)
+    assert servers[memory]["env"] == {preload.MEMORY_DIR: str(tmp_path)}
     assert servers[memory]["args"] == ["-m", preload.MEMORY_MODULE]
     for role in ROLES:  # the window runs the same harness, which offered exactly these names live (TD-69)
         own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role)]
         assert window_names(role, tmp_path) == [*own, *(f"{relay}/{t}" for t in RESULT_TOOLS)]
 
 
-def test_a_window_without_a_workspace_gets_no_memory_server_and_no_memory_tools() -> None:
+def test_a_window_without_a_memory_folder_gets_no_memory_server_and_no_memory_tools() -> None:
     assert list(json.loads(wf.mcp(INBOX)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
     for role in ROLES:
         assert not [n for n in window_names(role) if "memory" in n]

@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next import common, loop, profile
-from owlbear_delivery_next.config import CONFIG_FORMAT, Agent, GlobalLayer, Layer, Settings, resolve
+from owlbear_delivery_next import common, loop, migrations, profile
+from owlbear_delivery_next.config import CONFIG_FORMAT, GlobalLayer, Layer, Settings, resolve
 from owlbear_delivery_next.inbox import InboxItem
-from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Role, Stop
-from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, RoleModel
+from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Stop
+from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 
 if TYPE_CHECKING:
@@ -30,34 +30,13 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.common import Common
     from owlbear_delivery_next.loop import PrState
+    from owlbear_delivery_next.migrations import Migrations
     from owlbear_delivery_next.models import Step
 
 STORE_DIR = "owlbear-delivery"
 CONFIG = "config.json"  # the project's settings layer (TD-52)
 ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into CONFIG
 ACTIVITY_LIMIT = 200
-type Migrations = dict[int, Callable[[dict[str, Any]], dict[str, Any]]]
-_ROLES: TypeAdapter[dict[Role, RoleModel]] = TypeAdapter(dict[Role, RoleModel])
-
-
-def _roles_moved(data: dict[str, Any]) -> dict[str, Any]:
-    """Profile format 1 to 2: the role overrides moved to the project settings; each is checked, then dropped."""
-    _ROLES.validate_python(data.pop("roles", {}))
-    return data
-
-
-def _with_roles(layer: Layer, found: dict[Role, RoleModel]) -> Layer:
-    """The layer with old role overrides filling only the model and effort fields it leaves empty."""
-    agents = dict(layer.agents)
-    for role, old in found.items():
-        own = agents.get(role, Agent())
-        agents[role] = own.model_copy(update={"model": own.model or old.model, "effort": own.effort or old.effort})
-    return layer.model_copy(update={"agents": agents})
-
-
-# Forward migrations of a Change or profile record, keyed by the format they upgrade from.
-MIGRATIONS: Migrations = {}
-PROFILE_MIGRATIONS: Migrations = {1: _roles_moved}
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
 HANDLE = re.compile(r"c\d{1,4}")  # the only handle shape the host issues
@@ -127,7 +106,7 @@ def git_common_dir(cwd: Path) -> Path:
     return (cwd / out).resolve()
 
 
-def _load[T: Record](path: Path, model: type[T], current: int, migrations: Migrations) -> T:
+def _load[T: Record](path: Path, model: type[T], current: int, forward: Migrations) -> T:
     """Read one versioned record, refusing a newer format and migrating an older one forward."""
     name = path.parent.name if path.name == "change.json" else path.stem
     try:
@@ -135,10 +114,10 @@ def _load[T: Record](path: Path, model: type[T], current: int, migrations: Migra
     except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
         msg = f"state of {name} is unreadable"
         raise StoreError(msg) from exc
-    return _parse(raw, name, model, current, migrations)
+    return _parse(raw, name, model, current, forward)
 
 
-def _parse[T: Record](raw: str, name: str, model: type[T], current: int, migrations: Migrations) -> T:
+def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward: Migrations) -> T:
     try:
         data = json.loads(raw)
         version = int(data.get("format", 0))
@@ -150,7 +129,7 @@ def _parse[T: Record](raw: str, name: str, model: type[T], current: int, migrati
         raise FormatTooNewError(msg)
     try:
         while version < current:
-            data = migrations[version](data)
+            data = forward[version](data)
             version += 1
             data["format"] = version
         return model.model_validate(data)
@@ -249,12 +228,16 @@ class Store:
                 return
             try:
                 data = json.loads(path.read_text())
-                found = _ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
+                found = (
+                    migrations.ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
+                )
             except AttributeError, OSError, TypeError, ValueError:
                 return  # read_profile reports the damaged profile
             if found:
                 try:
-                    self.update_config(lambda cur: _with_roles(cur, found), "role overrides from the old profile")
+                    self.update_config(
+                        lambda cur: migrations.with_roles(cur, found), "role overrides from the old profile"
+                    )
                 except SharedError:
                     raise  # the old roles move later; never mark a move that did not happen
                 except StoreError:
@@ -325,7 +308,7 @@ class Store:
 
     def read(self, slug: str) -> Change:
         """Read one Change, migrating an older format forward."""
-        return _load(self._dir(slug) / "change.json", Change, FORMAT, MIGRATIONS)
+        return _load(self._dir(slug) / "change.json", Change, FORMAT, migrations.CHANGE)
 
     def raw_handle(self, slug: str) -> str | None:
         """The handle in the Change file without loading it, for a Change that cannot be read; None if absent."""
@@ -351,7 +334,7 @@ class Store:
     def read_profile(self) -> Profile | None:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
         path = self.root / "profile.json"
-        return _load(path, Profile, PROFILE_FORMAT, PROFILE_MIGRATIONS) if path.exists() else None
+        return _load(path, Profile, PROFILE_FORMAT, migrations.PROFILE) if path.exists() else None
 
     def write_profile(self, profile: Profile) -> None:
         """Write the project profile atomically."""

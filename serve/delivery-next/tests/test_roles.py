@@ -26,18 +26,18 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
         (StepKind.CHECK, "claude-opus-5.5", "medium"),
         (StepKind.REVIEW, "gpt-6.1-sol", "xhigh"),
         ("visual-review", "gpt-6.1-sol", "xhigh"),
-        ("plan-review", "gpt-6.1-sol", "high"),
-        ("brief-review", "gpt-6.1-sol", "high"),
+        ("plan-challenge", "gpt-6.1-sol", "high"),
+        ("brief-challenge", "gpt-6.1-sol", "high"),
     ],
 )
 def test_each_session_runs_with_its_roles_model_and_effort(session, model, effort):
     assert roles.chosen(resolve(None, Layer()), session) == RoleModel(model=model, effort=effort)
 
 
-def test_plan_review_is_the_challenger_not_the_planner():
+def test_plan_challenge_is_the_challenger_not_the_planner():
     settings = resolve(None, Layer(agents={"planner": Agent(model="p", effort="low")}))
     assert roles.chosen(settings, StepKind.PLAN) == RoleModel(model="p", effort="low")
-    assert roles.chosen(settings, "plan-review") == roles.DEFAULTS["challenger"]
+    assert roles.chosen(settings, "plan-challenge") == roles.DEFAULTS["challenger"]
 
 
 def test_a_project_override_wins_and_is_marked_in_the_table():

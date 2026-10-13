@@ -12,7 +12,7 @@ from owlbear_delivery_next.spend import ModelSpend, Spend
 
 __all__ = ["ModelSpend", "Spend"]  # kept importable from here, where every other record lives
 
-FORMAT = 1
+FORMAT = 2
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
@@ -149,7 +149,7 @@ class Brief(Record):
     version: int = 0
     approved_version: int | None = None
     approved_at: datetime | None = None
-    reviewed: int | None = None  # the version the brief reviewer judged (J2)
+    challenged: int | None = None  # the version the brief challenge judged (J2, TD-73)
     title: str = ""
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)

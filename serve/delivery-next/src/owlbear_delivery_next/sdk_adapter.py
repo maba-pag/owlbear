@@ -114,7 +114,7 @@ class Session:
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
     attachments: tuple[dict[str, str], ...] = ()  # blob attachments sent with the first message
-    memory: Path | None = None  # the OwlBear workspace whose owlbear-memory the agent reads and writes (TD-70)
+    memory: Path | None = None  # the project's memory folder in the shared repository (TD-70, TD-72)
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
@@ -441,10 +441,10 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     return session
 
 
-def _memory(workspace: Path | None) -> dict[str, Any]:
-    """The owlbear-memory server for an OwlBear workspace; none elsewhere, so the agent goes on without it."""
-    server = preload.memory(workspace)
-    return {} if server is None else {preload.MEMORY: {"type": "local", **server, "working_directory": str(workspace)}}
+def _memory(store: Path | None) -> dict[str, Any]:
+    """The owlbear-memory server for the project's memory folder; none without one, so the agent goes on without."""
+    server = preload.memory(store)
+    return {} if server is None else {preload.MEMORY: {"type": "local", **server}}
 
 
 def _refused(cfg: Session) -> str:

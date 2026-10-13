@@ -2,7 +2,7 @@
 
 The result is held with the step, brief version and worktree HEAD it depends on. Accepting processes it as if the
 session had just returned, but only while all three still match; otherwise the step runs again. Only an agent
-step's own session is held: a reviewer session inside a step (plan challenge, brief review, visual review) judges
+step's own session is held: a session judging inside a step (plan challenge, brief challenge, visual review) judges
 inputs Delivery does not hold, so its unread usage still only reruns the step.
 """
 

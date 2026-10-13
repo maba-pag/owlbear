@@ -84,7 +84,7 @@ def mcp(inbox: Path, memory: Path | None = None) -> Render:
         args = ["-m", "owlbear_delivery_next.step_mcp", "--inbox", str(inbox)]
         own = {relay: {"type": "stdio", "command": sys.executable, "args": args, "tools": ["*"]}}
         if (server := preload.memory(memory)) is not None:
-            own[memory_name] = {"type": "stdio", **server, "cwd": str(memory)}
+            own[memory_name] = {"type": "stdio", **server}
         return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), **own}}, indent=2) + "\n"
 
     return render

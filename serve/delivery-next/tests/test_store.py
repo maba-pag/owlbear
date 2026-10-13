@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import loop, status
+from owlbear_delivery_next import loop, migrations, status
 from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import Brief, Change, Exit, Question, Step, StepKind
+from owlbear_delivery_next.models import FORMAT, Brief, Change, Exit, Question, Step, StepKind
 from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
 
@@ -95,14 +95,26 @@ def test_profile_has_its_own_format_gate(store, monkeypatch):
 
 def test_change_records_migrate_forward_or_refuse(store, monkeypatch):
     save(store, Change(slug="c1"))
-    monkeypatch.setattr(store_mod, "FORMAT", 2)
+    monkeypatch.setattr(store_mod, "FORMAT", FORMAT + 1)
     with pytest.raises(StoreError, match="cannot be migrated"):
         store.read("c1")
-    monkeypatch.setitem(store_mod.MIGRATIONS, 1, lambda data: data | {"profile_version": 7})
+    monkeypatch.setitem(migrations.CHANGE, FORMAT, lambda data: data | {"profile_version": 7})
     assert store.read("c1").profile_version == 7
     monkeypatch.setattr(store_mod, "FORMAT", 0)
     with pytest.raises(FormatTooNewError):
         store.read("c1")
+
+
+def test_a_stored_brief_review_becomes_its_challenge(store):
+    approved = Brief(version=1, challenged=None)
+    save(store, Change(slug="c1", brief=Brief(version=2, challenged=2, approved=[approved])))
+    path = store.root / "changes" / "c1" / "change.json"
+    old = json.loads(path.read_text())
+    old["format"], old["brief"]["reviewed"] = 1, old["brief"].pop("challenged")
+    old["brief"]["approved"][0]["reviewed"] = old["brief"]["approved"][0].pop("challenged")
+    path.write_text(json.dumps(old))
+    brief = store.read("c1").brief
+    assert (brief.challenged, brief.approved) == (2, [approved])
 
 
 def test_write_keeps_prev_and_restore_brings_it_back(store):
@@ -159,7 +171,7 @@ def test_an_open_consent_question_is_closed_and_logged_once_ask_before_merge_is_
 
 
 def test_interrupted_fold_never_applies_an_item_twice(store, monkeypatch):
-    save(store, Change(slug="c1", brief=Brief(version=1, reviewed=1)))
+    save(store, Change(slug="c1", brief=Brief(version=1, challenged=1)))
     store.put_inbox("c1", BriefApproval(at=NOW, version=1))
 
     def killed(*_args, **_kwargs):

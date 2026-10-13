@@ -320,7 +320,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
     return "\n".join([*lines, "", "## Finish", PLAN_FINISH])
 
 
-def plan_review(
+def plan_challenge(
     change: Change, candidate: Plan, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]
 ) -> str:
     """Return the first message of the read-only challenge of a plan."""
@@ -353,7 +353,7 @@ def plan_review(
     )
 
 
-def brief_review(change: Change, worktree: Path) -> str:
+def brief_challenge(change: Change, worktree: Path) -> str:
     """Return the first message of the read-only challenge of the approved brief version before planning."""
     checks = [f"- {p.id}: {_one(' / '.join(p.steps))} · expect {_one(p.expect)}" for p in change.checks]
     head = f"You challenge brief v{change.brief.version} of the Change `{change.slug}` before it is planned, in the "

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-CONFIG, CLAIM = "config.json", "repository"
+CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
 VIEW = "OWLBEAR_COMMON"  # the host's view for its runners: the repository's path, or empty for none
 EXCLUDE = (".*.lock", ".tmp-*")  # Delivery's lock and temporary files, kept out of the repository
 GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a save answers within the page's 60 s
@@ -76,6 +76,10 @@ class Common:
     def project_path(self, name: str) -> Path:
         """A project's layer, in the folder named after its repository."""
         return self.root / name / CONFIG
+
+    def memory_path(self, name: str) -> Path:
+        """A project's agent memory, beside its layer (TD-72); memory curation commits it."""
+        return self.root / name / MEMORY
 
     @contextlib.contextmanager
     def locked(self, wait: float | None = None) -> Iterator[None]:
@@ -157,7 +161,7 @@ class Common:
     def pending(self) -> str:
         """What in the shared checkout is not yet committed or pushed, as a notice; nothing when all is published."""
         until = time.monotonic() + PENDING_SECONDS
-        status = _git(self.root, "status", "--porcelain", until=until)
+        status = _git(self.root, "status", "--porcelain", "--", ".", f":(exclude)*/{MEMORY}/*", until=until)
         if status.returncode:
             return f"the shared settings repository {self.root} cannot be read: {status.stderr.strip()[:200]}"
         files = status.stdout.splitlines()

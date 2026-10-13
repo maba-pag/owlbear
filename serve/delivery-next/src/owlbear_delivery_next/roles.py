@@ -25,8 +25,8 @@ SESSIONS: dict[str, Role] = {
     StepKind.CHECK: "builder",
     StepKind.REVIEW: "reviewer",  # task and final review
     "visual-review": "reviewer",
-    "plan-review": "challenger",
-    "brief-review": "challenger",
+    "plan-challenge": "challenger",
+    "brief-challenge": "challenger",
 }
 
 

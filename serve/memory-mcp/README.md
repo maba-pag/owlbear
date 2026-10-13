@@ -148,8 +148,9 @@ remain in active relevance scope.
 
 ## Configuration
 
-Memory entries are stored at `.owlbear/memory` under the current initialized workspace. The server
-has no environment configuration.
+Memory entries are stored at `.owlbear/memory` under the current initialized workspace. When
+`OWLBEAR_MEMORY_DIR` is set, the server uses that folder instead and needs no initialized workspace;
+Delivery Next sets it to the project's folder in the shared repository.
 
 ## Writer Model and Freshness
 

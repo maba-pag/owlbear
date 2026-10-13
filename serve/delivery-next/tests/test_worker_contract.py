@@ -30,11 +30,11 @@ def build(**changes) -> BuildResult:
     return result
 
 
-def test_the_plan_reviewer_sees_where_each_check_runs() -> None:
+def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
     profile = Profile(entries={"check:packages/app": entry})
     plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["npm test"])])
-    text = prompts.plan_review(Change(slug="s"), plan, profile, Path("/w"), {})
+    text = prompts.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
     assert "- `packages/app`: install `none`, check `npm test`" in text
     assert "runs each check from its package directory" in text
 

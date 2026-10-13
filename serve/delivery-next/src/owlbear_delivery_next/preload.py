@@ -1,4 +1,4 @@
-"""What each worker role starts with: its tools (TD-69), the project's memory (TD-70) and preloaded skills.
+"""What each worker role starts with: its tools (TD-69), the project's memory (TD-70, TD-72) and preloaded skills.
 
 The tools are those its agent file names. Mandatory material loads at session start; only situational references
 stay on demand (§3.13 Q-B). The skills ship in the package's ``worker_skills`` folder under Delivery-unique names,
@@ -22,6 +22,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
 }
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
+MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
 
 
 def agent_file(role: str) -> tuple[dict[str, str], str]:
@@ -37,14 +38,15 @@ def tools(role: str) -> list[str]:
     return [n.strip() for n in names.split(",") if n.strip()]
 
 
-def memory(workspace: Path | None) -> dict[str, Any] | None:
-    """The memory server for an OwlBear workspace, run with *workspace* as its working directory.
+def memory(store: Path | None) -> dict[str, Any] | None:
+    """The memory server for the project's memory folder *store* in the shared repository (TD-72).
 
-    None when there is no workspace or the server is not installed: the agents then go on without memory.
+    None without a shared repository or when the server is not installed: the agents then go on without memory.
     """
-    if workspace is None or find_spec(MEMORY_MODULE) is None:
+    if store is None or find_spec(MEMORY_MODULE) is None:
         return None
-    return {"command": sys.executable, "args": ["-m", MEMORY_MODULE], "tools": ["*"]}
+    command = {"command": sys.executable, "args": ["-m", MEMORY_MODULE]}
+    return command | {"env": {MEMORY_DIR: str(store)}, "tools": ["*"]}
 
 
 def directory() -> Path:

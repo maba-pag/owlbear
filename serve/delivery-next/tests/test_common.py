@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, common
+from owlbear_delivery_next import api, cli, common, runner
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import STORE_DIR, Store, StoreError
@@ -64,6 +64,23 @@ def test_a_project_is_named_after_its_repository(repo: Path) -> None:
     assert common.project_name(repo) == "shop-site"
     git(repo, "remote", "remove", "origin")
     assert common.project_name(repo) == "shop"
+
+
+def test_agents_remember_in_the_projects_folder_of_the_shared_repository(shared, repo) -> None:
+    root, _ = shared
+    store = Store.open(repo)
+    folder = runner._memory(store)  # noqa: SLF001
+
+    assert folder == root / "shop-site" / "memory"
+    assert folder.is_dir()
+    (folder / "pending.md").write_text("---\ntitle: x\n---\n")  # curation commits entries, not settings saves
+    assert store.shared.pending() == ""
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_without_a_shared_repository_agents_have_no_memory_and_the_clone_gets_none(repo) -> None:
+    assert runner._memory(Store.open(repo)) is None  # noqa: SLF001
+    assert not (repo / ".owlbear").exists()
 
 
 def test_settings_live_in_the_shared_repository_and_each_save_is_committed_and_pushed(shared, repo) -> None:

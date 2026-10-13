@@ -139,27 +139,27 @@ def owner_gated(c: Change) -> bool:
 
 
 def brief_ready(c: Change) -> bool:
-    """Planning starts only from the approved current brief version its reviewer judged (J2)."""
+    """Planning starts only from the approved current brief version its challenge judged (J2)."""
     b = c.brief
-    return b.approved_version == b.version == b.reviewed
+    return b.approved_version == b.version == b.challenged
 
 
 def brief_due(c: Change) -> bool:
-    """The approved current brief version still waits for its independent review."""
+    """The approved current brief version still waits for its challenge."""
     b = c.brief
-    return b.approved_version == b.version and b.reviewed != b.version
+    return b.approved_version == b.version and b.challenged != b.version
 
 
-def brief_review(change: Change, verdict: StepResult) -> tuple[Change, StepResult]:
-    """Bind the reviewer's verdict to the brief version: pass plans; findings ask the owner to revise or approve."""
+def brief_challenge(change: Change, verdict: StepResult) -> tuple[Change, StepResult]:
+    """Bind the challenge's verdict to the brief version: pass plans; findings ask the owner to revise or approve."""
     c = change.model_copy(deep=True)
     findings = verdict.exit == Exit.BACK or (verdict.exit == Exit.RETRY and verdict.cause is None)
     if verdict.exit != Exit.DONE and not findings:
-        return c, verdict  # the session failed or asked: counted or answered, then reviewed again
-    c.brief.reviewed = c.brief.version
+        return c, verdict  # the session failed or asked: counted or answered, then challenged again
+    c.brief.challenged = c.brief.version
     if not findings:
         return c, verdict
-    text = f"Brief v{c.brief.version} review: {verdict.reason}"
+    text = f"Brief v{c.brief.version} challenge: {verdict.reason}"
     options = [
         Option(id="change", label="Revise the brief in chat", next=StepKind.SHAPE),
         Option(id="split", label="Split it into smaller Changes in chat", next=StepKind.SHAPE),

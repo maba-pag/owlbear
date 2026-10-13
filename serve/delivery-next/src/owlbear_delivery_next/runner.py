@@ -96,9 +96,13 @@ def _others(store: Store, slug: str) -> dict[str, list[str]]:
     return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
 
 
-def _memory(repo: Path) -> Path | None:
-    """The OwlBear workspace whose owlbear-memory the agents use (TD-70); a repository without .owlbear has none."""
-    return repo if (repo / ".owlbear").is_dir() else None
+def _memory(store: Store) -> Path | None:
+    """The project's memory folder in the shared repository (TD-72); none without one, so the clone stays clean."""
+    if store.shared is None:
+        return None
+    folder = store.shared.memory_path(store.name)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 def _session(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
@@ -169,7 +173,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
         ),
         item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
-        memory=_memory(repo),
+        memory=_memory(store),
     )
     run = accepted or _kept(cfg, store)
     end = datetime.now(UTC)
@@ -180,7 +184,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     conversation.respond(task, run.payload, run.head, result.exit)
     _log(store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {}))
     if s.kind == StepKind.PLAN and result.plan:
-        message = prompts.plan_review(change, result.plan, profile, path, others)
+        message = prompts.plan_challenge(change, result.plan, profile, path, others)
         result = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
         if result.exit == Exit.DONE and result.plan:  # shared paths are shown, never asked about (D7)
             change.overlaps = overlap.found(result.plan, others, overlap.generated(path))
@@ -295,7 +299,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 checks=(),
                 journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
                 attachments=visual.attachments(out, shots),
-                memory=_memory(repo),
+                memory=_memory(store),
             )
             result, run = _review_run(store, lock, change, cfg, "visual-review", submit=tools.VISUAL_REVIEW)
             stopped = result.exit == Exit.STOP  # a session that did not end cleanly outranks its verdict
@@ -324,18 +328,18 @@ def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Sessio
     """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
     if planned.exit != Exit.DONE or planned.plan is None:
         return planned
-    verdict = _reviewer(store, lock, change, cfg, "plan-review")
+    verdict = _reviewer(store, lock, change, cfg, "plan-challenge")
     if verdict.exit == Exit.DONE:
         return planned
     if verdict.exit in {Exit.ASK, Exit.STOP} or (verdict.operational and verdict.exit == Exit.BACK):
         return verdict
     return verdict.model_copy(
-        update={"exit": Exit.RETRY, "plan": planned.plan, "reason": f"plan review: {verdict.reason}"}
+        update={"exit": Exit.RETRY, "plan": planned.plan, "reason": f"plan challenge: {verdict.reason}"}
     )
 
 
-def _brief_review(store: Store, lock: Lock, change: Change, repo: Path) -> None:
-    """J2: the reviewer challenges the approved brief version; pass plans, findings go back to the owner."""
+def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> None:
+    """J2: the challenger tests the approved brief version (TD-73); pass plans, findings go back to the owner."""
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
     store.write(lock, change)
@@ -344,15 +348,15 @@ def _brief_review(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         kind=StepKind.REVIEW,
         worktree=path,
         session_id="",
-        message=prompts.brief_review(change, path),
+        message=prompts.brief_challenge(change, path),
         resume=False,
         policy=permissions.Policy(path, (*prompts.GIT_READ, *extra), write=False),
         observe=lambda: worktree.observe(path, change.names.target),
         checks=(),
         journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
-        memory=_memory(repo),
+        memory=_memory(store),
     )
-    change, result = loop.brief_review(change, _reviewer(store, lock, change, cfg, "brief-review"))
+    change, result = loop.brief_challenge(change, _reviewer(store, lock, change, cfg, "brief-challenge"))
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 
@@ -422,7 +426,7 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         elif step.kind in AGENT:
             _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and loop.brief_due(change):
-            _brief_review(store, lock, change, repo)
+            _brief_challenge(store, lock, change, repo)
         else:
             _engine(store, lock, change, repo)
     except UsageUnreadError as exc:

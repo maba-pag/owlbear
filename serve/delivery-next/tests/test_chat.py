@@ -101,7 +101,7 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
     with store.lock(slug) as lock:
         change, step = store.fold(lock, slug, NOW)
         assert (change.brief.approved_version, step.kind, loop.brief_due(change)) == (2, StepKind.SHAPE, True)
-        store.write(lock, loop.apply(*loop.brief_review(change, loop.StepResult(exit=Exit.DONE)), NOW))
+        store.write(lock, loop.apply(*loop.brief_challenge(change, loop.StepResult(exit=Exit.DONE)), NOW))
     assert c.post("/api/next/briefs", json=revised).status_code == 409
 
 

@@ -212,5 +212,5 @@ def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypat
         checks=(),
     )
     with pytest.raises(runner.UsageUnreadError) as caught:
-        runner._review_run(store, Lock("c1"), change, cfg, "plan-review")  # noqa: SLF001
+        runner._review_run(store, Lock("c1"), change, cfg, "plan-challenge")  # noqa: SLF001
     assert caught.value.worktree is None  # so the gate offers only to run the step again

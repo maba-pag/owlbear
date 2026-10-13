@@ -41,7 +41,7 @@ def run(payload: tools.MissingTool, **fields) -> Run:
 def change(kind=K.BUILD, task="t1") -> Change:
     return Change(
         slug="c1",
-        brief=Brief(version=1, approved_version=1, reviewed=1, criteria=[Criterion(id="AC-1", text="works")]),
+        brief=Brief(version=1, approved_version=1, challenged=1, criteria=[Criterion(id="AC-1", text="works")]),
         plan=Plan(tasks=[Task(id="t1", title="one", scope=["a"])]),
         step=Step(kind=kind, task=task if kind in {K.BUILD, K.REVIEW} else None),
     )
@@ -164,11 +164,11 @@ def test_a_tool_no_runtime_has_changes_the_work_that_asked_for_it(enclosing, exi
     loop.apply(change(enclosing), r, NOW)  # every case is an exit its step defines
 
 
-def test_a_brief_review_without_the_tool_asks_for_a_revised_brief_once() -> None:
+def test_a_brief_challenge_without_the_tool_asks_for_a_revised_brief_once() -> None:
     r = to_result(run(report("matlab", "matlab: license server unknown")), K.REVIEW, NOW, K.SHAPE)
     due = change(K.SHAPE).model_copy(update={"brief": Brief(version=1, approved_version=1)})
-    c, asked = loop.brief_review(due, r)
-    assert (asked.exit, c.brief.reviewed, loop.brief_due(c)) == (Exit.ASK, 1, False)
+    c, asked = loop.brief_challenge(due, r)
+    assert (asked.exit, c.brief.challenged, loop.brief_due(c)) == (Exit.ASK, 1, False)
     assert "needs matlab" in asked.question.text
     assert [o.id for o in asked.question.options] == ["change", "split", "approve"]
 

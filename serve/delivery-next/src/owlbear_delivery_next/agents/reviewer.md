@@ -56,7 +56,7 @@ End the step with exactly one call:
 - `ask_question`: a criterion only the owner can judge, outside screenshot judgements.
 - `report_wrong_premise`: what you were asked to judge cannot be judged as given, with the evidence.
   In a task or final review, a defect of the plan or the brief is reported this way, not as a code
-  finding; in a plan or brief review, findings are about the plan or brief itself.
+  finding; in a plan or brief challenge, findings are about the plan or brief itself.
 - `report_missing_tool`: a tool you need to judge is missing or keeps failing, with the exact error.
 
 Never end a turn without one of these calls.
