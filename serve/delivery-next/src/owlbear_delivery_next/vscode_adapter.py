@@ -147,6 +147,7 @@ class _Driver:
             effort=cfg.effort or "",
             prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
             config=CONFIG,
+            context=cfg.context,
             reminder=self.env.reminder,
             attachments=embedded(cfg.attachments),
         )

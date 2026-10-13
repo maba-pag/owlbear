@@ -41,6 +41,7 @@ class FakeHost:
         self.boot_active = False  # the shell-only bootstrap turn has usually finished by binding time
         self.boot_script: list[dict] = []  # actions the bootstrap turn plays after launch
         self.models, self.models_at = [MODEL], 0.0  # models the host lists, from this clock time on
+        self.schema: dict | None = None  # the listed models' configSchema
         self.reconnects, self.closed, self.twin = 0, 0, None
         self.listed = [(folder / AGENT).resolve().as_uri()]  # agent files the sessions list
         self.listed_at = 0.0  # host clock time from which the sessions list them
@@ -110,6 +111,7 @@ class FakeHost:
         channel = params["channel"]
         if channel == "ahp-root://":
             listed = [{"id": m} for m in self.models] if self.t >= self.models_at else []
+            listed = [m | {"configSchema": self.schema} for m in listed] if self.schema else listed
             return {"snapshot": {"state": {"agents": [{"provider": "copilotcli", "models": listed}]}}}
         if channel in self.chats:
             return {"snapshot": {"state": self.chats[channel]}}
@@ -234,6 +236,23 @@ def test_step_binds_its_session_after_a_shell_only_bootstrap_and_runs_named_mode
     assert confirm["approved"] is True
     assert out.tools == {"t1": "openBrowserPage"}
     assert out.usage == {"model": MODEL}
+
+
+def test_step_sends_the_tiers_context_size_and_only_an_effort_the_model_takes(tmp_path: Path) -> None:
+    sizes = {"enum": [200000, 1000000], "enumDescriptions": ["Default", "Longer sessions"], "default": 1000000}
+
+    def config(schema: dict, context: str = "default") -> dict:
+        host = FakeHost(tmp_path, [{}], [DONE])
+        host.schema = schema
+        step(host, spec(tmp_path, context=context)).run(Control(), limit=60)
+        ((_, started),) = host.actions("chat/turnStarted")
+        return started["message"]["model"]["config"]
+
+    both = {"properties": {"thinkingLevel": {"enum": ["high", "max"]}, "contextSize": sizes}}
+    assert config(both) == {"thinkingLevel": EFFORT, "contextSize": 200000}  # never the host's 1M default
+    assert config(both, "long") == {"thinkingLevel": EFFORT, "contextSize": 1000000}
+    assert config({"properties": {}}) == {}  # a model without efforts gets none
+    assert config({}) == {"thinkingLevel": EFFORT}  # no schema listed: the effort as before
 
 
 def test_step_never_touches_the_users_chats(tmp_path: Path) -> None:

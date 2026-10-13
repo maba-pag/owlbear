@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import calibration, design_pack, roles, sdk_adapter, sessions, tools
+from owlbear_delivery_next import calibration, design_pack, roles, sdk_adapter, sessions, setup, tools
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.steps import judges
@@ -46,7 +46,7 @@ def replay(store: Store, run: Callable[[sdk_adapter.Session], Run] | None = None
     the model and effort the replay runs; any other round is left out and counted.
 
     Raises:
-        design_pack.PackError: No shared repository holds the rounds.
+        design_pack.PackError: No shared repository holds the rounds, or the judge's worktree cannot be a repository.
         ReplayError: A judge's processes were not confirmed gone.
     """
     if store.shared is None:
@@ -59,6 +59,10 @@ def replay(store: Store, run: Callable[[sdk_adapter.Session], Run] | None = None
         msg = f"the calibration folder leads outside the shared repository, to {root}"
         raise design_pack.PackError(msg)
     with tempfile.TemporaryDirectory(prefix="owlbear-replay-") as tmp:
+        code, text = setup.probe_in(Path(tmp))(["git", "init", "-q"])  # the window places its files only in a repo
+        if code:
+            msg = f"the replay's worktree could not be made a git repository: {text[:200] or f'exit {code}'}"
+            raise design_pack.PackError(msg)
         base = sdk_adapter.Session(
             kind=StepKind.REVIEW, worktree=Path(tmp), session_id="", message="", resume=False,
             policy=Policy(Path(tmp), (), write=False), observe=lambda: tools.Worktree("", ""), checks=(),

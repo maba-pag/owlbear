@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 ENDED = "The step has already ended. Stop now."
 ACCEPTED = "Accepted. Your step has ended: stop now and start nothing else."
+# The window's autopilot nudges a turn that ends without task_complete, on a model Delivery did not choose (live).
+ACCEPTED_WINDOW = "Accepted. Your step has ended: call `task_complete` once now, then stop and start nothing else."
 
 
 class Gate:
@@ -99,7 +101,7 @@ class Gate:
             self.run.first = args
             return f"Recorded. {self.cfg.reveal}".strip(), True
         self._finish(spec.ending, args, "")
-        return ACCEPTED, True
+        return ACCEPTED_WINDOW if self.run.runtime == "window" else ACCEPTED, True
 
     def _order(self, spec: tools.Spec) -> list[str]:
         """A first look comes once, and before the final result."""

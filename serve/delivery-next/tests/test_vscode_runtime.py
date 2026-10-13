@@ -20,7 +20,7 @@ from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.results import Gate
+from owlbear_delivery_next.results import ACCEPTED_WINDOW, Gate
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.step_inbox import Inbox
 from owlbear_delivery_next.store import Store
@@ -144,9 +144,9 @@ def test_each_step_names_its_relay_server_apart() -> None:
     assert list(second) == ["owlbear-step-9f8e7d6c5b4a3f2e"]
 
 
-def gate(log: list | None = None, observe=None) -> Gate:
+def gate(log: list | None = None, observe=None, runtime: str = "sdk") -> Gate:
     cfg = session(**({"observe": observe} if observe else {}))
-    return Gate(cfg, Run("s1"), lambda **e: (log if log is not None else []).append(e), lambda: None)
+    return Gate(cfg, Run("s1", runtime=runtime), lambda **e: (log if log is not None else []).append(e), lambda: None)
 
 
 def request(where: dict, path: str, token: str) -> int:
@@ -159,7 +159,7 @@ def request(where: dict, path: str, token: str) -> int:
 
 
 def test_the_inbox_serves_only_with_its_token_and_vanishes_with_the_step(tmp_path: Path) -> None:
-    g, path = gate(), tmp_path / "steps" / "one.json"
+    g, path = gate(runtime="window"), tmp_path / "steps" / "one.json"
     with Inbox(g, path):
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         where = json.loads(path.read_text())
@@ -175,7 +175,8 @@ def test_the_inbox_serves_only_with_its_token_and_vanishes_with_the_step(tmp_pat
         bad = step_mcp.forward(path, "POST", "/call", {"name": "submit_result", "arguments": {"summary": "x"}})
         assert (bad["ok"], bad["text"].startswith("Rejected.")) == (False, True)
         good = step_mcp.forward(path, "POST", "/call", {"name": "submit_result", "arguments": GOOD})
-        assert good == {"text": "Accepted. Your step has ended: stop now and start nothing else.", "ok": True}
+        assert good == {"text": ACCEPTED_WINDOW, "ok": True}  # the window's autopilot ends on task_complete
+        assert "task_complete" in ACCEPTED_WINDOW
     assert not path.exists()
     assert step_mcp.forward(path, "GET", "/tools") is None
     assert (g.run.ending, g.run.head, g.run.invalid) == ("result", HEAD, 1)

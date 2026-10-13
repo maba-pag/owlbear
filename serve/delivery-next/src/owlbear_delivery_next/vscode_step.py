@@ -97,6 +97,7 @@ class Step:
         self.launch, self.clock, self.settings = hooks.launch, hooks.clock, hooks.settings
         self.reconnect = hooks.reconnect
         self.opened: list[Transport] = []  # connections this step opened; it closes them when it ends
+        self.schema: Json | None = None  # the model's config properties as the host lists them
 
     def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome:
         """Pin, launch, bind, let the bootstrap end, sign in again, check the model, configure, run."""
@@ -194,7 +195,10 @@ class Step:
         while True:
             root = self.conn.request("subscribe", {"channel": ROOT})["snapshot"]["state"]
             agents = (a for a in root.get("agents") or [] if a.get("provider") == "copilotcli")
-            if any(m.get("id") == self.spec.model for a in agents for m in a.get("models") or []):
+            if found := next(
+                (m for a in agents for m in a.get("models") or [] if m.get("id") == self.spec.model), None
+            ):
+                self.schema = (found.get("configSchema") or {}).get("properties")
                 return True
             if self.clock() >= deadline:
                 return False
@@ -273,12 +277,26 @@ class Step:
             self.conn.next_event(0.2)
         return False
 
+    def _config(self) -> Json:
+        """The effort, unless the listed model takes none, and its context size: the default tier unless long.
+
+        The host's own default can be the long tier (1M for Claude Opus 5.5, live), so the size is always sent.
+        """
+        props = self.schema
+        config: Json = {} if props is not None and "thinkingLevel" not in props else {"thinkingLevel": self.spec.effort}
+        sizes = ((props or {}).get("contextSize") or {}).get("enum") or []
+        if sizes:
+            labels = (props or {})["contextSize"].get("enumDescriptions") or []
+            default = next((s for s, d in zip(sizes, labels, strict=False) if d == "Default"), min(sizes))
+            config["contextSize"] = max(sizes) if self.spec.context == "long" else default
+        return config
+
     def _message(self, text: str, agent: Json | None, attachments: tuple[Json, ...] = ()) -> Json:
         """Every message Delivery sends names the step's model, effort and agent, so none falls back to Auto."""
         message: Json = {
             "text": text,
             "origin": {"kind": "user"},
-            "model": {"id": self.spec.model, "config": {"thinkingLevel": self.spec.effort}},
+            "model": {"id": self.spec.model, "config": self._config()},
         }
         if agent:
             message["agent"] = agent
