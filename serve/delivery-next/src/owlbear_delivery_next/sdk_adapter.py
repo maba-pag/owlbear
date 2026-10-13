@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from importlib.resources import files
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import psutil
@@ -19,17 +20,17 @@ from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject, TasksCancelRequest
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next import processes, prompts, tools
+from owlbear_delivery_next import preload, processes, prompts, tools
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import decide, identities, view
 from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.results import ENDED, Gate
+from owlbear_delivery_next.sdk_usage import unexpected_models, unread, usage_read
 from owlbear_delivery_next.session_result import Run, note_quota
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
-    from pathlib import Path
 
     from copilot.session import CopilotSession
 
@@ -48,7 +49,6 @@ STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
 NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
-USAGE_PAUSE = 2.0  # seconds before the one repeated usage read (TD-54)
 
 
 def cli_path() -> str:
@@ -60,11 +60,16 @@ def cli_path() -> str:
 
 
 def agent(kind: StepKind) -> dict[str, Any]:
-    """Return the role's custom agent from the package's ``agents/`` prose."""
+    """Return the role's custom agent from the package's ``agents/`` prose, with the skills it preloads."""
     text = files("owlbear_delivery_next").joinpath("agents", f"{ROLES[kind]}.md").read_text(encoding="utf-8")
     _, front, body = text.split("---", 2)
     meta = dict(line.split(":", 1) for line in front.strip().splitlines())
-    return {"name": meta["name"].strip(), "description": meta["description"].strip(), "prompt": body.strip()}
+    return {
+        "name": meta["name"].strip(),
+        "description": meta["description"].strip(),
+        "prompt": body.strip(),
+        "skills": list(preload.REQUIRED[ROLES[kind]]),
+    }
 
 
 @dataclass(frozen=True)
@@ -129,6 +134,9 @@ class _Step:
         self.gate = Gate(cfg, self.run, self.log, self._wake)
         self.changed = asyncio.Event()
         self.shown = float("-inf")  # monotonic time of the last now-line write
+        self.created = False  # this invocation created its session, so the runtime preloads the role's skills
+        self.preloaded: set[str] = set()  # skills the runtime loaded from Delivery's folder before the first turn
+        self.checked = False  # the preload was checked at the first turn
 
     @property
     def done(self) -> bool:
@@ -147,7 +155,10 @@ class _Step:
         kind = getattr(ev.type, "value", str(ev.type))
         if kind == "assistant.turn_start":
             self.turn = True
+            self.preload_checked()
             self.model_seen(getattr(ev.data, "model", None), getattr(ev.data, "parent_tool_call_id", None))
+        elif kind == "skill.invoked":
+            self.skill_seen(ev.data)
         elif kind == "session.idle" and self.turn:
             self.turn, self.idle = False, True
             self._wake()
@@ -162,12 +173,15 @@ class _Step:
         elif kind == "assistant.usage":
             self.call_seen(ev.data)
         elif kind == "subagent.started":
-            source = getattr(ev.data, "model_selection_source", None)
-            model = getattr(ev.data, "model", None)
-            if model and model.lower() == "auto":
-                self.gate.revoke("wrong model: a subagent ran on auto")
-            else:  # logged only; the subagent's own calls and messages decide what it may use
-                self.log(event="subagent-start", model=model, source=getattr(source, "value", source))
+            self.subagent_started(ev.data)
+
+    def subagent_started(self, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
+        """A subagent on Auto voids the step (TD-53); any other start is logged only."""
+        source, model = getattr(data, "model_selection_source", None), getattr(data, "model", None)
+        if model and model.lower() == "auto":
+            self.gate.revoke("wrong model: a subagent ran on auto")
+        else:  # logged only; the subagent's own calls and messages decide what it may use
+            self.log(event="subagent-start", model=model, source=getattr(source, "value", source))
 
     def call_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK usage event data
         """One billed call: Auto voids the step for anyone (TD-53); the main agent's own calls name its model."""
@@ -176,6 +190,22 @@ class _Step:
             self.gate.revoke(f"wrong model: a {'subagent ' if parent else ''}call ran on auto")
             return
         self.model_seen(getattr(data, "model", None), parent)
+
+    def skill_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK skill event data
+        """Note a skill the runtime loaded; a preload from Delivery's folder counts toward the role's skills."""
+        trigger = getattr(getattr(data, "trigger", None), "value", getattr(data, "trigger", None))
+        name, path = getattr(data, "name", "") or "", getattr(data, "path", "") or ""
+        if trigger == "context-load" and path and Path(path).resolve().is_relative_to(preload.directory().resolve()):
+            self.preloaded.add(name)
+        self.log(event="skill", name=name, trigger=trigger)
+
+    def preload_checked(self) -> None:
+        """At a created session's first turn, every skill of the role is loaded, or the step ends (item 6)."""
+        if self.checked or not self.created:
+            return
+        self.checked = True
+        if absent := [s for s in preload.REQUIRED[ROLES[self.cfg.kind]] if s not in self.preloaded]:
+            self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
         """Void the step when its own agent runs on another model; a subagent may use any named model (TD-53)."""
@@ -264,6 +294,7 @@ class _Step:
             "custom_agents": [role],
             "agent": role["name"],
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
+            "skill_directories": [str(preload.directory())],
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,
@@ -311,55 +342,6 @@ async def _call[T](aw: Awaitable[T], what: str, limit: float = CALL) -> T:
         return await asyncio.wait_for(aw, limit)
     except TimeoutError as exc:
         raise TimeoutError(f"{what} did not answer within {limit:.0f} s") from exc  # noqa: TRY003, EM102
-
-
-def unexpected_models(
-    before: dict[str, Any], after: dict[str, Any], model: str | None, subagents: set[str]
-) -> list[str]:
-    """Models billed during this invocation that are neither the step's nor a logged subagent's.
-
-    An unknown baseline (a failed read on resume) or a failed final read checks nothing; the events still do.
-    """
-    if "error" in before or "error" in after:
-        return []
-    old, new = before.get("models") or {}, after.get("models") or {}
-    grew = {m for m, v in new.items() if m not in old or (v or {}).get("tokens") != (old[m] or {}).get("tokens")}
-    return sorted(grew - {model} - subagents)
-
-
-async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]:
-    try:
-        m = await _call(session.rpc.usage.get_metrics(), "usage", STOP_CALL)
-    except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
-        return {"error": type(exc).__name__}
-    nano = getattr(m, "total_nano_aiu", None)
-    models = {
-        name: {
-            "credits": (getattr(mm, "total_nano_aiu", None) or 0) / 1e9,
-            "tokens": mm.usage.input_tokens + mm.usage.output_tokens,
-        }
-        for name, mm in (getattr(m, "model_metrics", None) or {}).items()
-    }
-    mismatch = bool(requested and models and requested not in models)
-    return {"credits": None if nano is None else nano / 1e9, "models": models, "model_mismatch": mismatch}
-
-
-async def _usage_read(session: CopilotSession, requested: str | None) -> dict[str, Any]:
-    """The usage, read once more after a pause when the first read fails (TD-54)."""
-    usage = await _usage(session, requested)
-    if "error" in usage:
-        await asyncio.sleep(USAGE_PAUSE)
-        usage = await _usage(session, requested)
-    return usage
-
-
-def unread(before: dict[str, Any], after: dict[str, Any]) -> str:
-    """Why the model check cannot run for this invocation; empty when both reads it needs worked (TD-54)."""
-    if "error" in before:
-        return f"the usage before the resumed turn could not be read ({before['error']})"
-    if "error" in after:
-        return f"the usage at the step's end could not be read ({after['error']})"
-    return ""
 
 
 async def _settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
@@ -448,9 +430,9 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             sid, message = new, cfg.fresh
             st.run.session_id = sid
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
-        st.session = session
+        st.session, st.created = session, True
     st.log(event="session", id=sid, resumed=resumed, resent=message != prompts.CONTINUE, runtime=st.run.runtime_pid)
-    st.billed = await _usage_read(session, cfg.model) if resumed else {}
+    st.billed = await usage_read(session, cfg.model) if resumed else {}
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
     st.sending = True
     await _call(session.send(message, **extra), "send")
@@ -458,11 +440,20 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     return session
 
 
+def _refused(cfg: Session) -> str:
+    """Why the step cannot start: it names no model (TD-32), or Delivery's skills for its role are missing."""
+    if not cfg.model:
+        return "wrong model: the step names no model (TD-32)"
+    if gaps := preload.missing(ROLES[cfg.kind]):
+        return f"Delivery's worker skills are missing: {', '.join(gaps)}"
+    return ""
+
+
 async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, wait for the result boundary, then tear down within bounds."""
     st = _Step(cfg, asyncio.get_running_loop())
-    if not cfg.model:
-        st.finish("error", detail="wrong model: the step names no model (TD-32)")
+    if refused := _refused(cfg):
+        st.finish("error", detail=refused)
         st.run.termination = Termination(confirmed=True)
         return st.run
     client, session = None, None
@@ -479,7 +470,7 @@ async def run(cfg: Session) -> Run:
     except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     session = st.session
-    st.run.usage = await _usage_read(session, cfg.model) if session else {}
+    st.run.usage = await usage_read(session, cfg.model) if session else {}
     st.run.usage_unread = unread(st.billed, st.run.usage) if st.sending else ""
     if st.run.usage_unread:
         st.log(event="usage-unread", reason=st.run.usage_unread)

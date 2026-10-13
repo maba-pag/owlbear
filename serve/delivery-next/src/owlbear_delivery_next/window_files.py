@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import setup
+from owlbear_delivery_next import preload, setup
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -99,12 +99,26 @@ def agent_path(role: str) -> str:
 
 
 def agent(role: str) -> Render:
-    """The role's agent from the package prose, renamed for the window, with the result-tool note."""
+    """The role's agent from the package prose, renamed for the window, with its skills and the result-tool note."""
     text = files("owlbear_delivery_next").joinpath("agents", f"{role}.md").read_text(encoding="utf-8")
     _, front, body = text.split("---", 2)
     meta = dict(line.split(":", 1) for line in front.strip().splitlines())
-    head = f"---\nname: {agent_name(role)}\ndescription: {meta['description'].strip()}\n---\n"
+    skills = ", ".join(preload.REQUIRED.get(role, ()))
+    head = f"---\nname: {agent_name(role)}\ndescription: {meta['description'].strip()}\nskills: [{skills}]\n---\n"
     return lambda _old: f"{head}\n{body.strip()}\n\n{RESULTS}\n"
+
+
+def skill_path(name: str) -> str:
+    """Where the window's runtime finds one of Delivery's worker skills: among the worktree's project skills."""
+    return f".github/skills/{name}/SKILL.md"
+
+
+def skills(role: str) -> list[tuple[str, Render]]:
+    """The role's worker skills to place, as the package ships them; a missing one refuses the step."""
+    if gaps := preload.missing(role):
+        raise SettingsError(f"Delivery's worker skills are missing: {', '.join(gaps)}")  # noqa: EM102, TRY003
+    texts = {name: preload.text(name) for name in preload.REQUIRED.get(role, ())}
+    return [(skill_path(name), lambda _old, t=text: t) for name, text in texts.items()]
 
 
 @dataclass(frozen=True)

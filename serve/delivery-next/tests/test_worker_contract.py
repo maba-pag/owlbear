@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import psutil
 import pytest
 
-from owlbear_delivery_next import processes, prompts, sdk_adapter, session_result, tools
+from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_usage, session_result, tools
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy, Request, decide
 from owlbear_delivery_next.processes import Termination, verdict
@@ -353,14 +353,14 @@ def test_a_subagent_on_auto_voids_the_step_and_a_runtime_chosen_subagent_model_i
 
 def test_usage_naming_an_unattributed_model_voids_the_result_and_an_unnamed_model_never_starts(monkeypatch) -> None:
     usage = {"models": {"gpt-6-luna": {}, "claude-haiku-5.5": {}, "mai-code-1.1-flash": {}}}
-    assert sdk_adapter.unexpected_models({}, usage, "gpt-6-luna", {"claude-haiku-5.5"}) == ["mai-code-1.1-flash"]
-    assert sdk_adapter.unexpected_models({}, {"models": {"gpt-6-luna": {}}}, "gpt-6-luna", set()) == []
+    assert sdk_usage.unexpected_models({}, usage, "gpt-6-luna", {"claude-haiku-5.5"}) == ["mai-code-1.1-flash"]
+    assert sdk_usage.unexpected_models({}, {"models": {"gpt-6-luna": {}}}, "gpt-6-luna", set()) == []
     before = {"models": {"claude-haiku-5.5": {"tokens": 100}, "gpt-6-luna": {"tokens": 50}}}
     resumed = {"models": {"claude-haiku-5.5": {"tokens": 100}, "gpt-6-luna": {"tokens": 90}}}
-    assert sdk_adapter.unexpected_models(before, resumed, "gpt-6-luna", set()) == []
+    assert sdk_usage.unexpected_models(before, resumed, "gpt-6-luna", set()) == []
     grown = {"models": {**resumed["models"], "claude-haiku-5.5": {"tokens": 130}}}
-    assert sdk_adapter.unexpected_models(before, grown, "gpt-6-luna", set()) == ["claude-haiku-5.5"]
-    assert sdk_adapter.unexpected_models({"error": "RuntimeError"}, grown, "gpt-6-luna", set()) == []
+    assert sdk_usage.unexpected_models(before, grown, "gpt-6-luna", set()) == ["claude-haiku-5.5"]
+    assert sdk_usage.unexpected_models({"error": "RuntimeError"}, grown, "gpt-6-luna", set()) == []
     monkeypatch.setattr(sdk_adapter, "CopilotClient", lambda **_: pytest.fail("no runtime may start"))
     run = asyncio.run(sdk_adapter.run(step().cfg))
     assert (run.ending, run.detail) == ("error", "wrong model: the step names no model (TD-32)")
@@ -379,16 +379,16 @@ def test_usage_is_read_once_more_and_a_still_unread_read_names_why_the_check_can
             luna = SimpleNamespace(total_nano_aiu=2e9, usage=tokens)
             return SimpleNamespace(total_nano_aiu=2e9, model_metrics={"gpt-6-luna": luna})
 
-    monkeypatch.setattr(sdk_adapter, "USAGE_PAUSE", 0)
+    monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     once = SimpleNamespace(rpc=SimpleNamespace(usage=Usage(1)))
-    assert asyncio.run(sdk_adapter._usage_read(once, "gpt-6-luna"))["models"]["gpt-6-luna"]["tokens"] == 12  # noqa: SLF001
+    assert asyncio.run(sdk_usage.usage_read(once, "gpt-6-luna"))["models"]["gpt-6-luna"]["tokens"] == 12
     twice = SimpleNamespace(rpc=SimpleNamespace(usage=Usage(2)))
-    after = asyncio.run(sdk_adapter._usage_read(twice, "gpt-6-luna"))  # noqa: SLF001
+    after = asyncio.run(sdk_usage.usage_read(twice, "gpt-6-luna"))
     assert after == {"error": "RuntimeError"}
-    assert sdk_adapter.unread({}, after) == "the usage at the step's end could not be read (RuntimeError)"
-    before = sdk_adapter.unread({"error": "TimeoutError"}, {"models": {}})
+    assert sdk_usage.unread({}, after) == "the usage at the step's end could not be read (RuntimeError)"
+    before = sdk_usage.unread({"error": "TimeoutError"}, {"models": {}})
     assert before == "the usage before the resumed turn could not be read (TimeoutError)"
-    assert sdk_adapter.unread({}, {}) == sdk_adapter.unread({}, {"models": {}}) == ""
+    assert sdk_usage.unread({}, {}) == sdk_usage.unread({}, {"models": {}}) == ""
 
 
 def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(monkeypatch) -> None:
@@ -423,7 +423,7 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
     monkeypatch.setattr(sdk_adapter, "CopilotClient", Client)
     monkeypatch.setattr(sdk_adapter, "cli_path", lambda: "copilot")
     monkeypatch.setattr(sdk_adapter, "_teardown", teardown)
-    monkeypatch.setattr(sdk_adapter, "USAGE_PAUSE", 0)
+    monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     cfg = dataclasses.replace(step().cfg, model="gpt-6-luna", resume=False)
     run = asyncio.run(sdk_adapter.run(cfg))
     assert (run.ending, run.usage_unread) == ("error", "the usage at the step's end could not be read (RuntimeError)")
