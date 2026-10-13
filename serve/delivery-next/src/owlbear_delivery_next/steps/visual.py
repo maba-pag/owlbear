@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, PageError, StepKind, VisualResult
-from owlbear_delivery_next.steps import browse, check, design, engine, review, worktree
+from owlbear_delivery_next.steps import browse, check, decision, design, engine, worktree
 from owlbear_delivery_next.steps.browse import root
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next import tools
     from owlbear_delivery_next.design_pack import Installed
     from owlbear_delivery_next.models import Change, VisualState
-    from owlbear_delivery_next.visual_records import DetectorScan
+    from owlbear_delivery_next.visual_records import DetectorScan, VisualRound
 
 UI_SUFFIXES = frozenset(
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".tsx", ".jsx", ".vue", ".svelte", ".astro"}
@@ -316,74 +316,45 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     verdict: tools.ReviewResult | None,
     now: datetime,
     scans: Sequence[DetectorScan] = (),
+    kept: VisualRound | None = None,
 ) -> tuple[Change, StepResult]:
-    """Record the visual result; a pass moves on, a failed shot or a fix verdict becomes a repair task (B23).
+    """Record the visual result and end the round by the verdict matrix (``decision.route``; B23, TD-78).
 
-    The detector's scans are recorded as evidence only (TD-77).
+    A failed shot, a new browser error or a correctness fail always goes back (R8). The detector's scans are recorded
+    as evidence only (TD-77).
     """
-    found = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
+    failed = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
     if not shots:
-        found.append("no screenshot was captured")
+        failed.append("no screenshot was captured")
     errors = [e for s in shots for e in s.errors]
     new, _old = classify(errors, c.before)
     raised = [f"{e.state} at {e.width}px: new {e.kind} error: {e.text[:300]}" for e in new]
-    if not found and verdict is not None:
-        found = [*raised, *(f"{f.place}: {f.problem} - fix: {f.fix}" for f in verdict.findings)]
-        if verdict.verdict == "fix" and not verdict.findings:
+    found = [*failed, *raised]  # a failed shot does not hide the errors the others raised
+    if not failed and verdict is not None and verdict.verdict == "fix":  # an unsure judge's findings are the owner's
+        found += [f"{f.place}: {f.problem} - fix: {f.fix}" for f in verdict.findings]
+        if not verdict.findings:
             found.append("the reviewer did not accept the screenshots")
-    elif not found:
-        found = [*raised, "the screenshots were not judged"]
-    else:
-        found += raised  # a failed shot does not hide the errors the others raised
-    doubts = [f"{d.place}: {d.question}" for d in getattr(verdict, "doubts", [])] if not found else []
-    passed = not found and verdict is not None and verdict.verdict == "pass"
+    elif not failed and verdict is None:
+        found.append("the screenshots were not judged")
+    ends, sent = decision.route(kept, found, verdict, broken=bool(failed or raised))
+    doubts = [f"{d.place}: {d.question}" for d in getattr(verdict, "doubts", [])] if ends == "ask" else []
+    doubts += [f"{v.lens}: {v.reason}" for v in kept.verdicts if v.reason and v.lens == "design"] if kept else []
     files = [s.file for s in shots if s.file]
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     c.visual = VisualResult(
-        head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=passed, findings=found,
-        errors=errors, doubts=doubts, design=list(scans), at=now,
+        head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=ends == "merge",
+        findings=sent, errors=errors, doubts=doubts if ends == "ask" else [], design=list(scans), at=now,
     )  # fmt: skip
-    if passed:
+    if kept is not None and ends != "again":
+        kept.outcome = ends
+    if ends == "merge":
         reason = f"visual check of {head[:7]} passed: {len(files)} screenshots"
         return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))
-    if doubts:  # nothing is definitely wrong; only the owner can decide (N6)
-        return c, _ask_owner(head, doubts)
+    if ends == "again":
+        return c, decision.again(kept)
+    if ends == "ask" and kept is not None:  # nothing is definitely wrong, or the setting asks: the owner decides
+        return c, decision.ask(head, kept)
     shot = next((s for s in shots if s.error), None) or next((s for s in shots if s.file), None)
     named = f" (see {shot.file or f'{shot.state} at {shot.width}px'})" if shot else ""
-    return c, _repair(c, f"Fix: the visual check of {head[:7]} failed: {found[0][:200]}{named}", found)
-
-
-def _repair(c: Change, title: str, lines: Sequence[str]) -> StepResult:
-    """Back to build with every line in repair tasks, packed, none cut."""
-    parts = review.pack([f"- {f}" for f in lines])
-    fix = engine.task(c, title, "review", parts[0])
-    more = [engine.task(c, title, "review", d, f"t{int(fix.id[1:]) + i}") for i, d in enumerate(parts[1:], 1)]
-    cause = cause_key(ErrorKind.CHECKS, StepKind.CHECK, VISUAL)
-    return StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=title, fix_task=fix, more_fixes=more)
-
-
-def _ask_owner(head: str, doubts: Sequence[str]) -> StepResult:
-    """The reviewer could not decide; the merge waits for the owner's answer about this capture (N6)."""
-    text = f"The visual reviewer is unsure about the capture of {head[:7]}: {'; '.join(doubts)[:1500]}"
-    options = [
-        Option(id="accept", label="The screenshots are right: accept them", next="accept"),
-        Option(id="repair", label="Have it repaired (say what is wrong)", next="repair"),
-        Option(id="pause", label="Pause", next="pause"),
-    ]
-    return engine.ask(StepKind.CHECK, text, cause_key(ErrorKind.REVIEW, StepKind.CHECK, "visual-unsure"), options)
-
-
-def decided(c: Change, head: str, tree_id: str) -> tuple[Change, StepResult] | None:
-    """The owner's answer to the reviewer's doubts, applied only to the exact capture it was about."""
-    v = c.visual
-    if v is None or v.decision is None or v.passed:
-        return None
-    states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
-    if (v.head, v.tree, v.states, v.criteria) != (head, tree_id, states, criteria):
-        return None  # the Change moved on; the capture is taken and judged again
-    if v.decision == "accept":
-        c.visual = v.model_copy(update={"passed": True})
-        reason = f"visual check of {head[:7]} accepted by the owner: {len(v.files)} screenshots"
-        return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))
-    lines = [*v.doubts, *([f"owner: {v.note}"] if v.note else [])]
-    return c, _repair(c, f"Fix: the owner rejected the visual check of {head[:7]}", lines)
+    lines = sent or found or ["the screenshots were not judged"]
+    return c, decision.repair(c, f"Fix: the visual check of {head[:7]} failed: {lines[0][:200]}{named}", lines)

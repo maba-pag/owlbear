@@ -91,7 +91,7 @@ def brief(change: Change) -> list[str]:
     """The brief section, and the owner's criteria from earlier visual reviews that every review checks (TD-79)."""
     if not (kept := [k for k in change.owner_criteria if k.withdrawn_at is None]):
         return _brief(change)
-    owner = [f"- {k.id}: {_one(k.text)}" for k in kept[:20]]
+    owner = [f"- {k.id}: {' '.join(k.text.split())[:2000]}" for k in kept[:20]]  # whole: every review checks it
     return [*_brief(change), "", "The owner's criteria from earlier visual reviews:", *owner]
 
 

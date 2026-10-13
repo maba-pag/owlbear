@@ -29,6 +29,15 @@ class AnswerItem(_Item):
     question: str
     option: str | None = None
     text: str = ""
+    round: int | None = None  # the visual round a decision is about (TD-79)
+    findings: list[str] = Field(default_factory=list)  # the findings the owner ticked in it
+
+
+class WithdrawItem(_Item):
+    """Withdraw one of the owner's visual criteria; later reviews no longer check it (TD-79)."""
+
+    kind: Literal["withdraw"] = "withdraw"
+    criterion: str
 
 
 class CheckResult(_Item):
@@ -71,6 +80,6 @@ class PullItem(_Item):
 
 
 type InboxItem = Annotated[
-    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem | PullItem,
+    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem | PullItem | WithdrawItem,
     Field(discriminator="kind"),
 ]

@@ -24,6 +24,7 @@ from owlbear_delivery_next import (
     loop,
     permissions,
     processes,
+    prompts,
     runner,
     sdk_adapter,
     tools,
@@ -52,9 +53,9 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, judges, merge, visual
+from owlbear_delivery_next.steps import check, decision, judges, merge, visual
 from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
+from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan, JudgeVerdict, VisualRound
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -225,7 +226,8 @@ def test_a_passed_visual_check_holds_only_for_its_exact_head_tree_and_state_vers
     c = change(clone)
     assert not merge.visual_ok(c, head, [])  # fail-closed without a result
     shots = [visual.Shot("home", 1280, "home-1280.png"), visual.Shot("home", 390, "home-390.png")]
-    c, result = visual.judged(c, head, visual.tree(clone, head), shots, verdict=rv("pass"), now=NOW)
+    tree = visual.tree(clone, head)
+    c, result = visual.judged(c, head, tree, shots, verdict=rv("pass"), now=NOW, kept=rounded(c, head, tree))
     assert (result.exit, c.visual.passed, c.visual.states) == (Exit.DONE, True, {"home": 1})
     assert merge.visual_ok(c, head, [])
     newer = commit(clone, "web/app.css", "y\n")
@@ -245,7 +247,10 @@ def test_a_fix_verdict_becomes_a_builder_repair_task(clone):
     c = change(clone)
     verdict = rv("fix", [tools.Finding(place="home 390px", problem="text overflows", fix="wrap it")])
     shots = [visual.Shot("home", 1280, "home-1280.png"), visual.Shot("home", 390, "home-390.png")]
-    c, result = visual.judged(c, head, visual.tree(clone, head), shots, verdict=verdict, now=NOW)
+    tree = visual.tree(clone, head)
+    c, result = visual.judged(
+        c, head, tree, shots, verdict=verdict, now=NOW, kept=rounded(c, head, tree, correct="fail")
+    )
     assert (result.exit, result.back_to, c.visual.passed) == (Exit.BACK, StepKind.BUILD, False)
     assert c.visual.findings == ["home 390px: text overflows - fix: wrap it"]
     after = loop.apply(c, result, NOW)
@@ -255,6 +260,21 @@ def test_a_fix_verdict_becomes_a_builder_repair_task(clone):
 
 def err(text, width=1280, kind="console", state="home"):
     return PageError(state=state, version=1, width=width, kind=kind, text=text)
+
+
+def rounded(c, head, tree="t", *, correct="pass", design="pass", setting="ask", found=()):  # noqa: PLR0913
+    """The round both judges recorded, each with a verified verdict."""
+    verdicts = [
+        JudgeVerdict(lens="correctness", verdict=correct, usage_verified=True),
+        JudgeVerdict(lens="design", verdict=design, findings=list(found), usage_verified=True),
+    ]
+    states = {s.name: s.version for s in c.brief.visual}
+    number = len(c.visual_rounds) + 1
+    kept = VisualRound(
+        number=number, head=head, tree=tree, states=states, design_failures=setting, verdicts=verdicts, at=NOW
+    )
+    c.visual_rounds.append(kept)
+    return kept
 
 
 def test_an_error_is_existing_only_if_a_good_before_shot_of_that_state_version_and_width_had_it():
@@ -273,7 +293,8 @@ def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fai
     head = commit(clone, "web/app.css")
     shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"),))]
     before = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=[err("old")], at=NOW)
-    c, result = visual.judged(change(clone, before=before), head, "t", shots, verdict=rv("pass"), now=NOW)
+    c = change(clone, before=before)
+    c, result = visual.judged(c, head, "t", shots, verdict=rv("pass"), now=NOW, kept=rounded(c, head))
     assert (result.exit, c.visual.passed, c.visual.errors) == (Exit.DONE, True, [err("old")])
     shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"), err("boom", kind="page")))]
     verdict = rv("fix", [tools.Finding(place="home-1280.png", problem="text overflows", fix="wrap it")])
@@ -296,8 +317,15 @@ def test_an_oversize_screenshot_keeps_its_errors(tmp_path):
 def test_doubt_is_only_offered_when_nothing_is_definitely_wrong(clone):
     head = commit(clone, "web/app.css")
     good = [visual.Shot("home", 1280, "home-1280.png")]
-    c, result = visual.judged(change(clone), head, "t", good, verdict=unsure(), now=NOW)
+    c = change(clone)
+    c, result = visual.judged(c, head, "t", good, verdict=unsure(), now=NOW, kept=rounded(c, head))
     assert (result.exit, c.visual.passed, result.question.options[0].next) == (Exit.ASK, False, "accept")
+    assert (result.question.cause, c.visual_rounds[-1].outcome) == (decision.CAUSE, "ask")
+    seen = tools.Finding(place="home-1280.png", problem="maybe wraps", fix="decide")
+    c = change(clone)
+    doubtful = unsure().model_copy(update={"findings": [seen]})
+    c, result = visual.judged(c, head, "t", good, verdict=doubtful, now=NOW, kept=rounded(c, head, correct="unsure"))
+    assert result.exit == Exit.ASK  # an unsure judge's findings are for the owner, never an automatic repair
     noisy = [visual.Shot("home", 1280, "home-1280.png", errors=(err("boom", kind="page"),))]
     c, result = visual.judged(change(clone), head, "t", noisy, verdict=unsure(), now=NOW)
     assert (result.exit, c.visual.findings) == (Exit.BACK, ["home at 1280px: new page error: boom"])
@@ -336,9 +364,11 @@ def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_pa
     c, result = visual.judged(c, head, "t", shots, verdict=rv("pass"), now=NOW)
     assert (result.exit, c.visual.passed) == (Exit.BACK, False)
     assert c.visual.findings == ["home at 1280px: / did not answer: net::ERR_CONNECTION_REFUSED"]
-    for shots, verdict in (([], rv("pass")), ([visual.Shot("home", 1280, "f.png")], None)):
+    for shots, verdict in (([], rv("pass")), ([visual.Shot("home", 1280, error="/ answered 500")], None)):
         c, result = visual.judged(change(clone), head, "t", shots, verdict=verdict, now=NOW)
         assert (result.exit, c.visual.passed) == (Exit.BACK, False)
+    c, result = visual.judged(change(clone), head, "t", [visual.Shot("home", 1280, "f.png")], verdict=None, now=NOW)
+    assert (result.exit, result.cause, c.visual.passed) == (Exit.RETRY, decision.AGAIN, False)  # judged again
 
 
 # Runner flow with a fake capturer and reviewer
@@ -347,17 +377,25 @@ def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_pa
 class FakeReview:
     def __init__(self, verdict="pass"):
         self.calls, self.verdict, self.termination = [], verdict, processes.Termination(confirmed=True)
-        self.designs, self.design = [], None  # the design judge's sessions, and its run if set
+        self.designs, self.design = [], designed  # the design judge's sessions, and how each ends
 
     async def __call__(self, cfg):
         if cfg.role == "designer":
             self.designs.append(cfg)
-            return (
-                self.design(cfg) if self.design else Run(cfg.session_id, ending="error", termination=self.termination)
-            )
+            return self.design(cfg)
         self.calls.append(cfg)
         payload = unsure() if self.verdict == "unsure" else rv(self.verdict)
         return Run(cfg.session_id, ending="result", payload=payload, termination=self.termination)
+
+
+def designed(cfg, verdict="pass", findings=()):
+    """A verified two-phase design verdict over the session's images."""
+    names = list(cfg.observe().changed)
+    pairs = [{"pair": p, "better": "equal", "why": "same"} for p in design_tools.pairs(names)]
+    look = design_tools.DesignLook(verdict=verdict, findings=list(findings), preferences=pairs, covered_paths=names)
+    final = design_tools.DesignResult(**look.model_dump())
+    done = processes.Termination(confirmed=True)
+    return Run(cfg.session_id, ending="result", payload=final, first=look, termination=done)
 
 
 def unsure():
@@ -502,14 +540,140 @@ def test_both_judges_run_and_the_round_keeps_the_design_judges_blind_two_phase_v
         ("home", 1280, "P1", True)
     ]
     assert (design_verdict.model, design_verdict.effort) == ("claude-opus-5.5", "high")
-    assert after.visual.passed  # routing still follows the correctness judge until the decision page (slice 6)
+    q = loop.open_question(after)  # a design fail with the default setting: the owner decides
+    assert (after.visual.passed, kept.outcome, q.cause, after.step.kind) == (
+        False,
+        "ask",
+        decision.CAUSE,
+        StepKind.CHECK,
+    )
 
 
-def test_a_design_judge_without_a_verified_result_is_recorded_as_such(flow):
+def test_a_judge_without_a_verified_verdict_runs_again_with_the_capture(flow):
+    done = processes.Termination(confirmed=True)
+    flow.review.design = lambda cfg: Run(cfg.session_id, ending="error", termination=done)
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
-    [kept] = flow.store.read("c1").visual_rounds
-    assert (kept.verdicts[1].verdict, kept.verdicts[1].usage_verified) == (None, False)
+    after = flow.store.read("c1")
+    [kept] = after.visual_rounds
+    assert (kept.verdicts[1].verdict, kept.verdicts[1].usage_verified, kept.outcome) == (None, False, None)
     assert kept.blind == {"home-1280-A.png": "after", "home-1920-A.png": "after", "home-2400-A.png": "after"}
+    assert (after.visual, after.outcome.exit) == (None, Exit.RETRY)  # the outage's own retry, under its budget
+    flow.review.design = lambda cfg: designed(cfg).__class__(**{**vars(designed(cfg)), "first": None})
+    runner._visual(flow.store, Lock("c1"), after, flow.clone)  # noqa: SLF001
+    again = flow.store.read("c1")
+    assert (again.visual.passed, again.outcome.exit, again.outcome.cause) == (False, Exit.RETRY, decision.AGAIN)
+
+
+@pytest.mark.parametrize(
+    ("correct", "setting", "step", "sent"),
+    [
+        ("pass", "back", StepKind.BUILD, ["design"]),  # back by the setting, with the design findings
+        ("pass", "ask", StepKind.CHECK, []),  # the owner decides
+        ("fix", "back", StepKind.BUILD, ["correctness", "design"]),
+        ("fix", "ask", StepKind.BUILD, ["correctness"]),  # the design fail waits for the next round
+    ],
+)
+def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, setting, step, sent):
+    flow.store.update_config(lambda cur: cur.model_copy(update={"design_failures": setting}))
+    flow.review.verdict = correct
+    problem = {"image": "home-1280-A.png", "problem": "cramped card", "rule": "Layout & Space", "severity": "P1"}
+    flow.review.design = lambda cfg: designed(
+        cfg, "fail", [problem] if "home-1280-A.png" in cfg.observe().changed else []
+    )
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    assert (after.step.kind, after.visual_rounds[-1].outcome) == (step, "back" if step == StepKind.BUILD else "ask")
+    detail = next((t.detail for t in after.plan.tasks if t.origin == "review"), "")
+    has = {"correctness": "did not accept the screenshots" in detail, "design": "cramped card" in detail}
+    assert [lens for lens, seen in has.items() if seen] == sent
+
+
+def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):
+    flow.review.verdict = "unsure"
+    c = checking(flow.store, flow.clone)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    q, kept = loop.open_question(asked), asked.visual_rounds[-1]
+    assert (asked.visual.passed, asked.visual.doubts, [o.id for o in q.options]) == (
+        False,
+        ["home-1280.png: Is the greeting meant to wrap at 1280px?"],
+        ["pass", "fail", "pause"],
+    )
+    assert not loop.ordinary(q)  # a Changes-page decision (T6)
+    assert check.action(asked, live=False, paths={}) == "dispose"  # nothing relaunches before the owner answers
+    client = TestClient(
+        api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    shown = {"question": q.id, "round": kept.number, "head": kept.head, "pack": kept.pack}
+    refused = client.post("/api/next/changes/c1/answers", json={"question": q.id, "text": "hmm"})
+    assert (refused.status_code, "choose one of" in refused.json()["detail"]) == (422, True)
+    empty = client.post("/api/next/changes/c1/answers", json=shown | {"option": "fail"})
+    assert (empty.status_code, "ticks a finding or says what is wrong" in empty.json()["detail"]) == (422, True)
+    stale = client.post("/api/next/changes/c1/answers", json=shown | {"option": "pass", "pack": "older"})
+    assert (stale.status_code, "changed since the page was shown" in stale.json()["detail"]) == (409, True)
+    unknown = client.post("/api/next/changes/c1/answers", json=shown | {"option": "fail", "findings": ["design-9"]})
+    assert (unknown.status_code, "design-9" in unknown.json()["detail"]) == (422, True)
+    detail = client.get("/api/next/changes/c1").json()
+    assert (detail["visual_round"]["number"], detail["owner_criteria"]) == (kept.number, [])
+    passed, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="pass", round=kept.number)], NOW)
+    assert (passed.visual_rounds[-1].decision.outcome, step) == ("pass", passed.step)
+    flow.store.write(Lock("c1"), passed)
+    runner._visual(flow.store, Lock("c1"), passed, flow.clone)  # noqa: SLF001
+    done = flow.store.read("c1")
+    head = git(flow.clone, "rev-parse", "HEAD")
+    assert (len(flow.review.calls), done.visual.passed, done.step.kind) == (1, True, StepKind.MERGE)
+    assert (done.visual_rounds[-1].outcome, done.owner_criteria) == ("merge", [])  # a Pass comment is a note only
+    assert merge.visual_ok(done, head, [])
+
+
+def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criterion_until_withdrawn(flow):
+    flow.review.verdict = "unsure"
+    problem = {"image": "home-1280-A.png", "problem": "cramped card", "rule": "Layout & Space", "severity": "P2"}
+    flow.review.design = lambda cfg: designed(
+        cfg, "unsure", [problem] if "home-1280-A.png" in cfg.observe().changed else []
+    )
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    q, kept = loop.open_question(asked), asked.visual_rounds[-1]
+    [ticked] = [f.id for v in kept.verdicts for f in v.findings]
+    item = AnswerItem(at=NOW, question=q.id, option="fail", round=kept.number, findings=[ticked], text="More air")
+    failed, _ = loop.schedule(asked, [item], NOW)
+    flow.store.write(Lock("c1"), failed)
+    runner._visual(flow.store, Lock("c1"), failed, flow.clone)  # noqa: SLF001
+    back = flow.store.read("c1")
+    fix = next(t for t in back.plan.tasks if t.origin == "review")
+    assert (back.step.kind, back.visual_rounds[-1].outcome) == (StepKind.BUILD, "back")
+    assert (back.visual.doubts, "owner: More air" in back.visual.findings) == ([], True)  # decided: nothing open
+    assert ("cramped card" in fix.detail, "owner: More air" in fix.detail) == (True, True)
+    [criterion] = back.owner_criteria
+    assert (criterion.id, criterion.text, criterion.round) == ("owner-1", "More air", kept.number)
+    assert "owner-1: More air" in prompts.visual(
+        back, [("home", 1280, "home-1280.png")]
+    )  # every later review checks it
+    client = TestClient(
+        api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    assert client.post("/api/next/changes/c1/criteria/owner-1/withdraw").status_code == 200
+    withdrawn, _ = flow.store.fold(Lock("c1"), "c1", NOW)
+    assert withdrawn.owner_criteria[0].withdrawn_at is not None
+    assert "owner-1" not in prompts.visual(withdrawn, [("home", 1280, "home-1280.png")])
+    assert client.post("/api/next/changes/c1/criteria/owner-9/withdraw").status_code == 404
+
+
+def test_a_decision_never_passes_a_capture_of_another_head(flow):
+    flow.review.verdict = "unsure"
+    c = checking(flow.store, flow.clone)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    kept = asked.visual_rounds[-1]
+    item = AnswerItem(at=NOW, question=asked.outcome.question, option="pass", round=kept.number)
+    passed, _ = loop.schedule(asked, [item], NOW)
+    flow.store.write(Lock("c1"), passed)
+    commit(flow.clone, "web/app.css", "moved\n")
+    flow.review.verdict = "pass"
+    runner._visual(flow.store, Lock("c1"), passed, flow.clone)  # noqa: SLF001
+    assert len(flow.review.calls) == 2  # captured and judged again at the new head
+    assert flow.store.read("c1").visual_rounds[-1].number == kept.number + 1
 
 
 def test_the_capture_uses_the_widths_the_settings_name(flow):
@@ -544,50 +708,6 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
     head = git(flow.clone, "rev-parse", "HEAD")
     assert (flow.store.visual_dir("c1", head) / "home-2400.png").read_bytes() == PNG
     assert merge.visual_ok(after, head, [])
-
-
-def test_an_unsure_reviewer_makes_the_owner_decide_and_acceptance_holds_only_for_that_capture(flow):
-    flow.review.verdict = "unsure"
-    c = checking(flow.store, flow.clone)
-    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
-    asked = flow.store.read("c1")
-    q = loop.open_question(asked)
-    assert (asked.visual.passed, asked.visual.doubts, [o.next for o in q.options]) == (
-        False,
-        ["home-1280.png: Is the greeting meant to wrap at 1280px?"],
-        ["accept", "repair", "pause"],
-    )
-    assert not loop.ordinary(q)  # a Changes-page decision (T6)
-    assert check.action(asked, live=False, paths={}) == "dispose"  # nothing relaunches before the owner answers
-    for empty in (AnswerItem(at=NOW, question=q.id), AnswerItem(at=NOW, question=q.id, text="hmm")):
-        still, step = loop.schedule(asked, [empty], NOW)
-        assert (step, loop.open_question(still).id, still.visual.decision) == (None, q.id, None)
-    client = TestClient(
-        api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
-    )
-    refused = client.post("/api/next/changes/c1/answers", json={"question": q.id, "text": "hmm"})
-    assert (refused.status_code, "choose one of" in refused.json()["detail"]) == (422, True)
-    accepted, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
-    assert (accepted.visual.decision, step) == ("accept", accepted.step)
-    flow.store.write(Lock("c1"), accepted)
-    runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
-    done = flow.store.read("c1")
-    head = git(flow.clone, "rev-parse", "HEAD")
-    assert (len(flow.review.calls), done.visual.passed, done.step.kind) == (1, True, StepKind.MERGE)
-    assert merge.visual_ok(done, head, [])
-
-
-def test_an_acceptance_never_passes_a_capture_of_another_head(flow):
-    flow.review.verdict = "unsure"
-    c = checking(flow.store, flow.clone)
-    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
-    asked = flow.store.read("c1")
-    accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=asked.outcome.question, option="accept")], NOW)
-    flow.store.write(Lock("c1"), accepted)
-    commit(flow.clone, "web/app.css", "moved\n")
-    flow.review.verdict = "pass"
-    runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
-    assert len(flow.review.calls) == 2  # captured and judged again at the new head
 
 
 def test_a_verdict_whose_usage_stayed_unread_is_never_recorded_and_the_owner_reruns_the_check(flow):

@@ -12,7 +12,7 @@ import threading
 import time
 from datetime import UTC, datetime
 from importlib.resources import files
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -20,11 +20,19 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import config_routes, evidence, held, loop, profile
 from owlbear_delivery_next.briefs import save_brief, save_visual
-from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, PullItem
+from owlbear_delivery_next.inbox import (
+    AnswerItem,
+    BriefApproval,
+    CheckResult,
+    ConsentItem,
+    IntentItem,
+    PullItem,
+    WithdrawItem,
+)
 from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import card, status, unloadable
-from owlbear_delivery_next.steps import check, visual
+from owlbear_delivery_next.steps import check, decision, visual
 from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
@@ -52,12 +60,29 @@ class Body(BaseModel):
 
 
 class AnswerBody(Body):
-    """Answer one open question."""
+    """Answer one open question; a visual decision names the round, capture and pack the page showed (TD-79)."""
 
     question: str = Field(max_length=16)
     option: str | None = Field(default=None, max_length=64)
     text: str = Field(default="", max_length=2000)
     channel: Literal["status-view", "chat"] = "status-view"
+    round: int | None = Field(default=None, ge=1)
+    head: str = Field(default="", max_length=40)
+    pack: str = Field(default="", max_length=200)
+    findings: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=60)
+
+
+def decision_refused(c: Change, body: AnswerBody) -> tuple[int, str] | None:
+    """Why a Pass or Fail is refused: its round, capture or pack changed since the page showed them, or it is empty."""
+    kept = c.visual_rounds[-1] if c.visual_rounds else None
+    shown = (body.round, body.head, body.pack)
+    if kept is None or kept.outcome != "ask" or kept.decision or shown != (kept.number, kept.head, kept.pack):
+        return 409, "the capture or the design pack changed since the page was shown; reload"
+    if unknown := sorted(set(body.findings) - {f.id for v in kept.verdicts for f in v.findings}):
+        return 422, f"findings {unknown} are not in round {kept.number}"
+    if body.option == "fail" and not body.findings and not body.text.strip():
+        return 422, "a Fail ticks a finding or says what is wrong"
+    return None
 
 
 class CheckBody(Body):
@@ -298,6 +323,8 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
                 for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
             ],
             "before": c.before.model_dump(mode="json") if c.before else None,
+            "visual_round": c.visual_rounds[-1].model_dump(mode="json") if c.visual_rounds else None,
+            "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
             "activity": events[-20:],
         }
 
@@ -334,8 +361,19 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
         if body.option is None and {o.next for o in q.options} & loop.DECISIONS - {"retry"}:
             raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")
-        item = AnswerItem(at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text)
+        if q.cause == decision.CAUSE and body.option in {"pass", "fail"} and (why := decision_refused(c, body)):
+            raise HTTPException(*why)
+        item = AnswerItem(
+            at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text,
+            round=body.round, findings=body.findings,
+        )  # fmt: skip
         return put(slug, item)
+
+    @router.post("/changes/{slug}/criteria/{criterion}/withdraw")
+    def withdraw(slug: str, criterion: str) -> dict[str, str]:
+        if not any(k.id == criterion and k.withdrawn_at is None for k in read(slug).owner_criteria):
+            raise HTTPException(404, f"no criterion {criterion} is in force")
+        return put(slug, WithdrawItem(at=datetime.now(UTC), criterion=criterion))
 
     @router.post("/changes/{slug}/check-results")
     def check_result(slug: str, body: CheckBody) -> dict[str, str]:

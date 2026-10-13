@@ -253,6 +253,62 @@ function questionForm(q) {
   return box;
 }
 
+function tick(label) {
+  if (pds) {
+    const node = el("p-checkbox", undefined, { label });
+    return [node, () => node.checked === true];
+  }
+  const node = el("label"), input = el("input", undefined, { type: "checkbox" });
+  node.append(input, ` ${label}`);
+  return [node, () => input.checked];
+}
+
+// The owner's decision on one visual round (TD-79): both verdicts, the findings he ticks, a comment, Pass or Fail.
+function decisionForm(q, r) {
+  const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, text(q.text, { weight: "semibold" }));
+  const ticked = [];
+  for (const v of r.verdicts) {
+    const before = v.unanchored && v.unanchored !== v.verdict ? ` (before the detector: ${v.unanchored})` : "";
+    const judge = v.lens === "design" ? "Design" : "Correctness";
+    box.append(text(`${judge} judge: ${v.verdict ?? "no verified verdict"}${before}`, { weight: "semibold" }));
+    if (v.reason) box.append(text(v.reason, { size: "xs", color: "contrast-medium" }));
+    for (const f of v.findings) {
+      const made = f.introduced === false ? "existing" : f.introduced ? "new" : "";
+      const tags = [f.severity, f.rule, made].filter(Boolean).join(", ");
+      const [node, on] = tick(`${f.state}${f.width ? ` at ${f.width}px` : ""}: ${f.text}${tags ? ` (${tags})` : ""}`);
+      ticked.push([f.id, on]);
+      box.append(node);
+    }
+    const better = Object.entries(v.preferences || {})
+      .map(([p, s]) => `${p}: ${s === "equal" ? "equal" : `${s} better`}`);
+    if (better.length) box.append(text(`Blind comparison: ${better.join("; ")}`, { size: "xs" }));
+  }
+  const seen = r.detector.flatMap((s) => s.findings.map((f) =>
+    `${s.state}${s.width ? ` at ${s.width}px` : ""}: ${f.rule} at ${f.where} (${f.freshness})`));
+  if (seen.length) {
+    box.append(text("Design detector (evidence only):", { size: "xs" }), list(seen.slice(0, 30)));
+  }
+  const [words, said] = field("Comment: a Fail's comment is checked by every later review until you withdraw it");
+  const decide = (option) => send("/answers", {
+    question: q.id, option, text: said(), round: r.number, head: r.head, pack: r.pack,
+    findings: ticked.filter(([, on]) => on()).map(([id]) => id),
+  });
+  box.append(words, row(
+    button("Pass", () => decide("pass"), { icon: "check" }),
+    button("Fail", () => decide("fail"), { variant: "secondary", icon: "close" }),
+  ));
+  return box;
+}
+
+function criteriaPanel(criteria) {
+  const box = panel("Your visual criteria");
+  for (const k of criteria) {
+    const withdraw = () => send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {});
+    box.append(row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary" })));
+  }
+  return box;
+}
+
 function checkForm(check) {
   const [note, noted] = field("Note");
   const box = panel(`Check ${check.id}`, list(check.steps, "ol"));
@@ -315,14 +371,15 @@ function image(slug, kind, name, at, alt) {
   return link;
 }
 
-function visualSection(slug, v, b, existing) {
-  const state = v.passed ? ["Passed", "success"] : v.doubts.length ? ["Undecided", "warning"] : ["Failed", "error"];
+function visualSection(slug, v, b, existing, deciding) {
+  const open = deciding || v.doubts.length;
+  const state = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
   const verdict = el("p-tag", state[0], { variant: state[1] });
   const title = text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" });
   const box = panel("Before and after", row(title, verdict));
   if (v.findings.length) box.append(list(v.findings));
   if (v.doubts.length) {
-    box.append(text("The reviewer could not decide:", { size: "xs" }), list(v.doubts));
+    box.append(text("The judges could not decide:", { size: "xs" }), list(v.doubts));
   }
   if (existing.length) {
     box.append(text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" }));
@@ -378,11 +435,13 @@ async function showDetail() {
     text(d.brief.outcome, { color: "contrast-medium" }), text(spent, { size: "xs", color: "contrast-medium" }),
   ];
   if (d.pullback) parts.push(pullbackNote(d.pullback));
-  if (d.question) parts.push(questionForm(d.question));
+  const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
+  if (d.question) parts.push(deciding ? decisionForm(d.question, r) : questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
-  if (d.visual) parts.push(visualSection(d.slug, d.visual, d.before, d.visual_existing_errors));
+  if (d.visual) parts.push(visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding));
   else if (d.before) parts.push(beforeSection(d.slug, d.before));
+  if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
   if (d.step === "shape" && d.brief.approved !== d.brief.version) {
     const items = [
       ...d.criteria.map((k) => `${k.id}: ${k.text}`),
@@ -396,9 +455,9 @@ async function showDetail() {
   parts.push(panel("Recent activity", list(log, "ol")));
   const asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
   const forms = JSON.stringify([d.slug, d.question?.id, d.merge?.head, asked, d.brief.version, d.brief.approved,
-    d.pullback?.state, d.paused]);
+    d.pullback?.state, d.paused, r?.number, r?.outcome, d.owner_criteria.map((k) => k.id)]);
   const editing = target.contains(document.activeElement)
-    && document.activeElement.matches("textarea, input, p-textarea, p-radio-group, p-radio-group-option");
+    && document.activeElement.matches("textarea, input, p-textarea, p-radio-group, p-radio-group-option, p-checkbox");
   if ((editing || draft) && forms === shown.forms) return;  // keep unsent input while the same forms are shown
   target.replaceChildren(...parts);
   shown = { slug: d.slug, forms };

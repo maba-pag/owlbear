@@ -17,6 +17,7 @@ from owlbear_delivery_next.inbox import (
     IntentItem,
     PullItem,
     Recovery,
+    WithdrawItem,
 )
 from owlbear_delivery_next.models import (
     VISUAL,
@@ -38,6 +39,7 @@ from owlbear_delivery_next.models import (
     Waiting,
 )
 from owlbear_delivery_next.moves import ask, enter, go, open_task, resolved
+from owlbear_delivery_next.visual_records import OwnerDecision
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -250,6 +252,10 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                 _intent(c, item)
             case PullItem():
                 c.pull_requested = item.at
+            case WithdrawItem():
+                for k in c.owner_criteria:
+                    if k.id == item.criterion and k.withdrawn_at is None:
+                        k.withdrawn_at = item.at
             case _:
                 pass
     return c
@@ -267,10 +273,12 @@ def _intent(c: Change, item: IntentItem) -> None:
             c.intent.words, c.intent.hold = item.text, True
 
 
-def _visual_decision(c: Change, decision: str, note: str) -> None:
-    """Record the owner's answer to the visual reviewer's doubts on the capture it was about (N6)."""
-    if c.visual and c.visual.doubts and not c.visual.passed:
-        c.visual = c.visual.model_copy(update={"decision": decision, "note": note})
+def _visual_decision(c: Change, decision: str, item: AnswerItem) -> None:
+    """Record the owner's decision on the round it was about, while that round still waits for it (TD-79)."""
+    kept = c.visual_rounds[-1] if c.visual_rounds else None
+    if kept and kept.number == item.round and kept.outcome == "ask" and kept.decision is None:
+        outcome = "pass" if decision == "accept" else "fail"
+        kept.decision = OwnerDecision(outcome=outcome, findings=item.findings, comment=item.text, at=item.at)
 
 
 def _target(q: Question, option: str | None) -> str | None:
@@ -314,7 +322,7 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     if target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
         go(c, c.step.kind, c.step.task, c.step.mode)
     else:
-        _visual_decision(c, target, item.text)
+        _visual_decision(c, target, item)
 
 
 def answer_delivered(change: Change, question_id: str, now: datetime) -> Change:

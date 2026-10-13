@@ -46,5 +46,14 @@ def brief_challenged(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-CHANGE: Migrations = {1: brief_challenged}
+def visual_decided(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 2 to 3: the owner decides a visual round (TD-79); a capture keeps no accept or repair answer."""
+    for capture in (data.get("visual"), data.get("before")):
+        if isinstance(capture, dict):
+            capture.pop("decision", None)
+            capture.pop("note", None)
+    return data
+
+
+CHANGE: Migrations = {1: brief_challenged, 2: visual_decided}
 PROFILE: Migrations = {1: roles_moved}

@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import calibration, sessions
+from owlbear_delivery_next import calibration, runner, sessions
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
-from owlbear_delivery_next.models import Change
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.models import Change, VisualResult
+from owlbear_delivery_next.store import Lock, Store
 from owlbear_delivery_next.visual_records import (
     DetectorFinding,
     DetectorScan,
@@ -153,6 +153,32 @@ def test_only_the_newest_decided_rounds_keep_their_screenshots(shared_repo, tmp_
         calibration.keep(store.shared, store.name, "c1", decided(n, NOW + timedelta(minutes=minutes)), {"s.png": shot})
     kept = {r.number: bool(images) for r, images in calibration.cases(store.shared, store.name)}
     assert kept == {1: True, 3: True, 2: False}  # the earliest decision keeps its verdicts only
+
+
+def test_a_round_the_owner_decided_is_kept_with_its_before_and_after_screenshots(shared_repo, tmp_path) -> None:
+    root, repo = shared_repo
+    store = Store.open(repo)
+    change = Change(slug="c1", visual_rounds=[decided(1, NOW)])
+    change.visual = VisualResult(head="a" * 40, tree="t", files=["home-1280.png"], at=NOW)
+    change.before = VisualResult(head="b" * 40, tree="t", files=["home-1280.png"], at=NOW)
+    out, old = tmp_path / "after", store.before_dir("c1", "b" * 40)
+    for folder, data in ((out, b"after"), (old, b"before")):
+        folder.mkdir(parents=True)
+        (folder / "home-1280.png").write_bytes(data)
+    runner._calibrated(store, change, out)  # noqa: SLF001
+    kept = root / "shop-site" / "visual" / "c1-1"
+    assert [(kept / n).read_bytes() for n in ("after-home-1280.png", "before-home-1280.png")] == [b"after", b"before"]
+
+
+def test_a_change_stored_before_round_decisions_loads_without_its_old_answer(tmp_path) -> None:
+    store = Store(tmp_path / "store")
+    store.write(Lock("c1"), Change(slug="c1", visual=VisualResult(head="h", tree="t", at=NOW)))
+    path = store.root / "changes" / "c1" / "change.json"
+    data = json.loads(path.read_text())
+    data["format"] = 2
+    data["visual"] |= {"decision": "accept", "note": "fine"}
+    path.write_text(json.dumps(data))
+    assert store.read("c1").visual.head == "h"
 
 
 def test_without_a_shared_repository_nothing_is_kept_anywhere(tmp_path) -> None:
