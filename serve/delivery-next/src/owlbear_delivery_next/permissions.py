@@ -40,6 +40,7 @@ class Request:
     paths: tuple[str, ...] = ()
     urls: bool = False
     tool: str = ""
+    server: str = ""  # an MCP request's server
 
 
 def identities(req: Request) -> set[str]:
@@ -166,8 +167,14 @@ def _shell(policy: Policy, req: Request) -> str | None:  # noqa: PLR0911 - one r
     return None
 
 
-def decide(policy: Policy, req: Request) -> str | None:
-    """Return None to allow, or the denial reason the agent and the activity log see."""
+def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) -> str | None:
+    """Return None to allow, or the denial reason the agent and the activity log see.
+
+    *offered* are the MCP tools the role's agent file names as server/tool, such as saving a memory (TD-70); the
+    runtime names a request's tool server-tool.
+    """
+    if req.kind == "mcp" and f"{req.server}/{req.tool.removeprefix(f'{req.server}-')}" in offered:
+        return None
     if req.kind == "custom-tool":
         return None if req.tool in {s.name for s in tools.SPECS} else f"tool {req.tool} is not allowed"
     if req.kind in {"read", "write"}:
@@ -189,4 +196,4 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
     if kind in {"read", "write"}:
         path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
         return Request(kind, paths=(path,) if path else ())
-    return Request(kind, tool=getattr(r, "tool_name", ""))
+    return Request(kind, tool=getattr(r, "tool_name", ""), server=getattr(r, "server_name", ""))

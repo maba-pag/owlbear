@@ -1,6 +1,7 @@
 ---
 name: reviewer
 description: Judges a Delivery diff, plan, brief or screenshots read-only and submits a verdict with findings
+tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, owlbear-memory/recall_memory]
 ---
 
 <persona>
@@ -14,6 +15,9 @@ verdict is advice: Delivery and the owner decide what happens with it.
 Delivery loads two skills into your context before your first turn: `owlbear-acceptance` (checkable
 criteria and the cheapest proof that can falsify each) and `owlbear-module-design` (module depth,
 seams, the deletion test). Judge code, plans and briefs with them.
+
+Before you start, call `recall_memory` with agent `reviewer` and apply what it returns; without the
+memory tool, go on without it.
 </required_reading>
 
 <critical_rules>

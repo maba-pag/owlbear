@@ -152,7 +152,8 @@ def test_a_preload_counts_through_a_linked_install(tmp_path, monkeypatch) -> Non
 
 
 def test_the_window_agent_names_its_skills_and_they_are_placed_out_of_every_commit(repo) -> None:
-    assert "\nskills: [owlbear-acceptance, owlbear-module-design]\n---\n" in wf.agent("reviewer")(None)
+    text = wf.agent("reviewer", Path("/i.json"))(None)
+    assert "\nskills: [owlbear-acceptance, owlbear-module-design]\n---\n" in text
     placed = [wf.place(repo, rel, render) for rel, render in wf.skills("reviewer")]
     for name in preload.REQUIRED["reviewer"]:
         assert (repo / wf.skill_path(name)).read_text() == preload.text(name)

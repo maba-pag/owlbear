@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
-from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -60,15 +59,15 @@ def cli_path() -> str:
 
 
 def agent(kind: StepKind) -> dict[str, Any]:
-    """Return the role's custom agent from the package's ``agents/`` prose, with the skills it preloads."""
-    text = files("owlbear_delivery_next").joinpath("agents", f"{ROLES[kind]}.md").read_text(encoding="utf-8")
-    _, front, body = text.split("---", 2)
-    meta = dict(line.split(":", 1) for line in front.strip().splitlines())
+    """Return the role's custom agent from the package's ``agents/`` prose, with its tools and preloaded skills."""
+    role = ROLES[kind]
+    meta, body = preload.agent_file(role)
     return {
-        "name": meta["name"].strip(),
-        "description": meta["description"].strip(),
+        "name": meta["name"],
+        "description": meta["description"],
         "prompt": body.strip(),
-        "skills": list(preload.REQUIRED[ROLES[kind]]),
+        "tools": [*preload.tools(role), *(s.name for s in tools.SPECS)],  # nothing else is offered (TD-69)
+        "skills": list(preload.REQUIRED[role]),
     }
 
 
@@ -115,6 +114,7 @@ class Session:
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
     attachments: tuple[dict[str, str], ...] = ()  # blob attachments sent with the first message
+    memory: Path | None = None  # the OwlBear workspace whose owlbear-memory the agent reads and writes (TD-70)
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
@@ -231,7 +231,7 @@ class _Step:
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = view(request)
-        reason = decide(self.cfg.policy, req)
+        reason = decide(self.cfg.policy, req, frozenset(preload.tools(ROLES[self.cfg.kind])))
         if reason is None:
             for name in identities(req):  # a later allowed use supersedes an earlier denial of the same program
                 self.run.denied.pop(name, None)
@@ -295,6 +295,7 @@ class _Step:
             "agent": role["name"],
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
             "skill_directories": [str(preload.directory())],
+            "mcp_servers": _memory(self.cfg.memory),
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,
@@ -438,6 +439,12 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     await _call(session.send(message, **extra), "send")
     cfg.journal.delivered()
     return session
+
+
+def _memory(workspace: Path | None) -> dict[str, Any]:
+    """The owlbear-memory server for an OwlBear workspace; none elsewhere, so the agent goes on without it."""
+    server = preload.memory(workspace)
+    return {} if server is None else {preload.MEMORY: {"type": "local", **server, "working_directory": str(workspace)}}
 
 
 def _refused(cfg: Session) -> str:

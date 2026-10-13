@@ -160,8 +160,8 @@ class _Driver:
         try:
             for rel, render in wf.skills(self.role):
                 self.placed.append(wf.place(cfg.worktree, rel, render))
-            self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox)))
-            self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), wf.agent(self.role)))
+            self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox, cfg.memory)))
+            self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), wf.agent(self.role, inbox, cfg.memory)))
             with Inbox(self.gate, inbox):
                 conn = self.env.connect(cfg.worktree)
                 out = self.drive(conn)

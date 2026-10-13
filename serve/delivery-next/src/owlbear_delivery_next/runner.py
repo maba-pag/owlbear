@@ -96,6 +96,11 @@ def _others(store: Store, slug: str) -> dict[str, list[str]]:
     return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
 
 
+def _memory(repo: Path) -> Path | None:
+    """The OwlBear workspace whose owlbear-memory the agents use (TD-70); a repository without .owlbear has none."""
+    return repo if (repo / ".owlbear").is_dir() else None
+
+
 def _session(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
     """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7)."""
     if (store.read_profile() or Profile()).runtime == "vscode":
@@ -164,6 +169,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
         ),
         item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
+        memory=_memory(repo),
     )
     run = accepted or _kept(cfg, store)
     end = datetime.now(UTC)
@@ -289,6 +295,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 checks=(),
                 journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
                 attachments=visual.attachments(out, shots),
+                memory=_memory(repo),
             )
             result, run = _review_run(store, lock, change, cfg, "visual-review", submit=tools.VISUAL_REVIEW)
             stopped = result.exit == Exit.STOP  # a session that did not end cleanly outranks its verdict
@@ -343,6 +350,7 @@ def _brief_review(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         observe=lambda: worktree.observe(path, change.names.target),
         checks=(),
         journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
+        memory=_memory(repo),
     )
     change, result = loop.brief_review(change, _reviewer(store, lock, change, cfg, "brief-review"))
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))

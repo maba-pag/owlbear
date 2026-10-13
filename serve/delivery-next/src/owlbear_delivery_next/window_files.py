@@ -10,10 +10,10 @@ import contextlib
 import json
 import sys
 from dataclasses import dataclass
-from importlib.resources import files
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import preload, setup
+from owlbear_delivery_next import tools as tool_specs
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -70,8 +70,8 @@ def write_window_settings(folder: Path, model: str) -> None:
     path.write_text(text)
 
 
-def mcp(inbox: Path) -> Render:
-    """``.mcp.json`` with the step's relay added; the project's own servers stay."""
+def mcp(inbox: Path, memory: Path | None = None) -> Render:
+    """``.mcp.json`` with the step's servers added; the project's own servers stay."""
 
     def render(old: str | None) -> str:
         try:
@@ -80,10 +80,12 @@ def mcp(inbox: Path) -> Render:
             raise SettingsError(f"{MCP} is not plain JSON") from exc  # noqa: EM102, TRY003
         if not isinstance(data, dict) or not isinstance(data.get("mcpServers", {}), dict):
             raise SettingsError(f"{MCP} has no mcpServers object")  # noqa: EM102, TRY003
+        relay, memory_name = names(inbox)
         args = ["-m", "owlbear_delivery_next.step_mcp", "--inbox", str(inbox)]
-        server = {"type": "stdio", "command": sys.executable, "args": args, "tools": ["*"]}
-        name = f"{SERVER}-{inbox.stem[:16]}"
-        return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), name: server}}, indent=2) + "\n"
+        own = {relay: {"type": "stdio", "command": sys.executable, "args": args, "tools": ["*"]}}
+        if (server := preload.memory(memory)) is not None:
+            own[memory_name] = {"type": "stdio", **server, "cwd": str(memory)}
+        return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), **own}}, indent=2) + "\n"
 
     return render
 
@@ -98,14 +100,30 @@ def agent_path(role: str) -> str:
     return f".github/agents/{agent_name(role)}.agent.md"
 
 
-def agent(role: str) -> Render:
-    """The role's agent from the package prose, renamed for the window, with its skills and the result-tool note."""
-    text = files("owlbear_delivery_next").joinpath("agents", f"{role}.md").read_text(encoding="utf-8")
-    _, front, body = text.split("---", 2)
-    meta = dict(line.split(":", 1) for line in front.strip().splitlines())
+def agent(role: str, inbox: Path, memory: Path | None = None) -> Render:
+    """The role's agent from the package prose, renamed for the window, with its tools, skills and result note.
+
+    Its tools are the role's, under the same names as in the SDK runtime (the window runs the same harness), with
+    memory served by this step's memory server or left out, plus the result tools of this step's relay; the window
+    offers nothing else, neither its own question tool nor the owner's MCP tools (TD-69, runtime research P19, P23).
+    """
+    meta, body = preload.agent_file(role)
+    relay, memory_name = names(inbox)
+    served = preload.memory(memory) is not None
+    own = [
+        name.replace(f"{preload.MEMORY}/", f"{memory_name}/", 1)
+        for name in preload.tools(role)
+        if served or not name.startswith(f"{preload.MEMORY}/")
+    ]
+    tools = ", ".join([*own, *(f"{relay}/{s.name}" for s in tool_specs.SPECS)])
     skills = ", ".join(preload.REQUIRED.get(role, ()))
-    head = f"---\nname: {agent_name(role)}\ndescription: {meta['description'].strip()}\nskills: [{skills}]\n---\n"
-    return lambda _old: f"{head}\n{body.strip()}\n\n{RESULTS}\n"
+    head = f"---\nname: {agent_name(role)}\ndescription: {meta['description']}\ntools: [{tools}]\n"
+    return lambda _old: f"{head}skills: [{skills}]\n---\n\n{body.strip()}\n\n{RESULTS}\n"
+
+
+def names(inbox: Path) -> tuple[str, str]:
+    """The step's relay and memory server names; unique, since the host disables a name another session holds (P21)."""
+    return f"{SERVER}-{inbox.stem[:16]}", f"{preload.MEMORY}-{inbox.stem[:16]}"
 
 
 def skill_path(name: str) -> str:

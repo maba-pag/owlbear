@@ -78,7 +78,7 @@ def test_window_files_never_reach_a_commit_and_are_restored(repo: Path) -> None:
     placed = [
         wf.place(repo, wf.SETTINGS, wf.settings("gpt-6-luna")),
         wf.place(repo, wf.MCP, wf.mcp(Path("/inbox.json"))),
-        wf.place(repo, wf.agent_path("builder"), wf.agent("builder")),
+        wf.place(repo, wf.agent_path("builder"), wf.agent("builder", Path("/inbox.json"))),
     ]
     assert '"chat.defaultModel": "gpt-6-luna"' in (repo / wf.SETTINGS).read_text()
     assert "name: owlbear-builder" in (repo / wf.agent_path("builder")).read_text()
