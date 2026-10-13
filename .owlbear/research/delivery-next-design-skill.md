@@ -174,6 +174,65 @@ rubric alone and says so.
 Proof: in a sandbox project, a change that is correct but looks worse. The design judge fails it, the owner
 decides on the page, the fix task carries the comment, and the next review checks it.
 
+### 3.6 Slice 1 findings, 2026-10-14
+
+Read at tag `skill-v4.5.2` (commit `d631a88`, engine `0.1.14`) from a shallow clone in
+`.owlbear/scratch/research/impeccable`. Live checks used a sample page with known faults, served on localhost.
+
+- **Engine release.** `engine-v0.1.14`, published 2026-10-09. Its assets per platform carry GitHub's own sha256
+  digests and a `.sha256` sidecar file each:
+
+  | Asset | sha256 |
+  | --- | --- |
+  | `impeccable-darwin-arm64` | `abbd69d5…f4f87c` |
+  | `impeccable-darwin-x64` | `dfa45703…28aa0f5` |
+  | `impeccable-linux-arm64` | `396263ee…6208c948` |
+  | `impeccable-linux-x64` | `3d31ec1a…4368efb6` |
+
+  The upstream launcher refuses a download whose sidecar is missing. The darwin-arm64 binary downloaded here
+  matched its digest.
+- **Detect options.** `detect --json --no-config [--viewport WxH]`, with the default viewport 1280x800, so R7's
+  widths work. URL scans start the browser named by `IMPECCABLE_BROWSER` headless (`--headless=new`). It took
+  2 to 3 s per scan, and no browser was left running.
+- **Network.** In the `detect` code path, only the scanned page itself is fetched. The update check lives in the
+  `context` command, and the roll API in the skill's design flow. Source scans work offline.
+- **Rules.** 59: 31 "slop" (9 advisory) and 28 "quality" (4 advisory, 2 errors: `script-error` and
+  `content-hidden-at-rest`). Each names a skill section: Typography 11, Layout & Space 10, Colour & Contrast 8,
+  Visual Details 6, Motion 4, Imagery 4, Copy 4, none 12. The list is kept in
+  `.owlbear/scratch/research/impeccable-rules.tsv`.
+- **In-page detector.** The tag ships a built bundle, `crates/live/assets/detect-antipatterns-browser.js`
+  (2.8 MB, sha256 `d71d1c76…55939bbd9483`). It exposes `window.impeccableDetectAsync()`; setting
+  `window.__IMPECCABLE_CONFIG__ = {autoScan: false}` first keeps its overlay off.
+  - Live, injected into a Playwright page after its screenshot, it found the same four rules as the engine's URL
+    scan, grouped by element with selector and position.
+  - A screenshot taken after the scan was identical, byte for byte.
+  - It needs WebAssembly allowed by the page's Content-Security-Policy (`'wasm-unsafe-eval'`); otherwise it
+    throws "detector core unavailable". The engine's URL scan runs the rules outside the page and is not
+    affected.
+- **Upstream's own critique** (`reference/critique.md`) runs two isolated assessments, a design review and the
+  detector evidence. The design review must finish before the detector findings reach the verdict, because
+  "deterministic output still anchors judgment". It scores Nielsen's ten heuristics 0 to 4 (n/a allowed),
+  rates findings P0 to P3, and starts with a "design specificity" verdict.
+- **Licence.** Apache-2.0 (`LICENSE` sha256 `02bb8c3b…`). `NOTICE.md` names one third-party source,
+  `platform-design-skills` (MIT), used only in the iOS and Android references, which Delivery does not extract.
+
+Consequences for the plan:
+- **Slice 4.** Rendered scans run in-page in Delivery's own capture page: each state, stepped ones included, at
+  each width, after the screenshot. No second browser is needed. Where the page's CSP blocks WebAssembly, a
+  static state falls back to the engine's URL scan, and a stepped state is recorded "not scanned (CSP)". Source
+  scans use the engine.
+- **The pack** holds the engine digests, the in-page bundle with its digest, and the licence files.
+- **Slice 5.** The design judge works in two phases, as upstream's critique does: first an unanchored verdict,
+  then the detector's findings arrive and it gives its final verdict, naming agreements and false positives.
+  Both are recorded.
+- **The extracted skills.**
+  - `owlbear-ui-design`, for UI builds and the design judge: the brief wins; refinement preserves and redesign
+    replaces; the four modes; the craft floor's checks and refusals; and the typography, layout, colour and
+    polish essentials.
+  - `owlbear-ui-review`, for the design judge only: specificity verdict, heuristics 0 to 4, P0 to P3, the
+    cognitive load checklist, and the before/after comparison.
+  - Both build on OwlBear's `h-frontend-design` (TD-58).
+
 ## 4. Recommendation, Confidence, and Limits
 
 - Extract for builds and judging. Adopt the detector unmodified and pinned, as a mechanical check that only
