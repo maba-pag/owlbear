@@ -301,8 +301,8 @@ correct but hard to read.
   long one, each with its own size and rates in AI credits per 1M tokens. Opus 5.5 goes from 200K to 1M at the
   same rates. GPT-6.1 Sol goes from 272K to 922K at input ×2 and output ×1.5. Haiku 4.5 has one tier only.
 - **Sessions.** The SDK pins a tier with `context_tier`. Before this change Delivery never set it, so every
-  session ran on the default tier. The tier applies to SDK sessions only; VS Code window sessions use VS Code's
-  own.
+  session ran on the default tier. A VS Code window session takes the tier as the model's `contextSize`. The
+  agent host defaults `claude-opus-5.5` to 1M, so Delivery has sent the size since `37e915828`.
 - **Settings.** Each agent has a two-way switch labelled with the real sizes. An up arrow marks the long side
   when its rates are higher, and a rates column shows the credits per 1M tokens for the chosen model and tier.
   - `decided` (2026-10-13): the owner chose this layout, with no popover.
