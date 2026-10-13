@@ -36,6 +36,10 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
         name: {
             "credits": (getattr(mm, "total_nano_aiu", None) or 0) / 1e9,
             "tokens": mm.usage.input_tokens + mm.usage.output_tokens,
+            "input": mm.usage.input_tokens,
+            "output": mm.usage.output_tokens,
+            "cache_read": getattr(mm.usage, "cache_read_tokens", 0) or 0,
+            "cache_write": getattr(mm.usage, "cache_write_tokens", 0) or 0,
         }
         for name, mm in (getattr(m, "model_metrics", None) or {}).items()
     }

@@ -11,12 +11,19 @@ if TYPE_CHECKING:
 
 
 class ModelSpend(BaseModel):
-    """Credits and tokens one model used for a Change."""
+    """Credits and tokens one model used for a Change; input counts its cache reads and writes."""
 
     model_config = ConfigDict(extra="forbid")
 
     credits: float = 0.0
     tokens: int = 0
+    input: int = 0
+    output: int = 0
+    cache_read: int = 0
+    cache_write: int = 0
+
+
+COUNTS = ("tokens", "input", "output", "cache_read", "cache_write")
 
 
 class Spend(BaseModel):
@@ -41,11 +48,13 @@ class Spend(BaseModel):
         for name, m in (usage.get("models") or {}).items():
             prior = marks.get(name, ModelSpend())
             marks[name] = high = ModelSpend(
-                credits=max(prior.credits, m.get("credits") or 0.0), tokens=max(prior.tokens, m.get("tokens") or 0)
+                credits=max(prior.credits, m.get("credits") or 0.0),
+                **{f: max(getattr(prior, f), m.get(f) or 0) for f in COUNTS},
             )
             old = models.get(name, ModelSpend())
             models[name] = ModelSpend(
-                credits=old.credits + high.credits - prior.credits, tokens=old.tokens + high.tokens - prior.tokens
+                credits=old.credits + high.credits - prior.credits,
+                **{f: getattr(old, f) + getattr(high, f) - getattr(prior, f) for f in COUNTS},
             )
         mark = Spend(credits=max(was.credits, usage.get("credits") or 0.0), models=marks)
         last = self.last | ({session: mark} if session else {})

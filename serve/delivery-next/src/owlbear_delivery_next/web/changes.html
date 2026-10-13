@@ -615,6 +615,26 @@ function beforeSection(slug, b) {
   return box;
 }
 
+function count(n) {
+  return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
+}
+
+// The total, then a line per model; input includes cache reads and writes, so "in" is the uncached rest.
+function spendLines(spend) {
+  const box = el("div");
+  box.append(text(`Spent ${spend.credits.toFixed(2)} credits`, { size: "xs", color: "contrast-medium" }));
+  for (const [model, u] of Object.entries(spend.models)) {
+    const fresh = Math.max(0, u.input - u.cache_read - u.cache_write);
+    const split = u.tokens && u.input + u.output === u.tokens  // sessions recorded before the split leave it partial
+      ? ` (${count(fresh)} in \u00b7 ${count(u.output)} out \u00b7 ${count(u.cache_read)} cache read \u00b7 `
+        + `${count(u.cache_write)} cache write)`
+      : "";
+    const line = `${model}: ${u.credits.toFixed(2)} credits, ${count(u.tokens)} tokens${split}`;
+    box.append(text(line, { size: "xs", color: "contrast-medium" }));
+  }
+  return box;
+}
+
 async function showDetail() {
   const target = document.getElementById("detail");
   if (!selected) {
@@ -623,13 +643,11 @@ async function showDetail() {
   }
   const d = await call(`/changes/${selected}`);
   if (d.slug !== selected) return;  // the person chose another Change while this one loaded
-  const models = Object.entries(d.spend.models).map(([m, u]) => `${m} ${u.tokens} tokens`).join(", ");
-  const spent = `Spent ${d.spend.credits.toFixed(2)} credits${models ? ` (${models})` : ""}`;
   const pause = button(d.paused ? "Resume" : "Pause", () => send("/intent", { intent: d.paused ? "resume" : "pause" }),
     { variant: "secondary", icon: d.paused ? "play" : "pause" });
   const parts = [
     row(heading(2, d.slug, "xl"), pause), text(d.line),
-    text(d.brief.outcome, { color: "contrast-medium" }), text(spent, { size: "xs", color: "contrast-medium" }),
+    text(d.brief.outcome, { color: "contrast-medium" }), spendLines(d.spend),
   ];
   if (d.pullback) parts.push(pullbackNote(d.pullback));
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");

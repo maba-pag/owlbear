@@ -135,6 +135,16 @@ def test_a_missing_or_lower_usage_field_keeps_the_sessions_high_water_mark():
     assert (spend.credits, spend.models["gpt"]) == (5.0, ModelSpend(credits=5.0, tokens=9))
 
 
+def test_each_token_kind_adds_up_like_the_total_across_a_resumed_session():
+    def report(n: int) -> dict:
+        kinds = {"tokens": 11 * n, "input": 10 * n, "output": n, "cache_read": 6 * n, "cache_write": 3 * n}
+        return {"credits": float(n), "models": {"opus": {"credits": float(n), **kinds}}}
+
+    spend = Spend().plus(report(1), "s1").plus(report(3), "s1").plus(report(2), "s2")
+    want = ModelSpend(credits=5.0, tokens=55, input=50, output=5, cache_read=30, cache_write=15)
+    assert spend.models["opus"] == want
+
+
 def running(started: datetime) -> Change:
     return Change(
         slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t2", started_at=started), spend=Spend(credits=3.0)
