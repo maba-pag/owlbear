@@ -199,6 +199,16 @@ def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_neve
     assert gh.merges == []
 
 
+def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_locally(tmp_path, clone):
+    gh = FakeGh(pr(head="f" * 40))  # an owner commit on the PR branch, never fetched into the worktree (live G2)
+    final = Review(commit=A, inputs=Inputs(), verdict="pass", tree=git(clone, "rev-parse", "HEAD^{tree}"))
+    c = loop.fold(change(worktree=str(clone), reviews=[final]), [ConsentItem(at=NOW, head=A)], NOW)
+    _, result = merge.run(ctx(tmp_path, gh, prof(**ASKING)), c)
+    cause = failures.cause_key(ErrorKind.GATE, StepKind.MERGE, "review")
+    assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
+    assert gh.merges == []
+
+
 def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone):
     head, entries = ci_head(clone, "${{ inputs.n }}")
     gh = FakeGh(pr(head=head))

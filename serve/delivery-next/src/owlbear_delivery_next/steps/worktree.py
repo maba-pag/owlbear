@@ -146,6 +146,14 @@ def tree(path: Path, rev: str = "HEAD") -> str:
     return git(path, "rev-parse", f"{rev}^{{tree}}").strip()
 
 
+def known(path: Path, rev: str) -> bool:
+    """Whether *rev* is a commit this worktree's repository holds."""
+    found = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
+        [GIT, "cat-file", "-e", f"{rev}^{{commit}}"], cwd=path, capture_output=True, check=False, timeout=60
+    )
+    return found.returncode == 0
+
+
 def between(path: Path, old: str, new: str) -> list[str]:
     """Every path that differs between two trees, both rename ends included, read NUL-separated."""
     fields = git(path, "diff", "--name-status", "-M", "-z", old, new).split("\0")

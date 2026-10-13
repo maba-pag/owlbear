@@ -113,6 +113,8 @@ def reviewed(c: Change, path: Path, head: str) -> bool:
     final = next((v for v in reversed(c.reviews) if v.task is None), None)
     if final is None or (final.commit != head and not final.tree):
         return False  # carrying a review to another head needs its engine-recorded tree and coverage
+    if not worktree.known(path, head):
+        return False  # a head someone else pushed and nobody fetched was never reviewed (live G2)
     candidate = worktree.tree(path, head)
     if final.tree == candidate:
         return review_valid(c, final, final.inputs.paths)  # identical content: only the criteria can have moved
