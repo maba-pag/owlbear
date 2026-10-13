@@ -777,6 +777,17 @@ throwaway folders and are cleaned up.
 9. **C7 attachments**, bounded by the measured limits. Proof: one real Sol screenshot review in a
    window. Normal runs stay where they are (TD-50, R4).
 
+**Night progress, 2026-10-13** (branch `next/m4-slice1`, each item test-first, full suite, Sol review):
+- item 9 `0b4300c83`; the per-step relay name `ec7b719ea` (runtime research P21);
+- shared settings in `owlbear-common` (TD-57, TD-64) `7b67cae93`; agents rebuilt on the old ones
+  (TD-58) `22f2205a4`;
+- item 7 `824717d37`: `report_missing_tool` with the TD-36 cases; a conversation task never
+  re-plans; planning starts on a clean tree (leftover edits stashed, a failed stash asks); the TD-63
+  per-tool shape test replaces the tool count;
+- item 6 `199695546`: two cleaned skills preloaded for every role in both runtimes (P22).
+- Found: window steps offer the runtime's `ask_user` and the owner's MCP tools, which a read-only
+  Luna reviewer used to write files (P23). The window `tools:` allowlist (P19 F2) fixes it; item 4.
+
 **Deferred to the owner:** where the global config file lives (once decided, the runners must read
 the same global layer the settings page edits; today the host passes none, so global saves are
 refused); any rule allowing subagent models
