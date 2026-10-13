@@ -861,7 +861,7 @@ the platform migration rather than sequencing it (S3).
 | M1 | Done: ownership map, route comparison, live platform probe | L14 |
 | M2 | Charter drafted and challenged; awaits approval | [charter](delivery-next-charter.md) |
 | M3 | Journey and catalogue, status and exits, architecture, cutover: drafted, challenged three times, corrected; awaits approval | L14, M3 row |
-| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox from a brief to a merged PR, with the chat simulated by a scripted MCP client (no real chat session was exercised yet; since the [visual-baseline plan](delivery-next-visual-baseline.md) the chat saves UI states through `save_visual_check`), with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). Reshape phases A–E done on PR #449 (draft), with Sol challenges per phase and a final re-check; CI skips draft PRs (repository rule), so local proof: the full Python suite passed at `372f3c2a7` (5,601 passed). Live run of the reshaped first-release flow on the protected sandbox (PR #8): owner review thread fixed, replied to and resolved by Delivery, automatic merge without consent, pull-back of the checked-out `main`; four defects it found were fixed with tests. Visual review run live 2026-10-13 (sandbox PR #12, [design skill research §3.8](delivery-next-design-skill.md)): a design fail, the owner's Fail on the decision page, the fix task with the owner's criterion, both judges passing, merge. Remaining (status 2026-10-13): the `maba-pag` check of subagent models and cost, and a plan for writes as the repository owner (TD-17); the New Change button and the overlap display live, with the owner; the G2 gaps in the demonstration record | `serve/delivery-next/DEMO-slice1.md` on the branch |
+| M4 | Prototype on branch `next/m4-slice1`, PR #449, not merged: the whole journey ran in the sandbox from a brief to a merged PR, with the chat simulated by a scripted MCP client (no real chat session was exercised yet; since the [visual-baseline plan](delivery-next-visual-baseline.md) the chat saves UI states through `save_visual_check`), with brief approval and merge consent as the only touchpoints; twelve common failures were triggered by hand and each ended in its designed exit and continued; every failure found was fixed locally (P9). Reshape phases A–E done on PR #449 (draft), with Sol challenges per phase and a final re-check; CI skips draft PRs (repository rule), so local proof: the full Python suite passed at `372f3c2a7` (5,601 passed). Live run of the reshaped first-release flow on the protected sandbox (PR #8): owner review thread fixed, replied to and resolved by Delivery, automatic merge without consent, pull-back of the checked-out `main`; four defects it found were fixed with tests. Visual review run live 2026-10-13 (sandbox PR #12, [design skill research §3.8](delivery-next-design-skill.md)): a design fail, the owner's Fail on the decision page, the fix task with the owner's criterion, both judges passing, merge. Remaining (status 2026-10-13): writes as the repository owner (TD-17; plan below, the seat probe done); the New Change button and the overlap display live, with the owner; the G2 gaps in the demonstration record | `serve/delivery-next/DEMO-slice1.md` on the branch |
 
 Proven since: merge under a ruleset (required check, squash only, linear history) in the public
 sandbox `boecht/owlbear-sandbox-protected` — never merged while CI was pending or red, merged the
@@ -869,10 +869,40 @@ consented head with the `sha` guard. On the branch, the sync manifest has a `del
 behind the `sync_delivery_next` input, default off: the package reaches consumer `main` only when
 that input is set at dispatch (cutover §3.2 step 5).
 
-Still unproven, needed before M5: the `maba-pag` probe on its business seat (TD-17) — models,
-reasoning effort per session and agent, context window, subagent models and cost; the folder-open
-start, skill loading and workspace trust inside VS Code; the Changes page used in a browser by the
-owner.
+Still unproven, needed before M5: the folder-open start and workspace trust inside VS Code (one
+of three window launches on 2026-10-13 opened the window but started no chat session; the cause
+is unknown); writes as the repository owner (plan below).
+
+Proven on `maba-pag`'s business seat (TD-17), 2026-10-13. The SDK runtime reports the login
+`maba-pag`. Requested models and efforts are billed as requested. `claude-haiku-4.5` refuses any
+reasoning effort at session create, so Delivery now leaves the effort out for a model that offers
+none. A subagent bills under its own model: a `gpt-6-luna` session started one `scout` subagent on
+`claude-haiku-4.5`, the usage lists both models (0.080 and 0.096 credits), and the subagent events
+name the same model. That differs from the probe on the personal account, where only Auto models
+were billed. Context tier: the SDK takes `context_tier`. The VS Code agent host defaulted
+`claude-opus-5.5` to its 1M context size until Delivery sent `contextSize`. With it, the window
+design judge ran at the default tier (a calibration replay of sandbox round 1: about 35 credits,
+one model). Skill loading in the window is confirmed by `skill.invoked` events.
+
+Plan for writes as the repository owner (TD-17 target; not built):
+
+1. `gh` holds both accounts: `maba-pag` (active) and `boecht` (the sandbox owner, with `workflow`
+   scope). Delivery never runs `gh auth switch`, because the Copilot runtime and the window's
+   agent-host token stay on `maba-pag`.
+2. For each project, setup chooses the writer: the repository owner's login, if `gh auth token
+   --user OWNER` returns a token and `repos/OWNER/NAME` reports push permission; otherwise
+   `maba-pag`. The settings page shows the choice. A failed write that names authentication
+   checks it again.
+3. Every GitHub write gets the writer's token per call. `gh` calls in `gh_client` get `GH_TOKEN`.
+   Pushes through `remote_git` get the same token, with `-c credential.helper=` and
+   `-c credential.helper='!gh auth git-credential'`. Reads may use either account.
+4. Consequences to accept or route: the owner then authors the PR, replies to review threads and
+   merges. A ruleset that requires approval from someone other than the author would need
+   `maba-pag`'s review or no required review. Commit author settings stay separate from the
+   pushing account.
+5. Proof in `boecht/owlbear-sandbox-protected`: one Change with writer `boecht` (push, PR, thread
+   reply, merge), then the API's `author.login` checked for each. A second run without a `boecht`
+   token must fall back to `maba-pag`, and Copilot usage must still bill `maba-pag`.
 
 **Confidence:** high that ordinary failures nobody designed for, together with an inward-facing
 design (RC6), explain the observed pattern; every 2026-10-09 incident was ordinary. Medium on the
