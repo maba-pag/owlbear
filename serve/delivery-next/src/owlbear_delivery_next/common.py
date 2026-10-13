@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
 VIEW = "OWLBEAR_COMMON"  # the host's view for its runners: the repository's path, or empty for none
-EXCLUDE = (".*.lock", ".tmp-*")  # Delivery's lock and temporary files, kept out of the repository
+EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png")  # Delivery's locks, temporary files and calibration screenshots
 GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a save answers within the page's 60 s
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 

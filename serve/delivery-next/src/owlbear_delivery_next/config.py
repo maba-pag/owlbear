@@ -15,6 +15,7 @@ from pydantic import ConfigDict, Field, field_validator
 from owlbear_delivery_next.models import Effort, Record, Role
 from owlbear_delivery_next.profile_record import named
 from owlbear_delivery_next.roles import DEFAULTS
+from owlbear_delivery_next.visual_records import DesignFailures  # noqa: TC001 - pydantic resolves it at runtime
 
 CONFIG_FORMAT = 1
 type RuntimeName = Literal["sdk", "window"]
@@ -61,6 +62,7 @@ class Layer(Record):
     runtimes: dict[RuntimeName, bool] = Field(default_factory=dict)  # a runtime switched off or on
     widths: list[int] | None = None
     seed: str | None = None  # TD-65: resets the test data before each capture with steps; one command, no shell
+    design_failures: DesignFailures | None = None  # TD-78: a design judge's fail goes back, or to the owner
 
     @field_validator("format")
     @classmethod
@@ -116,6 +118,7 @@ class Settings(Record):
     runtimes: dict[RuntimeName, bool]
     widths: list[int]
     seed: str = ""
+    design_failures: DesignFailures = "ask"
     sources: dict[str, Source]
 
 
@@ -170,4 +173,19 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
     widths = _pick("widths", sources, ("project", project.widths), ("global", glob.widths), ("default", base.widths))
     visible = _pick("visible", sources, ("global", glob.visible), ("default", base.visible))
     seed = _pick("seed", sources, ("project", project.seed), ("default", ""))
-    return Settings(visible=visible, agents=agents, runtimes=runtimes, widths=widths, seed=seed, sources=sources)
+    design = _pick(
+        "design_failures",
+        sources,
+        ("project", project.design_failures),
+        ("global", glob.design_failures),
+        ("default", "ask"),  # autonomous default (TD-78)
+    )
+    return Settings(
+        visible=visible,
+        agents=agents,
+        runtimes=runtimes,
+        widths=widths,
+        seed=seed,
+        design_failures=design,
+        sources=sources,
+    )

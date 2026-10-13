@@ -40,12 +40,14 @@ def test_the_settings_need_the_token_and_a_local_host(store):
 def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_applied(store):
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
-    assert got["project"] == {"format": 1, "agents": {}, "runtimes": {}, "widths": None, "seed": None}
+    assert got["project"] == {
+        "format": 1, "agents": {}, "runtimes": {}, "widths": None, "seed": None, "design_failures": None
+    }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
     assert got["settings"]["sources"]["agents.builder.model"] == "default"
     assert (got["settings"]["seed"], got["settings"]["sources"]["seed"]) == ("", "default")
-    assert got["applied"] == ["agents.*.effort", "agents.*.model", "widths", "seed"]
+    assert got["applied"] == ["agents.*.effort", "agents.*.model", "widths", "seed", "design_failures"]
     assert len(got["project_rev"]) == 64
 
 
@@ -109,7 +111,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
     assert (got["global"], got["global_location"]) == ({"format": 1, "agents": {}, "runtimes": {}, "widths": None,
-                                                         "seed": None, "visible": None}, True)  # fmt: skip
+                                                         "seed": None, "design_failures": None, "visible": None},
+                                                        True)  # fmt: skip
     seeded = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": 1, "seed": "x"}})
     assert seeded.status_code == 422  # the seed command is a project setting (TD-65)
     layer = {"format": 1, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}

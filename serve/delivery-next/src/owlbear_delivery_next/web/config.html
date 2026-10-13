@@ -207,9 +207,22 @@ function row(...cells) {
 
 function saved(layer, key) {
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (key === "seed") return loaded[layer]?.seed ?? "";
+  if (key === "seed" || key === "design_failures") return loaded[layer]?.[key] ?? "";
   const [role, field] = key.split(".");
   return loaded[layer]?.agents?.[role]?.[field] ?? "";
+}
+
+// TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
+function designFailures() {
+  const key = "design_failures", below = loaded.inherited[rendered][key];
+  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  const input = el("p-select", undefined, { label: "When the design judge fails a change", "hide-label": "true" });
+  input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
+  input.append(el("p-select-option", "back: send it back to the build", { value: "back" }));
+  input.append(el("p-select-option", "ask: show it to me first", { value: "ask" }));
+  input.value = value || INHERIT;
+  input.dataset.key = key;
+  return cell(input, source(key, loaded.settings.design_failures));
 }
 
 // TD-65: one command, run without a shell in the worktree root, that resets the test data before a capture.
@@ -314,6 +327,7 @@ function render() {
     ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
   document.getElementById("general").replaceChildren(
     row(cell(el("p-text", "Screenshot widths")), widths()),
+    row(cell(el("p-text", "Design failures")), designFailures()),
     ...(rendered === "project" ? [row(cell(el("p-text", "Seed command")), seed())] : []),
     ...general.map(([label, value, key]) => row(
       cell(el("p-text", `${label} (not applied yet)`)), inactive(label, value, key))),
@@ -334,8 +348,8 @@ function edited(layer) {
       next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
       continue;
     }
-    if (key === "seed") {
-      next.seed = value || null;
+    if (key === "seed" || key === "design_failures") {
+      next[key] = value || null;
       continue;
     }
     const [role, field] = key.split(".");

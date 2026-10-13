@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.spend import ModelSpend, Spend
+from owlbear_delivery_next.visual_records import OwnerCriterion, VisualRound
 
 __all__ = ["ModelSpend", "Spend"]  # kept importable from here, where every other record lives
 
@@ -460,6 +461,8 @@ class Change(Record):
     env: Environment | None = None
     visual: VisualResult | None = None
     before: VisualResult | None = None  # TD-24: the states at the merge-base, captured once; never gates
+    visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round
+    owner_criteria: list[OwnerCriterion] = Field(default_factory=list)  # TD-79: checked by every later round
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None
