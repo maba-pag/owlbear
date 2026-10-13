@@ -52,7 +52,7 @@ _WORK = {
     StepKind.BUILD: ("Build", "implementing", "builder"),
     StepKind.REVIEW: ("Build", "reviewing", "reviewer"),
     StepKind.INTEGRATE: ("Build", "updating with the target", "builder"),
-    StepKind.CHECK: ("Check", "preparing", "builder"),
+    StepKind.CHECK: ("Check", "preparing", "preparer"),
     StepKind.PUBLISH: ("Publish", "publishing", "delivery"),
     StepKind.FOLLOW: ("Publish", "following", "delivery"),
     StepKind.MERGE: ("Merge", "merging", "delivery"),

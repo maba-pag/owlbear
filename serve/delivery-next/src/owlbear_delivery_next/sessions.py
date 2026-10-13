@@ -102,10 +102,11 @@ def judges(
     for label, cfg in sessions:
         role = roles.chosen(settings, label)
         session_id, model, effort = f"{lock.slug}-{label}-{uuid.uuid4().hex[:8]}", role.model, role.effort
+        journal = sdk_adapter.Journal(event=cfg.journal.event, now=cfg.journal.now)  # never the judged step's answer
         cfgs.append(
             dataclasses.replace(
                 cfg, kind=StepKind.REVIEW, session_id=session_id, resume=False, checks=(), model=model,
-                effort=effort, context=role.context, fresh=cfg.message, previous={},
+                effort=effort, context=role.context, fresh=cfg.message, previous={}, journal=journal,
             )
         )  # fmt: skip
     if len(cfgs) == 1 or (store.read_profile() or Profile()).runtime == "vscode":

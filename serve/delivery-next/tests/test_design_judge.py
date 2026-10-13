@@ -13,7 +13,7 @@ from owlbear_delivery_next.models import Brief, Change, Exit, Step, StepKind, Vi
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import ACCEPTED, Gate
-from owlbear_delivery_next.session_result import Run
+from owlbear_delivery_next.session_result import Run, to_result
 from owlbear_delivery_next.steps import judges
 from owlbear_delivery_next.store import Lock, Store
 from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
@@ -192,6 +192,15 @@ def test_delivery_decides_what_the_change_did_from_the_blind_evidence_mapped_bac
     assert judges._derived(look, NAMED) == verdict, why  # noqa: SLF001
 
 
+@pytest.mark.parametrize("verdict", ["pass", "fail", "unsure"])
+def test_a_design_verdict_is_logged_as_a_finished_judge_not_a_retry(verdict) -> None:
+    findings = [] if verdict == "pass" else [problem("home-1280-B.png")]
+    final = design_tools.DesignResult(**judged(verdict, findings).model_dump())
+    done = Run("d", ending="result", payload=final, termination=Termination(confirmed=True))
+    r = to_result(done, StepKind.REVIEW, datetime.now(UTC))
+    assert (r.exit, r.reason.split(":")[0]) == (Exit.DONE, f"design {verdict}")  # the round's matrix decides
+
+
 def test_findings_keep_their_image_and_delivery_marks_what_the_change_introduced() -> None:
     look = judged("fail", [problem("home-1280-A.png"), problem("home-1280-B.png"), problem("new-1280-A.png", rule="x")])
     final = design_tools.DesignResult(**look.model_dump())
@@ -227,6 +236,23 @@ def test_a_judge_left_running_outranks_another_judges_unread_usage(tmp_path, mon
 
 async def _ok(cfg):
     return Run(cfg.session_id, ending="error", termination=Termination(confirmed=True))
+
+
+def test_a_judge_never_runs_the_judged_steps_callbacks(tmp_path, monkeypatch) -> None:
+    """The plan challenge took the plan step's journal; its delivery swapped the runner's Change, losing its credits."""
+    store, touched = Store(tmp_path / "store"), []
+    change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.PLAN))
+    step = sdk_adapter.Journal(delivered=lambda: touched.append("delivered"), replaced=lambda: touched.append("new"))
+
+    async def fake(cfg):
+        cfg.journal.delivered()  # both runtimes call it once the first message is acknowledged
+        usage = {"credits": 4.37, "models": {"gpt-6.1-sol": {"credits": 4.37, "tokens": 65556}}}
+        return Run(cfg.session_id, ending="result", usage=usage, termination=Termination(confirmed=True))
+
+    monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
+    sessions.reviewer(store, Lock("c1"), change, session(role="", journal=step), "plan-challenge")
+    assert touched == []
+    assert change.spend.credits == 4.37
 
 
 def test_a_correctness_finding_or_doubt_names_one_of_its_screenshots() -> None:

@@ -306,6 +306,7 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         _decided(c, q, item, target, gate=gate)
     elif target == "pause":
         c.intent.paused_at, c.intent.pause_reason = now, q.text
+        q.effect_observed_at = item.at  # the engine's decision; never resumed into a session as its answer
     elif target == "done":
         _done(c, None, now)
     elif target == "abandon":

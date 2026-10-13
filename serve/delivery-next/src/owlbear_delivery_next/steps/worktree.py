@@ -179,3 +179,18 @@ def fingerprints(path: Path, paths: Sequence[str], rev: str = "HEAD") -> dict[st
         found[name] = meta
     absent = {p: "" for p in wanted if p not in found and not any(k.startswith(f"{p}/") for k in found)}
     return found | absent
+
+
+def launch_inputs(path: Path, directory: str, rev: str = "HEAD") -> str | None:
+    """Digest of the files directly in a launch directory (manifests, config); ``None`` when unread."""
+    try:
+        where = (path / directory).resolve().relative_to(path.resolve()).as_posix()  # a symlinked directory's target
+    except OSError, ValueError:
+        return None
+    spec = () if where == "." else (f"{where}/",)
+    try:
+        out = git(path, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", rev, "--", *spec)
+    except OSError, subprocess.SubprocessError:
+        return None
+    files = sorted(e for e in out.split("\0") if e and e.split(" ", 2)[1] == "blob")
+    return hashlib.sha256("\0".join(files).encode()).hexdigest()

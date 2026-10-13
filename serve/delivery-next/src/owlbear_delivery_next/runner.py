@@ -368,6 +368,35 @@ def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _out(json.dumps(event, default=str))
 
 
+def _reused(store: Store, lock: Lock, change: Change) -> bool:
+    """Check prep without an agent: this check's last launched recipe, while allowed and its inputs are unchanged.
+
+    Otherwise the recipe is forgotten and an agent prepares again.
+    """
+    r, s, now = change.recipe, change.step, datetime.now(UTC)
+    if s.kind != StepKind.CHECK or r is None:
+        return False
+    root, launch = Path(change.names.worktree), worktree.allowed(store.read_profile() or Profile(), StepKind.CHECK)
+    recipe = tools.CheckRecipe(command=r.command, directory=r.directory, ready_url=r.ready_url, summary="reused")
+    held = (
+        r.check == (s.task or "")
+        and root.is_dir()
+        and not tools.check_recipe(recipe, tools.Worktree("", ""), launch, root)
+    )
+    if not (held and r.inputs and worktree.launch_inputs(root, r.directory) == r.inputs):
+        change.recipe = None
+        store.write(lock, change)
+        return False
+    change.env = Environment(check=r.check, command=r.command, directory=r.directory, ready_url=r.ready_url)
+    reason = f"starting `{r.command}` for the check, as it last launched"
+    result = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
+    event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": StepKind.CHECK, "exit": result.exit}
+    store.log(lock, change.slug, event | {"reason": reason})
+    store.write(lock, loop.apply(change, result, now))
+    _out(json.dumps(event | {"reason": reason}, default=str))
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     """Take the Change lock without waiting, fold the inbox, run the next step, write its exit and exit."""
     parser = argparse.ArgumentParser(prog="python -m owlbear_delivery_next.runner")
@@ -405,7 +434,7 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind in AGENT:
-            _agent(store, lock, change, repo)
+            _reused(store, lock, change) or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and loop.brief_due(change):
             _brief_challenge(store, lock, change, repo)
         else:

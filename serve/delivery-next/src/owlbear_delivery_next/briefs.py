@@ -25,6 +25,8 @@ from owlbear_delivery_next.store import HANDLE, LockHeldError, StoreError
 if TYPE_CHECKING:
     from owlbear_delivery_next.store import Store
 
+SLUG = 40
+
 
 def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change:
     """The Change with its new brief draft version, waiting for the owner's approval; criteria and checks versioned."""
@@ -63,8 +65,13 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
 
 
 def new_slug(title: str, taken: list[str]) -> str:
-    """A free slug from the title."""
-    base = "-".join(re.findall(r"[a-z0-9]+", title.lower()))[:40].strip("-") or "change"
+    """A free slug from the title's whole words within 40 characters; a longer first word is cut."""
+    words, base = re.findall(r"[a-z0-9]+", title.lower()), ""
+    for w in words:
+        if len(f"{base}-{w}" if base else w) > SLUG:
+            break
+        base = f"{base}-{w}" if base else w
+    base = base or (words[0][:SLUG] if words else "change")
     return next(s for n in range(1, 1000) if (s := base if n == 1 else f"{base}-{n}") not in taken)
 
 

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, loop, setup, tools
+from owlbear_delivery_next import api, briefs, loop, setup, tools
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Question, StepKind
@@ -407,3 +407,18 @@ def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, m
     assert setup.run(repo, [], yes=True, local_files="no", skill="no") == 0
     assert "cannot be read" in capsys.readouterr().out
     assert store.read_profile().confirmed_at is not None
+
+
+@pytest.mark.parametrize(
+    ("title", "slug"),
+    [
+        ("Add a Notes textarea with an 800-character counter", "add-a-notes-textarea-with-an-800"),
+        ("Add greet(name)", "add-greet-name"),
+        ("Supercalifragilisticexpialidocious-and-more-words-beyond-forty", "supercalifragilisticexpialidocious-and"),
+        ("x" * 50, "x" * 40),
+        ("!!!", "change"),
+    ],
+)
+def test_a_slug_ends_on_a_whole_word_within_forty_characters(title, slug):
+    assert briefs.new_slug(title, []) == slug
+    assert briefs.new_slug(title, [slug]) == f"{slug}-2"

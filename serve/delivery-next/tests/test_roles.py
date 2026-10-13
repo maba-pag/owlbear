@@ -24,7 +24,7 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
     [
         (StepKind.PLAN, "claude-opus-5.5", "high"),
         (StepKind.BUILD, "claude-opus-5.5", "medium"),
-        (StepKind.CHECK, "claude-opus-5.5", "medium"),
+        (StepKind.CHECK, "claude-haiku-5.5", "low"),
         (StepKind.REVIEW, "gpt-6.1-sol", "xhigh"),
         ("visual-review", "gpt-6.1-sol", "xhigh"),
         ("plan-challenge", "gpt-6.1-sol", "high"),

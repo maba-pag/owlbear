@@ -20,7 +20,7 @@ import uvicorn
 from pydantic import ValidationError
 
 from owlbear_delivery_next import api, common, failures, loop, processes, setup, tools
-from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Record, StepKind, Stop
+from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
@@ -295,7 +295,7 @@ class Host:
         recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
         errors = tools.check_recipe(recipe, tools.Worktree("", ""), launch, root)
         if errors:
-            c.env = None
+            c.env = c.recipe = None
             self.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
             return loop.apply(c, check.failed("; ".join(errors)), now)
         c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
@@ -308,10 +308,17 @@ class Host:
             if (left := self._clear(c, e)) is None or left:
                 self._mark(c, left, now)
                 return c
-            c.env = None
+            c.env = c.recipe = None
             self.say(f"{c.slug}: check environment failed: no answer at {e.ready_url}")
             return loop.apply(c, check.failed(f"no answer at {e.ready_url}"), now)
         c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})
+        c.recipe = Recipe(
+            check=e.check,
+            command=e.command,
+            directory=e.directory,
+            ready_url=e.ready_url,
+            inputs=worktree.launch_inputs(root, e.directory),
+        )
         self.say(f"{c.slug}: check environment ready at {e.ready_url}, group {e.pgid}, PIDs {sorted(pids)}")
         return loop.apply(c, check.pending(c, c.env), now)
 

@@ -17,7 +17,7 @@ from owlbear_delivery_next import (
     tools,
     window_files,
 )
-from owlbear_delivery_next.inbox import AnswerItem
+from owlbear_delivery_next.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import Brief, Change, Criterion, Exit, ItemRef, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
@@ -204,6 +204,17 @@ def test_installed_and_rerun_resumes_the_same_task() -> None:
     assert loop.owner_gated(c)
     c = loop.fold(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="done")], NOW)
     assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
+
+
+def test_pause_is_never_delivered_to_the_session_after_resume() -> None:
+    r = to_result(run(report("docker", "zsh: command not found: docker")), K.BUILD, NOW)
+    c = loop.apply(change(), r, NOW)
+    q = c.questions[-1]
+    c = loop.fold(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="pause")], NOW)
+    assert (c.intent.paused_at, loop.next_step(c, NOW)) == (NOW, None)
+    c = loop.fold(c, [IntentItem(at=NOW, intent="resume")], NOW)
+    assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
+    assert [p.id for p in c.questions if p.answer and not p.effect_observed_at] == []  # the runner resumes with these
 
 
 def shell(text: str) -> SimpleNamespace:

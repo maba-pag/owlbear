@@ -17,7 +17,7 @@ FORMAT = 3
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
-type Role = Literal["planner", "builder", "reviewer", "challenger", "designer"]
+type Role = Literal["planner", "builder", "reviewer", "challenger", "designer", "preparer"]
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
 
@@ -418,6 +418,16 @@ class Environment(Record):
     ready_at: datetime | None = None
 
 
+class Recipe(Record):
+    """The launch recipe one check last started from; reused while its directory's own files are unchanged."""
+
+    check: str
+    command: str
+    directory: str
+    ready_url: str
+    inputs: str | None = None  # digest of the directory's own files at launch; unknown is never reused
+
+
 class Names(Record):
     """Names only; heads always come from git."""
 
@@ -459,6 +469,7 @@ class Change(Record):
     stop: Stop | None = None
     blocked: Stop | None = None  # host-owned: a process survives in the worktree, so no writer starts
     env: Environment | None = None
+    recipe: Recipe | None = None
     visual: VisualResult | None = None
     before: VisualResult | None = None  # TD-24: the states at the merge-base, captured once; never gates
     visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round

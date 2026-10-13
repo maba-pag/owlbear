@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next import cli, host
+from owlbear_delivery_next import cli, host, runner
 from owlbear_delivery_next.evidence import check_inputs, next_check
 from owlbear_delivery_next.host import Host, RunnerRecord
 from owlbear_delivery_next.inbox import AnswerItem, CheckResult, IntentItem
@@ -21,6 +21,7 @@ from owlbear_delivery_next.models import (
     PersonCheck,
     Plan,
     Question,
+    Recipe,
     Step,
     StepKind,
     Task,
@@ -30,7 +31,7 @@ from owlbear_delivery_next.models import (
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.status import Activity, status
-from owlbear_delivery_next.steps import check
+from owlbear_delivery_next.steps import check, worktree
 from owlbear_delivery_next.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -170,6 +171,7 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
         "  reviewer: gpt-6.1-sol effort xhigh",
         "  challenger: gpt-6.1-sol effort high",
         "  designer: claude-opus-5.5 effort high",
+        "  preparer: claude-haiku-5.5 effort low",
     ]
 
 
@@ -298,6 +300,94 @@ class Proc:
     pid = 900
 
 
+RECIPE = Recipe(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/")
+
+
+@pytest.fixture
+def reusable(store, tmp_path, monkeypatch):
+    """A check step in the store's own repository whose recipe launched at its HEAD; an agent run is recorded."""
+    fake = Fake(store, tmp_path)
+    environment(store, fake, monkeypatch)
+    c = store.read("c1")
+    c.names.worktree, c.env = str(tmp_path), None
+    c.recipe = RECIPE.model_copy(update={"inputs": worktree.launch_inputs(tmp_path, ".")})
+    save(store, c)
+    agents = []
+    monkeypatch.setattr(runner, "_agent", lambda *_a: agents.append("agent"))
+    return fake, agents
+
+
+def step(store, tmp_path) -> None:
+    c = store.read("c1")
+    with store.lock("c1") as lock:
+        runner._step(store, lock, c, c.step, tmp_path)  # noqa: SLF001
+
+
+def test_a_later_check_reuses_the_recipe_that_launched_without_an_agent(store, tmp_path, reusable):
+    fake, agents = reusable
+    step(store, tmp_path)
+    after = store.read("c1")
+    assert (agents, after.env.check, after.env.command, after.outcome.exit) == (
+        [],
+        "preview",
+        "npm run preview",
+        Exit.PENDING,
+    )
+    assert fake.host.tick(NOW) == []
+    assert store.read("c1").env.ready_at is not None  # the host launched it as an agent's recipe
+
+
+def _revoked(store, _tmp_path):
+    store.write_profile(Profile(version=2, entries={}))
+
+
+def _other_check(store, _tmp_path):
+    c = store.read("c1")
+    c.recipe = c.recipe.model_copy(update={"check": VISUAL})
+    save(store, c)
+
+
+def _launch_file(_store, tmp_path, name="package.json"):
+    (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / name).write_text(f'{{"scripts": {{"preview": "vite preview {len(name)}"}}}}')
+    for args in (["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "s"]):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+
+
+def test_a_symlinked_launch_directory_is_read_at_its_target(store, tmp_path):
+    _launch_file(store, tmp_path, "packages/web/package.json")
+    (tmp_path / "preview").symlink_to("packages/web", target_is_directory=True)
+    _launch_file(store, tmp_path, "README.md")
+    before = worktree.launch_inputs(tmp_path, "preview")
+    assert before == worktree.launch_inputs(tmp_path, "packages/web")
+    _launch_file(store, tmp_path, "packages/web/vite.config.json")
+    assert worktree.launch_inputs(tmp_path, "preview") not in {before, None}
+    assert worktree.launch_inputs(tmp_path, "../outside") is None
+
+
+@pytest.mark.parametrize("change", [_revoked, _other_check, _launch_file])
+def test_a_recipe_no_longer_allowed_or_for_other_inputs_is_forgotten_and_an_agent_prepares(
+    store, tmp_path, reusable, change
+):
+    _fake, agents = reusable
+    change(store, tmp_path)
+    step(store, tmp_path)
+    after = store.read("c1")
+    assert (agents, after.recipe, after.env) == (["agent"], None, None)
+
+
+def test_a_failed_launch_forgets_the_recipe_so_an_agent_prepares_again(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    environment(store, fake, monkeypatch)
+    c = store.read("c1")
+    c.recipe = RECIPE
+    save(store, c)
+    monkeypatch.setattr(check, "ready", lambda _e, _proc: None)
+    assert fake.host.tick(NOW) == []
+    after = store.read("c1")
+    assert (after.recipe, after.env, after.outcome.exit) == (None, None, Exit.RETRY)
+
+
 def test_an_uncertain_launch_is_disposed_from_the_worktree_scan_before_another_copy(store, tmp_path, monkeypatch):
     fake = Fake(store, tmp_path)
     calls = environment(store, fake, monkeypatch, launched_at=NOW)
@@ -324,6 +414,7 @@ def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_t
     assert (calls["durable"].pgid, calls["durable"].pids, calls["durable"].ready_at) == (900, {900: 2.0}, None)
     waiting = store.read("c1")
     assert (waiting.outcome.who, waiting.env.pids) == ("you", {900: 2.0, 901: 2.0})
+    assert waiting.recipe == RECIPE.model_copy(update={"inputs": worktree.launch_inputs(tmp_path / "wt", ".")})
     fake.live |= {900, 901}
     inputs = check_inputs(waiting, waiting.checks[0], check.fingerprints(waiting, waiting.checks[0]))
     store.put_inbox("c1", CheckResult(at=NOW - timedelta(hours=1), check="preview", passed=True, inputs=inputs))
