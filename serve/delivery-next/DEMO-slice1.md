@@ -513,3 +513,51 @@ Limits: one sleep of 77 s, with a 45 s background wake inside it.
     `tail -15`, `tail -20`, `cat`), in build, check and merge-task steps; each cost the agent a turn.
 
 Afterwards no host was running. Sandbox `main` is at `58e08aa`: the footer (#15), then the Notes field (#16).
+
+## Overnight UI run, 2026-10-14, times UTC
+
+The owner was away; I acted as the owner on the Changes page and recorded each owner-type choice for his review.
+The host ran from a separate checkout at `204d2e01d` (finding 10), on the owner's roles: planner, builder and
+designer `claude-opus-5.5`; reviewer and challenger `gpt-6.1-sol`; preparer `claude-haiku-5.5` at low effort.
+
+### What the findings above became
+
+| Finding | Now |
+| --- | --- |
+| 1 | Not Delivery (a saved VS Code browser tab) |
+| 2 | New Change opens the shaping chat on the `shaper` role through the window route (`673d9f55a`) |
+| 3, 7, 12, 13 | Fixed in `284f9e2ae` (whole-word slugs, Pause consumed by the engine, design result logged as done, judges' and challenges' spend) |
+| 4, 11 | Overlap recorded on every kept plan (`204d2e01d`); shown below |
+| 5, 8, 14 | Moot: steps run without allow lists (`daf6db53b`, TD-82) |
+| 6 | `seed` merges entries per key (`daf6db53b`) |
+| 9 | Check prep on the `preparer` role (`284f9e2ae`); below it cost 0.7 credits instead of about 20 |
+| 10 | Host and runners refuse mixed code versions (`c83da430d`) |
+
+### Two Changes planning at the same time
+
+| Time | Event |
+| --- | --- |
+| 03:14 | Both briefs approved: `show-the-build-date-in-the-page-footer` and `add-a-theme-toggle-to-the-preview-page` (UI, states `light` and `dark`, `dark` with a click) |
+| 03:14:38 → 03:15:30 | Build-date: plan, challenge passed, build. The overlap with the theme toggle (`page.ts`, `page.test.ts`) was recorded and shown on its card |
+| 03:15:04 → 03:18:47 | Theme toggle: the challenger sent the plan back once and asked three times; it had seen only a cut plan. I accepted the plan as the owner (decision N4); `PLAN_LIMIT` is 12,000 since `204d2e01d` |
+| 03:16 and 03:21 | Both task reviews asked about a failing `tsc` in the read-only worktree, which had no `node_modules`. I answered "run again" after `204d2e01d` installed dependencies there (N5) |
+| 03:34:01 | Build-date merged as PR #17 (`23eb2f9`), cleaned up, local `main` fast-forwarded |
+| 03:34:52 → 03:37:45 | Theme toggle updated with `origin/main` (one build task), reviews passed, PR #18 at `734517d`, CI passed |
+| 03:38:49 | Visual check asked for a seed command: the `dark` state clicks, and clicks run only on seeded data (TD-60). The sandbox had none. I set the project's seed command to `true` (the preview has no data; N7) and answered "done" at 04:17 |
+| 04:18:09 | Preparer reused the recipe (0.7 credits, Haiku); both judges passed round 1 |
+| 04:18:22 | Merged as PR #18 (`6b4caa2`) without consent: the sandbox has ask-before-merge off since 2026-10-13 |
+
+Credits: build-date 63.4, theme toggle 224.0 (four plan rounds, two builds, the design judge 32.9).
+
+### New findings
+
+- **15. Seed command asked after the build:** a brief whose state clicks was approved on a project without a seed
+  command; the visual check asked only after the build. Fixed in `6109d7702`: approval is refused with the
+  states named.
+- **16. Judges passed an expectation not visible:** the `dark` state expected "the button shows pressed"; in the
+  screenshot the button looks as in light mode (only `aria-pressed` changes). Both judges passed. Not fixed.
+- **17. Worker memory stays uncommitted:** the planner saved three memory entries into the shared repository;
+  only Memory tab actions commit. By design since TD-72 (`026f1b733`). Recorded in the backlog seed.
+
+The page overhaul (TD-85, `f265fb61f`) came after this run; its evidence is in the scratch folder `ux-overhaul`.
+Sandbox `main` is at `6b4caa2`.
