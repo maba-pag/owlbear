@@ -17,7 +17,7 @@ FORMAT = 3
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
-type Role = Literal["planner", "builder", "reviewer", "challenger", "designer", "preparer"]
+type Role = Literal["planner", "builder", "reviewer", "challenger", "designer", "preparer", "shaper"]
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
 

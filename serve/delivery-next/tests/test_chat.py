@@ -11,12 +11,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, briefs, loop, setup, tools
+from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.vscode_contract import Outcome as Outcome_
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 BRIEF = {
@@ -295,44 +297,119 @@ def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
     assert path.read_text() == "{}\n"
 
 
-class Popen:
-    def __init__(self, fail=None):
-        self.calls, self.fail = [], fail
-
-    def __call__(self, argv, **kwargs):
-        if self.fail:
-            raise self.fail
-        self.calls.append((argv, kwargs))
+COMMAND = f"code chat -m agent '{api.START_PROMPT}'"
+SHAPER = resolve(None, Layer()).agents["shaper"]
 
 
-def test_new_change_opens_an_agent_chat_without_a_shell(tmp_path):
-    popen = Popen()
-    out = api.new_chat(tmp_path, which=lambda _n: "/bin/code", popen=popen)
-    assert out == {"started": True, "command": f"code chat -m agent '{api.START_PROMPT}'"}
-    [(argv, kwargs)] = popen.calls
-    assert argv == ["/bin/code", "chat", "-m", "agent", api.START_PROMPT]
-    assert kwargs["cwd"] == tmp_path
-    assert kwargs["start_new_session"]
-    assert "shell" not in kwargs
+@pytest.mark.parametrize(
+    ("ending", "warning", "state"),
+    [
+        (Outcome_("started", session="copilotcli:/s0"), "", {"state": "open"}),
+        (Outcome_("started"), "could not remove it", {"state": "open", "warning": "could not remove it"}),
+        (Outcome_("model-unavailable", "the agent host does not list m"), "", {"state": "failed"}),
+    ],
+)
+def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_went(tmp_path, ending, warning, state):
+    asked = []
+    out = api.new_chat(tmp_path, SHAPER, start=lambda *a: asked.append(a) or (ending, warning))
+    assert asked == [(tmp_path, SHAPER, api.START_PROMPT)]
+    assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "high", "default")
+    assert {k: v for k, v in out.items() if k != "reason"} == state
+    if state["state"] == "failed":
+        why = f"the Copilot chat did not start (model-unavailable: {ending.detail})"
+        assert out["reason"] == f"{why}; run this in {tmp_path}"
 
 
-@pytest.mark.parametrize(("which", "fail"), [(lambda _n: None, None), (lambda _n: "/bin/code", OSError("denied"))])
-def test_new_change_returns_the_command_when_code_cannot_start(tmp_path, which, fail):
-    out = api.new_chat(tmp_path, which=which, popen=Popen(fail))
-    assert out["started"] is False
-    assert out["command"] == f"code chat -m agent '{api.START_PROMPT}'"
-    assert str(tmp_path) in out["reason"]
+class Opening:
+    """A launch that stays opening until released, then ends as ``ending`` says."""
+
+    def __init__(self, ending=None):
+        self.release, self.calls, self.ending = threading.Event(), [], ending or {"state": "open"}
+
+    def __call__(self, repo, role):
+        self.calls.append((repo, role))
+        assert self.release.wait(5)
+        if isinstance(self.ending, Exception):
+            raise self.ending
+        return self.ending
 
 
-def test_new_change_needs_the_token_and_launches_once_per_five_seconds(tmp_path):
-    launches = []
-    app = api.create_app(Store(tmp_path), "t", Host(), launch=lambda: launches.append(1) or {"started": True})
-    anonymous = TestClient(app, base_url="http://127.0.0.1")
-    assert anonymous.post("/api/next/new-change").status_code == 401
-    c = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
-    assert c.post("/api/next/new-change").json() == {"started": True}
+def launcher(store, launch, which=lambda _n: "/bin/code", auth="Bearer t"):
+    host = Host()
+    host.repo = store.root
+    app = api.create_app(store, "t", host, launch=launch, which=which)
+    return TestClient(app, base_url="http://127.0.0.1", headers={"authorization": auth})
+
+
+def settled(c, launch):
+    end = time.monotonic() + 5
+    while (state := c.get(f"/api/next/new-change/{launch}").json())["state"] == "opening" and time.monotonic() < end:
+        time.sleep(0.01)
+    return state
+
+
+def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_projects_shaper(tmp_path):
+    store = Store(tmp_path)
+    store.update_config(lambda _layer: Layer(agents={"shaper": Agent(model="gpt-6-luna", effort="max")}))
+    opening = Opening({"state": "open", "warning": "could not remove it"})
+    c = launcher(store, opening)
+    started = c.post("/api/next/new-change").json()
+    assert (started["started"], set(started)) == (True, {"started", "launch"})
+    assert c.get(f"/api/next/new-change/{started['launch']}").json() == {"state": "opening", "command": COMMAND}
+    opening.release.set()
+    assert settled(c, started["launch"]) == {"state": "open", "warning": "could not remove it", "command": COMMAND}
+    [(repo, role)] = opening.calls
+    assert (repo, role.model, role.effort) == (store.root, "gpt-6-luna", "max")
+
+
+@pytest.mark.parametrize(
+    ("ending", "reason"),
+    [
+        ({"state": "failed", "reason": "the Copilot chat did not start (unbound: x)"}, "did not start (unbound: x)"),
+        (OSError("no window"), "OSError: no window"),
+    ],
+)
+def test_a_failed_launch_gives_its_reason_and_the_command(tmp_path, ending, reason):
+    opening = Opening(ending)
+    opening.release.set()
+    c = launcher(Store(tmp_path), opening)
+    state = settled(c, c.post("/api/next/new-change").json()["launch"])
+    assert (state["state"], state["command"], reason in state["reason"]) == ("failed", COMMAND, True)
+
+
+def test_a_new_change_while_one_opens_is_refused_and_the_gap_starts_when_it_ends(tmp_path, monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(api, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    opening = Opening()
+    c = launcher(Store(tmp_path), opening)
+    first = c.post("/api/next/new-change").json()["launch"]
+    now[0] += 60  # VS Code had to start
+    refused = c.post("/api/next/new-change")
+    assert (refused.status_code, refused.json()["detail"]) == (409, "a shaping chat is already opening")
+    opening.release.set()
+    assert settled(c, first)["state"] == "open"
     assert c.post("/api/next/new-change").status_code == 429
-    assert launches == [1]
+    now[0] += api.LAUNCH_GAP
+    assert c.post("/api/next/new-change").json()["started"] is True
+    assert len(opening.calls) == 2
+
+
+def test_new_change_needs_the_token_and_without_code_or_settings_returns_the_command(tmp_path):
+    store, opening = Store(tmp_path), Opening()
+    anonymous = launcher(store, opening, auth="")
+    codes = [anonymous.post("/api/next/new-change").status_code, anonymous.get("/api/next/new-change/x").status_code]
+    assert codes == [401, 401]
+    out = launcher(store, opening, which=lambda _n: None).post("/api/next/new-change").json()
+    assert (out["started"], out["command"], out["reason"]) == (
+        False,
+        COMMAND,
+        f"`code` is not on PATH; run this in {store.root}",
+    )
+    store.config_path.write_text("{")
+    c = launcher(store, opening)
+    out = c.post("/api/next/new-change").json()
+    assert (out["started"], out["command"], "settings" in out["reason"]) == (False, COMMAND, True)
+    assert (c.get("/api/next/new-change/nope").status_code, opening.calls) == (404, [])
 
 
 def test_two_concurrent_new_change_calls_launch_once(tmp_path, monkeypatch):
@@ -344,12 +421,12 @@ def test_two_concurrent_new_change_calls_launch_once(tmp_path, monkeypatch):
         return time.monotonic()
 
     monkeypatch.setattr(api, "time", SimpleNamespace(monotonic=monotonic))
-    launches = []
-    app = api.create_app(Store(tmp_path), "t", Host(), launch=lambda: launches.append(1) or {"started": True})
-    c = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
+    opening = Opening()
+    c = launcher(Store(tmp_path), opening)
     with ThreadPoolExecutor(2) as pool:
         codes = sorted(pool.map(lambda _i: c.post("/api/next/new-change").status_code, range(2)))
-    assert (codes, launches) == ([200, 429], [1])
+    opening.release.set()
+    assert (codes, len(opening.calls)) == ([200, 409], 1)
 
 
 def test_the_page_loads_the_vendored_design_system_without_the_token(tmp_path):

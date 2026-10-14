@@ -16,11 +16,12 @@ import pytest
 
 from owlbear_delivery_next import ahp, sdk_adapter, session_result, step_mcp, vscode_adapter
 from owlbear_delivery_next.ahp import HostError
+from owlbear_delivery_next.config import Layer, resolve
 from owlbear_delivery_next.models import Exit, StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.tools import Worktree
-from owlbear_delivery_next.vscode_contract import Control, Hooks, StepSpec, ToolCall
+from owlbear_delivery_next.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall
 from owlbear_delivery_next.vscode_step import ACK, Step
 from owlbear_delivery_next.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
 
@@ -1003,3 +1004,141 @@ def test_a_process_left_in_the_worktree_stops_the_step(wt: Path, tmp_path: Path)
     result = session_result.to_result(run, StepKind.BUILD, datetime.now(UTC))
     assert (run.ending, result.exit) == ("result", Exit.STOP)
     assert "4242" in result.reason
+
+
+SHAPER = resolve(None, Layer()).agents["shaper"]
+SIZES = {"enum": [200000, 1000000], "enumDescriptions": ["Default", "Longer sessions"], "default": 1000000}
+
+
+def shaping_host(folder: Path) -> FakeHost:
+    host = FakeHost(folder, [{}], [])
+    host.models, host.listed = [SHAPER.model], []  # the chat names no agent file, so none needs listing
+    host.schema = {"properties": {"thinkingLevel": {"enum": ["high", "xhigh"]}, "contextSize": SIZES}}
+    return host
+
+
+def shaping_env(host: FakeHost, during: Callable[[], None] = lambda: None) -> vscode_adapter.Env:
+    def launch(args: list[str], cwd: Path) -> None:
+        during()
+        host.launch(args, cwd)
+
+    return vscode_adapter.Env(
+        connect=lambda _f: host, reconnect=lambda _c: host.reconnect(), launch=launch, clock=host.clock
+    )
+
+
+def shape(folder: Path, env: vscode_adapter.Env) -> tuple[Outcome, str]:
+    return vscode_adapter.open_chat(folder, SHAPER, "Shape a brief with me.", env)
+
+
+def untouched_git(folder: Path) -> tuple[str, str]:
+    """The folder's skip-worktree marks and local excludes, which Delivery never changes in the owner's folder."""
+    return git(folder, "ls-files", "-v"), (folder / ".git" / "info" / "exclude").read_text()
+
+
+def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: Path) -> None:
+    host = shaping_host(wt)
+    host.add(nonce="x", text="the owner's own chat")
+    host.chats["ahp-chat://default/c0"]["activeTurn"] = {"id": "theirs"}  # a busy chat does not block it
+    settings, before = wt / ".vscode" / "settings.json", untouched_git(wt)
+    seen: list[str] = []
+
+    out, warning = shape(wt, shaping_env(host, lambda: seen.append(settings.read_text())))
+
+    assert (out.end, out.session, warning) == ("started", "copilotcli:/s1", "")
+    assert seen == ['{\n  "chat.defaultToCopilotHarness": true\n}\n']  # the harness only: each turn names its model
+    assert not (wt / ".vscode").exists()
+    [launched] = host.launched
+    assert launched[:4] == ["code", "chat", "-m", "agent"]
+    assert re.fullmatch(r"!echo OWLBEAR-\w{12}", launched[4])
+    assert host.config["copilotcli:/s1"] == {
+        "autoApprove": "autoApprove",
+        "sandboxEnabled": "off",
+        "mode": "interactive",
+    }
+    ((chat, started),) = host.actions("chat/turnStarted")
+    message = started["message"]
+    assert (chat, message["text"], "agent" in message) == ("ahp-chat://default/c1", "Shape a brief with me.", False)
+    assert message["model"] == {"id": "claude-opus-5.5", "config": {"thinkingLevel": "high", "contextSize": 200000}}
+    assert host.chats[chat]["activeTurn"]["id"] == out.turns[0]  # still running: Delivery neither follows nor stops it
+    assert host.actions("chat/turnCancelled") == []
+    assert (host.twin.closed, host.closed) == (1, 1)
+    assert (git(wt, "status", "--porcelain", "--ignored"), untouched_git(wt)) == ("", before)
+
+
+OWNER = '// team settings\n{\n  "editor.tabSize": 2, // mine\n  "a": [1,2]\n}\n'
+
+
+def test_only_the_harness_key_is_added_and_removed_and_the_owners_edits_meanwhile_stay(wt: Path) -> None:
+    settings = wt / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(OWNER)
+    git(wt, "add", "-A")
+    git(wt, "commit", "-qm", "settings")
+    before, seen = untouched_git(wt), []
+
+    def owner_edits() -> None:
+        seen.append(text := settings.read_text())
+        settings.write_text(text.replace('"a": [1,2]', '"a": [1,2],\n  "b": true'))
+
+    out, warning = shape(wt, shaping_env(shaping_host(wt), owner_edits))
+
+    assert (out.end, warning) == ("started", "")
+    assert seen == [OWNER.replace("{\n", '{\n  "chat.defaultToCopilotHarness": true,\n', 1)]
+    assert settings.read_text() == OWNER.replace('"a": [1,2]', '"a": [1,2],\n  "b": true')
+    assert untouched_git(wt) == before
+
+
+def test_a_settings_file_delivery_made_keeps_what_the_owner_added_meanwhile(wt: Path) -> None:
+    settings = wt / ".vscode" / "settings.json"
+
+    def owner_adds() -> None:
+        settings.write_text(settings.read_text().replace("true\n", 'true,\n  "a": 1\n'))
+
+    out, warning = shape(wt, shaping_env(shaping_host(wt), owner_adds))
+    assert (out.end, warning, settings.read_text()) == ("started", "", '{\n  "a": 1\n}\n')
+
+
+@pytest.mark.parametrize("theirs", ['{"chat.defaultToCopilotHarness": false}', "// x\n{}\n"])
+def test_the_owners_own_harness_setting_or_an_empty_object_is_kept_byte_for_byte(wt: Path, theirs: str) -> None:
+    settings = wt / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(theirs)
+    out, warning = shape(wt, shaping_env(shaping_host(wt)))
+    assert (out.end, warning, settings.read_text()) == ("started", "", theirs)
+
+
+def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(wt: Path) -> None:
+    folder = wt / ".vscode"
+    out, warning = shape(wt, shaping_env(shaping_host(wt), lambda: folder.chmod(0o555)))
+    folder.chmod(0o755)
+    assert out.end == "started"
+    assert warning.startswith("could not remove chat.defaultToCopilotHarness from .vscode/settings.json")
+    assert warning.endswith("remove it by hand")
+    assert json.loads((folder / "settings.json").read_text()) == {HARNESS: True}
+
+
+def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(wt: Path) -> None:
+    settings = wt / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text("[]\n")
+    host = shaping_host(wt)
+    out, warning = shape(wt, shaping_env(host))
+    assert (out.end, warning, host.launched, settings.read_text()) == ("settings-refused", "", [], "[]\n")
+
+
+def test_a_shaping_turn_the_host_never_starts_is_reported(wt: Path) -> None:
+    host = shaping_host(wt)
+    dispatch = host.dispatch
+    host.dispatch = lambda channel, action: None if action["type"] == "chat/turnStarted" else dispatch(channel, action)
+    out, _ = shape(wt, shaping_env(host))
+    assert (out.end, out.detail) == ("unstarted", "the host did not start the prompt's turn")
+
+
+def test_an_unreachable_editor_leaves_no_shaping_files(wt: Path) -> None:
+    def refuse(_folder: Path) -> ahp.Transport:
+        raise HostError("VS Code published no agent host within 60 s")  # noqa: EM101, TRY003
+
+    out, warning = shape(wt, vscode_adapter.Env(connect=refuse))
+    assert (out.end, out.detail, warning) == ("error", "HostError: VS Code published no agent host within 60 s", "")
+    assert git(wt, "status", "--porcelain", "--ignored") == ""

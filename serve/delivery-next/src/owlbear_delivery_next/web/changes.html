@@ -748,19 +748,29 @@ async function refresh() {
   }
 }
 
+async function launched(id) {  // the host opens the chat in the background; VS Code may first have to start
+  for (;;) {
+    const s = await call(`/new-change/${encodeURIComponent(id)}`);
+    if (s.state !== "opening") return s;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
 async function newChange(event) {
   const trigger = event.currentTarget, result = document.getElementById("started");
   const wanted = await confirmed("Start a new Change?", [text("Delivery opens a chat in VS Code where you shape the "
     + "new Change's brief with the assistant. Nothing is built until you approve the brief.")], "Open the chat");
   if (!wanted) return;
   waiting(trigger, true);
-  result.textContent = "Opening a chat…";
+  result.textContent = "Opening the shaping chat…";
   try {
     const r = await call("/new-change", {});
-    if (r.started) {
-      result.textContent = "A chat opened in VS Code to shape the new Change.";
+    const s = r.started ? await launched(r.launch) : { state: "failed", ...r };
+    if (s.state === "open") {
+      const note = s.warning ? ` Note: ${s.warning}.` : "";
+      result.textContent = `A chat opened in VS Code to shape the new Change.${note}`;
     } else {
-      result.replaceChildren(`Could not open the chat: ${r.reason}. Copy this command: `, el("code", r.command));
+      result.replaceChildren(`Could not open the chat: ${s.reason}. Copy this command: `, el("code", s.command));
     }
   } catch (e) {
     result.textContent = "";

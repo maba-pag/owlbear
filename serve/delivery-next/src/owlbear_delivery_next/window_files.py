@@ -1,13 +1,15 @@
 """Files a C+ step needs in its worktree: the window's model pin, the step's MCP relay and its agent (TD-36).
 
 None of them reaches the agent's commits: an untracked file is listed in the clone's ``info/exclude``, a tracked
-one is marked ``skip-worktree``; ``restore`` puts back what the step found.
+one is marked ``skip-worktree``; ``restore`` puts back what the step found. The owner's own folder gets only the
+harness key, for as long as a shaping chat takes to open (TD-83).
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 HARNESS, DEFAULT_MODEL = "chat.defaultToCopilotHarness", "chat.defaultModel"
+HARNESS_LINE = f'\n  "{HARNESS}": true'  # the one line Delivery adds to an owner's settings
+HARNESS_ADDED = re.compile(re.escape(HARNESS_LINE) + ",?")
 SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
 SERVER = "owlbear-step"  # a step's relay is SERVER-<inbox>: the host disables a name another session holds (P21)
 RESULTS = (
@@ -34,6 +38,15 @@ class SettingsError(ValueError):
     """A window file cannot be written safely."""
 
 
+def _opening(text: str) -> int | None:
+    """Just after the opening brace of ``text``'s object, past leading comments; None when it is no object."""
+    lines = text.splitlines(keepends=True)
+    first = next((i for i, ln in enumerate(lines) if ln.strip() and not ln.lstrip().startswith("//")), None)
+    if first is None or not lines[first].lstrip().startswith("{"):
+        return None
+    return sum(len(ln) for ln in lines[:first]) + lines[first].index("{") + 1
+
+
 def _with_settings(old: str | None, model: str) -> str:
     """``old`` with the harness and model pinned; JSON with comments gets the keys after its opening brace."""
     try:
@@ -43,14 +56,11 @@ def _with_settings(old: str | None, model: str) -> str:
     if isinstance(current, dict):
         return json.dumps(current | {HARNESS: True, DEFAULT_MODEL: model}, indent=2) + "\n"
     text = old or ""
-    lines = text.splitlines(keepends=True)
-    first = next((i for i, ln in enumerate(lines) if ln.strip() and not ln.lstrip().startswith("//")), None)
-    if current is not None or first is None or not lines[first].lstrip().startswith("{"):
+    if current is not None or (at := _opening(text)) is None:
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
     if f'"{HARNESS}"' in text or f'"{DEFAULT_MODEL}"' in text:
         msg = f"{SETTINGS} pins the harness or model in a form Delivery can't edit"
         raise SettingsError(msg)
-    at = sum(len(ln) for ln in lines[:first]) + lines[first].index("{") + 1
     pins = f'\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": {json.dumps(model)},'
     return text[:at] + pins + text[at:]
 
@@ -68,6 +78,60 @@ def write_window_settings(folder: Path, model: str) -> None:
     text = settings(model)(path.read_text() if path.exists() else None)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+
+
+@dataclass(frozen=True)
+class Added:
+    """Delivery's harness line in an owner's settings, and whether Delivery made the file and its folder."""
+
+    file: bool
+    folder: bool
+
+
+def add_harness(folder: Path) -> Added | None:
+    """Add the harness key to the owner's ``folder`` settings, every other byte kept; None when they name it already.
+
+    Nothing else changes in the owner's folder, git metadata included: each turn Delivery sends names its model.
+    """
+    path = folder / SETTINGS
+    if part := setup.linked_part(folder, path):
+        raise SettingsError(f"{part} is a symbolic link; Delivery writes nothing through it")  # noqa: EM102, TRY003
+    try:
+        old = path.read_text()
+    except FileNotFoundError:
+        made = not path.parent.exists()
+        path.parent.mkdir(exist_ok=True)
+        with path.open("x") as f:  # never over a file the owner just created
+            f.write("{" + HARNESS_LINE + "\n}\n")
+        return Added(file=True, folder=made)
+    if f'"{HARNESS}"' in old:
+        return None
+    if (at := _opening(old)) is None:
+        raise SettingsError(f"{SETTINGS} is not a JSON object; set {HARNESS} by hand")  # noqa: EM102, TRY003
+    comma = "" if old[at:].lstrip().startswith("}") else ","
+    setup.replace_text(path, old[:at] + HARNESS_LINE + comma + old[at:])
+    return Added(file=False, folder=False)
+
+
+def remove_harness(folder: Path, added: Added) -> str:
+    """Take Delivery's harness line out again, keeping what the owner changed meanwhile; what failed, or ''."""
+    path = folder / SETTINGS
+    try:
+        rest, found = HARNESS_ADDED.subn("", path.read_text(), count=1)
+        if not found:
+            return ""
+        if added.file and rest == "{\n}\n":
+            path.unlink()
+            if added.folder:
+                with contextlib.suppress(OSError):  # a folder the owner filled meanwhile stays
+                    path.parent.rmdir()
+        else:
+            setup.replace_text(path, rest)
+    except FileNotFoundError:
+        return ""
+    except OSError as exc:
+        return f"could not remove {HARNESS} from {SETTINGS} ({exc}); remove it by hand"
+    return ""
 
 
 def mcp(inbox: Path, memory: Path | None = None) -> Render:

@@ -7,8 +7,6 @@ import re
 import secrets
 import shlex
 import shutil
-import subprocess
-import threading
 import time
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -29,28 +27,33 @@ from owlbear_delivery_next.inbox import (
     PullItem,
     WithdrawItem,
 )
+from owlbear_delivery_next.launches import Launches, Refused
 from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import card, status, unloadable
 from owlbear_delivery_next.steps import check, decision, visual
 from owlbear_delivery_next.store import StoreError
+from owlbear_delivery_next.vscode_adapter import open_chat
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from pathlib import Path
 
+    from owlbear_delivery_next.config import Effective
     from owlbear_delivery_next.host import Host, HostRecord
     from owlbear_delivery_next.inbox import InboxItem
     from owlbear_delivery_next.models import Inputs, VisualResult
     from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
+    from owlbear_delivery_next.vscode_contract import Outcome
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the delivery skill to shape a brief with me."
-LAUNCH_GAP = 5.0  # seconds between two new-Change launches
+COMMAND = shlex.join(["code", "chat", "-m", "agent", START_PROMPT])  # the manual fallback
+LAUNCH_GAP = 5.0  # seconds after a new-Change launch ends before the next may start
 
 
 class Body(BaseModel):
@@ -154,25 +157,16 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
 
 
 def new_chat(
-    repo: Path, which: Callable[[str], str | None] = shutil.which, popen: Callable[..., object] = subprocess.Popen
-) -> dict[str, Any]:
-    """Open a VS Code agent chat with the fixed start prompt in *repo*; on failure, the command to run there."""
-    argv = ["code", "chat", "-m", "agent", START_PROMPT]
-    command = shlex.join(argv)
-    if not (code := which("code")):
-        return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {repo}"}
-    try:
-        popen(
-            [code, *argv[1:]],
-            cwd=repo,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        return {"started": False, "command": command, "reason": f"could not start `code` ({exc}); run this in {repo}"}
-    return {"started": True, "command": command}
+    repo: Path, shaper: Effective, start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat
+) -> dict[str, str]:
+    """Open the shaping chat in *repo*'s window on the shaper role (TD-83): its launch's ending state."""
+    out, warning = start(repo, shaper, START_PROMPT)
+    if out.end == "started":
+        ending = {"state": "open"}
+    else:
+        why = f"the Copilot chat did not start ({out.end}: {out.detail})"
+        ending = {"state": "failed", "reason": f"{why}; run this in {repo}"}
+    return ending | ({"warning": warning} if warning else {})
 
 
 def create_app(  # noqa: C901, PLR0915 - one closure per route
@@ -180,14 +174,15 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     token: str,
     host: Host,
     *,
-    launch: Callable[[], dict[str, Any]] | None = None,
+    launch: Callable[[Path, Effective], dict[str, str]] = new_chat,
+    which: Callable[[str], str | None] = shutil.which,
 ) -> FastAPI:
     """Return the host's app: the Changes and Settings pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
     web = files("owlbear_delivery_next").joinpath("web")
     page, settings_page = (web.joinpath(n).read_text(encoding="utf-8") for n in ("changes.html", "config.html"))
     expected = f"Bearer {token}".encode()
-    launched, launching = [-LAUNCH_GAP], threading.Lock()
+    launches = Launches(LAUNCH_GAP, time.monotonic)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -268,11 +263,22 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:
-        with launching:  # FastAPI runs sync routes on a thread pool; check and set as one step
-            if (now := time.monotonic()) - launched[0] < LAUNCH_GAP:
-                raise HTTPException(429, "A new Change chat was just opened; wait a few seconds")
-            launched[0] = now
-        return launch() if launch else new_chat(host.repo)
+        if not which("code"):
+            return {"started": False, "command": COMMAND, "reason": f"`code` is not on PATH; run this in {host.repo}"}
+        try:
+            shaper = store.settings().agents["shaper"]
+        except StoreError as exc:
+            return {"started": False, "command": COMMAND, "reason": f"the settings are unreadable ({exc})"}
+        try:
+            return {"started": True, "launch": launches.start(lambda: launch(host.repo, shaper))}
+        except Refused as exc:
+            raise HTTPException(exc.status, exc.text) from exc
+
+    @router.get("/new-change/{launch_id}")
+    def new_change_state(launch_id: str) -> dict[str, Any]:
+        if (state := launches.state(launch_id)) is None:
+            raise HTTPException(404, "no such launch")
+        return state | {"command": COMMAND}
 
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:

@@ -32,9 +32,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.ahp import Json
+    from owlbear_delivery_next.config import Effective
     from owlbear_delivery_next.sdk_adapter import Session
 
 CONFIG = {"autoApprove": "autoApprove", "sandboxEnabled": "off", "mode": "autopilot"}  # the owner's D2, D4, D5
+SHAPING = CONFIG | {"mode": "interactive"}  # the owner's chat: allow-all, but it waits for the owner (TD-83)
 GRACE = 30.0  # seconds an agent has to end its turn after its result was accepted
 START = 60.0  # seconds a started editor has to publish its agent host
 
@@ -220,3 +222,35 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     result.usage = _usage(out, cfg.model)
     result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
     return result
+
+
+def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]:
+    """Open an interactive Copilot chat in ``folder``'s window with ``prompt`` as its first model turn (TD-83).
+
+    The chat runs on the role's model, effort and context tier with auto-approve; Delivery leaves it to the owner.
+    Returns how it went and what Delivery could not take out of the owner's settings again, or ''.
+    """
+    env, added, conn = env or Env(), list[wf.Added](), None
+    spec = StepSpec(
+        folder=folder, agent=None, model=role.model, effort=role.effort, prompt=prompt, config=SHAPING,
+        context=role.context,
+    )  # fmt: skip
+
+    def harness(where: Path, _model: str) -> None:
+        try:
+            if (line := wf.add_harness(where)) is not None:
+                added.append(line)
+        except OSError as exc:
+            raise wf.SettingsError(str(exc)) from exc
+
+    try:
+        conn = env.connect(folder)
+        hooks = Hooks(launch=env.launch, clock=env.clock, settings=harness, reconnect=lambda: env.reconnect(conn))
+        out = Step(conn, spec, lambda _call: False, hooks=hooks).open(Control())
+    except (OSError, wf.SettingsError, ahp.HostError, subprocess.SubprocessError) as exc:
+        out = Outcome("error", f"{type(exc).__name__}: {exc}"[:300])
+    finally:
+        if close := getattr(conn, "close", None):
+            close()
+        warning = wf.remove_harness(folder, added[0]) if added else ""
+    return out, warning

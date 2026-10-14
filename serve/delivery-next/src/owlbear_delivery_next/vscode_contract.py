@@ -42,6 +42,8 @@ type End = Literal[
     "busy",
     "user-turn",
     "steering-unrun",
+    "started",
+    "unstarted",
 ]
 
 
@@ -50,7 +52,7 @@ class StepSpec:
     """One VS Code step: where, which agent, which model and effort, what to do, and the session config."""
 
     folder: Path
-    agent: Path  # the agent file inside ``folder``; the host lists only agents in watched folders
+    agent: Path | None  # the agent file inside ``folder``; the host lists only agents in watched folders
     model: str
     effort: str
     prompt: str
@@ -73,7 +75,7 @@ class StepSpec:
     @property
     def agent_uri(self) -> str:
         """The agent file as the host names it in a session's customizations."""
-        return self.agent.resolve().as_uri()
+        return self.agent.resolve().as_uri() if self.agent else ""
 
 
 @dataclass(frozen=True)

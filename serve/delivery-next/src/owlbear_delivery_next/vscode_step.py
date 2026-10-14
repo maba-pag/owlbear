@@ -7,7 +7,8 @@ that echo, waits for it to end, signs in again over a new connection and waits u
 model, since a new window may start with none and resolve Auto (P14). The real turn, each reminder and each steering
 message carry an explicit model, effort and agent file (TD-27, TD-32). The host ignores an agent it does not list,
 so the step fails closed unless the session lists the agent file. A turn billed to any other model fails closed.
-``folder`` must be a Delivery-owned worktree: the settings apply to every chat in that folder. The step's result
+``folder`` must be a Delivery-owned worktree for ``run``: the settings apply to every chat in that folder. ``open``
+starts a chat in the owner's folder, whose settings hook adds only the harness key (TD-83). The step's result
 travels through the step's MCP relay (TD-36), not through this module.
 """
 
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 _TERMINAL = ("chat/turnComplete", "chat/turnCancelled", "chat/error")
 _UNSTOPPED: tuple[End, str] = ("cancel-unconfirmed", "the window's first turn did not stop")
+_UNBEGUN: tuple[End, str] = ("unstarted", "the host did not start the prompt's turn")
 FOLLOW_UP_GRACE = 10.0  # seconds to wait for a steering message to start its own turn (P8)
 ACK = 10.0  # seconds to wait for the host to confirm a cancel or a config change
 LISTED = 10.0  # seconds to wait for the session to list the step's agent file; the host took 0.4 s live
@@ -112,11 +114,38 @@ class Step:
                 self._turn(out, agent, control, deadline, self.spec.reminder)
             return out
         finally:
-            for conn in self.opened:
-                if close := getattr(conn, "close", None):
-                    close()
+            self._close()
 
-    def _open(self, control: Control, bind_limit: float) -> tuple[Outcome, _Bound | None]:
+    def open(self, control: Control, bind_limit: float = 60) -> Outcome:
+        """Start the prompt's turn in a new interactive session and leave it to the user: no following, no cancel."""
+        try:
+            out, bound = self._open(control, bind_limit, exclusive=False)
+            if bound is None or not self._ready(out, bound, control):
+                return out
+            self._start(out, None, self.spec.prompt)
+            out.end, out.detail = ("started", "") if self._began(bound.chat, out.turns[-1]) else _UNBEGUN
+            return out
+        finally:
+            self._close()
+
+    def _close(self) -> None:
+        for conn in self.opened:
+            if close := getattr(conn, "close", None):
+                close()
+
+    def _began(self, chat: str, turn: str) -> bool:
+        """Wait, at most ``ACK`` seconds, until the chat runs or has run ``turn``."""
+        deadline = self.clock() + ACK
+        while True:
+            state = self._chat(chat)
+            ids = [(state.get("activeTurn") or {}).get("id"), *(t.get("id") for t in state.get("turns") or [])]
+            if turn in ids:
+                return True
+            if self.clock() >= deadline:
+                return False
+            self.conn.next_event(0.2)
+
+    def _open(self, control: Control, bind_limit: float, *, exclusive: bool = True) -> tuple[Outcome, _Bound | None]:
         if control.stop.is_set():
             return Outcome("stopped", "stopped before launch"), None
         try:
@@ -124,7 +153,7 @@ class Step:
         except SettingsError as exc:
             return Outcome("settings-refused", str(exc)), None
         before = self._sessions()
-        if busy := self._busy(before):
+        if exclusive and (busy := self._busy(before)):
             return Outcome("folder-busy", f"session {busy} still runs a turn in this folder"), None
         self.launch(["code", "chat", "-m", "agent", self.spec.bootstrap], self.spec.folder)
         bound = self._bind(before, self.clock() + bind_limit)
@@ -206,6 +235,8 @@ class Step:
 
     def _listed(self, session: str) -> bool:
         """Wait, at most ``LISTED`` seconds, until the session's customizations list the step's agent file."""
+        if self.spec.agent is None:
+            return True
         deadline = self.clock() + LISTED
         while True:
             state = self.conn.request("subscribe", {"channel": session})["snapshot"]["state"]
