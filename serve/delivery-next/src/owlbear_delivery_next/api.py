@@ -408,8 +408,15 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
 
     @router.post("/changes/{slug}/approve-brief")
     def approve(slug: str, body: ApproveBody) -> dict[str, str]:
-        if body.version != read(slug).brief.version:
+        brief = read(slug).brief
+        if body.version != brief.version:
             raise HTTPException(409, f"brief version {body.version} is not the current draft")
+        if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().seed:
+            raise HTTPException(
+                409,
+                f"The visual states {', '.join(stepped)} have clicks or typing, which run only on seeded test data "
+                "(TD-60); set the project's seed command in Settings first, or revise the brief without those steps",
+            )
         return put(slug, BriefApproval(at=datetime.now(UTC), version=body.version))
 
     @router.post("/changes/{slug}/merge-consent")

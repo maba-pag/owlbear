@@ -108,6 +108,19 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
     assert c.post("/api/next/briefs", json=revised).status_code == 409
 
 
+def test_a_brief_with_clicks_waits_for_a_seed_command_before_approval(tmp_path):
+    store = Store(tmp_path)
+    c = client(store)
+    states = [{"name": "dark", "path": "/", "expect": "Dark"}]
+    steps = [{"state": "dark", "do": "click", "target": "Dark mode"}]
+    assert c.post("/api/next/briefs", json={**BRIEF, "ui": True, "visual": states, "steps": steps}).status_code == 200
+    slug = store.slugs()[0]
+    refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
+    assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)
+    store.update_config(lambda layer: layer.model_copy(update={"seed": "npm run seed"}))
+    assert c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1}).status_code == 200
+
+
 def test_plan_checks_come_from_the_profile():
     plan, _ = tools.parse(
         tools.PlanResult, {"tasks": [{"title": "t", "goal": "AC-1", "scope": ["/x"], "checks": ["make"]}]}
