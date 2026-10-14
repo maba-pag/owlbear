@@ -161,6 +161,106 @@ def test_quoted_text_and_option_values_are_not_a_bypass(text: str) -> None:
     assert decide(WRITE, shell(text)) is None
 
 
+@pytest.mark.parametrize(
+    ("text", "inner", "flag"),
+    [
+        ("env GIT_TRACE=1 git push -f", "env GIT_TRACE=1 git push -f", "-f"),
+        ("env -i git commit -n -m x", "env -i git commit -n -m x", "-n"),
+        ("echo main | xargs git push --force origin", "echo main | xargs git push --force origin", "--force"),
+        ("timeout 60 git commit --no-verify -m x", "timeout 60 git commit --no-verify -m x", "--no-verify"),
+        ("find . -name x -exec git push -f \\;", "find . -name x -exec git push -f \\;", "-f"),
+        ("sh -c 'git push -f'", "git push -f", "-f"),
+        ('bash -lc "git commit --no-verify -m x"', "git commit --no-verify -m x", "--no-verify"),
+        ("env bash -c 'git -c core.hooksPath=/x commit'", "git -c core.hooksPath=/x commit", "-c core.hooksPath=/x"),
+        ("eval git push -f", "git push -f", "-f"),
+        ("sh -c \"bash -c 'git push -f'\"", "git push -f", "-f"),
+        ("/bin/zsh -c 'cd x && git push -f'", "cd x && git push -f", "-f"),
+        ("bash -o pipefail -c 'git push -f'", "git push -f", "-f"),
+        ("bash -c -- 'git push -f'", "git push -f", "-f"),
+        ("eval -- 'git push -f'", "git push -f", "-f"),
+        (
+            "find . -exec sh -c 'git log -1' \\; -exec sh -c 'git push -f' \\;",
+            "git push -f",
+            "-f",
+        ),
+        ("find . -name git -exec sh -c 'git push -f' \\;", "git push -f", "-f"),
+    ],
+)
+def test_a_bypass_behind_a_wrapper_or_in_a_nested_shell_is_refused(text: str, inner: str, flag: str) -> None:
+    assert decide(WRITE, shell(text)) == f"`{inner}` uses {flag}, {BYPASS}"
+    assert decide(READ, shell(text)) is not None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "env FOO=1 npm test",
+        "xargs grep git",
+        "sh -c 'git push origin main'",
+        "bash scripts/check.sh --force",
+        "timeout 5 npm run build -- --force",
+        "echo git push -f",
+        "xargs grep -- git push -f",
+        "bash -c ' '",
+        "eval '# a comment'",
+        "git config user.name x",
+        "git config --get core.hooksPath",
+        "git config --get-regexp core.hooksPath .",
+        "GIT_CONFIG_PARAMETERS=\"'commit.gpgsign=true'\" git status",
+        "printf '%s' 'GIT_CONFIG_KEY_0=core.hooksPath'",
+        "command -v git push -f",
+        "GIT_CONFIG_GLOBAL=/dev/null git status",
+    ],
+)
+def test_wrappers_and_nested_shells_without_a_bypass_run(text: str) -> None:
+    assert decide(WRITE, shell(text)) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "flag"),
+    [
+        ("git config core.hooksPath /dev/null", "config core.hooksPath /dev/null"),
+        ("git config --local commit.gpgsign false", "config commit.gpgsign false"),
+        ("git config set core.hooksPath x", "config core.hooksPath x"),
+        (
+            "GIT_CONFIG_PARAMETERS=\"'core.hooksPath=/dev/null'\" git commit -m x",
+            "environment setting core.hooksPath=/dev/null",
+        ),
+        (
+            "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false git commit -m x",
+            "environment setting commit.gpgsign=false",
+        ),
+        ("HOOKS=/x git --config-env=core.hooksPath=HOOKS commit -m x", "-c core.hooksPath="),
+        ("git --config-env core.hooksPath=HOOKS commit -m x", "-c core.hooksPath="),
+        ("SIGN=false git --config-env=commit.gpgsign=SIGN commit -m x", "-c commit.gpgsign="),
+        ("git push -- origin +main", "+main"),
+        ("timeout --signal KILL 5 git push -f", "-f"),
+        ("sudo -Eu x git push -f", "-f"),
+        ("watch -d git push -f", "-f"),
+        ("env -u X git push -f", "-f"),
+        ("xargs -n1 git push -f", "-f"),
+    ],
+)
+def test_hooks_or_signing_turned_off_by_config_is_a_bypass(text: str, flag: str) -> None:
+    assert decide(WRITE, shell(text)) == f"`{text}` uses {flag}, {BYPASS}"
+
+
+def test_git_named_as_data_is_not_a_git_command() -> None:
+    assert decide(READ, shell("sh -c 'grep -n git README.md'")) is None
+    assert decide(READ, shell("find . -name git -exec cat {} \\;")) is None
+    assert decide(READ, shell("git config --list")) is None
+    assert decide(READ, shell("git config --remove-section x")) is not None
+
+
+def test_a_read_only_step_reads_nested_scripts_and_refuses_their_writes() -> None:
+    assert (
+        decide(READ, shell("sh -c 'rm x'")) == "`rm x` uses filesystem mutation 'rm', which writes in a read-only step"
+    )
+    assert decide(READ, shell("bash -c 'git log -1'")) is None
+    deep = 'sh -c "sh -c \'sh -c \\"sh -c ls\\"\'"'
+    assert decide(WRITE, shell(deep)).endswith("nests scripts more than 3 deep")
+
+
 def test_unparseable_and_empty_commands_are_refused() -> None:
     assert decide(WRITE, shell("echo 'open")) == "`echo 'open` cannot be parsed"
     assert decide(WRITE, shell("")) == "the shell request names no command"

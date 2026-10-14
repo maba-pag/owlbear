@@ -2,25 +2,36 @@
 
 Every shell command and file access is allowed, except in every step a hook or signing bypass or a force push,
 and in a read-only step any write. The read-only shell rule is ported from the old agents' deny-writes guard.
+Commands behind wrapper programs (env, xargs, timeout, find -exec, ...) and scripts given to a nested shell (-c) or
+eval are judged the same way, and so is turning hooks or signing off through git config. Not read: a script file a
+shell runs, a shell's standard input (pipes, here-strings), env -S, and commands built at run time.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+import shlex
+from dataclasses import dataclass
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from owlbear_delivery_next import tools
+from owlbear_delivery_next import shell_parse, tools
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
-_REDIRECTION = re.compile(r"&?[<>]+[&|]?")
-_PREFIX_WORDS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "time", "until", "while"})
-_ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
+_CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
+_CONFIG_QUERIES = frozenset(
+    {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
+     "get", "list"}
+)  # fmt: skip
+_CONFIG_READS = _CONFIG_QUERIES | {  # git config operations that set no value
+    "--unset", "--unset-all", "--remove-section", "--rename-section", "--edit", "-e", "unset", "remove-section",
+    "rename-section", "edit",
+}  # fmt: skip
+_CONFIG_KEY = re.compile(r"GIT_CONFIG_KEY_(\d+)")
 _READ_ONLY_GIT = frozenset(
     {
         "cat-file",
@@ -144,113 +155,8 @@ def identities(req: Request) -> set[str]:
     return programs or {(req.tool or req.kind).lower()}
 
 
-@dataclass
-class _Level:
-    """The command being read at one nesting level of shell text."""
-
-    words: list[str] = field(default_factory=list)
-    word: str | None = None
-    quote: str = ""
-    redirect: bool = False  # the next word is a redirection's target, not an argument
-
-    def add(self, chars: str) -> None:
-        self.word = (self.word or "") + chars
-
-    def end_word(self) -> None:
-        if self.word is not None:
-            if not self.redirect:
-                self.words.append(self.word)
-            self.redirect = False
-        self.word = None
-
-    def end_command(self, commands: list[list[str]]) -> None:
-        self.end_word()
-        if self.words:
-            commands.append(self.words)
-        self.words, self.redirect = [], False
-
-
-class _Lexer:
-    """Splits shell text into each command's words at unquoted operators and newlines, and into substitutions."""
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-        self.commands: list[list[str]] = []
-
-    def level(self, i: int, close: str = "") -> int:
-        """Read text[i:] up to the unquoted *close*, or to the end without one; return the index after it.
-
-        Raises:
-            ValueError: A quote, subshell or substitution is not closed.
-        """
-        s = _Level()
-        while i < len(self.text) and (s.quote or self.text[i] != close):
-            i = self._step(s, i)
-        if s.quote or (close and i >= len(self.text)):
-            raise ValueError
-        s.end_command(self.commands)
-        return i + 1
-
-    def _step(self, s: _Level, i: int) -> int:
-        text, ch = self.text, self.text[i]
-        if s.quote == "'" or (s.quote and ch == '"'):
-            if ch == s.quote:
-                s.quote = ""
-            else:
-                s.add(ch)
-            return i + 1
-        if ch == "\\":
-            nxt = text[i + 1 : i + 2]
-            if nxt != "\n":
-                s.add(nxt if not s.quote or nxt in '"\\`$' else ch + nxt)
-            return i + 2
-        if ch == "`" or text.startswith("$(", i):
-            s.add("$")  # the substitution's commands are checked on their own
-            return self.level(i + 1, "`") if ch == "`" else self.level(i + 2, ")")
-        if s.quote:
-            s.add(ch)
-            return i + 1
-        return self._unquoted(s, i)
-
-    def _unquoted(self, s: _Level, i: int) -> int:
-        text, ch = self.text, self.text[i]
-        if ch in "'\"":
-            s.quote = ch
-            s.add("")
-        elif ch == "#" and s.word is None:
-            end = text.find("\n", i)
-            return len(text) if end < 0 else end
-        elif match := _REDIRECTION.match(text, i):
-            if s.word is not None and s.word.isdigit():
-                s.word = None  # a file descriptor
-            s.end_word()
-            s.redirect = True
-            return match.end()
-        elif ch == "(":
-            s.end_command(self.commands)
-            return self.level(i + 1, ")")
-        elif ch in ";&|\n)":
-            s.end_command(self.commands)
-        elif ch in " \t":
-            s.end_word()
-        else:
-            s.add(ch)
-        return i + 1
-
-
-def _commands(text: str) -> list[list[str]]:
-    """The words of each command in *text*, including those of subshells and command substitutions.
-
-    Raises:
-        ValueError: The text cannot be parsed.
-    """
-    lexer = _Lexer(text)
-    lexer.level(0)
-    return lexer.commands
-
-
 class _GitCall(NamedTuple):
-    config: tuple[str, ...]  # the -c settings
+    config: tuple[str, ...]  # the -c settings, and the keys --config-env sets
     sub: str | None
     arguments: tuple[str, ...]  # the subcommand's, or the unparsed rest without one
 
@@ -262,8 +168,12 @@ def _parse_git(words: Sequence[str]) -> _GitCall:
     while i < len(words):
         w = words[i]
         if w in _GIT_GLOBAL_OPTIONS:
-            config += words[i + 1 : i + 2] if w == "-c" else []
+            value = words[i + 1 : i + 2]
+            config += value if w == "-c" else [v.partition("=")[0] + "=" for v in value] if w == "--config-env" else []
             i += 2
+        elif w.startswith("--config-env="):
+            config.append(w.removeprefix("--config-env=").partition("=")[0] + "=")  # its value is unknown here
+            i += 1
         elif w in _GIT_GLOBAL_FLAGS or ("=" in w and w.partition("=")[0] in _GIT_GLOBAL_ATTACHED):
             i += 1
         else:
@@ -275,12 +185,30 @@ def _parse_git(words: Sequence[str]) -> _GitCall:
 
 
 def _disables(setting: str) -> bool:
-    """Whether a git -c setting replaces the hooks or turns commit or tag signing off."""
+    """Whether a git setting replaces the hooks or turns commit or tag signing off; a bare key's value is unknown."""
     key, eq, value = setting.partition("=")
     key = key.lower()
     return key == "core.hookspath" or (
         key in {"commit.gpgsign", "tag.gpgsign"} and bool(eq) and value.lower() in _GIT_FALSE
     )
+
+
+def _config_write(arguments: Sequence[str]) -> str | None:
+    """The setting a git config command writes when it replaces the hooks or turns signing off."""
+    if any(a in _CONFIG_READS for a in arguments):
+        return None
+    plain: list[str] = []
+    i = 0
+    while i < len(arguments):
+        w = arguments[i]
+        i += 2 if w in _CONFIG_VALUES else 1
+        if not w.startswith("-") and w not in _CONFIG_VALUES:
+            plain.append(w)
+    if plain[:1] == ["set"]:
+        plain = plain[1:]
+    if len(plain) >= 2 and _disables(f"{plain[0]}={plain[1]}"):  # noqa: PLR2004 - a key and its value
+        return f"{plain[0]} {plain[1]}"
+    return None
 
 
 def _short(cluster: str, required: str, optional: str) -> tuple[str, bool]:
@@ -304,18 +232,51 @@ def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
         if sub == "push" and w.startswith(("--force", "+")):
             return w
         i += 2 if takes or (name in long_values and not eq) else 1
+    if sub == "push":  # after --, a refspec still forces with a leading +
+        return next((w for w in arguments[i + 1 :] if w.startswith("+")), None)
     return None
+
+
+def _environment(words: Sequence[str]) -> dict[str, str]:
+    """The variables one command sets for what it runs: leading assignments, env's, and export's."""
+    i = next((i for i, w in enumerate(words) if not shell_parse.ASSIGNMENT.match(w)), len(words))
+    found = list(words[:i])
+    if i < len(words) and PurePath(words[i]).name == "env":
+        found += [w for w in words[i + 1 : shell_parse.operand(words, i)] if shell_parse.ASSIGNMENT.match(w)]
+    elif i < len(words) and words[i] == "export":
+        found += [w for w in words[i + 1 :] if shell_parse.ASSIGNMENT.match(w)]
+    return dict(w.partition("=")[::2] for w in found)
+
+
+def _env_setting(words: Sequence[str]) -> str | None:
+    """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
+    env = _environment(words)
+    try:
+        settings = shlex.split(env.get("GIT_CONFIG_PARAMETERS", ""))
+    except ValueError:
+        settings = [env["GIT_CONFIG_PARAMETERS"]]
+    for name, key in env.items():
+        if m := _CONFIG_KEY.fullmatch(name):
+            value = env.get(f"GIT_CONFIG_VALUE_{m[1]}")
+            settings.append(key if value is None else f"{key}={value}")
+    return next((s for s in settings if _disables(s)), None)
 
 
 def _bypass(words: Sequence[str]) -> str | None:
     """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
-    i = next((i for i, w in enumerate(words) if w not in _PREFIX_WORDS and not _ASSIGNMENT.match(w)), len(words))
-    if i == len(words) or PurePath(words[i]).name != "git":
-        return None
-    call = _parse_git(words[i + 1 :])
-    if setting := next((s for s in call.config if _disables(s)), None):
-        return f"-c {setting}"
-    return _sub_bypass(call.sub, call.arguments)
+    if setting := _env_setting(words):
+        return f"environment setting {setting}"
+    for prog in shell_parse.programs(words):
+        if PurePath(prog[0]).name != "git":
+            continue
+        call = _parse_git(prog[1:])
+        if setting := next((s for s in call.config if _disables(s)), None):
+            return f"-c {setting}"
+        if call.sub == "config" and (setting := _config_write(call.arguments)):
+            return f"config {setting}"
+        if found := _sub_bypass(call.sub, call.arguments):
+            return found
+    return None
 
 
 def _is_read_only_branch(arguments: Sequence[str]) -> bool:
@@ -325,15 +286,17 @@ def _is_read_only_branch(arguments: Sequence[str]) -> bool:
 
 
 def _git_mutation(words: Sequence[str]) -> str | None:
-    """How a git command anywhere in one command's words would write."""
-    for i in (i for i, w in enumerate(words) if PurePath(w).name == "git"):
-        call = _parse_git(words[i + 1 :])
+    """How a git command one command's words run would write."""
+    for prog in (p for p in shell_parse.programs(words) if PurePath(p[0]).name == "git"):
+        call = _parse_git(prog[1:])
         if option := next((a for a in call.arguments if a.partition("=")[0] in _GIT_WRITE_OPTIONS), None):
             return f"Git output option {option}"
         if call.sub == "branch" and _is_read_only_branch(call.arguments):
             continue
+        if call.sub == "config" and any(a in _CONFIG_QUERIES for a in call.arguments):
+            continue
         if call.sub not in _READ_ONLY_GIT and (call.sub or call.arguments):
-            return f"Git command '{call.sub or ' '.join(words[i:])}'"
+            return f"Git command '{call.sub or ' '.join(prog)}'"
     return None
 
 
@@ -351,16 +314,32 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
 
 def _shell(policy: Policy, req: Request) -> str | None:
     for text in req.commands or ("",):
-        try:
-            commands = _commands(text)
-        except ValueError:
-            return f"`{text}` cannot be parsed"
-        if not commands:
-            return "the shell request names no command"
-        if flag := next(filter(None, map(_bypass, commands)), None):
-            return f"`{text}` uses {flag}, which skips hooks or signing or forces history"
-        if not policy.write and (found := _mutation(text, commands)):
-            return f"`{text}` uses {found}, which writes in a read-only step"
+        if reason := _check(policy, text):
+            return reason
+    return None
+
+
+def _check(policy: Policy, text: str, depth: int = 0) -> str | None:
+    """Judge one shell text, and each script it hands to a nested shell or eval the same way."""
+    try:
+        commands = shell_parse.commands(text)
+    except ValueError:
+        return f"`{text}` cannot be parsed"
+    if not commands:
+        return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
+    if flag := next(filter(None, map(_bypass, commands)), None):
+        return f"`{text}` uses {flag}, which skips hooks or signing or forces history"
+    if not policy.write and (found := _mutation(text, commands)):
+        return f"`{text}` uses {found}, which writes in a read-only step"
+    return _nested(policy, text, commands, depth)
+
+
+def _nested(policy: Policy, text: str, commands: Sequence[Sequence[str]], depth: int) -> str | None:
+    for script in (s for words in commands for s in shell_parse.scripts(words)):
+        if depth >= shell_parse.NESTING:
+            return f"`{text}` nests scripts more than {shell_parse.NESTING} deep"
+        if reason := _check(policy, script, depth + 1):
+            return reason
     return None
 
 
