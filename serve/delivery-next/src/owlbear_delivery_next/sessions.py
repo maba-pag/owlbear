@@ -52,31 +52,41 @@ def memory(store: Store) -> Path | None:
 
 
 def run(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
-    """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7)."""
+    """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7).
+
+    Either runtime's unknown model stops the Change for the owner (TD-94).
+    """
     if (store.read_profile() or Profile()).runtime == "vscode":
-        return vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
-    done = asyncio.run(sdk_adapter.run(cfg))
+        done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
+    else:
+        done = asyncio.run(sdk_adapter.run(cfg))
     if unread(done):
         raise UsageUnreadError(done)
     return done
 
 
 def unread(done: session_result.Run) -> bool:
-    """Its usage could not be read while its processes are confirmed gone; else the termination stop wins.
+    """Its model is unknown while its processes are confirmed gone; else the termination stop wins.
 
-    A voided read-only run is not: its violation decides the step, its usage is logged as it is.
+    A voided read-only run is not: its violation decides the step, its usage is logged as it is. A known wrong model
+    is not either: it reruns at once (TD-94).
     """
     confirmed = done.termination and done.termination.confirmed
-    return bool(done.usage_unread and confirmed and done.ending != "read-only-write")
+    voided = done.ending == "read-only-write" or done.model_check == "mismatch"
+    return bool(done.usage_unread and confirmed and not voided)
 
 
 def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, fields: dict[str, object]) -> None:
-    """Log one session's step event and add its usage to the Change's spend, which the log may later drop."""
+    """Log one session's step event and add its usage to the Change's spend, which the log may later drop.
+
+    A held run's usage was added when its gate logged it.
+    """
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": done.session_id}
-    step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage}
+    step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage, "model": done.model_check}
     step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None
-    change.spend = change.spend.plus(done.usage, done.session_id)
+    if done.usage.get("error") != "held":
+        change.spend = change.spend.plus(done.usage, done.session_id)
     store.write(lock, change)
     store.log(lock, change.slug, step)
     out(json.dumps(step, default=str))

@@ -26,8 +26,8 @@ from owlbear_delivery_next.processes import Termination, verdict
 from owlbear_delivery_next.results import ENDED, Gate
 from owlbear_delivery_next.sdk_teardown import CALL
 from owlbear_delivery_next.sdk_teardown import call as _call
-from owlbear_delivery_next.sdk_usage import unexpected_models, unread, usage_read
-from owlbear_delivery_next.session_result import Run, note_quota
+from owlbear_delivery_next.sdk_usage import USAGE_PAUSE, unexpected_models, unproven, unread, usage_read
+from owlbear_delivery_next.session_result import PROVEN, Run, note_quota
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -172,7 +172,7 @@ class _Step:
         elif kind in {"session.quota_observation", "session.error"}:
             note_quota(self.run, kind, ev.data)
         elif kind == "session.auto_mode_resolved":
-            self.gate.revoke("wrong model: the runtime resolved auto")
+            self.gate.wrong_model("the runtime resolved auto")
         elif kind == "assistant.message":
             self.model_seen(getattr(ev.data, "model", None), getattr(ev.data, "parent_tool_call_id", None))
         elif kind == "assistant.usage":
@@ -184,7 +184,7 @@ class _Step:
         """A subagent on Auto voids the step (TD-53); any other start is logged only."""
         source, model = getattr(data, "model_selection_source", None), getattr(data, "model", None)
         if model and model.lower() == "auto":
-            self.gate.revoke("wrong model: a subagent ran on auto")
+            self.gate.wrong_model("a subagent ran on auto")
         else:  # logged only; the subagent's own calls and messages decide what it may use
             self.log(event="subagent-start", model=model, source=getattr(source, "value", source))
 
@@ -192,7 +192,7 @@ class _Step:
         """One billed call: Auto voids the step for anyone (TD-53); the main agent's own calls name its model."""
         parent = getattr(data, "parent_tool_call_id", None)
         if getattr(data, "is_auto", None):
-            self.gate.revoke(f"wrong model: a {'subagent ' if parent else ''}call ran on auto")
+            self.gate.wrong_model(f"a {'subagent ' if parent else ''}call ran on auto")
             return
         self.model_seen(getattr(data, "model", None), parent)
 
@@ -215,7 +215,7 @@ class _Step:
     def model_seen(self, model: str | None, parent: str | None) -> None:
         """Void the step when its own agent runs on another model; a subagent may use any named model (TD-53)."""
         if model and parent and model.lower() == "auto":
-            self.gate.revoke("wrong model: a subagent ran on auto")
+            self.gate.wrong_model("a subagent ran on auto")
             return
         if not model or not self.cfg.model or model == self.cfg.model:
             return
@@ -223,7 +223,7 @@ class _Step:
             self.subagent_models.add(model)
             self.log(event="subagent-model", model=model)
         else:
-            self.gate.revoke(f"wrong model: a turn ran on {model}, the step needs {self.cfg.model}")
+            self.gate.wrong_model(f"a turn ran on {model}, the step needs {self.cfg.model}")
 
     def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
         """Overwrite the now line with this tool call, at most once per ``NOW_EVERY`` seconds."""
@@ -439,10 +439,26 @@ async def run(cfg: Session) -> Run:
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     session = st.session
     st.run.usage = await usage_read(session, cfg.model) if session else {}
-    st.run.usage_unread = unread(st.billed, st.run.usage) if st.sending else ""
-    if st.run.usage_unread:
-        st.log(event="usage-unread", reason=st.run.usage_unread)
     if wrong := unexpected_models(st.billed, st.run.usage, cfg.model, st.subagent_models):
-        st.gate.revoke(f"wrong model: the usage names {', '.join(wrong)}, the step needs {cfg.model}")
+        st.gate.wrong_model(f"the usage names {', '.join(wrong)}, the step needs {cfg.model}")
+    await _proven(st, session)
     st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run
+
+
+async def _proven(st: _Step, session: Any) -> None:  # noqa: ANN401 - the SDK session
+    """Settle the model check from the usage alone: verified, mismatch or unknown (TD-94).
+
+    A processed ending needs its own model's tokens to have grown; the usage is read once more before it counts as
+    unknown, since one read may come before the runtime's metrics catch up.
+    """
+    if st.run.model_check == "mismatch" or not st.sending:
+        return
+    st.run.usage_unread = unread(st.billed, st.run.usage)
+    if not st.run.usage_unread and st.run.ending in PROVEN and unproven(st.billed, st.run.usage, st.cfg.model):
+        await asyncio.sleep(USAGE_PAUSE)
+        st.run.usage = await usage_read(session, st.cfg.model)
+        st.run.usage_unread = unread(st.billed, st.run.usage) or unproven(st.billed, st.run.usage, st.cfg.model)
+    st.run.model_check = "unknown" if st.run.usage_unread else "verified"
+    if st.run.usage_unread:
+        st.log(event="usage-unread", reason=st.run.usage_unread)

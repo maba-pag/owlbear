@@ -177,7 +177,7 @@ def test_card_shows_the_last_event_step_time_and_credits():
         "now": "Build 2/2 · called `submit_result` 40 s ago",
         "step_time": "5 min",
         "quiet": False,
-        "credits": {"change": 3.0, "step": 0.75},
+        "credits": {"change": 3.0, "step": 0.75, "unknown": 0},
         "overlaps": [],
     }
 

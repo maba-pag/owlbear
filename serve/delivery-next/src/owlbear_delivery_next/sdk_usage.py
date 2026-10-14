@@ -1,4 +1,4 @@
-"""What one SDK session billed, read at the step's start and end: the input of the model check (TD-32, TD-53, TD-54)."""
+"""What one SDK session billed, read at the step's start and end: the proof of its model (TD-32, TD-53, TD-94)."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
     nano = getattr(m, "total_nano_aiu", None)
     models = {
         name: {
-            "credits": (getattr(mm, "total_nano_aiu", None) or 0) / 1e9,
+            "credits": None if (aiu := getattr(mm, "total_nano_aiu", None)) is None else aiu / 1e9,
             "tokens": mm.usage.input_tokens + mm.usage.output_tokens,
             "input": mm.usage.input_tokens,
             "output": mm.usage.output_tokens,
@@ -63,3 +63,13 @@ def unread(before: dict[str, Any], after: dict[str, Any]) -> str:
     if "error" in after:
         return f"the usage at the step's end could not be read ({after['error']})"
     return ""
+
+
+def unproven(before: dict[str, Any], after: dict[str, Any], model: str | None) -> str:
+    """Why readable usage does not prove the step's model ran: its tokens did not grow (TD-94); empty when they did."""
+    if not model or "error" in before or "error" in after:
+        return ""
+    old, new = (before.get("models") or {}).get(model), (after.get("models") or {}).get(model)
+    if new and (new.get("tokens") or 0) > ((old or {}).get("tokens") or 0):
+        return ""
+    return f"the usage does not show the step's model {model}"

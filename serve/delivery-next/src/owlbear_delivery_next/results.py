@@ -52,6 +52,11 @@ class Gate:
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail[:300]
         self.ended()
 
+    def wrong_model(self, detail: str) -> None:
+        """A turn or call on another model: whatever was submitted is void and the step reruns at once (TD-94)."""
+        self.run.model_check = "mismatch"
+        self.revoke(f"wrong model: {detail}")
+
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
         """The step's tools: its submit tool, a first look if it has one, its helpers, and the three every step has."""

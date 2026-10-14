@@ -925,7 +925,8 @@ def test_a_vscode_session_returns_the_gated_result_and_leaves_no_window_files(wt
     assert a.replies[0]["ok"] is True
     assert a.files_during == [True]
     assert (run.ending, run.head, run.payload.summary) == ("result", HEAD, "Added greet().")
-    assert run.usage == {"credits": None, "models": {MODEL: {"credits": 0.0, "tokens": 120}}, "model_mismatch": False}
+    assert run.usage == {"credits": None, "models": {MODEL: {"credits": None, "tokens": 120}}, "model_mismatch": False}
+    assert (run.model_check, run.usage_unread) == ("verified", "")
     assert (run.termination.confirmed, a.delivered, a.texts()) == (True, [1], ["Build it."])
     assert a.host.config["copilotcli:/s0"] == vscode_adapter.CONFIG
     assert a.host.launched[0][:4] == ["code", "chat", "-m", "agent"]

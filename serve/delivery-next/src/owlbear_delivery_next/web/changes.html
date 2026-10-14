@@ -705,10 +705,19 @@ function spendLines(spend) {
       ? ` (${count(fresh)} in \u00b7 ${count(u.output)} out \u00b7 ${count(u.cache_read)} cache read \u00b7 `
         + `${count(u.cache_write)} cache write)`
       : "";
-    const line = `${model}: ${u.credits.toFixed(2)} credits, ${count(u.tokens)} tokens${split}`;
+    const credits = u.credits_unread ? (u.credits ? `${u.credits.toFixed(2)}+ credits` : "credits unknown")
+      : `${u.credits.toFixed(2)} credits`;
+    const line = `${model}: ${credits}, ${count(u.tokens)} tokens${split}`;
     lines.push(text(line, { size: "xs", color: "contrast-medium" }));
   }
-  return disclosure(`Spent ${spend.credits.toFixed(2)} credits`, ...lines);
+  return disclosure(`Spent ${spentText(spend.credits, (spend.unread || []).length)}`, ...lines);
+}
+
+// Credits a session did not report make the total a lower bound, never a false zero (TD-94).
+function spentText(credits, unknown) {
+  if (!unknown) return `${credits.toFixed(2)} credits`;
+  const sessions = `unknown for ${unknown} session${unknown === 1 ? "" : "s"}`;
+  return credits ? `${credits.toFixed(2)}+ credits (${sessions})` : `credits ${sessions}`;
 }
 
 function ago(iso) {
@@ -938,9 +947,9 @@ function card(c, label, variant) {
   const bits = [];
   if (c.now && label !== "Done") bits.push(split(c.now)[1]);
   if (c.step_time) bits.push(`step ${c.step_time}`);
-  if (c.credits?.change) {
+  if (c.credits?.change || c.credits?.unknown) {
     const step = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
-    bits.push(`${c.credits.change.toFixed(2)} credits${step}`);
+    bits.push(`${spentText(c.credits.change, c.credits.unknown || 0)}${step}`);
   }
   if (c.quiet) bits.push("quiet");
   if (bits.length) node.append(plain("p", bits.join(" \u00b7 "), "meta"));

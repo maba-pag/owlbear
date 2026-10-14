@@ -7,7 +7,16 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from owlbear_delivery_next import design_tools, missing, tools
-from owlbear_delivery_next.failures import QUOTA, READ_ONLY, RO_WORKTREE, UNREAD, cause_key, quota, transient
+from owlbear_delivery_next.failures import (
+    QUOTA,
+    READ_ONLY,
+    RO_WORKTREE,
+    UNREAD,
+    WRONG_MODEL,
+    cause_key,
+    quota,
+    transient,
+)
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 from owlbear_delivery_next.processes import Termination
@@ -26,6 +35,8 @@ type Ending = Literal[
     "read-only-write",
     "read-only-refused",
 ]
+type ModelCheck = Literal["verified", "mismatch", "unknown"]
+PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
 
 
 @dataclass
@@ -48,15 +59,16 @@ class Run:
     invalid: int = 0
     quota: bool = False  # the runtime reported the Copilot quota exhausted
     quota_reset: datetime | None = None  # when it said the quota resets
-    usage_unread: str = ""  # why the model check could not run; such a run is never processed (TD-54)
+    usage_unread: str = ""  # why the usage does not prove the model; such a run is never processed (TD-54, TD-94)
+    model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns at once (TD-94)
 
 
 def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult:
-    """TD-54: the step's result is not accepted; the Change waits until the owner runs the step again.
+    """TD-94: an unknown model stops the Change until the owner runs the step again or accepts its held result.
 
-    TD-56: a held result may instead be accepted while the step, brief version and commit it depends on match.
+    TD-56: a held result may be accepted while the step, brief version and commit it depends on match.
     """
-    text = f"The model check could not run: {run.usage_unread}. The step's result was not accepted"
+    text = f"The step's model is unknown: {run.usage_unread}. The step's result was not accepted"
     text += "; it is held, so you can accept it without the model check." if accept else "."
     retry = Option(id="retry", label="Run this step again", next="retry")
     take = Option(id="accept", label="Accept the held result without the model check", next="accept")
@@ -124,6 +136,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
         return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.POLICY, enclosing, READ_ONLY), reason=run.detail)
     if run.ending == "read-only-refused":  # no session ran
         return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.STATE, enclosing, RO_WORKTREE), reason=run.detail)
+    if run.model_check == "mismatch":  # void whatever it submitted and run again before anything else (TD-94)
+        return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.TOOLING, kind, WRONG_MODEL), reason=run.detail)
     if run.quota and run.ending not in {"result", "ask", "premise", "missing-tool"}:  # the quota ended it
         reason = run.detail or "Copilot quota exhausted"
         return StepResult(

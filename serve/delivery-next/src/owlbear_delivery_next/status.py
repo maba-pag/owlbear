@@ -148,7 +148,7 @@ def card(
         "now": line,
         "step_time": _age(now - since) if since and not c.finished_at else None,
         "quiet": quiet or silent(c, activity, now, tool) is not None,
-        "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2)},
+        "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2), "unknown": len(c.spend.unread)},
         "overlaps": [f"overlaps with {o.other}: {', '.join(o.paths[:5])}" for o in c.overlaps],
     }
 
@@ -193,11 +193,11 @@ def status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
         wake = f", next try at {o.wake_at:%H:%M}" if o.wake_at else ""
         if (o.cause or "").endswith(f":{QUOTA}"):  # never asked about: the quota resets on its own
-            used = f"{c.spend.credits:.2f} credits used"
+            used = f"{c.spend.shown()} used"
             return Status(f"{s} · waiting for Copilot quota to reset{wake} · {used}", None, o.who)
         if failing := _episode(c, now)[0]:
             capacity = (o.cause or "").startswith(f"{ErrorKind.CAPACITY}:")
-            used = f" · {c.spend.credits:.2f} credits used" if capacity else ""
+            used = f" · {c.spend.shown()} used" if capacity else ""
             return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who)
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)

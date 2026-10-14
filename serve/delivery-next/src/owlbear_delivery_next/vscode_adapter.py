@@ -22,7 +22,7 @@ from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import Gate
 from owlbear_delivery_next.sdk_adapter import DEADLINES, role_of
-from owlbear_delivery_next.session_result import Run
+from owlbear_delivery_next.session_result import PROVEN, Run
 from owlbear_delivery_next.step_inbox import Inbox
 from owlbear_delivery_next.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall, launch_code_chat
 from owlbear_delivery_next.vscode_step import Step
@@ -187,7 +187,7 @@ class _Driver:
 def _ending(out: Outcome, gate: Gate) -> None:
     """Close the gate with the runtime's ending; a model mismatch voids any result, else an accepted call stands."""
     if out.end == "wrong-model":
-        gate.revoke(f"wrong model: {out.detail}")
+        gate.wrong_model(out.detail)
     elif out.end == "complete":
         gate.finish("no-result", None, "the turn ended without a result")
     elif out.end == "timeout":
@@ -197,8 +197,18 @@ def _ending(out: Outcome, gate: Gate) -> None:
 
 
 def _usage(out: Outcome, model: str | None) -> dict[str, Any]:
-    models = {name: {"credits": 0.0, "tokens": tokens} for name, tokens in out.tokens.items()}
+    """The window's usage reports: tokens per billed model; it reports no credits, so they stay unknown (TD-94)."""
+    models = {name: {"credits": None, "tokens": tokens} for name, tokens in out.tokens.items()}
     return {"credits": None, "models": models, "model_mismatch": bool(model and models and set(models) != {model})}
+
+
+def _proven(result: Run, out: Outcome, model: str | None) -> None:
+    """Only a usage report naming the step's model proves it; a processed ending without one is unknown (TD-94)."""
+    if result.model_check == "mismatch":
+        return
+    if result.ending in PROVEN and not (model and out.tokens.get(model)):
+        result.usage_unread = f"no usage report of the window named the step's model {model}"
+    result.model_check = "unknown" if result.usage_unread or result.ending not in PROVEN else "verified"
 
 
 def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termination:
@@ -220,6 +230,7 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     if started:
         cfg.journal.delivered()
     result.usage = _usage(out, cfg.model)
+    _proven(result, out, cfg.model)
     result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)
     return result
 
