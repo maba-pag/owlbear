@@ -294,6 +294,9 @@ class Store:
         return resolve(glob, self.read_config())
 
     def _dir(self, slug: str) -> Path:
+        if "." in slug:
+            msg = f"{slug} is not a Change name: it holds a dot"
+            raise StoreError(msg)
         path = self.root / "changes" / slug
         (path / "inbox").mkdir(parents=True, exist_ok=True)
         return path

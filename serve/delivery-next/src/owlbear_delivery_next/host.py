@@ -23,7 +23,7 @@ from owlbear_delivery_next import api, common, failures, loop, processes, setup,
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import before, check, engine, pullback, worktree
+from owlbear_delivery_next.steps import before, check, disposable, engine, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError
 
@@ -223,6 +223,7 @@ class Host:
                     c.stop = c.outcome = None
                 c.blocked = None
                 self._path(slug).unlink(missing_ok=True)
+                disposable.settled(self.store.root / "changes" / slug)
                 step = loop.next_step(c, now)
             if c.env:
                 c = self._environment(lock, c, now)
@@ -251,7 +252,10 @@ class Host:
         return False
 
     def _survivors(self, c: Change, rec: RunnerRecord | None) -> Found | None:
-        """Processes of the last step still present: recorded PIDs, the runner's former group, the worktree."""
+        """Processes of the last step still present: recorded PIDs, the runner's former group, the worktrees.
+
+        The read-only worktree is scanned while its last session's processes are not confirmed gone.
+        """
         since = rec.started_at if rec else c.step.started_at
         pids: dict[int, float | None] = {rec.pid: rec.created} if rec else {}
         for e in self.store.events(c.slug) if since else []:
@@ -259,11 +263,13 @@ class Host:
                 pids |= {int(p): t for p, t in e["pids"].items()}
         found: Found = {p: "" for p, t in pids.items() if self.alive(p, t) is not False}
         found |= self.group(rec.pid) if rec else {}
-        if c.names.worktree and Path(c.names.worktree).exists():
-            try:  # Unreadable processes count only if they may have started with the step.
-                found |= self.scan(Path(c.names.worktree), since or datetime.now(UTC))
-            except WorktreeProcessScanError:
-                return None
+        try:
+            ro = disposable.live(self.store.root / "changes" / c.slug)
+            for root in (Path(c.names.worktree) if c.names.worktree else None, ro):
+                if root and root.exists():  # Unreadable processes count only if they may have started with the step.
+                    found |= self.scan(root, since or datetime.now(UTC))
+        except OSError, WorktreeProcessScanError:
+            return None
         return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
     def _env_action(self, c: Change) -> check.Action | None:

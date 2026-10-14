@@ -212,5 +212,5 @@ def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypat
         checks=(),
     )
     with pytest.raises(sessions.UsageUnreadError) as caught:
-        sessions.review_run(store, Lock("c1"), change, cfg, "plan-challenge")
+        sessions.review_run(store, Lock("c1"), change, clone, lambda _at: cfg, "plan-challenge")
     assert caught.value.worktree is None  # so the gate offers only to run the step again

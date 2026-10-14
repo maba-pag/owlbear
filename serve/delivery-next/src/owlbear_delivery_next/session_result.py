@@ -7,13 +7,24 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from owlbear_delivery_next import design_tools, missing, tools
-from owlbear_delivery_next.failures import QUOTA, UNREAD, cause_key, quota, transient
+from owlbear_delivery_next.failures import QUOTA, READ_ONLY, RO_WORKTREE, UNREAD, cause_key, quota, transient
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import ErrorKind, Exit, Option, Plan, Question, StepKind, Stop, Task, Waiting
 from owlbear_delivery_next.processes import Termination
 
 type Ending = Literal[
-    "result", "ask", "premise", "missing-tool", "invalid", "no-result", "deadline", "missing", "unread", "error"
+    "result",
+    "ask",
+    "premise",
+    "missing-tool",
+    "invalid",
+    "no-result",
+    "deadline",
+    "missing",
+    "unread",
+    "error",
+    "read-only-write",
+    "read-only-refused",
 ]
 
 
@@ -109,6 +120,10 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
         )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     p = run.payload
+    if run.ending == "read-only-write":  # voided whatever it submitted; the quota does not excuse it
+        return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.POLICY, enclosing, READ_ONLY), reason=run.detail)
+    if run.ending == "read-only-refused":  # no session ran
+        return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.STATE, enclosing, RO_WORKTREE), reason=run.detail)
     if run.quota and run.ending not in {"result", "ask", "premise", "missing-tool"}:  # the quota ended it
         reason = run.detail or "Copilot quota exhausted"
         return StepResult(

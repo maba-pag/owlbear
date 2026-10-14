@@ -53,10 +53,13 @@ from owlbear_delivery_next.steps import (
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.models import Change, Step
     from owlbear_delivery_next.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
+READ_ONLY = frozenset({StepKind.PLAN, StepKind.REVIEW})  # their sessions run in the Change's read-only worktree
 TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
 
 
@@ -112,7 +115,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
     others = _planning(store, lock, slug, path) if s.kind == StepKind.PLAN else {}
-    parts = prompts.session(change, profile, path, others)
 
     def delivered() -> None:
         nonlocal change
@@ -127,33 +129,37 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         return change.step.session
 
     role = roles.chosen(store.settings(), s.kind)
-    cfg = sdk_adapter.Session(
-        kind=s.kind,
-        worktree=path,
-        session_id=s.session or "",
-        message=prompts.answer(answer) if resume and answer else parts.message,
-        resume=resume,
-        policy=permissions.Policy(path, write=parts.write),
-        observe=lambda: worktree.observe(path, change.names.target, since),
-        checks=parts.checks,
-        submit=parts.submit,
-        scope=tuple(change.brief.scope),
-        model=role.model,
-        effort=role.effort,
-        context=role.context,
-        fresh=parts.message,
-        previous=_previous(store, slug, s.session) if resume else {},
-        journal=sdk_adapter.Journal(
-            lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
-        ),
-        item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
-        memory=sessions.memory(store),
-        ui=change.brief.ui,
-        helpers=((design_tools.SCAN, partial(design.builder_scan, path)),)
-        if s.kind == StepKind.BUILD and change.brief.ui  # the builder's design detector (slice 7)
-        else (),
-    )
-    run = accepted or _kept(cfg, store)
+
+    def config(at: Path) -> sdk_adapter.Session:
+        parts = prompts.session(change, profile, at, others)
+        return sdk_adapter.Session(
+            kind=s.kind,
+            worktree=at,
+            session_id=s.session or "",
+            message=prompts.answer(answer) if resume and answer else parts.message,
+            resume=resume,
+            policy=permissions.Policy(at, write=parts.write),
+            observe=lambda: worktree.observe(at, change.names.target, since),
+            checks=parts.checks,
+            submit=parts.submit,
+            scope=tuple(change.brief.scope),
+            model=role.model,
+            effort=role.effort,
+            context=role.context,
+            fresh=parts.message,
+            previous=_previous(store, slug, s.session) if resume else {},
+            journal=sdk_adapter.Journal(
+                lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
+            ),
+            item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
+            memory=sessions.memory(store),
+            ui=change.brief.ui,
+            helpers=((design_tools.SCAN, partial(design.builder_scan, at)),)
+            if s.kind == StepKind.BUILD and change.brief.ui  # the builder's design detector (slice 7)
+            else (),
+        )
+
+    run = accepted or _kept(store, lock, change, path, config)
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
@@ -163,29 +169,46 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     sessions.logged(
         store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
     )
-    if s.kind == StepKind.PLAN and result.plan:
-        message = prompts.plan_challenge(change, result.plan, profile, path, others)
-        result = _challenge(store, lock, change, dataclasses.replace(cfg, message=message), result)
+    if s.kind == StepKind.PLAN and (plan := result.plan):
+        result = _challenge(
+            store,
+            lock,
+            change,
+            lambda at: dataclasses.replace(
+                config(at), message=prompts.plan_challenge(change, plan, profile, at, others)
+            ),
+            result,
+        )
         if result.exit == Exit.DONE and result.plan:  # shared paths are shown, never asked about (D7)
             change.overlaps = overlap.found(result.plan, others, overlap.generated(path))
         end = datetime.now(UTC)
     result = overlap.integrated(store, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
-    if answer and session_result.effect_seen(run):
-        change = budgets.effect_observed(change, answer.id, end)
+    change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     store.write(lock, loop.apply(change, result, end))
 
 
-def _kept(cfg: sdk_adapter.Session, store: Store) -> session_result.Run:
-    """The step's own session; an unread one names its worktree so the gate can hold its result (TD-56)."""
-    try:
-        return sessions.run(store, cfg)
-    except UsageUnreadError as exc:
-        exc.worktree = cfg.worktree
-        raise
+def _kept(
+    store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]
+) -> session_result.Run:
+    """The step's own session, a read-only one in the Change's read-only worktree.
+
+    An unread one names the Change worktree, whose HEAD is the commit judged, so the gate can hold its result (TD-56).
+    """
+
+    def own(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
+        try:
+            return [sessions.run(store, cfgs[0])]
+        except UsageUnreadError as exc:
+            exc.worktree = path
+            raise
+
+    if change.step.kind in READ_ONLY:
+        return sessions.isolated(store, lock, change, path, lambda at: [config(at)], own)[0]
+    return own([config(path)])[0]
 
 
 def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:
@@ -245,7 +268,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             given = {"errors": errors, "scans": scans}
             mine = [("visual-review", r) for r in judges.reviews(base, change, head, shots, out, **given)]
             theirs = [("design-review", d) for d in judges.sessions(base, change, head, images, **given)]
-            ran = sessions.judges(store, lock, change, [*mine, *theirs], settings)
+            ran = sessions.judges(store, lock, change, path, lambda _at: [*mine, *theirs], settings)
             reviewed, designed = ran[: len(mine)], ran[len(mine) :]
             stop = next((r for r, _ in ran if r.exit == Exit.STOP), None)  # any judge left running stops the Change
             result = stop or next((r for r, run in reviewed if not isinstance(run.payload, tools.ReviewResult)), None)
@@ -303,11 +326,13 @@ def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
 
 
-def _challenge(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, planned: Result) -> Result:
+def _challenge(
+    store: Store, lock: Lock, change: Change, made: Callable[[Path], sdk_adapter.Session], planned: Result
+) -> Result:
     """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
     if planned.exit != Exit.DONE or planned.plan is None:
         return planned
-    verdict = sessions.reviewer(store, lock, change, cfg, "plan-challenge")
+    verdict = sessions.reviewer(store, lock, change, Path(change.names.worktree), made, "plan-challenge")
     if verdict.exit == Exit.DONE:
         return planned
     if verdict.exit in {Exit.ASK, Exit.STOP} or (verdict.operational and verdict.exit == Exit.BACK):
@@ -322,19 +347,22 @@ def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> No
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
     store.write(lock, change)
-    cfg = sdk_adapter.Session(
-        kind=StepKind.REVIEW,
-        worktree=path,
-        session_id="",
-        message=prompts.brief_challenge(change, path),
-        resume=False,
-        policy=permissions.Policy(path, write=False),
-        observe=lambda: worktree.observe(path, change.names.target),
-        checks=(),
-        journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
-        memory=sessions.memory(store),
-    )
-    change, result = loop.brief_challenge(change, sessions.reviewer(store, lock, change, cfg, "brief-challenge"))
+
+    def made(at: Path) -> sdk_adapter.Session:
+        return sdk_adapter.Session(
+            kind=StepKind.REVIEW,
+            worktree=at,
+            session_id="",
+            message=prompts.brief_challenge(change, at),
+            resume=False,
+            policy=permissions.Policy(at, write=False),
+            observe=lambda: worktree.observe(at, change.names.target),
+            checks=(),
+            journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
+            memory=sessions.memory(store),
+        )
+
+    change, result = loop.brief_challenge(change, sessions.reviewer(store, lock, change, path, made, "brief-challenge"))
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
 
 

@@ -12,9 +12,13 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import loop, roles, sdk_adapter, session_result, tools, vscode_adapter
 from owlbear_delivery_next.models import StepKind
+from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.profile_record import Profile
+from owlbear_delivery_next.steps import disposable
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from owlbear_delivery_next.config import Settings
@@ -58,14 +62,19 @@ def run(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
 
 
 def unread(done: session_result.Run) -> bool:
-    """Its usage could not be read while its processes are confirmed gone; else the termination stop wins."""
-    return bool(done.usage_unread and done.termination and done.termination.confirmed)
+    """Its usage could not be read while its processes are confirmed gone; else the termination stop wins.
+
+    A voided read-only run is not: its violation decides the step, its usage is logged as it is.
+    """
+    confirmed = done.termination and done.termination.confirmed
+    return bool(done.usage_unread and confirmed and done.ending != "read-only-write")
 
 
 def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, fields: dict[str, object]) -> None:
     """Log one session's step event and add its usage to the Change's spend, which the log may later drop."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": done.session_id}
     step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage}
+    step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None
     change.spend = change.spend.plus(done.usage, done.session_id)
     store.write(lock, change)
@@ -73,48 +82,67 @@ def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, f
     out(json.dumps(step, default=str))
 
 
-def reviewer(store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str) -> Result:
-    """One fresh read-only reviewer session over ``cfg.message``; its verdict as a step result."""
-    return review_run(store, lock, change, cfg, label)[0]
+def reviewer(  # noqa: PLR0913, PLR0917 - the session is made in the read-only worktree of the source
+    store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str
+) -> Result:
+    """One fresh read-only reviewer session over the message *made* gives; its verdict as a step result."""
+    return review_run(store, lock, change, source, made, label)[0]
 
 
-def review_run(  # noqa: PLR0913 - the visual review has its own result schema
-    store: Store, lock: Lock, change: Change, cfg: sdk_adapter.Session, label: str, *, submit: tools.Spec = tools.REVIEW
-) -> tuple[Result, session_result.Run]:
-    """The reviewer session's verdict and its run, whose payload is the submitted review."""
-    return judges(store, lock, change, [(label, dataclasses.replace(cfg, submit=submit))])[0]
-
-
-def judges(
+def review_run(  # noqa: PLR0913, PLR0917 - the visual review has its own result schema
     store: Store,
     lock: Lock,
     change: Change,
-    sessions: list[tuple[str, sdk_adapter.Session]],
+    source: Path,
+    made: Callable[[Path], sdk_adapter.Session],
+    label: str,
+    *,
+    submit: tools.Spec = tools.REVIEW,
+) -> tuple[Result, session_result.Run]:
+    """The reviewer session's verdict and its run, whose payload is the submitted review."""
+    return judges(store, lock, change, source, lambda at: [(label, dataclasses.replace(made(at), submit=submit))])[0]
+
+
+def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
+    store: Store,
+    lock: Lock,
+    change: Change,
+    source: Path,
+    made: Callable[[Path], list[tuple[str, sdk_adapter.Session]]],
     settings: Settings | None = None,
 ) -> list[tuple[Result, session_result.Run]]:
-    """Fresh read-only judges: together on the SDK, one after another in the window, which shares one worktree.
+    """Fresh read-only judges in the read-only worktree of *source*: together on the SDK, in turn in the window.
 
-    *settings* is the round's snapshot, so what is recorded is what ran. A judge left running stops the Change ahead
-    of another's unread usage; otherwise an unread run is gated and nothing is processed (TD-54).
+    *made* builds the judges' sessions in that worktree, which the window resets before each judge. *settings* is the
+    round's snapshot, so what is recorded is what ran. A judge left running stops the Change ahead of another's unread
+    usage; otherwise an unread run is gated and nothing is processed (TD-54).
     """
     settings = settings or store.settings()
-    cfgs = []
-    for label, cfg in sessions:
-        role = roles.chosen(settings, label)
-        session_id, model, effort = f"{lock.slug}-{label}-{uuid.uuid4().hex[:8]}", role.model, role.effort
-        journal = sdk_adapter.Journal(event=cfg.journal.event, now=cfg.journal.now)  # never the judged step's answer
-        cfgs.append(
-            dataclasses.replace(
-                cfg, kind=StepKind.REVIEW, session_id=session_id, resume=False, checks=(), model=model,
-                effort=effort, context=role.context, fresh=cfg.message, previous={}, journal=journal,
-            )
-        )  # fmt: skip
-    if len(cfgs) == 1 or (store.read_profile() or Profile()).runtime == "vscode":
-        runs = [run(store, cfg) for cfg in cfgs]
-    else:
-        runs = asyncio.run(_together(cfgs))
+    labels: list[str] = []
+
+    def fresh(at: Path) -> list[sdk_adapter.Session]:
+        cfgs = []
+        for label, cfg in made(at):
+            role = roles.chosen(settings, label)
+            session_id, model, effort = f"{lock.slug}-{label}-{uuid.uuid4().hex[:8]}", role.model, role.effort
+            journal = sdk_adapter.Journal(event=cfg.journal.event, now=cfg.journal.now)  # never the judged step's
+            labels.append(label)
+            cfgs.append(
+                dataclasses.replace(
+                    cfg, kind=StepKind.REVIEW, session_id=session_id, resume=False, checks=(), model=model,
+                    effort=effort, context=role.context, fresh=cfg.message, previous={}, journal=journal,
+                    worktree=at, policy=Policy(at, write=False),
+                )
+            )  # fmt: skip
+        return cfgs
+
+    def ran(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
+        return [run(store, cfgs[0])] if len(cfgs) == 1 else asyncio.run(_together(cfgs))
+
+    window = (store.read_profile() or Profile()).runtime == "vscode"
+    runs = isolated(store, lock, change, source, fresh, ran, each=window)
     judged = []
-    for (label, _cfg), done in zip(sessions, runs, strict=True):  # state writes one at a time, under the lock
+    for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock
         verdict = session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
         if not unread(done):
             logged(store, lock, change, done, {"kind": label, "exit": verdict.exit})
@@ -123,6 +151,77 @@ def judges(
     if (first := next((r for r in runs if unread(r)), None)) and not left:
         raise UsageUnreadError(first)
     return judged
+
+
+def isolated(  # noqa: PLR0913, PLR0917 - the sessions are made for, and run in, the worktree it prepares
+    store: Store,
+    lock: Lock,
+    change: Change,
+    source: Path,
+    make: Callable[[Path], list[sdk_adapter.Session]],
+    go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]],
+    *,
+    each: bool = False,
+) -> list[session_result.Run]:
+    """Run read-only sessions in the Change's read-only worktree at *source*'s HEAD; refs they change void their runs.
+
+    It stays for the next session, its window with it. When Delivery may not reset it, or its last sessions'
+    processes are not confirmed gone, no session runs: every run is refused. *each* prepares it before each session,
+    else once for them all.
+    """
+    copy = disposable.prepare(source, store, change.slug)
+    if isinstance(copy, str):
+        return _refused(store, lock, change, copy, make(source))
+    cfgs = make(copy.path)
+    runs = _within(store, lock, change, copy, cfgs[:1] if each else cfgs, go)
+    for cfg in cfgs[1:] if each else []:
+        again = disposable.prepare(source, store, change.slug)
+        if isinstance(again, str):
+            runs += _refused(store, lock, change, again, [cfg])
+        else:
+            runs += _within(store, lock, change, again, [cfg], go)
+    return runs
+
+
+def _refused(
+    store: Store, lock: Lock, change: Change, why: str, cfgs: list[sdk_adapter.Session]
+) -> list[session_result.Run]:
+    at = datetime.now(UTC).isoformat(timespec="seconds")
+    store.log(lock, change.slug, {"event": "read-only-refused", "at": at, "why": why})
+    done = Termination(confirmed=True)  # no session started
+    return [session_result.Run(c.session_id, "read-only-refused", detail=why, termination=done) for c in cfgs]
+
+
+def _within(  # noqa: PLR0913, PLR0917 - the sessions run in the prepared copy
+    store: Store,
+    lock: Lock,
+    change: Change,
+    copy: disposable.Copy,
+    cfgs: list[sdk_adapter.Session],
+    go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]],
+) -> list[session_result.Run]:
+    disposable.begin(store.root / "changes" / change.slug, copy.path)
+    try:
+        runs = go(cfgs)
+    except UsageUnreadError as exc:
+        _closed(store, lock, change, copy, [exc.run])
+        if len(cfgs) > 1 or unread(exc.run):
+            raise
+        return [exc.run]  # voided: the violation, not the unread usage, decides the step
+    _closed(store, lock, change, copy, runs)
+    return runs
+
+
+def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run]) -> None:
+    if moved := disposable.changed(copy):
+        reason = f"a read-only step changed the repository: {', '.join(moved)}"
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        ids = [r.session_id for r in runs]
+        store.log(lock, change.slug, {"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})
+        for r in runs:
+            r.ending, r.payload, r.first, r.head, r.detail = "read-only-write", None, None, None, reason
+    if all(r.termination and r.termination.confirmed for r in runs):
+        disposable.settled(store.root / "changes" / change.slug)
 
 
 async def _together(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:

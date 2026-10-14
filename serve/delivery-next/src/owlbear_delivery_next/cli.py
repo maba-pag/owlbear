@@ -119,7 +119,6 @@ def seed(store: Store, a: argparse.Namespace) -> None:
     entries = {f"install:{pkg}": ProfileEntry(state="known", value=cmd, evidence="dev seed") for pkg, cmd in a.install}
     old = store.read_profile() or Profile()
     entries = old.entries | entries
-    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, runtime=old.runtime))
     criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(a.criterion, 1)]
     brief = Brief(version=1, outcome=a.outcome, scope=a.scope, criteria=criteria)
     brief.approved = [brief.model_copy(deep=True)]
@@ -133,6 +132,7 @@ def seed(store: Store, a: argparse.Namespace) -> None:
         step=Step(kind=StepKind.BUILD, task="t1"),
         names=Names(branch=f"owlbear/{a.change}", target=a.target),
     )
+    store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, runtime=old.runtime))
     with store.lock(a.change) as lock:
         store.write(lock, change)
 

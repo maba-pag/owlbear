@@ -17,7 +17,7 @@ from owlbear_delivery_next.git.remote_git import run_remote_git
 from owlbear_delivery_next.github.provider import classify_checks
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import Episode, ErrorKind, Exit, Stop, Waiting
-from owlbear_delivery_next.steps import engine, pullback, worktree
+from owlbear_delivery_next.steps import disposable, engine, pullback, worktree
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -243,6 +243,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
             saved, stopped = _retire(ctx, c, path, inv)
             if stopped is not None:
                 return c, stopped
+    if not kept and (why := disposable.remove(ctx.repo, ctx.store, c.slug)):
+        ctx.log(c.slug, "read-only-kept", why=why)
     if pr and pr.merged and profile.value(ctx.profile, profile.DELETE) == "yes":
         ctx.gh.delete_branch(ctx.repository, c.names.branch)
     line = {"slug": c.slug, "at": ctx.now.isoformat(), "pr": c.names.pr, "merged": bool(pr and pr.merged)}

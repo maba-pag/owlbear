@@ -1,6 +1,7 @@
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -31,7 +32,7 @@ from owlbear_delivery_next.models import (
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity, status
-from owlbear_delivery_next.steps import check, worktree
+from owlbear_delivery_next.steps import check, disposable, worktree
 from owlbear_delivery_next.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -134,6 +135,22 @@ def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):
     assert "777" in store.read("c1").blocked.action
     fake.live.clear()
     assert fake.host.tick(NOW) == ["c1"]
+
+
+def test_a_read_only_worktree_left_unconfirmed_is_scanned_before_its_mark_is_cleared(store, tmp_path):
+    fake, ro, scanned = Fake(store, tmp_path), tmp_path / "c1.ro", []
+    ro.mkdir()
+    fake.host.scan = lambda path, _since: (scanned.append(path), fake.found if path == ro else {})[1]
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    folder = store.root / "changes" / "c1"
+    disposable.begin(folder, ro)
+    fake.found = {4242: "copilot"}
+    assert fake.host.tick(NOW) == []
+    assert (store.read("c1").blocked.action, disposable.live(folder)) == ("End processes 4242", ro)
+    assert scanned == [Path(fake.worktree), ro]
+    fake.found = {}
+    assert fake.host.tick(NOW) == ["c1"]
+    assert disposable.live(folder) is None
 
 
 def test_a_merged_pr_is_observed_before_a_paused_waiting_change_is_skipped(store, tmp_path):

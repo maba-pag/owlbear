@@ -49,7 +49,18 @@ from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, cleanup, conversation, engine, follow, merge, publish, review, worktree
+from owlbear_delivery_next.steps import (
+    check,
+    cleanup,
+    conversation,
+    disposable,
+    engine,
+    follow,
+    merge,
+    publish,
+    review,
+    worktree,
+)
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -1365,6 +1376,19 @@ def test_cleanup_removes_the_worktree_only_after_bundle_and_archive_verify(workt
     with tarfile.open(archive) as tar:
         assert {"changes.diff", "index.txt", "files/a.txt", "files/new.txt", "files/staged.txt"} <= set(tar.getnames())
         assert tar.extractfile("files/new.txt").read() == b"untracked\n"
+
+
+def test_cleanup_removes_the_change_s_read_only_worktree_with_its_own(worktree_with_work, tmp_path):
+    clone, wt = worktree_with_work
+    cx = ctx(tmp_path, FakeGh(pr()), repo=clone)
+    copy = disposable.prepare(wt, cx.store, "c1")
+    (copy.path / "note.txt").write_text("a reviewer's scratch\n")
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.names.pr = "owlbear/c2", None
+    _, result = cleanup.run(cx, c)
+    assert (result.exit, wt.exists(), copy.path.exists()) == (Exit.DONE, False, False)
+    assert str(copy.path) not in git(clone, "worktree", "list")
+    assert not any("note.txt" in p for p in result.preserved)
 
 
 def test_failed_preservation_stops_and_leaves_the_worktree_untouched(worktree_with_work, tmp_path, monkeypatch):

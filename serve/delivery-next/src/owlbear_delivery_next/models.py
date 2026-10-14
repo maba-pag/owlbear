@@ -449,7 +449,7 @@ class Change(Record):
     """The whole durable record of one Change."""
 
     format: int = FORMAT
-    slug: str
+    slug: str = Field(pattern=r"^[^.]+$")  # a dot could name another Change's read-only worktree
     handle: str = ""  # host-issued short handle for chat tools (T2), e.g. c3
     profile_version: int = 0
     intent: Intent = Field(default_factory=Intent)

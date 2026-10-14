@@ -14,7 +14,7 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import ACCEPTED, Gate
 from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.steps import judges
+from owlbear_delivery_next.steps import disposable, judges
 from owlbear_delivery_next.store import Lock, Store
 from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
 
@@ -214,31 +214,31 @@ def test_findings_keep_their_image_and_delivery_marks_what_the_change_introduced
     assert (record.verdict, record.reason) == ("fail", "")  # the new state's P1
 
 
-def test_a_judge_left_running_outranks_another_judges_unread_usage(tmp_path, monkeypatch) -> None:
+def test_a_judge_left_running_outranks_another_judges_unread_usage(tmp_path, change_repo, monkeypatch) -> None:
     store = Store(tmp_path / "store")
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.CHECK))
     store.write(Lock("c1"), change)
     unread = Run("u", ending="result", usage_unread="unread", termination=Termination(confirmed=True))
     left = Run("l", ending="error", termination=Termination(confirmed=False, survivors=(7,)))
+    pair = lambda _at: [("visual-review", session(role="")), ("design-review", session())]  # noqa: E731
 
     async def fake(cfg):
         return unread if cfg.role != "designer" else left
 
     monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
-    ran = sessions.judges(
-        store, Lock("c1"), change, [("visual-review", session(role="")), ("design-review", session())]
-    )
+    ran = sessions.judges(store, Lock("c1"), change, change_repo, pair)
     assert [r.exit for r, _ in ran][1] == Exit.STOP  # returned, so the stop is applied
+    disposable.settled(store.root / "changes" / "c1")  # the host's scan found none left
     monkeypatch.setattr(sessions.sdk_adapter, "run", lambda cfg: fake(cfg) if cfg.role != "designer" else _ok(cfg))
     with pytest.raises(sessions.UsageUnreadError):
-        sessions.judges(store, Lock("c1"), change, [("visual-review", session(role="")), ("design-review", session())])
+        sessions.judges(store, Lock("c1"), change, change_repo, pair)
 
 
 async def _ok(cfg):
     return Run(cfg.session_id, ending="error", termination=Termination(confirmed=True))
 
 
-def test_a_judge_never_runs_the_judged_steps_callbacks(tmp_path, monkeypatch) -> None:
+def test_a_judge_never_runs_the_judged_steps_callbacks(tmp_path, change_repo, monkeypatch) -> None:
     """The plan challenge took the plan step's journal; its delivery swapped the runner's Change, losing its credits."""
     store, touched = Store(tmp_path / "store"), []
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.PLAN))
@@ -250,7 +250,9 @@ def test_a_judge_never_runs_the_judged_steps_callbacks(tmp_path, monkeypatch) ->
         return Run(cfg.session_id, ending="result", usage=usage, termination=Termination(confirmed=True))
 
     monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
-    sessions.reviewer(store, Lock("c1"), change, session(role="", journal=step), "plan-challenge")
+    sessions.reviewer(
+        store, Lock("c1"), change, change_repo, lambda _at: session(role="", journal=step), "plan-challenge"
+    )
     assert touched == []
     assert change.spend.credits == 4.37
 
@@ -264,7 +266,7 @@ def test_a_correctness_finding_or_doubt_names_one_of_its_screenshots() -> None:
     assert tools.check_review(anchored, tree, visual=True) == []
 
 
-def test_every_judge_ends_before_an_error_of_another_goes_on(tmp_path, monkeypatch) -> None:
+def test_every_judge_ends_before_an_error_of_another_goes_on(tmp_path, change_repo, monkeypatch) -> None:
     store, ended = Store(tmp_path / "store"), []
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.CHECK))
 
@@ -278,5 +280,11 @@ def test_every_judge_ends_before_an_error_of_another_goes_on(tmp_path, monkeypat
 
     monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
     with pytest.raises(OSError, match="disk full"):
-        sessions.judges(store, Lock("c1"), change, [("visual-review", session(role="")), ("design-review", session())])
+        sessions.judges(
+            store,
+            Lock("c1"),
+            change,
+            change_repo,
+            lambda _at: [("visual-review", session(role="")), ("design-review", session())],
+        )
     assert len(ended) == 1  # the other judge was not cancelled half-way
