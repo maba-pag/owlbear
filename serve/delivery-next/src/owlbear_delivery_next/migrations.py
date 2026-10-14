@@ -41,8 +41,13 @@ def _challenged(brief: object) -> None:
 
 
 def brief_challenged(data: dict[str, Any]) -> dict[str, Any]:
-    """Change format 1 to 2: the brief review is a challenge (TD-73); the field is renamed in every brief snapshot."""
+    """Change format 1 to 2: the brief review is a challenge (TD-73); the field is renamed in every brief snapshot.
+
+    A format-1 consent may still carry ``queued_at`` from the removed merge queue (340cb6d59); it is dropped.
+    """
     _challenged(data.get("brief"))
+    if isinstance(consent := data.get("consent"), dict):
+        consent.pop("queued_at", None)
     return data
 
 

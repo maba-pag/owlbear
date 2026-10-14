@@ -11,7 +11,7 @@ from owlbear_delivery_next import loop, migrations, status
 from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import FORMAT, Brief, Change, Exit, Question, Step, StepKind
+from owlbear_delivery_next.models import FORMAT, Brief, Change, Exit, MergeConsent, Question, Step, StepKind
 from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
 
@@ -133,6 +133,15 @@ def test_a_stored_brief_review_becomes_its_challenge(store):
     path.write_text(json.dumps(old))
     brief = store.read("c1").brief
     assert (brief.challenged, brief.approved) == (2, [approved])
+
+
+def test_a_format_1_consent_drops_the_merge_queue_field(store):
+    save(store, Change(slug="c1", consent=MergeConsent(head="a" * 40, at=datetime(2026, 10, 10, tzinfo=UTC))))
+    path = store.root / "changes" / "c1" / "change.json"
+    old = json.loads(path.read_text())
+    old["format"], old["consent"]["queued_at"] = 1, None
+    path.write_text(json.dumps(old))
+    assert store.read("c1").consent.head == "a" * 40
 
 
 def test_write_keeps_prev_and_restore_brings_it_back(store):
