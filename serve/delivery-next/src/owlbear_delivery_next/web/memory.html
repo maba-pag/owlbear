@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OwlBear Delivery · Memory</title>
+<link rel="stylesheet" href="/assets/pds/index.css">
+<script type="module">
+  import { load } from "/assets/pds/load.mjs";
+  load();
+</script>
+<style>
+  :not(:defined) { visibility: hidden; }
+  .no-pds :not(:defined) { visibility: visible; }
+  [hidden], main > p-text:empty { display: none !important; }
+  body { background: var(--p-color-canvas); color: var(--p-color-primary); }
+  main {
+    display: grid; gap: var(--p-spacing-fluid-md); max-width: 72rem; margin: 0 auto;
+    padding: var(--p-spacing-fluid-lg) var(--p-spacing-fluid-md);
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--p-spacing-static-md);
+  }
+  .row { display: flex; flex-wrap: wrap; align-items: end; gap: var(--p-spacing-static-sm); }
+  #filters > * { flex: 1 1 12rem; }
+  .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .entry {
+    display: grid; gap: var(--p-spacing-static-sm); padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+    background: var(--p-color-surface); border-radius: var(--p-radius-lg);
+  }
+  .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  .said { white-space: pre-wrap; }
+  .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
+  fieldset { margin: 0; padding: 0; border: 0; }
+  fieldset .row { align-items: center; }
+  textarea, input, select { font: inherit; }
+  .no-pds body { font-family: system-ui, sans-serif; }
+  .no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
+  .no-pds p-tag { font-weight: 600; }
+  .no-pds p-inline-notification { padding: var(--p-spacing-static-sm); border-inline-start: 4px solid; }
+  .no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>Memory</h1></p-heading>
+  <p-text id="shown" size="sm" color="contrast-medium" aria-live="polite"></p-text>
+</header>
+<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
+  uses plain controls. Reload to try again.</p>
+<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
+<p-inline-notification id="unavailable" state="info" heading="No shared repository" heading-tag="h2"
+  dismiss-button="false" hidden></p-inline-notification>
+<p-text id="status" role="status" aria-live="polite"></p-text>
+<p-text id="where" size="xs" color="contrast-medium"></p-text>
+<section id="filters" class="row" aria-label="Filters" hidden></section>
+<ul id="entries" class="entries" aria-label="Memory entries"></ul>
+</main>
+<script>
+"use strict";
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get("token")) {
+  sessionStorage.setItem("token", hash.get("token"));
+  history.replaceState(null, "", location.pathname);
+}
+const token = sessionStorage.getItem("token");
+const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved", "deleted"];  // needs you first
+const TAGS = { contested: "error", disputed: "error", stale: "warning", curated: "info", pending: "secondary",
+  approved: "success", deleted: "secondary" };
+const ACTIVE = "active", ANY = "any";
+let pds = false, loaded = null, editing = null;
+const filter = { state: ACTIVE, category: ANY, agent: ANY };
+
+function el(tag, text, attrs = {}) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function text(value, attrs = {}) {
+  return el("p-text", value, attrs);
+}
+
+function heading(level, title, size) {
+  const node = el("p-heading", undefined, { size });
+  node.append(el(`h${level}`, title));
+  return node;
+}
+
+function row(...children) {
+  const node = el("div", undefined, { class: "row" });
+  node.append(...children);
+  return node;
+}
+
+function say(message) {
+  document.getElementById("status").textContent = message;
+}
+
+function notify(message = "") {
+  const error = document.getElementById("error");
+  error.textContent = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
+  error.hidden = !message;
+}
+
+async function call(path, body = undefined) {
+  if (!token) throw new Error("Open the URL the host printed, including #token=…");
+  // an action commits and pushes the shared repository, which can take a network round trip
+  const init = { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(body ? 60000 : 5000) };
+  if (body) {
+    init.body = JSON.stringify(body);
+    init.headers["Content-Type"] = "application/json";
+  }
+  let response;
+  try {
+    response = await fetch(`/api/next${path}`, init);
+  } catch {
+    throw new Error("Delivery is not running. Start it, then reload this page.");
+  }
+  if (response.status === 401) {
+    throw new Error("Delivery restarted at a new address. Open the link from chat or owlbear-next status.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data === null) {
+    const detail = data?.detail;
+    const said = Array.isArray(detail) ? detail.map((e) => `${(e.loc ?? []).slice(1).join(".")}: ${e.msg}`).join("; ")
+      : detail;
+    throw new Error(said || `Delivery answered ${response.status} ${response.statusText}`);
+  }
+  return data;
+}
+
+function button(label, onclick, attrs = {}) {
+  const node = pds
+    ? el("p-button", label, { type: "button", compact: "true", ...attrs })
+    : el("button", label, { type: "button" });
+  node.onclick = onclick;
+  return node;
+}
+
+function waiting(node, on) {
+  if (pds) node.loading = on;
+  else node.disabled = on;
+}
+
+function select(label, options, value) {
+  if (pds) {
+    const node = el("p-select", undefined, { label });
+    for (const [v, said] of options) node.append(el("p-select-option", said, { value: v }));
+    node.value = value;
+    return [node, () => node.value];
+  }
+  const node = el("label", label, { class: "field" }), box = el("select");
+  for (const [v, said] of options) box.append(el("option", said, { value: v }));
+  box.value = value;
+  node.append(box);
+  return [node, () => box.value];
+}
+
+function entry(label, value, multiline, max) {
+  if (pds) {
+    const node = el(multiline ? "p-textarea" : "p-input-text", undefined,
+      { label, maxlength: `${max}`, ...(multiline ? { rows: "5", counter: "true" } : {}) });
+    node.value = value;
+    return [node, () => (node.value || "").trim()];
+  }
+  const node = el("label", label, { class: "field" });
+  const box = el(multiline ? "textarea" : "input", undefined, {
+    maxlength: `${max}`, ...(multiline ? { rows: "5" } : {}),
+  });
+  box.value = value;
+  node.append(box);
+  return [node, () => box.value.trim()];
+}
+
+function tick(label, checked) {
+  if (pds) {
+    const node = el("p-checkbox", undefined, { label, ...(checked ? { checked: "true" } : {}) });
+    return [node, () => node.checked === true];
+  }
+  const node = el("label"), box = el("input", undefined, { type: "checkbox" });
+  box.checked = checked;
+  node.append(box, ` ${label}`);
+  return [node, () => box.checked];
+}
+
+function confirmed(title, body, yes) {
+  if (!pds) return Promise.resolve(window.confirm([title, ...body.map((n) => n.textContent)].join("\n\n")));
+  return new Promise((resolve) => {
+    const modal = el("p-modal"), head = heading(2, title, "lg"), footer = row();
+    let answered = false;
+    const done = (answer) => {
+      if (answered) return;
+      answered = true;
+      modal.open = false;
+      setTimeout(() => modal.remove(), 1000);
+      resolve(answer);
+    };
+    head.slot = "header";
+    footer.slot = "footer";
+    footer.append(button(yes, () => done(true)), button("Cancel", () => done(false), { variant: "secondary" }));
+    modal.append(head, ...body, footer);
+    modal.addEventListener("dismiss", () => done(false));
+    document.body.append(modal);
+    modal.open = true;
+  });
+}
+
+function age(iso) {
+  const minutes = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60 * 48) return `${Math.round(minutes / 60)} h ago`;
+  return `${Math.round(minutes / 1440)} d ago`;
+}
+
+async function act(trigger, m, action, body = {}) {
+  waiting(trigger, true);
+  try {
+    const r = await call(`/memory/${encodeURIComponent(m.id)}/${action}`, { updated_at: m.updated_at, ...body });
+    notify();
+    editing = null;
+    const done = { approve: "Approved", resolve: "Resolved", edit: "Saved", delete: "Deleted" }[action];
+    say(`${done} "${r.entry.title}".${r.notice ? ` ${r.notice}` : ""}`);
+    await refresh();
+  } catch (e) {
+    notify(e.message);
+    waiting(trigger, false);
+  }
+}
+
+async function remove(trigger, m) {
+  const sure = await confirmed("Delete this memory?", [text(m.title, { weight: "semibold" }),
+    text(m.state === "pending" ? "It was never reviewed, so its file is removed."
+      : "It stays in the folder as deleted, so its history is kept, and agents no longer recall it.")], "Delete");
+  if (sure) act(trigger, m, "delete");
+}
+
+function editor(m) {
+  const [title, titleOf] = entry("Title", m.title, false, 200);
+  const [content, contentOf] = entry("Content", m.content, true, 1024);
+  const box = el("fieldset"), picks = [];
+  box.append(el("legend", "Categories"));
+  const ticks = row();
+  for (const c of loaded.categories) {
+    const [node, on] = tick(c, m.categories.includes(c));
+    picks.push([c, on]);
+    ticks.append(node);
+  }
+  box.append(ticks);
+  const save = button("Save", () => {
+    const categories = picks.filter(([, on]) => on()).map(([c]) => c);
+    if (!titleOf()) return notify("Give the memory a title.");
+    if (!categories.length) return notify("Choose at least one category.");
+    act(save, m, "edit", { title: titleOf(), content: contentOf(), categories });
+  }, { icon: "check" });
+  const cancel = button("Cancel", () => { editing = null; render(); }, { variant: "secondary" });
+  return [title, content, box, row(save, cancel)];
+}
+
+function card(m) {
+  const node = el("li", undefined, { class: "entry" }), title = el("div", undefined, { class: "title" });
+  title.append(text(m.title, { weight: "semibold" }), el("p-tag", m.state, { variant: TAGS[m.state], compact: "true" }),
+    ...m.categories.map((c) => el("p-tag", c, { compact: "true" })));
+  const scope = m.scope_agents.length ? m.scope_agents.map((a) => (a === "*" ? "all agents" : a)).join(", ")
+    : "no agent yet";
+  const meta = `From ${m.source_agent} · for ${scope} · confidence ${m.confidence} · updated ${age(m.updated_at)}`;
+  node.append(title, text(meta, { size: "xs", color: "contrast-medium" }));
+  if (editing === m.id) {
+    node.append(...editor(m));
+    return node;
+  }
+  node.append(text(m.content, { class: "said", size: "sm" }));
+  const actions = row();
+  if (m.state === "curated") {
+    const approve = button("Approve", () => act(approve, m, "approve"), { icon: "check" });
+    actions.append(approve);
+  }
+  if (["contested", "disputed", "stale"].includes(m.state)) {
+    const resolve = button("Resolve", () => act(resolve, m, "resolve"), { icon: "check" });
+    actions.append(resolve);
+  }
+  if (m.state !== "deleted") {
+    const del = button("Delete", () => remove(del, m), { variant: "secondary", icon: "delete",
+      aria: "{ 'aria-haspopup': 'dialog' }" });
+    actions.append(button("Edit", () => { editing = m.id; render(); }, { variant: "secondary", icon: "edit" }), del);
+  }
+  if (actions.children.length) node.append(actions);
+  return node;
+}
+
+function matches(m) {
+  const state = filter.state === ANY || (filter.state === ACTIVE ? m.state !== "deleted" : m.state === filter.state);
+  const category = filter.category === ANY || m.categories.includes(filter.category);
+  const agent = filter.agent === ANY || m.scope_agents.includes("*") || m.scope_agents.includes(filter.agent);
+  return state && category && agent;
+}
+
+function render() {
+  const all = loaded.entries;
+  const shown = all.filter(matches).sort((a, b) => ORDER.indexOf(a.state) - ORDER.indexOf(b.state)
+    || b.updated_at.localeCompare(a.updated_at));
+  const cards = shown.map(card);
+  if (!cards.length) {
+    const none = el("li");
+    none.append(text(all.length ? "No memory matches these filters." : "Agents have not remembered anything yet.",
+      { color: "contrast-medium" }));
+    cards.push(none);
+  }
+  document.getElementById("entries").replaceChildren(...cards);
+  document.getElementById("shown").textContent = `${shown.length} of ${all.length} shown`;
+}
+
+function filters() {
+  const agents = [...new Set(loaded.entries.flatMap((m) => m.scope_agents).filter((a) => a !== "*"))].sort();
+  const parts = [
+    ["state", "State", [[ACTIVE, "All but deleted"], [ANY, "All"], ...loaded.states.map((s) => [s, s])]],
+    ["category", "Category", [[ANY, "Any"], ...loaded.categories.map((c) => [c, c])]],
+    ["agent", "Agent", [[ANY, "Any"], ...agents.map((a) => [a, a])]],
+  ];
+  const nodes = parts.map(([key, label, options]) => {
+    if (!options.some(([v]) => v === filter[key])) filter[key] = ANY;
+    const [node, value] = select(label, options, filter[key]);
+    node.addEventListener("change", () => { filter[key] = value(); render(); });
+    return node;
+  });
+  const box = document.getElementById("filters");
+  box.replaceChildren(...nodes);
+  box.hidden = false;
+}
+
+async function refresh() {
+  try {
+    loaded = await call("/memory");
+  } catch (e) {
+    return notify(e.message);
+  }
+  const unavailable = document.getElementById("unavailable");
+  unavailable.textContent = loaded.available ? "" : `${loaded.reason}.`;
+  unavailable.hidden = loaded.available;
+  if (!loaded.available) {
+    document.getElementById("entries").replaceChildren();
+    document.getElementById("filters").hidden = true;
+    return;
+  }
+  const errors = loaded.parse_errors ? ` ${loaded.parse_errors} file(s) could not be read.` : "";
+  document.getElementById("where").textContent = `From ${loaded.folder}.${errors}`;
+  filters();
+  render();
+}
+
+async function start() {
+  // The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
+  const ready = customElements.whenDefined("p-button").then(() => true);
+  pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
+  if (!pds) {
+    document.documentElement.classList.add("no-pds");
+    document.getElementById("offline").hidden = false;
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !editing) refresh(); });
+  refresh();
+}
+
+start();
+</script>
+</body>
+</html>

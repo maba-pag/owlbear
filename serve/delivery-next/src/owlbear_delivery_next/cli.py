@@ -9,6 +9,7 @@ from pathlib import Path
 from subprocess import CalledProcessError
 
 from owlbear_delivery_next import common, design_pack, host, pack_replay, pack_update, profile, roles, setup
+from owlbear_delivery_next.backlog import Backlog, BacklogError
 from owlbear_delivery_next.config import Agent, Layer
 from owlbear_delivery_next.detector import DetectorError
 from owlbear_delivery_next.inbox import AnswerItem
@@ -177,6 +178,29 @@ def show_profile(
     return "\n".join([*lines, roles.table(store.settings()), f"Runtime: {prof.runtime}"])
 
 
+def add_backlog(store: Store, a: argparse.Namespace) -> int:
+    """Add a finding to the project's backlog (TD-84), or count up the entry it repeats; print which."""
+    try:
+        entry, new, notice = Backlog.of(store).add(a.title, a.text, a.source, a.evidence)
+    except (BacklogError, common.CommonError) as exc:
+        sys.stdout.write(f"not added: {exc}\n")
+        return 1
+    said = f"added {entry.id}: {entry.title}" if new else f"seen again {entry.id}: {entry.title} ({entry.count} times)"
+    sys.stdout.write(said + (f"\nNotice: {notice}" if notice else "") + "\n")
+    return 0
+
+
+def report(store: Store, a: argparse.Namespace) -> int:
+    """Run ``backlog add``, or print every Change's status or the detected profile."""
+    if a.command == "backlog":
+        return add_backlog(store, a)
+    if a.command == "status":
+        sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
+    else:
+        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
+    return 0
+
+
 def _overridden(layer: Layer, overrides: list[tuple[Role, RoleModel]]) -> Layer:
     """Set model and effort per role; the agent's other settings stay."""
     agents = dict(layer.agents)
@@ -192,7 +216,7 @@ def _role(text: str) -> tuple[Role, RoleModel]:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
-def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one parser and one branch per command
+def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser and one branch per command
     """Run one command."""
     parser = argparse.ArgumentParser(prog="owlbear-next")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
@@ -241,6 +265,14 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     pack.add_argument("--to", metavar="TAG", help="the candidate tag --diff compares with")
     pack.add_argument("--golden", action="store_true", help="run the engine and the in-page bundle on the golden pages")
     pack.add_argument("--replay", action="store_true", help="rerun the design judge on decided rounds (costs requests)")
+    found = sub.add_parser("backlog", help="the improvement backlog (TD-84)").add_subparsers(
+        dest="action", required=True
+    )
+    add = found.add_parser("add", help="add a finding; a repeat counts up its entry")
+    add.add_argument("--title", required=True)
+    add.add_argument("--text", default="")
+    add.add_argument("--source", choices=("owner", "watcher", "assistant", "review", "run"), default="assistant")
+    add.add_argument("--evidence", action="append", default=[], help="a Change, step, session, path or URL")
     a = parser.parse_args(argv)
     if a.command == "design-pack" and bool(a.diff) != bool(a.to):
         parser.error("--diff and --to go together")
@@ -255,12 +287,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0911, PLR0915 - one 
     if a.command == "setup":
         return setup.run(a.repo.resolve(), a.confirm, yes=a.yes, local_files=a.local_files, skill=a.skill)
     store = Store.open(a.repo.resolve())
-    if a.command == "status":
-        sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
-        return 0
-    if a.command == "profile":
-        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
-        return 0
+    if a.command in {"backlog", "status", "profile"}:
+        return report(store, a)
     if a.command == "seed":
         seed(store, a)
     elif a.command == "answer":

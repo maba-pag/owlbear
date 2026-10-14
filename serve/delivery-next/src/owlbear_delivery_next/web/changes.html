@@ -72,6 +72,7 @@
     border-bottom: 1px solid var(--p-color-contrast-lower);
   }
   .no-pds p-tag { font-weight: 600; }
+  .no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
   .no-pds p-inline-notification { padding: var(--p-spacing-static-sm); border-inline-start: 4px solid; }
   .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
   textarea { font: inherit; }
@@ -79,9 +80,9 @@
 </head>
 <body>
 <main>
+<!-- tabs -->
 <header>
   <p-heading size="2xl"><h1>Changes</h1></p-heading>
-  <a href="/config">Settings</a>
 </header>
 <p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
   uses plain controls. Reload to try again.</p>

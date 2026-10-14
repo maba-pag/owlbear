@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    type Ended = Callable[[str, dict[str, str]], dict[str, str]]
+
 KEPT = 16  # ended launches whose state the page can still read
 
 
@@ -32,6 +34,7 @@ class Launch:
     state: Literal["opening", "open", "failed"] = "opening"
     reason: str = ""
     warning: str = ""  # what Delivery could not undo in the owner's settings
+    command: str = ""  # what the owner runs by hand when the launch fails
 
 
 class Launches:
@@ -45,25 +48,32 @@ class Launches:
         self.opening: str | None = None
         self.kept: dict[str, Launch] = {}
 
-    def start(self, work: Callable[[], dict[str, str]]) -> str:
-        """Run ``work`` on its own thread and return the launch id; ``work`` gives the ending state."""
+    def start(self, work: Callable[[], dict[str, str]], command: str = "", done: Ended | None = None) -> str:
+        """Run ``work`` on its own thread and return the launch id; ``work`` gives the ending state.
+
+        ``done`` gets the launch id and that state before the page can read it, and returns the state to keep.
+        """
         with self.lock:
             if self.opening:
                 raise Refused(409, "a shaping chat is already opening")
             if self.clock() - self.ended < self.gap:
                 raise Refused(429, "A new Change chat was just opened; wait a few seconds")
             self.opening = launch = uuid.uuid4().hex[:12]
-            self.kept[launch] = Launch()
+            self.kept[launch] = Launch(command=command)
             while len(self.kept) > KEPT:
                 del self.kept[next(iter(self.kept))]
-        threading.Thread(target=self._run, args=(launch, work), name=f"new-change-{launch}", daemon=True).start()
+        threading.Thread(target=self._run, args=(launch, work, done), name=f"new-change-{launch}", daemon=True).start()
         return launch
 
-    def _run(self, launch: str, work: Callable[[], dict[str, str]]) -> None:
+    def _run(self, launch: str, work: Callable[[], dict[str, str]], done: Ended | None) -> None:
         try:
             out = work()
         except Exception as exc:  # noqa: BLE001 - the page must learn how its launch ended
             out = {"state": "failed", "reason": f"{type(exc).__name__}: {exc}"[:300]}
+        try:
+            out = done(launch, out) if done else out
+        except Exception as exc:  # noqa: BLE001 - a failed follow-up must not hold the next launch back
+            out = out | {"warning": f"{type(exc).__name__}: {exc}"[:300]}
         with self.lock:
             if (kept := self.kept.get(launch)) is not None:
                 kept.state, kept.reason, kept.warning = out["state"], out.get("reason", ""), out.get("warning", "")

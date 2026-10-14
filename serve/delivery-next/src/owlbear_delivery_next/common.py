@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
 VIEW = "OWLBEAR_COMMON"  # the host's view for its runners: the repository's path, or empty for none
@@ -130,19 +130,25 @@ class Common:
         path.write_text(identity + "\n")
         return True
 
-    def publish(self, path: Path, message: str, until: float | None = None) -> str:
-        """Commit ``path`` alone if it changed and push; what the owner should know when that fails, else nothing.
+    def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
+        """Commit ``paths`` alone if they changed and push; what the owner should know when that fails, else nothing.
 
         The caller holds ``locked``. Unpushed earlier commits are pushed too, so an unchanged save retries them.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
-        rel = path.relative_to(self.root).as_posix()
-        if (added := _git(self.root, "add", "--", rel, until=until)).returncode:
+        rels = [p.relative_to(self.root).as_posix() for p in ([paths] if isinstance(paths, Path) else paths)]
+        rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
+        if not rels:
+            return self._push(until)  # removed before it was ever committed: nothing to commit
+        if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
             return f"saved, but not committed: {added.stderr.strip()[:200]}"
-        staged = _git(self.root, "diff", "--cached", "--quiet", "--", rel, until=until).returncode
-        if staged and (made := _git(self.root, "commit", "-q", "-m", message, "--", rel, until=until)).returncode:
+        staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until).returncode
+        if staged and (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode:
             return f"saved, but not committed: {made.stderr.strip()[:200]}"
         return self._push(until)
+
+    def _tracked(self, rel: str, until: float) -> bool:
+        return _git(self.root, "ls-files", "--error-unmatch", "--", rel, until=until).returncode == 0
 
     def _push(self, until: float) -> str:
         """Push; once rejected, rebase on the remote and push again; a failed rebase is undone, never left half done."""

@@ -327,7 +327,8 @@ class Opening:
     def __init__(self, ending=None):
         self.release, self.calls, self.ending = threading.Event(), [], ending or {"state": "open"}
 
-    def __call__(self, repo, role):
+    def __call__(self, repo, role, prompt):
+        assert prompt == api.START_PROMPT
         self.calls.append((repo, role))
         assert self.release.wait(5)
         if isinstance(self.ending, Exception):

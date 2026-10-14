@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import config_routes, evidence, held, loop, profile
+from owlbear_delivery_next import backlog_routes, config_routes, evidence, held, loop, memory_routes, pages, profile
 from owlbear_delivery_next.briefs import save_brief, save_visual
 from owlbear_delivery_next.inbox import (
     AnswerItem,
@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.config import Effective
     from owlbear_delivery_next.host import Host, HostRecord
     from owlbear_delivery_next.inbox import InboxItem
+    from owlbear_delivery_next.launches import Ended
     from owlbear_delivery_next.models import Inputs, VisualResult
     from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
@@ -52,7 +53,6 @@ PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored P
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the delivery skill to shape a brief with me."
-COMMAND = shlex.join(["code", "chat", "-m", "agent", START_PROMPT])  # the manual fallback
 LAUNCH_GAP = 5.0  # seconds after a new-Change launch ends before the next may start
 
 
@@ -121,6 +121,15 @@ def link(rec: HostRecord | None) -> str | None:
     return f"{rec.url}#token={rec.token}" if rec and rec.token else None
 
 
+def fixed_page(html: str) -> Callable[[], HTMLResponse]:
+    """A page handler without parameters, so no request can change what it serves."""
+
+    def page() -> HTMLResponse:
+        return HTMLResponse(html)
+
+    return page
+
+
 def snapshot(inputs: Inputs, person: PersonCheck) -> str:
     """Opaque fingerprint of one check's inputs and shown instructions; a relaunch leaves it unchanged."""
     shown = inputs.model_dump_json() + person.model_dump_json(include={"steps", "expect"})
@@ -157,10 +166,13 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
 
 
 def new_chat(
-    repo: Path, shaper: Effective, start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat
+    repo: Path,
+    shaper: Effective,
+    prompt: str = START_PROMPT,
+    start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat,
 ) -> dict[str, str]:
     """Open the shaping chat in *repo*'s window on the shaper role (TD-83): its launch's ending state."""
-    out, warning = start(repo, shaper, START_PROMPT)
+    out, warning = start(repo, shaper, prompt)
     if out.end == "started":
         ending = {"state": "open"}
     else:
@@ -174,13 +186,11 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     token: str,
     host: Host,
     *,
-    launch: Callable[[Path, Effective], dict[str, str]] = new_chat,
+    launch: Callable[[Path, Effective, str], dict[str, str]] = new_chat,
     which: Callable[[str], str | None] = shutil.which,
 ) -> FastAPI:
-    """Return the host's app: the Changes and Settings pages without data, and a guarded API under ``/api/next``."""
+    """Return the host's app: its pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
-    web = files("owlbear_delivery_next").joinpath("web")
-    page, settings_page = (web.joinpath(n).read_text(encoding="utf-8") for n in ("changes.html", "config.html"))
     expected = f"Bearer {token}".encode()
     launches = Launches(LAUNCH_GAP, time.monotonic)
 
@@ -218,20 +228,29 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
             out["next"] = f"Approve brief v{out['version']} of {out['change']} in the Changes page: {link(host.record)}"
         return code, out
 
-    @app.get("/", response_class=HTMLResponse)
-    def index() -> str:
-        return page
-
-    @app.get("/config", response_class=HTMLResponse)
-    def settings() -> str:
-        return settings_page
-
     @app.get("/assets/pds/{name}")
     def pds(name: str) -> Response:
         if name not in PDS:
             raise HTTPException(404, "no such asset")
         body = files("owlbear_delivery_next").joinpath("web", "pds", name).read_bytes()
         return Response(body, media_type=PDS[name], headers={"Cache-Control": "max-age=3600"})
+
+    for path, html in pages.pages().items():
+        app.add_api_route(path, fixed_page(html), methods=["GET"], response_class=HTMLResponse)
+
+    def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
+        """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
+        command = shlex.join(["code", "chat", "-m", "agent", prompt])
+        if not which("code"):
+            return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
+        try:
+            shaper = store.settings().agents["shaper"]
+        except StoreError as exc:
+            return {"started": False, "command": command, "reason": f"the settings are unreadable ({exc})"}
+        try:
+            return {"started": True, "launch": launches.start(lambda: launch(host.repo, shaper, prompt), command, done)}
+        except Refused as exc:
+            raise HTTPException(exc.status, exc.text) from exc
 
     router = APIRouter(prefix="/api/next", dependencies=[Depends(auth)])
 
@@ -263,22 +282,13 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:
-        if not which("code"):
-            return {"started": False, "command": COMMAND, "reason": f"`code` is not on PATH; run this in {host.repo}"}
-        try:
-            shaper = store.settings().agents["shaper"]
-        except StoreError as exc:
-            return {"started": False, "command": COMMAND, "reason": f"the settings are unreadable ({exc})"}
-        try:
-            return {"started": True, "launch": launches.start(lambda: launch(host.repo, shaper))}
-        except Refused as exc:
-            raise HTTPException(exc.status, exc.text) from exc
+        return start_chat(START_PROMPT)
 
     @router.get("/new-change/{launch_id}")
     def new_change_state(launch_id: str) -> dict[str, Any]:
         if (state := launches.state(launch_id)) is None:
             raise HTTPException(404, "no such launch")
-        return state | {"command": COMMAND}
+        return state
 
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:
@@ -421,5 +431,7 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
         return put(slug, PullItem(at=datetime.now(UTC)))
 
     router.include_router(config_routes.router(store))
+    router.include_router(backlog_routes.router(store, start_chat))
+    router.include_router(memory_routes.router(store))
     app.include_router(router)
     return app
