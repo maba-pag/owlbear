@@ -17,6 +17,18 @@
   p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
   details.panel > summary { font-size: var(--p-typescale-md); }
   details.panel[open] { gap: var(--p-spacing-static-md); }
+  .scroll { min-width: 0; overflow-x: auto; }
+  .no-pds table { width: 100%; border-collapse: collapse; font-size: var(--p-typescale-sm); }
+  .no-pds caption { text-align: start; font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
+  .no-pds :is(th, td) {
+    padding: var(--p-spacing-static-xs) var(--p-spacing-static-sm); text-align: start; vertical-align: top;
+    border-bottom: 1px solid var(--p-color-contrast-lower);
+  }
+  .no-pds td { min-width: 7rem; }
+  .no-pds td label { display: block; }
+  .no-pds td :is(select, input:not([type="checkbox"])) { min-width: 11rem; }
+  .no-pds td select { max-width: 14rem; }
+  .no-pds p-text[color="error"] { color: var(--p-color-error); }
 </style>
 </head>
 <body>
@@ -25,6 +37,8 @@
 <header>
   <p-heading size="2xl"><h1>Settings</h1></p-heading>
 </header>
+<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
+  uses plain controls. Reload to try again.</p>
 <p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
 <p-text id="status" role="status" aria-live="polite"></p-text>
 <section class="panel" aria-labelledby="scope-title">
@@ -134,7 +148,7 @@ const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const INHERIT = "inherit";  // the effort option that clears the layer's own value
 const SOURCES = { default: "built-in default", global: "global", project: "this project" };
 const LAYERS = { project: "This project", global: "All projects" };
-let loaded = null, rendered = "project", saving = false;
+let pds = false, loaded = null, rendered = "project", saving = false;
 let offered = null;  // the models this machine's Copilot offers, once read; null while reading or unreadable
 // Unsaved edits per layer ("role.field" -> typed value); a save applies them over the newest saved layer.
 const drafts = { project: {}, global: {} };
@@ -214,15 +228,50 @@ function source(key, inUse) {
 }
 
 function cell(...nodes) {
-  const node = el("p-table-cell", undefined, { multiline: "true" });
+  const node = pds ? el("p-table-cell", undefined, { multiline: "true" }) : el("td");
   node.append(...nodes);
   return node;
 }
 
 function row(...cells) {
-  const node = el("p-table-row");
+  const node = el(pds ? "p-table-row" : "tr");
   node.append(...cells);
   return node;
+}
+
+// A table cell's control: its column says what it is, so the label is for assistive technology only.
+function choose(label, options, value, attrs = {}) {
+  const node = pds ? el("p-select", undefined, { label, "hide-label": "true", ...attrs })
+    : el("select", undefined, { "aria-label": label, ...(attrs.disabled ? { disabled: "" } : {}) });
+  for (const [v, said] of options) node.append(el(pds ? "p-select-option" : "option", said, { value: v }));
+  node.value = value;
+  return node;
+}
+
+function typed(label, value, attrs = {}) {
+  const { disabled, ...rest } = attrs;
+  const node = pds ? el("p-input-text", undefined, { label, "hide-label": "true", ...attrs })
+    : el("input", undefined, { type: "text", "aria-label": label, ...rest, ...(disabled ? { disabled: "" } : {}) });
+  node.value = value;
+  return node;
+}
+
+function tick(label, checked, hideLabel = true) {
+  if (pds) {
+    const on = checked ? { checked: "true" } : {};
+    return el("p-checkbox", undefined, { label, "hide-label": `${hideLabel}`, disabled: "true", ...on });
+  }
+  const box = el("input", undefined, { type: "checkbox", disabled: "", ...(hideLabel ? { "aria-label": label } : {}) });
+  box.checked = checked;
+  if (hideLabel) return box;
+  const node = el("label");
+  node.append(box, ` ${label}`);
+  return node;
+}
+
+function pure(label, attrs) {
+  return el(pds ? "p-button-pure" : "button", label, pds ? { type: "button", size: "x-small", icon: "reset", ...attrs }
+    : { type: "button", ...attrs });
 }
 
 function saved(layer, key) {
@@ -236,11 +285,8 @@ function saved(layer, key) {
 function designFailures() {
   const key = "design_failures", below = loaded.inherited[rendered][key];
   const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-  const input = el("p-select", undefined, { label: "When the design judge fails a change", "hide-label": "true" });
-  input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
-  input.append(el("p-select-option", "back: send it back to the build", { value: "back" }));
-  input.append(el("p-select-option", "ask: show it to me first", { value: "ask" }));
-  input.value = value || INHERIT;
+  const input = choose("When the design judge fails a change", [[INHERIT, `inherit (${below})`],
+    ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], value || INHERIT);
   input.dataset.key = key;
   return cell(input, source(key, loaded.settings.design_failures));
 }
@@ -249,8 +295,7 @@ function designFailures() {
 function seed() {
   const value = "seed" in drafts.project ? drafts.project.seed : saved("project", "seed");
   const label = "Seed command that resets this project's test data before screenshots with clicks or typing";
-  const input = el("p-input-text", undefined, { label, "hide-label": "true", placeholder: "none: only static states" });
-  input.value = value;
+  const input = typed(label, value, { placeholder: "none: only static states" });
   input.dataset.key = "seed";
   return cell(input, source("seed", loaded.settings.seed || "none"));
 }
@@ -259,8 +304,7 @@ function widths() {
   const value = "widths" in drafts[rendered] ? drafts[rendered].widths : saved(rendered, "widths");
   const below = loaded.inherited[rendered].widths.join(", ");
   const label = "Screenshot widths in px, comma-separated (1280 to 2400)";
-  const input = el("p-input-text", undefined, { label, "hide-label": "true", placeholder: `inherit (${below})` });
-  input.value = value;
+  const input = typed(label, value, { placeholder: `inherit (${below})` });
   input.dataset.key = "widths";
   return cell(input, source("widths", loaded.settings.widths));
 }
@@ -313,34 +357,37 @@ function contextCell(role) {
   if (model?.long) {
     const up = dearer(model), more = up ? "higher rates per token" : "same rates per token";
     const label = `Context for ${role}`;
-    const input = el("p-segmented-control", undefined, { label, "hide-label": "true", compact: "true", columns: "2" });
-    input.append(
-      el("p-segmented-control-item", tokens(model.context),
-        { value: "default", aria: `{ 'aria-label': '${tokens(model.context)}, default context' }` }),
-      el("p-segmented-control-item", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
-        { value: "long", aria: `{ 'aria-label': '${tokens(model.long.context)}, long context, ${more}' }` }),
-    );
-    input.value = tierOf(role);
+    let input;
+    if (pds) {
+      input = el("p-segmented-control", undefined,
+        { label, "hide-label": "true", compact: "true", columns: "2" });
+      input.append(
+        el("p-segmented-control-item", tokens(model.context),
+          { value: "default", aria: `{ 'aria-label': '${tokens(model.context)}, default context' }` }),
+        el("p-segmented-control-item", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
+          { value: "long", aria: `{ 'aria-label': '${tokens(model.long.context)}, long context, ${more}' }` }),
+      );
+      input.value = tierOf(role);
+    } else {
+      input = choose(label, [["default", `${tokens(model.context)}, default context`],
+        ["long", `${tokens(model.long.context)}, long context, ${more}`]], tierOf(role));
+    }
     input.dataset.key = key;
     parts.push(input);
   } else if (model) {
     const node = el("p-text", `${tokens(model.context)} \u00b7 only tier`, { size: "sm" });
     const wrong = tierMismatch(role);
-    const fix = { type: "button", size: "x-small", icon: "reset", "data-tier": role };
     parts.push(node, ...(wrong ? [el("p-text", wrong, { size: "xs", color: "error" }),
-      el("p-button-pure", "Use the default tier", fix)] : []));
+      pure("Use the default tier", { "data-tier": role })] : []));
   } else {
-    const input = el("p-select", undefined, { label: `Context for ${role}`, "hide-label": "true" });
     const below = loaded.inherited[rendered].agents[role].context;
-    input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }),
-      el("p-select-option", "default", { value: "default" }), el("p-select-option", "long", { value: "long" }));
-    input.value = own || INHERIT;
+    const input = choose(`Context for ${role}`,
+      [[INHERIT, `inherit (${below})`], ["default", "default"], ["long", "long"]], own || INHERIT);
     input.dataset.key = key;
     parts.push(input);
   }
   if (model) {
-    const reset = { type: "button", size: "x-small", icon: "reset", "data-inherit": role };
-    const node = el("p-button-pure", "Use inherited", reset);
+    const node = pure("Use inherited", { "data-inherit": role });
     node.hidden = !own;
     parts.push(node);
   }
@@ -356,7 +403,8 @@ function amount(n) {
 function ratesCell(role) {
   const model = offered?.find((m) => m.id === modelOf(role)), long = tierOf(role) === "long" && model?.long;
   const rates = long ? model.long.rates : model?.rates;
-  const node = el("p-table-cell", undefined, { multiline: "true", "data-cell": `${role}.rates` });
+  const node = cell();
+  node.dataset.cell = `${role}.rates`;
   if (!rates) {
     node.append(el("p-text", "\u2014"), el("p-text", "not known", { size: "xs", color: "contrast-medium" }));
     return node;
@@ -377,8 +425,19 @@ function refreshRow(role, fields) {
 }
 
 function flag(input, wrong) {
-  input.setAttribute("state", wrong ? "error" : "none");
-  input.setAttribute("message", wrong);
+  if (pds) {
+    input.setAttribute("state", wrong ? "error" : "none");
+    input.setAttribute("message", wrong);
+    return;
+  }
+  let said = input.nextElementSibling;
+  if (!said?.classList.contains("message")) {
+    said = el("p-text", "", { size: "xs", color: "error", class: "message", id: `${input.dataset.key}-message` });
+    input.after(said);
+  }
+  said.textContent = wrong;
+  input.setAttribute("aria-invalid", wrong ? "true" : "false");
+  input.setAttribute("aria-describedby", said.id);
 }
 
 function editable(role, field) {
@@ -388,59 +447,46 @@ function editable(role, field) {
   const model = offered?.find((m) => m.id === modelOf(role));
   let input;
   if (field === "effort") {
-    input = el("p-select", undefined, { label, "hide-label": "true" });
-    input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
     const efforts = model ? model.efforts : EFFORTS;
-    for (const e of efforts) {
-      input.append(el("p-select-option", e === model?.default_effort ? `${e} (model default)` : e, { value: e }));
-    }
+    const options = [[INHERIT, `inherit (${below})`],
+      ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
     if (value && !efforts.includes(value)) {
-      input.append(el("p-select-option", `${value} (not offered by ${model?.id ?? "this model"})`, { value }));
+      options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
     }
-    input.value = value || INHERIT;
-    flag(input, mismatch(role));
+    input = choose(label, options, value || INHERIT);
   } else if (offered?.length) {
-    input = el("p-select", undefined, { label, "hide-label": "true", filter: "true" });
-    input.append(el("p-select-option", `inherit (${below})`, { value: INHERIT }));
-    for (const m of offered) {
+    const options = [[INHERIT, `inherit (${below})`], ...offered.map((m) => {
       const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
       const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
-      input.append(el("p-select-option", `${m.name} (${m.id})${sizes}`, { value: m.id }));
-    }
-    if (value && !offered.some((m) => m.id === value)) {
-      input.append(el("p-select-option", `${value} (not offered here)`, { value }));
-    }
-    input.value = value || INHERIT;
+      return [m.id, `${m.name} (${m.id})${sizes}`];
+    })];
+    if (value && !offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
+    input = choose(label, options, value || INHERIT, { filter: "true" });
   } else {
-    input = el("p-input-text", undefined, { label, "hide-label": "true", placeholder: `inherit (${below})` });
-    input.value = value;
+    input = typed(label, value, { placeholder: `inherit (${below})` });
   }
   input.dataset.key = key;
   const efforts = field === "effort" && model && !model.efforts.length
     ? [el("p-text", `${model.id} takes no effort setting`, { size: "xs", color: "contrast-medium" })] : [];
   const node = cell(input, ...efforts, source(`agents.${key}`, loaded.settings.agents[role][field]));
   node.dataset.cell = key;
+  if (field === "effort") flag(input, mismatch(role));  // after cell(): the plain message goes beside the input
   return node;
 }
 
 // A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
 function inactive(label, value, key) {
-  const attrs = { label, "hide-label": "true", disabled: "true" };
   let control;
   if (typeof value === "boolean") {
-    control = el("p-checkbox", undefined, value ? { ...attrs, checked: "true" } : attrs);
+    control = tick(label, value);
   } else if (key.endsWith(".runtime")) {
-    control = el("p-select", undefined, attrs);
-    for (const r of loaded.catalogue.runtimes) control.append(el("p-select-option", r.runtime, { value: r.runtime }));
-    control.value = value;
+    control = choose(label, loaded.catalogue.runtimes.map((r) => [r.runtime, r.runtime]), value, { disabled: "true" });
   } else if (key.endsWith(".categories")) {
-    control = el("div");
-    for (const name of Object.keys(loaded.catalogue.categories)) {
-      const on = value.includes(name) ? { checked: "true" } : {};
-      control.append(el("p-checkbox", undefined, { ...attrs, label: name, "hide-label": "false", ...on }));
-    }
+    control = el("div", undefined, pds ? {} : { role: "group", "aria-label": label });
+    const names = Object.keys(loaded.catalogue.categories);
+    for (const name of names) control.append(tick(name, value.includes(name), false));
   } else {
-    control = el("p-input-text", undefined, { ...attrs, value: shown(value) });
+    control = typed(label, shown(value), { disabled: "true" });
   }
   return cell(control, source(key));
 }
@@ -532,7 +578,9 @@ function render() {
 
 function lock(on) {
   saving = on;
-  document.getElementById("save").loading = on;
+  const button = document.getElementById("save");
+  if (pds) button.loading = on;
+  else button.disabled = on;
   for (const input of document.querySelectorAll("#scope, main [data-key]")) input.disabled = on;
 }
 
@@ -596,18 +644,41 @@ async function save() {
   }
 }
 
+// Without the design system: native tables, layer switch and Save button in place of the page's p-* ones.
+function plain() {
+  for (const old of document.querySelectorAll("p-table")) {
+    const caption = old.getAttribute("caption");  // the box scrolls on a narrow screen, so it takes the keyboard
+    const box = el("div", undefined, { class: "scroll", role: "region", tabindex: "0", "aria-label": caption });
+    const table = el("table"), head = el("tr"), thead = el("thead");
+    for (const h of old.querySelectorAll("p-table-head-cell")) head.append(el("th", h.textContent, { scope: "col" }));
+    thead.append(head);
+    table.append(el("caption", caption), thead,
+      el("tbody", undefined, { id: old.querySelector("p-table-body").id }));
+    if (old.id) box.id = old.id;
+    box.append(table);
+    old.replaceWith(box);
+  }
+  const scope = document.getElementById("scope"), field = el("label", scope.getAttribute("label"), { class: "field" });
+  const layer = el("select", undefined, { id: "scope" });
+  for (const o of scope.querySelectorAll("p-select-option")) {
+    layer.append(el("option", o.textContent, { value: o.getAttribute("value") }));
+  }
+  layer.value = scope.getAttribute("value");
+  field.append(layer);
+  scope.replaceWith(field);
+  document.getElementById("save").replaceWith(el("button", "Save", { id: "save", type: "button" }));
+  document.getElementById("error").setAttribute("role", "alert");
+}
+
 async function start() {
-  // PDS loads from its CDN (TD-39); the controls are read and written only once they are defined.
+  // PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
   const used = ["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"];
   const ready = Promise.all(used.map((t) => customElements.whenDefined(t))).then(() => true);
-  if (!await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 10000, false))])) {
-    const said = document.createElement("p");  // plain: the notification element is a design-system one too
-    said.setAttribute("role", "alert");
-    said.textContent = "The settings need the Porsche Design System, which did not load (no connection to its CDN?). "
-      + "Reload when it is reachable; the settings files are unchanged.";
-    document.querySelector("main").prepend(said);
-    await ready;
-    said.remove();
+  pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
+  if (!pds) {
+    document.documentElement.classList.add("no-pds");
+    document.getElementById("offline").hidden = false;
+    plain();
   }
   for (const type of ["input", "change"]) {
     for (const id of ["agents", "general"]) document.getElementById(id).addEventListener(type, edit);
