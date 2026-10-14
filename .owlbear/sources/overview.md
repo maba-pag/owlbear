@@ -5095,3 +5095,15 @@ No external sources — analysis based entirely on codebase static analysis of `
 | Playwright web server | <https://playwright.dev/docs/test-webserver> | With `reuseExistingServer: false`, refuses an answering URL, then waits for it; no ownership check | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
 | pbakaus/impeccable README (4.5.2) | <https://github.com/pbakaus/impeccable> | Apache-2.0; 24 commands, 59-rule detector CLI without LLM, installer writes project files and a Copilot hook, engine binary download, roll API and opt-out telemetry | [design skill](../research/delivery-next-design-skill.md) | 2026-10-14 |
 | VS Code agent host (installed build) | `out/vs/platform/agentHost/node/agentHostMain.js` | `_handleSubagentStarted`: each subagent gets its own chat, announced on the parent's `task` call as a `subagent` content part | [watcher design](../research/delivery-next-watcher-design.md) | 2026-10-14 |
+
+## Repository Quality Service
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter coding agents | <https://megalinter.io/latest/coding-agents/> | Agent skills; rule disables need human confirmation | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| Trunk ignoring issues | <https://docs.trunk.io/code-quality/linters/ignoring-issues-and-files> | Ignore comments, unused-ignore reports | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| qlty | <https://docs.qlty.sh/> | One CLI for many linters; argues MCP is unnecessary for agents | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| eslint-comments require-description | <https://eslint-community.github.io/eslint-plugin-eslint-comments/rules/require-description.html> | Reason required on disable comments | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| Biome suppressions | <https://biomejs.dev/analyzer/suppressions/> | Suppression syntax with explanation, unused suppressions | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| MCP sampling (latest) | <https://modelcontextprotocol.io/specification/latest/client/sampling> | Sampling deprecated 2026-07-28 (SEP-2577) | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| OWASP LLM prompt injection cheat sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Code comments as injection channel | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
