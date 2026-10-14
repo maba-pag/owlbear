@@ -6,13 +6,15 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import design_tools, tools
+from owlbear_delivery_next import design_tools, lint, tools
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.sdk_adapter import Session
     from owlbear_delivery_next.session_result import Ending, Run
+
+    Checked = tuple[tools.Args | None, list[str], tools.Worktree | None]  # parsed call, its errors, the tree read
 
 ENDED = "The step has already ended. Stop now."
 ACCEPTED = "Accepted. Your step has ended: stop now and start nothing else."
@@ -27,7 +29,9 @@ class Gate:
         """Bind the step's bounds, its run record, its activity log and the wake-up for its waiter."""
         self.cfg, self.run, self.log, self.ended = cfg, run, log, ended
         self.done = False
+        self.lint = lint.Lint(log)
         self._lock = threading.Lock()
+        self._linting = threading.Lock()
 
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> bool:
         """End the step once and close the gate; the first ending is kept. Return whether it had already ended."""
@@ -59,8 +63,9 @@ class Gate:
         """Validate one call; return the text the agent reads and whether it was accepted."""
         if (helper := dict(self.cfg.helpers).get(spec)) is not None:
             return self._help(spec, helper, arguments)
-        with self._lock:
-            text, ok = self._call(spec, arguments)
+        checked = self._checked(spec, arguments)
+        with self._lock:  # an ending that came while the result was linted wins
+            text, ok = self._late(spec) if checked is None or self.done else self._settle(spec, *checked)
         if self.done:
             self.ended()
         return text, ok
@@ -80,19 +85,41 @@ class Gate:
             return "Rejected. Fix each field, then call again:\n" + "\n".join(f"- {e}" for e in errors), False
         return helper(args), True
 
-    def _call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
-        if self.done:  # before any check: a late call never touches the accepted head
-            self.log(event="tool", tool=spec.name, accepted=False, errors=["the step has already ended"])
-            return ENDED, False
+    def _checked(self, spec: tools.Spec, arguments: Any) -> Checked | None:  # noqa: ANN401 - the agent's JSON
+        """Validate under the lock, then lint outside it, so no ending or revocation waits on a linter (TD-87)."""
+        with self._lock:
+            if self.done:  # before any check: a late call never touches the accepted head
+                return None
+            args, errors, tree = self._check(spec, arguments)
+        if tree is not None and not errors and isinstance(args, tools.BuildResult):
+            with self._linting:
+                errors = self.lint.check(self.cfg.worktree, tree.changed)
+        return args, errors, tree
+
+    def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
         args, errors = tools.parse(spec.model, arguments)
-        if args is not None:
-            errors = tools.check_question(args) if isinstance(args, tools.AskQuestion) else []
-            if spec is self.cfg.submit or spec is self.cfg.first_look:
-                errors += self._order(spec) or self._check_result(args)
+        if args is None:
+            return None, errors, None
+        errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
+        if spec is self.cfg.submit or spec is self.cfg.first_look:
+            order = self._order(spec)
+            more, tree = (order, None) if order else self._check_result(args)
+            errors += more
+        return args, errors, tree
+
+    def _late(self, spec: tools.Spec) -> tuple[str, bool]:
+        self.log(event="tool", tool=spec.name, accepted=False, errors=["the step has already ended"])
+        return ENDED, False
+
+    def _settle(
+        self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None
+    ) -> tuple[str, bool]:
+        if tree is not None:
+            self.run.head = None if errors else tree.head
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
         if errors:
-            self.run.invalid += 1
+            self.run.invalid += not all(e.startswith("lint: ") for e in errors)  # lint has its own limit (TD-87)
             if self.run.invalid >= tools.INVALID_LIMIT:
                 self._finish("invalid", None, "; ".join(errors)[:300])
             lines = "\n".join(f"- {e}" for e in errors)
@@ -114,17 +141,14 @@ class Gate:
             return [f"{submit.name}: first submit your own verdict with {first.name}"]
         return []
 
-    def _check_result(self, args: tools.Args) -> list[str]:
+    def _check_result(self, args: tools.Args) -> tuple[list[str], tools.Worktree | None]:
         try:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"]
+            return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"], None
         cfg = self.cfg
         if isinstance(args, design_tools.DesignLook):
-            errors = design_tools.check(args, tree)
-        else:
-            errors = tools.check_result(
-                args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
-            )
-        self.run.head = None if errors else tree.head
-        return errors
+            return design_tools.check(args, tree), tree
+        return tools.check_result(
+            args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
+        ), tree

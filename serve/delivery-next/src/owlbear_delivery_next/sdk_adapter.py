@@ -256,11 +256,18 @@ class _Step:
     async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # off the loop: deadlines hold
         return ToolResult(text_result_for_llm=(await asyncio.to_thread(self.gate.call, spec, inv.arguments))[0])
 
+    async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
+        return await asyncio.to_thread(self._handle, spec, inv)
+
     def tools(self) -> list[Tool]:
         helped = {spec for spec, _ in self.cfg.helpers}  # these answer, and the turn goes on; so does a first look
         made = partial(Tool, skip_permission=True)
+        handlers = {
+            s: self._helped if s in helped else self._submitted if s is self.cfg.submit else self._handle
+            for s in self.gate.specs
+        }
         return [
-            made(s.name, s.description, partial(self._helped if s in helped else self._handle, s), tools.schema(s),
+            made(s.name, s.description, partial(handlers[s], s), tools.schema(s),
                  is_terminal=s not in helped and s is not self.cfg.first_look)
             for s in self.gate.specs
         ]  # fmt: skip

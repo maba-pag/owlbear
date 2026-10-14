@@ -24,7 +24,8 @@ READ_ONLY = "Read files and run any read-only command; nothing you run may write
 FINISH = """\
 1. Implement the task in the worktree, run every check, then `git add` and `git commit` your work.
 2. Call `submit_result` once with the summary, changed_paths and checks; Delivery reads your commit from the
-   worktree HEAD. If it is rejected, fix what each error names and call it again.
+   worktree HEAD and lints the files you changed with the project's linters. If it is rejected, fix what each
+   error names, commit, and call it again.
 
 - If a decision belongs to the owner, call `ask_question` instead of guessing, then stop.
 - If a tool, command or capability you need is missing or keeps failing, call `report_missing_tool` with the
