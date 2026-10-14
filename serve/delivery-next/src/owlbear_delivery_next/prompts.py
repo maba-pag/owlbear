@@ -266,7 +266,12 @@ def visual(
             "",
             "## Judge",
             (
-                "Findings only for a screenshot that does not show what its state expects, or a layout that is "
+                "Check every clause of each state's expectation on its own and name what in the screenshot shows "
+                "it. Hidden attributes, page source and passing tests do not show anything; only what is visible "
+                "counts. A clause the screenshot visibly contradicts or does not show is a finding (verdict fix); "
+                "when the owner's wording leaves unclear what should be visible, use verdict unsure with that "
+                "doubt. Do not invent requirements the expectation does not state. "
+                "Findings also for a layout that is "
                 "broken at that width (overlap, cut-off or unreadable content), or one that misses an owner's "
                 "criterion. Place: the screenshot file name. "
                 "covered_paths: every screenshot file name you looked at. If only the owner can decide whether a "
