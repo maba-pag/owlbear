@@ -26,6 +26,17 @@ def test_every_page_carries_the_same_tab_bar_with_its_own_tab_marked(tmp_path, p
 
 
 @pytest.mark.parametrize("path", [path for path, _ in TABS])
+def test_every_page_takes_the_shared_stylesheet_before_its_own(tmp_path, path):
+    c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
+
+    page = c.get(path).text
+
+    assert "<!-- base -->" not in page
+    shared = page.index("Shared by every host page")
+    assert page.index('href="/assets/pds/index.css"') < shared < page.rindex("<style>")
+
+
+@pytest.mark.parametrize("path", [path for path, _ in TABS])
 def test_a_query_cannot_replace_a_pages_html(tmp_path, path):
     c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
 

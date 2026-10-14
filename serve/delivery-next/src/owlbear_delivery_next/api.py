@@ -317,6 +317,8 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
                 "approved": c.brief.approved_version,
                 "title": c.brief.title,
                 "outcome": c.brief.outcome,
+                "scope": c.brief.scope,
+                "non_goals": c.brief.non_goals,
                 "ui": c.brief.ui,
                 "visual": [s.model_dump() for s in c.brief.visual],
             },

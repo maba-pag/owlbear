@@ -9,26 +9,13 @@
   import { load } from "/assets/pds/load.mjs";
   load();
 </script>
+<!-- base -->
 <style>
-  :not(:defined) { visibility: hidden; }
-  .no-pds :not(:defined) { visibility: visible; }
-  [hidden], main > p-text:empty { display: none !important; }
-  body { background: var(--p-color-canvas); color: var(--p-color-primary); }
-  main {
-    display: grid; gap: var(--p-spacing-fluid-md); max-width: 72rem; margin: 0 auto;
-    padding: var(--p-spacing-fluid-lg) var(--p-spacing-fluid-md);
-  }
-  header {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: var(--p-spacing-static-md);
-  }
-  section { display: grid; gap: var(--p-spacing-static-sm); }
-  .panel {
-    display: grid; gap: var(--p-spacing-static-md); padding: var(--p-spacing-fluid-sm);
-    background: var(--p-color-surface); border-radius: var(--p-radius-lg);
-  }
-  .row { display: flex; flex-wrap: wrap; align-items: end; gap: var(--p-spacing-static-sm); }
-  .grow { flex: 1 1 18rem; }
+  main > p-text:empty { display: none !important; }
+  .row { align-items: end; }
+  #add > * { flex: 1 1 14rem; }
+  #add > :nth-child(2) { flex-grow: 2; }
+  #add > :last-child { flex: 0 0 auto; }
   .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
   .entry {
     display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--p-spacing-static-md);
@@ -39,20 +26,14 @@
   .entry .body, .entry .more { display: grid; gap: var(--p-spacing-static-sm); min-width: 0; }
   .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
   .entry .more { padding-top: var(--p-spacing-static-sm); }
+  .entry .triage { flex-wrap: nowrap; }
+  .entry .triage p-select, .entry .triage label { flex: 0 1 14rem; min-width: 0; }
   .said { white-space: pre-wrap; }
-  details > summary { cursor: pointer; font-size: var(--p-typescale-sm); }
-  details > summary:focus-visible { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }
+  .later > summary { font-size: var(--p-typescale-lg); }
+  .later[open] > summary { margin-bottom: var(--p-spacing-static-sm); }
+  .quiet .entry { background: none; box-shadow: inset 0 0 0 1px var(--p-color-contrast-lower); }
   ul.plain { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
-  ul.plain li { font-size: var(--p-typescale-sm); }
   pre { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
-  .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
-  textarea, input, select { font: inherit; }
-  /* Without the PDS CDN the page keeps working with plain controls. */
-  .no-pds body { font-family: system-ui, sans-serif; }
-  .no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
-  .no-pds p-tag { font-weight: 600; }
-  .no-pds p-inline-notification { padding: var(--p-spacing-static-sm); border-inline-start: 4px solid; }
-  .no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
 </style>
 </head>
 <body>
@@ -60,7 +41,6 @@
 <!-- tabs -->
 <header>
   <p-heading size="2xl"><h1>Backlog</h1></p-heading>
-  <div id="actions" class="row"></div>
 </header>
 <p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
   uses plain controls. Reload to try again.</p>
@@ -69,24 +49,31 @@
 <p-text id="status" role="status" aria-live="polite"></p-text>
 <p-text id="where" size="xs" color="contrast-medium"></p-text>
 <section class="panel" aria-labelledby="add-title">
-  <p-heading size="lg"><h2 id="add-title">Add an idea</h2></p-heading>
+  <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
   <div id="add" class="row"></div>
 </section>
 <section aria-labelledby="inbox-title">
-  <p-heading size="xl"><h2 id="inbox-title">Inbox</h2></p-heading>
-  <p-text size="xs" color="contrast-medium">Untriaged findings: give each a kind to open it, or drop it.</p-text>
+  <div>
+    <p-heading size="xl"><h2 id="inbox-title">Inbox</h2></p-heading>
+    <p-text size="xs" color="contrast-medium">Untriaged findings: give each a kind to open it, or drop it.</p-text>
+  </div>
   <ul id="inbox" class="entries"></ul>
 </section>
 <section aria-labelledby="open-title">
-  <p-heading size="xl"><h2 id="open-title">Open</h2></p-heading>
-  <p-text size="xs" color="contrast-medium">Select entries and press Create Change to shape a Change from them.
-  </p-text>
+  <div>
+    <p-heading size="xl"><h2 id="open-title">Open</h2></p-heading>
+    <p-text size="xs" color="contrast-medium">Tick entries to shape a Change from them.</p-text>
+  </div>
   <ul id="open" class="entries"></ul>
 </section>
-<section aria-labelledby="later-title">
-  <p-heading size="xl"><h2 id="later-title">In a Change, done or dropped</h2></p-heading>
-  <ul id="later" class="entries"></ul>
-</section>
+<details class="later quiet">
+  <summary id="later-title">In a Change, done or dropped</summary>
+  <ul id="later" class="entries" aria-labelledby="later-title"></ul>
+</details>
+<div id="selection" class="bar" role="region" aria-label="Selected entries" hidden>
+  <p-text id="chosen" weight="semibold"></p-text>
+  <div id="actions" class="row"></div>
+</div>
 </main>
 <script>
 "use strict";
@@ -188,23 +175,25 @@ function tick(label, checked) {
   return [node, () => node.checked];
 }
 
-function entry(label, value = "", multiline = false) {
+function entry(label, value = "", multiline = false, rows = "3") {
+  const max = multiline ? "4000" : "200";
   if (pds) {
     const node = el(multiline ? "p-textarea" : "p-input-text", undefined,
-      { label, maxlength: multiline ? "4000" : "200", ...(multiline ? { rows: "3" } : {}) });
+      { label, "max-length": max, ...(multiline ? { rows } : {}) });
     node.value = value;
     return [node, () => (node.value || "").trim(), () => { node.value = ""; }];
   }
   const node = el("label", label, { class: "field" });
-  const box = el(multiline ? "textarea" : "input", undefined, multiline ? { rows: "3" } : { type: "text" });
+  const box = el(multiline ? "textarea" : "input", undefined,
+    { maxlength: max, ...(multiline ? { rows } : { type: "text" }) });
   box.value = value;
   node.append(box);
   return [node, () => box.value.trim(), () => { box.value = ""; }];
 }
 
-function select(label, options, value) {
+function select(label, options, value, attrs = {}) {
   if (pds) {
-    const node = el("p-select", undefined, { label });
+    const node = el("p-select", undefined, { label, ...attrs });
     for (const [v, said] of options) node.append(el("p-select-option", said, { value: v }));
     node.value = value;
     return [node, () => node.value];
@@ -290,10 +279,10 @@ function linkPart(e, byId) {
   return box;
 }
 
-function statusPart(e) {
+function statusPart(e, drop = true) {
   if (e.status === "inbox" || e.status === "open") {
-    return row(button("Mark done", () => patch(e, { status: "done" }), { variant: "secondary", icon: "check" }),
-      button("Drop", () => patch(e, { status: "dropped" }), { variant: "secondary", icon: "close" }));
+    const done = button("Mark done", () => patch(e, { status: "done" }), { variant: "secondary", icon: "check" });
+    return drop ? row(done, dropButton(e)) : row(done);
   }
   const reopen = button("Reopen", () => patch(e, { status: e.kind === "untriaged" ? "inbox" : "open" }),
     { variant: "secondary", icon: "refresh" });
@@ -307,11 +296,22 @@ function statusPart(e) {
   return row(which, reopen);
 }
 
+function dropButton(e) {
+  return button("Drop", () => patch(e, { status: "dropped" }), { variant: "secondary", icon: "close" });
+}
+
+function kindPicker(e, inline = false) {
+  const options = KINDS.map((k) => [k, inline && k === "untriaged" ? "Choose a kind" : k]);
+  const [kind, kindOf] = select("Kind", options, e.kind, inline ? { compact: "true", "hide-label": "true" } : {});
+  kind.addEventListener("change", () => { if (kindOf() !== e.kind) patch(e, { kind: kindOf() }); });
+  return kind;
+}
+
 function details(e, byId) {
   const more = el("details");
   more.open = opened.has(e.id);
   more.addEventListener("toggle", () => (more.open ? opened.add(e.id) : opened.delete(e.id)));
-  const box = el("div", undefined, { class: "more" });
+  const box = el("div", undefined, { class: "more" }), inbox = e.status === "inbox";
   if (e.text) box.append(text(e.text, { class: "said" }));
   if (e.evidence.length) {
     const refs = el("ul", undefined, { class: "plain" });
@@ -322,11 +322,10 @@ function details(e, byId) {
     }
     box.append(text("Evidence", { size: "xs", weight: "semibold" }), refs);
   }
-  const [kind, kindOf] = select("Kind", KINDS.map((k) => [k, k]), e.kind);
-  kind.addEventListener("change", () => { if (kindOf() !== e.kind) patch(e, { kind: kindOf() }); });
   const [notes, notesOf] = entry("Your notes: context for whoever shapes the Change", e.notes, true);
-  box.append(row(kind), notes, row(button("Save notes", () => patch(e, { notes: notesOf() }),
-    { variant: "secondary" })), linkPart(e, byId), statusPart(e));
+  if (!inbox) box.append(row(kindPicker(e)));  // an inbox card shows its kind outside, to triage it at a glance
+  box.append(notes, row(button("Save notes", () => patch(e, { notes: notesOf() }),
+    { variant: "secondary" })), linkPart(e, byId), statusPart(e, !inbox));
   more.append(el("summary", "Details, notes and links"), box);
   return [more, notesOf];
 }
@@ -334,8 +333,10 @@ function details(e, byId) {
 function card(e, byId) {
   const choosable = (e.status === "inbox" || e.status === "open") && !e.opening;
   const node = el("li", undefined, { class: choosable ? "entry" : "entry unselectable" });
+  let box = null;
   if (choosable) {
-    const [box, on] = tick(`Select ${e.title}`, selected.has(e.id));
+    let on;
+    [box, on] = tick(`Select ${e.title}`, selected.has(e.id));
     box.addEventListener("change", () => {
       if (on()) selected.add(e.id);
       else selected.delete(e.id);
@@ -351,9 +352,15 @@ function card(e, byId) {
   const where = e.change ? ` · in Change ${e.change}` : "";
   const [more, notesOf] = details(e, byId);
   body.append(title, text(`From ${SOURCES[e.source] ?? e.source} · ${seen}${where}`,
-    { size: "xs", color: "contrast-medium" }), more);
+    { size: "xs", color: "contrast-medium" }));
+  if (e.status === "inbox" && !e.opening) {
+    const triage = row(kindPicker(e, true), dropButton(e));
+    triage.classList.add("triage");
+    body.append(triage);
+  }
+  body.append(more);
   node.append(body);
-  built.set(e.id, { node, notes: notesOf });
+  built.set(e.id, { node, notes: notesOf, box });
   return node;
 }
 
@@ -376,15 +383,16 @@ function empty(message) {
   return node;
 }
 
+// The selection bar: shown while entries are ticked, so Create Change stays in reach wherever they are.
 function showActions() {
   const chosen = [...selected].filter((id) => loaded.entries.some((e) => e.id === id && !e.opening
     && ["inbox", "open"].includes(e.status)));
-  const label = chosen.length ? `Create Change from ${chosen.length}` : "Create Change";
-  const node = button(label, createChange, {
-    icon: "add", aria: DIALOG, ...(chosen.length ? {} : { disabled: "true" }),
-  });
+  const node = button(`Create Change from ${chosen.length}`, createChange, { icon: "add", aria: DIALOG });
   if (creating) waiting(node, true);
-  document.getElementById("actions").replaceChildren(node);
+  const clear = button("Clear", () => { selected.clear(); refresh(); }, { variant: "secondary" });
+  document.getElementById("actions").replaceChildren(node, clear);
+  document.getElementById("chosen").textContent = `${chosen.length} selected`;
+  document.getElementById("selection").hidden = !chosen.length && !creating;
 }
 
 async function refresh(rebuild = null) {
@@ -405,9 +413,12 @@ async function refresh(rebuild = null) {
     lists[e.status in lists ? e.status : "later"].push(kept(e, rebuild) ?? card(e, byId));
   }
   const none = { inbox: "Nothing new to triage.", open: "No open entries.", later: "Nothing here yet." };
+  const titles = { inbox: "Inbox", open: "Open", later: "In a Change, done or dropped" };
   for (const [id, cards] of Object.entries(lists)) {
     place(document.getElementById(id), cards.length ? cards : [empty(none[id])]);
+    document.getElementById(`${id}-title`).textContent = `${titles[id]} (${cards.length})`;
   }
+  for (const [id, b] of built) if (b.box) b.box.checked = selected.has(id);  // a kept card follows Clear
   if (focused?.isConnected && document.activeElement !== focused) focused.focus();
   const notes = [loaded.shared ? "" : "No shared repository is set up: the backlog stays in this clone and is not "
     + "committed.", loaded.unreadable.length ? `Unreadable backlog files: ${loaded.unreadable.join(", ")}.` : ""];
@@ -485,9 +496,7 @@ async function start() {
     document.getElementById("offline").hidden = false;
   }
   const [title, titleOf, clearTitle] = entry("Title");
-  const [said, saidOf, clearSaid] = entry("What you noticed (optional)", "", true);
-  title.classList.add("grow");
-  said.classList.add("grow");
+  const [said, saidOf, clearSaid] = entry("What you noticed (optional)", "", true, "1");
   const add = button("Add idea", () => addIdea(add, titleOf, saidOf, () => { clearTitle(); clearSaid(); }),
     { icon: "add" });
   document.getElementById("add").append(title, said, add);

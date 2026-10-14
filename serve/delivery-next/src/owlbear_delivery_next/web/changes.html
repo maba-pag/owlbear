@@ -9,39 +9,80 @@
   import { load } from "/assets/pds/load.mjs";
   load();
 </script>
+<!-- base -->
 <style>
-  :not(:defined) { visibility: hidden; }
-  .no-pds :not(:defined) { visibility: visible; }
-  [hidden], main > p-text:empty { display: none !important; }
-  #detail:not(:empty) { display: grid; gap: var(--p-spacing-static-md); }
-  body { background: var(--p-color-canvas); color: var(--p-color-primary); }
-  main {
-    display: grid; gap: var(--p-spacing-fluid-md); max-width: 72rem; margin: 0 auto;
-    padding: var(--p-spacing-fluid-lg) var(--p-spacing-fluid-md);
+  main > p-text:empty { display: none !important; }
+  main { max-width: 90rem; }
+  #board { display: grid; gap: var(--p-spacing-fluid-md); align-items: start; }
+  #list, #detail { display: grid; gap: var(--p-spacing-fluid-sm); align-content: start; min-width: 0; }
+  #board:not(.open) #detail { display: none; }
+  #board:not(.open) .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+  @media (min-width: 64rem) {
+    #board.open { grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr); }
   }
-  header {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: var(--p-spacing-static-md);
+  @media (max-width: 63.99rem) {
+    #board.open #list { display: none; }
   }
-  .panel {
-    display: grid; gap: var(--p-spacing-static-md); padding: var(--p-spacing-fluid-sm);
-    background: var(--p-color-surface); border-radius: var(--p-radius-lg);
+  /* The list: one card per Change, grouped by who acts next. */
+  .group { display: grid; gap: var(--p-spacing-static-sm); }
+  .group > summary { font-size: var(--p-typescale-md); }
+  .cards { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .card {
+    position: relative; display: grid; gap: var(--p-spacing-static-xs); align-content: start;
+    padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+    background: var(--p-color-surface); border-radius: var(--p-radius-lg); box-shadow: inset 0 0 0 1px transparent;
   }
+  .card:hover { box-shadow: inset 0 0 0 1px var(--p-color-contrast-low); }
+  .card.current { box-shadow: inset 0 0 0 2px var(--p-color-primary); }
+  .card:has(.open:focus-visible) { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }
+  .card .top { display: flex; align-items: center; justify-content: space-between; gap: var(--p-spacing-static-sm); }
+  .card .open {
+    min-width: 0; overflow-wrap: anywhere; color: inherit; font-size: var(--p-typescale-sm); font-weight: 600;
+    text-decoration: none;
+  }
+  .card .open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+  .card .open:focus-visible { outline: none; }
+  .says, .next, .meta { margin: 0; overflow-wrap: anywhere; }
+  .says { font-size: var(--p-typescale-sm); }
+  .card .says { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .stage { font-weight: 600; }
+  .next { font-size: var(--p-typescale-sm); font-weight: 600; }
+  .meta { font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
+  .meta.warn { color: var(--p-color-warning); }
+  /* The detail: who acts first, then what Delivery knows. */
+  .detail-head {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--p-spacing-static-sm);
+  }
+  .detail-head .back { grid-column: 1 / -1; justify-self: start; }
+  .detail-head h2 { overflow-wrap: anywhere; }
+  .act { box-shadow: inset 0 0 0 1px var(--p-color-contrast-low); }
+  #changes { display: grid; gap: var(--p-spacing-fluid-sm); }
+  .info { padding-top: var(--p-spacing-static-md); border-top: 1px solid var(--p-color-contrast-lower); }
   .panel > p-button, .panel > p-link-pure, .panel > button, .panel > a { justify-self: start; }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
-  .meta { display: block; margin-top: var(--p-spacing-static-xs); }
+  .brief, .gallery { display: grid; gap: var(--p-spacing-static-sm); }
+  .plan, .log { display: grid; gap: var(--p-spacing-static-xs); padding: 0; list-style: none; }
+  .plan li { display: flex; align-items: baseline; gap: var(--p-spacing-static-sm); }
+  .log li { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--p-spacing-static-sm); }
+  .log time { font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
   .shots {
     display: grid; gap: var(--p-spacing-static-md);
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 34rem), 1fr));
   }
-  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--p-spacing-static-sm); margin: 0; }
-  .pair figcaption { grid-column: 1 / -1; font-size: var(--p-typescale-xs); }
-  .shots img {
-    display: block; width: 100%; height: auto;
-    border: 1px solid var(--p-color-contrast-lower); border-radius: var(--p-radius-md);
+  .pair {
+    display: grid; grid-template-columns: 1fr 1fr; gap: var(--p-spacing-static-xs) var(--p-spacing-static-sm);
+    margin: 0;
+  }
+  .pair figcaption { grid-column: 1 / -1; font-size: var(--p-typescale-xs); font-weight: 600; }
+  .side { display: grid; gap: 2px; align-content: start; font-size: var(--p-typescale-xs); }
+  .shots img, .missing {
+    display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: top center;
+    border: 1px solid var(--p-color-contrast-lower); border-radius: var(--p-radius-md); box-sizing: border-box;
   }
   .zoom { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
-  .zoom:focus-visible { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }
+  .missing {
+    display: grid; place-items: center; padding: var(--p-spacing-static-sm); text-align: center;
+    border-style: dashed; border-color: var(--p-color-contrast-low);
+  }
   dialog.lightbox {
     width: 96vw; max-width: none; max-height: 96vh; padding: var(--p-spacing-static-sm); border: 0;
     border-radius: var(--p-radius-lg); background: var(--p-color-canvas); color: var(--p-color-primary);
@@ -52,30 +93,8 @@
   .lightbox .caption { flex: 1; margin: 0; text-align: center; font-size: var(--p-typescale-sm); }
   .finding { display: grid; gap: var(--p-spacing-static-xs); padding-block: var(--p-spacing-static-xs); }
   .finding + .finding { border-top: 1px solid var(--p-color-contrast-lower); }
-  details > summary { cursor: pointer; font-size: var(--p-typescale-sm); }
-  .missing {
-    display: grid; place-items: center; min-height: 6rem; padding: var(--p-spacing-static-sm);
-    border: 1px dashed var(--p-color-contrast-low); border-radius: var(--p-radius-md);
-  }
-  ul, ol { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
-  li { font-size: var(--p-typescale-sm); }
   .stale { opacity: .45; pointer-events: none; }
-  /* Without the PDS CDN the page keeps working: native controls, and layout for the display elements. */
-  .no-pds body { font-family: system-ui, sans-serif; }
-  .no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
-  .no-pds p-table { display: table; width: 100%; border-collapse: collapse; }
-  .no-pds p-table-head { display: table-header-group; font-weight: 600; }
-  .no-pds p-table-body { display: table-row-group; }
-  .no-pds p-table-head-row, .no-pds p-table-row { display: table-row; }
-  .no-pds p-table-head-cell, .no-pds p-table-cell {
-    display: table-cell; padding: var(--p-spacing-static-sm); vertical-align: top;
-    border-bottom: 1px solid var(--p-color-contrast-lower);
-  }
-  .no-pds p-tag { font-weight: 600; }
-  .no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
-  .no-pds p-inline-notification { padding: var(--p-spacing-static-sm); border-inline-start: 4px solid; }
-  .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
-  textarea { font: inherit; }
+  .no-pds .card .open { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -90,26 +109,26 @@
 <p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
 <p-text id="seen" color="contrast-medium" size="xs"></p-text>
 <section id="notes" class="panel" aria-label="Repository settings" hidden></section>
-<p-table id="list" caption="Changes">
-  <p-table-head><p-table-head-row>
-    <p-table-head-cell>Change</p-table-head-cell>
-    <p-table-head-cell>Status</p-table-head-cell>
-    <p-table-head-cell>Next action</p-table-head-cell>
-  </p-table-head-row></p-table-head>
-  <p-table-body id="changes"></p-table-body>
-</p-table>
-<section id="detail" aria-live="polite"></section>
+<div id="board">
+  <section id="list" aria-label="Changes">
+    <div id="changes"></div>
+  </section>
+  <section id="detail" aria-label="Selected Change"></section>
+</div>
 </main>
 <script>
 "use strict";
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get("token")) {
   sessionStorage.setItem("token", hash.get("token"));
-  history.replaceState(null, "", location.pathname);
+  history.replaceState(null, "", location.pathname + location.search);
 }
 const token = sessionStorage.getItem("token");
-let selected = null, lastSeen = null, busy = false, again = false, pds = false;
+const TITLE = document.title;
+let selected = new URLSearchParams(location.search).get("change"), lastSeen = null, busy = false, again = false;
+let pds = false, arrived = Boolean(selected), doneOpen = false;  // arrived: focus the detail once it shows
 let shown = { slug: null, forms: "" }, draft = false;  // the rendered detail, and whether it holds unsent input
+let refused = null;  // why the host refused the owner's last action; shown until the detail's forms change
 
 class HostDown extends Error {}
 class Restarted extends Error {}
@@ -142,14 +161,31 @@ function el(tag, text, attrs = {}) {
   return node;
 }
 
+function refusal(said) {
+  const node = notice("error", "Not done", said);
+  node.classList.add("refused");
+  return node;
+}
+
+// The refusal goes beside the form that was used, so it is seen where the owner is looking; the poll keeps it.
 function send(path, body, origin = shown) {  // origin: the rendered detail whose form the person used
+  const from = document.activeElement?.closest?.("#detail .act");
   call(`/changes/${origin.slug}${path}`, body).then(() => {
+    refused = null;
     if (shown === origin) {  // a later detail keeps its own draft
       draft = false;
       document.activeElement.blur();
     }
     return refresh();
-  }, failed);
+  }, (e) => {
+    if (e instanceof HostDown || e instanceof Restarted || shown !== origin) return failed(e);
+    refused = { forms: origin.forms, text: e.message };
+    for (const old of document.querySelectorAll("#detail .refused")) old.remove();
+    const node = refusal(e.message);
+    if (from?.isConnected) from.append(node);
+    else document.querySelector("#detail .detail-head")?.after(node);
+    node.scrollIntoView({ block: "nearest" });
+  });
 }
 
 function notify(...nodes) {
@@ -219,12 +255,12 @@ function external(label, href) {
   return pure;
 }
 
-function field(label) {
+function field(label, rows = "2") {
   if (pds) {
-    const node = el("p-textarea", undefined, { label, rows: "2" });
+    const node = el("p-textarea", undefined, { label, rows });
     return [node, () => node.value || ""];
   }
-  const node = el("label", label, { class: "field" }), input = el("textarea", undefined, { rows: "2" });
+  const node = el("label", label, { class: "field" }), input = el("textarea", undefined, { rows });
   node.append(input);
   return [node, () => input.value];
 }
@@ -245,10 +281,32 @@ function choice(label, options) {
   return [node, () => node.querySelector(":checked")?.value ?? null];
 }
 
+// Something the owner acts on: a framed panel; the status line above already says it is his turn.
 function panel(title, ...children) {
-  const box = el("section", undefined, { class: "panel" });
+  const box = el("section", undefined, { class: "panel act" });
   box.append(heading(3, title, "md"), ...children);
   return box;
+}
+
+// What Delivery knows about the Change: a plain section under a rule.
+function info(title, ...children) {
+  const box = el("section", undefined, { class: "info" });
+  box.append(heading(3, title, "md"), ...children);
+  return box;
+}
+
+function notice(state, title, ...lines) {
+  if (!pds) {
+    const box = el("section", undefined, { class: "panel act" });
+    box.append(heading(3, title, "md"), ...lines.map((l) => text(l)));
+    return box;
+  }
+  return el("p-inline-notification", undefined, { state, heading: title, "heading-tag": "h3",
+    description: lines.join(" "), "dismiss-button": "false" });
+}
+
+function plain(tag, value, cls) {
+  return el(tag, value, { class: cls });
 }
 
 function row(...children) {
@@ -390,11 +448,12 @@ function detectorLines(r) {
   });
 }
 
-// The owner's decision on one visual round (TD-79): both verdicts, the problems he sends back, a comment, Pass or Fail.
-function decisionForm(q, r) {
+// The owner's decision on one visual round (TD-79): the screenshots, both verdicts, the problems he sends back,
+// a comment, Pass or Fail.
+function decisionForm(q, r, pictures) {
   const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`,
-    text("Look at the screenshots above and the judges' verdicts, then pass the round or send it back."));
-  box.append(...r.verdicts.map(verdictLine));
+    text("Compare before and after, read the judges' verdicts, then pass the round or send it back."), ...pictures);
+  box.append(heading(4, "Verdicts", "sm"), ...r.verdicts.map(verdictLine));
   const all = problems(r), picks = [];
   const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
   if (made.length) {
@@ -449,7 +508,8 @@ function decisionForm(q, r) {
 }
 
 function criteriaPanel(criteria) {
-  const box = panel("Your visual criteria");
+  const box = info("Your visual criteria", text("Every later review checks these until you withdraw them.",
+    { size: "xs", color: "contrast-medium" }));
   for (const k of criteria) {
     const withdraw = () => send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {});
     box.append(row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary" })));
@@ -458,10 +518,13 @@ function criteriaPanel(criteria) {
 }
 
 function checkForm(check) {
-  const [note, noted] = field("Note");
-  const box = panel(`Check ${check.id}`, list(check.steps, "ol"));
-  if (check.expect) box.append(text(`Expected: ${check.expect}`, { color: "contrast-medium" }));
-  if (check.url) box.append(external(check.url, check.url));
+  const [note, noted] = field("Note (optional)");
+  const box = panel(`Your check ${check.id}`, list(check.steps, "ol"));
+  if (check.expect) box.append(text(`Expected: ${check.expect}`, { weight: "semibold" }));
+  if (check.url) {
+    box.append(row(external("Open the preview", check.url),
+      text(check.url, { size: "xs", color: "contrast-medium", tag: "span" })));
+  }
   const result = (passed) => ({ check: check.id, passed, note: noted(), inputs: check.inputs });
   box.append(note, row(
     button("Passed", () => send("/check-results", result(true)), { icon: "check" }),
@@ -470,20 +533,26 @@ function checkForm(check) {
   return box;
 }
 
+const CHECKED = { passed: "success", success: "success", failed: "error", failure: "error", error: "error" };
+
 function mergeForm(m) {
   const links = row(external(`PR #${m.pr}`, m.url), external("Diff summary", m.diff));
-  const box = panel(`Merge PR #${m.pr} (${m.method})`, links, text(`Exact head: ${m.head}`, { size: "xs" }));
+  const box = panel(`Merge PR #${m.pr}`,
+    text(`Delivery merges this exact head (${m.method}) once you approve it.`), links);
   if (m.void) box.append(text(`Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { color: "error" }));
-  const checks = m.checks.length ? m.checks.map((c) => `${c.name}: ${c.state}`) : ["no checks reported"];
-  box.append(text("Checks at this head:"), list(checks),
-    button(`Approve merging ${m.head.slice(0, 7)}`, () => send("/merge-consent", { head: m.head })));
+  const checks = m.checks.map((c) => el("p-tag", `${c.name}: ${c.state}`,
+    { variant: CHECKED[c.state] ?? "secondary", compact: "true" }));
+  box.append(text("Checks at this head", { size: "xs", weight: "semibold" }),
+    checks.length ? row(...checks) : text("No checks reported", { size: "xs", color: "contrast-medium" }),
+    text(`Head ${m.head}`, { size: "xs", color: "contrast-medium" }),
+    button(`Approve merging ${m.head.slice(0, 7)}`, () => send("/merge-consent", { head: m.head }), { icon: "check" }));
   return box;
 }
 
 function pullbackNote(p) {
   const behind = p.state === "behind", title = `Pull-back: ${p.state}`, pull = () => send("/pull", {});
   if (!pds) {
-    const box = panel(title, text(p.reason || ""));
+    const box = behind ? panel(title, text(p.reason || "")) : info(title, text(p.reason || ""));
     if (behind) box.append(button("Pull", pull));
     return box;
   }
@@ -562,21 +631,27 @@ function lightbox(gallery, start) {
   show();
 }
 
+function side(label, child) {
+  const node = el("div", undefined, { class: "side" });
+  node.append(el("span", label), child);
+  return node;
+}
+
+// The screenshots of a visual check and what was found, as nodes for the decision or the "Before and after" section.
 function visualSection(slug, v, b, existing, deciding) {
   const open = deciding || v.doubts.length;
   const state = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
-  const verdict = el("p-tag", state[0], { variant: state[1] });
-  const title = text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" });
-  const box = panel("Before and after", row(title, verdict));
-  if (v.findings.length) box.append(list(v.findings));
+  const verdict = el("p-tag", state[0], { variant: state[1], compact: "true" });
+  const nodes = [row(text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" }), verdict)];
+  if (v.findings.length) nodes.push(list(v.findings));
   if (v.doubts.length) {
-    box.append(text("The judges could not decide:", { size: "xs" }), list(v.doubts));
+    nodes.push(text("The judges could not decide:", { size: "xs" }), list(v.doubts));
   }
   if (existing.length) {
-    box.append(text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" }));
+    nodes.push(text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" }));
   }
   if (b && b.findings.length) {
-    box.append(text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" }));
+    nodes.push(text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" }));
   }
   const grid = el("div", undefined, { class: "shots" }), gallery = [];
   for (const name of v.files) {
@@ -587,33 +662,34 @@ function visualSection(slug, v, b, existing, deciding) {
       { slug, kind, name, at, side, state, width, commit: head.slice(0, 7) }, gallery);
     const before = comparable
       ? one("before", "before", b.at, b.head)
-      : text(kept ? "Before not comparable: the state changed since" : "Before not available",
-        { class: "missing", size: "xs", color: "contrast-medium" });
+      : el("span", kept ? "Not comparable: the state changed since" : "Not available", { class: "missing" });
     const fig = el("figure", undefined, { class: "pair" });
-    fig.append(before, one("visual", "after", v.at, v.head),
-      el("figcaption", `${state} \u00b7 ${width}px \u00b7 before | after`));
+    fig.append(el("figcaption", `${state} \u00b7 ${width} px`), side("Before", before),
+      side("After", one("visual", "after", v.at, v.head)));
     grid.append(fig);
   }
-  box.append(text("Select a screenshot to enlarge it; the arrow keys step through before and after at each width.",
+  const shots = el("div", undefined, { class: "gallery" });
+  shots.append(text("Select a screenshot to enlarge it; the arrow keys step through before and after at each width.",
     { size: "xs", color: "contrast-medium" }), grid);
-  return box;
+  nodes.push(shots);
+  return nodes;
 }
 
 function beforeSection(slug, b) {
-  const box = panel(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`);
-  if (b.findings.length) box.append(text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }));
+  const nodes = [text(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`, { weight: "semibold" })];
+  if (b.findings.length) nodes.push(text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }));
   if (b.errors.length) {
     const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
-    box.append(text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }));
+    nodes.push(text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }));
   }
   const grid = el("div", undefined, { class: "shots" }), gallery = [];
   for (const name of b.files) {
     const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
-    grid.append(zoomable({ slug, kind: "before", name, at: b.at, side: "before", state, width,
-      commit: (b.head || "").slice(0, 7) }, gallery));
+    grid.append(side(`${state} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at,
+      side: "before", state, width, commit: (b.head || "").slice(0, 7) }, gallery)));
   }
-  box.append(grid);
-  return box;
+  nodes.push(grid);
+  return nodes;
 }
 
 function count(n) {
@@ -622,8 +698,7 @@ function count(n) {
 
 // The total, then a line per model; input includes cache reads and writes, so "in" is the uncached rest.
 function spendLines(spend) {
-  const box = el("div");
-  box.append(text(`Spent ${spend.credits.toFixed(2)} credits`, { size: "xs", color: "contrast-medium" }));
+  const lines = [];
   for (const [model, u] of Object.entries(spend.models)) {
     const fresh = Math.max(0, u.input - u.cache_read - u.cache_write);
     const split = u.tokens && u.input + u.output === u.tokens  // sessions recorded before the split leave it partial
@@ -631,9 +706,136 @@ function spendLines(spend) {
         + `${count(u.cache_write)} cache write)`
       : "";
     const line = `${model}: ${u.credits.toFixed(2)} credits, ${count(u.tokens)} tokens${split}`;
-    box.append(text(line, { size: "xs", color: "contrast-medium" }));
+    lines.push(text(line, { size: "xs", color: "contrast-medium" }));
   }
+  return disclosure(`Spent ${spend.credits.toFixed(2)} credits`, ...lines);
+}
+
+function ago(iso) {
+  const seconds = Math.round((Date.now() - Date.parse(iso)) / 1000);
+  if (Number.isNaN(seconds)) return "";
+  if (seconds < 60) return "just now";
+  const minutes = Math.round(seconds / 60), hours = Math.round(minutes / 60);
+  return minutes < 60 ? `${minutes} min ago` : hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
+}
+
+const BOOKKEEPING = new Set(["pids", "inventory", "skill", "tasks", "preserved"]);
+const SAID = {
+  step: (e) => `${e.kind} step ${e.exit}${e.reason ? `: ${e.reason}` : ""}`,
+  tool: (e) => e.summary || `Called ${e.tool}${e.accepted === false ? " (rejected)" : ""}`,
+  session: (e) => (e.resumed ? "Session resumed" : `Session started${e.role ? ` (${e.role})` : ""}`),
+  denied: (e) => `Denied: ${e.reason || e.kind}`,
+  publish: (e) => `Published PR #${e.pr}`,
+  ci: (e) => (e.failed?.length ? `CI failed: ${e.failed.join(", ")}`
+    : `CI passed${e.passed?.length ? `: ${e.passed.join(", ")}` : ""}`),
+  "merge-offer": (e) => `Merge offered for ${String(e.head || "").slice(0, 7)}`,
+  "merge-request": (e) => e.message || `Merge requested (${e.status})`,
+  merged: (e) => `Merged PR #${e.pr}`,
+  pullback: (e) => `Pull-back ${e.state}${e.reason ? `: ${e.reason}` : ""}`,
+  "ro-install": (e) => `${e.command} in ${e.package}${e.ok ? "" : " failed"}`,
+  "fix-drafted": (e) => `Drafted fix Change ${e.fix}`,
+  brief: (e) => `Brief v${e.version} saved`,
+};
+
+// Newest first, in words; process and inventory bookkeeping stays in the activity file.
+function activityLog(events) {
+  const kept = events.filter((e) => e.event && !BOOKKEEPING.has(e.event)).slice(-12).reverse();
+  if (!kept.length) return text("Nothing yet.", { size: "xs", color: "contrast-medium" });
+  const log = el("ol", undefined, { class: "log" });
+  for (const e of kept) {
+    const when = e.at ? el("time", ago(e.at), { datetime: e.at, title: new Date(e.at).toLocaleString() }) : el("span");
+    const item = el("li");
+    item.append(when, el("span", (SAID[e.event] ?? ((x) => x.event))(e)));
+    log.append(item);
+  }
+  return log;
+}
+
+function planList(d) {
+  const working = ["build", "review", "integrate"].includes(d.step) && !d.line.startsWith("Done");
+  const now = working ? d.plan.find((t) => !t.done) : null;
+  const node = el("ol", undefined, { class: "plan" });
+  for (const t of d.plan) {
+    const [label, variant] = t.done ? ["done", "success"] : t === now ? ["now", "info"] : ["to do", "secondary"];
+    const item = el("li"), said = el("span", t.title);
+    if (t.origin && t.origin !== "plan") said.append(" ", plain("span", `from ${t.origin}`, "meta"));
+    item.append(el("p-tag", label, { variant, compact: "true" }), said);
+    node.append(item);
+  }
+  return node;
+}
+
+function screen(s) {
+  const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
+  return `${s.name} (${s.path}${steps.length ? `, then ${steps.join(", ")}` : ""}): ${s.expect}`;
+}
+
+// What the brief asks for, beyond its outcome: criteria, the screens the visual check takes, the owner's checks.
+function briefParts(d) {
+  const parts = [];
+  if (d.criteria.length) {
+    parts.push(heading(4, "Acceptance criteria", "sm"), list(d.criteria.map((k) => `${k.id}: ${k.text}`)));
+  }
+  if (d.brief.visual.length) {
+    parts.push(heading(4, "Screens the visual check captures", "sm"), list(d.brief.visual.map(screen)));
+  }
+  if (d.checks.length) {
+    const said = d.checks.map((c) => `${c.id}: ${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`);
+    parts.push(heading(4, "Checks you do yourself", "sm"), list(said));
+  }
+  const scope = d.brief.scope || [], out = d.brief.non_goals || [];
+  if (scope.length) parts.push(text(`Scope: ${scope.join(", ")}`, { size: "xs", color: "contrast-medium" }));
+  if (out.length) parts.push(text(`Not in this Change: ${out.join("; ")}`, { size: "xs", color: "contrast-medium" }));
+  return parts;
+}
+
+function approval(d) {
+  const version = d.brief.version, box = el("div", undefined, { class: "brief" });
+  if (d.brief.outcome) box.append(text(d.brief.outcome));
+  box.append(...briefParts(d));
+  const approve = button(`Approve brief v${version}`, () => send("/approve-brief", { version }), { icon: "check" });
+  return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, box,
+    text("Nothing is built until you approve. To change the brief, say so in the shaping chat.",
+      { size: "xs", color: "contrast-medium" }), approve);
+}
+
+function briefInfo(d) {
+  const rest = briefParts(d), box = info(`Brief v${d.brief.version}`);
+  if (d.brief.outcome) box.append(text(d.brief.outcome));
+  if (rest.length) box.append(disclosure("Criteria, screens and checks", ...rest));
   return box;
+}
+
+function detailHead(d) {
+  const head = el("div", undefined, { class: "detail-head" }), title = el("div");
+  const back = pds ? el("p-button-pure", "All Changes", { type: "button", icon: "arrow-left", class: "back" })
+    : el("button", "All Changes", { type: "button", class: "back" });
+  back.onclick = () => choose(null);
+  const name = heading(2, d.slug, "xl");
+  name.firstChild.tabIndex = -1;
+  title.append(name);
+  if (d.brief.title) title.append(text(d.brief.title, { color: "contrast-medium" }));
+  head.append(back, title);
+  if (!/^(Done|Abandoned) /.test(d.line)) {  // a finished Change has nothing left to pause
+    const intent = { intent: d.paused ? "resume" : "pause" };
+    head.append(button(d.paused ? "Resume" : "Pause", () => send("/intent", intent),
+      d.paused ? { icon: "play" } : { variant: "secondary", icon: "pause" }));
+  }
+  return head;
+}
+
+function reveal(target) {
+  if (matchMedia("(max-width: 63.99rem)").matches) return window.scrollTo(0, 0);
+  const top = target.getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight / 2) target.scrollIntoView({ block: "start" });
+}
+
+// The heading takes focus only once its PDS wrapper has rendered; a hidden element cannot be focused.
+function focusHeading(target) {
+  const wrapper = target.querySelector("p-heading"), name = target.querySelector("h2");
+  Promise.resolve(wrapper?.componentOnReady?.()).then(() => {
+    if (name.isConnected) name.focus({ preventScroll: true });
+  });
 }
 
 async function showDetail() {
@@ -642,64 +844,158 @@ async function showDetail() {
     shown = { slug: null, forms: "" };
     return target.replaceChildren();
   }
-  const d = await call(`/changes/${selected}`);
+  const d = await call(`/changes/${encodeURIComponent(selected)}`);
   if (d.slug !== selected) return;  // the person chose another Change while this one loaded
-  const pause = button(d.paused ? "Resume" : "Pause", () => send("/intent", { intent: d.paused ? "resume" : "pause" }),
-    { variant: "secondary", icon: d.paused ? "play" : "pause" });
-  const parts = [
-    row(heading(2, d.slug, "xl"), pause), text(d.line),
-    text(d.brief.outcome, { color: "contrast-medium" }), spendLines(d.spend),
-  ];
-  if (d.pullback) parts.push(pullbackNote(d.pullback));
+  const data = JSON.stringify(d);
+  if (d.slug === shown.slug && data === shown.data) return;  // unchanged: no rebuild, nothing moves
+  const [variant, label] = badge(d);
+  const parts = [detailHead(d), row(el("p-tag", label, { variant, compact: "true" }), text(d.line))];
+  if (label === "Stopped") {
+    parts.push(notice("error", "Stopped", `${d.line.replace(/^.*?stopped: /, "")}.`,
+      d.action ? `What to do: ${d.action}.` : ""));
+  }
+  const behind = d.pullback?.state === "behind";
+  if (behind) parts.push(pullbackNote(d.pullback));
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
   const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
     : d.before ? beforeSection(d.slug, d.before) : null;
-  if (pictures && deciding) parts.push(pictures);  // the owner looks first, then decides
-  if (d.question) parts.push(deciding ? decisionForm(d.question, r) : questionForm(d.question));
+  if (d.question) parts.push(deciding ? decisionForm(d.question, r, pictures) : questionForm(d.question));
   if (d.merge) parts.push(mergeForm(d.merge));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
-  if (pictures && !deciding) parts.push(pictures);
-  if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
-  if (d.step === "shape" && d.brief.approved !== d.brief.version) {
-    const items = [
-      ...d.criteria.map((k) => `${k.id}: ${k.text}`),
-      ...d.checks.map((c) => `Your check ${c.id}: ${c.steps.join("; ")}`),
-    ];
-    const version = d.brief.version;
-    const approve = button(`Approve brief v${version}`, () => send("/approve-brief", { version }));
-    parts.push(panel(`Brief v${version}: ${d.brief.title}`, list(items), approve));
+  const approving = d.step === "shape" && d.brief.approved !== d.brief.version;
+  if (approving) parts.push(approval(d));
+  if (pictures && !deciding) {  // decided: the verdict shows, the screenshots open on request
+    const shots = pictures.pop();
+    parts.push(info("Before and after", ...pictures,
+      disclosure(`Screenshots (${shots.querySelectorAll("button.zoom").length})`, shots)));
   }
-  const log = d.activity.slice(-8).map((e) => `${e.at || ""} ${e.event || ""} ${e.exit || e.tool || e.reason || ""}`);
-  parts.push(panel("Recent activity", list(log, "ol")));
+  if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
+  if (d.plan.length) parts.push(info("Plan", planList(d)));
+  if (!approving && (d.brief.outcome || d.criteria.length)) parts.push(briefInfo(d));
+  if (d.pullback && !behind) parts.push(pullbackNote(d.pullback));
+  parts.push(info("Recent activity", activityLog(d.activity)), spendLines(d.spend));
   const asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
-  const forms = JSON.stringify([d.slug, d.question?.id, d.merge?.head, asked, d.brief.version, d.brief.approved,
-    d.pullback?.state, d.paused, r?.number, r?.outcome, d.owner_criteria.map((k) => k.id)]);
-  const editing = target.contains(document.activeElement)
-    && document.activeElement.matches("textarea, input, p-textarea, p-radio-group, p-radio-group-option, p-checkbox");
+  const forms = JSON.stringify([d.slug, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head,
+    asked, d.brief.version, d.brief.approved, d.pullback?.state, d.paused, r?.number, r?.outcome,
+    d.owner_criteria.map((k) => k.id)]);
+  if (refused?.forms === forms) parts.splice(2, 0, refusal(refused.text));
+  else refused = null;
+  const focused = document.activeElement, name = target.querySelector("h2");
+  const using = target.contains(focused) && focused !== name;  // a control in use keeps its place until it is left
   const overlay = document.querySelector("dialog.lightbox, p-modal");  // its launcher and focus return stay
-  if ((editing || draft || overlay) && forms === shown.forms) return;  // keep unsent input while the same forms show
+  if ((using || draft || overlay) && forms === shown.forms) return;  // keep unsent input while the same forms show
   const opened = new Set([...target.querySelectorAll("details[open] > summary")].map((s) => s.textContent));
   target.replaceChildren(...parts);
   for (const s of target.querySelectorAll("details > summary")) if (opened.has(s.textContent)) s.parentNode.open = true;
-  shown = { slug: d.slug, forms };
+  if (arrived || (name && focused === name)) focusHeading(target);
+  if (arrived) reveal(target);
+  arrived = false;
+  shown = { slug: d.slug, forms, data };
   draft = false;
 }
 
-function cell(child, attrs = {}) {
-  const node = el("p-table-cell", undefined, attrs);
-  node.append(child);
-  return node;
-}
-
-function meta(value, color = "contrast-medium") {
-  return text(value, { size: "xs", color, class: "meta" });
-}
+const PAUSED = /· paused by you/;
 
 function badge(c) {
   if (/(^|· )stopped:/.test(c.line)) return ["error", "Stopped"];
+  if (PAUSED.test(c.line)) return ["secondary", "Paused"];
+  if (c.actor === "you") return ["warning", "Your turn"];
+  if (c.actor === "admin") return ["warning", "Admin"];
   if (c.line.startsWith("Done")) return ["success", "Done"];
-  const next = { you: ["warning", "Your turn"], admin: ["warning", "Admin"], github: ["secondary", "GitHub"] };
-  return next[c.actor] || ["info", "Delivery"];
+  if (c.line.startsWith("Abandoned")) return ["secondary", "Abandoned"];
+  return c.actor === "github" ? ["secondary", "GitHub"] : ["info", "Delivery"];
+}
+
+const GROUPS = { you: "Needs you", working: "Delivery is working", paused: "Paused", done: "Done" };
+
+function groupOf(label) {
+  if (["Stopped", "Your turn", "Admin"].includes(label)) return "you";
+  if (label === "Paused") return "paused";
+  return ["Done", "Abandoned"].includes(label) ? "done" : "working";
+}
+
+function split(line) {  // the stage, then what is happening in it
+  const at = line.indexOf(" \u00b7 ");
+  return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
+}
+
+function card(c, label, variant) {
+  const node = el("li", undefined, { class: c.slug === selected ? "card current" : "card" });
+  const open = el("a", c.slug, { href: `?change=${encodeURIComponent(c.slug)}`, class: "open", "data-slug": c.slug });
+  if (c.slug === selected) open.setAttribute("aria-current", "true");
+  open.onclick = (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    choose(c.slug);
+  };
+  const top = el("div", undefined, { class: "top" }), [stage, rest] = split(c.line);
+  top.append(open, el("p-tag", label, { variant, compact: "true" }));
+  const says = plain("p", undefined, "says");
+  if (stage) says.append(plain("span", stage, "stage"), " \u00b7 ");
+  says.append(rest);
+  node.append(top, says);
+  if (c.action && groupOf(label) !== "working") node.append(plain("p", `Next: ${c.action}`, "next"));
+  const bits = [];
+  if (c.now && label !== "Done") bits.push(split(c.now)[1]);
+  if (c.step_time) bits.push(`step ${c.step_time}`);
+  if (c.credits?.change) {
+    const step = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
+    bits.push(`${c.credits.change.toFixed(2)} credits${step}`);
+  }
+  if (c.quiet) bits.push("quiet");
+  if (bits.length) node.append(plain("p", bits.join(" \u00b7 "), "meta"));
+  for (const o of c.overlaps || []) node.append(plain("p", o, "meta"));
+  return node;
+}
+
+function showList(changes) {
+  const groups = { you: [], working: [], paused: [], done: [] };
+  for (const c of changes) {
+    const [variant, label] = badge(c);
+    groups[groupOf(label)].push([c, label, variant]);
+  }
+  groups.you.sort((a, b) => (b[1] === "Stopped") - (a[1] === "Stopped"));
+  const nodes = [];
+  if (!changes.length) {
+    nodes.push(plain("p", "No Changes yet. New Change opens a chat in VS Code where you shape the first one.",
+      "empty meta"));
+  } else if (!groups.you.length) {
+    nodes.push(plain("p", "Nothing needs you right now.", "meta"));
+  }
+  for (const [key, title] of Object.entries(GROUPS)) {
+    if (!groups[key].length) continue;
+    const cards = el("ul", undefined, { class: "cards" }), said = `${title} (${groups[key].length})`;
+    cards.append(...groups[key].map((g) => card(...g)));
+    const box = el(key === "done" ? "details" : "section", undefined, { class: "group" });
+    if (key === "done") {
+      box.open = doneOpen || groups.done.some(([c]) => c.slug === selected);
+      box.addEventListener("toggle", () => { doneOpen = box.open; });
+      box.append(el("summary", said), cards);
+    } else {
+      box.append(heading(2, said, "md"), cards);
+    }
+    nodes.push(box);
+  }
+  const focused = document.activeElement?.closest?.("#changes a[data-slug]")?.dataset.slug;
+  const onDone = Boolean(document.activeElement?.matches?.("#changes details.group > summary"));
+  document.getElementById("changes").replaceChildren(...nodes);
+  if (focused) document.querySelector(`#changes a[data-slug="${CSS.escape(focused)}"]`)?.focus();
+  if (onDone) document.querySelector("#changes details.group > summary")?.focus();
+  document.title = groups.you.length ? `(${groups.you.length}) ${TITLE}` : TITLE;
+}
+
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+function choose(slug, push = true) {
+  const was = selected;
+  selected = slug && SLUG.test(slug) ? slug : null;
+  arrived = Boolean(selected);
+  if (push && selected !== was) {
+    history.pushState(null, "", selected ? `?change=${encodeURIComponent(selected)}` : location.pathname);
+  }
+  document.getElementById("board").classList.toggle("open", Boolean(selected));
+  if (!selected && was) document.querySelector(`#changes a[data-slug="${CSS.escape(was)}"]`)?.focus();
+  refresh();
 }
 
 async function refresh() {
@@ -709,27 +1005,13 @@ async function refresh() {
   }
   busy = true;
   try {
-    const rows = (await call("/changes")).map((c) => {
-      const open = pds
-        ? el("p-button-pure", c.slug, { type: "button", icon: "arrow-right", "align-label": "start" })
-        : el("button", c.slug, { type: "button" });
-      if (c.slug === selected) open.setAttribute(pds ? "active" : "aria-current", "true");
-      open.onclick = () => { selected = c.slug; refresh(); };
-      const [variant, label] = badge(c);
-      const status = el("p-table-cell", undefined, { multiline: "true" });
-      status.append(row(el("p-tag", label, { variant, compact: "true" }), text(c.line, { tag: "span" })));
-      if (c.pullback && c.pullback.state === "behind") status.append(meta(c.pullback.reason, "warning"));
-      if (c.now) {
-        const step = c.step_time ? ` · step ${c.step_time}` : "";
-        const spent = ` · ${c.credits.change.toFixed(2)} credits (step ${c.credits.step.toFixed(2)})`;
-        status.append(meta(`${c.now}${step}${spent}${c.quiet ? " · quiet" : ""}`));
-      }
-      for (const o of c.overlaps || []) status.append(meta(o));
-      const line = el("p-table-row");
-      line.append(cell(open), status, cell(text(c.action || "—"), { multiline: "true" }));
-      return line;
-    });
-    document.getElementById("changes").replaceChildren(...rows);
+    const changes = await call("/changes");
+    if (selected && !changes.some((c) => c.slug === selected)) {  // gone, or a stale link
+      selected = null;
+      history.replaceState(null, "", location.pathname);
+      document.getElementById("board").classList.remove("open");
+    }
+    showList(changes);
     const notes = (await call("/project")).notes;
     document.getElementById("notes").replaceChildren(...notes.map((n) => text(n, { size: "xs" })));
     document.getElementById("notes").hidden = !notes.length;
@@ -793,6 +1075,9 @@ async function start() {
   for (const type of ["input", "change"]) {
     document.getElementById("detail").addEventListener(type, () => { draft = true; });
   }
+  addEventListener("popstate", () => choose(new URLSearchParams(location.search).get("change"), false));
+  if (selected && !SLUG.test(selected)) selected = null;
+  document.getElementById("board").classList.toggle("open", Boolean(selected));
   refresh();
   setInterval(refresh, 3000);
 }

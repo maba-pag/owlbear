@@ -9,25 +9,14 @@
   import { load } from "/assets/pds/load.mjs";
   load();
 </script>
+<!-- base -->
 <style>
-  :not(:defined) { visibility: hidden; }
-  [hidden], p-text:empty { display: none !important; }
-  body { background: var(--p-color-canvas); color: var(--p-color-primary); }
-  main {
-    display: grid; gap: var(--p-spacing-fluid-md); max-width: 96rem; margin: 0 auto;
-    padding: var(--p-spacing-fluid-lg) var(--p-spacing-fluid-md);
-  }
-  header {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: var(--p-spacing-static-md);
-  }
-  .panel {
-    display: grid; gap: var(--p-spacing-static-md); padding: var(--p-spacing-fluid-sm);
-    background: var(--p-color-surface); border-radius: var(--p-radius-lg);
-  }
-  .row { display: flex; flex-wrap: wrap; align-items: end; gap: var(--p-spacing-static-md); }
+  p-text:empty { display: none !important; }
+  .row { align-items: end; gap: var(--p-spacing-static-md); }
   #scope { min-width: 16rem; }
   p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
+  details.panel > summary { font-size: var(--p-typescale-md); }
+  details.panel[open] { gap: var(--p-spacing-static-md); }
 </style>
 </head>
 <body>
@@ -39,7 +28,7 @@
 <p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
 <p-text id="status" role="status" aria-live="polite"></p-text>
 <section class="panel" aria-labelledby="scope-title">
-  <p-heading size="xl"><h2 id="scope-title">Where you edit</h2></p-heading>
+  <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
   <div class="row">
     <p-select id="scope" label="Layer" value="project">
       <p-select-option value="project">This project</p-select-option>
@@ -51,29 +40,63 @@
     default. Each value shows where it comes from.</p-text>
 </section>
 <section class="panel" aria-labelledby="agents-title">
-  <p-heading size="xl"><h2 id="agents-title">Agents</h2></p-heading>
-  <p-table caption="Agents: model, effort and context apply to the next session; the other columns are not applied
-    yet">
+  <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
+  <p-table caption="Agents: model, effort and context apply to the next session">
     <p-table-head><p-table-head-row>
       <p-table-head-cell>Agent</p-table-head-cell>
       <p-table-head-cell>Model</p-table-head-cell>
       <p-table-head-cell>Effort</p-table-head-cell>
       <p-table-head-cell>Context</p-table-head-cell>
       <p-table-head-cell>AI credits per 1M tokens</p-table-head-cell>
-      <p-table-head-cell>Runtime (not applied yet)</p-table-head-cell>
-      <p-table-head-cell>Needs visibility (not applied yet)</p-table-head-cell>
-      <p-table-head-cell>Categories (not applied yet)</p-table-head-cell>
     </p-table-head-row></p-table-head>
     <p-table-body id="agents"></p-table-body>
   </p-table>
   <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite"></p-text>
-  <div class="row">
-    <p-button id="save" type="button" compact="true">Save</p-button>
-    <p-text id="pending" size="xs" color="contrast-medium" aria-live="polite"></p-text>
-  </div>
 </section>
-<section class="panel" aria-labelledby="runtimes-title">
-  <p-heading size="xl"><h2 id="runtimes-title">Runtimes</h2></p-heading>
+<section class="panel" aria-labelledby="general-title">
+  <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
+  <p-table caption="Visual check settings: they apply to the next visual check">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Setting</p-table-head-cell>
+      <p-table-head-cell>Value</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="general"></p-table-body>
+  </p-table>
+  <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
+  <p-text id="design-pack" size="xs"></p-text>
+  <p-text id="agreement-note" size="xs" color="contrast-medium"></p-text>
+  <p-table id="agreement-table" caption="How often each judge's verdict matched your Pass or Fail, per model">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Judge</p-table-head-cell>
+      <p-table-head-cell>Model</p-table-head-cell>
+      <p-table-head-cell>Decided</p-table-head-cell>
+      <p-table-head-cell>Agreed</p-table-head-cell>
+      <p-table-head-cell>Disagreed</p-table-head-cell>
+      <p-table-head-cell>Unsure</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="agreement"></p-table-body>
+  </p-table>
+</section>
+<details class="panel">
+  <summary>Not applied yet: runtimes, visibility and tool categories</summary>
+  <p-text size="xs" color="contrast-medium">Delivery keeps these settings but does not use them for routing or
+    visibility yet.</p-text>
+  <p-table caption="Per agent; not applied yet">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Agent</p-table-head-cell>
+      <p-table-head-cell>Runtime</p-table-head-cell>
+      <p-table-head-cell>Needs visibility</p-table-head-cell>
+      <p-table-head-cell>Categories</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="agents-later"></p-table-body>
+  </p-table>
+  <p-table caption="Switches; not applied yet">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Setting</p-table-head-cell>
+      <p-table-head-cell>Value</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="general-later"></p-table-body>
+  </p-table>
   <p-text id="baseline" size="xs" color="contrast-medium"></p-text>
   <p-table caption="What each runtime adds; not used for routing yet">
     <p-table-head><p-table-head-row>
@@ -93,32 +116,11 @@
     </p-table-head-row></p-table-head>
     <p-table-body id="categories"></p-table-body>
   </p-table>
-</section>
-<section class="panel" aria-labelledby="general-title">
-  <p-heading size="xl"><h2 id="general-title">General</h2></p-heading>
-  <p-table caption="General settings: screenshot widths apply to the next visual check; the others take effect
-    once routing and visibility are switched on">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Setting</p-table-head-cell>
-      <p-table-head-cell>Value</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="general"></p-table-body>
-  </p-table>
-  <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
-  <p-text id="design-pack" size="xs"></p-text>
-  <p-text id="agreement-note" size="xs" color="contrast-medium"></p-text>
-  <p-table caption="How often each judge's verdict matched your Pass or Fail, per model">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Judge</p-table-head-cell>
-      <p-table-head-cell>Model</p-table-head-cell>
-      <p-table-head-cell>Decided</p-table-head-cell>
-      <p-table-head-cell>Agreed</p-table-head-cell>
-      <p-table-head-cell>Disagreed</p-table-head-cell>
-      <p-table-head-cell>Unsure</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="agreement"></p-table-body>
-  </p-table>
-</section>
+</details>
+<div class="bar" role="region" aria-label="Save settings">
+  <p-button id="save" type="button" compact="true" icon="check">Save</p-button>
+  <p-text id="pending" size="sm" aria-live="polite"></p-text>
+</div>
 </main>
 <script>
 "use strict";
@@ -479,7 +481,9 @@ function pending() {
     const count = Object.keys(drafts[layer]).length;
     if (count) parts.push(`${LAYERS[layer]}: ${count} unsaved edit${count > 1 ? "s" : ""}`);
   }
-  document.getElementById("pending").textContent = parts.join("; ");
+  const into = rendered === "global" ? "all projects" : "this project";
+  document.getElementById("pending").textContent = parts.length ? `${parts.join("; ")}. Save writes ${into}.`
+    : `No unsaved edits. Save writes ${into}.`;
 }
 
 function render() {
@@ -490,12 +494,15 @@ function render() {
   document.getElementById("scope-note").textContent = loaded.global_location
     ? "" : "No shared settings location is set up (run owlbear-next common PATH), so only this project's settings "
       + "can be saved, in this clone.";
-  const agents = Object.entries(loaded.settings.agents).map(([role, eff]) => row(
+  const agents = Object.entries(loaded.settings.agents).map(([role]) => row(
     cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"), contextCell(role), ratesCell(role),
-    ...[["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]]
-      .map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`)),
   ));
   document.getElementById("agents").replaceChildren(...agents);
+  const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
+  document.getElementById("agents-later").replaceChildren(...Object.entries(loaded.settings.agents).map(
+    ([role, eff]) => row(cell(el("p-text", role)),
+      ...later.map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`))),
+  ));
   const { baseline, runtimes, categories } = loaded.catalogue;
   document.getElementById("baseline").textContent = `Every runtime has the baseline: ${baseline}.`;
   document.getElementById("runtimes").replaceChildren(...runtimes.map((r) => row(
@@ -508,13 +515,14 @@ function render() {
     row(cell(el("p-text", "Screenshot widths")), widths()),
     row(cell(el("p-text", "Design failures")), designFailures()),
     ...(rendered === "project" ? [row(cell(el("p-text", "Seed command")), seed())] : []),
-    ...general.map(([label, value, key]) => row(
-      cell(el("p-text", `${label} (not applied yet)`)), inactive(label, value, key))),
   );
+  document.getElementById("general-later").replaceChildren(...general.map(([label, value, key]) => row(
+    cell(el("p-text", label)), inactive(label, value, key))));
   const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
   document.getElementById("agreement").replaceChildren(...loaded.agreement.map((a) => row(
     ...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided), share(a.disagreed, a.decided),
       share(a.unsure, a.decided)].map((v) => cell(el("p-text", v))))));
+  document.getElementById("agreement-table").hidden = !loaded.agreement.length;
   document.getElementById("agreement-note").textContent = loaded.agreement.length
     ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
     : "No decided visual rounds yet, or no shared repository is set up.";
@@ -591,7 +599,16 @@ async function save() {
 async function start() {
   // PDS loads from its CDN (TD-39); the controls are read and written only once they are defined.
   const used = ["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"];
-  await Promise.all(used.map((t) => customElements.whenDefined(t)));
+  const ready = Promise.all(used.map((t) => customElements.whenDefined(t))).then(() => true);
+  if (!await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 10000, false))])) {
+    const said = document.createElement("p");  // plain: the notification element is a design-system one too
+    said.setAttribute("role", "alert");
+    said.textContent = "The settings need the Porsche Design System, which did not load (no connection to its CDN?). "
+      + "Reload when it is reachable; the settings files are unchanged.";
+    document.querySelector("main").prepend(said);
+    await ready;
+    said.remove();
+  }
   for (const type of ["input", "change"]) {
     for (const id of ["agents", "general"]) document.getElementById(id).addEventListener(type, edit);
   }

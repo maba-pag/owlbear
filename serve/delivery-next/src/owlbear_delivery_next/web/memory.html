@@ -9,37 +9,22 @@
   import { load } from "/assets/pds/load.mjs";
   load();
 </script>
+<!-- base -->
 <style>
-  :not(:defined) { visibility: hidden; }
-  .no-pds :not(:defined) { visibility: visible; }
-  [hidden], main > p-text:empty { display: none !important; }
-  body { background: var(--p-color-canvas); color: var(--p-color-primary); }
-  main {
-    display: grid; gap: var(--p-spacing-fluid-md); max-width: 72rem; margin: 0 auto;
-    padding: var(--p-spacing-fluid-lg) var(--p-spacing-fluid-md);
-  }
-  header {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: var(--p-spacing-static-md);
-  }
-  .row { display: flex; flex-wrap: wrap; align-items: end; gap: var(--p-spacing-static-sm); }
+  main > p-text:empty { display: none !important; }
+  .row { align-items: end; }
   #filters > * { flex: 1 1 12rem; }
+  #entries { display: grid; gap: var(--p-spacing-fluid-sm); }
   .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
   .entry {
     display: grid; gap: var(--p-spacing-static-sm); padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
     background: var(--p-color-surface); border-radius: var(--p-radius-lg);
   }
   .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  .quiet .entry { background: none; box-shadow: inset 0 0 0 1px var(--p-color-contrast-lower); }
   .said { white-space: pre-wrap; }
-  .field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
   fieldset { margin: 0; padding: 0; border: 0; }
   fieldset .row { align-items: center; }
-  textarea, input, select { font: inherit; }
-  .no-pds body { font-family: system-ui, sans-serif; }
-  .no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
-  .no-pds p-tag { font-weight: 600; }
-  .no-pds p-inline-notification { padding: var(--p-spacing-static-sm); border-inline-start: 4px solid; }
-  .no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
 </style>
 </head>
 <body>
@@ -55,9 +40,9 @@
 <p-inline-notification id="unavailable" state="info" heading="No shared repository" heading-tag="h2"
   dismiss-button="false" hidden></p-inline-notification>
 <p-text id="status" role="status" aria-live="polite"></p-text>
-<p-text id="where" size="xs" color="contrast-medium"></p-text>
 <section id="filters" class="row" aria-label="Filters" hidden></section>
-<ul id="entries" class="entries" aria-label="Memory entries"></ul>
+<div id="entries"></div>
+<p-text id="where" size="xs" color="contrast-medium"></p-text>
 </main>
 <script>
 "use strict";
@@ -68,6 +53,13 @@ if (hash.get("token")) {
 }
 const token = sessionStorage.getItem("token");
 const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved", "deleted"];  // needs you first
+const GROUPS = [  // who acts next on an entry in each state
+  ["Needs your review", "Approve what the curator kept, or settle what agents contest.", ["contested", "disputed",
+    "stale", "curated"]],
+  ["Waiting for the curator", "New memories the curator has not scoped yet; you may edit or delete them.", ["pending"]],
+  ["In use", "Agents recall these.", ["approved"]],
+  ["Deleted", "Kept for their history; agents no longer recall them.", ["deleted"]],
+];
 const TAGS = { contested: "error", disputed: "error", stale: "warning", curated: "info", pending: "secondary",
   approved: "success", deleted: "secondary" };
 const ACTIVE = "active", ANY = "any";
@@ -165,7 +157,7 @@ function select(label, options, value) {
 function entry(label, value, multiline, max) {
   if (pds) {
     const node = el(multiline ? "p-textarea" : "p-input-text", undefined,
-      { label, maxlength: `${max}`, ...(multiline ? { rows: "5", counter: "true" } : {}) });
+      { label, "max-length": `${max}`, ...(multiline ? { rows: "5", counter: "true" } : {}) });
     node.value = value;
     return [node, () => (node.value || "").trim()];
   }
@@ -304,14 +296,22 @@ function render() {
   const all = loaded.entries;
   const shown = all.filter(matches).sort((a, b) => ORDER.indexOf(a.state) - ORDER.indexOf(b.state)
     || b.updated_at.localeCompare(a.updated_at));
-  const cards = shown.map(card);
-  if (!cards.length) {
-    const none = el("li");
-    none.append(text(all.length ? "No memory matches these filters." : "Agents have not remembered anything yet.",
-      { color: "contrast-medium" }));
-    cards.push(none);
+  const sections = [];
+  for (const [title, hint, states] of GROUPS) {
+    const mine = shown.filter((m) => states.includes(m.state));
+    if (!mine.length) continue;
+    const box = el("section", undefined, { class: states.includes("deleted") ? "quiet" : "" });
+    const list = el("ul", undefined, { class: "entries" }), head = el("div");
+    list.append(...mine.map(card));
+    head.append(heading(2, `${title} (${mine.length})`, "lg"), text(hint, { size: "xs", color: "contrast-medium" }));
+    box.append(head, list);
+    sections.push(box);
   }
-  document.getElementById("entries").replaceChildren(...cards);
+  if (!sections.length) {
+    sections.push(text(all.length ? "No memory matches these filters." : "Agents have not remembered anything yet.",
+      { color: "contrast-medium", class: "empty" }));
+  }
+  document.getElementById("entries").replaceChildren(...sections);
   document.getElementById("shown").textContent = `${shown.length} of ${all.length} shown`;
 }
 
@@ -348,7 +348,9 @@ async function refresh() {
     return;
   }
   const errors = loaded.parse_errors ? ` ${loaded.parse_errors} file(s) could not be read.` : "";
-  document.getElementById("where").textContent = `From ${loaded.folder}.${errors}`;
+  const where = document.getElementById("where");
+  where.textContent = `Kept in ${loaded.folder.split("/").slice(-2).join("/")} of the shared repository.${errors}`;
+  where.title = loaded.folder;
   filters();
   render();
 }
