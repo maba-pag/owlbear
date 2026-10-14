@@ -560,4 +560,11 @@ Credits: build-date 63.4, theme toggle 224.0 (four plan rounds, two builds, the 
   only Memory tab actions commit. By design since TD-72 (`026f1b733`). Recorded in the backlog seed.
 
 The page overhaul (TD-85, `f265fb61f`) came after this run; its evidence is in the scratch folder `ux-overhaul`.
-Sandbox `main` is at `6b4caa2`.
+
+A verification Change on `dfd35ebf0` (the reworked guard, lint at submit, the migration fix) followed at 06:42:
+`clamp-helper`, seeded pre-approved. The Mac slept from 06:42 to 08:03; three build sessions failed to reach
+GitHub ("Authentication failed … network fetch failed") and waited as network failures, outside the budget. The
+builder then reported a wrong premise (`clamp` already existed); the re-plan narrowed the task to the missing test
+cases, and build, both reviews in the read-only worktree, PR #19, CI, merge (`634f42f`) and cleanup followed with
+no guard denial and no lint refusal (about 61 credits).
+Sandbox `main` is at `634f42f`.
