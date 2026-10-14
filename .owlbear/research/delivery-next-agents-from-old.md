@@ -106,3 +106,24 @@ agents.
 Confidence: high that the carried rules fit the new contract (each was checked against the engine's
 ownership); medium that the agents behave better, which only real runs and the N2 benchmark show.
 Limits: no live runs of the reworked agents yet; prose is not tested (TD-3).
+
+## 5. Hooks (added 2026-10-14)
+
+The owner asked which of the old hooks solve problems delivery-next has (TD-82). TD-86 then decided
+the guard is product code, not hook files. What each old hook became:
+
+| Old hook | Problem it solved | In delivery-next |
+| --- | --- | --- |
+| `deny-writes.py` | Read-only roles must not write; no hook or signing bypass, no force push | Ported into the SDK permission callback (`permissions.py`, `daf6db53b`): `--no-verify`, `-c core.hooksPath`, force push and writes in read-only steps are refused |
+| `lint-changed.py` | Ruff on each edited Python file, and a non-blocking warning on unusually broad edits | Lint once at builder submit (TD-87, `lint.py`, `faba3eff3`): ruff, Biome, ESLint on the changed files; up to 3 refusals per session, then `lint-unresolved`. The broad-edit warning is not ported: plan scopes are checked at plan submit, and reviews judge scope |
+| `session-context.py` | Git branch and recent log as start context | Not needed: the engine writes each step's message (Change, task, head) and preloads skills per role |
+| `deny-src-writes.py`, `allow-stances-only.py` | Path allow lists for test-only roles and ideation panelists | No such roles in delivery-next; path allow lists were removed with TD-82 |
+
+VS Code windows could not carry the guard: a live probe showed the agent host approves file writes,
+matching terminal commands and in-folder reads itself under every `autoApprove` value, and session
+configuration cannot override the host-wide user settings. Read-only steps therefore run in a
+disposable detached worktree per Change (`<slug>.ro`, `95fda75f8`): their writes land there and are
+deleted with it, and a ref change in the shared repository voids the result
+(`policy:<step>:read-only-write`). An in-place restore was built first and discarded after a Sol
+review found data-loss paths. Known limits: bypasses behind `sh -c`, `env` or `xargs` are not caught,
+and a window turn that survives an unconfirmed cancel could still write into the `.ro` worktree.

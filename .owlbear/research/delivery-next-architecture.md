@@ -145,13 +145,12 @@ the process that serves the status view the owner of runners in both phases.
   starts on the Change.
 - Detects sleep by a jump of more than 60 s between wall-clock and monotonic time, then runs an
   observation pass.
-- Starts new Changes for the New Change button: `POST /api/next/new-change` runs
-  `code chat -m agent "<start prompt for the delivery skill>"` in the project folder, as an
-  argument list without a shell and with a fixed prompt. It omits `-r`, which uses the last active
-  window, possibly another project's; whether VS Code reuses the project's open window is confirmed
-  in the user's VS Code check, with `vscode://agents/new?prompt=…&workspace=…` (a draft in the
-  Agents window) as fallback. If `code` is not on the path, the endpoint returns that exact command
-  and the page shows it (S12).
+- Starts new Changes for the New Change button: `POST /api/next/new-change` returns a launch id at
+  once and opens the shaping chat on a background thread: an interactive Copilot-harness chat in the
+  project folder's window on the `shaper` role, with the fixed start prompt (TD-83). The page polls
+  `GET /api/next/new-change/{launch}` (`opening`, `open`, `failed`). One launch runs per project; the
+  next may start 5 s after it ends. If `code` is not on the path or the chat fails, the page shows the
+  manual `code chat -m agent "<start prompt>"` command (S12).
 - Starts through a VS Code folder-open task ("OwlBear Delivery host", `runOn: folderOpen`). Setup
   writes `.vscode/tasks.json` only with consent and only while it is untracked, adds it to the
   clone's `.git/info/exclude` so nothing is committed (TD-11, DR14), and verifies workspace trust and
@@ -326,15 +325,21 @@ keeps working offline. Endpoints under `/api/next`:
 | `GET /changes` | Every Change card: status line, "now" line (step plus last tool event), step time, quiet warning, credits, overlaps, next actor |
 | `GET /changes/{slug}` | Brief and versions, plan, open question, person-only checks, "before" and visual-check screenshots, decisions with origin, PR link, pull-back result, activity |
 | `GET /project` | Neutral notes on repository rules that GitHub does not require and Delivery checks itself (TD-25) |
-| `POST /new-change` | Run `code chat -m agent` with the delivery skill's start prompt; returns the command when `code` is missing |
+| `POST /new-change` | Start opening the shaping chat in the background and return its launch id; 409 while one opens; the command when `code` is missing |
+| `GET /new-change/{launch}` | The launch's state (`opening`, `open`, `failed`), reason, settings warning and manual command |
 | `POST /briefs` | Create a Change or revise its brief draft (behind `save_brief`): validates the brief, returns the host-issued handle or field-specific errors |
-| `POST /changes/{slug}/approve-brief` | Approve one brief version |
+| `POST /changes/{slug}/approve-brief` | Approve one brief version; refused while a visual state has clicks or typing and the project has no seed command (TD-65) |
 | `POST /changes/{slug}/answers` | Answer one question (also used by the chat tool) |
 | `POST /changes/{slug}/check-results` | Pass or fail of one person-only check, with a note |
 | `POST /changes/{slug}/merge-consent` | Only with "ask before merge": consent to merge one exact head; void when the head changes |
 | `POST /changes/{slug}/pull` | Retry pull-back of the local target |
 | `POST /changes/{slug}/intent` | Pause, resume or abandon |
 | `POST /changes/{slug}/recovery` | Apply one action offered by the current `stop` (T6), e.g. "end processes 4312, 4318" |
+| `GET /backlog`, `POST /backlog`, `PATCH /backlog/{id}`, `POST /backlog/change` | The improvement backlog (TD-84): one JSON file per entry in the project's folder of the shared repository, committed and pushed on each owner action; a repeat counts up; classify, note, link, drop; Create Change opens the shaping chat with the chosen entries quoted as data |
+| `GET /memory`, `POST /memory/{id}/…` | The project's agent memory (TD-72, TD-85): list, approve, resolve, edit, delete through the memory engine; refused when the entry changed since the page loaded; publishes exactly the files touched |
+
+The pages share one tab bar (Changes, Backlog, Memory, Settings) and one stylesheet; the Changes page
+groups its cards by who acts next and opens a Change from `?change=` (TD-85).
 
 A brief save is validated and written at once, so its errors reach the chat. Every other write lands
 in the inbox and wakes the scheduler. Recovery actions are only those the current
