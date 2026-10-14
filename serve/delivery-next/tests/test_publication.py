@@ -989,6 +989,31 @@ def test_publish_returns_to_the_final_review_unless_head_is_the_final_reviewed_h
     assert publish.reviewed(c.model_copy(update={"reviews": [final.model_copy(update={"commit": head})]}), clone, head)
 
 
+class Interrupted(BaseException):
+    """The runner dies the moment GitHub has created the PR, before Delivery reads the answer."""
+
+
+@pytest.mark.parametrize("lost", [Interrupted, ProviderError(FailureCode.TIMEOUT, "create", "x", retry_safe=False)])
+def test_a_pr_created_before_an_interruption_is_found_again_and_never_created_twice(tmp_path, lost):
+    gh, made = FakeGh(None), []
+
+    def create(_repo, _branch, _target, _title, _body):
+        made.append(1)
+        gh.pr = pr(head=A, draft=True)
+        raise lost
+
+    gh.find_pull_request = lambda *_a: gh.pr
+    gh.create_pull_request = create
+    c, cx = change(StepKind.PUBLISH), ctx(tmp_path, gh)
+    if lost is Interrupted:
+        with pytest.raises(Interrupted):
+            publish.pull_request(cx, c, A)
+    else:  # an unknown create is read back at once
+        assert publish.pull_request(cx, c, A).number == 7
+    found = publish.pull_request(cx, c, A)  # the next runner
+    assert (found.number, made) == (7, [1])
+
+
 def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clone, tmp_path):
     commit(clone, "fix.txt")
     head = git(clone, "rev-parse", "HEAD")
