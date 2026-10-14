@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, cli, common, sessions
 from owlbear_delivery_next import host as host_module
+from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import STORE_DIR, Store, StoreError
 
@@ -19,7 +20,7 @@ EMPTY = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"  # sh
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC))  # noqa: S106
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
 
 def git(cwd: Path, *args: str) -> str:

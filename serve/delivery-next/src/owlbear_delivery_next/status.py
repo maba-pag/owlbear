@@ -167,6 +167,8 @@ def status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             return Status("Abandoned · PR closed, branch kept", None, "delivery")
         saved = f" · unmerged work saved in {', '.join(c.names.preserved)}" if c.names.preserved else ""
         pr = f" PR #{c.names.pr}" if c.names.pr else ""
+        if (p := c.pullback) and p.state == "behind":  # its reason reads "local <target> is behind: <why>"
+            return Status(f"Done · merged{pr}{saved} · {p.reason}", "Pull on the Changes page", "you")
         return Status(f"Done · merged{pr}{saved}", None, "delivery")
     _, verb, role = _WORK[c.step.kind]
     if (b := c.blocked) and not activity.runner_alive:

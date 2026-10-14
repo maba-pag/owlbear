@@ -81,6 +81,24 @@ def test_malformed_state_is_a_store_error_with_a_restore_stop(store, text):
     assert status.unloadable(err.value.stop(NOW)).action == "Restore the previous state"
 
 
+@pytest.mark.parametrize(
+    ("edit", "said"),
+    [
+        (lambda d: d | {"surprise": 1}, "unknown field surprise"),
+        (lambda d: {k: v for k, v in d.items() if k != "slug"}, "missing field slug"),
+        (lambda d: d | {"step": {"kind": "nap"}}, "invalid field step.kind"),
+    ],
+)
+def test_a_current_format_file_that_does_not_validate_was_written_by_another_delivery(store, edit, said):
+    save(store, Change(slug="c1"))
+    path = store.root / "changes" / "c1" / "change.json"
+    path.write_text(json.dumps(edit(json.loads(path.read_text()))))
+    with pytest.raises(StoreError) as err:
+        store.read("c1")
+    assert str(err.value) == f"state of c1 was written by a newer or different Delivery ({said})"
+    assert err.value.stop(NOW).action == "Restore the previous state"
+
+
 def test_profile_has_its_own_format_gate(store, monkeypatch):
     assert store.read_profile() is None
     store.write_profile(Profile(version=2, entries={"rules": ProfileEntry(state="unknown", evidence="HTTP 403")}))

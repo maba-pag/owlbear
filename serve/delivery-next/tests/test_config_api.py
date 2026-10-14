@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, model_choices
+from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import Store
 
@@ -15,7 +16,7 @@ AUTH = {"authorization": "Bearer t"}
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC))  # noqa: S106
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
 
 @pytest.fixture

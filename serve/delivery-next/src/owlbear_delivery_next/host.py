@@ -19,9 +19,10 @@ import psutil
 import uvicorn
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, common, failures, loop, processes, setup, tools
-from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop
+from owlbear_delivery_next import api, codebase, common, failures, loop, processes, profile, setup, tools
+from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop, Waiting
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import before, check, disposable, engine, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
@@ -39,16 +40,20 @@ PR_POLL = 20.0
 FAST = 2.0  # while a runner this host did not start may still run
 SLEEP_JUMP = 60.0
 BURST = (5, 60.0)  # at most five runner launches per Change in this many seconds
+PROBE = timedelta(seconds=10)  # between network probes while a Change waits on the network
+PROBE_TIMEOUT = 3.0
+RESTART = "Delivery's code changed since the host started; restart the host"
 type Found = dict[int, str]
 
 
 class HostRecord(Record):
-    """``host.json``: where the status view listens and the token its writes need."""
+    """``host.json``: where the status view listens, the token its writes need and the code it loaded."""
 
     url: str
     token: str
     pid: int
     started_at: datetime
+    code: str
     ready: list[str] | None = None  # failed readiness facts with their fix; None while the check runs
 
 
@@ -71,10 +76,23 @@ def running(store: Store) -> HostRecord | None:
     except BlockingIOError:
         with contextlib.suppress(OSError, ValidationError):
             return HostRecord.model_validate_json((store.root / "host.json").read_text())
-        return HostRecord(url="(starting)", token="", pid=0, started_at=datetime.now(UTC))
+        return HostRecord(url="(starting)", token="", pid=0, started_at=datetime.now(UTC), code="")
     finally:
         os.close(fd)
     return None
+
+
+def stale(record: HostRecord | None) -> bool:
+    """Whether the running host loaded other code than this process, so it may not read what this one writes."""
+    return record is not None and record.code != codebase.CURRENT
+
+
+def offline(c: Change, now: datetime) -> bool:
+    """Whether *c* waits out a network failure whose pause has not ended; the network's return ends it early."""
+    o = c.outcome
+    if o is None or (o.exit, o.waiting) != (Exit.PENDING, Waiting.NETWORK):
+        return False
+    return failures.kind_of(o.cause) == ErrorKind.NETWORK and o.wake_at is not None and o.wake_at > now
 
 
 def activity(store: Store, slug: str, host: HostRecord | None) -> Activity:
@@ -134,15 +152,22 @@ class Host:
         scan: Callable[[Path, datetime], Found] = _scan,
         group: Callable[[int], Found] = check.members,
         alive: Callable[[int, float | None], bool | None] = processes.alive,
+        code: Callable[[], str] = codebase.identity,
+        reach: Callable[[str], str | None] = lambda name: setup.reach(name, timeout=PROBE_TIMEOUT),
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
-        self.spawn = spawn or self._spawn
+        self.spawn, self.code, self.reach = spawn or self._spawn, code, reach
         self.wake, self.stopped = threading.Event(), threading.Event()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
         self.launches: dict[str, list[float]] = {}
         self.reported: dict[str, tuple[str, int | None]] = {}
-        self.record = HostRecord(url="", token="", pid=os.getpid(), started_at=datetime.now(UTC))
+        self.refused: str | None = None  # why runners do not start: the code differs or cannot be read
+        self.offline: set[str] = set()  # Changes last seen waiting on the network
+        self.back: dict[str, datetime] = {}  # those to wake, with when the probe saw the network return
+        self.down, self.probe_at, self.clock = False, 0.0, time.monotonic
+        pid, started = os.getpid(), datetime.now(UTC)
+        self.record = HostRecord(url="", token="", pid=pid, started_at=started, code=codebase.CURRENT)
 
     def say(self, text: str) -> None:
         """Write one line to the host's log."""
@@ -174,7 +199,11 @@ class Host:
     def tick(self, now: datetime | None = None) -> list[str]:
         """One observation pass over every Change; return those a runner was launched for."""
         launched = []
-        for slug in self.store.slugs():
+        self._probe(now or datetime.now(UTC))
+        slugs = self.store.slugs()
+        self.offline &= set(slugs)
+        self.back = {s: t for s, t in self.back.items() if s in slugs}
+        for slug in slugs:
             try:
                 if self._one(slug, now or datetime.now(UTC)) and self._launch(slug):
                     launched.append(slug)
@@ -183,6 +212,42 @@ class Host:
             except StoreError as exc:
                 self._unloadable(slug, str(exc))
         return launched
+
+    def interval(self) -> float:
+        """Seconds until the next pass: soon while a runner runs, by the next probe while a Change waits offline."""
+        wait = FAST if any(self.runner(s) for s in self.store.slugs()) else TICK
+        return max(0.0, min(wait, self.probe_at - self.clock())) if self.offline else wait
+
+    def _probe(self, now: datetime) -> None:
+        """Probe the network while a Change waits on it, every ``PROBE`` from the last probe's start."""
+        if not self.offline or self.clock() < self.probe_at:
+            return
+        self.probe_at = self.clock() + PROBE.total_seconds()
+        try:
+            name = profile.value(self.store.read_profile() or Profile(), profile.HOST, "github.com")
+        except StoreError:
+            name = "github.com"
+        up = self.reach(name) is None
+        if up and self.down:  # only a return wakes them: a probe that never failed says nothing about their failure
+            self.back |= dict.fromkeys(self.offline, now)
+            self.say(f"network: https://{name} answers again; waking {', '.join(sorted(self.offline))}")
+        self.down = not up
+
+    def _woken(self, c: Change, now: datetime) -> Change:
+        """End a network wait that began before the probe saw the network return; otherwise note it for the probe.
+
+        A wake stays pending until the Change is seen no longer waiting, so a locked or unwritten Change keeps it.
+        """
+        o, seen = c.outcome, self.back.get(c.slug)
+        if o is None or not offline(c, now):
+            self.offline.discard(c.slug)
+            self.back.pop(c.slug, None)
+        elif seen and o.at <= seen:
+            c.outcome = o.model_copy(update={"wake_at": now})
+        else:
+            self.back.pop(c.slug, None)
+            self.offline.add(c.slug)
+        return c
 
     def _unloadable(self, slug: str, text: str) -> None:
         """Report an unloadable Change once, and again only after its file changes; not on every pass."""
@@ -204,7 +269,7 @@ class Host:
             c, _ = self.store.fold(lock, slug, now, state, moved=moved)
             if moved:
                 self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
-            c = self._pull(lock, c, now)
+            c = self._woken(self._pull(lock, c, now), now)
             if rec and disappeared(prior, rec, now) and c.step == prior.step:
                 c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
                 self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
@@ -327,7 +392,21 @@ class Host:
         self.say(f"{c.slug}: check environment ready at {e.ready_url}, group {e.pgid}, PIDs {sorted(pids)}")
         return loop.apply(c, check.pending(c, c.env), now)
 
+    def _stale(self) -> bool:
+        """Whether the package differs from what this host loaded, or cannot be read; checked again on every launch."""
+        code = self.code()
+        if code.startswith(codebase.UNREADABLE):
+            reason = f"Delivery's code cannot be read: {code.removeprefix(codebase.UNREADABLE)}"
+        else:
+            reason = RESTART if code != self.record.code else None
+        if reason != self.refused:
+            self.say(f"no runner starts: {reason}" if reason else "Delivery's code is as loaded; runners start again")
+            self.refused = reason
+        return reason is not None
+
     def _launch(self, slug: str) -> bool:
+        if self._stale():
+            return False  # its runners could write state this host cannot read
         recent = [t for t in self.launches.get(slug, []) if time.monotonic() - t < BURST[1]]
         if len(recent) >= BURST[0]:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
@@ -361,8 +440,7 @@ class Host:
         wall, mono = time.time(), time.monotonic()
         self.wake.set()
         while not self.stopped.is_set():
-            watching = any(self.runner(s) for s in self.store.slugs())
-            self.wake.wait(FAST if watching else TICK)
+            self.wake.wait(self.interval())
             self.wake.clear()
             if abs((time.time() - wall) - (time.monotonic() - mono)) > SLEEP_JUMP:
                 self.say("woke from sleep: observing every Change")

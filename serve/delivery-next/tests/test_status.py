@@ -8,8 +8,10 @@ from owlbear_delivery_next.models import (
     Exit,
     Intent,
     ModelSpend,
+    Names,
     Outcome,
     Plan,
+    Pullback,
     Spend,
     Step,
     StepKind,
@@ -50,6 +52,18 @@ def test_host_down_overlays_every_unfinished_change(change):
 def test_finished_change_is_not_overlaid():
     done = build(finished_at=NOW)
     assert status(done, Activity(host_up=False), NOW).action is None
+
+
+def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers_pull():
+    behind = Pullback(state="behind", reason="local main is behind: main is checked out in 2 worktrees", at=NOW)
+    done = build(finished_at=NOW, names=Names(target="main", pr=13), pullback=behind)
+    assert status(done, Activity(host_up=True), NOW) == Status(
+        "Done · merged PR #13 · local main is behind: main is checked out in 2 worktrees",
+        "Pull on the Changes page",
+        "you",
+    )
+    pulled = done.model_copy(update={"pullback": Pullback(state="updated", at=NOW)})
+    assert status(pulled, Activity(host_up=True), NOW) == Status("Done · merged PR #13", None, "delivery")
 
 
 @pytest.mark.parametrize(

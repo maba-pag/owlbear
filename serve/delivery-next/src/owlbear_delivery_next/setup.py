@@ -58,12 +58,12 @@ def probe_in(cwd: Path) -> Probe:
     return run
 
 
-def reach(host: str) -> str | None:
+def reach(host: str, timeout: float = 10) -> str | None:
     """None when ``https://<host>`` answers through the configured proxy and the system trust store, else the error."""
     https = urllib.request.HTTPSHandler(context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
     request = urllib.request.Request(f"https://{host}/", method="HEAD")
     try:
-        urllib.request.build_opener(https).open(request, timeout=10).close()
+        urllib.request.build_opener(https).open(request, timeout=timeout).close()
     except urllib.error.HTTPError:
         return None
     except (urllib.error.URLError, OSError) as exc:

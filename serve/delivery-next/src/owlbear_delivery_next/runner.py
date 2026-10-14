@@ -17,6 +17,7 @@ from owlbear_delivery_next import (
     calibration,
     design_tools,
     held,
+    host,
     loop,
     overlap,
     permissions,
@@ -50,7 +51,7 @@ from owlbear_delivery_next.steps import (
     visual,
     worktree,
 )
-from owlbear_delivery_next.store import LockHeldError, Store, StoreError, git_common_dir
+from owlbear_delivery_next.store import STORE_DIR, LockHeldError, Store, StoreError, git_common_dir
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -425,6 +426,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
     repo = args.repo.resolve()
+    if host.stale(host.running(Store(git_common_dir(repo) / STORE_DIR))):  # before Store.open, which may write
+        _out(f"{args.change}: {host.RESTART}")
+        return 1
     store = Store.open(repo)
     try:
         with store.lock(args.change) as lock:

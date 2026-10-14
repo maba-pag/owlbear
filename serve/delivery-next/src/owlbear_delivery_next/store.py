@@ -127,15 +127,28 @@ def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward
     if version > current:
         msg = f"{name} has format {version}, newer than {current}"
         raise FormatTooNewError(msg)
+    written = version
     try:
         while version < current:
             data = forward[version](data)
             version += 1
             data["format"] = version
         return model.model_validate(data)
+    except ValidationError as exc:
+        if written < current:
+            msg = f"state of {name} cannot be migrated to format {current}"
+        else:  # the current format with fields this Delivery does not know: a newer or different one wrote it
+            msg = f"state of {name} was written by a newer or different Delivery ({_first(exc)})"
+        raise StoreError(msg) from exc
     except (KeyError, TypeError, ValueError) as exc:
         msg = f"state of {name} cannot be migrated to format {current}"
         raise StoreError(msg) from exc
+
+
+def _first(exc: ValidationError) -> str:
+    error = exc.errors()[0]
+    said = {"extra_forbidden": "unknown field", "missing": "missing field"}.get(error["type"], "invalid field")
+    return f"{said} {'.'.join(map(str, error['loc']))}"
 
 
 def read_layer[T: Layer](path: Path, model: type[T]) -> T:

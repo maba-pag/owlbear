@@ -1,3 +1,5 @@
+import importlib.util
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -5,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import cli, host, runner
+from owlbear_delivery_next import cli, codebase, host, runner
 from owlbear_delivery_next.evidence import check_inputs, next_check
 from owlbear_delivery_next.host import Host, RunnerRecord
 from owlbear_delivery_next.inbox import AnswerItem, CheckResult, IntentItem
@@ -16,6 +18,7 @@ from owlbear_delivery_next.models import (
     Brief,
     Change,
     Environment,
+    ErrorKind,
     Exit,
     Inputs,
     Names,
@@ -33,18 +36,22 @@ from owlbear_delivery_next.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity, status
 from owlbear_delivery_next.steps import check, disposable, worktree
+from owlbear_delivery_next.storage_io import open_lock
 from owlbear_delivery_next.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOLD = """\
 import os, sys
 from pathlib import Path
+from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.storage_io import open_lock
 from owlbear_delivery_next.store import Store
 root = Store.open(Path(sys.argv[1])).root
 fd = open_lock(os.open(root, os.O_RDONLY), blocking=False, name="host.lock")
-record = HostRecord(url="http://127.0.0.1:9/", token="t", pid=os.getpid(), started_at="2026-10-10T12:00:00Z")
+record = HostRecord(
+    url="http://127.0.0.1:9/", token="t", pid=os.getpid(), started_at="2026-10-10T12:00:00Z", code=CURRENT
+)
 (root / "host.json").write_text(record.model_dump_json())
 print("held", flush=True)
 sys.stdin.read()
@@ -455,3 +462,184 @@ def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_ch
     assert fake.host.tick(NOW) == ["c1"]  # then the preview starts and the capture runner follows
     after = store.read("c1")
     assert (calls["start"], after.outcome.waiting, after.outcome.cause) == (["npm run preview"], "reviewer", None)
+
+
+def test_the_code_identity_covers_shipped_files_and_ignores_incidental_ones(tmp_path):
+    pkg = tmp_path / "pkg"
+    (pkg / "web").mkdir(parents=True)
+    (pkg / "skills" / "delivery").mkdir(parents=True)
+    (pkg / "a.py").write_text("x = 1\n")
+    (pkg / "web" / "page.html").write_text("<p>")
+    (pkg / "skills" / "delivery" / "SKILL.md").write_text("# skill")
+    first = codebase.identity(pkg)
+    (pkg / "__pycache__").mkdir()
+    (pkg / "__pycache__" / "a.cpython-314.pyc").write_bytes(b"pyc")
+    for name in (".DS_Store", "foo.orig", "x.pyc", ".a.py.swp", "a.py~", ".#a.py", "web/page.html.orig"):
+        (pkg / name).write_bytes(b"incidental")
+    (pkg / "skills" / "delivery" / "SKILL.md.bak").write_text("old")
+    assert codebase.identity(pkg) == first
+    (pkg / "a.py").write_text("x = 2\n")
+    assert codebase.identity(pkg) != first
+    (pkg / "a.py").write_text("x = 1\n")
+    assert codebase.identity(pkg) == first
+    (pkg / "web" / "page.html").write_text("<p>!")
+    assert codebase.identity(pkg) != first
+    assert Host(Store(tmp_path), tmp_path).record.code == codebase.CURRENT == codebase.identity()
+
+
+def test_every_file_the_package_tracks_is_in_its_code_identity():
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "."],  # noqa: S607
+        cwd=codebase.ROOT,
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.split("\0")
+    assert {Path(p) for p in tracked if p} <= {p.relative_to(codebase.ROOT) for p in codebase.shipped()}
+
+
+def test_an_unreadable_shipped_file_is_the_identity_and_does_not_fail_import(tmp_path):
+    pkg = tmp_path / "pkg"
+    (pkg / "agents").mkdir(parents=True)
+    (pkg / "codebase.py").write_text(Path(codebase.__file__).read_text())
+    (pkg / "agents" / "builder.md").write_text("# builder")
+    (pkg / "agents" / "builder.md").chmod(0)
+    try:
+        spec = importlib.util.spec_from_file_location("copied_codebase", pkg / "codebase.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert module.CURRENT == codebase.identity(pkg) == "unreadable: agents/builder.md"
+    finally:
+        (pkg / "agents" / "builder.md").chmod(0o644)
+
+
+def test_a_host_starts_no_runner_while_its_code_differs_and_again_once_it_returns(store, tmp_path, capsys):
+    fake = Fake(store, tmp_path)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    fake.host.code = lambda: "edited"
+    assert fake.host.tick(NOW) == []
+    assert fake.host.tick(NOW) == []
+    assert capsys.readouterr().out.count(host.RESTART) == 1
+    assert fake.host.runner("c1") is None
+    fake.host.code = lambda: "unreadable: web/changes.html"
+    assert fake.host.tick(NOW) == []
+    assert fake.host.tick(NOW) == []
+    assert capsys.readouterr().out.count("no runner starts: Delivery's code cannot be read: web/changes.html") == 1
+    fake.host.code = lambda: fake.host.record.code
+    assert fake.host.tick(NOW) == ["c1"]
+    assert "runners start again" in capsys.readouterr().out
+
+
+def test_a_host_whose_own_code_was_unreadable_at_start_starts_no_runner(store, tmp_path, capsys):
+    fake = Fake(store, tmp_path)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    fake.host.record = fake.host.record.model_copy(update={"code": "unreadable: golden/good.html"})
+    fake.host.code = lambda: "unreadable: golden/good.html"
+    assert fake.host.tick(NOW) == []
+    assert "cannot be read: golden/good.html" in capsys.readouterr().out
+
+
+def test_a_runner_beside_a_host_of_other_code_runs_and_writes_nothing(store, tmp_path, capsys):
+    save(store, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
+    store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
+    before = (store.root / "changes" / "c1" / "change.json").read_text()
+    record = host.HostRecord(url="http://127.0.0.1:9/", token="t", pid=os.getpid(), started_at=NOW, code="older")  # noqa: S106
+    (store.root / "host.json").write_text(record.model_dump_json())
+    dir_fd = os.open(store.root, os.O_RDONLY)
+    lock_fd = open_lock(dir_fd, blocking=False, name="host.lock")
+    os.close(dir_fd)
+    try:
+        assert runner.main(["c1", "--repo", str(tmp_path)]) == 1
+        assert capsys.readouterr().out == f"c1: {host.RESTART}\n"
+        assert (store.root / "changes" / "c1" / "change.json").read_text() == before
+        assert len(list((store.root / "changes" / "c1" / "inbox").glob("*.json"))) == 1
+        assert host.RESTART in cli.show_status(store, NOW).splitlines()
+    finally:
+        os.close(lock_fd)
+
+
+def waiting_on(fake, kind, when=NOW):
+    c = Change(slug="c1", step=Step(kind=StepKind.BUILD), names=Names(worktree=fake.worktree))
+    return apply(c, StepResult(exit=Exit.RETRY, cause=f"{kind}:build:sdk", reason="HTTP 503"), when)
+
+
+def probing(fake, *answers):
+    probes, left = [], iter(answers)
+    fake.host.reach = lambda name: (probes.append(name), next(left))[1]
+    return probes
+
+
+def at(seconds):
+    return NOW + timedelta(seconds=seconds)
+
+
+def tick(fake, seconds):
+    fake.host.clock = lambda: float(seconds)
+    return fake.host.tick(at(seconds))
+
+
+def test_a_change_waiting_on_the_network_wakes_once_the_probe_sees_the_network_return(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, "unreachable", None)
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert tick(fake, 0) == []
+    assert tick(fake, 1) == []
+    assert tick(fake, 5) == []  # at most one probe every ten seconds
+    assert tick(fake, 11) == ["c1"]  # long before the pause ends at 60 s
+    assert probes == ["github.com", "github.com"]
+    assert store.read("c1").outcome.wake_at == at(11)
+
+
+def test_no_wait_ends_early_without_an_observed_return_or_for_a_capacity_wait(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, None, None)
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert [tick(fake, s) for s in (0, 1, 11)] == [[], [], []]  # the network never looked down
+    assert probes == ["github.com", "github.com"]
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, "unreachable", None)
+    save(store, waiting_on(fake, ErrorKind.CAPACITY))
+    assert [tick(fake, s) for s in (0, 1, 11)] == [[], [], []]
+    assert probes == []
+
+
+def test_a_network_return_wakes_a_change_that_was_locked_when_the_probe_saw_it(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, "unreachable", None)
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert [tick(fake, s) for s in (0, 1)] == [[], []]
+    with store.lock("c1"):
+        assert tick(fake, 11) == []  # the network returned while another writer held c1
+    assert tick(fake, 12) == ["c1"]
+    assert probes == ["github.com", "github.com"]
+    assert store.read("c1").outcome.wake_at == at(12)
+
+
+def test_a_network_return_does_not_wake_a_wait_that_began_after_it(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    probing(fake, "unreachable", None)
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert [tick(fake, s) for s in (0, 1)] == [[], []]
+    with store.lock("c1"):
+        assert tick(fake, 11) == []
+    save(store, later := waiting_on(fake, ErrorKind.NETWORK, at(11.5)))
+    assert [tick(fake, s) for s in (12, 13)] == [[], []]
+    assert store.read("c1").outcome.wake_at == later.outcome.wake_at
+
+
+def test_network_probes_keep_a_ten_second_schedule_from_each_probe_start(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    clock, probes = [0.0], []
+    fake.host.clock = lambda: clock[0]
+    fake.host.reach = lambda _name: (probes.append(clock[0]), clock.__setitem__(0, clock[0] + 3), "unreachable")[2]
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert fake.host.interval() == host.TICK  # no Change was seen waiting yet
+    fake.host.tick(at(0))
+    assert fake.host.interval() == 0  # the first probe is due
+    fake.host.tick(at(0))  # the probe takes three seconds
+    assert (probes, clock[0], fake.host.interval()) == ([0.0], 3.0, 7.0)
+    clock[0] = 9.9
+    fake.host.tick(at(10))
+    clock[0] = 10.0
+    fake.host.tick(at(10))
+    assert probes == [0.0, 10.0]

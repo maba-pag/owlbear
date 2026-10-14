@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, briefs, loop, setup, tools
+from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
@@ -31,7 +32,7 @@ BRIEF = {
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW)  # noqa: S106 - test token
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106 - test token
 
     def activity(self, _slug):
         return Activity(host_up=True)
