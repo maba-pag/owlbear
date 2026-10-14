@@ -76,7 +76,14 @@ the logic-line measure.
 | `prompts.py` | Bounded context for each agent step | new | 402 |
 | `sdk_adapter.py` | Session, agent, model and reasoning effort, result boundary, usage, teardown | new | 417 |
 | `session_result.py` | What one worker session produced, mapped to the loop's step result | new | 129 |
-| `permissions.py`, `confinement.py` | Allow list and denials per step kind; which paths a command reaches and whether they stay in the worktree | new | 183 |
+| `permissions.py` | Permission decisions per step: hook or signing bypass and force push refused everywhere, writes refused in read-only steps; no allow lists (TD-82) | new; `confinement.py` removed (`daf6db53b`) | 376 |
+| `shell_parse.py` | Shell text as the guard reads it: commands, wrapper programs, nested `-c` scripts and `eval` | new (`7f4821612`) | 220 |
+| `steps/disposable.py`, `steps/ro_installs.py` | Per-Change read-only worktree `<slug>.ro` for read-only sessions; its dependencies (TD-86) | new | 275 |
+| `lint.py` | The project's linters on the builder's changed files at submit (TD-87) | new | 238 |
+| `launches.py` | New Change launches of the shaping chat in the background (TD-83) | new | 86 |
+| `codebase.py` | The code version host and runners must share | new | 45 |
+| `backlog.py`, `backlog_routes.py` | Improvement backlog in the shared repository and its routes (TD-84) | new | 411 |
+| `memory_routes.py`, `pages.py` | Memory tab routes; the shared tab bar and stylesheet of every page (TD-85) | new | 169 |
 | `processes.py` | Recorded step processes by PID and start time, signalling, termination verdict | new | 74 |
 | `tools.py` | The six tool schemas and their validators | new | 472 |
 | `runner.py` | Process entry: one Change, one step | new | 320 |
