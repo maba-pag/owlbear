@@ -89,6 +89,15 @@ def found(plan: Plan, others: Mapping[str, Iterable[str]], patterns: Iterable[st
     return out
 
 
+def record(c: Change, result: StepResult, others: Mapping[str, Iterable[str]], repo: Path) -> None:
+    """Record the overlaps of the plan the step keeps: shown, never asked about (D7).
+
+    A plan its challenge sent back is kept too, so the owner's "accept as it is" finds its overlaps recorded.
+    """
+    if result.plan and result.exit in {Exit.DONE, Exit.RETRY}:
+        c.overlaps = found(result.plan, others, generated(repo))
+
+
 def _quiet(path: Path, *args: str) -> str | None:
     run = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
         [GIT, *args], cwd=path, capture_output=True, text=True, check=False, timeout=60

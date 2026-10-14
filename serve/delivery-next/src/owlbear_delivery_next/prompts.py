@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.visual_records import DetectorScan
 
 LIMIT = 1500
+PLAN_LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mid-sentence
 DETAIL = 4000  # a task's details: review findings, CI log tail or review thread
 READ_ONLY = "Read files and run any read-only command; nothing you run may write files or change Git state."
 FINISH = """\
@@ -285,11 +286,17 @@ PLAN_FINISH = (
 )
 
 
-def _plan_lines(plan: Plan) -> list[str]:
-    return [
-        f"- {t.id}: {_one(t.title)} · scope {', '.join(t.scope)} · checks {', '.join(t.checks)} · {_one(t.detail)}"
+def _plan_lines(plan: Plan, limit: int = PLAN_LIMIT) -> list[str]:
+    lines = [
+        f"- {t.id}: {_flat(t.title)} · scope {', '.join(t.scope)} · checks {', '.join(t.checks)} · {_flat(t.detail)}"
         for t in plan.tasks
     ]
+    text = "\n".join(lines)
+    return lines if len(text) <= limit else [*text[:limit].splitlines(), "(truncated)"]
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
 
 
 def _packages(profile: Profile) -> list[str]:

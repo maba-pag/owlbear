@@ -458,7 +458,7 @@ class Change(Record):
     decisions: list[Decision] = Field(default_factory=list)
     questions: list[Question] = Field(default_factory=list)
     plan: Plan | None = None
-    overlaps: list[Overlap] = Field(default_factory=list)  # recorded when the plan is accepted
+    overlaps: list[Overlap] = Field(default_factory=list)  # recorded with each plan kept: accepted or challenged
     reviews: list[Review] = Field(default_factory=list)
     step: Step = Field(default_factory=lambda: Step(kind=StepKind.SHAPE))
     outcome: Outcome | None = None

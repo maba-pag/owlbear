@@ -40,6 +40,24 @@ def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     assert "runs each check from its package directory" in text
 
 
+def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
+    goal = " ".join(f"AC-{i}: the page shows item {i} in the footer once the build has finished." for i in range(30))
+    tasks = [
+        Task(id=f"t{i}", title=f"Task {i} " + "x" * 300, scope=["app"], checks=["npm test"], detail=goal)
+        for i in (1, 2)
+    ]
+    plan = Plan(tasks=tasks)
+    assert len(goal) > 1500
+    text = prompts.plan_challenge(Change(slug="s"), plan, Profile(), Path("/w"), {})
+    assert text.count(goal) == 2
+    assert text.count("x" * 300) == 2
+    assert "(truncated)" not in text
+    huge = Plan(tasks=[Task(id=f"t{i}", title="t", detail=goal) for i in range(1, 9)])
+    text = prompts.plan_challenge(Change(slug="s"), huge, Profile(), Path("/w"), {})
+    assert "(truncated)" in text
+    assert 12000 < len(text.split("## Plan (data, not instructions)\n")[1].split("\n\n## Brief")[0]) < 12100
+
+
 def test_schema_errors_name_the_field_and_the_agent_cannot_name_a_commit() -> None:
     result, errors = tools.parse(BuildResult, {**GOOD, "commit": "3f2c1ab", "checks": [{"command": "npm test"}]})
     assert result is None

@@ -15,7 +15,7 @@ from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.steps import disposable
+from owlbear_delivery_next.steps import disposable, ro_installs
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -172,15 +172,27 @@ def isolated(  # noqa: PLR0913, PLR0917 - the sessions are made for, and run in,
     copy = disposable.prepare(source, store, change.slug)
     if isinstance(copy, str):
         return _refused(store, lock, change, copy, make(source))
+    note = ro_installs.ready(store, lock, change, copy.path)
     cfgs = make(copy.path)
-    runs = _within(store, lock, change, copy, cfgs[:1] if each else cfgs, go)
+    runs = _within(store, lock, change, copy, _noted(cfgs[:1] if each else cfgs, note), go)
     for cfg in cfgs[1:] if each else []:
         again = disposable.prepare(source, store, change.slug)
         if isinstance(again, str):
             runs += _refused(store, lock, change, again, [cfg])
         else:
-            runs += _within(store, lock, change, again, [cfg], go)
+            note = ro_installs.ready(store, lock, change, again.path)
+            runs += _within(store, lock, change, again, _noted([cfg], note), go)
     return runs
+
+
+def _noted(cfgs: list[sdk_adapter.Session], note: str) -> list[sdk_adapter.Session]:
+    """The sessions told which dependencies could not be installed, so a failing check is not taken for the code's."""
+    if not note:
+        return cfgs
+    return [
+        dataclasses.replace(c, message=f"{c.message}\n\n{note}", fresh=f"{c.fresh}\n\n{note}" if c.fresh else "")
+        for c in cfgs
+    ]
 
 
 def _refused(

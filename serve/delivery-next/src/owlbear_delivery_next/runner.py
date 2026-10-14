@@ -180,8 +180,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             ),
             result,
         )
-        if result.exit == Exit.DONE and result.plan:  # shared paths are shown, never asked about (D7)
-            change.overlaps = overlap.found(result.plan, others, overlap.generated(path))
+        overlap.record(change, result, others, path)
         end = datetime.now(UTC)
     result = overlap.integrated(store, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.steps import ro_installs, worktree
 from owlbear_delivery_next.storage_io import atomic_write
 from owlbear_delivery_next.store import StoreError, git_common_dir
 
@@ -57,8 +57,9 @@ def prepare(source: Path, store: Store, slug: str) -> Copy | str:
             if problem := custody(source, at, owned(store)):
                 return problem
             worktree.git(at, "checkout", "--quiet", "--detach", "--force", commit)
-            worktree.git(at, "clean", "-ffdxq")
+            worktree.git(at, "clean", "-ffdq")  # ignored files stay: installed dependencies serve the next session
         else:
+            ro_installs.forget(store.root / "changes" / slug)
             at.parent.mkdir(parents=True, exist_ok=True)
             worktree.git(source, "worktree", "prune")
             worktree.git(source, "worktree", "add", "--quiet", "--detach", str(at), commit)

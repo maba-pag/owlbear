@@ -107,9 +107,10 @@ def test_the_read_only_worktree_is_reused_and_reset_to_the_next_head(store, chan
     found = []
     second = reviewer(monkeypatch, lambda cfg: found.append(git(cfg.worktree, "status", "--porcelain", "--ignored")))
     c = reviewed(store, change_repo)
-    assert (second[0].worktree, git(at, "rev-parse", "HEAD"), found) == (at, head, [""])
+    assert (second[0].worktree, git(at, "rev-parse", "HEAD"), found) == (at, head, ["!! out.log"])
     assert (at / "a.txt").read_text() == "b\n"
-    assert not any((at / p).exists() for p in ("new.txt", "deep", "out.log"))
+    assert not any((at / p).exists() for p in ("new.txt", "deep"))
+    assert (at / "out.log").read_text() == "ignored\n"  # ignored files, installed dependencies among them, stay
     assert c.outcome.exit == Exit.DONE
 
 
