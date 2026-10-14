@@ -327,7 +327,7 @@ def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_w
     asked = []
     out = api.new_chat(tmp_path, SHAPER, start=lambda *a: asked.append(a) or (ending, warning))
     assert asked == [(tmp_path, SHAPER, api.START_PROMPT)]
-    assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "high", "default")
+    assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "medium", "default")
     assert {k: v for k, v in out.items() if k != "reason"} == state
     if state["state"] == "failed":
         why = f"the Copilot chat did not start (model-unavailable: {ending.detail})"

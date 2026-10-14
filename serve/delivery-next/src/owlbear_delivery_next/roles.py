@@ -19,7 +19,7 @@ DEFAULTS: dict[Role, RoleModel] = {
     "challenger": RoleModel(model="gpt-6.1-sol", effort="high"),
     "designer": RoleModel(model="claude-opus-5.5", effort="high"),  # the visual review's design judge
     "preparer": RoleModel(model="claude-haiku-5.5", effort="low"),  # check prep: finds the launch recipe
-    "shaper": RoleModel(model="claude-opus-5.5", effort="high"),  # the owner's New Change chat; no step kind (TD-83)
+    "shaper": RoleModel(model="claude-opus-5.5", effort="medium"),  # the New Change chat (TD-83); owner's effort
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
 SESSIONS: dict[str, Role] = {

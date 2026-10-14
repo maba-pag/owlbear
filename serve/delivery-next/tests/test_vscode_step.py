@@ -1059,7 +1059,7 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
     ((chat, started),) = host.actions("chat/turnStarted")
     message = started["message"]
     assert (chat, message["text"], "agent" in message) == ("ahp-chat://default/c1", "Shape a brief with me.", False)
-    assert message["model"] == {"id": "claude-opus-5.5", "config": {"thinkingLevel": "high", "contextSize": 200000}}
+    assert message["model"] == {"id": "claude-opus-5.5", "config": {"thinkingLevel": "medium", "contextSize": 200000}}
     assert host.chats[chat]["activeTurn"]["id"] == out.turns[0]  # still running: Delivery neither follows nor stops it
     assert host.actions("chat/turnCancelled") == []
     assert (host.twin.closed, host.closed) == (1, 1)
