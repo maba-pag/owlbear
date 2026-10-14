@@ -125,5 +125,7 @@ configuration cannot override the host-wide user settings. Read-only steps there
 disposable detached worktree per Change (`<slug>.ro`, `95fda75f8`): their writes land there and are
 deleted with it, and a ref change in the shared repository voids the result
 (`policy:<step>:read-only-write`). An in-place restore was built first and discarded after a Sol
-review found data-loss paths. Known limits: bypasses behind `sh -c`, `env` or `xargs` are not caught,
-and a window turn that survives an unconfirmed cancel could still write into the `.ro` worktree.
+review found data-loss paths. Known limits: since `7f4821612` the guard reads wrapper programs, nested
+`-c` scripts, `eval` and hook or signing changes through git config, but not script files, a shell's
+standard input, `env -S` or commands built at run time; and a window turn that survives an unconfirmed
+cancel could still write into the `.ro` worktree.
