@@ -92,12 +92,12 @@ def test_a_lint_error_in_a_changed_file_refuses_the_submit_until_it_is_fixed(cha
 
 
 @pytest.mark.usefixtures("real_ruff")
-def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_three(change_repo: Path) -> None:
+def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_the_limit(change_repo: Path) -> None:
     commit(change_repo, {"pyproject.toml": RUFF})
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "import sys\n"})
     g = gate(change_repo, since, log)
-    assert [submit(g, "new.py")[1] for _ in range(3)] == [False, False, False]
+    assert [submit(g, "new.py")[1] for _ in range(lint.REFUSALS)] == [False] * lint.REFUSALS
     assert g.run.invalid == 0  # the invalid-submit limit is not spent on lint
     assert submit(g, "new.py") == (ACCEPTED, True)
     assert [e["event"] for e in log if e["event"].startswith("lint-")] == ["lint-unresolved"]
