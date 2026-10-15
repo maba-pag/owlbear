@@ -33,7 +33,7 @@ def git(cwd: Path, *args: str) -> str:
 
 @pytest.fixture
 def shared_repo(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
-    remote, root = tmp_path / "remote.git", tmp_path / "owlbear-common"
+    remote, root = tmp_path / "remote.git", tmp_path / "owlbear-data"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
     git(tmp_path, "clone", "-q", str(remote), str(root))
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):

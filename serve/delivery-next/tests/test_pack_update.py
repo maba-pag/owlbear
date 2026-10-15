@@ -39,7 +39,7 @@ def git(cwd: Path, *args: str) -> str:
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch) -> Path:
     """A project clone with a shared settings repository."""
-    remote, root = tmp_path / "remote.git", tmp_path / "owlbear-common"
+    remote, root = tmp_path / "remote.git", tmp_path / "owlbear-data"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
     git(tmp_path, "clone", "-q", str(remote), str(root))
     git(root, "commit", "-q", "--allow-empty", "-m", "start")
