@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next import api, backlog_routes
 from owlbear_delivery_next.backlog import Backlog
 from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.common import Common
+from owlbear_delivery_next.data_repo import DataRepo
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.models import Change
 from owlbear_delivery_next.store import Store
@@ -41,7 +41,7 @@ class Launch:
 
 @pytest.fixture
 def store(tmp_path, shared_repo, github) -> Store:  # noqa: ARG001 - its issues are the fake GitHub's
-    return Store(tmp_path / "store", Common(shared_repo[0]), "shop-site")
+    return Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
 
 
 def client(store, launch=None, which=lambda _n: "/bin/code", headers=AUTH) -> TestClient:

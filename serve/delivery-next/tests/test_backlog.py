@@ -10,7 +10,7 @@ from owlbear_delivery_next import backlog as backlog_module
 from owlbear_delivery_next import backlog_migrate, cli
 from owlbear_delivery_next.backlog import Backlog, BacklogError
 from owlbear_delivery_next.backlog_issues import Issues
-from owlbear_delivery_next.common import Common
+from owlbear_delivery_next.data_repo import DataRepo
 from owlbear_delivery_next.store import Store
 
 T0 = datetime(2026, 10, 14, 8, tzinfo=UTC)
@@ -25,7 +25,7 @@ def git(cwd: Path, *args: str) -> str:
 def shared(shared_repo, tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     home = tmp_path / "home"
     home.mkdir()
-    (home / "common.json").write_text(json.dumps({"repository": str(shared_repo[0])}))
+    (home / "data.json").write_text(json.dumps({"repository": str(shared_repo[0])}))
     monkeypatch.setenv("OWLBEAR_HOME", str(home))
     return shared_repo
 
@@ -51,7 +51,7 @@ class Clock:
 
 
 def view(root: Path, clock: Clock | None = None) -> Backlog:
-    return Backlog(Common(root), "shop-site", clock or Clock())
+    return Backlog(DataRepo(root), "shop-site", clock or Clock())
 
 
 def names(issue) -> list[str]:
@@ -107,7 +107,7 @@ def test_a_finding_seen_again_counts_up_its_issue_and_comments_only_new_evidence
 
 def test_a_repeat_counts_up_only_its_own_project_s_entry_and_another_project_s_is_a_new_one_to_link(shared, github):
     root, title = shared[0], "Status line hides the step"
-    shop, docs = view(root), Backlog(Common(root), "docs-site", Clock())
+    shop, docs = view(root), Backlog(DataRepo(root), "docs-site", Clock())
     first = shop.add(title, source="watcher")[0]
 
     elsewhere, new = docs.add(title, source="watcher")
@@ -140,7 +140,7 @@ def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are
         "scope:unassigned": "000000",
         "help wanted": "008672",
     } | dict.fromkeys(made, "A67C52")
-    issues = Issues(Common(root))
+    issues = Issues(DataRepo(root))
     issues.ensure_labels([])
     github.labels["scope:global"] = {"name": "scope:global", "color": "0e8a16"}  # made by another writer meanwhile
     issues.ensure_labels(["scope:global"])
@@ -416,7 +416,7 @@ def test_migration_moves_each_file_into_one_issue_verifies_then_deletes_and_push
     github.answer = lagging
     said = []
 
-    assert backlog_migrate.migrate(Common(root), said.append) == 0
+    assert backlog_migrate.migrate(DataRepo(root), said.append) == 0
     github.answer, github.hidden = answer, set()
 
     assert said == [
@@ -430,7 +430,7 @@ def test_migration_moves_each_file_into_one_issue_verifies_then_deletes_and_push
         "closed",
         "completed",
     )
-    found = Backlog(Common(root)).read(fresh=True)[0]
+    found = Backlog(DataRepo(root)).read(fresh=True)[0]
     assert [(e.legacy, e.links, e.count, e.status) for e in sorted(found.values(), key=lambda e: int(e.id))] == [
         (a, ["2"], 1, "inbox"),
         (b, ["1"], 2, "done"),
@@ -439,7 +439,7 @@ def test_migration_moves_each_file_into_one_issue_verifies_then_deletes_and_push
     assert git(remote, "log", "-1", "--format=%s", "main") == "backlog: 2 entries moved to GitHub issues (TD-103)"
     assert "backlog" not in git(remote, "ls-tree", "-r", "--name-only", "main")
     again = []
-    assert (backlog_migrate.migrate(Common(root), again.append), again, len(github.issues)) == (
+    assert (backlog_migrate.migrate(DataRepo(root), again.append), again, len(github.issues)) == (
         0,
         ["no file entries to migrate"],
         2,
@@ -458,14 +458,14 @@ def test_a_migration_stopped_midway_keeps_every_file_and_a_rerun_creates_only_th
 
     github.answer = second_create_fails
     said = []
-    assert backlog_migrate.migrate(Common(root), said.append) == 1
+    assert backlog_migrate.migrate(DataRepo(root), said.append) == 1
     assert said[0] == "created #1: 20261014-000001 entry 1"
     assert said[1].startswith("stopped, no file deleted: GitHub (acme/owlbear-data) did not confirm the save")
     assert all(p.exists() for p in files)
 
     github.answer = answer
     said = []
-    assert backlog_migrate.migrate(Common(root), said.append) == 0
+    assert backlog_migrate.migrate(DataRepo(root), said.append) == 0
     assert said[:3] == [
         "already #1: 20261014-000001 entry 1",
         "created #2: 20261014-000002 entry 2",
@@ -495,7 +495,7 @@ def test_a_fresh_run_after_a_crash_finds_the_issues_made_before_it_while_github_
 
     github.answer = crash_at_the_third
     with pytest.raises(Crash):
-        backlog_migrate.migrate(Common(root), [].append)
+        backlog_migrate.migrate(DataRepo(root), [].append)
     assert (json.loads((root / backlog_migrate.JOURNAL).read_text()), git(root, "status", "--porcelain")) == (
         {"20261014-000001": "1", "20261014-000002": "2"},
         "",
@@ -505,7 +505,7 @@ def test_a_fresh_run_after_a_crash_finds_the_issues_made_before_it_while_github_
     github.answer = answer  # #1 and #2 still not listed
 
     said = []
-    assert backlog_migrate.migrate(Common(root), said.append) == 0
+    assert backlog_migrate.migrate(DataRepo(root), said.append) == 0
     assert said[:3] == [
         "already #1: 20261014-000001 entry 1",
         "already #2: 20261014-000002 entry 2",
@@ -529,10 +529,10 @@ def test_an_issue_that_does_not_read_back_as_its_file_or_an_unreadable_file_bloc
 
     github.edit = lossy
     said = []
-    assert backlog_migrate.migrate(Common(root), said.append) == 1
+    assert backlog_migrate.migrate(DataRepo(root), said.append) == 1
     assert said[-1] == "not verified, no file deleted: 20261014-000001 (#1): notes differ"
     (root / "owlbear" / "backlog" / "20261014-000003.json").write_text("{")
     said = []
-    assert backlog_migrate.migrate(Common(root), said.append) == 1
+    assert backlog_migrate.migrate(DataRepo(root), said.append) == 1
     assert said[0].startswith("unreadable: owlbear/backlog/20261014-000003.json")
     assert all(p.exists() for p in files)

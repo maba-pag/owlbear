@@ -49,7 +49,7 @@ def repo(tmp_path: Path, monkeypatch) -> Path:
         git(root, "config", key, value)
     home = tmp_path / "home"
     home.mkdir()
-    (home / "common.json").write_text(json.dumps({"repository": str(root)}))
+    (home / "data.json").write_text(json.dumps({"repository": str(root)}))
     monkeypatch.setenv("OWLBEAR_HOME", str(home))
     project = tmp_path / "shop"
     git(tmp_path, "init", "-q", "-b", "main", str(project))

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine
 
-from owlbear_delivery_next import api, common
+from owlbear_delivery_next import api, data_repo
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import Store
@@ -38,7 +38,7 @@ def shared(tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path]:
     git(root, "push", "-q", "origin", "HEAD")
     home = tmp_path / "home"
     home.mkdir()
-    (home / "common.json").write_text(json.dumps({"repository": str(root)}))
+    (home / "data.json").write_text(json.dumps({"repository": str(root)}))
     monkeypatch.setenv("OWLBEAR_HOME", str(home))
     git(tmp_path, "init", "-q", "-b", "main", str(repo))
     git(repo, "commit", "--allow-empty", "-qm", "start")
@@ -170,7 +170,7 @@ def test_no_agent_can_write_the_memory_until_the_owners_action_is_published(shar
     store = Store.open(repo)
     folder = root / store.name / "memory"
     curated, other = seed(folder, "Run ruff first", curated=True), seed(folder, "Ask before merging")
-    real, raced = common.Common.publish, []
+    real, raced = data_repo.DataRepo.publish, []
 
     def publish(self, paths, message, until=None):
         agent = MemoryEngine(folder, writer_lock_timeout=0.2)
@@ -179,7 +179,7 @@ def test_no_agent_can_write_the_memory_until_the_owners_action_is_published(shar
         write.join()
         return real(self, paths, message, until)
 
-    monkeypatch.setattr(common.Common, "publish", publish)
+    monkeypatch.setattr(data_repo.DataRepo, "publish", publish)
     approved = client(store).post(f"/api/next/memory/{curated.id}/approve", json={"updated_at": curated.updated_at})
 
     assert approved.status_code == 200

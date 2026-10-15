@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from owlbear_delivery_next.common import Common
+    from owlbear_delivery_next.data_repo import DataRepo
 
 FOLDER, RECORD = "visual", "round.json"
 ROUNDS = 50  # decided rounds whose screenshots are kept
@@ -29,12 +29,12 @@ MARGIN = 10  # percentage points a new pack's design judge may agree with the ow
 PART = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")  # one path component: a project, a Change or a screenshot
 
 
-def folder(shared: Common, name: str) -> Path:
+def folder(shared: DataRepo, name: str) -> Path:
     """The project's calibration folder in the shared repository."""
     return shared.root / _part(name) / FOLDER
 
 
-def keep(shared: Common, name: str, slug: str, decided: VisualRound, images: Mapping[str, Path]) -> str:
+def keep(shared: DataRepo, name: str, slug: str, decided: VisualRound, images: Mapping[str, Path]) -> str:
     """Record one decided round and its screenshots, each under the name given, such as ``after-home-1280.png``.
 
     Returns what the owner should know if publishing failed.
@@ -58,7 +58,7 @@ def keep(shared: Common, name: str, slug: str, decided: VisualRound, images: Map
         return shared.publish(target / RECORD, f"visual: {slug} round {decided.number} decided")
 
 
-def cases(shared: Common, name: str, wait: float | None = None) -> list[tuple[VisualRound, list[Path]]]:
+def cases(shared: DataRepo, name: str, wait: float | None = None) -> list[tuple[VisualRound, list[Path]]]:
     """Every decided round of the project, newest decision first, with the screenshots still kept for it."""
     with shared.locked(wait):
         return _cases(shared, name)
@@ -122,7 +122,7 @@ def replayed(pairs: Sequence[tuple[VisualRound, Verdict | None]]) -> Replay:
     return Replay(len(decided), before, sum(new == owner for owner, _, new in decided))
 
 
-def _cases(shared: Common, name: str) -> list[tuple[VisualRound, list[Path]]]:
+def _cases(shared: DataRepo, name: str) -> list[tuple[VisualRound, list[Path]]]:
     found = []
     for record in folder(shared, name).glob(f"*/{RECORD}"):
         decided = VisualRound.model_validate_json(record.read_text(encoding="utf-8"))

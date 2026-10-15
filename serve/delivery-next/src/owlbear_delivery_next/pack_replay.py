@@ -55,7 +55,7 @@ def replay(
         ReplayError: A judge's processes were not confirmed gone.
     """
     if store.shared is None:
-        msg = "the calibration replay reads the shared repository: set it with `owlbear-next common PATH`"
+        msg = "the calibration replay reads the shared repository: set it with `owlbear-next data PATH`"
         raise design_pack.PackError(msg)
     pack = _pack(candidate)
     role, memory = roles.chosen(store.settings(), "design-review"), sessions.memory(store)

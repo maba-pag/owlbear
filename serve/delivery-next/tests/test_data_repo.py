@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, common, sessions, setup
+from owlbear_delivery_next import api, cli, data_repo, sessions, setup
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
@@ -39,7 +39,7 @@ def shared(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     git(root, "push", "-q", "origin", "HEAD")
     home = tmp_path / "home"
     home.mkdir()
-    (home / "common.json").write_text(json.dumps({"repository": str(root)}))
+    (home / "data.json").write_text(json.dumps({"repository": str(root)}))
     monkeypatch.setenv("OWLBEAR_HOME", str(home))
     return root, remote
 
@@ -62,9 +62,9 @@ def pushed(remote: Path, rel: str) -> str:
 
 
 def test_a_project_is_named_after_its_repository(repo: Path) -> None:
-    assert common.project_name(repo) == "shop-site"
+    assert data_repo.project_name(repo) == "shop-site"
     git(repo, "remote", "remove", "origin")
-    assert common.project_name(repo) == "shop"
+    assert data_repo.project_name(repo) == "shop"
 
 
 def test_agents_remember_in_the_projects_folder_of_the_shared_repository(shared, repo) -> None:
@@ -171,19 +171,46 @@ def test_without_a_pointer_the_settings_stay_in_the_clone(repo) -> None:
 def test_a_pointer_to_no_repository_stops_delivery(tmp_path: Path, repo, monkeypatch) -> None:
     home = tmp_path / "home"
     home.mkdir()
-    (home / "common.json").write_text(json.dumps({"repository": str(tmp_path / "missing")}))
+    (home / "data.json").write_text(json.dumps({"repository": str(tmp_path / "missing")}))
     monkeypatch.setenv("OWLBEAR_HOME", str(home))
     with pytest.raises(StoreError, match="not a git repository"):
         Store.open(repo)
 
 
+def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(shared, repo, caplog) -> None:
+    root, _ = shared
+    home = data_repo.pointer().parent
+    (home / "data.json").rename(home / "common.json")
+    said = (home / "common.json").read_text()
+
+    with caplog.at_level("WARNING", logger=data_repo.__name__):
+        assert Store.open(repo).shared == data_repo.DataRepo(root)
+        assert Store.open(repo).shared == data_repo.DataRepo(root)
+    assert ((home / "data.json").read_text(), (home / "common.json").exists()) == (said, False)
+    assert sorted(p.name for p in home.iterdir()) == ["data.json"]  # no temporary file left
+    assert [r.getMessage() for r in caplog.records] == [
+        f"moved the shared repository's pointer {home / 'common.json'} to {home / 'data.json'}"
+    ]
+    (home / "common.json").write_text(json.dumps({"repository": "/elsewhere"}))  # the new pointer wins; old kept
+    assert (data_repo.locate(), (home / "common.json").exists()) == (data_repo.DataRepo(root), True)
+
+
+def test_recording_a_repository_moves_the_old_pointer_away(tmp_path: Path) -> None:
+    home, local = data_repo.pointer().parent, tmp_path / "local-data"
+    git(tmp_path, "init", "-q", "-b", "main", str(local))
+    (home / "common.json").write_text(json.dumps({"repository": str(tmp_path / "gone")}))
+    assert str(local) in cli.show_data(local)
+    assert sorted(p.name for p in home.iterdir()) == ["data.json"]
+    assert data_repo.locate() == data_repo.DataRepo(local.resolve())
+
+
 def test_the_cli_records_the_shared_repository_and_refuses_a_plain_folder(tmp_path: Path, repo) -> None:
-    plain, local = tmp_path / "plain", tmp_path / "local-common"
+    plain, local = tmp_path / "plain", tmp_path / "local-data"
     plain.mkdir()
     git(tmp_path, "init", "-q", "-b", "main", str(local))
-    assert "No shared settings repository" in cli.show_common(None)
-    assert "not a git repository" in cli.show_common(plain)
-    assert str(local) in cli.show_common(local)
+    assert "No shared settings repository" in cli.show_data(None)
+    assert "not a git repository" in cli.show_data(plain)
+    assert str(local) in cli.show_data(local)
     assert Store.open(repo).global_path == local / "config.json"
     assert (local / "shop-site" / "repository").read_text() == "github.com/acme/shop-site\n"
 
@@ -206,15 +233,15 @@ def test_the_hosts_runners_read_the_hosts_shared_repository(shared, repo, monkey
     (store.root / "changes" / "c1").mkdir(parents=True)
     monkeypatch.setattr(host_module.subprocess, "Popen", popen)
     host_module.Host(store, repo).spawn("c1")
-    assert seen[0][common.VIEW] == str(root)
-    assert common.VIEW not in os.environ  # the host's own environment is untouched
+    assert seen[0][data_repo.VIEW] == str(root)
+    assert data_repo.VIEW not in os.environ  # the host's own environment is untouched
 
 
 def test_a_save_waits_for_the_shared_lock_only_so_long(shared, repo, monkeypatch) -> None:
     root, _ = shared
     store = Store.open(repo)
-    monkeypatch.setattr(common, "LOCK_SECONDS", 0.2)
-    with common.Common(root).locked(), pytest.raises(StoreError, match="another settings save"):
+    monkeypatch.setattr(data_repo, "LOCK_SECONDS", 0.2)
+    with data_repo.DataRepo(root).locked(), pytest.raises(StoreError, match="another settings save"):
         store.update_config(lambda cur: cur)
 
 
@@ -310,8 +337,8 @@ def test_a_rename_waits_for_running_steps_and_a_host_picks_up_a_rename_made_else
     assert got.status_code == 409
     assert "steps of c1 are running" in got.json()["detail"]
     assert (root / "shop-site").is_dir()
-    with common.Common(root).locked():
-        common.Common(root).rename("shop-site", "acme-shop")  # as a pull of another machine's rename leaves it
+    with data_repo.DataRepo(root).locked():
+        data_repo.DataRepo(root).rename("shop-site", "acme-shop")  # as a pull of another machine's rename leaves it
     host = host_module.Host(store, repo, alive=lambda _p, _c: True)
     host.tick()
     assert store.name == "acme-shop"

@@ -42,7 +42,7 @@ def shared_repo(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     git(root, "push", "-q", "origin", "HEAD")
     home = tmp_path / "home"
     home.mkdir()
-    (home / "common.json").write_text(json.dumps({"repository": str(root)}))
+    (home / "data.json").write_text(json.dumps({"repository": str(root)}))
     monkeypatch.setenv("OWLBEAR_HOME", str(home))
     repo = tmp_path / "shop"
     git(tmp_path, "init", "-q", "-b", "main", str(repo))

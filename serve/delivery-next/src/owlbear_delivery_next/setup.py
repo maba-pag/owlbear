@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import truststore
 
-from owlbear_delivery_next import common, design_pack, pack_update, profile, roles
+from owlbear_delivery_next import data_repo, design_pack, pack_update, profile, roles
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
 from owlbear_delivery_next.store import Store, StoreError, git_common_dir
@@ -378,24 +378,24 @@ def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], objec
     The repository's name is the default; ``chosen`` (``--folder``) replaces it and is never asked again. False when
     no usable name was given; a folder the repository already claims is kept, renamed only on the settings page.
     """
-    ident = common.identity(repo)
+    ident = data_repo.identity(repo)
     try:
-        shared = common.locate()
+        shared = data_repo.locate()
         held = shared.claimed(ident) if shared else None
-    except common.CommonError:
+    except data_repo.DataRepoError:
         return True  # opening the store reports it
     if shared is None or held:
         if held and chosen and chosen != held:
             say(f"This project's shared settings folder is {held}; rename it on the settings page.")
         return True
-    name, asked = chosen or common.project_name(repo), 0
+    name, asked = chosen or data_repo.project_name(repo), 0
     while True:
         if not (why := shared.refusal(name, ident)):
             try:
                 with shared.locked():
                     if shared.claim(name, ident):
-                        shared.publish(shared.root / name / common.CLAIM, f"settings: the folder {name} is {ident}")
-            except common.CommonError as exc:
+                        shared.publish(shared.root / name / data_repo.CLAIM, f"settings: the folder {name} is {ident}")
+            except data_repo.DataRepoError as exc:
                 why = str(exc)
             else:
                 say(f"Shared settings folder: {shared.root / name}")

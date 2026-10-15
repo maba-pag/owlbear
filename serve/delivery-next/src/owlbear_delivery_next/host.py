@@ -19,7 +19,7 @@ import psutil
 import uvicorn
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, codebase, common, failures, loop, processes, profile, setup, tools
+from owlbear_delivery_next import api, codebase, data_repo, failures, loop, processes, profile, setup, tools
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop, Waiting
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
@@ -201,7 +201,7 @@ class Host:
         launched = []
         if self.store.shared:  # a rename on another machine arrives with a pull (TD-98)
             with self.launching:
-                self.store.name = common.folder(self.store.shared, self.repo)
+                self.store.name = data_repo.folder(self.store.shared, self.repo)
         self._probe(now or datetime.now(UTC))
         slugs = self.store.slugs()
         self.offline &= set(slugs)
@@ -431,7 +431,7 @@ class Host:
             proc = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
                 argv,
                 cwd=self.repo,
-                env={**os.environ, common.VIEW: str(self.store.shared.root) if self.store.shared else ""},
+                env={**os.environ, data_repo.VIEW: str(self.store.shared.root) if self.store.shared else ""},
                 stdin=subprocess.DEVNULL,
                 stdout=out,
                 stderr=subprocess.STDOUT,

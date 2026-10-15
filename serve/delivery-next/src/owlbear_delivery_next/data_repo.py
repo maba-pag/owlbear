@@ -1,10 +1,11 @@
-"""Delivery's settings in the shared documents repository (TD-57, TD-59, TD-64, TD-98).
+"""Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, TD-128).
 
-A pointer file names the repository. The global layer lives at its root, each project's layer in a folder named
+A pointer file names the repository; ``common.json``, its name before the repository's rename, moves to ``data.json``
+once. The global layer lives at its root, each project's layer in a folder named
 after the project's repository unless the owner chose another name; the folder is claimed by that repository's
 identity, and that claim keeps the chosen name for every clone and machine. Every save is committed and pushed
 under one repository-wide lock; a failed commit or push is reported, never hidden. A running host passes its view to
-its runners through ``OWLBEAR_COMMON``; each runner finds the project's folder by its claim.
+its runners through ``OWLBEAR_DATA``; each runner finds the project's folder by its claim.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import json
+import logging
 import os
 import re
 import subprocess
@@ -20,19 +22,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.storage_io import atomic_write
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
-VIEW = "OWLBEAR_COMMON"  # the host's view for its runners: the repository's path, or empty for none
+POINTER, OLD_POINTER = "data.json", "common.json"
+VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
 GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a save answers within the page's 60 s
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+_log = logging.getLogger(__name__)
 
 
-class CommonError(ValueError):
+class DataRepoError(ValueError):
     """The pointer names no usable repository, or a project folder belongs to another repository."""
 
 
@@ -46,7 +52,21 @@ def _held(path: Path) -> str:
 
 def pointer() -> Path:
     """Where the machine records the shared repository; ``OWLBEAR_HOME`` moves it (tests)."""
-    return Path(os.environ.get("OWLBEAR_HOME") or Path.home() / ".owlbear") / "common.json"
+    return Path(os.environ.get("OWLBEAR_HOME") or Path.home() / ".owlbear") / POINTER
+
+
+def _move_old(path: Path) -> None:
+    """Move the pointer's old ``common.json`` to *path* once: written atomically, then the old file removed."""
+    old = path.with_name(OLD_POINTER)
+    if path.exists() or not old.is_file():
+        return
+    try:
+        atomic_write(path, old.read_text())
+        old.unlink(missing_ok=True)
+    except OSError as exc:
+        msg = f"the pointer {old} could not be moved to {path}: {exc}"
+        raise DataRepoError(msg) from exc
+    _log.warning("moved the shared repository's pointer %s to %s", old, path)
 
 
 def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
@@ -74,7 +94,7 @@ def _top(root: Path) -> Path | None:
 
 
 @dataclass(frozen=True)
-class Common:
+class DataRepo:
     """The shared repository's checkout on this machine."""
 
     root: Path
@@ -100,7 +120,7 @@ class Common:
         admin = Path(found.stdout.strip())
         if found.returncode or not admin.is_dir():
             msg = f"the git folder of {self.root} cannot be found: {found.stderr.strip()[:200]}"
-            raise CommonError(msg)
+            raise DataRepoError(msg)
         fd = os.open(admin / "owlbear-delivery.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
             end = time.monotonic() + wait
@@ -111,7 +131,7 @@ class Common:
                 except BlockingIOError:
                     if time.monotonic() > end:
                         msg = "another settings save is still running; try again"
-                        raise CommonError(msg) from None
+                        raise DataRepoError(msg) from None
                     time.sleep(0.1)
             self._exclude(admin)
             yield
@@ -134,7 +154,7 @@ class Common:
         held = path.read_text().strip() if path.exists() else ""
         if held and held != identity:
             msg = f"the shared settings folder {name} belongs to {held}, not {identity}; run setup with --folder NAME"
-            raise CommonError(msg)
+            raise DataRepoError(msg)
         if held:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -146,7 +166,7 @@ class Common:
         found = sorted(p.parent.name for p in self.root.glob(f"*/{CLAIM}") if _held(p) == identity)
         if len(found) > 1:
             msg = f"the shared settings folders {', '.join(found)} all belong to {identity}; remove all but one"
-            raise CommonError(msg)
+            raise DataRepoError(msg)
         return found[0] if found else None
 
     def refusal(self, name: str, identity: str) -> str:
@@ -166,10 +186,10 @@ class Common:
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         why = self.refusal(new, _held(self.root / old / CLAIM))
         if why or (self.root / new).exists():
-            raise CommonError(why or f"{new} already exists in {self.root}")
+            raise DataRepoError(why or f"{new} already exists in {self.root}")
         if _git(self.root, "diff", "--cached", "--quiet", until=until).returncode:
             msg = f"{self.root} has staged changes; commit or unstage them, then rename again"
-            raise CommonError(msg)
+            raise DataRepoError(msg)
         _git(self.root, "mv", "-k", "--", old, new, until=until)
         if (self.root / old).exists():  # nothing in it was ever committed, so git moved nothing
             (self.root / old).rename(self.root / new)
@@ -227,11 +247,12 @@ class Common:
         return f"unpublished in {self.root}: {', '.join(parts)}; the next save retries" if parts else ""
 
 
-def locate() -> Common | None:
+def locate() -> DataRepo | None:
     """The shared repository: the host's view when one is passed down, else the pointer's; None without either."""
     if (view := os.environ.get(VIEW)) is not None:
-        return Common(Path(view)) if view else None
+        return DataRepo(Path(view)) if view else None
     path = pointer()
+    _move_old(path)
     try:
         data = json.loads(path.read_text())
         root = Path(data["repository"]).expanduser().resolve()
@@ -239,23 +260,24 @@ def locate() -> Common | None:
         return None
     except (OSError, ValueError, KeyError, TypeError) as exc:
         msg = f"{path} names no repository"
-        raise CommonError(msg) from exc
+        raise DataRepoError(msg) from exc
     if _top(root) != root:
         msg = f"{root}, named in {path}, is not a git repository's top folder"
-        raise CommonError(msg)
-    return Common(root)
+        raise DataRepoError(msg)
+    return DataRepo(root)
 
 
-def point(root: Path) -> Common:
+def point(root: Path) -> DataRepo:
     """Record ``root`` as this machine's shared repository; it must be a git checkout's top folder."""
     root = root.expanduser().resolve()
     if _top(root) != root:
         msg = f"{root} is not a git repository's top folder"
-        raise CommonError(msg)
+        raise DataRepoError(msg)
     path = pointer()
     path.parent.mkdir(parents=True, exist_ok=True)
+    _move_old(path)
     path.write_text(json.dumps({"repository": str(root)}) + "\n")
-    return Common(root)
+    return DataRepo(root)
 
 
 def identity(repo: Path) -> str:
@@ -274,6 +296,6 @@ def project_name(repo: Path) -> str:
     return safe or "project"
 
 
-def folder(shared: Common, repo: Path) -> str:
+def folder(shared: DataRepo, repo: Path) -> str:
     """The project's folder in ``shared``: the one its repository claims, else one named after the repository."""
     return shared.claimed(identity(repo)) or project_name(repo)

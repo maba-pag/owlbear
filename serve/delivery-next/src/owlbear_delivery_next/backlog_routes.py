@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_delivery_next.backlog import ID, Backlog, BacklogError, Entry, Kind, Scope, Status, ordered
-from owlbear_delivery_next.common import CommonError
+from owlbear_delivery_next.data_repo import DataRepoError
 from owlbear_delivery_next.prompts import DETAIL, _quote
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ def _run[T](store: Store, work: Callable[[Backlog], T]) -> T:
         return work(Backlog.of(store))
     except BacklogError as exc:
         raise HTTPException(exc.status, exc.text) from exc
-    except CommonError as exc:
+    except DataRepoError as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
@@ -93,7 +93,7 @@ def _took(store: Store, ids: list[str], launch: str, end: dict[str, str]) -> dic
     said = ""
     try:
         Backlog.of(store).take(ids, launch)
-    except (BacklogError, CommonError) as exc:
+    except (BacklogError, DataRepoError) as exc:
         said = f"the backlog entries could not be marked as in this Change ({exc})"
     warning = "; ".join(w for w in (end.get("warning", ""), said) if w)
     return end | ({"warning": warning} if warning else {})

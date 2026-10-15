@@ -25,7 +25,7 @@ from owlbear_delivery_next.github.provider import ProviderError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from owlbear_delivery_next.common import Common
+    from owlbear_delivery_next.data_repo import DataRepo
     from owlbear_delivery_next.github.gh_client import Json
     from owlbear_delivery_next.store import Store
 
@@ -39,7 +39,7 @@ type Status = Literal["inbox", "open", "in-change", "done", "dropped"]
 type Scope = Literal["project", "cross-project", "global", "unassigned"]
 type Ref = Annotated[str, Field(min_length=1, max_length=500)]
 ORDER = {"inbox": 0, "open": 1, "in-change": 2, "done": 3, "dropped": 4}
-NO_SHARED = "no shared repository is set up (`owlbear-next common PATH`); the backlog lives in its GitHub issues"
+NO_SHARED = "no shared repository is set up (`owlbear-next data PATH`); the backlog lives in its GitHub issues"
 _cache: dict[str, tuple[float, dict[str, Entry], dict[str, Json], list[str]]] = {}
 _recent: dict[str, dict[int, tuple[float, Json]]] = {}  # repository -> issue number -> (when, GitHub's answer)
 _cache_guard = threading.Lock()
@@ -109,7 +109,7 @@ def _valid(fields: dict[str, Any]) -> Entry:
 class Backlog:
     """The backlog issues of the shared repository, seen from one project."""
 
-    def __init__(self, shared: Common, project: str = "", clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(self, shared: DataRepo, project: str = "", clock: Callable[[], datetime] | None = None) -> None:
         """The issues of ``shared``'s GitHub remote; ``project`` is where new findings are found."""
         try:
             self.issues = Issues(shared)

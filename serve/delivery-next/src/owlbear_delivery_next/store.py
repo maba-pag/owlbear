@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next import common, loop, migrations, profile
+from owlbear_delivery_next import data_repo, loop, migrations, profile
 from owlbear_delivery_next.config import CONFIG_FORMAT, GlobalLayer, Layer, Settings, resolve
 from owlbear_delivery_next.inbox import InboxItem
 from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Stop
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from owlbear_delivery_next.common import Common
+    from owlbear_delivery_next.data_repo import DataRepo
     from owlbear_delivery_next.loop import PrState
     from owlbear_delivery_next.migrations import Migrations
     from owlbear_delivery_next.models import Step
@@ -188,7 +188,7 @@ def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T])
 class Store:
     """Change records, locks, inboxes and activity logs of one clone."""
 
-    def __init__(self, root: Path, shared: Common | None = None, name: str = "") -> None:
+    def __init__(self, root: Path, shared: DataRepo | None = None, name: str = "") -> None:
         self.root, self.shared, self.name = root, shared, name
         self.global_path = shared.global_path if shared else None
 
@@ -201,9 +201,9 @@ class Store:
     def open(cls, cwd: Path) -> Store:
         """Open or create the store for the clone containing *cwd* and gate its format."""
         try:
-            shared = common.locate()
-            name = common.folder(shared, cwd) if shared else ""
-        except common.CommonError as exc:
+            shared = data_repo.locate()
+            name = data_repo.folder(shared, cwd) if shared else ""
+        except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
         store = cls(git_common_dir(cwd) / STORE_DIR, shared, name)
         store.root.mkdir(mode=0o700, exist_ok=True)
@@ -219,8 +219,8 @@ class Store:
         if found < FORMAT:
             atomic_write(marker, f"{FORMAT}\n")
         try:
-            store.adopt(common.identity(cwd) if shared else "")
-        except common.CommonError as exc:
+            store.adopt(data_repo.identity(cwd) if shared else "")
+        except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
         store.move_roles()
         return store
@@ -266,11 +266,11 @@ class Store:
     def adopt(self, identity: str) -> None:
         """Claim the project's shared folder, then move the clone's own settings there once; the old file stays.
 
-        A publication that fails stays visible on the settings page (``Common.pending``) until a later save sends it.
+        A publication that fails stays visible on the settings page (``DataRepo.pending``) until a later save sends it.
         """
         if not self.shared:
             return
-        local, claim = self.root / CONFIG, self.shared.root / self.name / common.CLAIM
+        local, claim = self.root / CONFIG, self.shared.root / self.name / data_repo.CLAIM
         moving = local.exists() and not self.config_path.exists()
         if not moving and claim.exists() and claim.read_text().strip() == identity:
             return  # nothing to do, so no wait for a save that holds the lock
@@ -290,11 +290,11 @@ class Store:
             update_layer(path, model, change)
             return ""
         try:
-            until = time.monotonic() + common.SAVE_SECONDS  # the lock wait and every git command share it
+            until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
             with self.shared.locked():
                 update_layer(path, model, change)
                 return self.shared.publish(path, f"settings: {what}", until)
-        except common.CommonError as exc:
+        except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 
     def read_config(self) -> Layer:

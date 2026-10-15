@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
-from owlbear_delivery_next import calibration, common, model_choices, pack_update
+from owlbear_delivery_next import calibration, data_repo, model_choices, pack_update
 from owlbear_delivery_next.catalogue import CATALOGUE
-from owlbear_delivery_next.common import CommonError
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
+from owlbear_delivery_next.data_repo import DataRepoError
 from owlbear_delivery_next.store import StoreError, read_layer_bytes
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ def _agreement(store: Store) -> list[dict[str, Any]]:
         return []
     try:
         return calibration.agreement([r for r, _ in calibration.cases(store.shared, store.name, wait=2.0)])
-    except CommonError, OSError, ValueError:
+    except DataRepoError, OSError, ValueError:
         return []
 
 
@@ -129,17 +129,17 @@ def _working(store: Store, host: Host) -> list[str]:
 def _rename(store: Store, host: Host, name: str) -> str:
     """Move the project's folder while no runner can start or run, then use it here; the publication notice."""
     if store.shared is None:
-        raise HTTPException(409, "no shared settings location is set up; run `owlbear-next common PATH`")
+        raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
     if not host.launching.acquire(timeout=STARTING):
         raise HTTPException(409, "a runner is starting; try again")
     try:
         if busy := _working(store, host):
             raise HTTPException(409, f"steps of {', '.join(busy)} are running; rename once they have finished")
-        until = time.monotonic() + common.SAVE_SECONDS
+        until = time.monotonic() + data_repo.SAVE_SECONDS
         with store.shared.locked():
             notice = store.shared.rename(store.name, name, until)
             store.name = name
-    except CommonError as exc:
+    except DataRepoError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:
         raise HTTPException(503, f"the folder could not be renamed: {exc.strerror or exc}") from exc
@@ -168,7 +168,7 @@ def router(store: Store, host: Host) -> APIRouter:
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
-            raise HTTPException(409, "no shared settings location is set up; run `owlbear-next common PATH`")
+            raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
         return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page"))
 
     @routes.put("/config/folder")

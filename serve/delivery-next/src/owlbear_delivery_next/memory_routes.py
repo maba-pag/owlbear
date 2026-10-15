@@ -26,7 +26,7 @@ from owlbear_memory import (
 from owlbear_memory import ValidationError as MemoryValidationError
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from owlbear_delivery_next import common
+from owlbear_delivery_next import data_repo
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.store import Store
 
-NO_SHARED = "No shared repository is set up, so agents keep no memory; set one with `owlbear-next common PATH`"
+NO_SHARED = "No shared repository is set up, so agents keep no memory; set one with `owlbear-next data PATH`"
 ENTRY = r"^[A-Za-z0-9-]{1,64}$"  # the engine's ids are UUIDs
 
 
@@ -66,7 +66,7 @@ REFUSED: tuple[tuple[type[Exception], int, str], ...] = (  # the first match ans
     (ConcurrencyError, 409, "this entry changed since the page loaded it; reload"),
     (TransitionError, 409, ""),
     (MemoryValidationError, 422, ""),
-    (common.CommonError, 409, ""),
+    (data_repo.DataRepoError, 409, ""),
 )
 
 
@@ -80,7 +80,7 @@ def _act(store: Store, entry_id: str, what: str, do: Callable[[MemoryEngine], Me
         raise HTTPException(409, NO_SHARED)
     if not re.fullmatch(ENTRY, entry_id):
         raise HTTPException(404, "no such memory entry")
-    shared, until = store.shared, time.monotonic() + common.SAVE_SECONDS
+    shared, until = store.shared, time.monotonic() + data_repo.SAVE_SECONDS
     folder = shared.memory_path(store.name)
     try:
         engine = MemoryEngine(folder)

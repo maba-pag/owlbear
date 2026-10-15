@@ -10,7 +10,7 @@ from subprocess import CalledProcessError
 
 from owlbear_delivery_next import (
     backlog_migrate,
-    common,
+    data_repo,
     design_pack,
     host,
     pack_replay,
@@ -43,15 +43,15 @@ from owlbear_delivery_next.store import Store, StoreError
 START = "run `owlbear-next host`"
 
 
-def show_common(path: Path | None) -> str:
+def show_data(path: Path | None) -> str:
     """Record the shared settings repository when given, then say which one this machine uses."""
     try:
-        shared = common.point(path) if path else common.locate()
-    except common.CommonError as exc:
+        shared = data_repo.point(path) if path else data_repo.locate()
+    except data_repo.DataRepoError as exc:
         return f"Not set: {exc}"
     if shared is None:
-        return "No shared settings repository; settings stay in each clone. Set one: `owlbear-next common PATH`"
-    return f"Shared settings repository: {shared.root} (pointer {common.pointer()}). Restart a running host to use it."
+        return "No shared settings repository; settings stay in each clone. Set one: `owlbear-next data PATH`"
+    return f"Shared data repository: {shared.root} (pointer {data_repo.pointer()}). Restart a running host to use it."
 
 
 def show_pack(*, install: bool) -> int:
@@ -87,7 +87,7 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         design_pack.PackError,
         pack_replay.ReplayError,
         DetectorError,
-        common.CommonError,
+        data_repo.DataRepoError,
         CalledProcessError,
         OSError,
         ValueError,
@@ -197,7 +197,7 @@ def add_backlog(store: Store, a: argparse.Namespace) -> int:
         return backlog_migrate.migrate(store.shared, lambda said: sys.stdout.write(said + "\n"))
     try:
         entry, new = Backlog.of(store).add(a.title, a.text, a.source, a.evidence)
-    except (BacklogError, common.CommonError) as exc:
+    except (BacklogError, data_repo.DataRepoError) as exc:
         sys.stdout.write(f"not added: {exc}\n")
         return 1
     said = (
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     ans.add_argument("--text", default="")
     show = sub.add_parser("show", help="print the Change's step, exit and open question")
     show.add_argument("change")
-    shared = sub.add_parser("common", help="show or set the shared settings repository (TD-57)")
+    shared = sub.add_parser("data", help="show or set the shared settings repository (TD-57)")
     shared.add_argument("path", nargs="?", type=Path)
     pack = sub.add_parser("design-pack", help="show, install or update the pinned design pack (TD-76)")
     pack.add_argument("--install", action="store_true", help="download and verify what is missing")
@@ -294,8 +294,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     a = parser.parse_args(argv)
     if a.command == "design-pack" and bool(a.diff) != bool(a.to):
         parser.error("--diff and --to go together")
-    if a.command == "common":
-        sys.stdout.write(show_common(a.path) + "\n")
+    if a.command == "data":
+        sys.stdout.write(show_data(a.path) + "\n")
         return 0
     if a.command == "design-pack":
         updating = a.check or a.diff or a.golden or a.replay

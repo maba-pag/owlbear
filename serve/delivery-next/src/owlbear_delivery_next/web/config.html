@@ -561,7 +561,7 @@ function render() {
   if (!loaded.global_location && scope.value === "global") scope.value = "project";
   rendered = scope.value;
   document.getElementById("scope-note").textContent = loaded.global_location
-    ? "" : "No shared settings location is set up (run owlbear-next common PATH), so only this project's settings "
+    ? "" : "No shared settings location is set up (run owlbear-next data PATH), so only this project's settings "
       + "can be saved, in this clone.";
   const folder = document.getElementById("folder");
   if (document.activeElement !== folder) folder.value = loaded.folder ?? "";

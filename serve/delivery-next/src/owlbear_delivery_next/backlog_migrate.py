@@ -21,10 +21,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery_next.common import Common
+    from owlbear_delivery_next.data_repo import DataRepo
 
 FOLDER = "backlog"
-JOURNAL = ".backlog-migration.json"  # old id -> issue number; common.EXCLUDE keeps it out of git
+JOURNAL = ".backlog-migration.json"  # old id -> issue number; data_repo.EXCLUDE keeps it out of git
 COMPARED = ("title", "text", "source", "kind", "status", "scope", "project", "notes", "evidence", "change", "launch")
 COMPARED += ("count", "first_seen", "last_seen")
 
@@ -38,7 +38,7 @@ class File(NamedTuple):
     links: list[str]
 
 
-def _files(shared: Common, say: Callable[[str], None]) -> dict[str, File] | None:
+def _files(shared: DataRepo, say: Callable[[str], None]) -> dict[str, File] | None:
     """Each file entry by its old id, as an entry of its project; None when one cannot be read."""
     found = {}
     for path in sorted(shared.root.glob(f"*/{FOLDER}/*.json")):
@@ -61,7 +61,7 @@ def _files(shared: Common, say: Callable[[str], None]) -> dict[str, File] | None
 class Journal:
     """The issue number of each file entry, noted as soon as GitHub confirmed the issue."""
 
-    def __init__(self, shared: Common) -> None:
+    def __init__(self, shared: DataRepo) -> None:
         """Read the journal an earlier run left, under the lock that also keeps it out of git."""
         self.path = shared.root / JOURNAL
         with shared.locked():
@@ -117,7 +117,7 @@ def _wrong(backlog: Backlog, files: dict[str, File], have: dict[str, str]) -> li
     return wrong
 
 
-def migrate(shared: Common, say: Callable[[str], None]) -> int:
+def migrate(shared: DataRepo, say: Callable[[str], None]) -> int:
     """Move every file entry into an issue, verify them all, then delete and publish the files; 0 when done."""
     files = _files(shared, say)
     if files is None:
@@ -141,7 +141,7 @@ def migrate(shared: Common, say: Callable[[str], None]) -> int:
     return 1 if notice or len(gone) != len(files) else 0
 
 
-def _delete(shared: Common, files: dict[str, File], say: Callable[[str], None]) -> tuple[list[Path], str]:
+def _delete(shared: DataRepo, files: dict[str, File], say: Callable[[str], None]) -> tuple[list[Path], str]:
     """Delete the files still as they were read, then commit and push that; the deleted files and the notice."""
     with shared.locked():
         gone = [f.path for f in files.values() if f.path.exists() and f.path.read_bytes() == f.data]
