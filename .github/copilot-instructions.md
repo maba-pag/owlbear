@@ -32,6 +32,27 @@ state protection, proof and review gates. Never use Delivery to implement Delive
 requirements stay in
 [the programme](../.owlbear/research/change-continuation-delivery-redesign.md).
 
+### Asking the Owner
+
+When the owner decides or re-decides anything consequential, including a read-back or a recorded
+decision under review, ask one decision per question with the structured question tool, as his
+decisions TD-41..43, TD-150 and TD-156 in
+[the decision record](../.owlbear/research/delivery-liveness-first-rebuild.md) define:
+
+- The message shows the decision's record (its words and origin) and what changed since.
+- Options: one to four close variants of the decision, the matching one at a varying position and
+  never verbatim; one or two other directions, the opposite among them; then, in this order,
+  "take your recommendation (…)" naming the recommendation in the brackets, "none of these: show me
+  more options" and "explain first". No other recommendation mark; free text stays open.
+- "Take your recommendation" is recorded `autonomous` with its reason. "Show me more options" asks
+  again across directions, each with pro, con, risk and its own percentage that it is a good
+  choice. "Explain first" (his shorthand "nmdpcro": details, pro, con, risk, opinion) explains each
+  option neutrally, then asks again.
+- Free text is never recorded as written: offer two to five readings that fill its gaps differently,
+  plus "your words as written", "show me more readings" and "explain first".
+- Before asking, challenge the proposal against his intent: what it lacks and what it overdoes,
+  not only what is wrong (TD-150).
+
 ## Directory Structure
 
 | Directory | Purpose |
