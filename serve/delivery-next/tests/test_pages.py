@@ -51,3 +51,15 @@ def test_a_query_cannot_replace_a_pages_html(tmp_path, path):
     assert attacked.status_code == 200
     assert "alert(1)" not in attacked.text
     assert attacked.text == c.get(path).text
+
+
+@pytest.mark.parametrize("path", ["/", "/backlog", "/memory", "/config"])
+def test_a_page_with_consequential_buttons_takes_the_shared_confirmation_before_its_script(tmp_path, path):
+    c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
+
+    page = c.get(path).text
+
+    assert "<!-- ask -->" not in page
+    assert "window.confirm" not in page
+    assert "function confirmed(" not in page
+    assert page.index("function ask(") < page.index("await ask(")

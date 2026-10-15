@@ -13,6 +13,7 @@ TABS = (
 )
 MARK = "<!-- tabs -->"  # where each page takes the tab bar
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own
+ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
 
 
 def nav(current: int) -> str:
@@ -26,10 +27,15 @@ def nav(current: int) -> str:
 
 
 def pages() -> dict[str, str]:
-    """Each page's path and its HTML with the shared stylesheet and the tab bar in place."""
+    """Each page's path and its HTML with the shared stylesheet, the confirmation and the tab bar in place."""
     web = files("owlbear_delivery_next").joinpath("web")
     base = f"<style>\n{web.joinpath('base.css').read_text(encoding='utf-8')}</style>"
+    ask = f"<script>\n{web.joinpath('ask.js').read_text(encoding='utf-8')}</script>"
     return {
-        path: web.joinpath(name).read_text(encoding="utf-8").replace(BASE, base, 1).replace(MARK, nav(i), 1)
+        path: web.joinpath(name)
+        .read_text(encoding="utf-8")
+        .replace(BASE, base, 1)
+        .replace(ASK, ask, 1)
+        .replace(MARK, nav(i), 1)
         for i, (path, _, name) in enumerate(TABS)
     }

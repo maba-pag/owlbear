@@ -913,7 +913,11 @@ def test_a_check_result_is_accepted_only_for_the_inputs_the_page_showed(tmp_path
     stale = client.post("/api/next/changes/c1/check-results", json={"check": "preview", "passed": True, "inputs": old})
     assert (stale.status_code, stale.json()["detail"]) == (409, "This check changed since you opened it; reload")
     body = {"check": "preview", "passed": True, "inputs": shown()}
+    failed = client.post("/api/next/changes/c1/check-results", json=body | {"passed": False, "note": "  "})
+    assert (failed.status_code, "fix task" in failed.json()["detail"]) == (422, True)  # the note is the fix task
     assert client.post("/api/next/changes/c1/check-results", json=body).json() == {"accepted": "check-result"}
+    shown_change = client.get("/api/next/changes/c1").json()
+    assert (shown_change["asks_merge"], shown_change["deletes_branch"]) == (False, False)  # the profile's defaults
 
 
 def test_a_saved_person_check_is_voided_by_revised_steps_or_a_commit_in_its_scope(clone, tmp_path):

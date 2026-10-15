@@ -374,7 +374,7 @@ def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path):
     )
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages"></ol>' in page
-    assert "<code>worker_skills/NOTICE.md</code>" in page
+    assert "commits design_pack.json and worker_skills/NOTICE.md" in page  # the Update dialog says what it commits
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == design_pack.identity()

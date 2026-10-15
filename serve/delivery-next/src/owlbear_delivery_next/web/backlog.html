@@ -57,14 +57,14 @@
 <section aria-labelledby="inbox-title">
   <div>
     <p-heading size="xl"><h2 id="inbox-title">Inbox</h2></p-heading>
-    <p-text size="xs" color="contrast-medium">Untriaged findings: give each a kind to open it, or drop it.</p-text>
+    <p-text>Choose a kind to move an entry to Open, or drop it.</p-text>
   </div>
   <ul id="inbox" class="entries"></ul>
 </section>
 <section aria-labelledby="open-title">
   <div>
     <p-heading size="xl"><h2 id="open-title">Open</h2></p-heading>
-    <p-text size="xs" color="contrast-medium">Tick entries to shape a Change from them.</p-text>
+    <p-text>Tick entries to shape a Change from them.</p-text>
   </div>
   <ul id="open" class="entries"></ul>
 </section>
@@ -77,6 +77,7 @@
   <div id="actions" class="row"></div>
 </div>
 </main>
+<!-- ask -->
 <script>
 "use strict";
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -210,29 +211,6 @@ function select(label, options, value, attrs = {}) {
   return [node, () => box.value];
 }
 
-// An "are you sure" before a step that opens a chat or cannot be undone; true when the person confirms.
-function confirmed(title, body, yes) {
-  if (!pds) return Promise.resolve(window.confirm([title, ...body.map((n) => n.textContent)].join("\n\n")));
-  return new Promise((resolve) => {
-    const modal = el("p-modal"), head = heading(2, title, "lg"), footer = row();
-    let answered = false;
-    const done = (answer) => {
-      if (answered) return;
-      answered = true;
-      modal.open = false;
-      setTimeout(() => modal.remove(), 1000);
-      resolve(answer);
-    };
-    head.slot = "header";
-    footer.slot = "footer";
-    footer.append(button(yes, () => done(true)), button("Cancel", () => done(false), { variant: "secondary" }));
-    modal.append(head, ...body, footer);
-    modal.addEventListener("dismiss", () => done(false));
-    document.body.append(modal);
-    modal.open = true;
-  });
-}
-
 function age(iso) {
   const minutes = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000));
   if (minutes < 60) return `${minutes} min ago`;
@@ -249,11 +227,11 @@ function reference(ref) {
   return document.createTextNode(ref);
 }
 
-async function patch(e, fields) {
+async function patch(e, fields, said = `Saved "${e.title}".`) {
   try {
     const r = await call(`/backlog/${encodeURIComponent(e.id)}`, "PATCH", fields);
     notify();
-    say(`Saved "${e.title}".${r.notice ? ` ${r.notice}` : ""}`);
+    say(`${said}${r.notice ? ` ${r.notice}` : ""}`);
     await refresh(e.id);
   } catch (error) {
     notify(error.message);
@@ -302,7 +280,8 @@ function statusPart(e, drop = true) {
 }
 
 function dropButton(e) {
-  return button("Drop", () => patch(e, { status: "dropped" }), { variant: "secondary", icon: "close" });
+  const drop = () => patch(e, { status: "dropped" }, `Dropped "${e.title}"; Reopen brings it back.`);
+  return button("Drop", drop, { variant: "secondary", icon: "close" });
 }
 
 function kindPicker(e, inline = false) {
@@ -404,7 +383,7 @@ function showActions() {
     && ["inbox", "open"].includes(e.status)));
   const node = button(`Create Change from ${chosen.length}`, createChange, { icon: "add", aria: DIALOG });
   if (creating) waiting(node, true);
-  const clear = button("Clear", () => { selected.clear(); refresh(); }, { variant: "secondary" });
+  const clear = button("Clear selection", () => { selected.clear(); refresh(); }, { variant: "secondary" });
   document.getElementById("actions").replaceChildren(node, clear);
   document.getElementById("chosen").textContent = `${chosen.length} selected`;
   document.getElementById("selection").hidden = !chosen.length && !creating;
@@ -490,11 +469,17 @@ async function launched(id) {  // the host opens the chat in the background; VS 
 async function createChange() {
   const chosen = loaded.entries.filter((e) => selected.has(e.id));
   if (!chosen.length) return notify("Select one or more entries first.");
-  const titles = el("ul", undefined, { class: "plain" });
-  for (const e of chosen) titles.append(el("li", e.title));
-  const wanted = await confirmed("Start a Change from these entries?", [titles, text("Delivery opens a chat in "
-    + "VS Code where you shape the new Change's brief from them, with their notes, evidence and links. Once it "
-    + "opened they are marked as in a Change; nothing is built until you approve the brief.")], "Open the chat");
+  const titles = chosen.map((e) => e.title), many = chosen.length > 1;
+  const wanted = await ask({
+    title: `Shape a Change from ${many ? `these ${chosen.length} entries` : "this entry"}?`, yes: "Open the chat",
+    no: "Keep selected",
+    now: "A chat opens in VS Code where the shaper turns them, with their notes, evidence and links, into a brief; "
+      + "the chat uses AI credits. Once it opens, they are marked as in a Change.",
+    items: titles,
+    then: "Nothing is built. The brief appears on the Changes page for your approval.",
+    after: "Approve the brief there to start the work; set each entry's Change here once it exists.",
+    instead: "The entries stay selected and unchanged.",
+  });
   if (!wanted) return;
   const result = document.getElementById("started");
   creating = true;

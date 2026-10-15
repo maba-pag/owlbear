@@ -59,3 +59,6 @@ textarea, input, select, button { font: inherit; }
 .no-pds p-inline-notification {
   padding: var(--p-spacing-static-sm); border: 1px solid; border-radius: var(--p-radius-md);
 }
+.ask .parts { display: grid; gap: var(--p-spacing-static-md); max-width: 38rem; }
+.ask .parts ul { margin: var(--p-spacing-static-xs) 0 0; padding-inline-start: var(--p-spacing-static-lg); }
+.ask .row { margin-block-start: var(--p-spacing-static-md); }

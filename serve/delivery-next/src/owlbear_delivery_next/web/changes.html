@@ -126,6 +126,7 @@
   <section id="detail" aria-label="Selected Change"></section>
 </div>
 </main>
+<!-- ask -->
 <script>
 "use strict";
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -325,13 +326,59 @@ function row(...children) {
   return node;
 }
 
-function questionForm(q) {
+function questionForm(q, d) {
   const [options, option] = choice("Choose an option", q.options), [words, said] = field("Your answer in words");
-  const answer = () => send("/answers", { question: q.id, option: option(), text: said() });
+  const answer = async () => {
+    const chosen = q.options.find((o) => o.id === option()), told = chosen && consequence(chosen, d);
+    if (told && !(await ask(told))) return;
+    send("/answers", { question: q.id, option: option(), text: said() });
+  };
   const box = panel(`Question ${q.id}`, text(q.text, { weight: "semibold" }));
   if (q.options.length) box.append(options);
   box.append(words, button("Answer", answer));
   return box;
+}
+
+// What an answer sets off when it is more than going on: ending the Change, passing over a finding, going back.
+function consequence(o, d) {
+  const choices = { yes: o.label, no: "Back to the options", instead: "Choose another option." };
+  if (o.next === "abandon") {
+    return { title: "Abandon this Change?", yes: "Abandon", no: "Keep the Change",
+      now: "The Change ends here and is marked abandoned. There is no restore.",
+      then: `Delivery closes ${d.pr ? `pull request #${d.pr}` : "its pull request if one is open"}, saves work only `
+        + "the worktree holds, and removes the worktree. Branches are kept.",
+      after: "The branch and the saved work stay for reference; start a new Change to try again.",
+      instead: "The question stays open and the Change waits for your answer." };
+  }
+  if (o.next === "done") {
+    return { ...choices, title: `${o.label}?`,
+      now: "What this question raised stays as it is; nothing is sent back to be fixed.",
+      then: "Delivery goes on with the next step by itself.",
+      after: "Pause at any time; a pause takes effect after the running step." };
+  }
+  if (o.next === "accept") {
+    return { ...choices, title: `${o.label}?`,
+      now: "Delivery cannot prove which model produced this result; you take it as it is. Its verdict still "
+        + "applies, including any repair it asks for.",
+      then: "Delivery goes on from this result." };
+  }
+  if (o.next === "shape") {
+    return { ...choices, title: "Go back to the brief?",
+      now: "The Change returns to its brief. Work already done is kept for now.",
+      then: "Nothing runs until you revise the brief in the shaping chat and approve the new version here.",
+      after: "The new brief decides which work is kept or redone." };
+  }
+  if (o.next === "plan") {
+    return { ...choices, title: "Plan again?",
+      now: "The Change returns to planning. Work already done is kept.",
+      then: "The planner makes a new plan from the brief and the challenger checks it; this uses AI credits." };
+  }
+  return null;
+}
+
+// How the Change ends once every gate passed: the project's merge setting decides.
+function merging(d) {
+  return d.asks_merge ? "Delivery asks you before merging" : "Delivery merges by itself once every check passes";
 }
 
 function tick(label, checked = false) {
@@ -349,29 +396,6 @@ function disclosure(summary, ...children) {
   const node = el("details");
   node.append(el("summary", summary), ...children);
   return node;
-}
-
-// An "are you sure" before a step that is costly or cannot be undone; true when the person confirms.
-function confirmed(title, body, yes) {
-  if (!pds) return Promise.resolve(window.confirm([title, ...body.map((n) => n.textContent)].join("\n\n")));
-  return new Promise((resolve) => {
-    const modal = el("p-modal"), head = heading(2, title, "lg"), footer = row();
-    let answered = false;
-    const done = (answer) => {
-      if (answered) return;
-      answered = true;
-      modal.open = false;
-      setTimeout(() => modal.remove(), 1000);
-      resolve(answer);
-    };
-    head.slot = "header";
-    footer.slot = "footer";
-    footer.append(button(yes, () => done(true)), button("Cancel", () => done(false), { variant: "secondary" }));
-    modal.append(head, ...body, footer);
-    modal.addEventListener("dismiss", () => done(false));
-    document.body.append(modal);
-    modal.open = true;
-  });
 }
 
 const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
@@ -423,7 +447,7 @@ function verdictLine(v) {
     ? `, ${v.unanchored} before it saw the detector's findings` : "";
   const node = el("div");
   node.append(text(`${JUDGE[v.lens]}: ${said}${first}`, { weight: "semibold" }));
-  if (v.reason) node.append(text(v.reason, { size: "xs", color: "contrast-medium" }));
+  if (v.reason) node.append(text(v.reason));
   return node;
 }
 
@@ -460,16 +484,14 @@ function detectorLines(r) {
 
 // The owner's decision on one visual round (TD-79): the screenshots, both verdicts, the problems he sends back,
 // a comment, Pass or Fail.
-function decisionForm(q, r, pictures) {
-  const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`,
-    text("Compare before and after, read the judges' verdicts, then pass the round or send it back."), ...pictures);
+function decisionForm(q, r, pictures, d) {
+  const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, ...pictures);
   box.append(heading(4, "Verdicts", "sm"), ...r.verdicts.map(verdictLine));
   const all = problems(r), picks = [];
   const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
   if (made.length) {
-    box.append(heading(4, "Problems this Change introduced", "sm"), text("A Fail sends the ticked problems to the "
-      + "build. Those worth fixing (blocking, serious, annoying) and any missed criterion of yours are ticked for you; "
-      + "untick any you disagree with.", { size: "xs" }));
+    box.append(heading(4, "Problems this Change introduced", "sm"), text("Blocking, serious and annoying problems "
+      + "and any missed criterion of yours are ticked for you; a Fail sends the ticked ones to the builder."));
     for (const p of made) {
       const [node, ids] = problemRow(p, r.proposed || []);
       picks.push([p, ids]);
@@ -485,7 +507,8 @@ function decisionForm(q, r, pictures) {
   if (evidence.length) {
     box.append(disclosure("What the design detector found (evidence for the judges)", list(evidence)));
   }
-  const [words, said] = field("Comment: on a Fail, every later review checks it until you withdraw it");
+  const [words, said] = field("Comment: on Fail it becomes a criterion every later round checks until you withdraw "
+    + "it; on Pass it is only a note");
   const decide = async (option) => {
     const origin = shown, comment = said().trim(), chosen = picks.filter(([, ids]) => ids().length);
     const findings = chosen.flatMap(([, ids]) => ids());
@@ -494,17 +517,23 @@ function decisionForm(q, r, pictures) {
     }
     const instructions = chosen.flatMap(([p]) => (new Set(p.items.map((f) => f.text)).size > 1
       ? p.items.map((f) => `${where(f.state, widthsOf([f]))}: ${f.text}`) : [p.first.text]));
-    const ok = option === "fail"
-      ? await confirmed("Send the Change back to the build?", [
-        text("The builder gets a fix task with:"),
-        list([...instructions, ...(comment ? [`Your comment: ${comment}`] : [])]),
-        text("The Change is then checked and both judges look again, which uses more requests."
-          + (comment ? " Your comment becomes a criterion every later review checks until you withdraw it." : "")),
-      ], "Send back")
-      : await confirmed("Accept how this looks?", [
-        text("Delivery continues with this Change towards merging; no problem is sent to the build."
-          + (comment ? " Your comment is kept as a note." : "")),
-      ], "Pass");
+    const checks = d.checks.length;  // the person checks come after the visual round
+    const ok = await ask(option === "fail" ? {
+      title: "Send these problems back to the builder?", yes: "Send back", no: "Keep reviewing",
+      now: "The builder gets a fix task with:",
+      items: [...instructions, ...(comment ? [`Your comment: ${comment}`] : [])],
+      then: "After the fix, the reviewer checks it and both judges look again; this uses AI credits. The next "
+        + "round comes back to you.",
+      after: comment ? "Your comment stays a criterion every later round checks until you withdraw it." : "",
+      instead: "The round stays open; pass it, or tick other problems.",
+    } : {
+      title: `Pass visual round ${r.number}?`, yes: "Pass", no: "Keep reviewing",
+      now: "No problem of this round goes to the builder." + (comment ? " Your comment is kept as a note only." : ""),
+      then: checks ? `Your check${checks > 1 ? "s" : ""} come${checks > 1 ? "" : "s"} next. ${merging(d)}.`
+        : `${merging(d)}.`,
+      after: "Until the merge, comments on the pull request come back to Delivery as work.",
+      instead: "The round stays open for your decision.",
+    });
     if (ok) {
       const round = { round: r.number, head: r.head, pack: r.pack };
       send("/answers", { question: q.id, option, text: comment, ...round, findings }, origin);
@@ -518,17 +547,24 @@ function decisionForm(q, r, pictures) {
 }
 
 function criteriaPanel(criteria) {
-  const box = info("Your visual criteria", text("Every later review checks these until you withdraw them.",
-    { size: "xs", color: "contrast-medium" }));
+  const box = info("Your visual criteria", text("Every later visual round checks these until you withdraw them."));
   for (const k of criteria) {
-    const withdraw = () => send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {});
-    box.append(row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary" })));
+    const withdraw = async () => {
+      const stop = await ask({
+        title: `Stop checking ${k.id}?`, yes: "Stop checking", no: "Keep it",
+        now: `“${k.text}” is no longer checked in later visual rounds; it stays in this Change's history.`,
+        after: "There is no restore. A comment on a later Fail adds a new criterion.",
+        instead: "Every later visual round keeps checking it.",
+      });
+      if (stop) send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {});
+    };
+    box.append(row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary", aria: DIALOG })));
   }
   return box;
 }
 
-function checkForm(check) {
-  const [note, noted] = field("Note (optional)");
+function checkForm(check, d) {
+  const [note, noted] = field("What failed (needed for Failed; the builder gets it as the fix task)");
   const box = panel(`Your check ${check.id}`, list(check.steps, "ol"));
   if (check.expect) box.append(text(`Expected: ${check.expect}`, { weight: "semibold" }));
   if (check.url) {
@@ -536,31 +572,78 @@ function checkForm(check) {
       text(check.url, { size: "xs", color: "contrast-medium", tag: "span" })));
   }
   const result = (passed) => ({ check: check.id, passed, note: noted(), inputs: check.inputs });
+  const last = !d.asks_merge && d.checks.every((c) => c.id === check.id || c.passed === true);
+  const passed = async () => {
+    const pr = d.pr ? `pull request #${d.pr}` : "the pull request";
+    if (last && !(await ask({
+      title: `Pass ${check.id}, the last step before merging?`, yes: "Pass and merge", no: "Not yet",
+      now: `${check.id} is recorded as passed.`,
+      then: `It was the last check. Delivery merges ${pr} into ${d.target} by itself as soon as the remaining `
+        + "gates pass, its GitHub checks among them, then cleans up.",
+      after: `The change is then on ${d.target}; reversing it needs a revert you make yourself.`,
+      instead: "Nothing merges; the check stays open.",
+    }))) return;
+    send("/check-results", result(true));
+  };
+  const failed = async () => {
+    const why = noted().trim();
+    if (!why) return notify("Say what failed: the builder gets it as the fix task.");
+    if (await ask({
+      title: `Report ${check.id} as failed?`, yes: "Send to the builder", no: "Keep checking",
+      now: "The builder gets this fix task:", items: [why],
+      then: "Delivery fixes it, reviews the fix and prepares the check again; this uses AI credits. Then it asks you "
+        + "to check again.",
+      instead: "The check stays open; you can still mark it passed.",
+    })) send("/check-results", result(false));
+  };
   box.append(note, row(
-    button("Passed", () => send("/check-results", result(true)), { icon: "check" }),
-    button("Failed", () => send("/check-results", result(false)), { variant: "secondary", icon: "close" }),
+    button("Passed", passed, { icon: "check", ...(last ? { aria: DIALOG } : {}) }),
+    button("Failed", failed, { variant: "secondary", icon: "close", aria: DIALOG }),
   ));
   return box;
 }
 
 const CHECKED = { passed: "success", success: "success", failed: "error", failure: "error", error: "error" };
 
-function mergeForm(m) {
+function mergeForm(m, d) {
   const links = row(external(`PR #${m.pr}`, m.url), external("Diff summary", m.diff));
   const box = panel(`Merge PR #${m.pr}`,
-    text(`Delivery merges this exact head (${m.method}) once you approve it.`), links);
+    text(`Delivery merges this exact head (${m.method}) once you approve it; a new head needs a fresh approval.`),
+    links);
   if (m.void) box.append(text(`Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { color: "error" }));
   const checks = m.checks.map((c) => el("p-tag", `${c.name}: ${c.state}`,
     { variant: CHECKED[c.state] ?? "secondary", compact: "true" }));
+  const head = m.head.slice(0, 7), approve = async () => {
+    const sure = await ask({
+      title: `Merge pull request #${m.pr} at ${head}?`, yes: "Merge", no: "Not now",
+      now: `Delivery merges exactly ${head} into ${d.target} (${m.method}). If the pull request gets a new head `
+        + "first, this approval no longer counts.",
+      then: `It checks the gates once more, merges, ${d.deletes_branch ? "deletes the branch, " : ""}removes the `
+        + `worktree after saving work only it holds, and updates your local ${d.target} if that is safe.`,
+      after: `The change is on ${d.target}; reversing it needs a revert you make yourself.`,
+      instead: "Nothing merges. The pull request stays open; comments on it come back to Delivery as work.",
+    });
+    if (sure) send("/merge-consent", { head: m.head });
+  };
   box.append(text("Checks at this head", { size: "xs", weight: "semibold" }),
     checks.length ? row(...checks) : text("No checks reported", { size: "xs", color: "contrast-medium" }),
     text(`Head ${m.head}`, { size: "xs", color: "contrast-medium" }),
-    button(`Approve merging ${m.head.slice(0, 7)}`, () => send("/merge-consent", { head: m.head }), { icon: "check" }));
+    button(`Approve merging ${head}`, approve, { icon: "check", aria: DIALOG }));
   return box;
 }
 
-function pullbackNote(p) {
-  const behind = p.state === "behind", title = `Pull-back: ${p.state}`, pull = () => send("/pull", {});
+function pullbackNote(p, d) {
+  const behind = p.state === "behind", title = `Pull-back: ${p.state}`;
+  const pull = async () => {
+    const sure = await ask({
+      title: `Update your local ${d.target}?`, yes: "Update", no: "Leave it",
+      now: `Delivery moves your local ${d.target} to the merged one, replaying any local commits on top; their `
+        + "commit IDs change.",
+      after: "If local changes touch the same files, the update stops and says why.",
+      instead: `Your local ${d.target} stays behind; Pull stays here.`,
+    });
+    if (sure) send("/pull", {});
+  };
   if (!pds) {
     const box = behind ? panel(title, text(p.reason || "")) : info(title, text(p.reason || ""));
     if (behind) box.append(button("Pull", pull));
@@ -625,8 +708,10 @@ function lightbox(gallery, start) {
   };
   frame.append(img);
   dialog.append(row(
-    button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary" }), caption,
-    button("Next", () => go(1), { icon: "arrow-right", variant: "secondary" }),
+    button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary", "aria-keyshortcuts": "ArrowLeft",
+      title: "Previous screenshot (left arrow)" }), caption,
+    button("Next", () => go(1), { icon: "arrow-right", variant: "secondary", "aria-keyshortcuts": "ArrowRight",
+      title: "Next screenshot (right arrow)" }),
     button("Close", () => dialog.close(), { icon: "close", variant: "secondary" }),
   ), frame);
   dialog.addEventListener("keydown", (k) => {
@@ -679,8 +764,7 @@ function visualSection(slug, v, b, existing, deciding) {
     grid.append(fig);
   }
   const shots = el("div", undefined, { class: "gallery" });
-  shots.append(text("Select a screenshot to enlarge it; the arrow keys step through before and after at each width.",
-    { size: "xs", color: "contrast-medium" }), grid);
+  shots.append(grid);
   nodes.push(shots);
   return nodes;
 }
@@ -827,8 +911,8 @@ function briefParts(d) {
     parts.push(heading(4, "Checks you do yourself", "sm"), list(said));
   }
   const scope = d.brief.scope || [], out = d.brief.non_goals || [];
-  if (scope.length) parts.push(text(`Scope: ${scope.join(", ")}`, { size: "xs", color: "contrast-medium" }));
-  if (out.length) parts.push(text(`Not in this Change: ${out.join("; ")}`, { size: "xs", color: "contrast-medium" }));
+  if (scope.length) parts.push(text(`Scope: ${scope.join(", ")}`));
+  if (out.length) parts.push(text(`Not in this Change: ${out.join("; ")}`));
   return parts;
 }
 
@@ -836,10 +920,33 @@ function approval(d) {
   const version = d.brief.version, box = el("div", undefined, { class: "brief" });
   if (d.brief.outcome) box.append(text(d.brief.outcome));
   box.append(...briefParts(d));
-  const approve = button(`Approve brief v${version}`, () => send("/approve-brief", { version }), { icon: "check" });
+  const start = async () => {
+    if (await ask(approving(d))) send("/approve-brief", { version });
+  };
+  const approve = button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG });
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, box,
-    text("Nothing is built until you approve. To change the brief, say so in the shaping chat.",
-      { size: "xs", color: "contrast-medium" }), approve);
+    text("Nothing is built until you approve. To change the brief, say so in the shaping chat."), approve);
+}
+
+// What approving starts: the challenge, then planning, building and review, the visual round and the owner's checks
+// the brief asks for, and the merge as the project's setting has it.
+function approving(d) {
+  const v = d.brief.version, screens = d.brief.visual.length, checks = d.checks.length, you = [];
+  if (screens) you.push(`decide a visual round of ${screens} screen${screens > 1 ? "s" : ""}`);
+  if (checks) you.push(checks > 1 ? `do your ${checks} checks` : "do your check");
+  return {
+    title: `Approve brief v${v} and start the work?`, yes: d.paused ? "Approve; stay paused" : "Approve and start",
+    no: "Keep it waiting",
+    now: `Brief v${v} becomes the version every step follows${d.paused ? "; the Change stays paused until you resume"
+      : ""}.`,
+    then: ["The challenger reads the brief first and may come back with questions.",
+      "Then Delivery plans the work, builds and reviews each task, and opens a pull request.",
+      ...(you.length ? [`You ${you.join(" and ")}.`] : []),
+      `${merging(d)}. AI credits are used from now on.`].join(" "),
+    after: "Answer questions here as they come up. Pause at any time; a pause takes effect after the running step. To "
+      + "change the brief, revise it in the shaping chat and approve the new version.",
+    instead: "Nothing is built. The brief waits here; revise it in the shaping chat or come back later.",
+  };
 }
 
 function briefInfo(d) {
@@ -860,9 +967,13 @@ function detailHead(d) {
   if (d.brief.title) title.append(text(d.brief.title, { color: "contrast-medium" }));
   head.append(back, title);
   if (!/^(Done|Abandoned) /.test(d.line)) {  // a finished Change has nothing left to pause
-    const intent = { intent: d.paused ? "resume" : "pause" };
-    head.append(button(d.paused ? "Resume" : "Pause", () => send("/intent", intent),
-      d.paused ? { icon: "play" } : { variant: "secondary", icon: "pause" }));
+    const intent = { intent: d.paused ? "resume" : "pause" }, said = d.paused
+      ? "Resumed: Delivery goes on once no question, check or stop holds the Change."
+      : "Pause requested: the running step finishes first, then nothing new starts until you resume.";
+    head.append(button(d.paused ? "Resume" : "Pause", () => {
+      document.getElementById("started").textContent = said;
+      send("/intent", intent);
+    }, d.paused ? { icon: "play" } : { variant: "secondary", icon: "pause" }));
   }
   return head;
 }
@@ -898,13 +1009,13 @@ async function showDetail() {
       d.action ? `What to do: ${d.action}.` : ""));
   }
   const behind = d.pullback?.state === "behind";
-  if (behind) parts.push(pullbackNote(d.pullback));
+  if (behind) parts.push(pullbackNote(d.pullback, d));
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
   const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
     : d.before ? beforeSection(d.slug, d.before) : null;
-  if (d.question) parts.push(deciding ? decisionForm(d.question, r, pictures) : questionForm(d.question));
-  if (d.merge) parts.push(mergeForm(d.merge));
-  for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check));
+  if (d.question) parts.push(deciding ? decisionForm(d.question, r, pictures, d) : questionForm(d.question, d));
+  if (d.merge) parts.push(mergeForm(d.merge, d));
+  for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check, d));
   const approving = d.step === "shape" && d.brief.approved !== d.brief.version;
   if (approving) parts.push(approval(d));
   if (pictures && !deciding) {  // decided: the verdict shows, the screenshots open on request
@@ -916,7 +1027,7 @@ async function showDetail() {
   if (d.progress) parts.push(info("Progress", stepper(d.progress)));
   if (d.plan.length) parts.push(info("Plan", planList(d)));
   if (!approving && (d.brief.outcome || d.criteria.length)) parts.push(briefInfo(d));
-  if (d.pullback && !behind) parts.push(pullbackNote(d.pullback));
+  if (d.pullback && !behind) parts.push(pullbackNote(d.pullback, d));
   parts.push(info("Recent activity", activityLog(d.activity)), spendLines(d.spend));
   const asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
   const forms = JSON.stringify([d.slug, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head,
@@ -1088,8 +1199,14 @@ async function launched(id) {  // the host opens the chat in the background; VS 
 
 async function newChange(event) {
   const trigger = event.currentTarget, result = document.getElementById("started");
-  const wanted = await confirmed("Start a new Change?", [text("Delivery opens a chat in VS Code where you shape the "
-    + "new Change's brief with the assistant. Nothing is built until you approve the brief.")], "Open the chat");
+  const wanted = await ask({
+    title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
+    now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
+      + "Copilot chat.",
+    then: "Nothing is built. When you save the brief in the chat, it appears here for your approval.",
+    after: "Approve it here to start the work, or keep shaping it in the chat.",
+    instead: "Nothing opens.",
+  });
   if (!wanted) return;
   waiting(trigger, true);
   result.textContent = "Opening the shaping chat…";

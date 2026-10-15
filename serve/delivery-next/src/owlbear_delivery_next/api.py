@@ -308,7 +308,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:
         c = read(slug)
-        o = c.outcome
+        o, prof = c.outcome, store.read_profile() or Profile()
         events = store.events(slug)
         merge = offer(c, events)
         q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
@@ -346,6 +346,9 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
             "checks": checks,
             "pr": c.names.pr,
+            "target": c.names.target,
+            "asks_merge": profile.value(prof, profile.ASK) == "yes",
+            "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
             "paused": c.intent.paused_at is not None,
             "merge": merge,
             "consent": c.consent.model_dump(mode="json") if c.consent else None,
@@ -417,6 +420,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         person = next((p for p in c.checks if p.id == body.check), None)
         if person is None or not (c.env and c.env.check == body.check and c.env.ready_at):
             raise HTTPException(409, f"check {body.check} is not waiting for a result")
+        if not (body.passed or body.note.strip()):
+            raise HTTPException(422, "a failed check says what failed: the note becomes the builder's fix task")
         inputs = evidence.check_inputs(c, person, check.fingerprints(c, person))
         if snapshot(inputs, person) != body.inputs:
             raise HTTPException(409, "This check changed since you opened it; reload")

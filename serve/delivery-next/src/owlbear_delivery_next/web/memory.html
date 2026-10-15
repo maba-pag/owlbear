@@ -44,6 +44,7 @@
 <div id="entries"></div>
 <p-text id="where" size="xs" color="contrast-medium"></p-text>
 </main>
+<!-- ask -->
 <script>
 "use strict";
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -56,9 +57,9 @@ const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved
 const GROUPS = [  // who acts next on an entry in each state
   ["Needs your review", "Approve what the curator kept, or settle what agents contest.", ["contested", "disputed",
     "stale", "curated"]],
-  ["Waiting for the curator", "New memories the curator has not scoped yet; you may edit or delete them.", ["pending"]],
-  ["In use", "Agents recall these.", ["approved"]],
-  ["Deleted", "Kept for their history; agents no longer recall them.", ["deleted"]],
+  ["Waiting for the curator", "The curator scopes these first; you can still edit or delete them.", ["pending"]],
+  ["In use", "", ["approved"]],
+  ["Deleted (history kept)", "", ["deleted"]],
 ];
 const TAGS = { contested: "error", disputed: "error", stale: "warning", curated: "info", pending: "secondary",
   approved: "success", deleted: "secondary" };
@@ -181,28 +182,6 @@ function tick(label, checked) {
   return [node, () => box.checked];
 }
 
-function confirmed(title, body, yes) {
-  if (!pds) return Promise.resolve(window.confirm([title, ...body.map((n) => n.textContent)].join("\n\n")));
-  return new Promise((resolve) => {
-    const modal = el("p-modal"), head = heading(2, title, "lg"), footer = row();
-    let answered = false;
-    const done = (answer) => {
-      if (answered) return;
-      answered = true;
-      modal.open = false;
-      setTimeout(() => modal.remove(), 1000);
-      resolve(answer);
-    };
-    head.slot = "header";
-    footer.slot = "footer";
-    footer.append(button(yes, () => done(true)), button("Cancel", () => done(false), { variant: "secondary" }));
-    modal.append(head, ...body, footer);
-    modal.addEventListener("dismiss", () => done(false));
-    document.body.append(modal);
-    modal.open = true;
-  });
-}
-
 function age(iso) {
   const minutes = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000));
   if (minutes < 60) return `${minutes} min ago`;
@@ -216,8 +195,14 @@ async function act(trigger, m, action, body = {}) {
     const r = await call(`/memory/${encodeURIComponent(m.id)}/${action}`, { updated_at: m.updated_at, ...body });
     notify();
     editing = null;
-    const done = { approve: "Approved", resolve: "Resolved", edit: "Saved", delete: "Deleted" }[action];
-    say(`${done} "${r.entry.title}".${r.notice ? ` ${r.notice}` : ""}`);
+    const title = `"${r.entry.title}"`, again = action === "edit" && m.state === "approved";
+    const done = {
+      approve: `Approved ${title}: agents in its scope can recall it.`,
+      resolve: `Approved ${title} as it reads now; its challenges are cleared.`,
+      edit: again ? `Saved ${title}; it needs your approval again.` : `Saved ${title}.`,
+      delete: `Deleted ${title}.`,
+    }[action];
+    say(`${done}${r.notice ? ` ${r.notice}` : ""}`);
     await refresh();
   } catch (e) {
     notify(e.message);
@@ -226,10 +211,25 @@ async function act(trigger, m, action, body = {}) {
 }
 
 async function remove(trigger, m) {
-  const sure = await confirmed("Delete this memory?", [text(m.title, { weight: "semibold" }),
-    text(m.state === "pending" ? "It was never reviewed, so its file is removed."
-      : "It stays in the folder as deleted, so its history is kept, and agents no longer recall it.")], "Delete");
+  const sure = await ask({
+    title: `Delete “${m.title}”?`, yes: "Delete", no: "Keep it",
+    now: m.state === "pending" ? "It was never reviewed, so its file is removed."
+      : "It is marked deleted and agents no longer recall it; its history stays in the folder.",
+    after: "There is no restore here.",
+    instead: "It stays as it is.",
+  });
   if (sure) act(trigger, m, "delete");
+}
+
+async function resolve(trigger, m) {
+  const sure = await ask({
+    title: `Approve “${m.title}” as it reads now?`, yes: "Approve as it reads", no: "Keep it under review",
+    now: `It leaves the ${m.state} state: its challenges are cleared and it counts as approved.`,
+    then: "Agents in its scope can recall it again.",
+    after: "Edit or delete it at any time; an edit needs your approval again.",
+    instead: "It stays under review; edit it first if the text is wrong.",
+  });
+  if (sure) act(trigger, m, "resolve");
 }
 
 function editor(m) {
@@ -250,7 +250,14 @@ function editor(m) {
     if (!categories.length) return notify("Choose at least one category.");
     act(save, m, "edit", { title: titleOf(), content: contentOf(), categories });
   }, { icon: "check" });
-  const cancel = button("Cancel", () => { editing = null; render(); }, { variant: "secondary" });
+  const changed = () => titleOf() !== m.title || contentOf() !== m.content
+    || picks.some(([c, on]) => on() !== m.categories.includes(c));
+  const cancel = button("Cancel", async () => {
+    if (changed() && !(await ask({ title: "Discard your edits?", yes: "Discard", no: "Keep editing",
+      now: "Your changes to this memory are lost.", instead: "You go on editing." }))) return;
+    editing = null;
+    render();
+  }, { variant: "secondary" });
   return [title, content, box, row(save, cancel)];
 }
 
@@ -273,8 +280,9 @@ function card(m) {
     actions.append(approve);
   }
   if (["contested", "disputed", "stale"].includes(m.state)) {
-    const resolve = button("Resolve", () => act(resolve, m, "resolve"), { icon: "check" });
-    actions.append(resolve);
+    const settle = button("Resolve", () => resolve(settle, m),
+      { icon: "check", aria: "{ 'aria-haspopup': 'dialog' }" });
+    actions.append(settle);
   }
   if (m.state !== "deleted") {
     const del = button("Delete", () => remove(del, m), { variant: "secondary", icon: "delete",
@@ -303,7 +311,7 @@ function render() {
     const box = el("section", undefined, { class: states.includes("deleted") ? "quiet" : "" });
     const list = el("ul", undefined, { class: "entries" }), head = el("div");
     list.append(...mine.map(card));
-    head.append(heading(2, `${title} (${mine.length})`, "lg"), text(hint, { size: "xs", color: "contrast-medium" }));
+    head.append(heading(2, `${title} (${mine.length})`, "lg"), ...(hint ? [text(hint)] : []));
     box.append(head, list);
     sections.push(box);
   }

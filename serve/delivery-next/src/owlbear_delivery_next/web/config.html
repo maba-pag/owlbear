@@ -53,8 +53,7 @@
     </p-select>
     <p-text id="scope-note" size="xs" color="contrast-medium"></p-text>
   </div>
-  <p-text size="xs" color="contrast-medium">A blank field inherits: project, else global, else the built-in
-    default. Each value shows where it comes from.</p-text>
+  <p-text>A blank project value uses the global one; a blank global value uses the built-in default.</p-text>
 </section>
 <section class="panel" aria-labelledby="folder-title">
   <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
@@ -62,7 +61,7 @@
     <p-input-text id="folder" label="Folder in the shared settings repository"></p-input-text>
     <p-button id="rename" type="button" compact="true" icon="edit">Rename folder</p-button>
   </div>
-  <p-text id="folder-note" size="xs" color="contrast-medium"></p-text>
+  <p-text id="folder-note"></p-text>
 </section>
 <section class="panel" aria-labelledby="agents-title">
   <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
@@ -106,11 +105,8 @@
   <p-heading size="lg"><h2 id="pack-title">Design pack</h2></p-heading>
   <p-text id="pack-active"></p-text>
   <p-text id="pack-notice" size="xs" color="contrast-medium"></p-text>
-  <p-text size="xs" color="contrast-medium">An update takes the newest upstream release: detector pins and design
-    skills together, then the rule diff, the golden pages, the calibration replay and a challenger on the whole
-    pack. Only when every stage passes does it write <code>design_pack.json</code> and
-    <code>worker_skills/NOTICE.md</code> in Delivery's package checkout, commit them on its current branch and push
-    that one commit to the branch's upstream. Any failure changes nothing in the package.</p-text>
+  <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
+    only if every stage passes.</p-text>
   <div class="row">
     <p-button id="pack-update" type="button" compact="true" icon="refresh">Update design pack</p-button>
     <p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>
@@ -125,8 +121,6 @@
 </section>
 <details class="panel">
   <summary>Not applied yet: runtimes, visibility and tool categories</summary>
-  <p-text size="xs" color="contrast-medium">Delivery keeps these settings but does not use them for routing or
-    visibility yet.</p-text>
   <p-table caption="Per agent; not applied yet">
     <p-table-head><p-table-head-row>
       <p-table-head-cell>Agent</p-table-head-cell>
@@ -168,6 +162,7 @@
   <p-text id="pending" size="sm" aria-live="polite"></p-text>
 </div>
 </main>
+<!-- ask -->
 <script>
 "use strict";
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -544,15 +539,20 @@ function inherit(event) {
   pending();
 }
 
+// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.
+function changes(layer) {
+  const shown = (v) => (v === "" || v === null || v === undefined ? "inherited" : v);
+  return Object.entries(drafts[layer]).map(([key, value]) =>
+    `${key.replace(".", " ").replaceAll("_", " ")}: ${shown(saved(layer, key))} → ${shown(value)}`);
+}
+
 function pending() {
-  const parts = [];
-  for (const layer of Object.keys(LAYERS)) {
-    const count = Object.keys(drafts[layer]).length;
-    if (count) parts.push(`${LAYERS[layer]}: ${count} unsaved edit${count > 1 ? "s" : ""}`);
-  }
-  const into = rendered === "global" ? "all projects" : "this project";
-  document.getElementById("pending").textContent = parts.length ? `${parts.join("; ")}. Save writes ${into}.`
-    : `No unsaved edits. Save writes ${into}.`;
+  const other = rendered === "global" ? "project" : "global", count = Object.keys(drafts[other]).length;
+  const mine = changes(rendered), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
+  if (count) parts.push(`${LAYERS[other]}: ${count} more unsaved.`);
+  document.getElementById("pending").textContent = parts.join(" ");
+  const save = document.getElementById("save");
+  if (save) save.textContent = rendered === "global" ? "Save global defaults" : "Save project settings";
 }
 
 function render() {
@@ -652,6 +652,14 @@ async function save() {
     return;
   }
   const layer = rendered, sent = { ...drafts[layer] };
+  if (layer === "global" && !(await ask({
+    title: "Change the defaults for all projects?", yes: "Save global defaults", no: "Keep editing",
+    now: "These become the defaults for every project:", items: changes(layer),
+    then: "Each project's next session uses them, unless the project sets its own value; sessions running now keep "
+      + "theirs.",
+    after: "Change them back here at any time.",
+    instead: "Your edits stay unsaved on this page.",
+  }))) return;
   lock(true);
   say("Saving…");
   try {
@@ -676,8 +684,14 @@ async function save() {
 async function rename() {
   const name = document.getElementById("folder").value.trim();
   if (saving || !loaded?.folder || !name || name === loaded.folder) return;
-  const sure = window.confirm(`Rename this project's folder from ${loaded.folder} to ${name}? Delivery moves it in `
-    + "the shared settings repository, then commits and pushes the move.");
+  const sure = await ask({
+    title: `Rename the folder ${loaded.folder} to ${name}?`, yes: "Rename", no: "Keep the name",
+    now: "Delivery moves the folder with this project's settings, memory and visual decisions in the shared "
+      + "settings repository, then commits and pushes the move. It refuses while a step of this project runs.",
+    then: "Other clones of this project use the new name the next time they start.",
+    after: "Rename it again here at any time; your source checkout keeps its name.",
+    instead: "The folder keeps its name.",
+  });
   if (!sure) return;
   lock(true);
   say("Renaming…");
@@ -811,9 +825,15 @@ function poll() {
 }
 
 async function startUpdate() {
-  const sure = window.confirm("Update the design pack? If every stage passes, Delivery commits design_pack.json and "
-    + "worker_skills/NOTICE.md on its package checkout's current branch and pushes that one commit to the branch's "
-    + "upstream. The challenger and the calibration replay use model requests.");
+  const sure = await ask({
+    title: "Update the design pack?", yes: "Update", no: "Keep the current pack",
+    now: "Delivery takes the newest upstream pack, detector pins and design skills together, and validates it: "
+      + "rule diff, golden pages, calibration replay and a challenger. This uses AI credits.",
+    then: "Only if every stage passes, it activates the pack, commits design_pack.json and worker_skills/NOTICE.md "
+      + "on its package checkout's current branch and pushes that commit upstream.",
+    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and the stages below say why.",
+    instead: "The current pack stays active.",
+  });
   if (!sure) return;
   try {
     renderUpdate(await call("/design-pack/update", "POST", undefined, 10000));
