@@ -19,6 +19,7 @@ SHIPPED = (
     "worker_skills/*-LICENSE",
     "web/**/*.html",
     "web/**/*.css",
+    "web/**/*.js",
     "web/**/*.mjs",
 )
 

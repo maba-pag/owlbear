@@ -47,12 +47,19 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel" 
       node.addEventListener("click", () => end(answer));
       return node;
     };
-    foot.append(choice(yes, true, "primary"), choice(no, false, "secondary"));
-    box.append(titled(2, title, "lg", designed ? { slot: "header" } : {}), body, foot);
-    if (designed) box.addEventListener("dismiss", () => end(false));
-    else box.addEventListener("cancel", (event) => { event.preventDefault(); end(false); });
+    const decline = choice(no, false, "secondary");
+    foot.append(choice(yes, true, "primary"), decline);
+    box.append(titled(2, title, "lg", designed ? { slot: "header" } : { id: "ask-title" }), body, foot);
     document.body.append(box);
-    if (designed) box.open = true;
-    else box.showModal();
+    if (designed) {
+      box.addEventListener("dismiss", () => end(false));
+      box.open = true;
+      return;
+    }
+    box.setAttribute("aria-labelledby", "ask-title");
+    box.addEventListener("cancel", (event) => { event.preventDefault(); end(false); });
+    box.addEventListener("click", (event) => { if (event.target === box) end(false); });  // the backdrop
+    box.showModal();
+    decline.focus();  // the safe choice first
   });
 }

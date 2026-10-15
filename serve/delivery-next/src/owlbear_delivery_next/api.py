@@ -149,6 +149,21 @@ def snapshot(inputs: Inputs, person: PersonCheck) -> str:
     return hashlib.sha256(shown.encode()).hexdigest()
 
 
+def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) -> dict[str, Any]:
+    """One person-only check as the page shows it; a pass its inputs no longer match counts as open (None)."""
+    a = p.answer
+    held = bool(a and a.passed and a.inputs and evidence.check_valid(a.inputs, inputs))
+    return {
+        "id": p.id,
+        "steps": p.steps,
+        "expect": p.expect,
+        "passed": True if held else (False if a and a.passed is False else None),
+        "waiting": waiting,
+        "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
+        "inputs": snapshot(inputs, p),
+    }
+
+
 def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The merge dialog: the latest offer while the Change waits for consent to merge its exact head."""
     o = c.outcome
@@ -314,18 +329,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
-        checks = [
-            {
-                "id": p.id,
-                "steps": p.steps,
-                "expect": p.expect,
-                "passed": p.answer.passed if p.answer else None,
-                "waiting": bool(waiting and c.step.task == p.id),
-                "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
-                "inputs": snapshot(evidence.check_inputs(c, p, check.fingerprints(c, p)), p),
-            }
-            for p in c.checks
-        ]
+        checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
+            waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
         return summary_of(slug) | {
             "brief": {
                 "version": c.brief.version,
