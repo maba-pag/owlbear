@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from owlbear_delivery_next import preload, roles, sdk_adapter, tools
+from owlbear_delivery_next import preload, sdk_adapter, tools
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -102,7 +102,7 @@ def test_the_window_agent_offers_the_same_tools_and_this_steps_servers_tools(tmp
     assert servers[memory]["env"] == {preload.MEMORY_DIR: str(tmp_path)}
     assert servers[memory]["args"] == ["-m", preload.MEMORY_MODULE]
     for role in ROLES:  # the window runs the same harness, which offered exactly these names live (TD-69)
-        own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role) if n not in wf.SDK_ONLY]
+        own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role)]
         assert window_names(role, tmp_path) == [*own, *(f"{relay}/{t}" for t in tools.results(role))]
 
 
@@ -110,9 +110,7 @@ def test_a_window_without_a_memory_folder_gets_no_memory_server_and_no_memory_to
     assert list(json.loads(wf.mcp(INBOX)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
     for role in ROLES:
         assert not [n for n in window_names(role) if "memory" in n]
-        assert [n for n in window_names(role) if "/" not in n] == [
-            n for n in preload.tools(role) if "/" not in n and n not in wf.SDK_ONLY
-        ]
+        assert [n for n in window_names(role) if "/" not in n] == [n for n in preload.tools(role) if "/" not in n]
 
 
 def test_the_window_agent_names_the_relay_its_step_configures(tmp_path) -> None:
@@ -122,17 +120,9 @@ def test_the_window_agent_names_the_relay_its_step_configures(tmp_path) -> None:
     assert f"{server}/submit_result" in wf.agent("planner", inbox)(None)
 
 
-def test_the_planner_alone_gets_the_researcher_and_every_builtin_agent_is_excluded() -> None:
-    planner = options(kind=StepKind.PLAN)
-    assert [a["name"] for a in planner["custom_agents"]] == ["planner", "researcher"]
-    assert planner["custom_agents"][0]["infer"] is False  # never started as its own subagent
-    found = planner["custom_agents"][1]
-    assert (found["model"], found["reasoning_effort"], found["tools"]) == (
-        roles.RESEARCHER.model,
-        roles.RESEARCHER.effort,
-        ["view", "glob", "grep"],
-    )
-    assert planner["excluded_builtin_agents"] == list(sdk_adapter.BUILTINS)
+def test_each_role_is_offered_only_its_own_agent_and_every_builtin_agent_is_excluded() -> None:
+    for kind, role in sdk_adapter.ROLES.items():
+        offered = options(kind=kind)
+        assert [(a["name"], a["infer"]) for a in offered["custom_agents"]] == [(role, False)]
+        assert offered["excluded_builtin_agents"] == list(sdk_adapter.BUILTINS)
     assert "general-purpose" in sdk_adapter.BUILTINS
-    for kind in (StepKind.BUILD, StepKind.REVIEW):
-        assert [a["name"] for a in options(kind=kind)["custom_agents"]] == [sdk_adapter.ROLES[kind]]

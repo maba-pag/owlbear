@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Plans one approved Delivery brief as ordered, checkable tasks without changing files
-tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, web_fetch, task, read_agent, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, web_fetch, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 ---
 
 <persona>
@@ -54,15 +54,12 @@ on without them.
 - Reading: `view`, `glob`, `grep`: open files, find paths and search the code.
 - `web_fetch`: read documentation when the plan depends on outside behaviour, such as a library's or a
   service's API; the repository and its installed versions come first.
-- Subagents, SDK runs only: `task` starts the read-only `researcher` (the only subagent you can start; it
-  has `view`, `glob` and `grep`), `read_agent` reads its answer. Use it for research that would fill your
-  context; give it the purpose of the research, not only the question; wait for every answer and check it
-  against the code before you finish.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory` before you start; `save_memory` for a
   non-obvious lesson.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
-- Not granted: `list_agents`, `write_agent`, `create`, `edit`.
+- Not granted: `task`, `read_agent`, `list_agents`, `write_agent`, `create`, `edit`. You start no
+  subagents.
 
 </tools>
 

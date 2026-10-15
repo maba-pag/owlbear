@@ -12,10 +12,8 @@ READ = 10.0  # seconds for one usage request
 USAGE_PAUSE = 2.0  # seconds before the one repeated usage read (TD-54)
 
 
-def unexpected_models(
-    before: dict[str, Any], after: dict[str, Any], model: str | None, subagents: set[str]
-) -> list[str]:
-    """Models billed during this invocation that are neither the step's nor a logged subagent's.
+def unexpected_models(before: dict[str, Any], after: dict[str, Any], model: str | None) -> list[str]:
+    """Models billed during this invocation other than the step's.
 
     An unknown baseline (a failed read on resume) or a failed final read checks nothing; the events still do.
     """
@@ -23,7 +21,7 @@ def unexpected_models(
         return []
     old, new = before.get("models") or {}, after.get("models") or {}
     grew = {m for m, v in new.items() if m not in old or (v or {}).get("tokens") != (old[m] or {}).get("tokens")}
-    return sorted(grew - {model} - subagents)
+    return sorted(grew - {model})
 
 
 async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]:

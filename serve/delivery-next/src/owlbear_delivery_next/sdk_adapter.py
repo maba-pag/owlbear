@@ -18,7 +18,7 @@ from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next import preload, processes, prompts, roles, sdk_teardown, tools
+from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, tools
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import decide, identities, view
@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 
 DEADLINES = {StepKind.PLAN: 900.0, StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "preparer"}
-RESEARCHER = "researcher"  # the only subagent a session may start (TD-111)
 BUILTINS = (  # the runtime's own subagents, each excluded so none can start (benchmark 2026-10-15)
     *("explore", "task", "code-review", "rubber-duck", "research", "rem-agent", "security-review"),
     "general-purpose",
@@ -71,21 +70,6 @@ def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = F
         "prompt": body.strip(),
         "tools": [*preload.tools(role), *tools.results(role, ui=ui, judging=judging)],  # nothing else (TD-69)
         "skills": list(preload.required(role, ui=ui)),
-    }
-
-
-def researcher() -> dict[str, Any]:
-    """The read-only researcher subagent, on its required model and effort, offered only to roles granted ``task``."""
-    meta, body = preload.agent_file(RESEARCHER)
-    want = roles.RESEARCHER
-    return {
-        "name": meta["name"],
-        "description": meta["description"],
-        "prompt": body.strip(),
-        "tools": preload.tools(RESEARCHER),
-        "model": want.model,
-        "reasoning_effort": want.effort,
-        "infer": True,
     }
 
 
@@ -155,7 +139,6 @@ class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
         self.turn = self.idle = False
-        self.subagent_models: set[str] = set()
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
         self.session: CopilotSession | None = None  # kept as soon as it opens, even if the first send fails
         self.sending = False  # a first message was sent or attempted, so a model may have run
@@ -204,17 +187,12 @@ class _Step:
             self.subagent_started(ev.data)
 
     def subagent_started(self, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
-        """Only the researcher may start, on its required model (TD-111); Auto voids the step for anyone (TD-53)."""
-        source, model = getattr(data, "model_selection_source", None), getattr(data, "model", None)
-        name = getattr(data, "agent_name", None)
+        """No subagent may run (owner decision 2026-10-15); Auto is still a wrong model (TD-53)."""
+        model, name = getattr(data, "model", None), getattr(data, "agent_name", None)
         if model and model.lower() == "auto":
             self.gate.wrong_model("a subagent ran on auto")
-        elif name != RESEARCHER:
-            self.gate.revoke(f"a subagent other than the researcher started: {name}")
-        elif model and model != roles.RESEARCHER.model:
-            self.gate.wrong_model(f"the researcher ran on {model}, it needs {roles.RESEARCHER.model}")
         else:
-            self.log(event="subagent-start", agent=name, model=model, source=getattr(source, "value", source))
+            self.gate.revoke(f"a subagent started: {name}; no subagent may run")
 
     def call_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK usage event data
         """One billed call: Auto voids the step for anyone (TD-53); the main agent's own calls name its model."""
@@ -241,15 +219,11 @@ class _Step:
             self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
-        """Void the step when its own agent, or its researcher, runs on another model (TD-94, TD-111)."""
+        """Void the step when its own agent runs on another model (TD-94) or a subagent runs at all."""
         if model and parent and model.lower() == "auto":
             self.gate.wrong_model("a subagent ran on auto")
-        elif model and parent and model != roles.RESEARCHER.model:  # the main agent's model too: it is not the role's
-            self.gate.wrong_model(f"a subagent ran on {model}, the researcher needs {roles.RESEARCHER.model}")
         elif model and parent:
-            if model not in self.subagent_models:  # once per session: each turn would push history out of the log
-                self.log(event="subagent-model", model=model)
-            self.subagent_models.add(model)
+            self.gate.revoke("a subagent ran; no subagent may run")
         elif model and self.cfg.model and model != self.cfg.model:
             self.gate.wrong_model(f"a turn ran on {model}, the step needs {self.cfg.model}")
 
@@ -331,11 +305,10 @@ class _Step:
 
     def options(self) -> dict[str, Any]:
         role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging)
-        helpers = [researcher()] if "task" in role["tools"] else []  # the planner's only subagent (TD-111)
         return {
             "on_permission_request": self.permission,
             "tools": self.tools(),
-            "custom_agents": [role | {"infer": False}, *helpers],  # the role never starts itself as a subagent
+            "custom_agents": [role | {"infer": False}],  # the role never starts itself as a subagent
             "agent": role["name"],
             "excluded_builtin_agents": list(BUILTINS),
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
@@ -484,7 +457,7 @@ async def _proven(st: _Step, session: Any) -> None:  # noqa: ANN401 - the SDK se
     if not st.sending:
         return
     for again in (False, True):
-        if wrong := unexpected_models(st.billed, st.run.usage, st.cfg.model, st.subagent_models):
+        if wrong := unexpected_models(st.billed, st.run.usage, st.cfg.model):
             st.gate.wrong_model(f"the usage names {', '.join(wrong)}, the step needs {st.cfg.model}")
         if st.run.model_check == "mismatch":
             return

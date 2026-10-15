@@ -67,7 +67,6 @@ def _step(usage: dict, *, ending: str = "result") -> SimpleNamespace:
         log=lambda **e: events.append(e),
         events=events,
         gate=Gate(SimpleNamespace(), run, lambda **_: None, lambda: None),
-        subagent_models={"claude-haiku-5.5"},
     )
 
 
@@ -77,7 +76,7 @@ def test_an_sdk_result_whose_model_the_usage_does_not_show_is_read_again_then_un
     asyncio.run(sdk_adapter._proven(late, _session({MODEL: 12})))  # noqa: SLF001
     assert (late.run.model_check, late.run.usage_unread) == ("verified", "")
     missing = _step({"models": {}})
-    asyncio.run(sdk_adapter._proven(missing, _session({"claude-haiku-5.5": 7})))  # noqa: SLF001
+    asyncio.run(sdk_adapter._proven(missing, _session({})))  # noqa: SLF001
     assert missing.run.model_check == "unknown"
     assert missing.run.usage_unread == "the usage does not show the step's model gpt-6-luna"
     assert missing.events == [{"event": "usage-unread", "reason": missing.run.usage_unread}]

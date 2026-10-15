@@ -94,6 +94,8 @@ def test_every_worker_role_has_its_own_agent_file_or_is_explicitly_pending() -> 
         assert folder.joinpath(f"{role}.md").is_file() == (role not in PENDING), role
     assert set(AGENTS) == set(roles.DEFAULTS) - PENDING - {CHAT}
     assert {r for k, r in roles.SESSIONS.items() if "challenge" in k} == {"challenger"}
+    files_ = {p.name for p in folder.iterdir()}
+    assert files_ == {f"{r}.md" for r in AGENTS}  # no agent file without a check
 
 
 @pytest.mark.parametrize("role", AGENTS)
@@ -102,38 +104,23 @@ def test_each_agent_explains_exactly_its_grants_and_names_only_granted_tools(rol
     assert audit(granted(role), body) == []
 
 
-def test_the_researcher_subagent_explains_exactly_its_read_only_grants() -> None:
-    _, body = preload.agent_file(sdk_adapter.RESEARCHER)  # a subagent: no result tools, its last message answers
-    assert sdk_adapter.researcher()["tools"] == ["view", "glob", "grep"]
-    assert audit(sdk_adapter.researcher()["tools"], body) == []
-    files_ = {p.name for p in files("owlbear_delivery_next").joinpath("agents").iterdir()}
-    assert files_ == {f"{r}.md" for r in (*AGENTS, sdk_adapter.RESEARCHER)}  # no agent file without a check
-
-
 @pytest.mark.parametrize("role", AGENTS)
-def test_conditional_tools_say_their_condition_and_the_window_drops_sdk_only_ones(role, tmp_path) -> None:
+def test_conditional_tools_say_their_condition_and_the_window_offers_the_same_tools(role, tmp_path) -> None:
     _, body = preload.agent_file(role)
     for name in set(tools.results(role, ui=True)) - set(tools.results(role, ui=False)):
         assert "UI Changes only" in entry(body, name)
     if role in {roles.SESSIONS[label] for label in tools.VERDICTS}:
         for name in set(tools.results(role)) - set(tools.results(role, judging=True)):
             assert "not in screenshot judgements" in entry(body, name)
-    sdk_only = [n for n in preload.tools(role) if n in wf.SDK_ONLY]
-    for name in sdk_only:
-        assert "SDK runs only" in entry(body, name)
     window = wf.agent(role, INBOX, tmp_path, ui=True)(None)
     offered = {n.split("/")[-1] for n in window.split("tools: [", 1)[1].split("]", 1)[0].split(", ")}
-    assert offered == {bare(n) for n in preload.tools(role) if n not in wf.SDK_ONLY} | {*tools.results(role, ui=True)}
-    assert set(sdk_only) <= set(sdk_adapter.agent(StepKind.REVIEW, role=role)["tools"])
+    assert offered == {bare(n) for n in preload.tools(role)} | {*tools.results(role, ui=True)}
     note = window.rsplit("\n\n", 1)[1]
     assert ticks(note) & VOCABULARY == set(tools.results(role, ui=True))
 
 
-def test_the_planner_alone_keeps_subagents_and_only_in_sdk_runs() -> None:
-    assert {r for r in AGENTS if set(preload.tools(r)) & {"task", "read_agent", "list_agents", "write_agent"}} == {
-        "planner"
-    }
-    assert set(preload.tools("planner")) & {"task", "read_agent", "list_agents", "write_agent"} == wf.SDK_ONLY
+def test_no_role_has_subagent_tools() -> None:
+    assert {r for r in AGENTS if set(preload.tools(r)) & {"task", "read_agent", "list_agents", "write_agent"}} == set()
 
 
 def test_judges_are_never_offered_or_told_of_a_question() -> None:

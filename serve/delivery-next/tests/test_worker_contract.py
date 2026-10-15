@@ -8,7 +8,7 @@ from typing import ClassVar
 import psutil
 import pytest
 
-from owlbear_delivery_next import processes, prompts, roles, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
+from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination, verdict
@@ -170,19 +170,13 @@ def _event(kind: str, **data: object) -> SimpleNamespace:
     return SimpleNamespace(type=SimpleNamespace(value=kind), data=SimpleNamespace(**data))
 
 
-def test_a_turn_on_another_model_voids_an_accepted_result_and_only_the_researchers_model_is_allowed() -> None:
-    researcher = roles.RESEARCHER.model
+def test_a_turn_on_another_model_voids_an_accepted_result() -> None:
     st = _accepted()
     st.on_event(_event("assistant.message", content="", model="claude-opus-5.5", parent_tool_call_id=None))
-    st.on_event(_event("assistant.message", content="", model=researcher, parent_tool_call_id="call-1"))
     assert (st.run.ending, st.run.head) == ("result", HEAD)
-    assert [e["model"] for e in st.events if e.get("event") == "subagent-model"] == [researcher]
     st.on_event(_event("assistant.message", content="", model="mai-code-1.1-flash", parent_tool_call_id=None))
     assert (st.run.ending, st.run.payload, st.run.head, st.run.model_check) == ("error", None, None, "mismatch")
     assert st.run.detail == "wrong model: a turn ran on mai-code-1.1-flash, the step needs claude-opus-5.5"
-    st = _accepted()
-    st.on_event(_event("assistant.message", content="", model="claude-haiku-5.5", parent_tool_call_id="call-1"))
-    assert st.run.detail == f"wrong model: a subagent ran on claude-haiku-5.5, the researcher needs {researcher}"
     st = _accepted()
     st.on_event(_event("session.auto_mode_resolved"))
     assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, "wrong model: the runtime resolved auto")
@@ -194,34 +188,29 @@ def test_a_turn_on_another_model_voids_an_accepted_result_and_only_the_researche
     )
 
 
-def test_a_subagent_call_on_the_planners_own_model_is_not_the_researchers_model() -> None:
-    wrong = f"wrong model: a subagent ran on claude-opus-5.5, the researcher needs {roles.RESEARCHER.model}"
-    for event in (
-        _event("assistant.message", content="", model="claude-opus-5.5", parent_tool_call_id="call-1"),
-        _event("assistant.usage", model="claude-opus-5.5", parent_tool_call_id="call-1", is_auto=False),
-    ):
-        st = _accepted("claude-opus-5.5")
-        st.on_event(event)
-        assert (st.run.ending, st.run.payload, st.run.detail, st.run.model_check) == ("error", None, wrong, "mismatch")
-
-
-def test_only_the_researcher_may_start_on_its_required_model_and_auto_voids_the_step() -> None:
+def test_any_subagent_voids_the_step_as_policy_and_auto_stays_a_wrong_model() -> None:
     def started(name: str, model: str | None, source: str = "agent_definition_default") -> SimpleNamespace:
         return _event("subagent.started", agent_name=name, model=model, model_selection_source=source)
 
-    researcher = roles.RESEARCHER.model
-    st = _accepted()
-    st.on_event(started("researcher", researcher))
-    assert (st.run.ending, st.run.head) == ("result", HEAD)
-    assert [(e["agent"], e["model"]) for e in st.events if e.get("event") == "subagent-start"] == [
-        ("researcher", researcher)
-    ]
-    other = "a subagent other than the researcher started: general-purpose"
-    slow = f"wrong model: the researcher ran on claude-haiku-5.5, it needs {researcher}"
+    ran = "a subagent ran; no subagent may run"
     for event, detail, check in [
-        (started("general-purpose", "claude-opus-5.5"), other, "unknown"),
-        (started("researcher", "claude-haiku-5.5"), slow, "mismatch"),
-        (started("researcher", "auto", "explicit_override"), "wrong model: a subagent ran on auto", "mismatch"),
+        (
+            started("general-purpose", "claude-opus-5.5"),
+            "a subagent started: general-purpose; no subagent may run",
+            "unknown",
+        ),
+        (started("researcher", "gpt-6-luna"), "a subagent started: researcher; no subagent may run", "unknown"),
+        (started("explore", "auto", "explicit_override"), "wrong model: a subagent ran on auto", "mismatch"),
+        (
+            _event("assistant.message", content="", model="claude-opus-5.5", parent_tool_call_id="call-1"),
+            ran,
+            "unknown",
+        ),
+        (
+            _event("assistant.usage", model="claude-opus-5.5", parent_tool_call_id="call-1", is_auto=False),
+            ran,
+            "unknown",
+        ),
         (
             _event("assistant.usage", model="mai-code-1.1-flash", parent_tool_call_id="call-2", is_auto=True),
             "wrong model: a subagent call ran on auto",
@@ -240,14 +229,14 @@ def test_only_the_researcher_may_start_on_its_required_model_and_auto_voids_the_
 
 def test_usage_naming_an_unattributed_model_voids_the_result_and_an_unnamed_model_never_starts(monkeypatch) -> None:
     usage = {"models": {"gpt-6-luna": {}, "claude-haiku-5.5": {}, "mai-code-1.1-flash": {}}}
-    assert sdk_usage.unexpected_models({}, usage, "gpt-6-luna", {"claude-haiku-5.5"}) == ["mai-code-1.1-flash"]
-    assert sdk_usage.unexpected_models({}, {"models": {"gpt-6-luna": {}}}, "gpt-6-luna", set()) == []
+    assert sdk_usage.unexpected_models({}, usage, "gpt-6-luna") == ["claude-haiku-5.5", "mai-code-1.1-flash"]
+    assert sdk_usage.unexpected_models({}, {"models": {"gpt-6-luna": {}}}, "gpt-6-luna") == []
     before = {"models": {"claude-haiku-5.5": {"tokens": 100}, "gpt-6-luna": {"tokens": 50}}}
     resumed = {"models": {"claude-haiku-5.5": {"tokens": 100}, "gpt-6-luna": {"tokens": 90}}}
-    assert sdk_usage.unexpected_models(before, resumed, "gpt-6-luna", set()) == []
+    assert sdk_usage.unexpected_models(before, resumed, "gpt-6-luna") == []
     grown = {"models": {**resumed["models"], "claude-haiku-5.5": {"tokens": 130}}}
-    assert sdk_usage.unexpected_models(before, grown, "gpt-6-luna", set()) == ["claude-haiku-5.5"]
-    assert sdk_usage.unexpected_models({"error": "RuntimeError"}, grown, "gpt-6-luna", set()) == []
+    assert sdk_usage.unexpected_models(before, grown, "gpt-6-luna") == ["claude-haiku-5.5"]
+    assert sdk_usage.unexpected_models({"error": "RuntimeError"}, grown, "gpt-6-luna") == []
     monkeypatch.setattr(sdk_adapter, "CopilotClient", lambda **_: pytest.fail("no runtime may start"))
     run = asyncio.run(sdk_adapter.run(step().cfg))
     assert (run.ending, run.detail) == ("error", "wrong model: the step names no model (TD-32)")
