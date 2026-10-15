@@ -124,10 +124,12 @@ def _position(c: Change) -> tuple[int | None, int | None]:
     return (planned.index(root.id) + 1, len(planned)) if root and root.id in planned else (None, None)
 
 
-def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]:  # noqa: PLR0911 - one case per step
+def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]:  # noqa: C901, PLR0911 - one case per step
     """The sub-step and the round of its loop."""
     s, kind, task = c.step, _kind(c), _task(c)
     own = c.budgets.loops.get(round_key(c), 0) + 1
+    if s.kind == StepKind.INTEGRATE and kind != StepKind.INTEGRATE:  # the round of the loop it interrupted
+        return _SUB[s.kind], _work(c.model_copy(update={"step": s.model_copy(update={"kind": kind})}), rounds)[1]
     if s.kind in _SUB:
         return _SUB[s.kind], 1
     if kind == StepKind.SHAPE:

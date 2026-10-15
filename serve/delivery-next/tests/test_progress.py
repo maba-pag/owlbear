@@ -93,6 +93,17 @@ def test_a_first_build_names_only_its_task():
     assert progress(c).line == "Build · Task 2 of 4"
 
 
+def test_an_integration_inside_a_loop_shows_that_loops_round():
+    c = reviewing(3)
+    c.step = Step(kind=StepKind.INTEGRATE, mode=StepKind.REVIEW, task=c.step.task)
+    p = progress(c)
+
+    assert (p.line, p.round) == ("Build · Task 2 of 4 · Updating with the target · round 4", 4)
+    c.budgets.loops["final"] = 2
+    c.step = Step(kind=StepKind.INTEGRATE, mode=StepKind.REVIEW)  # the final review's third round
+    assert progress(c).line == "Final review · Updating with the target · round 3"
+
+
 @pytest.mark.parametrize(
     "cause",
     [
