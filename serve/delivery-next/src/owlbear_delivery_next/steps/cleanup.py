@@ -12,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import briefs, budgets, profile
+from owlbear_delivery_next import briefs, budgets, change_record, profile
 from owlbear_delivery_next.git.remote_git import run_remote_git
 from owlbear_delivery_next.github.provider import classify_checks
 from owlbear_delivery_next.loop import StepResult
@@ -252,6 +252,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     line |= {"kept": str(path)} if kept else {}
     with (ctx.store.root / "history.jsonl").open("a", encoding="utf-8") as out:
         out.write(json.dumps(line) + "\n")
+    if notice := change_record.save(ctx.store, c, pr, ctx.now):
+        ctx.log(c.slug, "change-record", notice=notice)
     if pr and pr.merged and c.step.mode != "abandon":
         c.pullback = pullback.run(ctx.repo, c.names.target, ctx.now)
         ctx.log(c.slug, "pullback", **c.pullback.model_dump(mode="json", exclude={"at"}))

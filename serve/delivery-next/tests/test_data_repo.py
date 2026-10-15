@@ -8,11 +8,13 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, data_repo, profile_share, sessions, setup
+from owlbear_delivery_next import api, change_record, cli, data_repo, profile_share, sessions, setup
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.detector import DetectorError
+from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.host import HostRecord
+from owlbear_delivery_next.models import Brief, BriefDecision, Change, Decision
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.store import STORE_DIR, Store, StoreError
 
@@ -196,6 +198,27 @@ def test_a_shared_profile_is_detected_once_in_each_clone_and_again_after_a_failu
     assert profile_share.checked(store, repo).version == 2  # tried again at the next start
     assert [profile_share.checked(store, repo).version for _ in range(2)] == [3, 3]
     assert (seen, Store.open(repo).read_profile().version) == ([2, 2], 3)
+
+
+def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, repo) -> None:
+    root, remote = shared
+    store, at = Store.open(repo), datetime(2026, 10, 15, 9, tzinfo=UTC)
+    decided = BriefDecision(question="Limit the notes?", answer="yes", origin="decided")
+    approved = Brief(version=2, title="Notes", outcome="Owners keep notes", decisions=[decided])
+    c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=at, approved=[approved]))
+    c.decisions.append(Decision(text="keep 800 characters", origin="decided", at=at))
+    c.spend = c.spend.plus({"credits": 3.5}, "s1")
+    pr = PullRequest(
+        repository="acme/shop-site", number=7, node_id="n", url="https://x/pull/7", head_branch="owlbear/notes",
+        head_sha="a" * 40, base_branch="main", draft=False, state="closed", merged=True, merge_commit_sha="b" * 40,
+    )  # fmt: skip
+    assert change_record.save(store, c, pr, at) == ""
+    assert change_record.save(store, c, pr, at) == ""  # a cleanup run again rewrites the same record
+    record = json.loads((root / "shop-site" / "changes" / "20261015-notes.json").read_text())
+    assert (record["outcome"], record["pr"]["number"], record["brief"]["title"]) == ("merged", 7, "Notes")
+    assert (record["brief"]["decisions"][0]["answer"], record["decisions"][0]["text"]) == ("yes", "keep 800 characters")
+    assert record["spend"]["credits"] == 3.5
+    assert pushed(remote, "shop-site/changes/20261015-notes.json") == "changes: shop-site: notes merged"
 
 
 def test_without_a_pointer_the_settings_stay_in_the_clone(repo) -> None:
