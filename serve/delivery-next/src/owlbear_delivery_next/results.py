@@ -59,10 +59,11 @@ class Gate:
 
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
-        """The step's tools: its submit tool, a first look if it has one, its helpers, and the three every step has."""
+        """The step's tools: its submit tool, a first look if it has one, its helpers, a question unless a judge's."""
         first = (self.cfg.first_look,) if self.cfg.first_look else ()
         helpers = tuple(spec for spec, _ in self.cfg.helpers)
-        return self.cfg.submit, *first, *helpers, tools.ASK, tools.PREMISE, tools.MISSING
+        ask = (tools.ASK,) if tools.asks(self.cfg.role) else ()
+        return self.cfg.submit, *first, *helpers, *ask, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""

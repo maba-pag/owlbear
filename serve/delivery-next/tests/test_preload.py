@@ -117,16 +117,16 @@ def step(kind=StepKind.REVIEW) -> sdk_adapter._Step:
 
 
 def test_a_created_session_must_have_preloaded_every_role_skill_by_its_first_turn(tmp_path) -> None:
-    st = step()
+    st = step(StepKind.PLAN)
     for e in (loaded("owlbear-acceptance"), loaded("owlbear-module-design"), event("assistant.turn_start")):
         st.on_event(e)
     assert not st.done
-    short = step()
+    short = step(StepKind.PLAN)
     short.on_event(loaded("owlbear-acceptance"))
     short.on_event(loaded("owlbear-module-design", trigger="agent-invoked"))  # the agent's own call is no preload
     short.on_event(event("assistant.turn_start"))
     assert (short.run.ending, short.run.detail) == ("error", "skills not preloaded: owlbear-module-design")
-    other = step()
+    other = step(StepKind.PLAN)
     other.on_event(loaded("owlbear-acceptance"))
     other.on_event(loaded("owlbear-module-design", root=tmp_path))  # a same-named skill from elsewhere
     other.on_event(event("assistant.turn_start"))
@@ -154,7 +154,7 @@ def test_a_preload_counts_through_a_linked_install(tmp_path, monkeypatch) -> Non
 
 def test_the_window_agent_names_its_skills_and_they_are_placed_out_of_every_commit(repo) -> None:
     text = wf.agent("reviewer", Path("/i.json"))(None)
-    assert "\nskills: [owlbear-acceptance, owlbear-module-design]\n---\n" in text
+    assert "\nskills: [owlbear-acceptance, owlbear-module-design, owlbear-findings]\n---\n" in text
     placed = [wf.place(repo, rel, render) for rel, render in wf.skills("reviewer")]
     for name in preload.REQUIRED["reviewer"]:
         assert (repo / wf.skill_path(name)).read_text() == preload.text(name)

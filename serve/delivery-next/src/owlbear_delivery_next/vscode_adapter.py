@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -94,7 +94,7 @@ class Env:
     launch: Callable[[list[str], Path], None] = launch_code_chat
     clock: Callable[[], float] = time.monotonic
     settle: Callable[[Path, datetime], Termination] = leftovers.settle
-    reminder: str = field(default=prompts.REMINDER)
+    reminder: str | None = None  # None: the session role's own reminder
 
 
 def _grace(control: Control) -> Callable[[], None]:
@@ -150,7 +150,7 @@ class _Driver:
             prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
             config=CONFIG,
             context=cfg.context,
-            reminder=self.env.reminder,
+            reminder=prompts.reminder(self.role) if self.env.reminder is None else self.env.reminder,
             attachments=embedded(cfg.attachments),
         )
         out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=DEADLINES.get(cfg.kind, 1200.0))

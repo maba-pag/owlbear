@@ -313,6 +313,6 @@ def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> Non
 
 def test_prompts_and_window_note_name_the_report() -> None:
     assert "report_missing_tool" in prompts.FINISH
-    assert "report_missing_tool" in prompts.REMINDER
-    assert "report_missing_tool" in window_files.RESULTS
+    assert "report_missing_tool" in prompts.reminder("builder")
+    assert "report_missing_tool" in window_files.tools_note("builder")
     assert "something you need is missing" not in prompts.FINISH

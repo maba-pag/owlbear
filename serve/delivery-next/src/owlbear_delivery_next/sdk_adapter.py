@@ -351,7 +351,7 @@ class _Step:
                 else:
                     reminded = True
                     self.log(event="reminder")
-                    await _call(session.send(prompts.REMINDER), "send")
+                    await _call(session.send(prompts.reminder(role_of(self.cfg))), "send")
 
 
 async def _efforts(client: CopilotClient, model: str) -> bool:

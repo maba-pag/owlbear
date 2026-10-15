@@ -155,9 +155,9 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
             labels.append(label)
             cfgs.append(
                 dataclasses.replace(
-                    cfg, kind=StepKind.REVIEW, session_id=session_id, resume=False, checks=(), model=model,
-                    effort=effort, context=role.context, fresh=cfg.message, previous={}, journal=journal,
-                    worktree=at, policy=Policy(at, write=False),
+                    cfg, role=cfg.role or roles.SESSIONS[label], kind=StepKind.REVIEW, session_id=session_id,
+                    resume=False, checks=(), model=model, effort=effort, context=role.context, fresh=cfg.message,
+                    previous={}, journal=journal, worktree=at, policy=Policy(at, write=False),
                 )
             )  # fmt: skip
         return cfgs

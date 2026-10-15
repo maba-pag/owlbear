@@ -35,6 +35,16 @@ memory tool, go on without it.
 
 </critical_rules>
 
+<tools>
+
+- Reading: `view`, `glob`, `grep`: open the screenshots and the files your message names.
+- Memory: `recall_memory` (as `owlbear-memory/recall_memory`): lessons for agent `designer`, before you start.
+- Results: `submit_first_look`, `submit_result`, `report_wrong_premise`, `report_missing_tool`: how you end,
+  under Output format.
+- Not granted: `ask_question`. A doubt only the owner can decide is a verdict of `unsure`.
+
+</tools>
+
 <output_format>
 
 End the step with exactly these calls, in order:

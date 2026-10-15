@@ -47,13 +47,18 @@ answer where. If it contradicts a criterion or needs paths outside the scope, ca
 positions; never report a wrong premise for a review request.
 """
 REMINDER = (
-    "Your turn ended without a result. Finish the task and call submit_result, or call ask_question, "
+    "Your turn ended without a result. Finish the task and call submit_result, or call {ask}"
     "report_wrong_premise or report_missing_tool. Do not end your turn without one of these calls."
 )
 CONTINUE = (
     "Your previous step was interrupted after the owner's answer reached you. Continue the task from where you "
     "stopped: implement it, run the checks, commit, then call submit_result."
 )
+
+
+def reminder(role: str) -> str:
+    """The one nudge after a turn that ended without a result; a judge has no question to ask (TD-108)."""
+    return REMINDER.format(ask="ask_question, " if tools.asks(role) else "")
 
 
 def _cut(text: str, limit: int = LIMIT) -> str:

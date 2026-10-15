@@ -11,7 +11,7 @@ from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.tools import Worktree
 
-ROLES = ("builder", "planner", "reviewer")
+ROLES = ("builder", "planner", "reviewer", "challenger", "designer")
 SDK_TOOLS = {  # the runtime's built-in tools, the same for every model (tools.list, runtime research P24)
     *("bash", "read_bash", "list_bash", "stop_bash", "view", "create", "edit", "glob", "grep", "web_fetch"),
     *("task", "read_agent", "list_agents", "write_agent"),
@@ -59,7 +59,7 @@ def test_only_the_builder_writes_files_and_every_role_recalls_memory() -> None:
         names = set(preload.tools(role))
         assert bool(names & {"create", "edit"}) == (role == "builder")
         assert f"{preload.MEMORY}/recall_memory" in names
-    assert f"{preload.MEMORY}/save_memory" not in preload.tools("reviewer")
+        assert (f"{preload.MEMORY}/save_memory" in names) == (role in {"builder", "planner"})
 
 
 def test_the_sdk_agent_is_offered_its_own_tools_and_the_result_tools() -> None:
@@ -102,15 +102,17 @@ def test_the_window_agent_offers_the_same_tools_and_this_steps_servers_tools(tmp
     assert servers[memory]["env"] == {preload.MEMORY_DIR: str(tmp_path)}
     assert servers[memory]["args"] == ["-m", preload.MEMORY_MODULE]
     for role in ROLES:  # the window runs the same harness, which offered exactly these names live (TD-69)
-        own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role)]
-        assert window_names(role, tmp_path) == [*own, *(f"{relay}/{t}" for t in RESULT_TOOLS)]
+        own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role) if n not in wf.SDK_ONLY]
+        assert window_names(role, tmp_path) == [*own, *(f"{relay}/{t}" for t in tools.results(role))]
 
 
 def test_a_window_without_a_memory_folder_gets_no_memory_server_and_no_memory_tools() -> None:
     assert list(json.loads(wf.mcp(INBOX)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
     for role in ROLES:
         assert not [n for n in window_names(role) if "memory" in n]
-        assert [n for n in window_names(role) if "/" not in n] == [n for n in preload.tools(role) if "/" not in n]
+        assert [n for n in window_names(role) if "/" not in n] == [
+            n for n in preload.tools(role) if "/" not in n and n not in wf.SDK_ONLY
+        ]
 
 
 def test_the_window_agent_names_the_relay_its_step_configures(tmp_path) -> None:

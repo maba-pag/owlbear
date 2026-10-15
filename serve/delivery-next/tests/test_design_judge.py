@@ -105,7 +105,6 @@ def test_only_the_first_look_lets_the_sdk_turn_go_on() -> None:
     assert {t.name: t.is_terminal for t in st.tools()} == {
         "submit_result": True,
         tools.FIRST_LOOK: False,
-        "ask_question": True,
         "report_wrong_premise": True,
         "report_missing_tool": True,
     }

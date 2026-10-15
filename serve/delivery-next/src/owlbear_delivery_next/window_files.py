@@ -26,12 +26,15 @@ HARNESS_LINE = f'\n  "{HARNESS}": true'  # the one line Delivery adds to an owne
 HARNESS_ADDED = re.compile(re.escape(HARNESS_LINE) + ",?")
 SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
 SERVER = "owlbear-step"  # a step's relay is SERVER-<inbox>: the host disables a name another session holds (P21)
-RESULTS = (
-    "Your result tools come from Delivery's `owlbear-step-…` MCP server: `submit_result`, `ask_question`, "
-    "`report_wrong_premise` and `report_missing_tool`. Never push."
-)
+SDK_ONLY = frozenset({"task", "read_agent"})  # subagents: the window's restricted profile is not validated (TD-111)
 
 type Render = Callable[[str | None], str]
+
+
+def tools_note(role: str, *, ui: bool = False) -> str:
+    """The window agent's closing note, naming exactly the Delivery tools its step's relay offers the role."""
+    *rest, last = (f"`{name}`" for name in tool_specs.results(role, ui=ui))
+    return f"Delivery's tools come from its `owlbear-step-…` MCP server: {', '.join(rest)} and {last}. Never push."
 
 
 class SettingsError(ValueError):
@@ -168,8 +171,9 @@ def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = Fals
     """The role's agent from the package prose, renamed for the window, with its tools, skills and result note.
 
     Its tools are the role's, under the same names as in the SDK runtime (the window runs the same harness), with
-    memory served by this step's memory server or left out, plus the result tools of this step's relay; the window
-    offers nothing else, neither its own question tool nor the owner's MCP tools (TD-69, runtime research P19, P23).
+    memory served by this step's memory server or left out and no SDK-only tool, plus the result tools of this step's
+    relay; the window offers nothing else, neither its own question tool nor the owner's MCP tools (TD-69, runtime
+    research P19, P23).
     """
     meta, body = preload.agent_file(role)
     relay, memory_name = names(inbox)
@@ -177,12 +181,13 @@ def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = Fals
     own = [
         name.replace(f"{preload.MEMORY}/", f"{memory_name}/", 1)
         for name in preload.tools(role)
-        if served or not name.startswith(f"{preload.MEMORY}/")
+        if (served or not name.startswith(f"{preload.MEMORY}/")) and name not in SDK_ONLY
     ]
     tools = ", ".join([*own, *(f"{relay}/{name}" for name in tool_specs.results(role, ui=ui))])
     skills = ", ".join(preload.required(role, ui=ui))
     head = f"---\nname: {agent_name(role)}\ndescription: {meta['description']}\ntools: [{tools}]\n"
-    return lambda _old: f"{head}skills: [{skills}]\n---\n\n{body.strip()}\n\n{RESULTS}\n"
+    note = tools_note(role, ui=ui)
+    return lambda _old: f"{head}skills: [{skills}]\n---\n\n{body.strip()}\n\n{note}\n"
 
 
 def names(inbox: Path) -> tuple[str, str]:

@@ -259,12 +259,18 @@ MISSING = Spec(
 SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
+JUDGES = frozenset({"challenger", "designer"})  # they answer with a verdict, never a question (TD-108)
+
+
+def asks(role: str) -> bool:
+    """Whether the role may ask the owner with ``ask_question``; a judge's session always names its role."""
+    return role not in JUDGES
 
 
 def results(role: str, *, ui: bool = False) -> list[str]:
-    """Delivery's tools a role's agent is offered: every step's four, the design judge's first look, the UI scan."""
+    """Delivery's tools a role's agent is offered: every step's own, the design judge's first look, the UI scan."""
     extra = [FIRST_LOOK] if role == "designer" else [SCAN_DESIGN] if role == "builder" and ui else []
-    return [*(s.name for s in SPECS), *extra]
+    return [*(s.name for s in SPECS if s is not ASK or asks(role)), *extra]
 
 
 REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")
