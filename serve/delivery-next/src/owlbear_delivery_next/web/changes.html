@@ -528,7 +528,7 @@ function decisionForm(q, r, pictures, d) {
     }
     const instructions = chosen.flatMap(([p]) => (new Set(p.items.map((f) => f.text)).size > 1
       ? p.items.map((f) => `${where(f.state, widthsOf([f]))}: ${f.text}`) : [p.first.text]));
-    const checks = d.checks.length;  // the person checks come after the visual round
+    const checks = d.checks.filter((c) => c.passed !== true).length;  // the open person checks come after the round
     const ok = await ask(option === "fail" ? {
       title: "Send these problems back to the builder?", yes: "Send back", no: "Keep reviewing",
       now: "The builder gets a fix task with:",
