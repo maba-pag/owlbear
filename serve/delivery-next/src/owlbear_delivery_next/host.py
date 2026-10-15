@@ -368,6 +368,8 @@ class Host:
         root = Path(c.names.worktree)
         recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
         errors = tools.check_recipe(recipe, tools.Worktree("", ""), root)
+        if (env := prepare.environ(self.store, c)) is None:  # the test copy's explicit environment (TD-96)
+            errors.append("the check has no test preparation; nothing launches without one")
         if errors:
             c.env = c.recipe = None
             self.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
@@ -375,7 +377,7 @@ class Host:
         c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
         self.store.write(lock, c)
         log = self.store.root / "changes" / c.slug / "env.log"
-        if proc := check.start(e, root, log, prepare.environ(self.store, c)):  # the test copy's isolation (TD-96)
+        if proc := check.start(e, root, log, env):
             c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
             self.store.write(lock, c)
         pids = check.ready(e, proc) if proc else None

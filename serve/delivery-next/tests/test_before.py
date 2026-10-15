@@ -24,9 +24,10 @@ from owlbear_delivery_next.models import (
     Task,
     VisualState,
 )
+from owlbear_delivery_next.preparation import Preparation
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import before, check, visual
+from owlbear_delivery_next.steps import before, check, prepare, visual
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -225,6 +226,9 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
 def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_path):
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), ui)
+    none = Preparation(id="none", kind="data-only", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
+    store.update_config(lambda layer: layer.model_copy(update={"preparations": [none]}))
+    prepare._write(store, "c1", prepare.Prepared(check=VISUAL, option=none))  # noqa: SLF001 - as the preparer chose
     runner._before(store, Lock("c1"), ui, Path(ui.names.worktree))  # noqa: SLF001
     c = store.read("c1")
     assert (c.before.files, c.before.findings, before.due(c)) == (

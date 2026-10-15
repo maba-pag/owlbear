@@ -32,10 +32,11 @@ from owlbear_delivery_next.models import (
     VisualResult,
     VisualState,
 )
+from owlbear_delivery_next.preparation import BASE, Preparation
 from owlbear_delivery_next.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity, status
-from owlbear_delivery_next.steps import check, disposable, worktree
+from owlbear_delivery_next.steps import check, disposable, prepare, worktree
 from owlbear_delivery_next.storage_io import open_lock
 from owlbear_delivery_next.store import Store
 
@@ -298,11 +299,19 @@ def test_disposal_is_verified_over_recorded_pids_and_the_whole_group_without_its
     assert found == {901: "", 902: "node"}
 
 
+def prepared(store, check_id: str = "preview") -> None:
+    """The check's declared data-only test copy, restored as the runner leaves it for the host's launch."""
+    none = Preparation(id="none", kind="data-only", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
+    store.update_config(lambda layer: layer.model_copy(update={"preparations": [none]}))
+    prepare._write(store, "c1", prepare.Prepared(check=check_id, option=none, ready=True))  # noqa: SLF001
+
+
 def environment(store, fake, monkeypatch, **env):
     store.write_profile(Profile(version=1))
     c = checking(**env)
     c.names.worktree = fake.worktree
     save(store, c)
+    prepared(store, c.env.check)
     calls = {"dispose": [], "start": [], "left": []}
 
     def dispose(e):
@@ -313,8 +322,13 @@ def environment(store, fake, monkeypatch, **env):
         calls["durable"] = store.read("c1").env  # the group is recorded before readiness is awaited
         return e.pids | {901: 2.0}
 
+    def start(e, _root, _log, env=None):
+        calls["start"].append(e.command)
+        calls["env"] = env
+        return Proc()
+
     monkeypatch.setattr(check, "dispose", dispose)
-    monkeypatch.setattr(check, "start", lambda e, _root, _log, _env=None: calls["start"].append(e.command) or Proc())
+    monkeypatch.setattr(check, "start", start)
     monkeypatch.setattr(check, "ready", ready)
     monkeypatch.setattr(check, "created", lambda _pid: 2.0)
     return calls
@@ -396,6 +410,16 @@ def test_a_recipe_for_another_check_or_other_inputs_is_forgotten_and_an_agent_pr
     assert (agents, after.recipe, after.env) == (["agent"], None, None)
 
 
+def test_a_project_without_a_preparation_option_asks_and_neither_reuses_nor_prepares(store, tmp_path, reusable):
+    _fake, agents = reusable
+    store.update_config(lambda layer: layer.model_copy(update={"preparations": []}))
+    step(store, tmp_path)
+    after = store.read("c1")
+    assert (agents, after.env, after.outcome.exit, after.outcome.cause) == (
+        [], None, Exit.ASK, "project-env:check:preparation-missing"
+    )  # fmt: skip
+
+
 def test_a_failed_launch_forgets_the_recipe_so_an_agent_prepares_again(store, tmp_path, monkeypatch):
     fake = Fake(store, tmp_path)
     environment(store, fake, monkeypatch)
@@ -406,6 +430,17 @@ def test_a_failed_launch_forgets_the_recipe_so_an_agent_prepares_again(store, tm
     assert fake.host.tick(NOW) == []
     after = store.read("c1")
     assert (after.recipe, after.env, after.outcome.exit) == (None, None, Exit.RETRY)
+
+
+def test_a_check_without_a_test_preparation_never_launches(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    calls = environment(store, fake, monkeypatch)
+    for path in (store.root / "changes" / "c1" / "prepare").glob("*.json"):
+        path.unlink()
+    assert fake.host.tick(NOW) == []
+    after = store.read("c1")
+    assert (calls["start"], after.env, after.outcome.exit) == ([], None, Exit.RETRY)
+    assert after.outcome.reason == "the check has no test preparation; nothing launches without one"
 
 
 def test_an_uncertain_launch_is_disposed_from_the_worktree_scan_before_another_copy(store, tmp_path, monkeypatch):
@@ -431,6 +466,7 @@ def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_t
     fake.found = {}
     assert fake.host.tick(NOW) == []
     assert calls["start"] == ["npm run preview"]
+    assert set(calls["env"]) - set(BASE) == {"APP_ENV"}  # the explicit test environment, never the host's own
     assert (calls["durable"].pgid, calls["durable"].pids, calls["durable"].ready_at) == (900, {900: 2.0}, None)
     waiting = store.read("c1")
     assert (waiting.outcome.who, waiting.env.pids) == ("you", {900: 2.0, 901: 2.0})
@@ -454,6 +490,7 @@ def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_ch
     c.checks, c.step, c.env = [], Step(kind=StepKind.CHECK, task=VISUAL), c.env.model_copy(update={"check": VISUAL})
     c.brief = Brief(version=1, ui=True, visual=[VisualState(name="home", path="/", expect="a greeting")])
     save(store, c)
+    prepared(store, VISUAL)
     assert (fake.host.tick(NOW), calls["start"]) == (["c1"], [])  # a runner renders the "before" states first
     c = store.read("c1")
     c.before = VisualResult(head="b" * 40, tree="t", at=NOW)

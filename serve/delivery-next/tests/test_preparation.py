@@ -17,8 +17,10 @@ from owlbear_delivery_next.store import Store
 
 TOOL = """import os, pathlib, sys
 act, snap, db = sys.argv[1], os.environ.get("OWLBEAR_SNAPSHOT", ""), os.environ.get("TEST_DB", "")
-with open(os.environ["PREP_LOG"], "a") as f:
+with open(os.environ.get("TEST_LOG") or os.environ["PREP_LOG"], "a") as f:
     f.write(f"{act} {db}\\n")
+    if os.environ.get("LIVE_SECRET"):
+        f.write(f"secret-{act}\\n")
 if act == "export":
     pathlib.Path(snap, "db.txt").write_text("alice@example.com")
 if act in {"export-symlink", "export-hardlink"}:  # the live file itself, reached from the snapshot
@@ -35,7 +37,7 @@ if act == "fail":
     sys.exit("restore refused")
 """
 SETUP = """import os, pathlib, sys
-act, log = sys.argv[1], pathlib.Path(os.environ["PREP_LOG"])
+act, log = sys.argv[1], pathlib.Path(os.environ["TEST_LOG"])
 with log.open("a") as f:
     f.write(f"{act}-from-patch\\n")
 if act == "seed":
@@ -44,13 +46,7 @@ if act == "cleanup" and log.with_name("cleanup-fails").exists():
     sys.exit("cleanup refused")
 """
 LIVE = {"TEST_DB": "postgres://live/app"}
-HELD = preparation.HELD
-
-
-@pytest.fixture(autouse=True)
-def released(monkeypatch):
-    """The snapshot machinery as it runs once the owner releases live copies; the hold has its own test."""
-    monkeypatch.setattr(preparation, "HELD", frozenset())
+UNCOVERED = "its isolation does not point the live TEST_DB elsewhere"
 
 
 def git(root: Path, *args: str) -> str:
@@ -85,9 +81,10 @@ def option(tmp_path: Path, kind: str = "live-copy-plus-data", **fields) -> Prepa
     live = kind != "data-only"
     base = {
         "id": "copy", "kind": kind, "cleanup": run(tmp_path, "cleanup"),
-        "isolation": {"TEST_DB": str(tmp_path / "test.db")}, "setup_globs": ["fixtures/**"],
+        "isolation": {"TEST_DB": str(tmp_path / "test.db"), "TEST_LOG": str(tmp_path / "prep.log")},
+        "setup_globs": ["fixtures/**"],
         **({"export": run(tmp_path, "export"), "masking": run(tmp_path, "mask"), "restore": run(tmp_path, "restore"),
-            "data_classes": ["customers"]} if live else {}),
+            "data_classes": ["customers"], "live": LIVE} if live else {}),
         **({"seed": run(tmp_path, "seed")} if kind != "live-copy" else {}),
     }  # fmt: skip
     return Preparation.model_validate(base | fields)
@@ -117,21 +114,91 @@ def lines(log: Path) -> list[str]:
 
 
 @pytest.mark.parametrize(
-    ("change_", "rules", "error"),
+    ("change_", "rules", "errors"),
     [
-        ({"id": "copy"}, {}, ""),
-        ({}, {"data_classes": []}, "data classes customers are not permitted"),
-        ({"isolation": {}}, {"isolation": []}, "it declares no isolation"),
-        ({"isolation": {"OTHER_DB": "x"}}, {}, "its isolation lacks TEST_DB"),
-        ({"isolation": {"TEST_DB": LIVE["TEST_DB"]}}, {}, "its isolation TEST_DB equals the live value"),
-        ({"copies_keys": True}, {}, "it copies keys or secrets, which are not permitted"),
-        ({"masking": ""}, {}, "it copies customers without masking"),
+        ({"id": "copy"}, {}, []),
+        ({}, {"data_classes": []}, ["data classes customers are not permitted"]),
+        ({"isolation": {}}, {"isolation": []}, ["it declares no isolation", UNCOVERED]),
+        ({"isolation": {"OTHER_DB": "x"}}, {}, ["its isolation lacks TEST_DB", UNCOVERED]),
+        (
+            {"isolation": {"TEST_DB": LIVE["TEST_DB"]}}, {},
+            ["its isolation TEST_DB equals the live value", "its isolation TEST_DB points at the live TEST_DB"],
+        ),
+        ({"isolation": {"TEST_DB": "x", "OTHER_DB": "postgres://u:p@LIVE:5432/app/"}}, {"isolation": []},
+         ["its isolation OTHER_DB points at the live TEST_DB"]),
+        ({"copies_keys": True}, {}, ["it copies keys or secrets, which are not permitted"]),
+        ({"masking": ""}, {}, ["it copies customers without masking"]),
+    ],
+)  # fmt: skip
+def test_the_owner_permissions_refuse_an_unsafe_option(tmp_path, change_, rules, errors):
+    rules = {"data_classes": ["customers"], "isolation": ["TEST_DB"]} | rules
+    assert preparation.refusals(option(tmp_path, **change_), DataPermissions(**rules), LIVE) == errors
+
+
+@pytest.mark.parametrize(
+    ("test", "live", "same"),
+    [
+        ("postgres://ro:x@db.live:5432/app", "postgres://admin:y@DB.live/app/", True),  # credentials never differ it
+        ("postgres://db.live:5433/app", "postgres://db.live:5432/app", False),
+        ("postgres://db.live/app_test", "postgres://db.live/app", False),
+        ("postgres://db.test/app", "postgres://db.live/app", False),
+        ("mysql://db.live/app", "postgres://db.live/app", False),
+        (" s3-live-bucket ", "s3-live-bucket", True),
+        ("s3-test-bucket", "s3-live-bucket", False),
     ],
 )
-def test_the_owner_permissions_refuse_an_unsafe_option(tmp_path, change_, rules, error):
-    rules = {"data_classes": ["customers"], "isolation": ["TEST_DB"]} | rules
-    why = preparation.refusals(option(tmp_path, **change_), DataPermissions(**rules), LIVE)
-    assert why == ([error] if error else [])
+def test_a_test_value_names_live_by_url_identity_or_exact_text(test, live, same):
+    assert preparation.same(test, live) is same
+
+
+def test_a_live_copy_must_point_every_declared_live_resource_elsewhere(env):
+    repo, store, log, tmp = env
+    rules = DataPermissions(data_classes=["customers"])
+    two = {"TEST_DB": LIVE["TEST_DB"], "BUCKET": "s3://live-bucket"}
+    assert preparation.refusals(option(tmp, live=two), rules, {}) == [
+        "its isolation does not point the live BUCKET elsewhere"
+    ]
+    copy = option(tmp, live=two, isolation={"TEST_DB": "postgres://LIVE/app", "BUCKET": "s3://test-bucket"})
+    assert preparation.refusals(copy, rules, {}) == ["its isolation TEST_DB points at the live TEST_DB"]
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
+    result = prepare.launch(store, change(repo), settings(copy, isolation=[]), lambda _e: None)
+    assert (result.exit, lines(log)) == (Exit.ASK, [])  # nothing exported
+
+
+def test_restore_seed_cleanup_and_the_launch_never_inherit_delivery_s_environment(env, monkeypatch):
+    repo, store, log, tmp = env
+    monkeypatch.setenv("LIVE_SECRET", "s3cret")
+    c, s = change(repo), settings(option(tmp))
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
+    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    launch = prepare.environ(store, c)
+    assert set(launch) - set(preparation.BASE) == {"TEST_DB", "TEST_LOG", "OWLBEAR_SNAPSHOT"}
+    assert launch["PATH"] == prepare.os.environ["PATH"]
+    c.env = None
+    prepare.end(store, c, repo, s, lambda _e: None)
+    assert lines(log) == ["export", "secret-export", "mask", "secret-mask", "restore", "seed", "cleanup"]
+
+
+def test_export_and_masking_never_run_a_script_the_preparer_edited(env):
+    repo, store, log, tmp = env
+    edited = option(tmp, export=f"{sys.executable} fixtures/export.py", masking=f"{sys.executable} --x=fixtures/")
+    head = git(repo, "rev-parse", "HEAD").strip()
+    ctx = Preparing((edited,), settings(edited).data, head, live=LIVE)
+    dirty = tools.Worktree(head, head, ("fixtures/export.py", "fixtures/a.json"))
+    assert preparation.check(recipe(), dirty, repo, ctx) == [
+        (
+            "changes: fixtures/a.json, fixtures/export.py is run by the export or masking, which read live and run "
+            "only the project's committed scripts - revert it"
+        )
+    ]
+    rec = prepare.Prepared(check="visual", option=edited, paths=["fixtures/export.py"])
+    prepare._write(store, "c1", rec)  # noqa: SLF001 - as accepted
+    result = prepare.launch(store, change(repo), settings(edited), lambda _e: None)
+    assert (result.exit, lines(log)) == (Exit.RETRY, [])
+    assert result.reason == (
+        "test preparation failed: the export or masking runs fixtures/export.py, which the preparer edited; they "
+        "read live"
+    )
 
 
 def test_keys_and_unmasked_classes_are_allowed_only_by_the_permissions(tmp_path):
@@ -146,6 +213,8 @@ def test_keys_and_unmasked_classes_are_allowed_only_by_the_permissions(tmp_path)
         ({"export": ""}, "a live-copy-plus-data option needs export"),
         ({"kind": "live-copy", "seed": "x"}, "a live-copy option adds no data"),
         ({"data_classes": []}, "a live copy names the data classes it copies"),
+        ({"live": {}}, "a live copy names its live resources in live"),
+        ({"live": {"TEST_DB": " "}}, "live names each resource's live value; TEST_DB is empty"),
         ({"kind": "data-only", "export": "x"}, "a data-only option exports, masks and copies nothing"),
         ({"isolation": {"OWLBEAR_SNAPSHOT": "x"}}, "isolation names environment variables"),
         ({"setup_globs": ["../outside/*"]}, "setup_globs must be repository-relative"),
@@ -177,7 +246,7 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     refused = preparation.check(recipe(), tools.Worktree(head, head), repo, denied)
     assert refused[0].startswith("preparation: copy is not permitted (data classes customers are not permitted)")
     none = preparation.check(recipe(), tools.Worktree(head, head, ("fixtures/users.json",)), repo, Preparing())
-    assert none[0] == "preparation: this project declares no preparation options - leave it empty"
+    assert none[0] == "preparation: this project declares no preparation options, so no check launches - ask"
     assert none[1].startswith("changes: fixtures/users.json edited; you may edit nothing without a preparation")
 
 
@@ -189,7 +258,25 @@ def test_with_no_safe_option_delivery_asks_and_starts_no_preparer(tmp_path):
     )  # fmt: skip
     assert "copy: data classes customers are not permitted" in asked.reason
     assert prepare.unsafe(settings(option(tmp_path)), LIVE) is None
-    assert prepare.unsafe(settings(), LIVE) is None  # a project without data declares none
+
+
+def test_without_a_declared_option_no_check_launches_and_the_owner_is_asked_to_declare_one(env):
+    repo, store, _log, tmp = env
+    asked = prepare.unsafe(settings(), LIVE)
+    assert (asked.exit, asked.cause, [o.next for o in asked.question.options]) == (
+        Exit.ASK, "project-env:check:preparation-missing", [StepKind.CHECK, "pause"]
+    )  # fmt: skip
+    assert "Declare at least one under `preparations` in the project's settings (`<project folder>/config.json`" in (
+        asked.reason
+    )
+    assert "data-only option whose seed and cleanup are `true`" in asked.reason
+    c = change(repo)
+    assert not prepare.reusable(store, c, settings(), LIVE)  # a last recipe without a preparation never relaunches
+    with pytest.raises(prepare.PrepareError, match="the check has no test preparation"):
+        prepare.merge_base(store, c, settings(), lambda _e: None)(tmp)  # nor does the "before" capture
+    assert prepare.environ(store, c) is None
+    none = option(tmp, "data-only", id="none", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
+    assert prepare.unsafe(resolve(None, Layer(preparations=[none])), LIVE) is None  # a project without data
 
 
 def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ended(env):
@@ -333,26 +420,22 @@ def test_the_edits_of_a_preparer_whose_runner_died_are_discarded_before_any_late
     assert len(events) == 1
 
 
-def test_live_copy_options_are_held_until_the_owner_releases_them(env, monkeypatch):
+def test_a_live_copy_pointing_at_live_is_refused_and_never_exported(env):
     repo, store, log, tmp = env
-    monkeypatch.setattr(preparation, "HELD", HELD)
     rules = DataPermissions(data_classes=["customers"], isolation=["TEST_DB"])
-    held = (
-        "live-copy preparation is held until the owner confirms how isolation from live is proven (review 2026-10-15)"
-    )
-    for kind in ("live-copy", "live-copy-plus-data"):
-        assert preparation.refusals(option(tmp, kind), rules, LIVE) == [held]
+    copy = option(tmp, isolation={"TEST_DB": "postgres://live:5432/app"})
+    why = ["its isolation TEST_DB points at the live TEST_DB"]
+    assert preparation.refusals(copy, rules, LIVE) == why
     data = option(tmp, "data-only", id="fixtures")
-    assert preparation.refusals(data, rules, LIVE) == []
     head = git(repo, "rev-parse", "HEAD").strip()
-    ctx = Preparing((option(tmp), data), rules, head, live=LIVE)
+    ctx = Preparing((copy, data), rules, head, live=LIVE)
     refused = preparation.check(recipe(), tools.Worktree(head, head), repo, ctx)
-    assert refused[0] == f"preparation: copy is not permitted ({held}) - pick another or ask"
+    assert refused[0] == f"preparation: copy is not permitted ({why[0]}) - pick another or ask"
     assert preparation.check(recipe("fixtures"), tools.Worktree(head, head), repo, ctx) == []
 
-    prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, change(repo), settings(option(tmp)), lambda _e: None).exit == Exit.ASK
-    alongside = prepare.launch(store, change(repo), settings(option(tmp), data), lambda _e: None)
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
+    assert prepare.launch(store, change(repo), settings(copy), lambda _e: None).exit == Exit.ASK
+    alongside = prepare.launch(store, change(repo), settings(copy, data), lambda _e: None)
     assert (alongside.exit, alongside.reason) == (Exit.RETRY, "the preparation option copy is no longer permitted")
     assert lines(log) == []  # nothing exported
     prepare._write(store, "c1", prepare.Prepared(check="pc1", option=data))  # noqa: SLF001 - as accepted

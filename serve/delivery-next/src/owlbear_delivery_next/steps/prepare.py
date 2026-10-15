@@ -4,8 +4,9 @@ Per check, a live copy is exported and masked once into a frozen snapshot outsid
 "before" capture and again before the host launches the check, that same snapshot is restored into the isolated test
 environment, test data is seeded and the preparer's setup patch applied. The end of the check runs the cleanup command
 with the patch still applied, then discards it and deletes the snapshot unless the owner keeps a masked one; a failed
-cleanup or deletion is ended again by the next runner. Restore, seed, cleanup and the launch run with the option's
-isolation; only export and masking see Delivery's own environment.
+cleanup or deletion is ended again by the next runner. Restore, seed, cleanup and the launch run with an explicit
+environment: the process essentials (``preparation.BASE``) and the option's isolation, never Delivery's own; only
+export and masking see that, and they run only the project's committed scripts, never one the preparer edited.
 """
 
 from __future__ import annotations
@@ -199,9 +200,18 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
 
 
 def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.StepResult | None:
-    """No declared option is permitted, so a check would run on live data: the owner decides; nothing runs."""
+    """No option is declared, or none is permitted, so a check would run on live data: the owner decides."""
     live = dict(os.environ) if live is None else live
-    if not settings.preparations or preparation.safe(settings.preparations, settings.data, live):
+    if not settings.preparations:
+        text = (
+            "This project declares no test preparation option, and a check launches only on a prepared test copy "
+            "(TD-96). Declare at least one under `preparations` in the project's settings "
+            "(`<project folder>/config.json` in the shared repository, or the settings page); a project without data "
+            "can declare a data-only option whose seed and cleanup are `true`. Then continue."
+        )
+        cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-missing")
+        return engine.ask(StepKind.CHECK, text, cause, engine.continue_or_pause(StepKind.CHECK))
+    if preparation.safe(settings.preparations, settings.data, live):
         return None
     why = "; ".join(f"{o.id}: {', '.join(preparation.refusals(o, settings.data, live))}" for o in settings.preparations)
     text = (
@@ -245,15 +255,16 @@ def reusable(store: Store, c: Change, settings: Settings, live: Mapping[str, str
     """Whether the recipe's preparation still holds: the option it chose is declared as it was, and permitted."""
     rec = read(store, c.slug, c.step.task or "")
     if rec is None:
-        return not settings.preparations
+        return False
     now = next((o for o in settings.preparations if o.id == rec.option.id), None)
     live = dict(os.environ) if live is None else live
     return now == rec.option and not preparation.refusals(rec.option, settings.data, live)
 
 
 def isolated(rec: Prepared) -> dict[str, str]:
-    """The environment of restore, seed, cleanup and the launch: the option's isolation and the snapshot."""
-    return dict(os.environ) | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
+    """The explicit environment of restore, seed, cleanup and the launch: the essentials, isolation and snapshot."""
+    base = {k: v for k in preparation.BASE if (v := os.environ.get(k)) is not None}
+    return base | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
 
 
 def environ(store: Store, c: Change) -> dict[str, str] | None:
@@ -312,14 +323,14 @@ def _snapshot(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> s
     """Export and mask the live copy once per check; the frozen snapshot's digest is kept, a failed one deleted."""
     if rec.option.kind not in LIVE or rec.digest:
         return ""
+    if edited := preparation.named(f"{rec.option.export} {rec.option.masking}", rec.paths, home):
+        return f"the export or masking runs {', '.join(edited)}, which the preparer edited; they read live"
     folder = snapshots() / hashlib.sha256(f"{store.root}\0{slug}\0{rec.check}".encode()).hexdigest()[:16]
     shutil.rmtree(folder, ignore_errors=True)  # a kept snapshot of an earlier run
     folder.mkdir(mode=0o700, parents=True)
     rec.snapshot = str(folder)
     _write(store, slug, rec)  # before the export: the end of the check removes even a partial snapshot
     live = dict(os.environ) | {SNAPSHOT: str(folder)}  # export reads live; it is the copy the owner permitted
-    # Export and masking see live, and run before the setup patch is applied: when the owner releases live copies
-    # (preparation.HELD), they must run only the project's declared, committed scripts, never preparer-edited ones.
     note = _command(rec, "export", home, log, live) or _plain(folder)
     note = note or _command(rec, "masking", home, log, live) or _plain(folder)
     if not note and not any(folder.iterdir()):
@@ -370,13 +381,13 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
     return _command(rec, "restore", root, log, env) or _command(rec, "seed", root, log, env)
 
 
-def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[Path], dict[str, str]] | None:
+def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[Path], dict[str, str]]:
     """The "before" capture's preparation of its merge-base worktree; it returns the launch environment."""
     rec = read(store, c.slug, VISUAL)
-    if rec is None:
-        return None
 
     def go(root: Path) -> dict[str, str]:
+        if rec is None:
+            raise PrepareError(check.failed("the check has no test preparation; nothing launches without one"))
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False):
             raise PrepareError(check.failed(note))
         return isolated(rec)

@@ -175,11 +175,6 @@ REVIEW_FINISH = (
     "Call `submit_result` once with `verdict` and `findings`; `covered_paths` may list the paths you read. "
     "Delivery covers the changed paths itself. If it is rejected, fix what each error names and call it again."
 )
-RECIPE = (
-    "Verify that it starts and that its local URL answers, then stop everything you started: no process may "
-    "remain in the worktree. If you cannot both start and stop it, verify the command, directory "
-    "and URL from the code and package files instead. Delivery launches it for the owner and checks readiness."
-)
 SOURCE_ONLY = (
     "Find the command, directory and URL from the project's files only (scripts, package manifests, a test "
     "runner's web-server configuration). Do not start the app: outside a prepared test copy it may reach live data. "
@@ -193,8 +188,7 @@ BOUNDARY = (
     "run an option's export, restore, seed or cleanup yourself."
 )
 NO_OPTIONS = (
-    "The project declares no preparation options: leave `preparation` empty. If the check needs data the app "
-    "would read from live, call `ask_question`; a check never runs on live data (TD-96)."
+    "The project declares no preparation options, so no check launches (TD-96): call `ask_question` and say so."
 )
 CHECK_FINISH = (
     "Call `submit_result` once with `command`, `directory` (repository-relative), `ready_url` "
@@ -271,7 +265,7 @@ def check(
             "",
             "## Launch recipe",
             "Find the command that serves this check in the project's files (scripts, package manifests).",
-            SOURCE_ONLY if ctx.options else RECIPE,
+            SOURCE_ONLY,
             "",
             "## Finish",
             CHECK_FINISH,

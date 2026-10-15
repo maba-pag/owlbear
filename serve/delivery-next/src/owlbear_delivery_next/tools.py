@@ -168,8 +168,7 @@ class CheckRecipe(Args):
     preparation: str = Field(
         default="",
         max_length=40,
-        description="The id of the project's declared preparation option the check runs on; empty only when the "
-        "project declares none",
+        description="The id of the project's declared preparation option the check runs on",
         examples=["live-copy"],
     )
     reason: str = Field(

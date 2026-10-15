@@ -27,12 +27,10 @@ on without them.
    a test runner's web-server configuration (such as Playwright's), then the source itself.
 2. **Choose only a declared option.** Your first message lists the project's options, each with
    whether the owner's permissions allow it. Never invent a data source, a database URL or an
-   export. When the project declares options, every check runs on one of them; when no permitted
-   option gives the check the data it needs, call `ask_question`.
-3. **Verify the launch only where it is safe.** When the project declares options, do not start the
-   app: outside a prepared test copy it may reach live data. Delivery verifies the launch on the
-   test copy, and a launch that fails comes back to you. When it declares none, start the recipe,
-   check its `127.0.0.1` URL answers, then stop everything you started.
+   export. Every check runs on one of them; when no permitted option gives the check the data it
+   needs, or the project declares none, call `ask_question`.
+3. **Never start the app.** Outside a prepared test copy it may reach live data. Delivery verifies
+   the launch on the test copy, and a launch that fails comes back to you.
 4. **Edit only test-system setup files (TD-107).** Fixtures, seed and preparation scripts and test
    configuration that the chosen option's setup files name, and nothing else; never Change code.
    Leave your edits uncommitted and never commit: Delivery keeps them as a patch for this check,
@@ -67,7 +65,7 @@ End the step with exactly one call:
 
 - `submit_result`: `command`, `directory` (repository-relative), `ready_url`
   (`http://127.0.0.1:<port>/...`), `summary` (how you found and verified it), `preparation` (the
-  option's id; empty only when the project declares none) and `reason` (why that option gives the
+  option's id) and `reason` (why that option gives the
   check its data). If it is rejected, each error names a field: fix it and call again.
 - `ask_question`: no permitted option fits, or the check's data is the owner's decision.
 - `report_wrong_premise`: a state, path or page the check names does not exist in this branch.
