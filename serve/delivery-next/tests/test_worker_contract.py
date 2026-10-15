@@ -194,6 +194,17 @@ def test_a_turn_on_another_model_voids_an_accepted_result_and_only_the_researche
     )
 
 
+def test_a_subagent_call_on_the_planners_own_model_is_not_the_researchers_model() -> None:
+    wrong = f"wrong model: a subagent ran on claude-opus-5.5, the researcher needs {roles.RESEARCHER.model}"
+    for event in (
+        _event("assistant.message", content="", model="claude-opus-5.5", parent_tool_call_id="call-1"),
+        _event("assistant.usage", model="claude-opus-5.5", parent_tool_call_id="call-1", is_auto=False),
+    ):
+        st = _accepted("claude-opus-5.5")
+        st.on_event(event)
+        assert (st.run.ending, st.run.payload, st.run.detail, st.run.model_check) == ("error", None, wrong, "mismatch")
+
+
 def test_only_the_researcher_may_start_on_its_required_model_and_auto_voids_the_step() -> None:
     def started(name: str, model: str | None, source: str = "agent_definition_default") -> SimpleNamespace:
         return _event("subagent.started", agent_name=name, model=model, model_selection_source=source)

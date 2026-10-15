@@ -241,16 +241,13 @@ class _Step:
         """Void the step when its own agent, or its researcher, runs on another model (TD-94, TD-111)."""
         if model and parent and model.lower() == "auto":
             self.gate.wrong_model("a subagent ran on auto")
-            return
-        if not model or not self.cfg.model or model == self.cfg.model:
-            return
-        if parent and model == roles.RESEARCHER.model:
+        elif model and parent and model != roles.RESEARCHER.model:  # the main agent's model too: it is not the role's
+            self.gate.wrong_model(f"a subagent ran on {model}, the researcher needs {roles.RESEARCHER.model}")
+        elif model and parent:
             if model not in self.subagent_models:  # once per session: each turn would push history out of the log
                 self.log(event="subagent-model", model=model)
             self.subagent_models.add(model)
-        elif parent:
-            self.gate.wrong_model(f"a subagent ran on {model}, the researcher needs {roles.RESEARCHER.model}")
-        else:
+        elif model and self.cfg.model and model != self.cfg.model:
             self.gate.wrong_model(f"a turn ran on {model}, the step needs {self.cfg.model}")
 
     def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
