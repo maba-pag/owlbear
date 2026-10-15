@@ -158,6 +158,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
                     cfg, role=cfg.role or roles.SESSIONS[label], kind=StepKind.REVIEW, session_id=session_id,
                     resume=False, checks=(), model=model, effort=effort, context=role.context, fresh=cfg.message,
                     previous={}, journal=journal, worktree=at, policy=Policy(at, write=False),
+                    judging=label in tools.VERDICTS,
                 )
             )  # fmt: skip
         return cfgs

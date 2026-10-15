@@ -260,17 +260,19 @@ SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 JUDGES = frozenset({"challenger", "designer"})  # they answer with a verdict, never a question (TD-108)
+# Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
+VERDICTS = frozenset({"visual-review", "design-review", "plan-challenge", "brief-challenge"})
 
 
-def asks(role: str) -> bool:
-    """Whether the role may ask the owner with ``ask_question``; a judge's session always names its role."""
-    return role not in JUDGES
+def asks(role: str, *, judging: bool = False) -> bool:
+    """Whether a session may ask the owner with ``ask_question``: never a judge's, nor a judgement's."""
+    return role not in JUDGES and not judging
 
 
-def results(role: str, *, ui: bool = False) -> list[str]:
+def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the design judge's first look, the UI scan."""
     extra = [FIRST_LOOK] if role == "designer" else [SCAN_DESIGN] if role == "builder" and ui else []
-    return [*(s.name for s in SPECS if s is not ASK or asks(role)), *extra]
+    return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
 
 
 REVIEW = Spec("submit_result", "Submit your review verdict once, after reading the diff.", ReviewResult, "result")

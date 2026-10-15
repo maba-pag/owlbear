@@ -115,6 +115,9 @@ def test_conditional_tools_say_their_condition_and_the_window_drops_sdk_only_one
     _, body = preload.agent_file(role)
     for name in set(tools.results(role, ui=True)) - set(tools.results(role, ui=False)):
         assert "UI Changes only" in entry(body, name)
+    if role in {roles.SESSIONS[label] for label in tools.VERDICTS}:
+        for name in set(tools.results(role)) - set(tools.results(role, judging=True)):
+            assert "not in screenshot judgements" in entry(body, name)
     sdk_only = [n for n in preload.tools(role) if n in wf.SDK_ONLY]
     for name in sdk_only:
         assert "SDK runs only" in entry(body, name)
@@ -139,6 +142,11 @@ def test_judges_are_never_offered_or_told_of_a_question() -> None:
         assert asks == (role not in {"challenger", "designer"}), role
         assert (tools.ASK.name in wf.tools_note(role)) == asks
         assert (tools.ASK.name in prompts.reminder(role)) == asks
+    for label in tools.VERDICTS:
+        role = roles.SESSIONS[label]
+        assert tools.ASK.name not in tools.results(role, judging=True), label
+        assert tools.ASK.name not in wf.tools_note(role, judging=True)
+        assert tools.ASK.name not in prompts.reminder(role, judging=True)
 
 
 def test_a_misaligned_agent_fails_naming_the_unexplained_grant_and_the_prose_only_tool() -> None:
@@ -180,9 +188,14 @@ class _Made(Exception):  # noqa: N818 - stops the round once its sessions are bu
 
 @pytest.mark.parametrize(
     ("label", "role"),
-    [("plan-challenge", "challenger"), ("brief-challenge", "challenger"), (StepKind.REVIEW, "reviewer")],
+    [
+        ("plan-challenge", "challenger"),
+        ("brief-challenge", "challenger"),
+        (StepKind.REVIEW, "reviewer"),
+        ("visual-review", "reviewer"),
+    ],
 )
-def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypatch) -> None:
+def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypatch, tmp_path) -> None:
     built: list[sdk_adapter.Session] = []
 
     def isolated(_store, _lock, _change, source, make, _go, **_kw):
@@ -201,7 +214,12 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     assert opts["custom_agents"][0]["skills"] == list(preload.REQUIRED[role])
     offered = {t.name for t in opts["tools"]}
     assert offered == {s.name for s in Gate(cfg, Run("s"), lambda **_: None, lambda: None).specs}
-    assert (tools.ASK.name in offered) == (role == "reviewer")
+    asks = role == "reviewer" and label != "visual-review"  # the screenshot judgement answers with a verdict (TD-108)
+    assert (tools.ASK.name in offered) == (tools.ASK.name in opts["custom_agents"][0]["tools"]) == asks
+    window = wf.agent(role, INBOX, tmp_path, judging=cfg.judging)(None)
+    granted_there, note = window.split("tools: [", 1)[1].split("]", 1)[0], window.rsplit("\n\n", 1)[1]
+    reminder = prompts.reminder(role, judging=cfg.judging)
+    assert (tools.ASK.name in granted_there) == (tools.ASK.name in note) == (tools.ASK.name in reminder) == asks
     assert wf.agent_path(sdk_adapter.role_of(cfg)) == f".github/agents/owlbear-{role}.agent.md"
 
 

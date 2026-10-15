@@ -57,9 +57,9 @@ CONTINUE = (
 )
 
 
-def reminder(role: str) -> str:
-    """The one nudge after a turn that ended without a result; a judge has no question to ask (TD-108)."""
-    return REMINDER.format(ask="ask_question, " if tools.asks(role) else "")
+def reminder(role: str, *, judging: bool = False) -> str:
+    """The one nudge after a turn that ended without a result; a judge or judgement has no question (TD-108)."""
+    return REMINDER.format(ask="ask_question, " if tools.asks(role, judging=judging) else "")
 
 
 def _cut(text: str, limit: int = LIMIT) -> str:

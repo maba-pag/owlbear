@@ -136,7 +136,7 @@ class _Driver:
         return False
 
     def drive(self, conn: ahp.Transport) -> Outcome:
-        cfg = self.cfg
+        cfg, reminder = self.cfg, self.env.reminder
         hooks = Hooks(
             launch=self.env.launch,
             clock=self.env.clock,
@@ -151,7 +151,7 @@ class _Driver:
             prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
             config=CONFIG,
             context=cfg.context,
-            reminder=prompts.reminder(self.role) if self.env.reminder is None else self.env.reminder,
+            reminder=prompts.reminder(self.role, judging=cfg.judging) if reminder is None else reminder,
             attachments=embedded(cfg.attachments),
         )
         out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=DEADLINES.get(cfg.kind, 1200.0))
@@ -165,9 +165,8 @@ class _Driver:
             for rel, render in wf.skills(self.role, ui=cfg.ui):
                 self.placed.append(wf.place(cfg.worktree, rel, render))
             self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox, cfg.memory)))
-            self.placed.append(
-                wf.place(cfg.worktree, wf.agent_path(self.role), wf.agent(self.role, inbox, cfg.memory, ui=cfg.ui))
-            )
+            made = wf.agent(self.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging)
+            self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), made))
             with Inbox(self.gate, inbox):
                 conn = self.env.connect(cfg.worktree)
                 out = self.drive(conn)

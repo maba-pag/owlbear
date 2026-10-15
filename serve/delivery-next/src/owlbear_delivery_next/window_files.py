@@ -31,9 +31,9 @@ SDK_ONLY = frozenset({"task", "read_agent"})  # subagents: the window's restrict
 type Render = Callable[[str | None], str]
 
 
-def tools_note(role: str, *, ui: bool = False) -> str:
+def tools_note(role: str, *, ui: bool = False, judging: bool = False) -> str:
     """The window agent's closing note, naming exactly the Delivery tools its step's relay offers the role."""
-    *rest, last = (f"`{name}`" for name in tool_specs.results(role, ui=ui))
+    *rest, last = (f"`{name}`" for name in tool_specs.results(role, ui=ui, judging=judging))
     return f"Delivery's tools come from its `owlbear-step-…` MCP server: {', '.join(rest)} and {last}. Never push."
 
 
@@ -167,7 +167,7 @@ def agent_path(role: str) -> str:
     return f".github/agents/{agent_name(role)}.agent.md"
 
 
-def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False) -> Render:
+def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False) -> Render:
     """The role's agent from the package prose, renamed for the window, with its tools, skills and result note.
 
     Its tools are the role's, under the same names as in the SDK runtime (the window runs the same harness), with
@@ -183,10 +183,10 @@ def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = Fals
         for name in preload.tools(role)
         if (served or not name.startswith(f"{preload.MEMORY}/")) and name not in SDK_ONLY
     ]
-    tools = ", ".join([*own, *(f"{relay}/{name}" for name in tool_specs.results(role, ui=ui))])
+    tools = ", ".join([*own, *(f"{relay}/{name}" for name in tool_specs.results(role, ui=ui, judging=judging))])
     skills = ", ".join(preload.required(role, ui=ui))
     head = f"---\nname: {agent_name(role)}\ndescription: {meta['description']}\ntools: [{tools}]\n"
-    note = tools_note(role, ui=ui)
+    note = tools_note(role, ui=ui, judging=judging)
     return lambda _old: f"{head}skills: [{skills}]\n---\n\n{body.strip()}\n\n{note}\n"
 
 

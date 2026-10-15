@@ -62,7 +62,7 @@ class Gate:
         """The step's tools: its submit tool, a first look if it has one, its helpers, a question unless a judge's."""
         first = (self.cfg.first_look,) if self.cfg.first_look else ()
         helpers = tuple(spec for spec, _ in self.cfg.helpers)
-        ask = (tools.ASK,) if tools.asks(self.cfg.role) else ()
+        ask = (tools.ASK,) if tools.asks(self.cfg.role, judging=self.cfg.judging) else ()
         return self.cfg.submit, *first, *helpers, *ask, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments

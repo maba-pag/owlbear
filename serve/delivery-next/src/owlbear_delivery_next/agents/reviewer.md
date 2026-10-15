@@ -43,8 +43,8 @@ memory tool, go on without it.
 - Reading: `view`, `glob`, `grep`: open files and screenshots, find paths and search the code.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`): lessons for agent `reviewer`, before you
   start.
-- Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
-  under Output format.
+- Results: `submit_result`, `ask_question` (not in screenshot judgements), `report_wrong_premise`,
+  `report_missing_tool`: how you end, under Output format.
 - Not granted: `save_memory`, `create`, `edit`.
 
 </tools>

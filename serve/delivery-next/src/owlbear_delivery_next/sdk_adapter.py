@@ -60,7 +60,7 @@ def cli_path() -> str:
     return path
 
 
-def agent(kind: StepKind, *, ui: bool = False, role: str = "") -> dict[str, Any]:
+def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = False) -> dict[str, Any]:
     """Return the role's custom agent from the package's ``agents/`` prose, with its tools and preloaded skills."""
     role = role or ROLES[kind]
     meta, body = preload.agent_file(role)
@@ -68,7 +68,7 @@ def agent(kind: StepKind, *, ui: bool = False, role: str = "") -> dict[str, Any]
         "name": meta["name"],
         "description": meta["description"],
         "prompt": body.strip(),
-        "tools": [*preload.tools(role), *tools.results(role, ui=ui)],  # nothing else is offered (TD-69)
+        "tools": [*preload.tools(role), *tools.results(role, ui=ui, judging=judging)],  # nothing else (TD-69)
         "skills": list(preload.required(role, ui=ui)),
     }
 
@@ -137,6 +137,7 @@ class Session:
     memory: Path | None = None  # the project's memory folder in the shared repository (TD-70, TD-72)
     ui: bool = False  # the Change has a user interface, so the role's design skills load too (TD-76)
     role: str = ""  # the agent role when not the step kind's, such as the design judge's
+    judging: bool = False  # a verdict-only judgement, such as the reviewer's of screenshots: no question (TD-108)
     first_look: tools.Spec | None = None  # a judgement submitted before the final result, which does not end it
     reveal: str = ""  # what the first look's reply releases, such as the detector's findings
     helpers: tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...] = ()  # Delivery tools that answer, not end
@@ -327,7 +328,7 @@ class _Step:
         self.record_tree()
 
     def options(self) -> dict[str, Any]:
-        role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role)
+        role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging)
         helpers = [researcher()] if "task" in role["tools"] else []  # the planner's only subagent (TD-111)
         return {
             "on_permission_request": self.permission,
@@ -378,7 +379,7 @@ class _Step:
                 else:
                     reminded = True
                     self.log(event="reminder")
-                    await _call(session.send(prompts.reminder(role_of(self.cfg))), "send")
+                    await _call(session.send(prompts.reminder(role_of(self.cfg), judging=self.cfg.judging)), "send")
 
 
 async def _efforts(client: CopilotClient, model: str) -> bool:
