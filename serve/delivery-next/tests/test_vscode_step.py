@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import ahp, sdk_adapter, session_result, step_mcp, vscode_adapter
+from owlbear_delivery_next import ahp, sdk_adapter, session_result, setup, step_mcp, vscode_adapter
 from owlbear_delivery_next.ahp import HostError
 from owlbear_delivery_next.config import Layer, resolve
 from owlbear_delivery_next.models import Exit, StepKind
@@ -1018,13 +1018,15 @@ def shaping_host(folder: Path) -> FakeHost:
     return host
 
 
-def shaping_env(host: FakeHost, during: Callable[[], None] = lambda: None) -> vscode_adapter.Env:
+def shaping_env(
+    host: FakeHost, during: Callable[[], None] = lambda: None, shaper: Path | None = None
+) -> vscode_adapter.Env:
     def launch(args: list[str], cwd: Path) -> None:
         during()
         host.launch(args, cwd)
 
     return vscode_adapter.Env(
-        connect=lambda _f: host, reconnect=lambda _c: host.reconnect(), launch=launch, clock=host.clock
+        connect=lambda _f: host, reconnect=lambda _c: host.reconnect(), launch=launch, clock=host.clock, shaper=shaper
     )
 
 
@@ -1065,6 +1067,43 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
     assert host.actions("chat/turnCancelled") == []
     assert (host.twin.closed, host.closed) == (1, 1)
     assert (git(wt, "status", "--porcelain", "--ignored"), untouched_git(wt)) == ("", before)
+
+
+def test_the_installed_shaper_agent_is_selected_by_its_uri_on_the_first_turn(wt: Path, tmp_path: Path) -> None:
+    agent = setup.shaper_path(tmp_path)
+    agent.parent.mkdir(parents=True)
+    agent.write_text("---\nname: owlbear-shaper\n---\n")
+    host = shaping_host(wt)
+    host.listed = [agent.resolve().as_uri()]
+
+    out, warning = shape(wt, shaping_env(host, shaper=agent))
+
+    assert (out.end, warning) == ("started", "")
+    ((_, started),) = host.actions("chat/turnStarted")
+    assert started["message"]["agent"] == {"uri": agent.resolve().as_uri()}
+    assert not (wt / ".github").exists()  # no project agent file
+
+
+def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_path: Path) -> None:
+    agent = setup.shaper_path(tmp_path)
+    agent.parent.mkdir(parents=True)
+    agent.write_text("---\nname: owlbear-shaper\n---\n")
+    host = shaping_host(wt)
+
+    out, _ = shape(wt, shaping_env(host, shaper=agent))
+
+    assert (out.end, out.detail) == ("no-agent", f"the session does not list {agent.resolve().as_uri()}")
+    assert host.actions("chat/turnStarted") == []
+
+
+def test_without_the_installed_shaper_agent_the_chat_starts_unselected_with_a_warning(wt: Path, tmp_path: Path) -> None:
+    host = shaping_host(wt)
+    out, warning = shape(wt, shaping_env(host, shaper=setup.shaper_path(tmp_path)))
+    assert out.end == "started"
+    assert warning.startswith("the shaper agent is not installed at")
+    assert warning.endswith("(run setup --skill yes)")
+    ((_, started),) = host.actions("chat/turnStarted")
+    assert "agent" not in started["message"]
 
 
 OWNER = '// team settings\n{\n  "editor.tabSize": 2, // mine\n  "a": [1,2]\n}\n'

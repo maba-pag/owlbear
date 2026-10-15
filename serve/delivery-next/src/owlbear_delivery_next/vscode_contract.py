@@ -52,7 +52,7 @@ class StepSpec:
     """One VS Code step: where, which agent, which model and effort, what to do, and the session config."""
 
     folder: Path
-    agent: Path | None  # the agent file inside ``folder``; the host lists only agents in watched folders
+    agent: Path | None  # the agent file; the host lists only agents in ``folder``'s or ~/.copilot/agents (live)
     model: str
     effort: str
     prompt: str

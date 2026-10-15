@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import brief_tools, evidence, profile, tools
 from owlbear_delivery_next.models import (
+    BriefDecision,
     Change,
     Criterion,
     Exit,
@@ -48,7 +49,8 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
             VisualState(name=s.name, path=s.path, expect=s.expect, steps=steps, version=prev.version if same else v)
         )
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
-    fields |= {"ui": d.ui, "visual": visual}
+    fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals}
+    fields["decisions"] = [BriefDecision(**x.model_dump()) for x in d.decisions]
     c.brief = c.brief.model_copy(update=fields)
     ids, paths, shown = [k.id for k in criteria], evidence.coverage(c), {p.id: p for p in c.checks}
     c.checks = []
@@ -145,5 +147,6 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "visual": p.visual} for p in c.checks]
     brief = {"change": draft.change, "title": c.brief.title, "outcome": c.brief.outcome, "scope": c.brief.scope}
     brief |= {"criteria": [k.text for k in c.brief.criteria], "person_checks": checks, "ui": draft.ui}
+    brief |= {"non_goals": c.brief.non_goals, "decisions": [x.model_dump() for x in c.brief.decisions]}
     brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
     return save_brief(store, brief)

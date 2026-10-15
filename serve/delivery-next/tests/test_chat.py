@@ -5,12 +5,13 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, briefs, loop, setup, tools
+from owlbear_delivery_next import api, briefs, loop, prompts, setup, tools
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
@@ -106,6 +107,33 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
         assert (change.brief.approved_version, step.kind, loop.brief_due(change)) == (2, StepKind.SHAPE, True)
         store.write(lock, loop.apply(*loop.brief_challenge(change, loop.StepResult(exit=Exit.DONE)), NOW))
     assert c.post("/api/next/briefs", json=revised).status_code == 409
+
+
+DECIDED = [
+    {"question": "Which wording?", "answer": "'Bye, Ada!'", "origin": "decided"},
+    {"question": "Where does it live?", "answer": "packages/app/farewell.ts", "origin": "autonomous"},
+]
+
+
+def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and_are_read_back(repo):
+    store = Store.open(repo)
+    c = client(store)
+    body = {**BRIEF, "non_goals": ["No translations"], "decisions": DECIDED}
+    assert c.post("/api/next/briefs", json=body).status_code == 200
+    states = [{"name": "home", "path": "/", "expect": "Bye"}]
+    assert c.post("/api/next/briefs/visual", json={"change": "c1", "ui": True, "states": states}).status_code == 200
+    change = store.read(store.slugs()[0])
+    brief = change.brief
+    assert (brief.version, brief.non_goals) == (2, ["No translations"])
+    assert [d.model_dump() for d in brief.decisions] == DECIDED
+    shown = [prompts.plan(change, Profile(), Path("/w"), {}), prompts.brief_challenge(change, Path("/w"))]
+    for text in [*shown, "\n".join(prompts.brief(change))]:  # planner, challenger, reviewers
+        assert "Non-goals:\n- No translations" in text
+        assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
+    read_back = Chat(repo).show_status("c1")["brief"]
+    assert (read_back["non_goals"], read_back["decisions"], read_back["version"]) == (["No translations"], DECIDED, 2)
+    bad = {**body, "decisions": [{"question": "Which?", "answer": "this", "origin": "guessed"}]}
+    assert c.post("/api/next/briefs", json=bad).json()["errors"][0].startswith("decisions")
 
 
 def test_a_brief_with_clicks_waits_for_a_seed_command_before_approval(tmp_path):
@@ -233,6 +261,21 @@ def test_the_chat_skill_installs_user_locally_and_never_over_another_skill(tmp_p
     assert "save_brief" in path.read_text()
     path.write_text("---\nname: delivery\n---\nsomeone else's")
     assert "holds another skill" in setup.install_skill(tmp_path)
+    assert path.read_text().endswith("someone else's")
+
+
+def test_the_shaper_agent_installs_where_the_window_lists_user_agents_idempotently(tmp_path):
+    path = tmp_path / ".copilot" / "agents" / "owlbear-shaper.agent.md"
+    assert setup.shaper_path(tmp_path) == path
+    assert setup.install_agent(tmp_path) == f"shaper agent installed for you only (not tracked): {path}"
+    shipped = path.read_text()
+    assert setup.install_agent(tmp_path).startswith("shaper agent installed")
+    assert path.read_text() == shipped
+    path.write_text(shipped.replace("Shapes one Change", "Shaped one Change"))  # an older Delivery's file: replaced
+    assert setup.install_agent(tmp_path).startswith("shaper agent installed")
+    assert path.read_text() == shipped
+    path.write_text("---\nname: owlbear-shaper\n---\nsomeone else's")
+    assert "holds another agent of that name" in setup.install_agent(tmp_path)
     assert path.read_text().endswith("someone else's")
 
 
@@ -477,16 +520,17 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
     monkeypatch.setattr(setup, "check", lambda *_a: [])
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
     written = [repo / ".vscode" / "tasks.json", repo / ".mcp.json", home / ".copilot" / "skills" / "delivery"]
+    written.append(setup.shaper_path(home))
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
-    assert [p.exists() for p in written] == [False, False, False]
+    assert [p.exists() for p in written] == [False, False, False, False]
     assert len(asked) == 3  # both local files and the skill were asked, never assumed
     assert "Install the Delivery chat skill" in asked[2]
     asked.clear()
     assert setup.run(repo, [], yes=True, local_files="no", skill="no", ask=lambda q: asked.append(q) or "y") == 0
-    assert (asked, [p.exists() for p in written]) == ([], [False, False, False])
+    assert (asked, [p.exists() for p in written]) == ([], [False, False, False, False])
     assert setup.run(repo, [], yes=True, local_files="yes", skill="yes", ask=pytest.fail) == 0
-    assert [p.exists() for p in written] == [True, True, True]
+    assert [p.exists() for p in written] == [True, True, True, True]
 
 
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):

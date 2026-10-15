@@ -1,6 +1,7 @@
 """TD-99/TD-106/TD-108/TD-111: each role has its own agent file, whose tools section explains exactly what it is
 granted, whose prose names only granted tools, and which each runtime offers only what that runtime may run."""
 
+import asyncio
 import re
 from collections.abc import Sequence
 from importlib.resources import files
@@ -9,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import preload, prompts, roles, sdk_adapter, sessions, tools
+from owlbear_delivery_next import mcp_server, preload, prompts, roles, sdk_adapter, sessions, setup, tools
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.config import Layer, resolve
 from owlbear_delivery_next.models import StepKind
@@ -25,16 +26,27 @@ SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research 
     *("task", "read_agent", "list_agents", "write_agent"),
 }
 MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
-VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | {s.name for s in tools.SPECS} | {tools.FIRST_LOOK, tools.SCAN_DESIGN}
-ALIAS = f"{preload.MEMORY}/"  # a memory tool is named bare or as owlbear-memory/<tool>; both are the same tool
+CHAT_TOOLS = {"save_brief", "save_visual_check", "show_status", "answer_question"}  # the owner chat's server
+WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
+VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
+VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN}
+ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
+SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
+    *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
+    *(f"{setup.SERVER}/{name}" for name in ("save_brief", "save_visual_check", "show_status", "answer_question")),
+]
 VERBS = "submit|report|ask|recall|save|assess|scan|read|list|write|stop"
 LOOKALIKE = re.compile(rf"(?:{VERBS})_[a-z_]+|[a-z_]+_(?:bash|agents?|memory|memories)")  # unknown: a tool typo
 NOT_GRANTED = "Not granted:"
 INBOX = Path("/s/0123456789abcdef0123.json")
 
 
+def bare(name: str) -> str:
+    return next((name.removeprefix(a) for a in ALIASES if name.startswith(a)), name)
+
+
 def ticks(text: str) -> set[str]:
-    return {t.removeprefix(ALIAS) for t in re.findall(r"`([^`\n]+)`", text)}
+    return {bare(t) for t in re.findall(r"`([^`\n]+)`", text)}
 
 
 def entries(body: str) -> list[str]:
@@ -62,7 +74,7 @@ def prose(body: str) -> str:
 
 def audit(granted: Sequence[str], body: str) -> list[str]:
     """What breaks the alignment of one agent's grants, its tools section and its prose."""
-    grants = {g.removeprefix(ALIAS) for g in granted}
+    grants = {bare(g) for g in granted}
     explained = {t for e in entries(body) if not e.startswith(NOT_GRANTED) for t in ticks(e) & VOCABULARY}
     named = ticks(prose(body))
     problems = [f"granted, not explained in <tools>: {n}" for n in sorted(grants - explained)]
@@ -100,9 +112,7 @@ def test_conditional_tools_say_their_condition_and_the_window_drops_sdk_only_one
         assert "SDK runs only" in entry(body, name)
     window = wf.agent(role, INBOX, tmp_path, ui=True)(None)
     offered = {n.split("/")[-1] for n in window.split("tools: [", 1)[1].split("]", 1)[0].split(", ")}
-    assert offered == {n.removeprefix(ALIAS) for n in preload.tools(role) if n not in wf.SDK_ONLY} | {
-        *tools.results(role, ui=True)
-    }
+    assert offered == {bare(n) for n in preload.tools(role) if n not in wf.SDK_ONLY} | {*tools.results(role, ui=True)}
     assert set(sdk_only) <= set(sdk_adapter.agent(StepKind.REVIEW, role=role)["tools"])
     note = window.rsplit("\n\n", 1)[1]
     assert ticks(note) & VOCABULARY == set(tools.results(role, ui=True))
@@ -128,7 +138,10 @@ def test_a_misaligned_agent_fails_naming_the_unexplained_grant_and_the_prose_onl
     body += "Use `edit` to fix it.\n"
     problems = audit(["view", "grep", "submit_result"], body)
     assert problems == ["granted, not explained in <tools>: grep", "named in prose, not granted: edit"]
-    assert audit(["view", "submit_result"], body.replace("`edit`", "`save_brief`")) == ["unknown tool name: save_brief"]
+    assert audit(["view", "submit_result"], body.replace("`edit`", "`save_breif`")) == ["unknown tool name: save_breif"]
+    assert audit(["view", "submit_result"], body.replace("`edit`", "`save_brief`")) == [
+        "named in prose, not granted: save_brief"
+    ]
 
 
 def test_worker_skills_may_name_tools_but_never_grant_them() -> None:
@@ -182,3 +195,20 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     assert offered == {s.name for s in Gate(cfg, Run("s"), lambda **_: None, lambda: None).specs}
     assert (tools.ASK.name in offered) == (role == "reviewer")
     assert wf.agent_path(sdk_adapter.role_of(cfg)) == f".github/agents/owlbear-{role}.agent.md"
+
+
+def shaper_file() -> tuple[dict[str, str], list[str], str]:
+    text = files("owlbear_delivery_next").joinpath("chat_agents", setup.SHAPER).read_text(encoding="utf-8")
+    _, front, body = text.split("---", 2)
+    meta = {k.strip(): v.strip() for k, v in (line.split(":", 1) for line in front.strip().splitlines())}
+    return meta, [n.strip() for n in meta["tools"].strip("[]").split(",")], body
+
+
+def test_the_shaper_grants_the_live_verified_tools_and_explains_exactly_them() -> None:
+    meta, grants, body = shaper_file()
+    assert (meta["name"], meta["skills"]) == ("owlbear-shaper", "[delivery]")
+    assert grants == SHAPER_TOOLS
+    assert audit(grants, body) == []
+    assert forbidden(body) == {"bash", "edit", "create"}  # no terminal, no edit (TD-109)
+    assert {t.name for t in asyncio.run(mcp_server.mcp.list_tools())} == CHAT_TOOLS
+    assert len(body.splitlines()) <= 130

@@ -72,7 +72,18 @@ class Chat:
         out["changes"] = [r for r in rows if not change or r.get("handle") == change]
         if change and not out["changes"]:
             out["error"] = f"change: {change} is not a Change here - leave it empty to list all"
+        elif change and (brief := self.brief(out["changes"][0].get("slug", ""))):
+            out["brief"] = brief
         return out
+
+    def brief(self, slug: str) -> dict[str, Any] | None:
+        """The Change's current brief as the chat saved it, decisions and non-goals included, to read back."""
+        try:
+            b = self.store.read(slug).brief
+        except StoreError:
+            return None
+        out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals", "decisions"})
+        return out | {"criteria": [k.text for k in b.criteria]}
 
     def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:
         """Answer one worker question; recovery decisions are refused with the Changes page (T6)."""
@@ -109,17 +120,20 @@ mcp = MCPServer(
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-def save_brief(  # noqa: PLR0913 - the brief's six fields
+def save_brief(  # noqa: PLR0913 - the brief's eight fields
     *,
     title: Annotated[str, _d("title")] = "",
     outcome: Annotated[str, _d("outcome")] = "",
     criteria: Annotated[list[str] | None, _d("criteria")] = None,
     scope: Annotated[list[str] | None, _d("scope")] = None,
+    non_goals: Annotated[list[str] | None, _d("non_goals")] = None,
+    decisions: Annotated[list[brief_tools.DecisionDraft] | None, _d("decisions")] = None,
     person_checks: Annotated[list[brief_tools.PersonCheckDraft] | None, _d("person_checks")] = None,
     change: Annotated[str, _d("change")] = "",
 ) -> dict[str, Any]:
     """Create or revise one Change's brief draft; the reply gives its handle or one error per field to fix."""
     fields = {"title": title, "outcome": outcome, "criteria": criteria or [], "scope": scope or []}
+    fields |= {"non_goals": non_goals or [], "decisions": [d.model_dump() for d in decisions or []]}
     checks = [p.model_dump() for p in person_checks or []]
     return _STATE["chat"].save_brief(fields | {"person_checks": checks, "change": change})
 

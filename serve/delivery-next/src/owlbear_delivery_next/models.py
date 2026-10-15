@@ -148,6 +148,17 @@ class VisualResult(Record):
         return f"{self.head}@{self.at.isoformat()}"
 
 
+type Origin = Literal["decided", "approved", "autonomous"]
+
+
+class BriefDecision(Record):
+    """One choice made while shaping a brief version, with who made it."""
+
+    question: str
+    answer: str
+    origin: Origin
+
+
 class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""
 
@@ -159,6 +170,7 @@ class Brief(Record):
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
+    decisions: list[BriefDecision] = Field(default_factory=list)
     criteria: list[Criterion] = Field(default_factory=list)
     ui: bool = False
     visual: list[VisualState] = Field(default_factory=list)
@@ -202,7 +214,7 @@ class Decision(Record):
     """One recorded decision with its provenance."""
 
     text: str
-    origin: Literal["decided", "approved", "autonomous"]
+    origin: Origin
     at: datetime
     paths: list[str] = Field(default_factory=list)  # the UI paths a "Not a UI change" answer covers
 

@@ -44,6 +44,18 @@ class VisualStepDraft(Args):
 STEPS = 10  # steps per state, so one state stays one short interaction
 
 
+class DecisionDraft(Args):
+    """One choice made while shaping, with its origin; the planner, reviewers and a resumed chat see it."""
+
+    question: str = bounded(300, "What was decided, as a question", "Which greeting wording?")
+    answer: str = bounded(500, "The choice", "'Hello, Ada!' with the first name only")
+    origin: Literal["decided", "approved", "autonomous"] = Field(
+        description="decided: the owner chose it; approved: it came with something the owner approved without "
+        "being asked; autonomous: the shaping agent chose it",
+        examples=["decided"],
+    )
+
+
 class VisualDraft(Args):
     """``save_visual_check``: set a shaping Change's UI flag, page states and their steps as a new brief version."""
 
@@ -78,6 +90,18 @@ class BriefDraft(Args):
         10, "Acceptance criteria, each checkable by a test or command", ["farewell('Ada') returns 'Bye, Ada!'"]
     )
     scope: list[str] = bounded(20, "Repository-relative paths or directories the Change may touch", ["packages/app"])
+    non_goals: list[Annotated[str, Field(min_length=3, max_length=300)]] = Field(
+        default_factory=list,
+        max_length=10,
+        description="What the owner agreed is out of this Change",
+        examples=[["No translations of the greeting"]],
+    )
+    decisions: list[DecisionDraft] = Field(
+        default_factory=list,
+        max_length=30,
+        description="Every choice the owner made and each consequential choice of the shaping agent",
+        examples=[[{"question": "Which wording?", "answer": "'Hello, Ada!'", "origin": "decided"}]],
+    )
     person_checks: list[PersonCheckDraft] = Field(
         default_factory=list,
         max_length=5,

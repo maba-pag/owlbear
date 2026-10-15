@@ -13,11 +13,12 @@ import subprocess
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import ahp, leftovers, prompts
+from owlbear_delivery_next import ahp, leftovers, prompts, setup
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import Gate
@@ -29,7 +30,6 @@ from owlbear_delivery_next.vscode_step import Step
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.ahp import Json
     from owlbear_delivery_next.config import Effective
@@ -95,6 +95,7 @@ class Env:
     clock: Callable[[], float] = time.monotonic
     settle: Callable[[Path, datetime], Termination] = leftovers.settle
     reminder: str | None = None  # None: the session role's own reminder
+    shaper: Path | None = field(default_factory=lambda: setup.shaper_path(Path.home()))  # the chat's agent (TD-93)
 
 
 def _grace(control: Control) -> Callable[[], None]:
@@ -239,12 +240,14 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
 def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]:
     """Open an interactive Copilot chat in ``folder``'s window with ``prompt`` as its first model turn (TD-83).
 
-    The chat runs on the role's model, effort and context tier with auto-approve; Delivery leaves it to the owner.
+    The chat runs on the role's model, effort and context tier with auto-approve, as the user-level shaper agent
+    when setup installed it; Delivery leaves it to the owner.
     Returns how it went and what Delivery could not take out of the owner's settings again, or ''.
     """
     env, added, conn = env or Env(), list[wf.Added](), None
+    agent = env.shaper if env.shaper and env.shaper.is_file() else None
     spec = StepSpec(
-        folder=folder, agent=None, model=role.model, effort=role.effort, prompt=prompt, config=SHAPING,
+        folder=folder, agent=agent, model=role.model, effort=role.effort, prompt=prompt, config=SHAPING,
         context=role.context,
     )  # fmt: skip
 
@@ -265,4 +268,7 @@ def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None
         if close := getattr(conn, "close", None):
             close()
         warning = wf.remove_harness(folder, added[0]) if added else ""
+    if env.shaper and agent is None and out.end == "started":
+        missing = f"the shaper agent is not installed at {env.shaper}; the chat runs without it (run setup --skill yes)"
+        warning = f"{warning}; {missing}" if warning else missing
     return out, warning

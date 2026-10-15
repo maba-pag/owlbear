@@ -14,6 +14,7 @@ from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
 SRC = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
 LIMIT = 500
 FIELDS = 6  # T5: about six fields per object
+WIDER = {"save_brief": 8}  # the owner added decisions and non_goals to the brief (reuse study v2, Sol finding 6)
 
 
 @pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))
@@ -47,7 +48,7 @@ def _objects(node: dict[str, Any], defs: dict[str, Any]) -> list[dict[str, Any]]
 def _shape(name: str, obj: dict[str, Any], defs: dict[str, Any], depth: int = 0) -> list[str]:
     """T4/T5 problems of one object: an undescribed or opaque field, more than about six fields, deep nesting."""
     fields = obj.get("properties", {})
-    problems = [f"{name}: {len(fields)} fields"] if len(fields) > FIELDS else []
+    problems = [f"{name}: {len(fields)} fields"] if len(fields) > WIDER.get(name, FIELDS) else []
     problems += [f"{name}: nested {depth} levels"] if depth > 1 else []
     problems += [f"{name}: an object without declared fields"] if not fields else []
     for field, node in fields.items():

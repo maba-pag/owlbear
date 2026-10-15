@@ -32,6 +32,7 @@ type Ask = Callable[[str], str]
 type Choice = Literal["yes", "no", "ask"]
 TASK = "OwlBear Delivery host"
 SERVER = "owlbear-delivery"
+SHAPER = "owlbear-shaper.agent.md"
 PUSH = frozenset({"WRITE", "MAINTAIN", "ADMIN"})
 
 
@@ -192,19 +193,35 @@ def check(repo: Path, prof: Profile | None) -> list[Check]:
     return [*readiness(host, probe_in(repo), reach(host), copilot), updates]
 
 
-def install_skill(home: Path) -> str:
-    """Install the chat skill where Copilot loads personal skills; never over another skill of that name."""
-    text = files("owlbear_delivery_next").joinpath("skills", "delivery", "SKILL.md").read_text(encoding="utf-8")
-    path = home / ".copilot" / "skills" / "delivery" / "SKILL.md"
+def _install(text: str, path: Path, what: str) -> str:
+    """Write *text* to the user-level *path*; never over another file of that name (one without ``save_brief``)."""
     try:
         old = path.read_text(encoding="utf-8") if path.exists() else text
         if old != text and "save_brief" not in old:
-            return f"chat skill not installed: {path} holds another skill named delivery; move it, then run setup again"
+            kind = what.rsplit(maxsplit=1)[-1]
+            return f"{what} not installed: {path} holds another {kind} of that name; move it, then run setup again"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        return f"chat skill not installed: {path}: {exc}"
-    return f"chat skill installed for you only (not tracked): {path}"
+        return f"{what} not installed: {path}: {exc}"
+    return f"{what} installed for you only (not tracked): {path}"
+
+
+def install_skill(home: Path) -> str:
+    """Install the chat skill where Copilot loads personal skills."""
+    text = files("owlbear_delivery_next").joinpath("skills", "delivery", "SKILL.md").read_text(encoding="utf-8")
+    return _install(text, home / ".copilot" / "skills" / "delivery" / "SKILL.md", "chat skill")
+
+
+def shaper_path(home: Path) -> Path:
+    """The shaping chat's agent file, in the one user folder the window's agent host lists agents from (TD-93)."""
+    return home / ".copilot" / "agents" / SHAPER
+
+
+def install_agent(home: Path) -> str:
+    """Install the shaping chat's agent file for this user only; Delivery selects it by its URI."""
+    text = files("owlbear_delivery_next").joinpath("chat_agents", SHAPER).read_text(encoding="utf-8")
+    return _install(text, shaper_path(home), "shaper agent")
 
 
 def recommendations(prof: Profile) -> list[str]:
@@ -415,11 +432,13 @@ def run(  # noqa: PLR0913 - one answer per consent
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
         say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
-    path = Path.home() / ".copilot" / "skills" / "delivery" / "SKILL.md"
-    question = f"Install the Delivery chat skill for you only at {path}? [y/N] "
+    path, agent = Path.home() / ".copilot" / "skills" / "delivery" / "SKILL.md", shaper_path(Path.home())
+    question = f"Install the Delivery chat skill at {path} and its shaper agent at {agent}, for you only? [y/N] "
     if not (skill == "yes" or (skill == "ask" and ask(question).strip().lower().startswith("y"))):
-        say(f"chat skill not installed (no consent): {path}; run setup with --skill yes to install it")
+        say(f"chat skill and shaper agent not installed (no consent): {path}, {agent}")
+        say("Run setup with --skill yes to install them.")
         return 0
     say(install_skill(Path.home()))
+    say(install_agent(Path.home()))
     say("To share it with this repository, copy that folder to .github/skills/delivery/ and commit it yourself.")
     return 0

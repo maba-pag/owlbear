@@ -122,7 +122,7 @@ class Step:
             out, bound = self._open(control, bind_limit, exclusive=False)
             if bound is None or not self._ready(out, bound, control):
                 return out
-            self._start(out, None, self.spec.prompt)
+            self._start(out, {"uri": self.spec.agent_uri} if self.spec.agent else None, self.spec.prompt)
             out.end, out.detail = ("started", "") if self._began(bound.chat, out.turns[-1]) else _UNBEGUN
             return out
         finally:
