@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import common
 from owlbear_delivery_next.github import gh_client
-from owlbear_delivery_next.github.gh_client import GhClient, Json, repo
+from owlbear_delivery_next.github.gh_client import GhClient, Json, Missing, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
 if TYPE_CHECKING:
@@ -60,6 +60,11 @@ class Issues(GhClient):
             if len(got) < PAGE:
                 return found
             page += 1
+
+    def issue(self, number: int) -> Json | None:
+        """One issue as GitHub holds it now, however its listing lags; None when there is none."""
+        got = self._api("get_issue", "GET", f"{repo(self.repository)}/issues/{number}", absent={404, 410})
+        return None if isinstance(got, Missing) or "pull_request" in got else got
 
     def private(self) -> None:
         """Refuse a write unless GitHub says the repository is private (TD-103: no public reports)."""

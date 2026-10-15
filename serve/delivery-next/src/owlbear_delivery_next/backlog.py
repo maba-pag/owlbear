@@ -3,7 +3,8 @@
 Each entry is one GitHub issue in the shared repository (``backlog_issues``); this module is the view over them. A
 finding seen again counts up its entry instead of adding one; untriaged entries form the inbox. Saving is online-only:
 when GitHub cannot be reached the save fails with GitHub's reason, nothing is kept locally. Reads are cached for a few
-seconds since the page refreshes often; every write reads afresh under the shared repository's lock.
+seconds since the page refreshes often; every write reads afresh under the shared repository's lock, and reads each
+issue it changes directly first, so an edit made on GitHub meanwhile is kept.
 """
 
 from __future__ import annotations
@@ -125,7 +126,7 @@ class Backlog:
         with _cache_guard:
             hit = _cache.get(self.repository)
         if not fresh and hit and time.monotonic() - hit[0] < READ_SECONDS:
-            self.raw = hit[2]
+            self.raw = dict(hit[2])
             return dict(hit[1]), list(hit[3])
         found, raw, bad = {}, {}, []
         for issue in self._overlaid(self._github("read", self.issues.issues)):
@@ -135,7 +136,7 @@ class Backlog:
                 bad.append(f"#{issue['number']}")
                 continue
             found[entry.id], raw[entry.id] = entry, issue
-        self.raw = raw
+        self.raw = dict(raw)
         with _cache_guard:
             _cache[self.repository] = (time.monotonic(), found, raw, bad)
         return dict(found), list(bad)
@@ -156,6 +157,7 @@ class Backlog:
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
                 fields |= {"evidence": refs[-EVIDENCE:], "project": self.project}
                 return self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now})), True
+            same = self._get(found, same.id)
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}
             entry = _valid(same.model_dump() | seen | {"evidence": (same.evidence + new)[-EVIDENCE:]})
@@ -180,11 +182,12 @@ class Backlog:
             others = []
             if "links" in fields:
                 new["links"] = links = list(dict.fromkeys(fields["links"]))
-                if bad := [i for i in links if i not in found or i == entry_id]:
+                if bad := [i for i in links if i == entry_id or (i not in found and self._fetch(found, i) is None)]:
                     raise BacklogError(422, f"links: {', '.join(bad)} is not another entry of this backlog")
                 for other in sorted((set(links) ^ set(old.links)) & found.keys(), key=int):
-                    theirs = [i for i in found[other].links if i != entry_id] + ([entry_id] if other in links else [])
-                    others.append(_valid(found[other].model_dump() | {"links": theirs, "updated_at": now}))
+                    them = self._get(found, other)
+                    theirs = [i for i in them.links if i != entry_id] + ([entry_id] if other in links else [])
+                    others.append(_valid(them.model_dump() | {"links": theirs, "updated_at": now}))
             entry = _valid(new)
             self._save(entry, *others)
             return entry
@@ -236,8 +239,8 @@ class Backlog:
             kept = {n: v for n, v in _recent.get(self.repository, {}).items() if now - v[0] < RECENT_SECONDS}
             _recent[self.repository] = kept
         out = {i["number"]: i for i in listed}
-        for number, (_, issue) in kept.items():
-            if number not in out or out[number].get("updated_at", "") <= issue.get("updated_at", ""):
+        for number, (_, issue) in kept.items():  # a tie is the listing's: an edit elsewhere may share the second
+            if number not in out or out[number].get("updated_at", "") < issue.get("updated_at", ""):
                 out[number] = issue
         return sorted(out.values(), key=lambda i: -i["number"])
 
@@ -253,9 +256,22 @@ class Backlog:
             _cache.pop(self.repository, None)
 
     def _get(self, found: dict[str, Entry], entry_id: str) -> Entry:
-        if entry_id not in found:
+        if (entry := self._fetch(found, entry_id)) is None:
             raise BacklogError(404, f"no backlog entry #{entry_id}")
-        return found[entry_id]
+        return entry
+
+    def _fetch(self, found: dict[str, Entry], entry_id: str) -> Entry | None:
+        """The entry as its issue holds it now, read directly before it changes: the listing may be behind."""
+        if not re.fullmatch(ID, entry_id):
+            return None
+        if (issue := self._github("read", lambda: self.issues.issue(int(entry_id)))) is None:
+            return None
+        try:
+            entry = Entry.model_validate(backlog_issues.fields(issue))
+        except ValidationError as exc:
+            raise BacklogError(409, f"#{entry_id} holds no readable backlog entry; fix its issue first") from exc
+        found[entry_id], self.raw[entry_id] = entry, issue
+        return entry
 
     def _github[T](self, what: str, call: Callable[[], T]) -> T:
         """Run one GitHub call; its failure is the owner's error, saying whether a save may have happened."""

@@ -314,6 +314,21 @@ def test_an_issue_github_does_not_list_yet_is_read_from_the_write_and_a_repeat_s
     assert [(e.id, e.count, e.kind) for e in view(root).entries()] == [("1", 2, "defect")]
 
 
+def test_an_edit_on_github_wins_over_this_process_s_own_write_and_every_change_starts_from_the_issue_as_it_is(
+    shared, github
+):
+    root, _ = shared
+    a = view(root).add("a")[0].id
+    github.issues[1]["title"] = "renamed on GitHub"  # in the same second as the write: an equal updated_at
+
+    assert view(root).read(fresh=True)[0][a].title == "renamed on GitHub"
+    github.hidden = {1}  # the listing lags behind a later edit; the cached write would be older still
+    github.issues[1] |= {"title": "renamed again", "labels": [{"name": "help wanted"}], "updated_at": "2099-01-01"}
+    view(root).update(a, {"notes": "kept"})
+    assert (github.issues[1]["title"], names(github.issues[1])[0]) == ("renamed again", "help wanted")
+    assert view(root).read(fresh=True)[0][a].notes == "kept"
+
+
 def test_reads_are_reused_briefly_and_every_write_reads_github_afresh(shared, github):
     root, _ = shared
     view(root).add("a")
