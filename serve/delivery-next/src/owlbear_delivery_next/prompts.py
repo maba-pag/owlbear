@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 LIMIT = 1500
 PLAN_LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mid-sentence
 DETAIL = 4000  # a task's details: review findings, CI log tail or review thread
+DECISION = (300, 500)  # a shaping decision's question and answer, whole: brief_tools.DecisionDraft bounds them
 READ_ONLY = "Read files and run any read-only command; nothing you run may write files or change Git state."
 FINISH = """\
 1. Implement the task in the worktree, run every check, then `git add` and `git commit` your work.
@@ -69,8 +70,8 @@ def _quote(text: str, limit: int = LIMIT) -> str:
     return "\n".join(f"> {line}" for line in _cut(text, limit).splitlines() or [""])
 
 
-def _one(text: str) -> str:
-    return " ".join(_cut(text, 400).split())
+def _one(text: str, limit: int = 400) -> str:
+    return " ".join(_cut(text, limit).split())
 
 
 def answer_text(question: Question) -> str:
@@ -90,7 +91,7 @@ def _brief(change: Change) -> list[str]:
         lines += ["", "Non-goals:", *(f"- {_one(n)}" for n in change.brief.non_goals[:10])]
     if decisions := change.brief.decisions[:30]:
         lines += ["", "Decisions while shaping (origin: decided by the owner, approved with the brief, or autonomous):"]
-        lines += [f"- {_one(d.question)} -> {_one(d.answer)} ({d.origin})" for d in decisions]
+        lines += [f"- {_one(d.question, DECISION[0])} -> {_one(d.answer, DECISION[1])} ({d.origin})" for d in decisions]
     if answered := [q for q in change.questions if q.answer]:
         lines += ["", "The owner's answers so far:", *(f"- {_one(q.text)}: {answer_text(q)}" for q in answered)]
     return lines

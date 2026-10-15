@@ -136,6 +136,19 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     assert c.post("/api/next/briefs", json=bad).json()["errors"][0].startswith("decisions")
 
 
+def test_a_saved_decision_reaches_the_workers_whole(repo):
+    store = Store.open(repo)
+    question = "Which states may the greeting show? " + "q" * 240 + " end of question"
+    answer = "Home and checkout. " + "x" * 400 + " Never on the payment page."
+    decided = [{"question": question, "answer": answer, "origin": "decided"}]
+    assert answer.index("Never") > 400  # past the old cut
+    assert client(store).post("/api/next/briefs", json={**BRIEF, "decisions": decided}).status_code == 200
+    change = store.read(store.slugs()[0])
+
+    for text in (prompts.plan(change, Profile(), Path("/w"), {}), "\n".join(prompts.brief(change))):
+        assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
+
+
 def test_a_brief_with_clicks_waits_for_a_seed_command_before_approval(tmp_path):
     store = Store(tmp_path)
     c = client(store)
