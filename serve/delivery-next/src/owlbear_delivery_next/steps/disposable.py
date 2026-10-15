@@ -9,6 +9,7 @@ mark; the next preparation resets that.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -32,11 +33,12 @@ LIVE = "read-only.live"  # in the Change's store folder from a session's start u
 
 @dataclass(frozen=True)
 class Copy:
-    """The read-only worktree of *source*'s repository and the refs the repository had before its session."""
+    """The read-only worktree of *source*'s repository, and the repository's refs and shared Git settings before."""
 
     source: Path
     path: Path
     refs: dict[str, str]
+    shared: frozenset[str] = frozenset()
 
 
 def path(source: Path, slug: str) -> Path:
@@ -63,7 +65,7 @@ def prepare(source: Path, store: Store, slug: str) -> Copy | str:
             at.parent.mkdir(parents=True, exist_ok=True)
             worktree.git(source, "worktree", "prune")
             worktree.git(source, "worktree", "add", "--quiet", "--detach", str(at), commit)
-        return Copy(source, at, _refs(source))
+        return Copy(source, at, _refs(source), _shared(source))
     except (OSError, subprocess.SubprocessError) as exc:
         return f"the read-only worktree could not be prepared: {_why(exc)}"
 
@@ -94,6 +96,25 @@ def _why(exc: BaseException) -> str:
 def _refs(cwd: Path) -> dict[str, str]:
     out = worktree.git(cwd, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/tags")
     return dict(line.split(" ", 1) for line in out.splitlines() if line)
+
+
+def _shared(cwd: Path) -> frozenset[str]:
+    """The shared config entries but ``branch.*``, which pushes write, and a fingerprint of each shared hook."""
+    common = git_common_dir(cwd)
+    listed = worktree.git(cwd, "config", "--file", str(common / "config"), "--list")
+    config = {f"config {line}" for line in listed.splitlines() if line and not line.startswith("branch.")}
+    hooks = common / "hooks"
+    found = sorted(hooks.iterdir()) if hooks.is_dir() else []
+    return frozenset(config | {f"hook {p.name} {hashlib.sha256(p.read_bytes()).hexdigest()[:12]}" for p in found})
+
+
+def tampered(copy: Copy) -> list[str]:
+    """Shared config entries and hooks added, changed or removed since the copy was made (TD-146)."""
+    try:
+        now = _shared(copy.source)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"the shared Git config and hooks could not be read ({type(exc).__name__})"]
+    return [f"added {e}" for e in sorted(now - copy.shared)] + [f"removed {e}" for e in sorted(copy.shared - now)]
 
 
 def _listed(cwd: Path) -> list[dict[str, str]]:

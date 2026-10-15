@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next import briefs, cli, loop, profile_record, runner, sdk_adapter, sessions, tools
-from owlbear_delivery_next.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.models import Brief, Change, ErrorKind, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.profile_record import Profile
@@ -438,6 +438,32 @@ def test_a_review_that_moves_a_ref_with_its_usage_unread_is_retried_for_the_viol
         ("read-only-write", "no usage event", {"credits": 2.0})
     ]
     assert c.spend.credits == 2.0
+
+
+def test_a_review_that_changes_shared_git_settings_stops_for_the_owner_and_nothing_is_restored(
+    store, change_repo, monkeypatch
+):
+    hook = Path(git(change_repo, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "hooks" / "pre-push"
+
+    def act(cfg):
+        git(cfg.worktree, "config", "core.hooksPath", "/elsewhere")
+        hook.write_text("#!/bin/sh\n")
+        git(cfg.worktree, "tag", "probe")  # the shared settings decide, not the moved ref
+
+    reviewer(monkeypatch, act)
+    c = reviewed(store, change_repo)
+    assert (c.outcome.exit, c.stop.kind) == (Exit.STOP, ErrorKind.POLICY)
+    assert "added config core.hookspath=/elsewhere" in c.stop.reason
+    assert "added hook pre-push" in c.stop.reason
+    assert (git(change_repo, "config", "core.hooksPath"), hook.exists()) == ("/elsewhere", True)
+    assert [e["changes"][0] for e in store.events("c1") if e.get("event") == "read-only-tampered"] == [
+        "added config core.hookspath=/elsewhere"
+    ]
+
+
+def test_a_review_that_only_sets_a_branch_upstream_passes(store, change_repo, monkeypatch):
+    reviewer(monkeypatch, lambda cfg: git(cfg.worktree, "config", "branch.main.remote", "origin"))
+    assert reviewed(store, change_repo).outcome.exit == Exit.DONE
 
 
 def test_a_judge_that_moves_a_ref_with_its_usage_unread_is_retried_for_the_violation(

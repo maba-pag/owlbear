@@ -85,7 +85,7 @@ def unread(done: session_result.Run) -> bool:
     is not either: it reruns once after a wait (TD-94).
     """
     confirmed = done.termination and done.termination.confirmed
-    voided = done.ending == "read-only-write" or done.model_check == "mismatch"
+    voided = done.ending in {"read-only-write", "shared-git-changed"} or done.model_check == "mismatch"
     return bool(done.usage_unread and confirmed and not voided)
 
 
@@ -252,10 +252,14 @@ def _within(  # noqa: PLR0913, PLR0917 - the sessions run in the prepared copy
 
 
 def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run]) -> None:
-    if moved := disposable.changed(copy):
+    at, ids = datetime.now(UTC).isoformat(timespec="seconds"), [r.session_id for r in runs]
+    if changes := disposable.tampered(copy):
+        reason = f"a read-only step changed shared Git settings: {'; '.join(changes)}"
+        store.log(lock, change.slug, {"event": "read-only-tampered", "at": at, "changes": changes, "sessions": ids})
+        for r in runs:
+            r.ending, r.payload, r.first, r.head, r.detail = "shared-git-changed", None, None, None, reason[:300]
+    elif moved := disposable.changed(copy):
         reason = f"a read-only step changed the repository: {', '.join(moved)}"
-        at = datetime.now(UTC).isoformat(timespec="seconds")
-        ids = [r.session_id for r in runs]
         store.log(lock, change.slug, {"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})
         for r in runs:
             r.ending, r.payload, r.first, r.head, r.detail = "read-only-write", None, None, None, reason

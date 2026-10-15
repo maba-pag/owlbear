@@ -34,6 +34,7 @@ type Ending = Literal[
     "error",
     "read-only-write",
     "read-only-refused",
+    "shared-git-changed",
 ]
 type ModelCheck = Literal["verified", "mismatch", "unknown"]
 PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
@@ -133,6 +134,15 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
         )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     p = run.payload
+    if run.ending == "shared-git-changed":  # never restored: the owner may have made the change himself (TD-146)
+        stop = Stop(
+            kind=ErrorKind.POLICY,
+            reason=run.detail,
+            action="Check the repository's shared Git config and hooks folder; undo any change you did not make",
+            resume="The shared Git config and hooks are as you want them",
+            at=now,
+        )
+        return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     if run.ending == "read-only-write":  # voided whatever it submitted; the quota does not excuse it
         return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.POLICY, enclosing, READ_ONLY), reason=run.detail)
     if run.ending == "read-only-refused":  # no session ran
