@@ -1,4 +1,4 @@
-"""The host's pages, the tab bar and the base stylesheet they share (TD-85): Changes, Backlog, Memory and Settings."""
+"""The host's pages, their tab bar and the base stylesheet they share (TD-85, TD-113): Changes to Maintenance."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ TABS = (
     ("/backlog", "Backlog", "backlog.html"),
     ("/memory", "Memory", "memory.html"),
     ("/config", "Settings", "config.html"),
+    ("/maintenance", "Maintenance", "maintenance.html"),
 )
 MARK = "<!-- tabs -->"  # where each page takes the tab bar
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own

@@ -77,19 +77,19 @@ def platform_name() -> str:
     return f"{system}-{machine}"
 
 
-def folder() -> Path:
-    """Where this machine keeps the pack's downloads, outside every project."""
+def folder(pins: dict[str, Any] | None = None) -> Path:
+    """Where this machine keeps the pack's downloads, outside every project; *pins* name a candidate pack."""
     home = Path(os.environ.get("OWLBEAR_HOME") or Path.home() / ".owlbear")
-    return home / "design-pack" / manifest()["pack"]
+    return home / "design-pack" / (pins or manifest())["pack"]
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _wanted() -> dict[str, tuple[str, str]]:
-    pins, up = manifest(), manifest()["upstream"]
-    name = platform_name()
+def _wanted(pins: dict[str, Any] | None = None) -> dict[str, tuple[str, str]]:
+    pins = pins or manifest()
+    up, name = pins["upstream"], platform_name()
     engine = RELEASE.format(repository=up["repository"], engine=up["engine"], platform=name)
     bundle = RAW.format(repository=up["repository"], commit=up["commit"], path=pins["bundle"]["path"])
     return {ENGINE: (engine, pins["engine"][name]), BUNDLE: (bundle, pins["bundle"]["sha256"])}
@@ -104,10 +104,10 @@ def _private(target: Path) -> bool:
     return not target.is_symlink() and info.st_uid == os.getuid() and not info.st_mode & 0o022
 
 
-def installed() -> Installed | None:
+def installed(pins: dict[str, Any] | None = None) -> Installed | None:
     """The pack's files when both are present in a private folder and match their digests; otherwise none."""
     try:
-        wanted, target = _wanted(), folder()
+        wanted, target = _wanted(pins), folder(pins)
         if not (_private(target) and _private(target.parent)) or any(
             _sha256(target / n) != d for n, (_u, d) in wanted.items()
         ):
@@ -140,16 +140,16 @@ def _keep(target: Path, name: str, data: bytes) -> None:
         raise
 
 
-def install(download: Callable[[str], bytes] | None = None) -> Installed:
+def install(download: Callable[[str], bytes] | None = None, pins: dict[str, Any] | None = None) -> Installed:
     """Download what is missing or changed, refuse any file that does not match its digest, and keep the rest."""
     download = download or fetch
-    target = folder()
+    target = folder(pins)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     target.mkdir(mode=0o700, exist_ok=True)
     if not (_private(target) and _private(target.parent)):
         msg = f"{target} is a link or others can write to it; the design pack is kept only in a private folder"
         raise PackError(msg)
-    for name, (url, digest) in _wanted().items():
+    for name, (url, digest) in _wanted(pins).items():
         path = target / name
         if path.exists() and _sha256(path) == digest:
             continue
@@ -162,7 +162,7 @@ def install(download: Callable[[str], bytes] | None = None) -> Installed:
             msg = f"{url} does not match the design pack's digest; nothing was installed from it"
             raise PackError(msg)
         _keep(target, name, data)
-    found = installed()
+    found = installed(pins)
     if found is None:
         msg = f"the design pack in {target} does not verify after installing"
         raise PackError(msg)

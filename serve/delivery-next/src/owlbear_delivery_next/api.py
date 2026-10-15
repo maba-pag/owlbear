@@ -17,7 +17,18 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next import backlog_routes, config_routes, evidence, held, loop, memory_routes, pages, profile
+from owlbear_delivery_next import (
+    backlog_routes,
+    config_routes,
+    evidence,
+    held,
+    loop,
+    memory_routes,
+    pack_job,
+    pack_routes,
+    pages,
+    profile,
+)
 from owlbear_delivery_next.briefs import save_brief, save_visual
 from owlbear_delivery_next.inbox import (
     AnswerItem,
@@ -184,13 +195,14 @@ def new_chat(
     return ending | ({"warning": warning} if warning else {})
 
 
-def create_app(  # noqa: C901, PLR0915 - one closure per route
+def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams the tests replace
     store: Store,
     token: str,
     host: Host,
     *,
     launch: Callable[[Path, Effective, str], dict[str, str]] = new_chat,
     which: Callable[[str], str | None] = shutil.which,
+    pack: pack_job.Job | None = None,
 ) -> FastAPI:
     """Return the host's app: its pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
@@ -445,5 +457,6 @@ def create_app(  # noqa: C901, PLR0915 - one closure per route
     router.include_router(config_routes.router(store))
     router.include_router(backlog_routes.router(store, start_chat))
     router.include_router(memory_routes.router(store))
+    router.include_router(pack_routes.router(store, pack or pack_job.Job(store)))
     app.include_router(router)
     return app

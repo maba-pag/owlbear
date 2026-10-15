@@ -46,6 +46,12 @@ def _version(tag: str) -> tuple[int, ...]:
 
 def behind(fetch: Callable[[str], bytes] | None = None) -> int | None:
     """Skill releases among upstream's newest 100 that are newer than the pinned tag; None when unreadable."""
+    found = newer(fetch)
+    return None if found is None else len(found)
+
+
+def newer(fetch: Callable[[str], bytes] | None = None) -> list[str] | None:
+    """Those releases' tags, oldest first; None when unreadable."""
     upstream = design_pack.manifest()["upstream"]
     url = RELEASES.format(repo=upstream["repository"])
     try:
@@ -56,7 +62,9 @@ def behind(fetch: Callable[[str], bytes] | None = None) -> int | None:
         return None
     tags = [r.get("tag_name") for r in releases if isinstance(r, dict) and not r.get("prerelease")]
     pinned = _version(upstream["tag"])
-    return sum(1 for t in tags if isinstance(t, str) and t.startswith("skill-v") and _version(t) > pinned)
+    return sorted(
+        (t for t in tags if isinstance(t, str) and t.startswith("skill-v") and _version(t) > pinned), key=_version
+    )
 
 
 def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]:

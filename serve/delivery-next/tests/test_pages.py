@@ -6,7 +6,13 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next import api
 from owlbear_delivery_next.store import Store
 
-TABS = [("/", "Changes"), ("/backlog", "Backlog"), ("/memory", "Memory"), ("/config", "Settings")]
+TABS = [
+    ("/", "Changes"),
+    ("/backlog", "Backlog"),
+    ("/memory", "Memory"),
+    ("/config", "Settings"),
+    ("/maintenance", "Maintenance"),
+]
 
 
 @pytest.mark.parametrize(("path", "title"), TABS)
