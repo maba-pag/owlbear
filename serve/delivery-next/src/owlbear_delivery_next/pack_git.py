@@ -91,13 +91,14 @@ def activate(co: Checkout, files: dict[Path, str], message: str, run: Git = git)
     """Write *files*, commit exactly them on the branch, and return the commit; on failure restore them unchanged.
 
     Raises:
-        design_pack.PackError: The branch moved or the commit failed; nothing is left changed.
+        design_pack.PackError: The branch moved or the commit failed; only the update's own commit or files are
+            undone, never another commit, and a HEAD that moved otherwise is reported, not reset.
     """
     again = checkout(co.root, run)
     if again != co:
         msg = f"the checkout changed during the update (now {again.branch}); nothing was activated"
         raise design_pack.PackError(msg)
-    before = run(co.root, ["rev-parse", "HEAD"])
+    before, made = run(co.root, ["rev-parse", "HEAD"]), ""
     kept = {path: path.read_bytes() for path in files}
     try:
         for path, text in files.items():
@@ -109,14 +110,28 @@ def activate(co: Checkout, files: dict[Path, str], message: str, run: Git = git)
         if run(co.root, ["rev-parse", f"{made}^"]) != before:
             msg = "the commit did not land on the branch head it started from"
             raise design_pack.PackError(msg)  # noqa: TRY301 - the restore below undoes this commit too
-    except BaseException:
-        for path, data in kept.items():
-            path.write_bytes(data)
-        _quiet(run, co.root, ["reset", "--quiet", "--", *[str(p.relative_to(co.root)) for p in files]])
-        if _quiet(run, co.root, ["rev-parse", "HEAD"]) not in {before, ""}:
-            _quiet(run, co.root, ["reset", "--quiet", "--keep", before])
+    except BaseException as exc:
+        if moved := _rollback(co, kept, before, made, run):
+            msg = f"{exc}; {moved}"
+            raise design_pack.PackError(msg) from exc
         raise
     return made
+
+
+def _rollback(co: Checkout, kept: dict[Path, bytes], before: str, made: str, run: Git) -> str:
+    """Undo exactly the update: its own commit while HEAD is still that commit, else its written files.
+
+    Another commit is never reset; when HEAD moved otherwise, the words that say so are returned.
+    """
+    head = _quiet(run, co.root, ["rev-parse", "HEAD"])
+    if made and head == made:
+        return "" if _undo(co, made, run) else f"the update commit {made[:12]} could not be undone"
+    if made:
+        return f"HEAD moved to {head[:12] or 'unknown'} after the update commit {made[:12]}; nothing was reset"
+    for path, data in kept.items():
+        path.write_bytes(data)
+    _quiet(run, co.root, ["reset", "--quiet", "--", *[str(p.relative_to(co.root)) for p in kept]])
+    return "" if head in {before, ""} else f"HEAD moved to {head[:12]} during the update; nothing was reset"
 
 
 def push(co: Checkout, commit: str, run: Git = git) -> str:

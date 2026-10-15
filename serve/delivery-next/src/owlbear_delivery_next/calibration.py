@@ -91,6 +91,7 @@ class Replay:
     agreed_before: int  # recorded design verdicts that matched the owner's decision
     agreed_after: int  # replayed ones that did; a replay without a verified verdict did not
     left_out: int = 0  # kept rounds that could not be replayed: no screenshots, or inputs that do not match them
+    pack: str = ""  # the identity of the pack the judge replayed with, as ``design_pack.identity`` names it
 
     @property
     def before(self) -> float:

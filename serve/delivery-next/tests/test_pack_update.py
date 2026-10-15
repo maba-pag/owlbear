@@ -18,6 +18,7 @@ from owlbear_delivery_next import (
     design_pack,
     design_tools,
     detector,
+    pack_candidate,
     pack_replay,
     pack_update,
     setup,
@@ -311,9 +312,11 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
         final = design_tools.DesignResult(**look.model_dump())
         return Run(cfg.session_id, ending="result", payload=final, first=look, termination=Termination(confirmed=True))
 
-    result = pack_replay.replay(store, run)
+    result = pack_replay.replay(store, candidate(), run=run)
     assert (result.rounds, result.agreed_before, result.agreed_after) == (1, 0, 1)  # the after's new problem fails
     assert result.left_out == 6
+    assert result.pack == design_pack.identity(candidate().manifest) != design_pack.identity()  # the candidate's
+    assert result.pack.startswith("impeccable-4.6.0.1+")
     [cfg] = seen
     assert (cfg.role, cfg.message, cfg.reveal, cfg.model) == (
         "designer",
@@ -340,8 +343,18 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
         return Run(cfg.session_id, ending="result", termination=Termination(confirmed=False))
 
     with pytest.raises(pack_replay.ReplayError, match="may still be running"):
-        pack_replay.replay(store, run)
+        pack_replay.replay(store, run=run)
     assert len(started) == 1
+
+
+def candidate(**pins) -> pack_candidate.Candidate:
+    made = design_pack.manifest() | {"pack": "impeccable-4.6.0.1"} | pins
+    return pack_candidate.Candidate("skill-v4.6.0", made, json.dumps(made), "notice", None)
+
+
+def test_a_replay_refuses_a_candidate_whose_skills_the_judge_does_not_load(repo) -> None:
+    with pytest.raises(design_pack.PackError, match="names skills the judge does not load"):
+        pack_replay.replay(Store.open(repo), candidate(skills=["other"]), run=lambda _cfg: None)
 
 
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys) -> None:

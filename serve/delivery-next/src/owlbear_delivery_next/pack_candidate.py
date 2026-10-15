@@ -228,5 +228,5 @@ def said_replay(r: Replay) -> str:
     verdict_ = "advisory: too few rounds" if r.advisory else "within the margin" if r.ok else "below the margin"
     return (
         f"{r.rounds} decided rounds, {r.left_out} left out; the design judge agreed with the owner "
-        f"{r.before:.0%} as recorded, {r.after:.0%} with this pack ({verdict_})"
+        f"{r.before:.0%} as recorded, {r.after:.0%} with {f'the pack {r.pack}' if r.pack else 'this pack'} ({verdict_})"
     )

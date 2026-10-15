@@ -67,7 +67,7 @@ class Live:
     sync: Callable[[Path, str], None] = pack_candidate.sync
     download: Callable[[str], bytes] = design_pack.fetch
     golden: Callable[[design_pack.Installed], dict[str, dict[str, list[str]]]] = pack_update.golden
-    replay: Callable[[Store], Replay] = pack_replay.replay
+    replay: Callable[[Store, pack_candidate.Candidate | None], Replay] = pack_replay.replay
     challenge: Callable[[Store, Any], Run] = sessions.run
     git: pack_git.Git = pack_git.git
 
@@ -193,7 +193,7 @@ class Job:
         co, c = self._do("candidate", candidate, lambda out: _pack(*out))
         diff = self._do("diff", lambda: pack_update.diff(live.clone, tag))
         golden = self._do("golden", lambda: _golden(live.golden(c.installed)))
-        replayed = self._do("replay", lambda: _replayed(live.replay(store)))
+        replayed = self._do("replay", lambda: _replayed(live.replay(store, c)))  # the candidate's judge, not the active
         text = pack_candidate.message(c, diff, golden, replayed, package)
         self._do("challenger", lambda: _passed(pack_candidate.challenge(store, c, live.clone, text, live.challenge)))
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"

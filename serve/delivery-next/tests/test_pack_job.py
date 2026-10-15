@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import threading
 from datetime import UTC, datetime
+from functools import partial
 from importlib.resources import files
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, calibration, design_pack, pack_job, pack_update, tools
+from owlbear_delivery_next import api, calibration, design_pack, pack_git, pack_job, pack_update, tools
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.processes import Termination
@@ -120,8 +121,9 @@ class Fakes:
         assert installed.bundle == "bundle skill-v4.6.0"  # the candidate's detector, not the active one
         return self.wrong
 
-    def replay(self, _store: Store) -> calibration.Replay:
+    def replay(self, _store: Store, candidate) -> calibration.Replay:
         self.calls.append("replay")
+        self.replayed = candidate
         return calibration.Replay(40, 40, 40 if self.replay_ok else 0)
 
     def challenge(self, _store: Store, cfg) -> Run:
@@ -169,6 +171,9 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "replay", "challenger"]
+    replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
+    assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
+    assert replayed.manifest == (checkout / "design_pack.json").read_text()  # the pack then activated
     cfg = fakes.sessions[0]
     assert (cfg.role, cfg.policy.write, cfg.judging, cfg.submit) == ("challenger", False, True, tools.REVIEW)
     assert "## Rules added\n- glow: Glow" in cfg.message
@@ -256,6 +261,34 @@ def test_a_rejected_push_takes_the_local_commit_back(tmp_path, checkout, clone):
     assert "the local commit was undone" in state["reason"]
     assert snapshot(checkout) == before
     assert state["pushed"] is None
+
+
+def test_a_failed_activation_undoes_only_its_own_commit_never_a_concurrent_one(checkout):
+    root, notice = checkout.parents[1], checkout / "worker_skills" / "NOTICE.md"
+    co, start, old = pack_git.checkout(checkout), git(checkout.parents[1], "rev-parse", "HEAD"), notice.read_bytes()
+
+    def concurrent(cwd: Path, args: list[str], *, fail: bool = False) -> str:
+        if args[0] == "commit":  # another process commits on the branch while the update commits
+            (root / "other.txt").write_text(f"theirs {fail}\n")
+            git(root, "add", "other.txt")
+            git(root, "commit", "-qm", "theirs", "--", "other.txt")
+            if fail:
+                msg = "git commit failed: hook refused"
+                raise design_pack.PackError(msg)
+        return pack_git.git(cwd, args)
+
+    with pytest.raises(design_pack.PackError, match="did not land"):
+        pack_git.activate(co, {notice: "new\n"}, "update", concurrent)
+    theirs = git(root, "rev-parse", "HEAD")
+    assert (git(root, "rev-parse", "HEAD^"), git(root, "log", "-1", "--format=%s")) == (start, "theirs")
+    assert (notice.read_bytes(), git(root, "status", "--porcelain")) == (old, "")
+
+    git(root, "push", "-q")
+    co = pack_git.checkout(checkout)
+    with pytest.raises(design_pack.PackError, match=r"HEAD moved to \w+ during the update; nothing was reset"):
+        pack_git.activate(co, {notice: "new\n"}, "update", partial(concurrent, fail=True))
+    assert git(root, "rev-parse", "HEAD^") == theirs  # the second concurrent commit stays
+    assert (notice.read_bytes(), git(root, "status", "--porcelain")) == (old, "")
 
 
 def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout, clone):

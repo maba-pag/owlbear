@@ -1,7 +1,8 @@
 """Calibration replay before a design pack update (design skill research §3.5, step 4 of ``pack_update``).
 
-The candidate pack is checked out as the active one; its design judge reruns, with the project's design model, on each
-decided round kept whole, and ``calibration.replayed`` compares its agreement with the owner to the recorded one.
+The design judge reruns with the candidate pack an update would activate, with the project's design model, on each
+decided round kept whole, and ``calibration.replayed`` compares its agreement with the owner to the recorded one. The
+replay records the candidate's identity; the candidate must name the skills the judge's session loads.
 
 Fixed are the messages, detector reveals and screenshots the round was judged on. Not fixed: the judge's worktree is
 empty, and the project memory it reads is today's.
@@ -26,6 +27,7 @@ from owlbear_delivery_next.steps import judges
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from owlbear_delivery_next.pack_candidate import Candidate
     from owlbear_delivery_next.profile_record import RoleModel
     from owlbear_delivery_next.session_result import Run
     from owlbear_delivery_next.store import Store
@@ -39,19 +41,23 @@ class ReplayError(RuntimeError):
     """A replay judge may still be running, so no further one starts."""
 
 
-def replay(store: Store, run: Callable[[sdk_adapter.Session], Run] | None = None) -> calibration.Replay:
-    """The design judge, with the installed pack and the project's model, again on each decided round kept whole.
+def replay(
+    store: Store, candidate: Candidate | None = None, run: Callable[[sdk_adapter.Session], Run] | None = None
+) -> calibration.Replay:
+    """The design judge, with *candidate* (else the installed pack) and the project's model, on each decided round.
 
     A round is replayed with the messages and screenshots it was judged on, and only if its design verdict came from
     the model and effort the replay runs; any other round is left out and counted.
 
     Raises:
-        design_pack.PackError: No shared repository holds the rounds, or the judge's worktree cannot be a repository.
+        design_pack.PackError: No shared repository holds the rounds, the judge's worktree cannot be a repository, or
+            the candidate names skills the judge does not load.
         ReplayError: A judge's processes were not confirmed gone.
     """
     if store.shared is None:
         msg = "the calibration replay reads the shared repository: set it with `owlbear-next common PATH`"
         raise design_pack.PackError(msg)
+    pack = _pack(candidate)
     role, memory = roles.chosen(store.settings(), "design-review"), sessions.memory(store)
     run = run or (lambda cfg: asyncio.run(sdk_adapter.run(cfg)))
     root, pairs, left_out = calibration.folder(store.shared, store.name).resolve(), [], 0
@@ -78,7 +84,17 @@ def replay(store: Store, run: Callable[[sdk_adapter.Session], Run] | None = None
                 left_out += 1
                 continue
             pairs.append((kept, judges.design(_ran(run, cfgs), images, role, datetime.now(UTC)).verdict))
-    return dataclasses.replace(calibration.replayed(pairs), left_out=left_out)
+    return dataclasses.replace(calibration.replayed(pairs), left_out=left_out, pack=pack)
+
+
+def _pack(candidate: Candidate | None) -> str:
+    """The identity of the pack replayed; a candidate's skills must be the ones the judge's session loads."""
+    if candidate is None:
+        return design_pack.identity()
+    if candidate.pins["skills"] != design_pack.manifest()["skills"]:
+        msg = f"the candidate pack {candidate.pins['pack']} names skills the judge does not load; it cannot be replayed"
+        raise design_pack.PackError(msg)
+    return design_pack.identity(candidate.manifest)
 
 
 def _ran(run: Callable[[sdk_adapter.Session], Run], cfgs: list[sdk_adapter.Session]) -> list[Run]:
