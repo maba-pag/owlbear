@@ -25,6 +25,7 @@
   .entry.unselectable { grid-template-columns: minmax(0, 1fr); }
   .entry .body, .entry .more { display: grid; gap: var(--p-spacing-static-sm); min-width: 0; }
   .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  .entry .title, .entry li { overflow-wrap: anywhere; }
   .entry .more { padding-top: var(--p-spacing-static-sm); }
   .entry .triage { flex-wrap: nowrap; }
   .entry .triage p-select, .entry .triage label { flex: 0 1 14rem; min-width: 0; }
