@@ -259,14 +259,21 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     assert errors(recipe("nope"))[0] == "preparation: nope is not a declared option - use one of copy"
     assert errors(recipe(""))[0].startswith("preparation: empty - pick one of copy; a check never runs on live")
     assert errors(recipe(reason=""))[0].startswith("reason: empty")
-    assert errors(recipe(), ["src/app.py"])[0].startswith("changes: src/app.py edited; you may edit only the setup")
+    assert errors(recipe(), ["src/app.py"]) == [
+        "changes: src/app.py edited; you may edit only the setup files fixtures/** and no Change code - revert them"
+    ]
     assert errors(recipe(), at="f" * 40)[0].startswith("changes: HEAD moved")
     denied = Preparing(ctx.options, DataPermissions(isolation=["TEST_DB"]), head, live=LIVE)
     refused = preparation.check(recipe(), tools.Worktree(head, head), repo, denied)
     assert refused[0].startswith("preparation: copy is not permitted (data classes customers are not permitted)")
     none = preparation.check(recipe(), tools.Worktree(head, head, ("fixtures/users.json",)), repo, Preparing())
-    assert none[0] == "preparation: this project declares no preparation options, so no check launches - ask"
-    assert none[1].startswith("changes: fixtures/users.json edited; you may edit nothing without a preparation")
+    assert none == [
+        "preparation: this project declares no preparation options, so no check launches - ask",
+        (
+            "changes: fixtures/users.json edited; you may edit nothing without a preparation option and no Change "
+            "code - revert them"
+        ),
+    ]
 
 
 def test_with_no_safe_option_delivery_asks_and_starts_no_preparer(tmp_path):

@@ -211,8 +211,4 @@ def check(recipe: tools.CheckRecipe, tree: tools.Worktree, root: Path, ctx: Prep
     if option and (run := named(f"{option.export} {option.masking}", tree.dirty, root)):
         errors.append(f"changes: {', '.join(run)} is run by the export or masking, which read live and run only "
                       "the project's committed scripts - revert it")  # fmt: skip
-    return (
-        errors
-        + tools.check_recipe(recipe, tree, root, option.setup_globs if option else ())
-        + tools.check_recipe(recipe, tree, root, option.setup_globs if option else ())
-    )
+    return errors + tools.check_recipe(recipe, tree, root, option.setup_globs if option else ())
