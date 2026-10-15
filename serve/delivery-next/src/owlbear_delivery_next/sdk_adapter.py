@@ -314,6 +314,7 @@ class _Step:
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
             "skill_directories": [str(preload.directory())],
             "mcp_servers": _memory(self.cfg.memory),
+            "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,

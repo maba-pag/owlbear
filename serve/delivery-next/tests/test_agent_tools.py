@@ -76,6 +76,7 @@ def test_the_projects_memory_folder_is_given_to_the_memory_server(tmp_path) -> N
 
 def test_without_a_memory_folder_or_the_memory_server_the_agents_go_on_without_memory(tmp_path, monkeypatch) -> None:
     assert options()["mcp_servers"] == {}
+    assert options()["enable_file_hooks"] is False  # the project's agent hooks stay off too (TD-142)
     monkeypatch.setattr(preload, "find_spec", lambda _name: None)
     assert options(memory=tmp_path)["mcp_servers"] == {}
     assert list(json.loads(wf.mcp(INBOX, tmp_path)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
