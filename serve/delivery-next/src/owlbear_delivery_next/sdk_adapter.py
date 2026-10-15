@@ -439,8 +439,6 @@ async def run(cfg: Session) -> Run:
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     session = st.session
     st.run.usage = await usage_read(session, cfg.model) if session else {}
-    if wrong := unexpected_models(st.billed, st.run.usage, cfg.model, st.subagent_models):
-        st.gate.wrong_model(f"the usage names {', '.join(wrong)}, the step needs {cfg.model}")
     await _proven(st, session)
     st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run
@@ -449,16 +447,23 @@ async def run(cfg: Session) -> Run:
 async def _proven(st: _Step, session: Any) -> None:  # noqa: ANN401 - the SDK session
     """Settle the model check from the usage alone: verified, mismatch or unknown (TD-94).
 
-    A processed ending needs its own model's tokens to have grown; the usage is read once more before it counts as
-    unknown, since one read may come before the runtime's metrics catch up.
+    Every usage read is checked for models nobody may use. A processed ending needs its own model's tokens to have
+    grown; the usage is read once more before it counts as unknown, since one read may come before the runtime's
+    metrics catch up. A mismatch, found here or by an event meanwhile, is final.
     """
-    if st.run.model_check == "mismatch" or not st.sending:
+    if not st.sending:
         return
-    st.run.usage_unread = unread(st.billed, st.run.usage)
-    if not st.run.usage_unread and st.run.ending in PROVEN and unproven(st.billed, st.run.usage, st.cfg.model):
+    for again in (False, True):
+        if wrong := unexpected_models(st.billed, st.run.usage, st.cfg.model, st.subagent_models):
+            st.gate.wrong_model(f"the usage names {', '.join(wrong)}, the step needs {st.cfg.model}")
+        if st.run.model_check == "mismatch":
+            return
+        why, proof = unread(st.billed, st.run.usage), unproven(st.billed, st.run.usage, st.cfg.model)
+        if again or why or not proof or st.run.ending not in PROVEN:
+            break
         await asyncio.sleep(USAGE_PAUSE)
         st.run.usage = await usage_read(session, st.cfg.model)
-        st.run.usage_unread = unread(st.billed, st.run.usage) or unproven(st.billed, st.run.usage, st.cfg.model)
-    st.run.model_check = "unknown" if st.run.usage_unread else "verified"
+    st.run.usage_unread = why or (proof if st.run.ending in PROVEN else "")
+    st.run.model_check = "unknown" if why or proof else "verified"
     if st.run.usage_unread:
         st.log(event="usage-unread", reason=st.run.usage_unread)

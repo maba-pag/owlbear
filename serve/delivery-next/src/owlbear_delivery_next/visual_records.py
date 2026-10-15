@@ -96,17 +96,18 @@ class OwnerDecision(_Strict):
 class VisualRound(_Strict):
     """One visual review: the capture it judged, both verdicts, the detector's evidence and how it ended.
 
-    The capture, states, criteria, owner criteria, before capture and pack are everything its verdicts depend on, so
-    an owner's accept without the model check holds only while all of them are still the Change's (TD-94).
+    The capture, brief version, states, criteria, owner criteria, before capture, widths and pack are everything its
+    verdicts depend on, so an owner's accept without the model check holds only while all of them stay (TD-94).
     """
 
     number: int
     head: str
     tree: str
+    brief: int = 0  # the brief version the judges saw
     states: dict[str, int] = Field(default_factory=dict)
     criteria: dict[str, int] = Field(default_factory=dict)  # the brief's criterion versions the judges checked
     owner: list[str] = Field(default_factory=list)  # the owner criteria in force (TD-79)
-    before: str = ""  # the before capture's head the blind pairs came from
+    before: str = ""  # the before capture's identity the blind pairs came from
     widths: list[int] = Field(default_factory=list)
     pack: str = ""  # the design pack's identity
     blind: dict[str, Literal["before", "after"]] = Field(default_factory=dict)  # the design judge's image names

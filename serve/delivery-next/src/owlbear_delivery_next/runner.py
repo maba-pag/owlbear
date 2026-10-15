@@ -229,6 +229,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
     store.write(lock, change)
     url = change.env.ready_url if change.env else ""
+    mine, theirs, ran = [], [], []  # the judges' sessions and how they ended
     try:
         settings = store.settings()  # one snapshot: what the round records is what it ran with
         head = worktree.head(path)
@@ -291,6 +292,8 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 change, head, tree, shots, verdict=judgement, now=datetime.now(UTC), scans=scans, kept=kept
             )
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
+    if ran:  # after the round and its question are saved: a failed log never loses the gate (TD-94)
+        sessions.log_held(store, lock, [label for label, _ in [*mine, *theirs]], [run for _, run in ran])
 
 
 def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:

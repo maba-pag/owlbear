@@ -57,13 +57,16 @@ def _session(*reads: dict) -> SimpleNamespace:
 
 def _step(usage: dict, *, ending: str = "result") -> SimpleNamespace:
     events: list[dict] = []
+    run = Run("s", ending=ending, usage=usage)
     return SimpleNamespace(
-        run=Run("s", ending=ending, usage=usage),
+        run=run,
         sending=True,
         billed={},
         cfg=SimpleNamespace(model=MODEL),
         log=lambda **e: events.append(e),
         events=events,
+        gate=Gate(SimpleNamespace(), run, lambda **_: None, lambda: None),
+        subagent_models={"claude-haiku-5.5"},
     )
 
 
@@ -77,9 +80,28 @@ def test_an_sdk_result_whose_model_the_usage_does_not_show_is_read_again_then_un
     assert missing.run.model_check == "unknown"
     assert missing.run.usage_unread == "the usage does not show the step's model gpt-6-luna"
     assert missing.events == [{"event": "usage-unread", "reason": missing.run.usage_unread}]
-    errored = _step({"models": {}}, ending="error")  # nothing to process, so nothing to prove
+    errored = _step({"models": {}}, ending="error")  # nothing to process: no gate, and still no proof
     asyncio.run(sdk_adapter._proven(errored, _session()))  # noqa: SLF001
-    assert (errored.run.model_check, errored.run.usage_unread) == ("verified", "")
+    assert (errored.run.model_check, errored.run.usage_unread) == ("unknown", "")
+
+
+def test_the_second_usage_read_is_checked_for_a_wrong_model_and_a_mismatch_is_final(monkeypatch) -> None:
+    monkeypatch.setattr(sdk_adapter, "USAGE_PAUSE", 0)
+    st = _step({"models": {}})
+    asyncio.run(sdk_adapter._proven(st, _session({MODEL: 12, "mai-code-1.1-flash": 5})))  # noqa: SLF001
+    assert (st.run.ending, st.run.model_check, st.run.usage_unread) == ("error", "mismatch", "")
+    assert st.run.detail == "wrong model: the usage names mai-code-1.1-flash, the step needs gpt-6-luna"
+    late = _step({"models": {}})
+    late.run.model_check = "mismatch"  # an event during the read
+    asyncio.run(sdk_adapter._proven(late, _session({MODEL: 12})))  # noqa: SLF001
+    assert late.run.model_check == "mismatch"
+
+
+def test_only_a_judges_verdict_is_held_for_its_round_and_any_other_unproven_ending_gates() -> None:
+    done = Termination(confirmed=True)
+    verdict = Run("v", ending="result", payload=object(), usage_unread="x", termination=done)
+    asked = Run("a", ending="ask", payload=object(), usage_unread="x", termination=done)
+    assert (sessions.held(verdict), sessions.held(asked)) == (True, False)
 
 
 def test_a_window_result_needs_a_usage_report_naming_the_steps_model() -> None:
@@ -107,3 +129,11 @@ def test_unread_credits_make_the_total_a_lower_bound_until_the_session_reports_t
     spend = spend.plus({"credits": 1.0, "models": {"claude-opus-5.5": {"credits": 1.0, "tokens": 40}}}, "w1")
     assert (spend.unread, spend.models["claude-opus-5.5"].credits_unread) == (["s2"], False)
     assert Spend().plus({"credits": None, "models": {}}, "w2").shown() == "credits unknown for 1 session"
+
+
+def test_a_failed_report_marks_the_sessions_models_unread_even_after_a_known_zero() -> None:
+    spend = Spend().plus({"credits": 0.0, "models": {MODEL: {"credits": 0.0, "tokens": 4}}}, "s1")
+    spend = spend.plus({"error": "RuntimeError"}, "s1")
+    assert (spend.unread, spend.models[MODEL].credits_unread) == (["s1"], True)
+    spend = spend.plus({"credits": 0.5, "models": {MODEL: {"credits": 0.5, "tokens": 9}}}, "s1")
+    assert (spend.unread, spend.models[MODEL]) == ([], ModelSpend(credits=0.5, tokens=9))

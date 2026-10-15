@@ -61,9 +61,21 @@ def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> sessio
         done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
     else:
         done = asyncio.run(sdk_adapter.run(cfg))
-    if unread(done) and not hold:
+    if unread(done) and not (hold and held(done)):
         raise UsageUnreadError(done)
     return done
+
+
+def held(done: session_result.Run) -> bool:
+    """A judge's verdict whose model is unknown, which its round decides with the owner; any other ending gates."""
+    return unread(done) and done.ending == "result" and done.payload is not None
+
+
+def log_held(store: Store, lock: Lock, labels: list[str], runs: list[session_result.Run]) -> None:
+    """Log the held verdicts once their round and its question are saved, so a failed log never loses the gate."""
+    for label, done in zip(labels, runs, strict=True):
+        if held(done):
+            logged(store, lock, store.read(lock.slug), done, {"kind": label, "exit": "held"})
 
 
 def unread(done: session_result.Run) -> bool:
@@ -158,11 +170,11 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     judged = []
     for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock
         verdict = session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
-        if hold or not unread(done):
+        if not unread(done):
             logged(store, lock, change, done, {"kind": label, "exit": verdict.exit})
         judged.append((verdict, done))
     left = any(not (r.termination and r.termination.confirmed) for r in runs)
-    if not hold and (first := next((r for r in runs if unread(r)), None)) and not left:
+    if (first := next((r for r in runs if unread(r) and not (hold and held(r))), None)) and not left:
         raise UsageUnreadError(first)
     return judged
 

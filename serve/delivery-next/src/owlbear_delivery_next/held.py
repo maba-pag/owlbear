@@ -25,6 +25,7 @@ from owlbear_delivery_next.storage_io import atomic_write
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change, Option, Question
     from owlbear_delivery_next.store import Lock, Store
+    from owlbear_delivery_next.visual_records import VisualRound
 
 ACCEPT = "accept"  # the gate question's option that processes the held result
 HEAD_SECONDS = 3  # the page polls through this check; a slower Git offers no accept rather than stalling it
@@ -168,13 +169,22 @@ def offered(store: Store, change: Change, question: Question) -> list[Option]:
         return question.options
     if cause.endswith(f":{VISUAL_MODEL}"):
         kept, where = (change.visual_rounds[-1] if change.visual_rounds else None), change.names.worktree
-        if kept is not None and kept.outcome == "model" and where and decision.matches(change, kept, head(Path(where))):
+        if kept is not None and kept.outcome == "model" and where and _visual_holds(store, change, kept, Path(where)):
             return question.options
         return [o for o in question.options if o.id != ACCEPT]
     hold = _read(store, change.slug)
     if hold is not None and hold.question == question.id and _matches(hold, change):
         return question.options
     return [o for o in question.options if o.id != ACCEPT]
+
+
+def _visual_holds(store: Store, change: Change, kept: VisualRound, where: Path) -> bool:
+    """The round's capture and every input its verdicts depended on, widths included, are still the Change's."""
+    try:
+        widths = (change.before.widths if change.before else None) or store.settings().widths
+    except Exception:  # noqa: BLE001 - unreadable settings offer no accept rather than fail the page
+        return False
+    return decision.matches(change, kept, head(where), widths)
 
 
 def take(store: Store, lock: Lock, change: Change) -> Run | None:

@@ -143,6 +143,10 @@ class VisualResult(Record):
     findings: list[str] = Field(default_factory=list)
     at: datetime
 
+    def identity(self) -> str:
+        """This capture among others of the same head: a recapture is another one."""
+        return f"{self.head}@{self.at.isoformat()}"
+
 
 class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""

@@ -136,12 +136,13 @@ def unknown(head: str, kept: VisualRound) -> StepResult:
     return engine.ask(StepKind.CHECK, text, MODEL, options)
 
 
-def matches(c: Change, kept: VisualRound, head: str | None) -> bool:
-    """Everything the round's verdicts depend on is still the Change's: capture, brief, owner criteria, pack."""
+def matches(c: Change, kept: VisualRound, head: str | None, widths: Sequence[int]) -> bool:
+    """Everything the round's verdicts depend on is still the Change's: capture, brief, owner criteria, pack, widths."""
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     owner = [k.id for k in c.owner_criteria if k.withdrawn_at is None]
-    now = (head, states, criteria, owner, c.before.head if c.before else "", design_pack.identity())
-    return now == (kept.head, kept.states, kept.criteria, kept.owner, kept.before, kept.pack)
+    before, pack = c.before.identity() if c.before else "", design_pack.identity()
+    now = (head, c.brief.version, states, criteria, owner, before, pack, list(widths))
+    return now == (kept.head, kept.brief, kept.states, kept.criteria, kept.owner, kept.before, kept.pack, kept.widths)
 
 
 def waived(c: Change, head: str, tree_id: str, widths: Sequence[int]) -> tuple[Change, StepResult] | None:
@@ -149,7 +150,7 @@ def waived(c: Change, head: str, tree_id: str, widths: Sequence[int]) -> tuple[C
     kept, v = (c.visual_rounds[-1] if c.visual_rounds else None), c.visual
     if kept is None or kept.outcome != "model" or not kept.model_waived or v is None:
         return None
-    if not matches(c, kept, head) or (kept.tree, kept.widths) != (tree_id, list(widths)):
+    if not matches(c, kept, head, widths) or kept.tree != tree_id:
         return None  # the Change moved on; the capture is taken and judged again
     correct = kept.verdicts[0]
     said = REVIEW_OF[correct.verdict or "unsure"]

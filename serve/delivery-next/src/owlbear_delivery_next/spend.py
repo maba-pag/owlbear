@@ -51,7 +51,7 @@ class Spend(BaseModel):
         others = [s for s in self.unread if s != session]
         unread = others if known or not session else [*others, session]
         if "error" in usage:
-            return self.model_copy(update={"unread": unread})
+            return self._failed(session, unread)
         was = self.last.get(session, Spend()) if session else Spend()
         marks, models = dict(was.models), {k: v.model_copy() for k, v in self.models.items()}
         for name, m in (usage.get("models") or {}).items():
@@ -73,6 +73,18 @@ class Spend(BaseModel):
             flags = (s.models[name].credits_unread for s in last.values() if name in s.models)
             total.credits_unread = any(flags)
         return Spend(credits=self.credits + mark.credits - was.credits, models=models, last=last, unread=unread)
+
+    def _failed(self, session: str, unread: list[str]) -> Spend:
+        """A failed report: the session's models keep their known credits as lower bounds, now marked unread."""
+        was = self.last.get(session)
+        if was is None:
+            return self.model_copy(update={"unread": unread})
+        marks = {n: m.model_copy(update={"credits_unread": True}) for n, m in was.models.items()}
+        models = {
+            n: m.model_copy(update={"credits_unread": m.credits_unread or n in marks}) for n, m in self.models.items()
+        }
+        last = self.last | {session: was.model_copy(update={"models": marks})}
+        return self.model_copy(update={"unread": unread, "models": models, "last": last})
 
     def shown(self) -> str:
         """The total as text: a lower bound with the unread sessions named, or unknown, never a false zero."""

@@ -206,9 +206,10 @@ def _proven(result: Run, out: Outcome, model: str | None) -> None:
     """Only a usage report naming the step's model proves it; a processed ending without one is unknown (TD-94)."""
     if result.model_check == "mismatch":
         return
-    if result.ending in PROVEN and not (model and out.tokens.get(model)):
+    proven = bool(model and out.tokens.get(model))
+    if result.ending in PROVEN and not proven:
         result.usage_unread = f"no usage report of the window named the step's model {model}"
-    result.model_check = "unknown" if result.usage_unread or result.ending not in PROVEN else "verified"
+    result.model_check = "verified" if proven else "unknown"
 
 
 def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termination:

@@ -790,9 +790,18 @@ def test_a_visual_accept_without_the_model_check_is_withdrawn_once_the_capture_m
         return run
 
     flow.mp.setattr(runner.sdk_adapter, "run", unread)
-    runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    log = flow.store.log
+    flow.mp.setattr(flow.store, "log", lambda *_a: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    with pytest.raises(OSError, match="No space"):  # the gate is written before the held runs are logged
+        runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    flow.mp.setattr(flow.store, "log", log)
     asked = flow.store.read("c1")
     q = loop.open_question(asked)
+    assert (asked.visual_rounds[-1].outcome, [o.id for o in q.options]) == ("model", ["accept", "retry"])
+    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": [1600]}))
+    assert [o.id for o in held.offered(flow.store, asked, q)] == ["retry"]  # other widths: no accept
+    flow.store.update_config(lambda cur: cur.model_copy(update={"widths": asked.visual_rounds[-1].widths}))
+    assert [o.id for o in held.offered(flow.store, asked, q)] == ["accept", "retry"]
     commit(flow.clone, "web/app.css", "moved\n")
     assert [o.id for o in held.offered(flow.store, asked, q)] == ["retry"]
     accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
