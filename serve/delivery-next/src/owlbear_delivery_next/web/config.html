@@ -788,8 +788,9 @@ function renderUpdate(u) {
 async function readPack() {
   try {
     const pack = await call("/design-pack");
+    const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
     document.getElementById("pack-active").textContent = `Active: ${pack.pack} from upstream ${pack.upstream}, `
-      + `identity ${pack.identity}. ${pack.status}.`;
+      + `identity ${pack.identity}. ${plain(pack.status)}.`;
     document.getElementById("pack-notice").textContent = `Last notice: ${pack.notice}.`;
     renderUpdate(pack.update);
   } catch (e) {

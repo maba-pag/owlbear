@@ -56,7 +56,7 @@ def overview(store: Store) -> list[dict[str, Any]]:
         {"name": "Design pack update", "where": "Settings", "href": "/config#pack", "built": True,
          "recorded": True, "last": pack_job.last(store),
          "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push."},
-        {"name": "Engine update", "where": "Settings", "href": "/config", "built": False, "recorded": False,
+        {"name": "Engine update", "where": "Settings", "href": None, "built": False, "recorded": False,
          "last": None, "note": "Not built yet."},
         {"name": "Review Tests", "where": "Project action", "href": None, "built": False, "recorded": False,
          "last": None, "note": "Not built yet (TD-112)."},

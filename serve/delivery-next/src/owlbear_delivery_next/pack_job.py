@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 FILE = "design-pack-update.json"  # the last run, under the store
 STAGES = (
-    ("notice", "Notice: is upstream ahead?"),
+    ("notice", "Notice: newer upstream release"),
     ("candidate", "Candidate: detector pins and skills"),
     ("diff", "Diff: rules and skill files"),
     ("golden", "Golden pages"),
