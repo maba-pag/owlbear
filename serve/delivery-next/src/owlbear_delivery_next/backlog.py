@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 ID = r"^[1-9]\d{0,8}$"  # the issue's number
 EVIDENCE = 50  # references kept per entry, the newest
 READ_SECONDS = 10.0  # how long a listing is reused
+RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later; until then the write's answer counts
 type Source = Literal["owner", "watcher", "assistant", "review", "run"]
 type Kind = Literal["untriaged", "defect", "improvement", "idea", "question"]
 type Status = Literal["inbox", "open", "in-change", "done", "dropped"]
@@ -38,6 +39,7 @@ type Ref = Annotated[str, Field(min_length=1, max_length=500)]
 ORDER = {"inbox": 0, "open": 1, "in-change": 2, "done": 3, "dropped": 4}
 NO_SHARED = "no shared repository is set up (`owlbear-next common PATH`); the backlog lives in its GitHub issues"
 _cache: dict[str, tuple[float, dict[str, Entry], dict[str, Json], list[str]]] = {}
+_recent: dict[str, dict[int, tuple[float, Json]]] = {}  # repository -> issue number -> (when, GitHub's answer)
 _cache_guard = threading.Lock()
 
 
@@ -126,7 +128,7 @@ class Backlog:
             self.raw = hit[2]
             return dict(hit[1]), list(hit[3])
         found, raw, bad = {}, {}, []
-        for issue in self._github("read", self.issues.issues):
+        for issue in self._overlaid(self._github("read", self.issues.issues)):
             try:
                 entry = Entry.model_validate(backlog_issues.fields(issue))
             except ValidationError:
@@ -205,10 +207,9 @@ class Backlog:
         fields = entry.model_dump()
         text, names = self._body(fields), backlog_issues.labels(fields)
         self._github("save", lambda: self.issues.ensure_labels(names))
-        issue = self._github("save", lambda: self.issues.create(entry.title, text, names))
-        self._forget()
+        issue = self._remember(self._github("save", lambda: self.issues.create(entry.title, text, names)))
         if (wanted := backlog_issues.state(entry.status))["state"] == "closed":
-            self._github("save", lambda: self.issues.edit(issue["number"], wanted))
+            self._remember(self._github("save", lambda: self.issues.edit(issue["number"], wanted)))
         return entry.model_copy(update={"id": str(issue["number"])})
 
     def _save(self, *entries: Entry) -> None:
@@ -219,8 +220,26 @@ class Backlog:
             change = {"title": entry.title, "body": self._body(fields), **backlog_issues.state(entry.status)}
             change["labels"] = backlog_issues.kept_labels(self.raw.get(entry.id, {})) + names
             self._github("save", lambda names=names: self.issues.ensure_labels(names))
-            self._github("save", lambda change=change, n=int(entry.id): self.issues.edit(n, change))
-            self._forget()
+            self._remember(self._github("save", lambda change=change, n=int(entry.id): self.issues.edit(n, change)))
+
+    def _remember(self, issue: Json) -> Json:
+        """Keep GitHub's answer to a write for the next reads, which may not list it yet."""
+        with _cache_guard:
+            _recent.setdefault(self.repository, {})[issue["number"]] = (time.monotonic(), issue)
+            _cache.pop(self.repository, None)
+        return issue
+
+    def _overlaid(self, listed: list[Json]) -> list[Json]:
+        """The listing, with the issues written lately where GitHub lists them older or not yet."""
+        now = time.monotonic()
+        with _cache_guard:
+            kept = {n: v for n, v in _recent.get(self.repository, {}).items() if now - v[0] < RECENT_SECONDS}
+            _recent[self.repository] = kept
+        out = {i["number"]: i for i in listed}
+        for number, (_, issue) in kept.items():
+            if number not in out or out[number].get("updated_at", "") <= issue.get("updated_at", ""):
+                out[number] = issue
+        return sorted(out.values(), key=lambda i: -i["number"])
 
     @staticmethod
     def _body(fields: dict[str, Any]) -> str:

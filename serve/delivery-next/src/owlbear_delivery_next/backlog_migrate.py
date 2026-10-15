@@ -2,7 +2,9 @@
 
 Every ``<shared>/<project>/backlog/<id>.json`` becomes one issue scoped to its project, carrying the old id as its
 marker, so a second run skips what the first created. Only once every entry reads back from GitHub as it was are the
-files deleted, and that deletion is committed and pushed; a file changed meanwhile stays.
+files are deleted, and that deletion is committed and pushed; a file changed meanwhile stays. A run finds the issues an
+earlier run made by listing them, and GitHub lists a new issue only seconds later: run again once ``gh issue list``
+shows them.
 """
 
 from __future__ import annotations

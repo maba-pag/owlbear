@@ -18,6 +18,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
     monkeypatch.setattr(backlog, "_cache", {})
+    monkeypatch.setattr(backlog, "_recent", {})
     root = tmp_path_factory.mktemp("worktrees").resolve()
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
 
@@ -26,8 +27,8 @@ class FakeGitHub:
     """GitHub's issue, comment and label REST API for ``acme/owlbear-data``, behind the ``gh api`` runner."""
 
     def __init__(self, *, down: bool = False) -> None:
-        self.issues, self.labels, self.comments, self.calls = {}, {}, [], []
-        self.down, self.fail_writes = down, False
+        self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
+        self.down, self.fail_writes, self.tick = down, False, 0
 
     def __call__(self, argv, data, _timeout, _cwd):
         if self.down:
@@ -53,8 +54,9 @@ class FakeGitHub:
                 return 422, "Validation Failed"
             self.labels[body["name"]] = {"name": body["name"], "color": body["color"]}
             return 0, self.labels[body["name"]]
-        if parts == ["issues"] and method == "GET":
-            return 0, self._page(sorted(self.issues.values(), key=lambda i: -i["number"]), params)
+        if parts == ["issues"] and method == "GET":  # GitHub lists a new issue only seconds later: ``hidden``
+            listed = [i for i in self.issues.values() if i["number"] not in self.hidden]
+            return 0, self._page(sorted(listed, key=lambda i: -i["number"]), params)
         if parts == ["issues"]:
             number = len(self.issues) + 1
             self.issues[number] = {"number": number, "state": "open", "state_reason": None,
@@ -76,6 +78,8 @@ class FakeGitHub:
             issue["labels"] = [{"name": n} for n in body["labels"]]
         if body.get("state") == "open":
             issue["state_reason"] = None
+        self.tick += 1
+        issue["updated_at"] = f"2026-10-15T00:{self.tick // 60:02d}:{self.tick % 60:02d}Z"
         return issue
 
     @staticmethod

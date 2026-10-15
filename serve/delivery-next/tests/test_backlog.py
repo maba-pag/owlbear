@@ -111,6 +111,7 @@ def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are
     a = view(root).add("a")[0]
     view(root).add("b")
     github.issues[1]["labels"].append({"name": "help wanted"})
+    github.issues[1]["updated_at"] = "2099-01-01"
 
     view(root).update(a.id, {"kind": "defect", "scope": "project"})
 
@@ -167,8 +168,9 @@ def test_github_holds_the_title_class_scope_and_state_and_an_issue_without_a_rea
     backlog.add("a")
     backlog.add("b")
     github.issues[1] |= {"title": "renamed", "state": "closed", "state_reason": "not_planned"}
-    github.issues[1]["labels"] = [{"name": "scope:global"}, {"name": "class:idea"}]
+    github.issues[1] |= {"labels": [{"name": "scope:global"}, {"name": "class:idea"}], "updated_at": "2099-01-01"}
     github.issues[2]["body"] = github.issues[2]["body"].replace('"count": 1', '"count": 0')
+    github.issues[2]["updated_at"] = "2099-01-01"
     github.issues[3] = {"number": 3, "title": "someone's issue", "body": "no entry", "state": "open", "labels": []}
 
     found, bad = backlog.read(fresh=True)
@@ -242,6 +244,18 @@ def test_saving_is_online_only_and_an_unreachable_github_fails_with_its_reason(s
         Backlog.of(Store(tmp_path / "store"))
 
 
+def test_an_issue_github_does_not_list_yet_is_read_from_the_write_and_a_repeat_still_counts_up(shared, github):
+    root, _ = shared
+    a = view(root).add("Flaky check", source="run")[0]
+    github.hidden = {1}
+
+    again, new = view(root).add("Flaky check", source="run")
+    triaged = view(root).update(a.id, {"kind": "defect"})
+
+    assert (new, again.id, again.count, triaged.status, len(github.issues)) == (False, "1", 2, "open", 1)
+    assert [(e.id, e.count, e.kind) for e in view(root).entries()] == [("1", 2, "defect")]
+
+
 def test_reads_are_reused_briefly_and_every_write_reads_github_afresh(shared, github):
     root, _ = shared
     view(root).add("a")
@@ -300,9 +314,19 @@ def test_migration_moves_each_file_into_one_issue_verifies_then_deletes_and_push
         old_file(root, a, "Code index", text="detail", evidence=[".owlbear/ideas.md: Code index"], links=[b]),
         old_file(root, b, "Visual judges", kind="defect", status="done", notes="fixed", count=2, links=[a]),
     )
+    answer = github.answer
+
+    def lagging(method, parts, params, body):  # GitHub lists no issue made during the run
+        out = answer(method, parts, params, body)
+        if method == "POST" and parts == ["issues"]:
+            github.hidden.add(out[1]["number"])
+        return out
+
+    github.answer = lagging
     said = []
 
     assert backlog_migrate.migrate(Common(root), said.append) == 0
+    github.answer, github.hidden = answer, set()
 
     assert said == [
         f"created #1: {a} Code index",
