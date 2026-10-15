@@ -137,15 +137,19 @@ def capture(url: str, out: Path, *states: VisualState) -> list[visual.Shot]:
 def test_a_real_capture_types_and_clicks_before_its_screenshot(site, tmp_path):
     root, url = site
     (root / "index.html").write_text(PAGE.format(extra=""))
+    (root / "twice.html").write_text(PAGE.format(extra="<button>Show</button>"))
     steps = [VisualStep(do="type", target="Name", text="Ada"), VisualStep(do="click", target="Show")]
-    (shot,) = capture(url, tmp_path / "out", VisualState(name="search", path="/", expect="Hello, Ada", steps=steps))
-    assert (shot.file, shot.error) == ("search-1280.png", "")
-    (root / "index.html").write_text(PAGE.format(extra="<button>Show</button>"))
-    (twice,) = capture(url, tmp_path / "twice", VisualState(name="search", path="/", expect="x", steps=steps))
-    assert twice.error == "state search step 2 (click 'Show'): 2 controls are named 'Show'; name exactly one"
     wrong = [VisualStep(do="type", target="Show", text="Ada")]  # a button is no field to type into
-    (field,) = capture(url, tmp_path / "field", VisualState(name="search", path="/", expect="x", steps=wrong))
-    assert field.error == "state search step 1 (type 'Show'): no control named it"
+    shot, twice, field = capture(  # one browser launch, a page per state
+        url,
+        tmp_path / "out",
+        VisualState(name="search", path="/", expect="Hello, Ada", steps=steps),
+        VisualState(name="twice", path="/twice.html", expect="x", steps=steps),
+        VisualState(name="field", path="/", expect="x", steps=wrong),
+    )
+    assert (shot.file, shot.error) == ("search-1280.png", "")
+    assert twice.error == "state twice step 2 (click 'Show'): 2 controls are named 'Show'; name exactly one"
+    assert field.error == "state field step 1 (type 'Show'): no control named it"
 
 
 @pytest.mark.browser
