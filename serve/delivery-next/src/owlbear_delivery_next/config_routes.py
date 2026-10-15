@@ -2,18 +2,20 @@
 
 A save names the revision it was based on, so a page opened earlier never overwrites a newer save. Both layers live
 where the store says: in the shared repository once its pointer exists (TD-57), where each save is committed and
-pushed (TD-64); without it, only the project layer, in the clone. Only model, effort and widths are applied.
+pushed (TD-64); without it, only the project layer, in the clone. Only model, effort and widths are applied. The
+project's folder there can be renamed (TD-98) while none of its runners runs.
 """
 
 from __future__ import annotations
 
 import hashlib
+import time
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
-from owlbear_delivery_next import calibration, model_choices, pack_update
+from owlbear_delivery_next import calibration, common, model_choices, pack_update
 from owlbear_delivery_next.catalogue import CATALOGUE
 from owlbear_delivery_next.common import CommonError
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
@@ -22,6 +24,7 @@ from owlbear_delivery_next.store import StoreError, read_layer_bytes
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.host import Host
     from owlbear_delivery_next.store import Store
 
 APPLIED = [
@@ -33,6 +36,7 @@ APPLIED = [
     "data",
     "design_failures",
 ]  # the settings Delivery uses today
+STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end
 
 
 class Save(BaseModel):
@@ -40,6 +44,12 @@ class Save(BaseModel):
 
     rev: str
     layer: dict[str, Any]
+
+
+class Folder(BaseModel):
+    """The new name of the project's folder in the shared repository."""
+
+    name: str
 
 
 def _rev(path: Path | None) -> str:
@@ -62,6 +72,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "global": glob.model_dump(mode="json") if glob else None,
         "global_rev": hashlib.sha256(glob_raw).hexdigest(),
         "global_location": global_path is not None,
+        "folder": store.name or None,
         "notice": notice or (store.shared.pending() if store.shared else ""),
         "settings": resolve(glob, project).model_dump(mode="json"),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only
@@ -105,7 +116,39 @@ def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: 
         raise HTTPException(503, f"the settings could not be saved: {exc.strerror or exc}") from exc
 
 
-def router(store: Store) -> APIRouter:
+def _working(store: Store, host: Host) -> list[str]:
+    """The Changes whose runner may still run, or whose lock another process holds: they may use the old folder."""
+    out = []
+    for slug in store.slugs():
+        rec, holder = host.runner(slug), store.holder(slug)
+        if (rec and host.alive(rec.pid, rec.created) is not False) or (holder and holder.pid != host.record.pid):
+            out.append(slug)
+    return out
+
+
+def _rename(store: Store, host: Host, name: str) -> str:
+    """Move the project's folder while no runner can start or run, then use it here; the publication notice."""
+    if store.shared is None:
+        raise HTTPException(409, "no shared settings location is set up; run `owlbear-next common PATH`")
+    if not host.launching.acquire(timeout=STARTING):
+        raise HTTPException(409, "a runner is starting; try again")
+    try:
+        if busy := _working(store, host):
+            raise HTTPException(409, f"steps of {', '.join(busy)} are running; rename once they have finished")
+        until = time.monotonic() + common.SAVE_SECONDS
+        with store.shared.locked():
+            notice = store.shared.rename(store.name, name, until)
+            store.name = name
+    except CommonError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(503, f"the folder could not be renamed: {exc.strerror or exc}") from exc
+    finally:
+        host.launching.release()
+    return notice
+
+
+def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
     routes, offered = APIRouter(), model_choices.Offered()
 
@@ -127,5 +170,9 @@ def router(store: Store) -> APIRouter:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next common PATH`")
         return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page"))
+
+    @routes.put("/config/folder")
+    def put_folder(body: Folder) -> dict[str, Any]:
+        return _state(store, "" if body.name == store.name else _rename(store, host, body.name))
 
     return routes

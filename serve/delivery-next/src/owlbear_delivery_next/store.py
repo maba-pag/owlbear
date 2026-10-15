@@ -190,15 +190,19 @@ class Store:
 
     def __init__(self, root: Path, shared: Common | None = None, name: str = "") -> None:
         self.root, self.shared, self.name = root, shared, name
-        self.config_path = shared.project_path(name) if shared else root / CONFIG
         self.global_path = shared.global_path if shared else None
+
+    @property
+    def config_path(self) -> Path:
+        """The project's settings layer: in its shared folder, which a rename moves (TD-98), else in the clone."""
+        return self.shared.project_path(self.name) if self.shared else self.root / CONFIG
 
     @classmethod
     def open(cls, cwd: Path) -> Store:
         """Open or create the store for the clone containing *cwd* and gate its format."""
         try:
             shared = common.locate()
-            name = common.project_name(cwd) if shared else ""
+            name = common.folder(shared, cwd) if shared else ""
         except common.CommonError as exc:
             raise StoreError(str(exc)) from exc
         store = cls(git_common_dir(cwd) / STORE_DIR, shared, name)

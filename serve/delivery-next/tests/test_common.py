@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, common, sessions
+from owlbear_delivery_next import api, cli, common, sessions, setup
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
@@ -216,3 +216,102 @@ def test_a_save_waits_for_the_shared_lock_only_so_long(shared, repo, monkeypatch
     monkeypatch.setattr(common, "LOCK_SECONDS", 0.2)
     with common.Common(root).locked(), pytest.raises(StoreError, match="another settings save"):
         store.update_config(lambda cur: cur)
+
+
+def claimed_by_another(root: Path, name: str = "shop-site") -> None:
+    (root / name).mkdir()
+    (root / name / "repository").write_text("github.com/other/shop-site\n")
+    git(root, "add", name)
+    git(root, "commit", "-qm", "other")
+
+
+def renamer(store: Store, repo: Path, **kw: object) -> TestClient:
+    found = host_module.Host(store, repo, **kw)
+    return TestClient(api.create_app(store, "t", found), base_url="http://127.0.0.1", headers=AUTH)
+
+
+def test_a_taken_folder_name_is_asked_for_at_setup_and_kept_for_the_repository(shared, repo) -> None:
+    root, remote = shared
+    claimed_by_another(root)
+    answers, said = iter(["bad name", "shop-site", "acme-shop"]), []
+
+    assert setup.project_folder(repo, "", lambda _q: next(answers), said.append)
+    assert any("belongs to github.com/other/shop-site" in s for s in said)
+    assert any("no folder name" in s for s in said)
+    assert pushed(remote, "acme-shop/repository")
+    store = Store.open(repo)
+    assert (store.name, store.config_path) == ("acme-shop", root / "acme-shop" / "config.json")
+    assert setup.project_folder(repo, "", lambda _q: pytest.fail("asked again"), said.append)
+
+
+def test_without_an_answer_setup_names_the_folder_flag_and_stops(shared, repo, capsys) -> None:
+    root, _ = shared
+    claimed_by_another(root)
+    assert cli.main(["--repo", str(repo), "setup"]) == 1  # no terminal under pytest: nothing is asked
+    assert "--folder NAME" in capsys.readouterr().out
+    said: list[str] = []
+    assert not setup.project_folder(repo, "", lambda _q: "", said.append)
+    assert "--folder NAME" in said[-1]
+    assert not setup.project_folder(repo, "shop-site", lambda _q: pytest.fail("asked"), said.append)
+    assert setup.project_folder(repo, "acme-shop", lambda _q: pytest.fail("asked"), said.append)
+    assert Store.open(repo).name == "acme-shop"
+
+
+def test_renaming_moves_the_whole_folder_commits_pushes_and_is_used_from_then_on(shared, repo) -> None:
+    root, remote = shared
+    store = Store.open(repo)
+    store.update_config(lambda cur: cur.model_copy(update={"widths": [1440]}))
+    memory = sessions.memory(store)
+    (memory / "kept.md").write_text("kept\n")
+    git(root, "add", "shop-site/memory/kept.md")
+    git(root, "commit", "-qm", "memory")
+    (memory / "pending.md").write_text("not curated\n")
+
+    got = renamer(store, repo).put("/api/next/config/folder", json={"name": "acme-shop"})
+
+    assert (got.status_code, got.json()["folder"], got.json()["notice"]) == (200, "acme-shop", "")
+    assert not (root / "shop-site").exists()
+    assert (root / "acme-shop" / "memory" / "pending.md").exists()
+    assert git(root, "status", "--porcelain") == "?? acme-shop/memory/pending.md"  # uncurated memory stays so
+    move = "settings: the folder shop-site is now acme-shop"
+    assert pushed(remote, "acme-shop/memory/kept.md").splitlines()[0] == move
+    assert git(remote, "ls-tree", "-r", "--name-only", "main").split() == [
+        "acme-shop/config.json", "acme-shop/memory/kept.md", "acme-shop/repository"
+    ]  # fmt: skip
+    assert store.config_path == root / "acme-shop" / "config.json"
+    reopened = Store.open(repo)
+    assert (reopened.name, reopened.settings().widths) == ("acme-shop", [1440])
+
+
+def test_a_rename_to_a_taken_or_unsafe_name_is_refused(shared, repo) -> None:
+    root, _ = shared
+    store = Store.open(repo)
+    claimed_by_another(root, "other")
+    c = renamer(store, repo)
+    taken = c.put("/api/next/config/folder", json={"name": "other"})
+    unsafe = c.put("/api/next/config/folder", json={"name": "../x"})
+
+    assert (taken.status_code, unsafe.status_code) == (409, 409)
+    assert "belongs to github.com/other/shop-site" in taken.json()["detail"]
+    assert "no folder name" in unsafe.json()["detail"]
+    assert (store.name, Store.open(repo).name) == ("shop-site", "shop-site")
+
+
+def test_a_rename_waits_for_running_steps_and_a_host_picks_up_a_rename_made_elsewhere(shared, repo) -> None:
+    root, _ = shared
+    store = Store.open(repo)
+    (store.root / "changes" / "c1").mkdir(parents=True)
+    record = host_module.RunnerRecord(pid=4242, created=None, started_at=datetime.now(UTC))
+    (store.root / "changes" / "c1" / "runner.json").write_text(record.model_dump_json())
+    (store.root / "changes" / "c1" / "change.json").write_text("{}")  # listed; the host reports it unloadable
+
+    got = renamer(store, repo, alive=lambda _p, _c: True).put("/api/next/config/folder", json={"name": "acme-shop"})
+
+    assert got.status_code == 409
+    assert "steps of c1 are running" in got.json()["detail"]
+    assert (root / "shop-site").is_dir()
+    with common.Common(root).locked():
+        common.Common(root).rename("shop-site", "acme-shop")  # as a pull of another machine's rename leaves it
+    host = host_module.Host(store, repo, alive=lambda _p, _c: True)
+    host.tick()
+    assert store.name == "acme-shop"

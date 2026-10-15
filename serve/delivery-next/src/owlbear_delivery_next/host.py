@@ -157,7 +157,7 @@ class Host:
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
         self.spawn, self.code, self.reach = spawn or self._spawn, code, reach
-        self.wake, self.stopped = threading.Event(), threading.Event()
+        self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
         self.launches: dict[str, list[float]] = {}
@@ -199,6 +199,9 @@ class Host:
     def tick(self, now: datetime | None = None) -> list[str]:
         """One observation pass over every Change; return those a runner was launched for."""
         launched = []
+        if self.store.shared:  # a rename on another machine arrives with a pull (TD-98)
+            with self.launching:
+                self.store.name = common.folder(self.store.shared, self.repo)
         self._probe(now or datetime.now(UTC))
         slugs = self.store.slugs()
         self.offline &= set(slugs)
@@ -413,8 +416,9 @@ class Host:
         if len(recent) >= BURST[0]:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
         self.launches[slug] = [*recent, time.monotonic()]
-        rec = self.spawn(slug)
-        atomic_write(self._path(slug), rec.model_dump_json())
+        with self.launching:  # a project folder rename waits, so no runner starts during it
+            rec = self.spawn(slug)
+            atomic_write(self._path(slug), rec.model_dump_json())
         self.say(f"{slug}: runner {rec.pid} started")
         return True
 

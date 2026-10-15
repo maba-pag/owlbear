@@ -56,6 +56,14 @@
   <p-text size="xs" color="contrast-medium">A blank field inherits: project, else global, else the built-in
     default. Each value shows where it comes from.</p-text>
 </section>
+<section class="panel" aria-labelledby="folder-title">
+  <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
+  <div class="row">
+    <p-input-text id="folder" label="Folder in the shared settings repository"></p-input-text>
+    <p-button id="rename" type="button" compact="true" icon="edit">Rename folder</p-button>
+  </div>
+  <p-text id="folder-note" size="xs" color="contrast-medium"></p-text>
+</section>
 <section class="panel" aria-labelledby="agents-title">
   <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
   <p-table caption="Agents: model, effort and context apply to the next session">
@@ -555,6 +563,13 @@ function render() {
   document.getElementById("scope-note").textContent = loaded.global_location
     ? "" : "No shared settings location is set up (run owlbear-next common PATH), so only this project's settings "
       + "can be saved, in this clone.";
+  const folder = document.getElementById("folder");
+  if (document.activeElement !== folder) folder.value = loaded.folder ?? "";
+  folder.disabled = document.getElementById("rename").disabled = !loaded.folder || saving;
+  document.getElementById("folder-note").textContent = loaded.folder
+    ? "Named after the repository unless renamed. Renaming moves the folder with its settings, memory and visual "
+      + "decisions, then commits and pushes the move; it is refused while a step of this project runs."
+    : "No shared settings location is set up, so this project has no folder there.";
   const agents = Object.entries(loaded.settings.agents).map(([role]) => row(
     cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"), contextCell(role), ratesCell(role),
   ));
@@ -595,7 +610,7 @@ function lock(on) {
   const button = document.getElementById("save");
   if (pds) button.loading = on;
   else button.disabled = on;
-  for (const input of document.querySelectorAll("#scope, main [data-key]")) input.disabled = on;
+  for (const input of document.querySelectorAll("#scope, #folder, #rename, main [data-key]")) input.disabled = on;
 }
 
 function edited(layer) {
@@ -658,6 +673,27 @@ async function save() {
   }
 }
 
+async function rename() {
+  const name = document.getElementById("folder").value.trim();
+  if (saving || !loaded?.folder || !name || name === loaded.folder) return;
+  const sure = window.confirm(`Rename this project's folder from ${loaded.folder} to ${name}? Delivery moves it in `
+    + "the shared settings repository, then commits and pushes the move.");
+  if (!sure) return;
+  lock(true);
+  say("Renaming…");
+  try {
+    loaded = await call("/config/folder", "PUT", { name });
+    notify(loaded.notice || "");
+    say(`This project's folder is now ${loaded.folder}.`);
+  } catch (e) {
+    say("");
+    notify(e.message);
+  } finally {
+    lock(false);
+    if (loaded) render();
+  }
+}
+
 // Without the design system: native tables, layer switch and Save button in place of the page's p-* ones.
 function plain() {
   for (const old of document.querySelectorAll("p-table")) {
@@ -681,6 +717,10 @@ function plain() {
   field.append(layer);
   scope.replaceWith(field);
   document.getElementById("save").replaceWith(el("button", "Save", { id: "save", type: "button" }));
+  const folder = el("label", document.getElementById("folder").getAttribute("label"), { class: "field" });
+  folder.append(el("input", undefined, { id: "folder", type: "text" }));
+  document.getElementById("folder").replaceWith(folder);
+  document.getElementById("rename").replaceWith(el("button", "Rename folder", { id: "rename", type: "button" }));
   document.getElementById("pack-update").replaceWith(
     el("button", "Update design pack", { id: "pack-update", type: "button" }));
   document.getElementById("error").setAttribute("role", "alert");
@@ -702,6 +742,7 @@ async function start() {
   document.getElementById("agents").addEventListener("click", inherit);
   document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });
   document.getElementById("save").addEventListener("click", save);
+  document.getElementById("rename").addEventListener("click", rename);
   document.getElementById("pack-update").addEventListener("click", startUpdate);
   if (await reload()) render();
   await readPack();

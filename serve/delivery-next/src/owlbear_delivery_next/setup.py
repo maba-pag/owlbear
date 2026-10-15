@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import truststore
 
-from owlbear_delivery_next import design_pack, pack_update, profile, roles
+from owlbear_delivery_next import common, design_pack, pack_update, profile, roles
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
 from owlbear_delivery_next.store import Store, StoreError, git_common_dir
@@ -34,6 +34,7 @@ TASK = "OwlBear Delivery host"
 SERVER = "owlbear-delivery"
 SHAPER = "owlbear-shaper.agent.md"
 PUSH = frozenset({"WRITE", "MAINTAIN", "ADMIN"})
+ASKS = 3  # folder names setup asks for before it stops
 
 
 @dataclass(frozen=True)
@@ -371,6 +372,42 @@ def ask_tty(question: str) -> str:
         return ""
 
 
+def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], object]) -> bool:
+    """Claim the project's folder in the shared repository; on a collision the owner names it (TD-98).
+
+    The repository's name is the default; ``chosen`` (``--folder``) replaces it and is never asked again. False when
+    no usable name was given; a folder the repository already claims is kept, renamed only on the settings page.
+    """
+    ident = common.identity(repo)
+    try:
+        shared = common.locate()
+        held = shared.claimed(ident) if shared else None
+    except common.CommonError:
+        return True  # opening the store reports it
+    if shared is None or held:
+        if held and chosen and chosen != held:
+            say(f"This project's shared settings folder is {held}; rename it on the settings page.")
+        return True
+    name, asked = chosen or common.project_name(repo), 0
+    while True:
+        if not (why := shared.refusal(name, ident)):
+            try:
+                with shared.locked():
+                    if shared.claim(name, ident):
+                        shared.publish(shared.root / name / common.CLAIM, f"settings: the folder {name} is {ident}")
+            except common.CommonError as exc:
+                why = str(exc)
+            else:
+                say(f"Shared settings folder: {shared.root / name}")
+                return True
+        say(f"{why}.")
+        if chosen or asked == ASKS or not (name := ask("Folder name for this project in the shared settings: ")):
+            break
+        name, asked = name.strip(), asked + 1
+    say("Run setup again with --folder NAME, a folder name no other repository uses.")
+    return False
+
+
 def run(  # noqa: PLR0913 - one answer per consent
     repo: Path,
     confirms: list[tuple[str, str]],
@@ -383,7 +420,8 @@ def run(  # noqa: PLR0913 - one answer per consent
     """Readiness, profile, consented writes; print each result and the start action.
 
     ``yes`` confirms the profile only (TD-11): the local files and the user-level skill each need their own
-    answer, given by flag or asked; without a terminal an unasked answer is no.
+    answer, given by flag or asked; without a terminal an unasked answer is no. The command line claims the
+    project's shared folder first (``project_folder``).
     """
     store, python, say = Store.open(repo), sys.executable, lambda t: sys.stdout.write(t + "\n")
     try:

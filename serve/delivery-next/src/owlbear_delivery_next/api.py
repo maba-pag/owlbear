@@ -455,7 +455,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         read(slug)
         return put(slug, PullItem(at=datetime.now(UTC)))
 
-    router.include_router(config_routes.router(store))
+    router.include_router(config_routes.router(store, host))
     router.include_router(backlog_routes.router(store, start_chat))
     router.include_router(memory_routes.router(store))
     router.include_router(pack_routes.router(store, pack or pack_job.Job(store)))

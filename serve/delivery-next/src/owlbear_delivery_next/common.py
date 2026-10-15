@@ -1,9 +1,10 @@
-"""Delivery's settings in the shared documents repository (TD-57, TD-59, TD-64).
+"""Delivery's settings in the shared documents repository (TD-57, TD-59, TD-64, TD-98).
 
 A pointer file names the repository. The global layer lives at its root, each project's layer in a folder named
-after the project's repository, claimed by that repository's identity. Every save is committed and pushed under one
-repository-wide lock; a failed commit or push is reported, never hidden. A running host passes its view to its
-runners through ``OWLBEAR_COMMON``, so the settings page and the runners always read the same layers.
+after the project's repository unless the owner chose another name; the folder is claimed by that repository's
+identity, and that claim keeps the chosen name for every clone and machine. Every save is committed and pushed
+under one repository-wide lock; a failed commit or push is reported, never hidden. A running host passes its view to
+its runners through ``OWLBEAR_COMMON``; each runner finds the project's folder by its claim.
 """
 
 from __future__ import annotations
@@ -28,10 +29,19 @@ VIEW = "OWLBEAR_COMMON"  # the host's view for its runners: the repository's pat
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
 GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a save answers within the page's 60 s
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
 class CommonError(ValueError):
     """The pointer names no usable repository, or a project folder belongs to another repository."""
+
+
+def _held(path: Path) -> str:
+    """The identity a claim file holds; nothing when there is none."""
+    try:
+        return path.read_text().strip()
+    except OSError, ValueError:
+        return ""
 
 
 def pointer() -> Path:
@@ -123,13 +133,51 @@ class Common:
         path = self.root / name / CLAIM
         held = path.read_text().strip() if path.exists() else ""
         if held and held != identity:
-            msg = f"the shared settings folder {name} belongs to {held}, not {identity}; rename one repository"
+            msg = f"the shared settings folder {name} belongs to {held}, not {identity}; run setup with --folder NAME"
             raise CommonError(msg)
         if held:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(identity + "\n")
         return True
+
+    def claimed(self, identity: str) -> str | None:
+        """The folder ``identity`` claims, under the name kept for the repository (TD-98); None before any claim."""
+        found = sorted(p.parent.name for p in self.root.glob(f"*/{CLAIM}") if _held(p) == identity)
+        if len(found) > 1:
+            msg = f"the shared settings folders {', '.join(found)} all belong to {identity}; remove all but one"
+            raise CommonError(msg)
+        return found[0] if found else None
+
+    def refusal(self, name: str, identity: str) -> str:
+        """Why ``name`` cannot be the folder of ``identity``; nothing when it can."""
+        if not _NAME.fullmatch(name) or name == CONFIG:
+            return f"{name!r} is no folder name: up to 64 letters, digits, '.', '_' or '-', first a letter or digit"
+        if (self.root / name).exists() and not (self.root / name).is_dir():
+            return f"{name} is a file in {self.root}"
+        held = _held(self.root / name / CLAIM)
+        return f"the shared settings folder {name} belongs to {held}" if held and held != identity else ""
+
+    def rename(self, old: str, new: str, until: float | None = None) -> str:
+        """Move a project's folder with all it holds to ``new``, commit and push the move; the caller holds ``locked``.
+
+        Files never committed move along uncommitted. What the owner should know about the publication, else nothing.
+        """
+        until = time.monotonic() + SAVE_SECONDS if until is None else until
+        why = self.refusal(new, _held(self.root / old / CLAIM))
+        if why or (self.root / new).exists():
+            raise CommonError(why or f"{new} already exists in {self.root}")
+        if _git(self.root, "diff", "--cached", "--quiet", until=until).returncode:
+            msg = f"{self.root} has staged changes; commit or unstage them, then rename again"
+            raise CommonError(msg)
+        _git(self.root, "mv", "-k", "--", old, new, until=until)
+        if (self.root / old).exists():  # nothing in it was ever committed, so git moved nothing
+            (self.root / old).rename(self.root / new)
+        if _git(self.root, "diff", "--cached", "--quiet", until=until).returncode:
+            made = _git(self.root, "commit", "-q", "-m", f"settings: the folder {old} is now {new}", until=until)
+            if made.returncode:
+                return f"renamed, but not committed: {made.stderr.strip()[:200]}"
+        return self._push(until)
 
     def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
         """Commit ``paths`` alone if they changed and push; what the owner should know when that fails, else nothing.
@@ -224,3 +272,8 @@ def project_name(repo: Path) -> str:
     """The project's repository name (TD-64): the last part of its identity, made safe for a folder name."""
     safe = _UNSAFE.sub("-", identity(repo).rsplit("/", 1)[-1]).strip(".-")
     return safe or "project"
+
+
+def folder(shared: Common, repo: Path) -> str:
+    """The project's folder in ``shared``: the one its repository claims, else one named after the repository."""
+    return shared.claimed(identity(repo)) or project_name(repo)
