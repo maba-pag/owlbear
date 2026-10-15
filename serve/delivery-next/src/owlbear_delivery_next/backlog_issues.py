@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import common
 from owlbear_delivery_next.github import gh_client
 from owlbear_delivery_next.github.gh_client import GhClient, Json, repo
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -28,7 +30,10 @@ LONGEST = 65000  # GitHub refuses an issue body over 65536 characters
 SCOPES = ("project", "cross-project", "global", "unassigned")
 KINDS = ("untriaged", "defect", "improvement", "idea", "question")
 OURS = ("scope:", "project:", "class:")
+VISIBILITY = "repo_visibility"  # the operation whose failure refuses a write: the repository is not known private
+PRIVATE_SECONDS = 600.0  # how long GitHub's word that the repository is private is reused
 _BLOCK = re.compile(rf"<!-- {MARK} (\{{.*\}}) -->", re.DOTALL)
+_private: dict[str, float] = {}  # host/owner/name -> when GitHub last said it is private
 
 
 class Issues(GhClient):
@@ -56,18 +61,38 @@ class Issues(GhClient):
                 return found
             page += 1
 
+    def private(self) -> None:
+        """Refuse a write unless GitHub says the repository is private (TD-103: no public reports)."""
+        where = f"{self.host}/{self.repository}"
+        if time.monotonic() - _private.get(where, -PRIVATE_SECONDS) < PRIVATE_SECONDS:
+            return
+        try:
+            got = self._api(VISIBILITY, "GET", repo(self.repository))
+        except ProviderError as exc:
+            why = f"its visibility is unknown ({exc}); the backlog is written only to a private repository"
+            raise ProviderError(exc.code, VISIBILITY, why, retry_safe=True) from exc
+        facts = got if isinstance(got, dict) else {}
+        if facts.get("private") is not True or facts.get("visibility", "private") != "private":
+            seen = facts.get("visibility") or "of unknown visibility"
+            why = f"it is {seen}, not private; the backlog is written only to a private repository"
+            raise ProviderError(FailureCode.CONFLICT, VISIBILITY, why, retry_safe=True)
+        _private[where] = time.monotonic()
+
     def create(self, title: str, body: str, labels: list[str]) -> Json:
         """Open one issue."""
+        self.private()
         payload = {"title": title, "body": body, "labels": labels}
         return self._api("create_issue", "POST", f"{repo(self.repository)}/issues", body=payload, write=True)
 
     def edit(self, number: int, fields: dict[str, Any]) -> Json:
         """Set an issue's title, body, labels or state."""
+        self.private()
         endpoint = f"{repo(self.repository)}/issues/{number}"
         return self._api("edit_issue", "PATCH", endpoint, body=fields, write=True)
 
     def comment(self, number: int, body: str) -> None:
         """Add one comment to an issue."""
+        self.private()
         endpoint = f"{repo(self.repository)}/issues/{number}/comments"
         self._api("comment_issue", "POST", endpoint, body={"body": body}, write=True)
 
@@ -82,6 +107,7 @@ class Issues(GhClient):
                     break
                 page += 1
         for name in [n for n in names if n not in self._labels]:
+            self.private()
             payload = {"name": name, "color": COLOUR, "description": "OwlBear backlog"}
             endpoint = f"{repo(self.repository)}/labels"
             self._api("create_label", "POST", endpoint, body=payload, write=True, absent={422})  # 422: made meanwhile

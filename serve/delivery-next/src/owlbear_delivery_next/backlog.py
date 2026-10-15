@@ -265,6 +265,8 @@ class Backlog:
             self._forget()
             if what == "read":
                 text = f"the backlog could not be read from GitHub ({self.repository}): {exc}"
+            elif exc.operation == backlog_issues.VISIBILITY:
+                text = f"not saved to GitHub ({self.repository}): {exc}"
             elif exc.retry_safe:
                 text = f"not saved: GitHub ({self.repository}) could not be reached: {exc}"
             else:

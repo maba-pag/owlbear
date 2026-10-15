@@ -244,6 +244,40 @@ def test_saving_is_online_only_and_an_unreachable_github_fails_with_its_reason(s
         Backlog.of(Store(tmp_path / "store"))
 
 
+@pytest.mark.parametrize(
+    ("visibility", "said"),
+    [
+        ("public", "it is public, not private"),
+        ("internal", "it is internal, not private"),
+        ("unread", "its visibility is unknown (repo_visibility: Not Found (HTTP 404))"),
+    ],
+)
+def test_nothing_is_written_unless_github_says_the_shared_repository_is_private(shared, github, visibility, said):
+    root, _ = shared
+    github.visibility, answer = visibility, github.answer
+    if visibility == "unread":
+        github.answer = lambda method, parts, *rest: (404, "Not Found") if not parts else answer(method, parts, *rest)
+
+    with pytest.raises(BacklogError) as refused:
+        view(root).add("a report")
+
+    assert refused.value.status == 503
+    said = f"not saved to GitHub (acme/owlbear-data): repo_visibility: {said}; the backlog is written only to a "
+    assert refused.value.text == said + "private repository"
+    assert (github.issues, github.labels, [m for m, *_ in github.calls if m != "GET"]) == ({}, {}, [])
+
+
+def test_a_private_repository_is_checked_once_for_a_while_before_the_first_write(shared, github):
+    root, _ = shared
+    a = view(root).add("a")[0]
+    view(root).add("b")
+    view(root).update(a.id, {"notes": "n"})
+
+    assert [endpoint for _, endpoint, _ in github.calls].count("repos/acme/owlbear-data") == 1
+    first_write = next(i for i, (method, *_) in enumerate(github.calls) if method != "GET")
+    assert github.calls[first_write - 1][1] == "repos/acme/owlbear-data"
+
+
 def test_an_issue_github_does_not_list_yet_is_read_from_the_write_and_a_repeat_still_counts_up(shared, github):
     root, _ = shared
     a = view(root).add("Flaky check", source="run")[0]

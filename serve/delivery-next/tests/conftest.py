@@ -19,6 +19,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
     monkeypatch.setattr(backlog, "_cache", {})
     monkeypatch.setattr(backlog, "_recent", {})
+    monkeypatch.setattr(backlog_issues, "_private", {})
     root = tmp_path_factory.mktemp("worktrees").resolve()
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
 
@@ -28,7 +29,7 @@ class FakeGitHub:
 
     def __init__(self, *, down: bool = False) -> None:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
-        self.down, self.fail_writes, self.tick = down, False, 0
+        self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
 
     def __call__(self, argv, data, _timeout, _cwd):
         if self.down:
@@ -40,13 +41,16 @@ class FakeGitHub:
         self.calls.append((method, endpoint, body))
         path, _, query = endpoint.partition("?")
         parts, params = path.split("/")[3:], dict(parse_qsl(query))
-        assert path.startswith("repos/acme/owlbear-data/"), endpoint
+        assert f"{path}/".startswith("repos/acme/owlbear-data/"), endpoint
         status, out = self.answer(method, parts, params, body)
         if status:
             return subprocess.CompletedProcess(argv, 1, b"", f"gh: {out} (HTTP {status})\n".encode())
         return subprocess.CompletedProcess(argv, 0, json.dumps(out).encode(), b"")
 
     def answer(self, method, parts, params, body):  # noqa: PLR0911 - one answer per endpoint
+        if not parts:
+            return 0, {"full_name": "acme/owlbear-data", "private": self.visibility != "public",
+                       "visibility": self.visibility}  # fmt: skip
         if parts == ["labels"] and method == "GET":
             return 0, self._page(list(self.labels.values()), params)
         if parts == ["labels"]:
@@ -68,6 +72,8 @@ class FakeGitHub:
         if parts[2:] == ["comments"]:
             self.comments.append((number, body["body"]))
             return 0, {"id": len(self.comments)}
+        if method == "GET":  # one issue, as it is now: never hidden
+            return 0, self.issues[number]
         return 0, self.edit(self.issues[number], body)
 
     def edit(self, issue, body):
