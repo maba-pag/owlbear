@@ -245,8 +245,9 @@ class _Step:
         if not model or not self.cfg.model or model == self.cfg.model:
             return
         if parent and model == roles.RESEARCHER.model:
+            if model not in self.subagent_models:  # once per session: each turn would push history out of the log
+                self.log(event="subagent-model", model=model)
             self.subagent_models.add(model)
-            self.log(event="subagent-model", model=model)
         elif parent:
             self.gate.wrong_model(f"a subagent ran on {model}, the researcher needs {roles.RESEARCHER.model}")
         else:
