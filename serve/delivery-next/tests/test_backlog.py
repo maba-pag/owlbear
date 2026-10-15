@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next import backlog as backlog_module
 from owlbear_delivery_next import backlog_migrate, cli
 from owlbear_delivery_next.backlog import Backlog, BacklogError
 from owlbear_delivery_next.backlog_issues import Issues
@@ -454,6 +455,47 @@ def test_a_migration_stopped_midway_keeps_every_file_and_a_rerun_creates_only_th
         "created #3: 20261014-000003 entry 3",
     ]
     assert (len(github.issues), [p.exists() for p in files]) == (3, [False] * 3)
+
+
+class Crash(BaseException):
+    """The migrating process dies."""
+
+
+def test_a_fresh_run_after_a_crash_finds_the_issues_made_before_it_while_github_does_not_list_them(
+    shared, github, monkeypatch
+):
+    root, _ = shared
+    files = committed(root, *(old_file(root, f"20261014-00000{n}", f"entry {n}", status="done") for n in (1, 2, 3)))
+    answer = github.answer
+
+    def crash_at_the_third(method, parts, params, body):  # GitHub lists no issue made during the test
+        if method == "POST" and parts == ["issues"] and len(github.issues) == 2:
+            raise Crash
+        out = answer(method, parts, params, body)
+        if method == "POST" and parts == ["issues"]:
+            github.hidden.add(out[1]["number"])
+        return out
+
+    github.answer = crash_at_the_third
+    with pytest.raises(Crash):
+        backlog_migrate.migrate(Common(root), [].append)
+    assert (json.loads((root / backlog_migrate.JOURNAL).read_text()), git(root, "status", "--porcelain")) == (
+        {"20261014-000001": "1", "20261014-000002": "2"},
+        "",
+    )
+    for name in ("_cache", "_recent"):  # a fresh process: none of the first one's writes are remembered
+        monkeypatch.setattr(backlog_module, name, {})
+    github.answer = answer  # #1 and #2 still not listed
+
+    said = []
+    assert backlog_migrate.migrate(Common(root), said.append) == 0
+    assert said[:3] == [
+        "already #1: 20261014-000001 entry 1",
+        "already #2: 20261014-000002 entry 2",
+        "created #3: 20261014-000003 entry 3",
+    ]
+    assert (len(github.issues), [github.issues[n]["state"] for n in (1, 2, 3)]) == (3, ["closed"] * 3)
+    assert ([p.exists() for p in files], (root / backlog_migrate.JOURNAL).exists()) == ([False] * 3, False)
 
 
 def test_an_issue_that_does_not_read_back_as_its_file_or_an_unreadable_file_blocks_every_deletion(shared, github):

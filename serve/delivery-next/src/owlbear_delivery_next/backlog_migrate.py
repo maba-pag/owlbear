@@ -1,10 +1,10 @@
 """One-time move of the file backlog into GitHub issues (TD-103), run by ``owlbear-next backlog migrate``.
 
 Every ``<shared>/<project>/backlog/<id>.json`` becomes one issue scoped to its project, carrying the old id as its
-marker, so a second run skips what the first created. Only once every entry reads back from GitHub as it was are the
-files are deleted, and that deletion is committed and pushed; a file changed meanwhile stays. A run finds the issues an
-earlier run made by listing them, and GitHub lists a new issue only seconds later: run again once ``gh issue list``
-shows them.
+marker. Each issue's number is noted in a journal at the shared checkout's root (kept out of git) as soon as GitHub
+confirms it, so a later run, even in a fresh process, reads those issues directly instead of trusting a listing that
+shows a new issue only seconds later. Only once every entry reads back from GitHub as it was are the files deleted,
+with the journal, and that deletion is committed and pushed; a file changed meanwhile stays.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from pydantic import ValidationError
 
 from owlbear_delivery_next.backlog import Backlog, BacklogError, Entry
+from owlbear_delivery_next.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.common import Common
 
 FOLDER = "backlog"
+JOURNAL = ".backlog-migration.json"  # old id -> issue number; common.EXCLUDE keeps it out of git
 COMPARED = ("title", "text", "source", "kind", "status", "scope", "project", "notes", "evidence", "change", "launch")
 COMPARED += ("count", "first_seen", "last_seen")
 
@@ -56,32 +58,60 @@ def _files(shared: Common, say: Callable[[str], None]) -> dict[str, File] | None
     return found
 
 
-def _created(backlog: Backlog, files: dict[str, File], say: Callable[[str], None]) -> None:
-    """Open an issue for each file entry that has none, then connect them as their files were."""
-    have = {e.legacy: e.id for e in backlog.read(fresh=True)[0].values() if e.legacy}
+class Journal:
+    """The issue number of each file entry, noted as soon as GitHub confirmed the issue."""
+
+    def __init__(self, shared: Common) -> None:
+        """Read the journal an earlier run left, under the lock that also keeps it out of git."""
+        self.path = shared.root / JOURNAL
+        with shared.locked():
+            try:
+                self.numbers: dict[str, str] = json.loads(self.path.read_text()) if self.path.exists() else {}
+            except ValueError as exc:
+                raise BacklogError(409, f"{JOURNAL} is unreadable ({exc}); check the issues, then fix it") from exc
+
+    def note(self, legacy: str, number: str) -> None:
+        """Keep one confirmed number before anything else happens."""
+        self.numbers[legacy] = number
+        atomic_write(self.path, json.dumps(self.numbers, indent=1, sort_keys=True) + "\n")
+
+
+def _created(backlog: Backlog, files: dict[str, File], journal: Journal, say: Callable[[str], None]) -> dict[str, str]:
+    """Open an issue for each file entry that has none, then connect them as their files were; each one's number.
+
+    A number the journal holds is read directly, so a listing that lags never makes a second issue.
+    """
+    listed = {e.legacy: e.id for e in backlog.read(fresh=True)[0].values() if e.legacy}
+    have: dict[str, str] = {}
     for legacy, file in files.items():
-        if legacy in have:
-            say(f"already #{have[legacy]}: {legacy} {file.entry.title}")
+        noted = journal.numbers.get(legacy)
+        if noted and (issue := backlog.current(noted)) is not None:
+            if issue.legacy != legacy:
+                raise BacklogError(409, f"#{noted} holds no entry {legacy}, which {JOURNAL} gives it; check it")
+            have[legacy] = noted
+        elif legacy in listed:
+            have[legacy] = listed[legacy]
+        else:
+            have[legacy] = backlog.put(file.entry, made=lambda n, legacy=legacy: journal.note(legacy, n)).id
+            say(f"created #{have[legacy]}: {legacy} {file.entry.title}")
             continue
-        have[legacy] = backlog.put(file.entry).id
-        say(f"created #{have[legacy]}: {legacy} {file.entry.title}")
+        say(f"already #{have[legacy]}: {legacy} {file.entry.title}")
     for legacy, file in files.items():
         wanted = [have[i] for i in file.links if i in have]
-        if file.links and backlog.read(fresh=True)[0][have[legacy]].links != wanted:
+        if file.links and getattr(backlog.current(have[legacy]), "links", None) != wanted:
             backlog.update(have[legacy], {"links": wanted})
+    return have
 
 
-def _wrong(backlog: Backlog, files: dict[str, File]) -> list[str]:
-    """What differs between each file entry and its issue as GitHub returns it now."""
-    issues = {e.legacy: e for e in backlog.read(fresh=True)[0].values() if e.legacy}
-    numbers = {legacy: e.id for legacy, e in issues.items()}
+def _wrong(backlog: Backlog, files: dict[str, File], have: dict[str, str]) -> list[str]:
+    """What differs between each file entry and its issue as GitHub returns it now, read directly."""
     wrong = []
     for legacy, file in files.items():
-        if (issue := issues.get(legacy)) is None:
+        if (issue := backlog.current(have[legacy])) is None or issue.legacy != legacy:
             wrong.append(f"{legacy}: no issue")
             continue
         fields = [f for f in COMPARED if getattr(issue, f) != getattr(file.entry, f)]
-        if issue.links != [numbers.get(i, i) for i in file.links]:
+        if issue.links != [have.get(i, i) for i in file.links]:
             fields.append("links")
         wrong += [f"{legacy} (#{issue.id}): {', '.join(fields)} differ"] if fields else []
     return wrong
@@ -97,8 +127,8 @@ def migrate(shared: Common, say: Callable[[str], None]) -> int:
         return 0
     try:
         backlog = Backlog(shared)
-        _created(backlog, files, say)
-        if wrong := _wrong(backlog, files):
+        have = _created(backlog, files, Journal(shared), say)
+        if wrong := _wrong(backlog, files, have):
             say("not verified, no file deleted: " + "; ".join(wrong))
             return 1
     except BacklogError as exc:
@@ -119,6 +149,8 @@ def _delete(shared: Common, files: dict[str, File], say: Callable[[str], None]) 
             say(f"kept: {path.relative_to(shared.root)} changed while it was migrated")
         for path in gone:
             path.unlink()
+        if len(gone) == len(files):  # every issue is verified: nothing more to reconcile
+            (shared.root / JOURNAL).unlink(missing_ok=True)
         for folder in {path.parent for path in gone}:
             if not [p for p in folder.iterdir() if p.name != ".backlog.lock"]:
                 (folder / ".backlog.lock").unlink(missing_ok=True)

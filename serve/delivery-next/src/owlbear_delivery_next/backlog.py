@@ -205,12 +205,16 @@ class Backlog:
 
         return self._apply(work)
 
-    def put(self, entry: Entry) -> Entry:
-        """Open one issue holding ``entry`` as it is (its id aside), closed when it is done or dropped."""
+    def put(self, entry: Entry, made: Callable[[str], None] = lambda _number: None) -> Entry:
+        """Open one issue holding ``entry`` as it is (its id aside), closed when it is done or dropped.
+
+        ``made`` gets the issue's number as soon as GitHub confirms it, before the issue is closed.
+        """
         fields = entry.model_dump()
         text, names = self._body(fields), backlog_issues.labels(fields)
         self._github("save", lambda: self.issues.ensure_labels(names))
         issue = self._remember(self._github("save", lambda: self.issues.create(entry.title, text, names)))
+        made(str(issue["number"]))
         if (wanted := backlog_issues.state(entry.status))["state"] == "closed":
             self._remember(self._github("save", lambda: self.issues.edit(issue["number"], wanted)))
         return entry.model_copy(update={"id": str(issue["number"])})
@@ -254,6 +258,10 @@ class Backlog:
     def _forget(self) -> None:
         with _cache_guard:
             _cache.pop(self.repository, None)
+
+    def current(self, entry_id: str) -> Entry | None:
+        """The entry as its issue holds it now, read directly; None when there is no such issue."""
+        return self._fetch({}, entry_id)
 
     def _get(self, found: dict[str, Entry], entry_id: str) -> Entry:
         if (entry := self._fetch(found, entry_id)) is None:
