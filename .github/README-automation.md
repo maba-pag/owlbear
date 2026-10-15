@@ -59,6 +59,21 @@ test environments skip the torch/CUDA model stack that only the deselected `mode
 keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup identical.
 [`test_ci_workflows.py`](../tests/test_ci_workflows.py) owns these workflow-shape contracts.
 
+## Snyk
+
+Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) tests every pull request
+into `dev` and comments on it. The integration can only import the repository's default branch, so
+its projects follow `main` and are set never to retest; they exist only to anchor those
+pull-request checks. The `dev-snyk-checks` ruleset requires the three Snyk checks, with a bypass for
+direct pushes.
+
+The [Snyk monitor workflow](workflows/snyk-monitor.yml) records `dev` itself. Every push to `dev`
+reports open-source dependencies (`snyk monitor --all-projects`) and Snyk Code results to the org
+with target reference `dev`; Snyk retests those snapshots daily. It authenticates with the
+`SNYK_TOKEN` Actions secret, the API key of the org-collaborator service account
+`github-actions-owlbear`. The workflow is development-only, so the sync manifest keeps it off
+`main`.
+
 ## MegaLinter toolchain updates
 
 [Renovate](renovate.json) updates the native and action MegaLinter declarations together. Ruff,
