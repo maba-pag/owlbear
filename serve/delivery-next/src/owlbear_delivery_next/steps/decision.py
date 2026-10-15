@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next.failures import cause_key
+from owlbear_delivery_next import design_pack, tools
+from owlbear_delivery_next.failures import VISUAL_MODEL, cause_key
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Option, StepKind
 from owlbear_delivery_next.steps import check, engine, review
@@ -19,15 +20,16 @@ from owlbear_delivery_next.visual_records import OwnerCriterion
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from owlbear_delivery_next import tools
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.visual_records import JudgeVerdict, VisualRound
 
 CAUSE = cause_key(ErrorKind.REVIEW, StepKind.CHECK, "visual-decision")
 AGAIN = cause_key(ErrorKind.REVIEW, StepKind.CHECK, "visual-judge")
+MODEL = cause_key(ErrorKind.LIVENESS, StepKind.CHECK, VISUAL_MODEL)
+REVIEW_OF = {"pass": "pass", "fail": "fix", "unsure": "unsure"}  # a recorded correctness verdict as the review's
 FIX = frozenset({"P0", "P1", "P2"})  # severities worth a fix; P3 is polish
 OWNER = "owner-"  # an owner criterion's id, which a finding cites as its rule
-type Route = Literal["merge", "back", "ask", "again"]
+type Route = Literal["merge", "back", "ask", "again", "model"]
 
 
 def proposed(kept: VisualRound) -> list[str]:
@@ -50,22 +52,41 @@ def route(
     """The verdict matrix: how the round ends, and the lines a fix task carries.
 
     A failed shot or a new browser error goes back on its own (R8), with the design findings when the setting sends
-    design fails back. Otherwise both verdicts must be verified: a correctness fail goes back; pass and pass merge;
-    a design fail goes back or to the owner by the setting; any unsure goes to the owner (N6).
+    design fails back. Otherwise both verdicts must exist: a correctness fail goes back; pass and pass merge;
+    a design fail goes back or to the owner by the setting; any unsure goes to the owner (N6). A verdict whose
+    judge's model is unknown sends the round to the owner first, unless he already waived the check (TD-94).
     """
     design = kept.verdicts[1] if kept else None
     by_setting = kept is not None and design is not None and kept.design_failures == "back" and design.verdict == "fail"
     sent = lines([design], proposed(kept)) if by_setting and kept else []
-    back = bool(sent)  # a design fail with nothing to fix goes to the owner
     if broken:
         return "back", [*found, *sent]
     if verdict is None or design is None or design.verdict is None or kept is None:
         return "again", []
-    if verdict.verdict == "fix":
+    ends = _matrix(verdict.verdict, design.verdict, found, sent)
+    if not kept.model_waived and not all(v.usage_verified for v in kept.verdicts):
+        kept.waivable = ends[0]
+        return "model", []
+    return ends
+
+
+def _matrix(said: str, design: str, found: Sequence[str], sent: list[str]) -> tuple[Route, list[str]]:
+    """Both verdicts exist: a correctness fail goes back; a design fail with nothing to fix goes to the owner."""
+    if said == "fix":
         return "back", [*found, *sent]
-    if (verdict.verdict, design.verdict) == ("pass", "pass"):
+    if (said, design) == ("pass", "pass"):
         return "merge", []
-    return ("back", sent) if verdict.verdict == "pass" and back else ("ask", [])
+    return ("back", sent) if said == "pass" and sent else ("ask", [])
+
+
+def doubts(ends: Route, verdict: tools.ReviewResult | None, kept: VisualRound | None) -> list[str]:
+    """What the owner is asked about: the judges' open questions, or why a judge's model is unknown."""
+    if ends == "model" and kept:
+        return [f"{v.lens}: {v.reason}" for v in kept.verdicts if not v.usage_verified]
+    if ends != "ask":
+        return []
+    said = [f"{d.place}: {d.question}" for d in getattr(verdict, "doubts", [])]
+    return said + [f"{v.lens}: {v.reason}" for v in kept.verdicts if v.reason and v.lens == "design"] if kept else said
 
 
 def lines(verdicts: Sequence[JudgeVerdict | None], ticked: Sequence[str]) -> list[str]:
@@ -99,6 +120,55 @@ def ask(head: str, kept: VisualRound) -> StepResult:
         Option(id="pause", label="Pause", next="pause"),
     ]
     return engine.ask(StepKind.CHECK, text, CAUSE, options)
+
+
+def unknown(head: str, kept: VisualRound) -> StepResult:
+    """A judge's model is unknown: the owner accepts the whole round without the model check, or runs it again."""
+    said = [f"{v.lens} {v.verdict}" + (f" ({v.reason[:200]})" if v.reason else "") for v in kept.verdicts]
+    text = (
+        f"A judge's model is unknown in the visual review of {head[:7]} (round {kept.number}): {'; '.join(said)}. "
+        "Accepting takes the whole round without the model check; its verdicts still decide."
+    )
+    options = [
+        Option(id="accept", label="Accept the round without the model check", next="accept"),
+        Option(id="retry", label="Run the round again", next="retry"),
+    ]
+    return engine.ask(StepKind.CHECK, text, MODEL, options)
+
+
+def matches(c: Change, kept: VisualRound, head: str | None) -> bool:
+    """Everything the round's verdicts depend on is still the Change's: capture, brief, owner criteria, pack."""
+    states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
+    owner = [k.id for k in c.owner_criteria if k.withdrawn_at is None]
+    now = (head, states, criteria, owner, c.before.head if c.before else "", design_pack.identity())
+    return now == (kept.head, kept.states, kept.criteria, kept.owner, kept.before, kept.pack)
+
+
+def waived(c: Change, head: str, tree_id: str, widths: Sequence[int]) -> tuple[Change, StepResult] | None:
+    """The round the owner accepted without the model check, routed by its verdicts; none once anything moved."""
+    kept, v = (c.visual_rounds[-1] if c.visual_rounds else None), c.visual
+    if kept is None or kept.outcome != "model" or not kept.model_waived or v is None:
+        return None
+    if not matches(c, kept, head) or (kept.tree, kept.widths) != (tree_id, list(widths)):
+        return None  # the Change moved on; the capture is taken and judged again
+    correct = kept.verdicts[0]
+    said = REVIEW_OF[correct.verdict or "unsure"]
+    found = [f"{f.image}: {f.text}" for f in correct.findings] if said == "fix" else []
+    found = found or (["the reviewer did not accept the screenshots"] if said == "fix" else [])
+    ends, sent = route(kept, found, tools.ReviewResult.model_construct(verdict=said), broken=False)
+    if ends == "again":
+        return None
+    kept.outcome = ends
+    if ends == "merge":
+        c.visual = v.model_copy(update={"passed": True, "doubts": []})
+        reason = f"visual check of {head[:7]} passed, the model check waived by the owner: {len(v.files)} screenshots"
+        return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))
+    if ends == "ask":
+        c.visual = v.model_copy(update={"doubts": [f"{x.lens}: {x.reason}" for x in kept.verdicts if x.reason]})
+        return c, ask(head, kept)
+    out = sent or found
+    c.visual = v.model_copy(update={"findings": out, "doubts": []})
+    return c, repair(c, f"Fix: the visual check of {head[:7]} failed: {out[0][:200]}", out)
 
 
 def repair(c: Change, title: str, found: Sequence[str]) -> StepResult:

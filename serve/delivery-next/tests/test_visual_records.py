@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import calibration, config_routes, runner, sessions
+from owlbear_delivery_next import calibration, config_routes, sessions, visual_settled
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.models import Change, VisualResult
 from owlbear_delivery_next.store import Lock, Store
@@ -165,7 +165,7 @@ def test_a_round_the_owner_decided_is_kept_with_its_before_and_after_screenshots
     for folder, data in ((out, b"after"), (old, b"before")):
         folder.mkdir(parents=True)
         (folder / "home-1280.png").write_bytes(data)
-    runner._calibrated(store, change, out)  # noqa: SLF001
+    visual_settled.calibrated(store, change, out)
     kept = root / "shop-site" / "visual" / "c1-1"
     assert [(kept / n).read_bytes() for n in ("after-home-1280.png", "before-home-1280.png")] == [b"after", b"before"]
 

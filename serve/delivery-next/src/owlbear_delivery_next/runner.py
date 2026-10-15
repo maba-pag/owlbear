@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import (
     budgets,
-    calibration,
     design_tools,
     held,
     host,
@@ -29,6 +28,7 @@ from owlbear_delivery_next import (
     sessions,
     setup,
     tools,
+    visual_settled,
 )
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.failures import cause_key
@@ -40,7 +40,6 @@ from owlbear_delivery_next.steps import (
     check,
     cleanup,
     conversation,
-    decision,
     design,
     engine,
     follow,
@@ -234,11 +233,9 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         settings = store.settings()  # one snapshot: what the round records is what it ran with
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
-        if owned := decision.decided(change, head, tree):  # the owner decided this round (TD-79)
-            store.write(lock, loop.apply(owned[0], owned[1], datetime.now(UTC)))
-            _calibrated(store, owned[0], out)  # after the decision is saved: it never waits on the shared repository
-            return
         widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
+        if visual_settled.settled(store, lock, change, (head, tree, widths), out):
+            return
         visual.seed(change, path, settings.seed, lambda e: store.log(lock, change.slug, e))  # TD-65
         pack = design.pack()
         shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
@@ -268,7 +265,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             given = {"errors": errors, "scans": scans}
             mine = [("visual-review", r) for r in judges.reviews(base, change, head, shots, out, **given)]
             theirs = [("design-review", d) for d in judges.sessions(base, change, head, images, **given)]
-            ran = sessions.judges(store, lock, change, path, lambda _at: [*mine, *theirs], settings)
+            ran = sessions.judges(store, lock, change, path, lambda _at: [*mine, *theirs], settings, hold=True)
             reviewed, designed = ran[: len(mine)], ran[len(mine) :]
             stop = next((r for r, _ in ran if r.exit == Exit.STOP), None)  # any judge left running stops the Change
             result = stop or next((r for r, run in reviewed if not isinstance(run.payload, tools.ReviewResult)), None)
@@ -294,21 +291,6 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 change, head, tree, shots, verdict=judgement, now=datetime.now(UTC), scans=scans, kept=kept
             )
     store.write(lock, loop.apply(change, result, datetime.now(UTC)))
-
-
-def _calibrated(store: Store, change: Change, out: Path) -> None:
-    """Keep a decided round for calibration in the shared repository; the decision never waits on it."""
-    v, b = change.visual, change.before
-    if store.shared is None or v is None or not change.visual_rounds:
-        return
-    before = store.before_dir(change.slug, b.head) if b else None
-    images = {f"after-{f}": out / f for f in v.files}
-    images |= {f"before-{f}": before / f for f in v.files if before and (before / f).is_file()}
-    try:
-        if notice := calibration.keep(store.shared, store.name, change.slug, change.visual_rounds[-1], images):
-            _out(f"calibration: {notice}")
-    except Exception as exc:  # noqa: BLE001 - calibration is evidence; the decision stands without it
-        _out(f"calibration: {type(exc).__name__}: {exc}"[:300])
 
 
 def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:

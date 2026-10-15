@@ -20,6 +20,7 @@ from owlbear_delivery_next import (
     design_pack,
     design_tools,
     detector,
+    held,
     host,
     loop,
     processes,
@@ -747,24 +748,59 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
     assert merge.visual_ok(after, head, [])
 
 
-def test_a_verdict_whose_usage_stayed_unread_is_never_recorded_and_the_owner_reruns_the_check(flow):
+def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flow):
     c = checking(flow.store, flow.clone)
     plain = flow.review.__call__
 
     async def unread(cfg):
         run = await plain(cfg)
-        run.usage_unread = "the usage at the step's end could not be read (RuntimeError)"
+        if cfg.role != "designer":  # only the correctness judge's model stays unproven
+            run.usage_unread = "the usage at the step's end could not be read (RuntimeError)"
         return run
 
     flow.mp.setattr(runner.sdk_adapter, "run", unread)
-    flow.mp.setattr(flow.store, "log", lambda *_a: (_ for _ in ()).throw(OSError(28, "No space left on device")))
-    with pytest.raises(OSError, match="No space"):  # the gate is written before anything that can fail
-        runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
-    after = flow.store.read("c1")
-    q = loop.open_question(after)
-    assert (after.visual, after.outcome.exit, [o.next for o in q.options]) == (c.visual, Exit.ASK, ["retry"])
+    runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    q, kept = loop.open_question(asked), asked.visual_rounds[-1]
+    assert (asked.outcome.exit, [o.id for o in q.options], kept.outcome, kept.waivable) == (
+        Exit.ASK,
+        ["accept", "retry"],
+        "model",
+        "merge",
+    )
     assert "could not be read (RuntimeError)" in q.text
-    assert check.action(after, live=True, paths={}) == "dispose"  # no capture resumes before the owner answers
+    assert (asked.visual.passed, asked.visual.doubts[0].startswith("correctness: model unknown")) == (False, True)
+    assert check.action(asked, live=True, paths={}) == "dispose"  # no capture resumes before the owner answers
+    assert [o.id for o in held.offered(flow.store, asked, q)] == ["accept", "retry"]
+    accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
+    assert accepted.visual_rounds[-1].model_waived
+    flow.store.write(Lock("c1"), accepted)
+    runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
+    done = flow.store.read("c1")
+    assert (len(flow.review.calls), done.visual.passed, done.visual_rounds[-1].outcome) == (1, True, "merge")
+
+
+def test_a_visual_accept_without_the_model_check_is_withdrawn_once_the_capture_moves(flow):
+    c = checking(flow.store, flow.clone)
+    plain = flow.review.__call__
+
+    async def unread(cfg):
+        run = await plain(cfg)
+        run.usage_unread = "no usage report of the window named the step's model gpt-6-luna"
+        return run
+
+    flow.mp.setattr(runner.sdk_adapter, "run", unread)
+    runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
+    asked = flow.store.read("c1")
+    q = loop.open_question(asked)
+    commit(flow.clone, "web/app.css", "moved\n")
+    assert [o.id for o in held.offered(flow.store, asked, q)] == ["retry"]
+    accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
+    flow.store.write(Lock("c1"), accepted)
+    flow.mp.setattr(runner.sdk_adapter, "run", plain)
+    runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
+    again = flow.store.read("c1")
+    assert (len(flow.review.calls), again.visual_rounds[-1].number) == (2, 2)  # captured and judged again
 
 
 def test_damaged_settings_stop_the_change_once_instead_of_crashing_each_runner(flow):

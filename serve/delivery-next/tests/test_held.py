@@ -198,7 +198,7 @@ def test_a_result_whose_commit_is_no_longer_head_is_not_held(tmp_path, clone, mo
 def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypatch):
     store = Store(tmp_path / "store")
     run = Run("r1", ending="result", usage_unread=UNREAD, termination=Termination(confirmed=True))
-    monkeypatch.setattr(sessions, "run", lambda *_a: (_ for _ in ()).throw(sessions.UsageUnreadError(run)))
+    monkeypatch.setattr(sessions, "run", lambda *_a, **_k: (_ for _ in ()).throw(sessions.UsageUnreadError(run)))
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.PLAN))
     store.write(Lock("c1"), change)
     cfg = runner.sdk_adapter.Session(

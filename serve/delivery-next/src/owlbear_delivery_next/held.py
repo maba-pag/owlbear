@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next import tools
-from owlbear_delivery_next.failures import UNREAD
+from owlbear_delivery_next.failures import UNREAD, VISUAL_MODEL
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.steps import decision, worktree
 from owlbear_delivery_next.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -159,9 +159,18 @@ def _matches(held: Held, change: Change) -> bool:
 
 
 def offered(store: Store, change: Change, question: Question) -> list[Option]:
-    """The question's options as offered now: "accept" only while its hold exists and still matches (TD-56)."""
-    if all(o.id != ACCEPT for o in question.options) or not (question.cause or "").endswith(f":{UNREAD}"):
+    """The question's options as offered now: "accept" only while what it would accept still matches (TD-56, TD-94).
+
+    A held step result needs its hold; a visual round needs every input its verdicts depended on.
+    """
+    cause = question.cause or ""
+    if all(o.id != ACCEPT for o in question.options) or not cause.endswith((f":{UNREAD}", f":{VISUAL_MODEL}")):
         return question.options
+    if cause.endswith(f":{VISUAL_MODEL}"):
+        kept, where = (change.visual_rounds[-1] if change.visual_rounds else None), change.names.worktree
+        if kept is not None and kept.outcome == "model" and where and decision.matches(change, kept, head(Path(where))):
+            return question.options
+        return [o for o in question.options if o.id != ACCEPT]
     hold = _read(store, change.slug)
     if hold is not None and hold.question == question.id and _matches(hold, change):
         return question.options

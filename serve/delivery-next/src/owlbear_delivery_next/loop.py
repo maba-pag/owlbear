@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import Field
 
 from owlbear_delivery_next import budgets, evidence
-from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, kind_of
+from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, VISUAL_MODEL, kind_of
 from owlbear_delivery_next.inbox import (
     AnswerItem,
     BriefApproval,
@@ -320,7 +320,12 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     q.effect_observed_at = item.at
     if not gate:
         return  # the Change moved on since it asked
-    if target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
+    if (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
+        kept = c.visual_rounds[-1] if c.visual_rounds else None
+        if kept and kept.outcome == "model":
+            kept.model_waived = target == "accept"
+        go(c, c.step.kind, c.step.task, c.step.mode)
+    elif target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
         go(c, c.step.kind, c.step.task, c.step.mode)
     else:
         _visual_decision(c, target, item)

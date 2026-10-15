@@ -244,16 +244,26 @@ def _reveal(scans: Sequence[DetectorScan], states: set[str]) -> str:
     )
 
 
+def ended(run: Run | None) -> bool:
+    """A result accepted from a session whose processes are confirmed gone, its model proven or not."""
+    done = run is not None and run.ending == "result" and run.payload is not None
+    return done and bool(run and run.termination and run.termination.confirmed)
+
+
 def verified(run: Run | None) -> bool:
-    """A result accepted from a session whose usage was read and whose processes are confirmed gone."""
-    ended = run is not None and run.ending == "result" and run.payload is not None and not run.usage_unread
-    return ended and bool(run and run.termination and run.termination.confirmed)
+    """An ended result whose usage proved the judge's model (TD-94)."""
+    return ended(run) and run is not None and not run.usage_unread
+
+
+def _unknown(runs: Sequence[Run]) -> str:
+    """Why a judge's model is unknown, for the round's reason; empty when every batch proved it."""
+    return next((f"model unknown: {r.usage_unread}" for r in runs if r.usage_unread), "")
 
 
 def _why(run: Run | None) -> str:
     if run is None:
         return "not run"
-    return run.usage_unread or run.detail or f"the session ended with {run.ending}"
+    return run.detail or f"the session ended with {run.ending}"
 
 
 def merged(payloads: Sequence[tools.Args | None]) -> tools.VisualReviewResult | None:
@@ -273,7 +283,7 @@ def merged(payloads: Sequence[tools.Args | None]) -> tools.VisualReviewResult | 
 def correctness(runs: Sequence[Run], role: RoleModel, now: datetime) -> JudgeVerdict:
     """The correctness judge's record over its batches, or why there is no verified verdict."""
     who = {"model": role.model, "effort": role.effort, "context": role.context, "at": now}
-    missing = [r for r in runs if not verified(r)]
+    missing = [r for r in runs if not ended(r)]
     if not runs or missing or (p := merged([r.payload for r in runs])) is None:
         return JudgeVerdict(lens="correctness", reason=_why(missing[0] if missing else None)[:300], **who)
     found = [
@@ -283,9 +293,14 @@ def correctness(runs: Sequence[Run], role: RoleModel, now: datetime) -> JudgeVer
         for n, f in enumerate(p.findings, 1)
         for state, width in [_place(f.place)]
     ]
-    doubts = "; ".join(f"{d.place}: {d.question}" for d in p.doubts)
+    doubts = "; ".join([*(f"{d.place}: {d.question}" for d in p.doubts), *filter(None, [_unknown(runs)])])
     return JudgeVerdict(
-        lens="correctness", verdict=VERDICT[p.verdict], findings=found, reason=doubts[:800], usage_verified=True, **who
+        lens="correctness",
+        verdict=VERDICT[p.verdict],
+        findings=found,
+        reason=doubts[:800],
+        usage_verified=all(verified(r) for r in runs),
+        **who,
     )
 
 
@@ -301,7 +316,7 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
     where "after" has a serious problem or misses an owner's criterion that "before" did not have.
     """
     who = {"model": role.model, "effort": role.effort, "context": role.context, "at": now}
-    missing = [r for r in runs if not (verified(r) and isinstance(r.first, design_tools.DesignLook))]
+    missing = [r for r in runs if not (ended(r) and isinstance(r.first, design_tools.DesignLook))]
     if not runs or missing:
         return JudgeVerdict(lens="design", reason=_why(missing[0] if missing else None)[:300], **who)
     finals = [r.payload for r in runs if isinstance(r.payload, design_tools.DesignResult)]
@@ -327,13 +342,14 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
     }
     derived = [_derived(p, named) for p in finals]
     said = sorted({p.verdict for p in finals} - set(derived))
+    reasons = [*(p.doubt for p in finals if p.doubt), *(f"the judge said {v}" for v in said), _unknown(runs)]
     return JudgeVerdict(
         lens="design",
         verdict=_worst(derived),
         unanchored=_worst(_derived(p, named) for p in firsts),
         findings=found,
-        reason="; ".join([*(p.doubt for p in finals if p.doubt), *(f"the judge said {v}" for v in said)])[:800],
-        usage_verified=True,
+        reason="; ".join(filter(None, reasons))[:800],
+        usage_verified=all(verified(r) for r in runs),
         agreed=sorted({r for p in finals for r in p.agreed}),
         false_positives=sorted({r for p in finals for r in p.false_positives}),
         preferences=better,
@@ -386,6 +402,9 @@ def recorded(  # noqa: PLR0913 - one round from every judged input
         head=head,
         tree=tree,
         states={s.name: s.version for s in c.brief.visual},
+        criteria={k.id: k.version for k in c.brief.criteria},
+        owner=[k.id for k in c.owner_criteria if k.withdrawn_at is None],
+        before=c.before.head if c.before else "",
         widths=list(widths),
         pack=design_pack.identity(),
         design_failures=settings.design_failures,

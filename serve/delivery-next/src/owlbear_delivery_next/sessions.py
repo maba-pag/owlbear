@@ -51,16 +51,17 @@ def memory(store: Store) -> Path | None:
     return folder
 
 
-def run(store: Store, cfg: sdk_adapter.Session) -> session_result.Run:
+def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run:
     """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7).
 
-    Either runtime's unknown model stops the Change for the owner (TD-94).
+    Either runtime's unknown model stops the Change for the owner (TD-94), unless the caller *holds* the run to
+    decide it with others, as a visual round does.
     """
     if (store.read_profile() or Profile()).runtime == "vscode":
         done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
     else:
         done = asyncio.run(sdk_adapter.run(cfg))
-    if unread(done):
+    if unread(done) and not hold:
         raise UsageUnreadError(done)
     return done
 
@@ -120,12 +121,15 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     source: Path,
     made: Callable[[Path], list[tuple[str, sdk_adapter.Session]]],
     settings: Settings | None = None,
+    *,
+    hold: bool = False,
 ) -> list[tuple[Result, session_result.Run]]:
     """Fresh read-only judges in the read-only worktree of *source*: together on the SDK, in turn in the window.
 
     *made* builds the judges' sessions in that worktree, which the window resets before each judge. *settings* is the
     round's snapshot, so what is recorded is what ran. A judge left running stops the Change ahead of another's unread
-    usage; otherwise an unread run is gated and nothing is processed (TD-54).
+    usage; otherwise an unread run is gated and nothing is processed (TD-54), unless *hold* keeps it for the round's
+    own decision (TD-94).
     """
     settings = settings or store.settings()
     labels: list[str] = []
@@ -147,18 +151,18 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
         return cfgs
 
     def ran(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
-        return [run(store, cfgs[0])] if len(cfgs) == 1 else asyncio.run(_together(cfgs))
+        return [run(store, cfgs[0], hold=hold)] if len(cfgs) == 1 else asyncio.run(_together(cfgs))
 
     window = (store.read_profile() or Profile()).runtime == "vscode"
     runs = isolated(store, lock, change, source, fresh, ran, each=window)
     judged = []
     for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock
         verdict = session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
-        if not unread(done):
+        if hold or not unread(done):
             logged(store, lock, change, done, {"kind": label, "exit": verdict.exit})
         judged.append((verdict, done))
     left = any(not (r.termination and r.termination.confirmed) for r in runs)
-    if (first := next((r for r in runs if unread(r)), None)) and not left:
+    if not hold and (first := next((r for r in runs if unread(r)), None)) and not left:
         raise UsageUnreadError(first)
     return judged
 

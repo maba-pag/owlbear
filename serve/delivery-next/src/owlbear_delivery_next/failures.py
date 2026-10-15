@@ -22,6 +22,7 @@ SPLITTABLE = frozenset(
 QUOTA = "quota"  # the cause subject of an exhausted Copilot quota: waited out, never asked about
 UNREAD = "usage-unread"  # the cause subject of a step whose model could not be proven from its usage (TD-54, TD-94)
 WRONG_MODEL = "wrong-model"  # the cause subject of a step a turn or call on another model voided (TD-94)
+VISUAL_MODEL = "visual-model"  # the cause subject of a visual round whose judge's model is unknown (TD-94)
 READ_ONLY = "read-only-write"  # the cause subject of a read-only session that changed the shared repository's refs
 RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree Delivery could not prepare
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)

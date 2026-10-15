@@ -337,16 +337,16 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     elif not failed and verdict is None:
         found.append("the screenshots were not judged")
     ends, sent = decision.route(kept, found, verdict, broken=bool(failed or raised))
-    doubts = [f"{d.place}: {d.question}" for d in getattr(verdict, "doubts", [])] if ends == "ask" else []
-    doubts += [f"{v.lens}: {v.reason}" for v in kept.verdicts if v.reason and v.lens == "design"] if kept else []
     files = [s.file for s in shots if s.file]
     states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
     c.visual = VisualResult(
         head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=ends == "merge",
-        findings=sent, errors=errors, doubts=doubts if ends == "ask" else [], design=list(scans), at=now,
+        findings=sent, errors=errors, doubts=decision.doubts(ends, verdict, kept), design=list(scans), at=now,
     )  # fmt: skip
     if kept is not None and ends != "again":
         kept.outcome = ends
+    if ends == "model" and kept is not None:  # TD-94: the owner accepts the whole round or runs it again
+        return c, decision.unknown(head, kept)
     if ends == "merge":
         reason = f"visual check of {head[:7]} passed: {len(files)} screenshots"
         return c, StepResult(exit=Exit.DONE, reason=reason, paths=check.declared(c))

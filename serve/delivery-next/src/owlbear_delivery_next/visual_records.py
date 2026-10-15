@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 type Lens = Literal["correctness", "design"]
 type Verdict = Literal["pass", "fail", "unsure"]
-type Outcome = Literal["merge", "back", "ask"]
+type Outcome = Literal["merge", "back", "ask", "model"]  # "model": a judge's model is unknown; the owner decides
 type DesignFailures = Literal["back", "ask"]
 type Freshness = Literal["new", "existing", "unknown"]
 
@@ -94,12 +94,19 @@ class OwnerDecision(_Strict):
 
 
 class VisualRound(_Strict):
-    """One visual review: the capture it judged, both verdicts, the detector's evidence and how it ended."""
+    """One visual review: the capture it judged, both verdicts, the detector's evidence and how it ended.
+
+    The capture, states, criteria, owner criteria, before capture and pack are everything its verdicts depend on, so
+    an owner's accept without the model check holds only while all of them are still the Change's (TD-94).
+    """
 
     number: int
     head: str
     tree: str
     states: dict[str, int] = Field(default_factory=dict)
+    criteria: dict[str, int] = Field(default_factory=dict)  # the brief's criterion versions the judges checked
+    owner: list[str] = Field(default_factory=list)  # the owner criteria in force (TD-79)
+    before: str = ""  # the before capture's head the blind pairs came from
     widths: list[int] = Field(default_factory=list)
     pack: str = ""  # the design pack's identity
     blind: dict[str, Literal["before", "after"]] = Field(default_factory=dict)  # the design judge's image names
@@ -109,11 +116,15 @@ class VisualRound(_Strict):
     detector: list[DetectorScan] = Field(default_factory=list)
     decision: OwnerDecision | None = None
     outcome: Outcome | None = None
+    waivable: Literal["merge", "back", "ask"] | None = None  # where the verdicts lead once the model check is waived
+    model_waived: bool = False  # the owner accepted the round without the model check (TD-94)
     at: datetime
 
     @model_validator(mode="after")
     def _decided_on_two_verified_verdicts(self) -> Self:
-        verified = sorted(v.lens for v in self.verdicts if v.verdict is not None and v.usage_verified)
+        verified = sorted(
+            v.lens for v in self.verdicts if v.verdict is not None and (v.usage_verified or self.model_waived)
+        )
         one_each = verified == ["correctness", "design"] and len(self.verdicts) == len(verified)
         if self.decision is not None and not one_each:
             msg = "a round is decided only on one verified verdict from each judge"
