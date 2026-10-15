@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import loop
-from owlbear_delivery_next.budgets import EPISODE_QUIET, RETRY_LIMIT, episode
-from owlbear_delivery_next.failures import QUOTA
+from owlbear_delivery_next.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
+from owlbear_delivery_next.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.loop import CONSENT
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import ErrorKind, Exit, StepKind, Waiting
@@ -216,7 +216,8 @@ def status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago", None, "delivery")
     if o and o.exit == Exit.RETRY and o.wake_at and o.wake_at > now and o.cause:
         k = c.budgets.causes[o.cause].count if o.cause in c.budgets.causes else 1
-        return Status(f"{s} · retrying: {o.cause} ({k} of {RETRY_LIMIT}) at {o.wake_at:%H:%M}", None, "delivery")
+        limit = WRONG_MODEL_LIMIT if o.cause.endswith(f":{WRONG_MODEL}") else RETRY_LIMIT
+        return Status(f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}", None, "delivery")
     if activity.holder_pid:
         return Status(f"{s} · not running: waiting for process {activity.holder_pid} to end", None, "delivery")
     return Status(f"{s} · not running: starting {role}", None, "delivery")

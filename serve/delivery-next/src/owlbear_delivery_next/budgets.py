@@ -5,7 +5,16 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, QUOTA, SPLITTABLE, cause_key, kind_of, signature
+from owlbear_delivery_next.failures import (
+    DEFECT,
+    ENVIRONMENT,
+    QUOTA,
+    SPLITTABLE,
+    WRONG_MODEL,
+    cause_key,
+    kind_of,
+    signature,
+)
 from owlbear_delivery_next.models import Budget, ErrorKind, Exit, Option, Outcome, Question, StepKind, Stop, Waiting
 from owlbear_delivery_next.moves import ask, enter, fix_task, go
 
@@ -20,6 +29,7 @@ FLAKE_LIMIT = 1
 ROUND_LIMIT = 2
 REPLAN_LIMIT = 3
 DEFECT_LIMIT = 3  # the same Delivery defect in a row before asking
+WRONG_MODEL_LIMIT = 2  # wrong models in a row before asking: one rerun (owner decision 2026-10-15)
 PAUSE = timedelta(minutes=1)
 PAUSE_CAP = timedelta(minutes=30)
 EPISODE_QUIET = timedelta(hours=1)
@@ -167,6 +177,19 @@ def _defect(c: Change, r: StepResult, now: datetime) -> None:
         c.step.attempt += 1
 
 
+def _wrong_model(c: Change, r: StepResult, now: datetime) -> None:
+    """Owner decision 2026-10-15: a wrong model reruns the step once, after its wait; a second in a row asks."""
+    cause = r.cause or ""
+    b = c.budgets.causes.get(cause)
+    count = b.count + 1 if b else 1
+    c.budgets.causes[cause] = Budget(count=count, task=c.step.task, at=now)
+    if count >= WRONG_MODEL_LIMIT:
+        text = f"The step ran on the wrong model again after one rerun: {r.reason}"
+        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(), cause=cause), now)
+    else:
+        c.step.attempt += 1
+
+
 def _resolve_or_pause() -> list[Option]:
     return [Option(id="done", label="Done, continue"), Option(id="pause", label="Pause", next="pause")]
 
@@ -250,6 +273,9 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
         return
     if kind_of(r.cause) in ENVIRONMENT:
         _environment(c, r, now)
+        return
+    if r.cause.endswith(f":{WRONG_MODEL}"):
+        _wrong_model(c, r, now)
         return
     if kind_of(r.cause) in DEFECT:
         _defect(c, r, now)

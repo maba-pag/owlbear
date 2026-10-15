@@ -53,7 +53,7 @@ class Gate:
         self.ended()
 
     def wrong_model(self, detail: str) -> None:
-        """A turn or call on another model: whatever was submitted is void and the step reruns at once (TD-94)."""
+        """A turn or call on another model: whatever was submitted is void and the step reruns once (TD-94)."""
         self.run.model_check = "mismatch"
         self.revoke(f"wrong model: {detail}")
 

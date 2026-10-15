@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from owlbear_delivery_next import design_tools, missing, tools
@@ -37,6 +37,7 @@ type Ending = Literal[
 ]
 type ModelCheck = Literal["verified", "mismatch", "unknown"]
 PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
+WRONG_MODEL_WAIT = timedelta(minutes=5)  # owner decision 2026-10-15: one rerun of a wrong model, after a fixed wait
 
 
 @dataclass
@@ -60,7 +61,7 @@ class Run:
     quota: bool = False  # the runtime reported the Copilot quota exhausted
     quota_reset: datetime | None = None  # when it said the quota resets
     usage_unread: str = ""  # why the usage does not prove the model; such a run is never processed (TD-54, TD-94)
-    model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns at once (TD-94)
+    model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns once after a wait
 
 
 def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult:
@@ -136,8 +137,10 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
         return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.POLICY, enclosing, READ_ONLY), reason=run.detail)
     if run.ending == "read-only-refused":  # no session ran
         return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.STATE, enclosing, RO_WORKTREE), reason=run.detail)
-    if run.model_check == "mismatch":  # void whatever it submitted and run again before anything else (TD-94)
-        return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.TOOLING, kind, WRONG_MODEL), reason=run.detail)
+    if run.model_check == "mismatch":  # void whatever it submitted; the budget allows one rerun after the wait
+        # Until the host schedules sessions (TD-104/105), the wait stands in for queueing behind other ready work.
+        cause, wake = cause_key(ErrorKind.TOOLING, kind, WRONG_MODEL), now + WRONG_MODEL_WAIT
+        return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, wake_at=wake)
     if run.quota and run.ending not in {"result", "ask", "premise", "missing-tool"}:  # the quota ended it
         reason = run.detail or "Copilot quota exhausted"
         return StepResult(

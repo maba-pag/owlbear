@@ -1,4 +1,5 @@
-"""TD-94: only usage proves the model; a mismatch reruns at once, an unknown one stops, unread credits never show 0."""
+"""TD-94: only usage proves the model; a mismatch reruns once after a wait, an unknown one stops, unread credits
+never show 0."""
 
 import asyncio
 from datetime import UTC, datetime

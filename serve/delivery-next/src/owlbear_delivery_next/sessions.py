@@ -82,7 +82,7 @@ def unread(done: session_result.Run) -> bool:
     """Its model is unknown while its processes are confirmed gone; else the termination stop wins.
 
     A voided read-only run is not: its violation decides the step, its usage is logged as it is. A known wrong model
-    is not either: it reruns at once (TD-94).
+    is not either: it reruns once after a wait (TD-94).
     """
     confirmed = done.termination and done.termination.confirmed
     voided = done.ending == "read-only-write" or done.model_check == "mismatch"

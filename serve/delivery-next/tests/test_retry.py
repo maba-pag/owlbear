@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from owlbear_delivery_next import budgets, failures, loop
+from owlbear_delivery_next import budgets, failures, loop, session_result
 from owlbear_delivery_next.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.loop import StepResult
@@ -18,6 +18,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
+from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.status import Activity, card, status
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -85,6 +86,38 @@ def test_the_same_delivery_defect_three_times_asks_with_the_error():
     assert c.outcome.exit == Exit.ASK
     assert "submit tool rejected payload" in q.text
     assert [o.id for o in q.options] == ["done", "pause"]
+
+
+WRONG = "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna"
+
+
+def wrong_model(kind: StepKind, at: datetime) -> StepResult:
+    run = session_result.Run("s", detail=WRONG, model_check="mismatch", termination=Termination(confirmed=True))
+    return session_result.to_result(run, kind, at)
+
+
+def test_a_wrong_model_reruns_once_after_its_wait_and_a_second_in_a_row_asks():
+    c = loop.apply(change(), wrong_model(K.BUILD, NOW), NOW)
+    wake = NOW + session_result.WRONG_MODEL_WAIT
+    assert (c.outcome.exit, c.outcome.wake_at, c.step.attempt, c.questions) == (Exit.RETRY, wake, 2, [])
+    assert loop.next_step(c, wake - timedelta(seconds=1)) is None
+    assert loop.next_step(c, wake) == c.step
+    line = status(c, Activity(host_up=True), NOW + timedelta(minutes=1)).line
+    assert line.endswith("retrying: tooling:build:wrong-model (1 of 2) at 12:05")
+    c = loop.apply(c, wrong_model(K.BUILD, wake), wake)
+    q = loop.open_question(c)
+    assert c.outcome.exit == Exit.ASK
+    assert q.text == f"The step ran on the wrong model again after one rerun: {WRONG}"
+    assert [o.id for o in q.options] == ["done", "pause"]
+
+
+def test_a_step_between_two_wrong_models_starts_a_new_streak():
+    c = loop.apply(change(), wrong_model(K.BUILD, NOW), NOW)
+    c = loop.apply(c, StepResult(exit=Exit.DONE, reason="built"), NOW)
+    c = loop.apply(c, StepResult(exit=Exit.RETRY, reason="a: missing test - fix: add it"), NOW)
+    assert c.step.kind == K.BUILD
+    c = loop.apply(c, wrong_model(K.BUILD, NOW), NOW)
+    assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
 
 
 def test_identical_check_failures_replan_once_to_split_then_ask():
