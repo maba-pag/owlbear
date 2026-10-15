@@ -32,6 +32,25 @@ persisted, or changed.
 
 A reviewer judges the exact commit and its claimed boundary, not the builder's summary.
 
+A defect fix prefers an existing test that discriminates: one that fails on the defect and passes on the fix.
+Show failing-before evidence where it is feasible, such as that test failing on the commit before the fix;
+otherwise state what reproduces the defect and what the proof leaves open.
+
+## Durable Tests
+
+Proof is not automatically a durable test. A search, diff, lint, type check, build or manual check can prove a
+task without becoming a committed test. A test that only confirms that text, a file or a symbol exists or is gone
+freezes the change instead of protecting behaviour.
+
+- Admit a durable test only where it guards behaviour that is easy to break unnoticed and that nothing else
+  protects: a public interface, a non-obvious invariant or edge case, an error, concurrency, security or
+  data-loss boundary, or a fixed defect likely to return. Never add one to raise coverage or to mirror a
+  criterion's sentence.
+- Assertions test behaviour, not implementation: meaningful input through the boundary callers use, and an
+  observable output, state, error or side effect. Ask which plausible regression would make the test fail;
+  without an answer, choose another proof.
+- Add a negative or boundary case only where it separates the contract from a likely wrong implementation.
+
 ## Rules for a Criterion
 
 ### C1 - One Observable Boundary

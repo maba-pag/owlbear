@@ -44,12 +44,27 @@ never supplies the layout, the navigation model or the controls; controls are th
 - **Depth:** shadows have an offset and a soft blur; a zero-offset coloured halo is decoration.
 - **Motion:** one purposeful moment rather than effects everywhere; ease out from a visible default; respect
   reduced motion.
-- **States:** hover, focus, active, disabled, loading, empty, error and success, with real content and working
-  controls. Visible keyboard focus and logical tab order.
+- **States:** hover, focus, active, disabled, loading, empty, partial (some data loaded, some missing or
+  failed), error and success, with real content and working controls. Visible keyboard focus and logical tab
+  order.
 - **Browser surfaces:** selection, caret, scrollbars, focus rings, link underlines and tabular numerals are themed,
   not left at browser defaults.
 - **Copy:** the product's own words. Controls name their action; errors name the problem and the way out.
 - **Coverage:** every brief requirement is present and found within seconds.
+
+## Accessibility
+
+Use the project's accessibility target; without one, WCAG 2.2 AA.
+
+- Native elements first; ARIA only where native semantics cannot express the interaction.
+- Every control has an accessible name; labels, instructions and errors are tied to their fields.
+- Non-text content has a text alternative; a decorative image has empty alt text.
+- Headings follow a logical order, and the page has landmarks (header, navigation, main, footer).
+- Pointer targets are at least 24 by 24 CSS pixels, or spaced so that a 24px circle centred on each overlaps no
+  other target (WCAG 2.5.8). Exceptions: an equivalent control of that size on the same page, a target inline in
+  text, a size the browser sets, or a size that is essential or legally required.
+- A modal keeps focus inside while it is open and returns it to the control that opened it when it closes.
+  Prove both with the keyboard in a real browser; a screenshot cannot show either.
 
 ## Refuse unless the brief asks for it
 
@@ -90,7 +105,7 @@ never supplies the layout, the navigation model or the controls; controls are th
 ## Order of fixes
 
 1. Broken or blocked tasks, data loss, misleading state, inaccessible paths.
-2. Missing loading, empty, error, success, disabled and permission states.
+2. Missing loading, empty, partial, error, success, disabled and permission states.
 3. Flow, hierarchy, responsive behaviour and drift from the design system.
 4. Visual and motion inconsistencies.
 5. Code and asset cleanup.
