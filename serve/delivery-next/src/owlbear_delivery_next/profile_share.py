@@ -12,12 +12,15 @@ import os
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import migrations, profile
+from owlbear_delivery_next.data_repo import DataRepoError
 from owlbear_delivery_next.detector import DetectorError
+from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.data_repo import DataRepo
     from owlbear_delivery_next.profile_record import Profile
     from owlbear_delivery_next.store import Store
 
@@ -42,9 +45,9 @@ def write(store: Store, text: str) -> str:
 
 
 def adopt(store: Store) -> None:
-    """Move the clone's own profile to the project's shared folder once; the old file stays as the recovery copy."""
+    """Move the clone's own profile to the project's shared folder once, after its roles moved; the old file stays."""
     local = store.root / PROFILE
-    if not store.shared or not local.exists() or path(store).exists():
+    if not store.shared or not local.exists() or path(store).exists() or not (store.root / ROLES_MOVED).exists():
         return
     with store.shared.locked():
         if path(store).exists():  # another clone moved its profile while this one waited
@@ -59,17 +62,27 @@ def checked(store: Store, repo: Path) -> Profile | None:
     """The profile, its facts detected once in this clone; a failed detection is tried again at the next start."""
     from owlbear_delivery_next.store import StoreError  # noqa: PLC0415 - the store imports this module
 
-    prof, mark = store.read_profile(), store.root / CHECKED
-    if prof is None or not store.shared or mark.exists():
+    prof, mark, shared = store.read_profile(), store.root / CHECKED, store.shared
+    if prof is None or shared is None or mark.exists():
         return prof
     try:
         fresh = profile.detect(repo, profile.provider(prof, repo), prof)
-        if fresh != prof:
-            store.write_profile(fresh)
-    except DetectorError, StoreError:
+        if fresh != prof and not _replaced(store, shared, prof, fresh):
+            return prof  # another clone saved the profile meanwhile
+    except DetectorError, ProviderError, StoreError, DataRepoError:
         return prof
     atomic_write(mark, f"profile v{fresh.version} detected in this clone\n")
     return fresh
+
+
+def _replaced(store: Store, shared: DataRepo, old: Profile, new: Profile) -> bool:
+    """Write *new* only while the shared profile is still *old*; whether it was written."""
+    with shared.locked():
+        if store.read_profile() != old:
+            return False
+        atomic_write(path(store), new.model_dump_json(indent=1))
+        shared.publish(path(store), f"settings: {store.name}: project profile detected in a clone")
+    return True
 
 
 def move_roles(store: Store) -> None:

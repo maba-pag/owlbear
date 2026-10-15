@@ -1,7 +1,7 @@
 import json
 import os
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,10 +11,10 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next import api, change_record, cli, data_repo, profile_share, sessions, setup
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.detector import DetectorError
-from owlbear_delivery_next.github.provider import PullRequest
+from owlbear_delivery_next.config import Layer
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError, PullRequest
 from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.models import Brief, BriefDecision, Change, Decision
+from owlbear_delivery_next.models import Brief, BriefDecision, Change, Decision, VisualState
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.store import STORE_DIR, Store, StoreError
 
@@ -189,22 +189,36 @@ def test_a_shared_profile_is_detected_once_in_each_clone_and_again_after_a_failu
     def detect(_repo, _gh, prev):
         seen.append(prev.version)
         if len(seen) == 1:
-            msg = "gh: offline"
-            raise DetectorError(msg)
+            raise ProviderError(FailureCode.UNAVAILABLE, "repo view", "offline", retry_safe=True)
+        if len(seen) == 2:
+            store.write_profile(Profile(version=5))  # another clone saves meanwhile: its profile stays
         return prev.model_copy(update={"version": prev.version + 1})
 
     monkeypatch.setattr(profile_share.profile, "detect", detect)
     monkeypatch.setattr(profile_share.profile, "provider", lambda *_a: None)
-    assert profile_share.checked(store, repo).version == 2  # tried again at the next start
-    assert [profile_share.checked(store, repo).version for _ in range(2)] == [3, 3]
-    assert (seen, Store.open(repo).read_profile().version) == ([2, 2], 3)
+    assert [profile_share.checked(store, repo).version for _ in range(2)] == [2, 2]
+    assert [profile_share.checked(store, repo).version for _ in range(2)] == [6, 6]
+    assert (seen, Store.open(repo).read_profile().version) == ([2, 2, 5], 6)
+
+
+def test_a_format_one_profile_moves_to_the_shared_folder_only_after_its_roles_did(shared, repo) -> None:
+    root, _ = shared
+    old = Store.open(repo).root / "profile.json"
+    old.write_text(json.dumps({"format": 1, "roles": {"builder": {"model": "m-old", "effort": "low"}}}))
+    (root / "shop-site" / "config.json").write_text("{damaged")
+    Store.open(repo)
+    assert (old.exists(), (root / "shop-site" / "profile.json").exists()) == (True, False)
+    (root / "shop-site" / "config.json").write_text(Layer().model_dump_json())
+    assert Store.open(repo).settings().agents["builder"].model == "m-old"
+    assert (old.exists(), (root / "shop-site" / "profile.json").exists()) == (False, True)
 
 
 def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, repo) -> None:
     root, remote = shared
     store, at = Store.open(repo), datetime(2026, 10, 15, 9, tzinfo=UTC)
     decided = BriefDecision(question="Limit the notes?", answer="yes", origin="decided")
-    approved = Brief(version=2, title="Notes", outcome="Owners keep notes", decisions=[decided])
+    state = VisualState(name="full", path="/notes", expect="a counter shows 800")
+    approved = Brief(version=2, title="Notes", outcome="Owners keep notes", decisions=[decided], visual=[state])
     c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=at, approved=[approved]))
     c.decisions.append(Decision(text="keep 800 characters", origin="decided", at=at))
     c.spend = c.spend.plus({"credits": 3.5}, "s1")
@@ -213,12 +227,18 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
         head_sha="a" * 40, base_branch="main", draft=False, state="closed", merged=True, merge_commit_sha="b" * 40,
     )  # fmt: skip
     assert change_record.save(store, c, pr, at) == ""
-    assert change_record.save(store, c, pr, at) == ""  # a cleanup run again rewrites the same record
-    record = json.loads((root / "shop-site" / "changes" / "20261015-notes.json").read_text())
+    assert change_record.save(store, c, pr, at + timedelta(days=1)) == ""  # a cleanup run again rewrites it
+    folder = root / "shop-site" / "changes"
+    assert [p.name for p in folder.iterdir()] == ["20261015-090000-notes.json"]
+    record = json.loads((folder / "20261015-090000-notes.json").read_text())
     assert (record["outcome"], record["pr"]["number"], record["brief"]["title"]) == ("merged", 7, "Notes")
     assert (record["brief"]["decisions"][0]["answer"], record["decisions"][0]["text"]) == ("yes", "keep 800 characters")
-    assert record["spend"]["credits"] == 3.5
-    assert pushed(remote, "shop-site/changes/20261015-notes.json") == "changes: shop-site: notes merged"
+    assert (record["brief"]["visual"][0]["expect"], record["spend"]["credits"]) == ("a counter shows 800", 3.5)
+    assert pushed(remote, "shop-site/changes/20261015-090000-notes.json").splitlines()[-1] == (
+        "changes: shop-site: notes merged"
+    )
+    assert change_record.save(store, Change(slug="never"), None, at) == ""  # never approved: no record
+    assert not (folder / "20261015-090000-never.json").exists()
 
 
 def test_without_a_pointer_the_settings_stay_in_the_clone(repo) -> None:

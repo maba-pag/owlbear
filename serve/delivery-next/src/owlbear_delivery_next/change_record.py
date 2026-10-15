@@ -1,7 +1,7 @@
 """A finished Change's record in the project's shared folder (TD-148): brief, decisions, outcome, PR and spend.
 
-Only finished Changes leave one; live state stays in the clone's store. The file is named after the brief's approval
-date and the slug, so a cleanup that runs again rewrites the same record.
+Only finished Changes leave one; live state stays in the clone's store. The file is named after the second the brief
+was approved and the slug, so a cleanup that runs again rewrites the same record and two clones' records stay apart.
 """
 
 from __future__ import annotations
@@ -19,12 +19,15 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.store import Store
 
-BRIEF = {"version", "title", "outcome", "scope", "non_goals", "decisions", "criteria"}
+BRIEF = {"version", "title", "outcome", "scope", "non_goals", "decisions", "criteria", "ui", "visual"}
 
 
 def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
-    """Write and publish the record of *c*; what the owner should know when that fails, else nothing."""
-    if not store.shared:
+    """Write and publish the record of *c*; what the owner should know when that fails, else nothing.
+
+    A Change never approved leaves none: it has no approved brief, and no stable name for a record.
+    """
+    if not store.shared or c.brief.approved_at is None:
         return ""
     brief = c.brief.approved[-1] if c.brief.approved else c.brief
     outcome = "merged" if pr and pr.merged else "abandoned"
@@ -38,7 +41,7 @@ def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
         "decisions": [d.model_dump(mode="json", include={"text", "origin", "at"}) for d in c.decisions],
         "spend": c.spend.model_dump(mode="json", exclude={"last"}),
     }
-    path = store.shared.root / store.name / "changes" / f"{(c.brief.approved_at or now):%Y%m%d}-{c.slug}.json"
+    path = store.shared.root / store.name / "changes" / f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}.json"
     try:
         with store.shared.locked():
             path.parent.mkdir(parents=True, exist_ok=True)

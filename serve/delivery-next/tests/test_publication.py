@@ -61,7 +61,7 @@ from owlbear_delivery_next.steps import (
     review,
     worktree,
 )
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.store import Lock, SharedError, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 A, B = "681d75b8f76e8c9a53053a9054812a449926e2aa", "b" * 40  # A: the clone fixture's base commit (fixed dates)
@@ -233,6 +233,18 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     assert gh.merges == []
     c = loop.apply(c, result, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="none")], NOW)
+    saving = cx.store.write_profile
+
+    def locked(_profile) -> None:
+        msg = "the shared settings are locked"
+        raise SharedError(msg)
+
+    cx.store.write_profile = locked
+    assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)  # the answer holds though unsaved
+    assert [e["reason"] for e in cx.store.events(c.slug) if e.get("event") == "profile-not-saved"] == [
+        "the shared settings are locked"
+    ]
+    cx.store.write_profile, cx.profile = saving, p
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
     assert (names, held, profile.value(cx.profile, profile.DECLARED)) == ((), None, "none")
     assert profile.known(cx.store.read_profile(), profile.DECLARED)

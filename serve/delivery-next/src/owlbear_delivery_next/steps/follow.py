@@ -24,6 +24,7 @@ from owlbear_delivery_next.models import (
 )
 from owlbear_delivery_next.steps import check, engine
 from owlbear_delivery_next.steps import conversation as conv
+from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import CiState, ConversationItem, PullRequest
@@ -74,8 +75,12 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     value = "none" if answers and answers[-1].option == "none" else names
     if value and digest == bound:
         ctx.profile = profile.confirm(ctx.profile, profile.DECLARED, value, ctx.now)
-        ctx.store.write_profile(ctx.profile)
-        ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
+        try:
+            ctx.store.write_profile(ctx.profile)
+        except StoreError as exc:  # the answer still holds; the next pass saves the confirmation again
+            ctx.log(c.slug, "profile-not-saved", key=profile.DECLARED, reason=str(exc)[:300])
+        else:
+            ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
     if value:
         return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
     options = [

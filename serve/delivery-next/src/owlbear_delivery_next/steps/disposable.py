@@ -13,6 +13,7 @@ import hashlib
 import re
 import shutil
 import subprocess
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -38,7 +39,7 @@ class Copy:
     source: Path
     path: Path
     refs: dict[str, str]
-    shared: frozenset[str] = frozenset()
+    shared: tuple[str, ...] = ()
 
 
 def path(source: Path, slug: str) -> Path:
@@ -98,14 +99,20 @@ def _refs(cwd: Path) -> dict[str, str]:
     return dict(line.split(" ", 1) for line in out.splitlines() if line)
 
 
-def _shared(cwd: Path) -> frozenset[str]:
-    """The shared config entries but ``branch.*``, which pushes write, and a fingerprint of each shared hook."""
+def _shared(cwd: Path) -> tuple[str, ...]:
+    """The shared config entries in order but ``branch.*``, which pushes write, and each shared hook's fingerprint."""
     common = git_common_dir(cwd)
     listed = worktree.git(cwd, "config", "--file", str(common / "config"), "--list")
-    config = {f"config {line}" for line in listed.splitlines() if line and not line.startswith("branch.")}
+    config = [f"config {line}" for line in listed.splitlines() if line and not line.startswith("branch.")]
     hooks = common / "hooks"
-    found = sorted(hooks.iterdir()) if hooks.is_dir() else []
-    return frozenset(config | {f"hook {p.name} {hashlib.sha256(p.read_bytes()).hexdigest()[:12]}" for p in found})
+    return (*config, *(_hook(p) for p in (sorted(hooks.iterdir()) if hooks.is_dir() else [])))
+
+
+def _hook(p: Path) -> str:
+    link = f" -> {p.readlink()}" if p.is_symlink() else ""
+    if p.is_file():  # a link's target too: Git runs what it points to
+        return f"hook {p.name}{link} {p.stat().st_mode & 0o777:o} {hashlib.sha256(p.read_bytes()).hexdigest()[:12]}"
+    return f"hook {p.name}{link} {'folder' if p.is_dir() else 'missing'}"
 
 
 def tampered(copy: Copy) -> list[str]:
@@ -114,7 +121,9 @@ def tampered(copy: Copy) -> list[str]:
         now = _shared(copy.source)
     except (OSError, subprocess.SubprocessError) as exc:
         return [f"the shared Git config and hooks could not be read ({type(exc).__name__})"]
-    return [f"added {e}" for e in sorted(now - copy.shared)] + [f"removed {e}" for e in sorted(copy.shared - now)]
+    added, removed = Counter(now) - Counter(copy.shared), Counter(copy.shared) - Counter(now)
+    found = [f"added {e}" for e in sorted(added.elements())] + [f"removed {e}" for e in sorted(removed.elements())]
+    return found or (["reordered shared config entries"] if now != copy.shared else [])
 
 
 def _listed(cwd: Path) -> list[dict[str, str]]:

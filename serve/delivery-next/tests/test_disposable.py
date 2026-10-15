@@ -466,6 +466,28 @@ def test_a_review_that_only_sets_a_branch_upstream_passes(store, change_repo, mo
     assert reviewed(store, change_repo).outcome.exit == Exit.DONE
 
 
+def test_a_review_that_disables_a_hook_stops_and_a_hooks_subfolder_is_no_obstacle(store, change_repo, monkeypatch):
+    hooks = Path(git(change_repo, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "hooks"
+    (hooks / "pre-commit.d").mkdir()
+    (hooks / "pre-commit").write_text("#!/bin/sh\n")
+    (hooks / "pre-commit").chmod(0o755)
+    reviewer(monkeypatch, lambda _cfg: (hooks / "pre-commit").chmod(0o644))
+    c = reviewed(store, change_repo)
+    assert (c.outcome.exit, c.stop.kind) == (Exit.STOP, ErrorKind.POLICY)
+    assert "added hook pre-commit 644" in c.stop.reason
+    assert "removed hook pre-commit 755" in c.stop.reason
+
+
+def test_a_review_that_edits_a_linked_hooks_target_stops(store, change_repo, tmp_path, monkeypatch):
+    hooks = Path(git(change_repo, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "hooks"
+    target = tmp_path / "shared-pre-push"
+    target.write_text("#!/bin/sh\n")
+    (hooks / "pre-push").symlink_to(target)
+    reviewer(monkeypatch, lambda _cfg: target.write_text("#!/bin/sh\nexit 0\n"))
+    c = reviewed(store, change_repo)
+    assert (c.outcome.exit, f"added hook pre-push -> {target}" in c.stop.reason) == (Exit.STOP, True)
+
+
 def test_a_judge_that_moves_a_ref_with_its_usage_unread_is_retried_for_the_violation(
     tmp_path, change_repo, monkeypatch
 ):
