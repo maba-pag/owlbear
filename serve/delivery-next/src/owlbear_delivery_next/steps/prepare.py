@@ -2,9 +2,10 @@
 
 Per check, a live copy is exported and masked once into a frozen snapshot outside every repository. Before the
 "before" capture and again before the host launches the check, that same snapshot is restored into the isolated test
-environment, test data is seeded and the preparer's setup patch applied. The end of the check discards the patch,
-runs the cleanup command and deletes the snapshot unless the owner keeps it. Restore, seed, cleanup and the launch
-run with the option's isolation; only export and masking see Delivery's own environment.
+environment, test data is seeded and the preparer's setup patch applied. The end of the check runs the cleanup command
+with the patch still applied, then discards it and deletes the snapshot unless the owner keeps a masked one; a failed
+cleanup or deletion is ended again by the next runner. Restore, seed, cleanup and the launch run with the option's
+isolation; only export and masking see Delivery's own environment.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from owlbear_delivery_next import loop, preparation, tools
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Option, Record, StepKind, Stop, Waiting
 from owlbear_delivery_next.preparation import LIVE, SNAPSHOT, Preparation
-from owlbear_delivery_next.steps import before, check, engine, worktree
+from owlbear_delivery_next.steps import before, check, engine, preparer, worktree
 from owlbear_delivery_next.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -141,12 +142,15 @@ def discard(root: Path, paths: Sequence[str]) -> None:
 def context(store: Store, c: Change, settings: Settings, root: Path) -> preparation.Preparing:
     """What a preparer's recipe is validated against, with the HEAD and the edits its session starts from.
 
-    The edits are kept on disk too, so the preparer's own are discarded even when its runner dies (``stray``).
+    The edits, HEAD and ignored setup files are kept on disk too, so the preparer's own are undone even when its
+    runner dies (``stray``).
     """
-    found = edits(root)
-    _dir(store, c.slug).mkdir(mode=0o700, parents=True, exist_ok=True)
-    atomic_write(_dir(store, c.slug) / SESSION, json.dumps({"root": str(root), "found": found}))
-    return preparation.Preparing(tuple(settings.preparations), settings.data, worktree.head(root), tuple(found))
+    found, folder = edits(root), _dir(store, c.slug)
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    globs = sorted({g for o in settings.preparations for g in o.setup_globs})
+    started = {"root": str(root), "found": found} | preparer.start(root, folder, globs)
+    atomic_write(folder / SESSION, json.dumps(started))
+    return preparation.Preparing(tuple(settings.preparations), settings.data, started["head"], tuple(found))
 
 
 def stray(store: Store, slug: str, log: Log) -> None:
@@ -156,9 +160,10 @@ def stray(store: Store, slug: str, log: Log) -> None:
         return
     started = json.loads(marker.read_text())
     if (root := Path(started["root"])).is_dir():
+        undone = preparer.end(root, _dir(store, slug), started)
         made = [p for p in edits(root) if p not in set(started["found"])]
         discard(root, made)
-        log({"event": "prepared-stray", "at": datetime.now(UTC).isoformat(), "discarded": made[:20]})
+        log({"event": "prepared-stray", "at": datetime.now(UTC).isoformat(), "discarded": made[:20], **undone})
     marker.unlink()
 
 
@@ -167,11 +172,17 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
 ) -> loop.StepResult:
     """End a preparer session: keep an accepted recipe's option and setup edits as its patch, then discard every edit.
 
-    The preparer's edits never stay in the worktree, accepted or not (TD-107); edits it found there stay.
+    The preparer's edits, commits and ignored setup files never stay in the worktree, accepted or not (TD-107);
+    edits it found there stay. A preparer that moved HEAD keeps nothing.
     """
+    marker = _dir(store, c.slug) / SESSION
+    started = json.loads(marker.read_text()) if marker.is_file() else {"head": ctx.head}
+    moved = preparer.end(root, _dir(store, c.slug), started).get("reset")  # if this fails, ``stray`` ends it
     made = [p for p in edits(root) if p not in set(ctx.found)]
     try:
-        if result.exit == Exit.PENDING and isinstance(payload, tools.CheckRecipe):
+        if moved:
+            result = check.failed(f"the preparer committed (HEAD was {moved[:12]}); its commits were undone")
+        elif result.exit == Exit.PENDING and isinstance(payload, tools.CheckRecipe):
             if option := ctx.option(payload.preparation):
                 patch = capture(root, made) if made else b""
                 _write(store, c.slug, Prepared(check=c.step.task or "", option=option, reason=payload.reason,
@@ -183,7 +194,7 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
         result = check.failed(f"the preparer's setup edits could not be kept: {exc}"[:300])
     finally:
         discard(root, made)
-        (_dir(store, c.slug) / SESSION).unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
     return result
 
 
@@ -260,14 +271,28 @@ def due(store: Store, c: Change) -> bool:
     return rec is not None and not rec.ready
 
 
+def _plain(folder: Path) -> str:
+    """Why the snapshot is not only plain files and folders inside itself; masking must write nothing beyond it."""
+    top = folder.resolve()
+    for p in folder.rglob("*"):
+        file = p.is_file(follow_symlinks=False)
+        if (
+            not (file or p.is_dir(follow_symlinks=False))
+            or (file and p.stat().st_nlink > 1)
+            or not p.resolve().is_relative_to(top)
+        ):
+            return f"the snapshot holds {p.relative_to(folder)}, a link or special file"
+    return ""
+
+
 def _digest(folder: Path) -> str:
     h = hashlib.sha256()
     for p in sorted(folder.rglob("*")):
         h.update(str(p.relative_to(folder)).encode() + b"\0")
-        if p.is_symlink():
-            h.update(str(p.readlink()).encode())
-        elif p.is_file():
+        if p.is_file(follow_symlinks=False):
             h.update(hashlib.sha256(p.read_bytes()).digest())
+        elif not p.is_dir(follow_symlinks=False):
+            h.update(b"\0not a plain file")  # never read through a link
     return h.hexdigest()
 
 
@@ -276,8 +301,15 @@ def _command(rec: Prepared, name: str, root: Path, log: Log, env: Mapping[str, s
     return f"the {name} command {note}" if cmd and (note := check.run(shlex.split(cmd), root, log, env)) else ""
 
 
+def _gone(path: str) -> bool:
+    """Delete a snapshot folder; whether it is gone."""
+    if path:
+        shutil.rmtree(path, ignore_errors=True)
+    return not path or not Path(path).exists(follow_symlinks=False)
+
+
 def _snapshot(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> str:
-    """Export and mask the live copy once per check; the frozen snapshot's digest is kept."""
+    """Export and mask the live copy once per check; the frozen snapshot's digest is kept, a failed one deleted."""
     if rec.option.kind not in LIVE or rec.digest:
         return ""
     folder = snapshots() / hashlib.sha256(f"{store.root}\0{slug}\0{rec.check}".encode()).hexdigest()[:16]
@@ -286,10 +318,18 @@ def _snapshot(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> s
     rec.snapshot = str(folder)
     _write(store, slug, rec)  # before the export: the end of the check removes even a partial snapshot
     live = dict(os.environ) | {SNAPSHOT: str(folder)}  # export reads live; it is the copy the owner permitted
-    if note := _command(rec, "export", home, log, live) or _command(rec, "masking", home, log, live):
+    # Export and masking see live, and run before the setup patch is applied: when the owner releases live copies
+    # (preparation.HELD), they must run only the project's declared, committed scripts, never preparer-edited ones.
+    note = _command(rec, "export", home, log, live) or _plain(folder)
+    note = note or _command(rec, "masking", home, log, live) or _plain(folder)
+    if not note and not any(folder.iterdir()):
+        note = f"the export wrote nothing into ${SNAPSHOT}"
+    if note:  # only a masked snapshot may be kept
+        if not _gone(rec.snapshot):
+            return f"the unmasked snapshot {folder} could not be deleted; {note}"
+        rec.snapshot = ""
+        _write(store, slug, rec)
         return note
-    if not any(folder.iterdir()):
-        return f"the export wrote nothing into ${SNAPSHOT}"
     rec.digest = _digest(folder)
     _write(store, slug, rec)
     log({"event": "snapshot", "at": datetime.now(UTC).isoformat(), "check": rec.check, "option": rec.option.id})
@@ -322,7 +362,7 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
         if keep:
             rec.applied = str(root)
             _write(store, c.slug, rec)  # before applying: the end of the check discards even a partial patch
-        try:
+        try:  # before restore and seed, so setup scripts the preparer repaired are the ones they run
             _git(root, "apply", "--binary", str(patch))
         except subprocess.CalledProcessError as exc:
             return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()[:200]}"
@@ -366,32 +406,52 @@ def left(store: Store, c: Change) -> list[Prepared]:
     return [r for r in _records(store, c.slug) if r.open and r.check != current]
 
 
+def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
+    """Apply the setup patch again for a cleanup that runs without it, unless the worktree edited its paths since."""
+    patch = _file(store, c.slug, rec.check, ".patch")
+    if rec.applied or not rec.paths or not patch.is_file() or str(home) != c.names.worktree:
+        return
+    if set(edits(home)) & set(rec.paths):
+        return
+    rec.applied = str(home)
+    _write(store, c.slug, rec)  # before applying: the patch is discarded even when the end is cut short
+    try:
+        _git(home, "apply", "--binary", str(patch))
+    except subprocess.CalledProcessError:
+        rec.applied = ""  # Git applies all of a patch or none of it
+        _write(store, c.slug, rec)
+
+
 def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None:
-    """End every check whose environment is gone: discard its patch, clean up, delete its snapshot.
+    """End every check whose environment is gone: clean up with its patch applied, discard it, delete its snapshot.
 
     Cleanup and deletion always run. A patch that cannot be discarded stops the Change, so no setup edit can
-    reach a commit (TD-107).
+    reach a commit (TD-107). A failed cleanup or deletion leaves the run outstanding: the next runner ends it again.
     """
     for rec in left(store, c):
-        stuck = ""
-        if rec.applied and Path(rec.applied).is_dir():
-            try:
-                discard(Path(rec.applied), rec.paths)
-            except (OSError, subprocess.SubprocessError) as exc:
-                stuck = f"the check's setup edits ({', '.join(rec.paths[:5])}) could not be discarded: {exc}"[:300]
+        stuck = note = ""
         home = Path(c.names.worktree) if c.names.worktree and Path(c.names.worktree).is_dir() else repo
-        note = _command(rec, "cleanup", home, log, isolated(rec))
-        keep = settings.data.retention == "keep"
-        if rec.snapshot and not keep:
-            shutil.rmtree(rec.snapshot, ignore_errors=True)
+        keep = settings.data.retention == "keep" and bool(rec.digest)  # only a masked snapshot is kept
+        try:
+            _reapply(store, c, rec, home)
+            note = _command(rec, "cleanup", home, log, isolated(rec))
+            if not (gone := keep or _gone(rec.snapshot)):
+                note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
+        finally:
+            if rec.applied and Path(rec.applied).is_dir():
+                try:
+                    discard(Path(rec.applied), rec.paths)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    stuck = f"the check's setup edits ({', '.join(rec.paths[:5])}) could not be discarded: {exc}"[:300]
         at = datetime.now(UTC)
-        log({"event": "prepared-end", "at": at.isoformat(), "check": rec.check, "cleanup": note or "ok"})
+        log({"event": "prepared-end", "at": at.isoformat(), "check": rec.check, "cleanup": note or "ok"}
+            | ({"outstanding": True} if note else {}))  # fmt: skip
         if stuck:
             stop = Stop(kind=ErrorKind.STATE, reason=stuck, action=f"Discard those edits in {rec.applied}",
                         resume="The worktree holds none of them", at=at)  # fmt: skip
             return loop.StepResult(exit=Exit.STOP, reason=stuck, stop=stop)
-        update = {"snapshot": rec.snapshot if keep else "", "digest": "", "applied": "", "ready": False, "open": False}
-        _write(store, c.slug, rec.model_copy(update=update))
+        update = {"snapshot": rec.snapshot if keep or not gone else "", "applied": "", "ready": False}
+        _write(store, c.slug, rec.model_copy(update=update | ({} if note else {"digest": "", "open": False})))
     return None
 
 

@@ -21,6 +21,9 @@ with open(os.environ["PREP_LOG"], "a") as f:
     f.write(f"{act} {db}\\n")
 if act == "export":
     pathlib.Path(snap, "db.txt").write_text("alice@example.com")
+if act in {"export-symlink", "export-hardlink"}:  # the live file itself, reached from the snapshot
+    live = pathlib.Path(os.environ["PREP_LOG"]).with_name("live.txt")
+    (os.symlink if act == "export-symlink" else os.link)(live, pathlib.Path(snap, "db.txt"))
 if act == "mask":
     p = pathlib.Path(snap, "db.txt")
     p.write_text(p.read_text().replace("alice@example.com", "user-1"))
@@ -31,7 +34,23 @@ if act == "seed":
 if act == "fail":
     sys.exit("restore refused")
 """
+SETUP = """import os, pathlib, sys
+act, log = sys.argv[1], pathlib.Path(os.environ["PREP_LOG"])
+with log.open("a") as f:
+    f.write(f"{act}-from-patch\\n")
+if act == "seed":
+    pathlib.Path(os.environ["TEST_DB"]).write_text("seeded by the patch")
+if act == "cleanup" and log.with_name("cleanup-fails").exists():
+    sys.exit("cleanup refused")
+"""
 LIVE = {"TEST_DB": "postgres://live/app"}
+HELD = preparation.HELD
+
+
+@pytest.fixture(autouse=True)
+def released(monkeypatch):
+    """The snapshot machinery as it runs once the owner releases live copies; the hold has its own test."""
+    monkeypatch.setattr(preparation, "HELD", frozenset())
 
 
 def git(root: Path, *args: str) -> str:
@@ -312,3 +331,153 @@ def test_the_edits_of_a_preparer_whose_runner_died_are_discarded_before_any_late
     assert (prepare.edits(repo), events[0]["event"]) == (["src/left.py"], "prepared-stray")
     prepare.stray(store, "c1", events.append)
     assert len(events) == 1
+
+
+def test_live_copy_options_are_held_until_the_owner_releases_them(env, monkeypatch):
+    repo, store, log, tmp = env
+    monkeypatch.setattr(preparation, "HELD", HELD)
+    rules = DataPermissions(data_classes=["customers"], isolation=["TEST_DB"])
+    held = (
+        "live-copy preparation is held until the owner confirms how isolation from live is proven (review 2026-10-15)"
+    )
+    for kind in ("live-copy", "live-copy-plus-data"):
+        assert preparation.refusals(option(tmp, kind), rules, LIVE) == [held]
+    data = option(tmp, "data-only", id="fixtures")
+    assert preparation.refusals(data, rules, LIVE) == []
+    head = git(repo, "rev-parse", "HEAD").strip()
+    ctx = Preparing((option(tmp), data), rules, head, live=LIVE)
+    refused = preparation.check(recipe(), tools.Worktree(head, head), repo, ctx)
+    assert refused[0] == f"preparation: copy is not permitted ({held}) - pick another or ask"
+    assert preparation.check(recipe("fixtures"), tools.Worktree(head, head), repo, ctx) == []
+
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
+    assert prepare.launch(store, change(repo), settings(option(tmp)), lambda _e: None).exit == Exit.ASK
+    alongside = prepare.launch(store, change(repo), settings(option(tmp), data), lambda _e: None)
+    assert (alongside.exit, alongside.reason) == (Exit.RETRY, "the preparation option copy is no longer permitted")
+    assert lines(log) == []  # nothing exported
+    prepare._write(store, "c1", prepare.Prepared(check="pc1", option=data))  # noqa: SLF001 - as accepted
+    assert prepare.launch(store, change(repo, "pc1"), settings(data), lambda _e: None).exit == Exit.PENDING
+    assert lines(log) == ["seed"]
+
+
+@pytest.mark.parametrize("link", ["export-symlink", "export-hardlink"])
+def test_an_export_that_reaches_live_through_a_link_is_never_masked_and_is_deleted(env, link):
+    repo, store, log, tmp = env
+    (live := tmp / "live.txt").write_text("alice@example.com")
+    linked = option(tmp, export=run(tmp, link))
+    c, s = change(repo), settings(linked, retention="keep")
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=linked))  # noqa: SLF001 - as accepted
+    kept = set(prepare.snapshots().iterdir()) if prepare.snapshots().is_dir() else set()
+    result = prepare.launch(store, c, s, lambda _e: None)
+    assert (result.exit, result.reason) == (
+        Exit.RETRY, "test preparation failed: the snapshot holds db.txt, a link or special file"
+    )  # fmt: skip
+    assert (lines(log), live.read_text()) == ([link], "alice@example.com")  # masking never ran through the link
+    assert prepare.read(store, "c1", "visual").snapshot == ""
+    assert set(prepare.snapshots().iterdir()) == kept  # deleted
+
+
+def test_a_failed_masking_is_deleted_even_when_the_owner_keeps_snapshots(env, monkeypatch):
+    repo, store, _log, tmp = env
+    failing = option(tmp, masking=run(tmp, "fail"))
+    c, s = change(repo), settings(failing, retention="keep")
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=failing))  # noqa: SLF001 - as accepted
+    events = []
+    with monkeypatch.context() as broken:
+        broken.setattr(prepare.shutil, "rmtree", lambda *_a, **_k: None)  # the deletion fails
+        result = prepare.launch(store, c, s, lambda _e: None)
+        assert result.reason.startswith("test preparation failed: the unmasked snapshot ")
+        assert "could not be deleted; the masking command" in result.reason
+        snapshot = Path(prepare.read(store, "c1", "visual").snapshot)
+        assert (snapshot / "db.txt").read_text() == "alice@example.com"
+        c.env = None
+        assert prepare.end(store, c, repo, s, events.append) is None
+        assert (events[-1]["outstanding"], [r.check for r in prepare.left(store, c)]) == (True, ["visual"])
+    assert prepare.end(store, c, repo, s, events.append) is None
+    assert (snapshot.exists(), prepare.left(store, c), events[-1]["cleanup"]) == (False, [], "ok")
+    assert prepare.read(store, "c1", "visual").snapshot == ""  # an unmasked snapshot is never kept
+
+
+def patched(env) -> tuple[Change, object, Path]:
+    """A data-only check whose seed and cleanup run a setup script only the preparer's accepted patch holds."""
+    repo, store, _log, tmp = env
+    script = f"{sys.executable} fixtures/setup.py"
+    data = option(tmp, "data-only", id="fixtures", seed=f"{script} seed", cleanup=f"{script} cleanup")
+    c, s = change(repo, "pc1"), settings(data)
+    ctx = prepare.context(store, c, s, repo)
+    (repo / "fixtures" / "setup.py").write_text(SETUP)
+    accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
+    assert prepare.chosen(store, c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    assert not (repo / "fixtures" / "setup.py").exists()
+    return c, s, tmp / "test.db"
+
+
+def test_data_only_seed_runs_the_setup_script_of_the_accepted_patch(env):
+    _repo, store, log, _tmp = env
+    c, s, db = patched(env)
+    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    assert (lines(log), db.read_text()) == (["seed-from-patch"], "seeded by the patch")
+
+
+def test_cleanup_runs_with_the_setup_patch_and_a_failed_one_stays_outstanding_until_it_succeeds(env):
+    repo, store, log, tmp = env
+    c, s, _db = patched(env)
+    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    (fails := tmp / "cleanup-fails").write_text("")
+    c.env, events = None, []
+    assert prepare.end(store, c, repo, s, events.append) is None
+    assert (lines(log)[-1], events[-1]["outstanding"]) == ("cleanup-from-patch", True)  # the patch's own script ran
+    assert (prepare.edits(repo), [r.check for r in prepare.left(store, c)]) == ([], ["pc1"])  # discarded; still owed
+    fails.unlink()
+    assert prepare.end(store, c, repo, s, events.append) is None  # the next runner: the patch is applied again
+    assert (lines(log)[-1], events[-1]["cleanup"], prepare.left(store, c), prepare.edits(repo)) == (
+        "cleanup-from-patch", "ok", [], []
+    )  # fmt: skip
+
+
+def commit(repo: Path, *paths: str) -> None:
+    git(repo, "add", *paths)
+    git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "by the preparer")
+
+
+@pytest.mark.parametrize("ending", ["chosen", "stray"])
+def test_a_preparer_commit_is_undone_and_none_of_its_edits_stay(env, ending):
+    repo, store, _log, tmp = env
+    c, s, events = change(repo, "pc1"), settings(option(tmp)), []
+    start = git(repo, "rev-parse", "HEAD").strip()
+    ctx = prepare.context(store, c, s, repo)
+    (repo / "fixtures" / "users.json").write_text("committed by the preparer\n")
+    (repo / "src" / "app.py").write_text("print('changed')\n")
+    commit(repo, "fixtures/users.json", "src/app.py")
+    (repo / "fixtures" / "orders.json").write_text("[]\n")
+    if ending == "chosen":
+        accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
+        result = prepare.chosen(store, c, repo, recipe(), ctx, accepted)
+        assert (result.exit, result.reason.startswith("the preparer committed")) == (Exit.RETRY, True)
+    else:
+        prepare.stray(store, "c1", events.append)
+        assert events[0]["reset"] != start
+    assert (git(repo, "rev-parse", "HEAD").strip(), prepare.edits(repo)) == (start, [])
+    assert ((repo / "fixtures" / "users.json").read_text(), prepare.read(store, "c1", "pc1")) == ("[]\n", None)
+
+
+@pytest.mark.parametrize("ending", ["chosen", "stray"])
+def test_ignored_setup_files_the_preparer_created_or_changed_are_put_back(env, ending):
+    repo, store, _log, tmp = env
+    (repo / ".gitignore").write_text("*.local\n")
+    commit(repo, ".gitignore")
+    (repo / "fixtures" / "kept.local").write_text("the owner's\n")
+    (repo / "src" / "other.local").write_text("outside the setup globs\n")
+    c, s = change(repo, "pc1"), settings(option(tmp))
+    ctx = prepare.context(store, c, s, repo)
+    (repo / "fixtures" / "kept.local").write_text("changed by the preparer\n")
+    (repo / "fixtures" / "deep").mkdir()
+    (repo / "fixtures" / "deep" / "new.local").write_text("made by the preparer\n")
+    if ending == "chosen":
+        accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
+        assert prepare.chosen(store, c, repo, recipe(), ctx, accepted) is accepted
+    else:
+        prepare.stray(store, "c1", lambda _e: None)
+    assert (repo / "fixtures" / "kept.local").read_text() == "the owner's\n"
+    assert not (repo / "fixtures" / "deep" / "new.local").exists()
+    assert (repo / "src" / "other.local").read_text() == "outside the setup globs\n"

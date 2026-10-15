@@ -25,6 +25,10 @@ if TYPE_CHECKING:
 
 type Kind = Literal["live-copy", "live-copy-plus-data", "data-only"]
 LIVE: frozenset[str] = frozenset({"live-copy", "live-copy-plus-data"})
+HELD: frozenset[str] = LIVE  # kinds refused until the owner releases them
+HELD_REASON = (
+    "live-copy preparation is held until the owner confirms how isolation from live is proven (review 2026-10-15)"
+)
 COMMAND_LIMIT = 300
 SNAPSHOT = "OWLBEAR_SNAPSHOT"  # the snapshot folder every command of a live copy is given
 VARIABLE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
@@ -102,7 +106,7 @@ class DataPermissions(Record):
 
 def refusals(option: Preparation, rules: DataPermissions, live: Mapping[str, str]) -> list[str]:
     """Why the owner's permissions refuse *option*; *live* is the environment the app would otherwise read."""
-    why = []
+    why = [HELD_REASON] if option.kind in HELD else []
     if denied := sorted(set(option.data_classes) - set(rules.data_classes)):
         why.append(f"data classes {', '.join(denied)} are not permitted")
     if option.copies_keys and not rules.keys:
