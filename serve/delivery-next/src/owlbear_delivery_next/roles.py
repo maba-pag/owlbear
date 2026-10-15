@@ -22,6 +22,8 @@ DEFAULTS: dict[Role, RoleModel] = {
     "shaper": RoleModel(model="claude-opus-5.5", effort="medium"),  # the New Change chat (TD-83); owner's effort
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
+# TD-111: the planner's read-only researcher subagent, required on the model the benchmark of 2026-10-15 chose
+RESEARCHER = RoleModel(model="gpt-6-luna", effort="xhigh")
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",
     StepKind.BUILD: "builder",

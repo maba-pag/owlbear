@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from owlbear_delivery_next import preload, sdk_adapter, tools
+from owlbear_delivery_next import preload, roles, sdk_adapter, tools
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -120,3 +120,19 @@ def test_the_window_agent_names_the_relay_its_step_configures(tmp_path) -> None:
     (server,) = json.loads(wf.mcp(inbox)(None))["mcpServers"]
     assert server == wf.names(inbox)[0]
     assert f"{server}/submit_result" in wf.agent("planner", inbox)(None)
+
+
+def test_the_planner_alone_gets_the_researcher_and_every_builtin_agent_is_excluded() -> None:
+    planner = options(kind=StepKind.PLAN)
+    assert [a["name"] for a in planner["custom_agents"]] == ["planner", "researcher"]
+    assert planner["custom_agents"][0]["infer"] is False  # never started as its own subagent
+    found = planner["custom_agents"][1]
+    assert (found["model"], found["reasoning_effort"], found["tools"]) == (
+        roles.RESEARCHER.model,
+        roles.RESEARCHER.effort,
+        ["view", "glob", "grep"],
+    )
+    assert planner["excluded_builtin_agents"] == list(sdk_adapter.BUILTINS)
+    assert "general-purpose" in sdk_adapter.BUILTINS
+    for kind in (StepKind.BUILD, StepKind.REVIEW):
+        assert [a["name"] for a in options(kind=kind)["custom_agents"]] == [sdk_adapter.ROLES[kind]]

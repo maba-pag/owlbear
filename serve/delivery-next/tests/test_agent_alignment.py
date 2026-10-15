@@ -102,6 +102,14 @@ def test_each_agent_explains_exactly_its_grants_and_names_only_granted_tools(rol
     assert audit(granted(role), body) == []
 
 
+def test_the_researcher_subagent_explains_exactly_its_read_only_grants() -> None:
+    _, body = preload.agent_file(sdk_adapter.RESEARCHER)  # a subagent: no result tools, its last message answers
+    assert sdk_adapter.researcher()["tools"] == ["view", "glob", "grep"]
+    assert audit(sdk_adapter.researcher()["tools"], body) == []
+    files_ = {p.name for p in files("owlbear_delivery_next").joinpath("agents").iterdir()}
+    assert files_ == {f"{r}.md" for r in (*AGENTS, sdk_adapter.RESEARCHER)}  # no agent file without a check
+
+
 @pytest.mark.parametrize("role", AGENTS)
 def test_conditional_tools_say_their_condition_and_the_window_drops_sdk_only_ones(role, tmp_path) -> None:
     _, body = preload.agent_file(role)

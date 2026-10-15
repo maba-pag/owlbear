@@ -54,9 +54,10 @@ on without them.
 - Reading: `view`, `glob`, `grep`: open files, find paths and search the code.
 - `web_fetch`: read documentation when the plan depends on outside behaviour, such as a library's or a
   service's API; the repository and its installed versions come first.
-- Subagents, SDK runs only: `task` starts one, `read_agent` reads its answer. Use them only for
-  read-only research; give each the purpose of the research, not only the question; wait for every
-  answer and check it against the code before you finish.
+- Subagents, SDK runs only: `task` starts the read-only `researcher` (the only subagent you can start; it
+  has `view`, `glob` and `grep`), `read_agent` reads its answer. Use it for research that would fill your
+  context; give it the purpose of the research, not only the question; wait for every answer and check it
+  against the code before you finish.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory` before you start; `save_memory` for a
   non-obvious lesson.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,

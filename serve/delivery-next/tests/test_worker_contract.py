@@ -8,7 +8,7 @@ from typing import ClassVar
 import psutil
 import pytest
 
-from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
+from owlbear_delivery_next import processes, prompts, roles, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination, verdict
@@ -157,82 +157,74 @@ def test_a_late_call_never_changes_the_accepted_result_or_its_head() -> None:
     assert [e["accepted"] for e in st.events if e.get("event") == "tool"] == [True, False]
 
 
-def test_a_turn_on_another_model_voids_even_an_accepted_result_but_a_subagent_model_is_only_logged() -> None:
-    def message(model: str, parent: str | None = None) -> SimpleNamespace:
-        data = SimpleNamespace(content="", model=model, parent_tool_call_id=parent)
-        return SimpleNamespace(type=SimpleNamespace(value="assistant.message"), data=data)
+def _accepted(model: str = "claude-opus-5.5") -> sdk_adapter._Step:
+    trees = iter([Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",))])
+    st = step()
+    st.cfg = dataclasses.replace(st.cfg, model=model, observe=lambda: next(trees), checks=("npm test",))
+    st.gate.cfg = st.cfg
+    st._handle(tools.SUBMIT, SimpleNamespace(arguments=GOOD))  # noqa: SLF001
+    return st
 
-    def accepted() -> sdk_adapter._Step:
-        trees = iter([Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",))])
-        st = step()
-        st.cfg = dataclasses.replace(st.cfg, model="gpt-6-luna", observe=lambda: next(trees), checks=("npm test",))
-        st.gate.cfg = st.cfg
-        st._handle(tools.SUBMIT, SimpleNamespace(arguments=GOOD))  # noqa: SLF001
-        return st
 
-    st = accepted()
-    st.on_event(message("gpt-6-luna"))
-    st.on_event(message("claude-haiku-5.5", parent="call-1"))
+def _event(kind: str, **data: object) -> SimpleNamespace:
+    return SimpleNamespace(type=SimpleNamespace(value=kind), data=SimpleNamespace(**data))
+
+
+def test_a_turn_on_another_model_voids_an_accepted_result_and_only_the_researchers_model_is_allowed() -> None:
+    researcher = roles.RESEARCHER.model
+    st = _accepted()
+    st.on_event(_event("assistant.message", content="", model="claude-opus-5.5", parent_tool_call_id=None))
+    st.on_event(_event("assistant.message", content="", model=researcher, parent_tool_call_id="call-1"))
     assert (st.run.ending, st.run.head) == ("result", HEAD)
-    assert [e["model"] for e in st.events if e.get("event") == "subagent-model"] == ["claude-haiku-5.5"]
-    st.on_event(message("mai-code-1.1-flash"))
-    assert (st.run.ending, st.run.payload, st.run.head) == ("error", None, None)
-    assert st.run.detail == "wrong model: a turn ran on mai-code-1.1-flash, the step needs gpt-6-luna"
-    st = accepted()
-    st.on_event(SimpleNamespace(type=SimpleNamespace(value="session.auto_mode_resolved"), data=SimpleNamespace()))
+    assert [e["model"] for e in st.events if e.get("event") == "subagent-model"] == [researcher]
+    st.on_event(_event("assistant.message", content="", model="mai-code-1.1-flash", parent_tool_call_id=None))
+    assert (st.run.ending, st.run.payload, st.run.head, st.run.model_check) == ("error", None, None, "mismatch")
+    assert st.run.detail == "wrong model: a turn ran on mai-code-1.1-flash, the step needs claude-opus-5.5"
+    st = _accepted()
+    st.on_event(_event("assistant.message", content="", model="claude-haiku-5.5", parent_tool_call_id="call-1"))
+    assert st.run.detail == f"wrong model: a subagent ran on claude-haiku-5.5, the researcher needs {researcher}"
+    st = _accepted()
+    st.on_event(_event("session.auto_mode_resolved"))
     assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, "wrong model: the runtime resolved auto")
-    st = accepted()
-    turn = SimpleNamespace(turn_id="t", model="gpt-6-sol", parent_tool_call_id=None)
-    st.on_event(SimpleNamespace(type=SimpleNamespace(value="assistant.turn_start"), data=turn))
+    st = _accepted()
+    st.on_event(_event("assistant.turn_start", turn_id="t", model="gpt-6-sol", parent_tool_call_id=None))
     assert (st.run.ending, st.run.detail) == (
         "error",
-        "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna",
+        "wrong model: a turn ran on gpt-6-sol, the step needs claude-opus-5.5",
     )
 
 
-def test_a_subagent_on_auto_voids_the_step_and_a_runtime_chosen_subagent_model_is_logged() -> None:
-    def started(model: str | None, source: str) -> SimpleNamespace:
-        data = SimpleNamespace(agent_name="general-purpose", model=model, model_selection_source=source)
-        return SimpleNamespace(type=SimpleNamespace(value="subagent.started"), data=data)
+def test_only_the_researcher_may_start_on_its_required_model_and_auto_voids_the_step() -> None:
+    def started(name: str, model: str | None, source: str = "agent_definition_default") -> SimpleNamespace:
+        return _event("subagent.started", agent_name=name, model=model, model_selection_source=source)
 
-    def usage(model: str, parent: str | None = None, *, auto: bool | None = False) -> SimpleNamespace:
-        data = SimpleNamespace(model=model, parent_tool_call_id=parent, is_auto=auto)
-        return SimpleNamespace(type=SimpleNamespace(value="assistant.usage"), data=data)
-
-    def accepted() -> sdk_adapter._Step:
-        trees = iter([Worktree(HEAD, BASE, changed=("packages/app/src/greet.ts",))])
-        st = step()
-        st.cfg = dataclasses.replace(st.cfg, model="gpt-6-luna", observe=lambda: next(trees), checks=("npm test",))
-        st.gate.cfg = st.cfg
-        st._handle(tools.SUBMIT, SimpleNamespace(arguments=GOOD))  # noqa: SLF001
-        return st
-
-    st = accepted()
-    st.on_event(started("claude-haiku-5.5", "agent_definition_default"))
-    st.on_event(started("mai-code-1.1-flash", "runtime_policy"))  # "runtime policy, Auto mode, or an experiment"
-    st.on_event(usage("gpt-6-luna", auto=None))
-    st.on_event(usage("claude-haiku-5.5", parent="call-1"))
+    researcher = roles.RESEARCHER.model
+    st = _accepted()
+    st.on_event(started("researcher", researcher))
     assert (st.run.ending, st.run.head) == ("result", HEAD)
-    assert [(e["model"], e["source"]) for e in st.events if e.get("event") == "subagent-start"] == [
-        ("claude-haiku-5.5", "agent_definition_default"),
-        ("mai-code-1.1-flash", "runtime_policy"),
+    assert [(e["agent"], e["model"]) for e in st.events if e.get("event") == "subagent-start"] == [
+        ("researcher", researcher)
     ]
-    assert st.subagent_models == {"claude-haiku-5.5"}  # a start alone never excuses a model in the final usage
-    st.on_event(started("auto", "explicit_override"))
-    assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, "wrong model: a subagent ran on auto")
-
-    for event, detail in [
-        (usage("mai-code-1.1-flash", parent="call-2", auto=True), "wrong model: a subagent call ran on auto"),
-        (usage("gpt-6-luna", auto=True), "wrong model: a call ran on auto"),
-        (usage("mai-code-1.1-flash"), "wrong model: a turn ran on mai-code-1.1-flash, the step needs gpt-6-luna"),
+    other = "a subagent other than the researcher started: general-purpose"
+    slow = f"wrong model: the researcher ran on claude-haiku-5.5, it needs {researcher}"
+    for event, detail, check in [
+        (started("general-purpose", "claude-opus-5.5"), other, "unknown"),
+        (started("researcher", "claude-haiku-5.5"), slow, "mismatch"),
+        (started("researcher", "auto", "explicit_override"), "wrong model: a subagent ran on auto", "mismatch"),
+        (
+            _event("assistant.usage", model="mai-code-1.1-flash", parent_tool_call_id="call-2", is_auto=True),
+            "wrong model: a subagent call ran on auto",
+            "mismatch",
+        ),
+        (
+            _event("assistant.usage", model="claude-opus-5.5", parent_tool_call_id=None, is_auto=True),
+            "wrong model: a call ran on auto",
+            "mismatch",
+        ),
     ]:
-        st = accepted()
+        st = _accepted()
         st.on_event(event)
-        assert (st.run.ending, st.run.payload, st.run.detail) == ("error", None, detail)
-    st = accepted()
-    message = SimpleNamespace(content="", model="auto", parent_tool_call_id="call-1")
-    st.on_event(SimpleNamespace(type=SimpleNamespace(value="assistant.message"), data=message))
-    assert (st.run.ending, st.run.detail) == ("error", "wrong model: a subagent ran on auto")
+        assert (st.run.ending, st.run.payload, st.run.detail, st.run.model_check) == ("error", None, detail, check)
 
 
 def test_usage_naming_an_unattributed_model_voids_the_result_and_an_unnamed_model_never_starts(monkeypatch) -> None:
