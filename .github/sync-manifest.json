@@ -38,6 +38,7 @@
     ".github/README-automation.md",
     ".github/copilot-instructions.md",
     ".github/skills",
+    ".github/workflows/snyk-monitor.yml",
     ".mega-linter.yml",
     ".owlbear",
     ".pre-commit-config.yaml",
