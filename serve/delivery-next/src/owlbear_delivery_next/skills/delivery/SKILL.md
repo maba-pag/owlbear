@@ -54,9 +54,10 @@ intent, never quoting the record, with the structured question tool when there i
 
 - one to four close variants of the recorded choice, as many as really differ in consequence, the
   matching one at a varying position and never verbatim; a one-line consequence where it helps;
-- one or two other directions where real ones exist;
-- then, always in this order: "take your recommendation", "none of these: show me more options",
-  "explain first"; no recommendation mark; free text stays open.
+- one or two other directions where real ones exist, the opposite among them;
+- then, always in this order: "take your recommendation (…)" with your recommendation named in the
+  brackets, "none of these: show me more options", "explain first"; no other recommendation mark;
+  free text stays open.
 
 A chosen variant or direction is `decided`. "Take your recommendation": state your choice and why,
 record it `autonomous`. "Show me more options": ask again with options across directions, each with
