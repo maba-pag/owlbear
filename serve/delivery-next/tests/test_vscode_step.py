@@ -1096,14 +1096,13 @@ def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_p
     assert host.actions("chat/turnStarted") == []
 
 
-def test_without_the_installed_shaper_agent_the_chat_starts_unselected_with_a_warning(wt: Path, tmp_path: Path) -> None:
+def test_without_the_installed_shaper_agent_the_chat_never_opens_with_every_tool(wt: Path, tmp_path: Path) -> None:
     host = shaping_host(wt)
     out, warning = shape(wt, shaping_env(host, shaper=setup.shaper_path(tmp_path)))
-    assert out.end == "started"
-    assert warning.startswith("the shaper agent is not installed at")
-    assert warning.endswith("(run setup --skill yes)")
-    ((_, started),) = host.actions("chat/turnStarted")
-    assert "agent" not in started["message"]
+    assert (out.end, warning) == ("no-agent", "")
+    assert out.detail.startswith("the shaper agent is not installed at")
+    assert out.detail.endswith("run `owlbear-next setup`")
+    assert host.actions("chat/turnStarted") == []  # nothing launched: an agentless chat would have every tool
 
 
 OWNER = '// team settings\n{\n  "editor.tabSize": 2, // mine\n  "a": [1,2]\n}\n'

@@ -240,12 +240,14 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
 def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]:
     """Open an interactive Copilot chat in ``folder``'s window with ``prompt`` as its first model turn (TD-83).
 
-    The chat runs on the role's model, effort and context tier with auto-approve, as the user-level shaper agent
-    when setup installed it; Delivery leaves it to the owner.
+    The chat runs on the role's model, effort and context tier with auto-approve, as the user-level shaper agent;
+    without that agent it does not open, since an agentless chat would have every tool (TD-93, TD-102).
     Returns how it went and what Delivery could not take out of the owner's settings again, or ''.
     """
     env, added, conn = env or Env(), list[wf.Added](), None
-    agent = env.shaper if env.shaper and env.shaper.is_file() else None
+    agent = env.shaper
+    if agent is not None and not agent.is_file():
+        return Outcome("no-agent", f"the shaper agent is not installed at {agent}; run `owlbear-next setup`"), ""
     spec = StepSpec(
         folder=folder, agent=agent, model=role.model, effort=role.effort, prompt=prompt, config=SHAPING,
         context=role.context,
@@ -268,7 +270,4 @@ def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None
         if close := getattr(conn, "close", None):
             close()
         warning = wf.remove_harness(folder, added[0]) if added else ""
-    if env.shaper and agent is None and out.end == "started":
-        missing = f"the shaper agent is not installed at {env.shaper}; the chat runs without it (run setup --skill yes)"
-        warning = f"{warning}; {missing}" if warning else missing
     return out, warning

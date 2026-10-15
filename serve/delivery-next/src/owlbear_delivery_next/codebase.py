@@ -11,6 +11,7 @@ SHIPPED = (
     "**/*.py",
     "design_pack.json",
     "agents/*.md",
+    "chat_agents/*.md",
     "golden/*.html",
     "golden/*.json",
     "skills/**/*.md",
