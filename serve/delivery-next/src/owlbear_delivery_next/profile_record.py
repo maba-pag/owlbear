@@ -56,3 +56,12 @@ class Profile(Record):
     confirmed_at: datetime | None = None
     entries: dict[str, ProfileEntry] = Field(default_factory=dict)
     runtime: Runtime = "managed"  # TD-35: managed runs agent steps through the SDK; vscode runs them in VS Code
+
+
+WINDOW_PAUSED = True  # TD-137: until the window probes pass, every agent step runs through the SDK
+PAUSED_NOTE = "window steps are paused until the window probes pass (TD-137); agent steps run through the SDK"
+
+
+def in_window(profile: Profile | None) -> bool:
+    """Whether agent steps run in a VS Code window: the profile says so and window steps are not paused."""
+    return not WINDOW_PAUSED and (profile or Profile()).runtime == "vscode"

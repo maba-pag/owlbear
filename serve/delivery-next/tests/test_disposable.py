@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import briefs, cli, loop, runner, sdk_adapter, sessions, tools
+from owlbear_delivery_next import briefs, cli, loop, profile_record, runner, sdk_adapter, sessions, tools
 from owlbear_delivery_next.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
@@ -400,6 +400,7 @@ def test_a_change_name_never_holds_a_dot(tmp_path):
 
 
 def test_each_window_judge_finds_the_read_only_worktree_reset(tmp_path, change_repo, monkeypatch):
+    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
     store, seen = Store(tmp_path / "store"), []
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.CHECK))
     store.write(Lock("c1"), change)

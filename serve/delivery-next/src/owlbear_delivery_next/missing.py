@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next import profile_record
 from owlbear_delivery_next.catalogue import runtime_of
 from owlbear_delivery_next.failures import ENVIRONMENT, cause_key, transient
 from owlbear_delivery_next.loop import StepResult
@@ -94,6 +95,11 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
             f"does not rerun steps there yet. Switch the project's runtime, or go on without it. The step needs {said}"
         )
         options = [Option(id="switched", label="Switched the runtime, run the step again", next="retry")]
+        if where == "window" and profile_record.WINDOW_PAUSED:
+            text, options = (
+                f"{tool} exists only in the window runtime: {profile_record.PAUSED_NOTE}. The step needs {said}",
+                [],
+            )
         options += [*_without(enclosing, tool), PAUSE]
         return _ask(enclosing, text[:1500], cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
     return _nowhere(tool, said, enclosing, subject)

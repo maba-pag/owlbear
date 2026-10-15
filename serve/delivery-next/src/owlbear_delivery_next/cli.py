@@ -36,7 +36,14 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry, RoleModel, Runtime
+from owlbear_delivery_next.profile_record import (
+    PAUSED_NOTE,
+    Profile,
+    ProfileEntry,
+    RoleModel,
+    Runtime,
+    in_window,
+)
 from owlbear_delivery_next.status import status, unloadable
 from owlbear_delivery_next.store import Store, StoreError
 
@@ -185,7 +192,8 @@ def show_profile(
     )
     lines = [f"profile v{prof.version}", *([f"Notice: {notice}"] if notice else [])]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
-    return "\n".join([*lines, roles.table(store.settings()), f"Runtime: {prof.runtime}"])
+    paused = f" ({PAUSED_NOTE})" if prof.runtime == "vscode" and not in_window(prof) else ""
+    return "\n".join([*lines, roles.table(store.settings()), f"Runtime: {prof.runtime}{paused}"])
 
 
 def add_backlog(store: Store, a: argparse.Namespace) -> int:
@@ -213,6 +221,9 @@ def report(store: Store, a: argparse.Namespace) -> int:
         return add_backlog(store, a)
     if a.command == "status":
         sys.stdout.write(show_status(store, datetime.now(UTC)) + "\n")
+    elif a.runtime == "vscode" and not in_window(Profile(runtime="vscode")):
+        sys.stderr.write(f"Runtime not switched: {PAUSED_NOTE}.\n")
+        return 1
     else:
         sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
     return 0

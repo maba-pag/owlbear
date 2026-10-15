@@ -14,7 +14,7 @@ from owlbear_delivery_next import loop, roles, sdk_adapter, session_result, tool
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile
+from owlbear_delivery_next.profile_record import in_window
 from owlbear_delivery_next.steps import disposable, ro_installs
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> sessio
     Either runtime's unknown model stops the Change for the owner (TD-94), unless the caller *holds* the run to
     decide it with others, as a visual round does.
     """
-    if (store.read_profile() or Profile()).runtime == "vscode":
+    if in_window(store.read_profile()):
         done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
     else:
         done = asyncio.run(sdk_adapter.run(cfg))
@@ -166,7 +166,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     def ran(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
         return [run(store, cfgs[0], hold=hold)] if len(cfgs) == 1 else asyncio.run(_together(cfgs))
 
-    window = (store.read_profile() or Profile()).runtime == "vscode"
+    window = in_window(store.read_profile())
     runs = isolated(store, lock, change, source, fresh, ran, each=window)
     judged = []
     for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock

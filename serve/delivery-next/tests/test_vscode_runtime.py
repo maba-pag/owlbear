@@ -14,7 +14,17 @@ import psutil
 import pytest
 from mcp import Client, StdioServerParameters
 
-from owlbear_delivery_next import ahp, cli, leftovers, sdk_adapter, sessions, step_mcp, tools, vscode_adapter
+from owlbear_delivery_next import (
+    ahp,
+    cli,
+    leftovers,
+    profile_record,
+    sdk_adapter,
+    sessions,
+    step_mcp,
+    tools,
+    vscode_adapter,
+)
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
@@ -305,6 +315,7 @@ def test_settle_terminates_leftovers_and_confirms_only_an_empty_scan(tmp_path: P
 
 
 def test_the_profile_runtime_chooses_where_sessions_run(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
     store, calls = Store(tmp_path), []
     monkeypatch.setattr(sessions.vscode_adapter, "run", lambda _cfg, inbox: calls.append(("vscode", inbox)) or Run("v"))
 
@@ -323,6 +334,7 @@ def test_the_profile_runtime_chooses_where_sessions_run(tmp_path: Path, monkeypa
 
 
 def test_the_cli_switches_the_runtime_and_shows_it(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
     monkeypatch.setattr(cli.profile, "detect", lambda _r, _g, prev: prev or Profile())
     monkeypatch.setattr(cli.profile, "provider", lambda *_a: SimpleNamespace())
     store = Store(tmp_path)
@@ -331,6 +343,30 @@ def test_the_cli_switches_the_runtime_and_shows_it(tmp_path: Path, monkeypatch) 
     assert cli.show_profile(store, tmp_path, []).endswith("Runtime: vscode")
     with pytest.raises(SystemExit):
         cli.main(["profile", "--runtime", "auto"])
+
+
+def test_paused_window_steps_run_through_the_sdk_and_the_cli_refuses_the_switch(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    store, calls = Store(tmp_path), []
+    monkeypatch.setattr(sessions.vscode_adapter, "run", lambda *_a: calls.append("vscode") or Run("v"))
+
+    async def sdk(_cfg) -> Run:
+        calls.append("sdk")
+        return Run("s")
+
+    monkeypatch.setattr(sessions.sdk_adapter, "run", sdk)
+    store.write_profile(Profile(runtime="vscode"))  # chosen before the pause
+    sessions.run(store, session())
+    assert calls == ["sdk"]
+    monkeypatch.setattr(cli.profile, "detect", lambda _r, _g, prev: prev or Profile())
+    monkeypatch.setattr(cli.profile, "provider", lambda *_a: SimpleNamespace())
+    assert cli.show_profile(store, tmp_path, []).endswith(f"Runtime: vscode ({profile_record.PAUSED_NOTE})")
+    store.write_profile(Profile())
+    switch = SimpleNamespace(command="profile", runtime="vscode")
+    assert cli.report(store, switch) == 1
+    assert profile_record.PAUSED_NOTE in capsys.readouterr().err
+    assert store.read_profile().runtime == "managed"
 
 
 def test_connect_uses_a_running_host_without_opening_a_window(tmp_path, monkeypatch):

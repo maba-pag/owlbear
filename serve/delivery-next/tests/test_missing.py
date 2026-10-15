@@ -11,6 +11,7 @@ from owlbear_delivery_next import (
     loop,
     missing,
     permissions,
+    profile_record,
     prompts,
     runner,
     sdk_adapter,
@@ -127,7 +128,8 @@ def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None
     assert error in c.questions[-1].text  # the owner sees the real error, not the stable reason
 
 
-def test_a_tool_of_another_runtime_asks_since_delivery_does_not_rerun_there_yet() -> None:
+def test_a_tool_of_another_runtime_asks_since_delivery_does_not_rerun_there_yet(monkeypatch) -> None:
+    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
     r = to_result(run(report("browser", "no browser tool in this session")), K.BUILD, NOW)
     assert (r.exit, r.cause) == (Exit.ASK, "project-env:build:tool-browser")
     assert "only in the window runtime; this step ran in the sdk runtime" in r.question.text
@@ -138,6 +140,15 @@ def test_a_tool_of_another_runtime_asks_since_delivery_does_not_rerun_there_yet(
     assert options(brief) == [("switched", "retry"), ("pause", "pause")]  # the brief changes only in chat
     task = to_result(run(report("get_task_output", "unknown tool")), K.BUILD, NOW)
     assert (task.exit, task.cause) == (Exit.ASK, "project-env:build:tool-get-task-output")
+
+
+def test_a_window_tool_offers_no_switch_while_window_steps_are_paused() -> None:
+    r = to_result(run(report("browser", "no browser tool in this session")), K.BUILD, NOW)
+    assert (r.exit, r.cause) == (Exit.ASK, "project-env:build:tool-browser")
+    assert profile_record.PAUSED_NOTE in r.question.text
+    assert options(r) == [("replan", K.PLAN), ("pause", "pause")]
+    brief = to_result(run(report("open_browser_page", "unknown tool")), K.REVIEW, NOW, K.SHAPE)
+    assert options(brief) == [("pause", "pause")]
     there = to_result(run(report("get_errors", "the tool failed"), runtime="window"), K.BUILD, NOW)
     assert there.exit == Exit.BACK  # the window runtime has it; it is still missing, so nowhere fits
 
@@ -255,7 +266,8 @@ def test_denials_record_the_programs_they_name() -> None:
     assert st.run.denied == {}  # a later allowed use of the program supersedes its denial
 
 
-def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning() -> None:
+def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning(monkeypatch) -> None:
+    monkeypatch.setattr(profile_record, "WINDOW_PAUSED", False)
     ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
     task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: add a docker test\n\nhttps://x/pull/7#r1")
     p = report("matlab", "matlab: license server unknown")
