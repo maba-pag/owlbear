@@ -1,8 +1,8 @@
 """Where a Change stands: its stages in order, the current task and sub-step, and the round of its loop (TD-97).
 
-A round counts one loop of the normal process, from Delivery's own records: a plan challenge or a re-plan
-(``budgets.rounds["plan"]``, ``budgets.replans``), a review that sends its task or the final review back to
-fixing (``budgets.rounds`` by ``round_key``), and a visual check that fails back to the build (a visual round
+A round counts one loop of the normal process, from Delivery's own records, never reset: a plan challenge or a
+re-plan (``budgets.loops["plan"]``, ``budgets.replans``), a review that sends its task or the final review back
+to fixing (``budgets.loops`` by ``round_key``), and a visual check that fails back to the build (a visual round
 that ended ``back``). Retries after a crash or a network wait (``budgets.causes``) are never a round.
 """
 
@@ -93,7 +93,7 @@ def _current(c: Change) -> str:
 
 
 def _rounds(c: Change) -> dict[str, int]:
-    r = c.budgets.rounds
+    r = c.budgets.loops  # never reset, so a round shown never goes down and a finished stage keeps its badge
     return {
         "shape": r.get("shape", 0) + 1,
         "plan": r.get("plan", 0) + c.budgets.replans + 1,
@@ -127,13 +127,13 @@ def _position(c: Change) -> tuple[int | None, int | None]:
 def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]:  # noqa: PLR0911 - one case per step
     """The sub-step and the round of its loop."""
     s, kind, task = c.step, _kind(c), _task(c)
-    own = c.budgets.rounds.get(round_key(c), 0) + 1
+    own = c.budgets.loops.get(round_key(c), 0) + 1
     if s.kind in _SUB:
         return _SUB[s.kind], 1
     if kind == StepKind.SHAPE:
         return ("Brief challenge" if brief_due(c) else None), rounds["shape"]
     if kind == StepKind.PLAN:
-        again = "Re-planning after the plan challenge" if c.budgets.rounds.get("plan") else "Re-planning"
+        again = "Re-planning after the plan challenge" if c.budgets.loops.get("plan") else "Re-planning"
         return (again if rounds["plan"] > 1 else None), rounds["plan"]
     if kind == StepKind.REVIEW:
         return ("Task review", own) if s.task else (None, rounds["final"])

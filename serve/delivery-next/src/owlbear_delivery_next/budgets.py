@@ -214,6 +214,7 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
     if _progress(c, cause_key(ErrorKind.REVIEW, s.kind, key), r.score):
         c.budgets.rounds[key] = 0
     c.budgets.rounds[key] = c.budgets.rounds.get(key, 0) + 1
+    c.budgets.loops[key] = c.budgets.loops.get(key, 0) + 1  # what the owner sees; resets nowhere (TD-97)
     if c.budgets.rounds[key] > ROUND_LIMIT:
         fix = StepKind.BUILD if s.kind == StepKind.REVIEW else s.kind
         options = [

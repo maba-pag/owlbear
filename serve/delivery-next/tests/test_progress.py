@@ -43,7 +43,7 @@ def reviewing(fix_rounds: int) -> Change:
     ]
     fixes[0] = fixes[0].model_copy(update={"fixes": "t2"})
     c = Change(slug="c1", plan=Plan(tasks=FOUR + fixes), step=Step(kind=StepKind.REVIEW, task=fixes[-1].id))
-    c.budgets.rounds[budgets.round_key(c)] = fix_rounds
+    c.budgets.loops[budgets.round_key(c)] = fix_rounds
     return c
 
 
@@ -133,7 +133,7 @@ def test_a_failed_visual_check_loops_back_through_the_build_and_counts_its_round
 def test_a_final_review_repair_counts_the_final_reviews_round():
     fix = Task(id="t5", title="Fix 2 review finding(s) of the final review", origin="review")
     c = Change(slug="c1", plan=Plan(tasks=[*FOUR, fix]), step=Step(kind=StepKind.BUILD, task="t5"))
-    c.budgets.rounds["final"] = 1
+    c.budgets.loops["final"] = 1
 
     assert progress(c).line == "Build · Fixing final review findings · round 2"
     c.step = Step(kind=StepKind.REVIEW, mode="final")
@@ -182,3 +182,13 @@ def test_the_changes_page_shows_the_stages_as_an_ordered_list_marking_the_curren
     assert 'el("ol", undefined, { class: "stepper" })' in page
     assert 'item.setAttribute("aria-current", "step")' in page
     assert "rounds`" in page  # the loop badge's words, beside its multiplication sign
+
+
+def test_the_shown_round_never_drops_and_a_passed_review_keeps_its_badge():
+    c = reviewing(3)
+    key = budgets.round_key(c)
+    c.budgets.rounds[key] = 0  # the review budget restarted after progress; the loops it counted stay
+    assert progress(c).round == 4
+    c.budgets.rounds.pop(key, None)  # the review passed: its budget entry is dropped
+    c.step = Step(kind=StepKind.REVIEW)  # on to the final review
+    assert next(s for s in progress(c).stages if s.key == "build").rounds == 4

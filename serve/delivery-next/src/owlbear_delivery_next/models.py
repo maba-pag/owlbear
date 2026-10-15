@@ -381,6 +381,7 @@ class Budgets(Record):
 
     causes: dict[str, Budget] = Field(default_factory=dict)
     rounds: dict[str, int] = Field(default_factory=dict)
+    loops: dict[str, int] = Field(default_factory=dict)  # every round ever, never reset: the progress display (TD-97)
     replans: int = 0
 
 
