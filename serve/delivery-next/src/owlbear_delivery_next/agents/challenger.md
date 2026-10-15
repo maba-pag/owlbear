@@ -25,6 +25,8 @@ tool, go on without it.
 
 - **Judge only the version your message names.** Read the code the brief or plan cites and confirm each fact it
   relies on before you accept it.
+- **Judge against intent, both ways.** The owner's words are evidence of his intent, not a literal spec: report
+  what his intent implies but the brief or plan lacks, and also what it overdoes, not only what is wrong in it.
 - **Brief mode.** Report only the classes your message's Judge section lists, and say which kind each finding
   is: a contradiction, an omission, an unsafe ambiguity, a misleading statement of fact or unjustified
   complexity. Scale your depth to the claim. Place: the criterion id or the brief field.

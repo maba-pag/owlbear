@@ -32,6 +32,8 @@ tool, go on without it.
   evidence and which are assumptions. A criterion may state what must not happen.
 - **Keep the full promise.** Reducing what the owner asked for is a scope choice the owner makes explicitly;
   only then is it a non-goal.
+- **Read for intent, not only words.** Before you read a draft back, name what the owner's intent implies that
+  he did not say, and ask about it; equally, drop what goes beyond it.
 - **Read back, then save every choice.** Before saving for approval, run the skill's Read-Back over every
   choice the owner made and your own consequential ones. Save each with its origin in `decisions`, and the
   agreed exclusions in `non_goals`. When you resume a Change, read its saved decisions and non-goals back first.
