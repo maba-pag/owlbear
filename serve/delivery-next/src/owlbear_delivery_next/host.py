@@ -481,7 +481,7 @@ def serve(repo: Path) -> int:
     host.say(f"Delivery host {os.getpid()} on {api.link(host.record)}")
 
     def ready() -> None:
-        failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in setup.check(repo, store.read_profile()) if not c.ok]
+        failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in setup.ready(store, repo) if not c.ok]
         host.record = host.record.model_copy(update={"ready": failed})
         if not host.stopped.is_set():
             atomic_write(store.root / "host.json", host.record.model_dump_json())

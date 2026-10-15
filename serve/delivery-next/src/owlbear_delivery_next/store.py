@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next import data_repo, loop, migrations, profile
+from owlbear_delivery_next import data_repo, loop, migrations, profile, profile_share
 from owlbear_delivery_next.config import CONFIG_FORMAT, GlobalLayer, Layer, Settings, resolve
 from owlbear_delivery_next.inbox import InboxItem
 from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Stop
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 
 STORE_DIR = "owlbear-delivery"
 CONFIG = "config.json"  # the project's settings layer (TD-52)
-ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into CONFIG
 ACTIVITY_LIMIT = 200
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
@@ -220,48 +219,11 @@ class Store:
             atomic_write(marker, f"{FORMAT}\n")
         try:
             store.adopt(data_repo.identity(cwd) if shared else "")
+            profile_share.move_roles(store)
+            profile_share.adopt(store)
         except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
-        store.move_roles()
         return store
-
-    def move_roles(self) -> None:
-        """Merge a format-1 profile's role overrides into the project settings, once.
-
-        Fields the settings already set win; the old values fill only the empty ones. A marker then records the
-        move, so an override cleared later never returns while the old profile is still on disk. An unreadable or
-        invalid profile or settings file is left to ``read_profile`` and ``read_config`` to report.
-        """
-        path, marker = self.root / "profile.json", self.root / ROLES_MOVED
-        if marker.exists() or not path.exists():
-            return
-        dir_fd = os.open(self.root, _DIR_FLAGS)
-        try:
-            fd = open_lock(dir_fd, blocking=True, name=f".{ROLES_MOVED}.lock")
-        finally:
-            os.close(dir_fd)
-        try:
-            if marker.exists():  # another opener finished the move while this one waited
-                return
-            try:
-                data = json.loads(path.read_text())
-                found = (
-                    migrations.ROLES.validate_python(data.get("roles", {})) if int(data.get("format", 0)) == 1 else {}
-                )
-            except AttributeError, OSError, TypeError, ValueError:
-                return  # read_profile reports the damaged profile
-            if found:
-                try:
-                    self.update_config(
-                        lambda cur: migrations.with_roles(cur, found), "role overrides from the old profile"
-                    )
-                except SharedError:
-                    raise  # the old roles move later; never mark a move that did not happen
-                except StoreError:
-                    return  # refused before writing; read_config reports the damaged settings
-            atomic_write(marker, "the format-1 profile's role overrides are merged into config.json\n")
-        finally:
-            os.close(fd)
 
     def adopt(self, identity: str) -> None:
         """Claim the project's shared folder, then move the clone's own settings there once; the old file stays.
@@ -353,12 +315,15 @@ class Store:
 
     def read_profile(self) -> Profile | None:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
-        path = self.root / "profile.json"
+        path = profile_share.path(self)
         return _load(path, Profile, PROFILE_FORMAT, migrations.PROFILE) if path.exists() else None
 
-    def write_profile(self, profile: Profile) -> None:
-        """Write the project profile atomically."""
-        atomic_write(self.root / "profile.json", profile.model_dump_json(indent=1))
+    def write_profile(self, profile: Profile) -> str:
+        """Write the project profile atomically, published when shared (TD-147); the publication notice."""
+        try:
+            return profile_share.write(self, profile.model_dump_json(indent=1))
+        except data_repo.DataRepoError as exc:
+            raise SharedError(str(exc)) from exc
 
     def write(self, lock: Lock, change: Change) -> None:
         """Write one Change atomically, keeping the previous file as ``.prev``."""

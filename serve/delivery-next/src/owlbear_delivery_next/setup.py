@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import truststore
 
-from owlbear_delivery_next import data_repo, design_pack, pack_update, profile, roles
+from owlbear_delivery_next import data_repo, design_pack, pack_update, profile, profile_share, roles
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.sdk_adapter import cli_path
 from owlbear_delivery_next.store import Store, StoreError, git_common_dir
@@ -181,6 +181,11 @@ def readiness(host: str, probe: Probe, network: str | None, copilot: str | None)
     fix = 'Run `git config --global user.name "Your Name"` and `git config --global user.email you@example.com`'
     out.append(Check("git identity", ok=ok, detail=f"{name[1]} <{email[1]}>" if ok else "not set", fix=fix))
     return [*out, _signing(probe)]
+
+
+def ready(store: Store, repo: Path) -> list[Check]:
+    """The readiness check at a host start, after a shared profile's facts were detected in this clone (TD-147)."""
+    return check(repo, profile_share.checked(store, repo))
 
 
 def check(repo: Path, prof: Profile | None) -> list[Check]:

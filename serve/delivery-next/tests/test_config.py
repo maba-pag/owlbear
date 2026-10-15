@@ -5,7 +5,7 @@ import threading
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import roles
+from owlbear_delivery_next import profile_share, roles
 from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.config import Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.models import StepKind
@@ -192,17 +192,17 @@ def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(
 def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real, raced = store_mod.open_lock, []
+    real, raced = profile_share.open_lock, []
 
     def other_opener_first(fd, **kw):
-        if kw.get("name") == f".{store_mod.ROLES_MOVED}.lock" and not raced:
+        if kw.get("name") == f".{profile_share.ROLES_MOVED}.lock" and not raced:
             raced.append(True)  # another process moves the roles, then the owner clears them through its page
-            Store(root).move_roles()
+            profile_share.move_roles(Store(root))
             Store(root).update_config(lambda _cur: Layer())
         return real(fd, **kw)
 
-    monkeypatch.setattr(store_mod, "open_lock", other_opener_first)
-    Store(root).move_roles()
+    monkeypatch.setattr(profile_share, "open_lock", other_opener_first)
+    profile_share.move_roles(Store(root))
 
     assert raced
     assert roles.chosen(Store(root).settings(), StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
@@ -211,16 +211,16 @@ def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, mon
 def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):
     root = repo / ".git" / "owlbear-delivery"
     _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real = store_mod.atomic_write
+    real = profile_share.atomic_write
 
     def no_marker(target, content):
-        if target.name == store_mod.ROLES_MOVED:
+        if target.name == profile_share.ROLES_MOVED:
             raise OSError(28, "No space left on device")
         real(target, content)
 
-    monkeypatch.setattr(store_mod, "atomic_write", no_marker)
+    monkeypatch.setattr(profile_share, "atomic_write", no_marker)
     with pytest.raises(OSError, match="No space"):
-        Store(root).move_roles()
+        profile_share.move_roles(Store(root))
 
 
 def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monkeypatch):
@@ -235,8 +235,8 @@ def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monk
 
     monkeypatch.setattr(store_mod, "atomic_write", replaced_then_failed)
     with pytest.raises(OSError, match="Input/output"):
-        Store(root).move_roles()
-    assert not (root / store_mod.ROLES_MOVED).exists()
+        profile_share.move_roles(Store(root))
+    assert not (root / profile_share.ROLES_MOVED).exists()
 
 
 @pytest.mark.parametrize(

@@ -8,10 +8,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, data_repo, sessions, setup
+from owlbear_delivery_next import api, cli, data_repo, profile_share, sessions, setup
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.codebase import CURRENT
+from owlbear_delivery_next.detector import DetectorError
 from owlbear_delivery_next.host import HostRecord
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.store import STORE_DIR, Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
@@ -159,6 +161,41 @@ def test_old_role_overrides_reach_the_shared_layer_without_replacing_its_values(
     layer = json.loads((root / "shop-site" / "config.json").read_text())
     assert Store.open(repo).settings().agents["builder"].model == "m-old"
     assert json.loads((root / "shop-site" / "config.json").read_text())["widths"] == layer["widths"] == [1440]
+
+
+def test_the_profile_lives_in_the_shared_folder_and_a_clones_own_moves_there_once(shared, repo) -> None:
+    root, remote = shared
+    old = Store.open(repo).root / "profile.json"
+    old.write_text(Profile(version=3).model_dump_json())
+    store = Store.open(repo)
+    assert (store.read_profile().version, old.exists(), old.with_name("profile.json.moved").exists()) == (
+        3,
+        False,
+        True,
+    )
+    assert pushed(remote, "shop-site/profile.json") == "settings: shop-site: project profile moved from its clone"
+    assert store.write_profile(Profile(version=4)) == ""
+    assert json.loads((root / "shop-site" / "profile.json").read_text())["version"] == 4
+    assert pushed(remote, "shop-site/profile.json").splitlines()[0] == "settings: shop-site: project profile"
+
+
+@pytest.mark.usefixtures("shared")
+def test_a_shared_profile_is_detected_once_in_each_clone_and_again_after_a_failure(repo, monkeypatch) -> None:
+    store, seen = Store.open(repo), []
+    store.write_profile(Profile(version=2))
+
+    def detect(_repo, _gh, prev):
+        seen.append(prev.version)
+        if len(seen) == 1:
+            msg = "gh: offline"
+            raise DetectorError(msg)
+        return prev.model_copy(update={"version": prev.version + 1})
+
+    monkeypatch.setattr(profile_share.profile, "detect", detect)
+    monkeypatch.setattr(profile_share.profile, "provider", lambda *_a: None)
+    assert profile_share.checked(store, repo).version == 2  # tried again at the next start
+    assert [profile_share.checked(store, repo).version for _ in range(2)] == [3, 3]
+    assert (seen, Store.open(repo).read_profile().version) == ([2, 2], 3)
 
 
 def test_without_a_pointer_the_settings_stay_in_the_clone(repo) -> None:
