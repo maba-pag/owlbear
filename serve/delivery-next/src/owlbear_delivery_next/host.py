@@ -24,7 +24,7 @@ from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import before, check, disposable, engine, pullback, worktree
+from owlbear_delivery_next.steps import before, check, disposable, engine, prepare, pullback, worktree
 from owlbear_delivery_next.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.store import LockHeldError, Store, StoreError
 
@@ -292,9 +292,10 @@ class Host:
                 step = loop.next_step(c, now)
             if c.env:
                 c = self._environment(lock, c, now)
-                step = loop.next_step(c, now) if check.capturing(c) or before.due(c) else None
+                runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
+                step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
-            return step is not None
+            return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 
     def _pull(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Run pull-back again when the owner asked to Pull, and record its result."""
@@ -356,8 +357,8 @@ class Host:
     def _environment(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Launch the check environment after the preparing Builder is gone; pending once it answers."""
         e = c.env
-        if e is None or self._env_action(c) != "launch" or before.due(c):
-            return c  # the runner renders the "before" states with this recipe first (TD-24)
+        if e is None or self._env_action(c) != "launch" or before.due(c) or prepare.due(self.store, c):
+            return c  # the runner renders the "before" states, then prepares the test copy (TD-24, TD-96)
         if (left := self._clear(c, e)) is None or left:
             self._mark(c, left, now)  # never a second group beside one that may still run
             return c
@@ -370,7 +371,8 @@ class Host:
             return loop.apply(c, check.failed("; ".join(errors)), now)
         c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
         self.store.write(lock, c)
-        if proc := check.start(e, root, self.store.root / "changes" / c.slug / "env.log"):
+        log = self.store.root / "changes" / c.slug / "env.log"
+        if proc := check.start(e, root, log, prepare.environ(self.store, c)):  # the test copy's isolation (TD-96)
             c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
             self.store.write(lock, c)
         pids = check.ready(e, proc) if proc else None

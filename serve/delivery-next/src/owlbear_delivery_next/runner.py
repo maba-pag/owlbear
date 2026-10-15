@@ -32,7 +32,7 @@ from owlbear_delivery_next import (
 )
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.failures import cause_key
-from owlbear_delivery_next.models import Environment, ErrorKind, Exit, StepKind, Waiting
+from owlbear_delivery_next.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.sessions import UsageUnreadError
 from owlbear_delivery_next.steps import (
@@ -45,6 +45,7 @@ from owlbear_delivery_next.steps import (
     follow,
     judges,
     merge,
+    prepare,
     publish,
     review,
     visual,
@@ -129,9 +130,10 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         return change.step.session
 
     role = roles.chosen(store.settings(), s.kind)
+    ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
 
     def config(at: Path) -> sdk_adapter.Session:
-        parts = prompts.session(change, profile, at, others)
+        parts = prompts.session(change, profile, at, others, ctx)
         return sdk_adapter.Session(
             kind=s.kind,
             worktree=at,
@@ -157,6 +159,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             helpers=((design_tools.SCAN, partial(design.builder_scan, at)),)
             if s.kind == StepKind.BUILD and change.brief.ui  # the builder's design detector (slice 7)
             else (),
+            preparing=ctx,
         )
 
     run = accepted or _kept(store, lock, change, path, config)
@@ -185,6 +188,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
+    if ctx is not None:
+        result = prepare.chosen(store, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     store.write(lock, loop.apply(change, result, end))
@@ -237,14 +242,14 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
         if visual_settled.settled(store, lock, change, (head, tree, widths), out):
             return
-        visual.seed(change, path, settings.seed, lambda e: store.log(lock, change.slug, e))  # TD-65
+        prepare.stepped(change, prepared=prepare.read(store, change.slug, VISUAL) is not None)  # TD-96
         pack = design.pack()
         shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
         states = {s.name: s.version for s in change.brief.visual}
         source = design.sources(path, visual.ui_paths(change, head), pack)
         found = [s.design for s in shots if s.design] + ([source] if source else [])
         scans = design.marked(found, change.before, states)
-    except visual.SeedError as exc:
+    except prepare.PrepareError as exc:
         result = exc.result
     except visual.BrowserMissingError as exc:
         result = visual.missing_browser(str(exc))
@@ -298,14 +303,15 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
 def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
+    settings, log = store.settings(), lambda e: store.log(lock, change.slug, e)
     change.before = shots = before.capture(
         change,
         repo,
         lambda base: store.before_dir(change.slug, base),
         store.read_profile() or Profile(),
-        lambda e: store.log(lock, change.slug, e),
-        widths=store.settings().widths,
-        seed=store.settings().seed,
+        log,
+        widths=settings.widths,
+        prepare=prepare.merge_base(store, change, settings, log),
     )
     store.write(lock, change)
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
@@ -389,6 +395,7 @@ def _reused(store: Store, lock: Lock, change: Change) -> bool:
     root = Path(change.names.worktree)
     recipe = tools.CheckRecipe(command=r.command, directory=r.directory, ready_url=r.ready_url, summary="reused")
     held = r.check == (s.task or "") and root.is_dir() and not tools.check_recipe(recipe, tools.Worktree("", ""), root)
+    held = held and prepare.reusable(store, change, store.settings())  # its preparation still declared and permitted
     if not (held and r.inputs and worktree.launch_inputs(root, r.directory) == r.inputs):
         change.recipe = None
         store.write(lock, change)
@@ -425,7 +432,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
+def _step(  # noqa: C901 - one branch per phase
+    store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
+) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
     if step is not None:
         try:
@@ -436,14 +445,16 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             store.write(lock, loop.apply(change, stop, now))
             return
     try:
-        if step is not None and check.capturing(change):
+        if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
+            _out(f"{change.slug}: test preparation ran")
+        elif step is not None and check.capturing(change):
             _visual(store, lock, change, repo)
         elif step is not None and before.due(change):
             _before(store, lock, change, repo)
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind in AGENT:
-            _reused(store, lock, change) or _agent(store, lock, change, repo)
+            _reused(store, lock, change) or prepare.refused(store, lock, change) or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and loop.brief_due(change):
             _brief_challenge(store, lock, change, repo)
         else:

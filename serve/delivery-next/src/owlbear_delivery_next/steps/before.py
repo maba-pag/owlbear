@@ -45,7 +45,7 @@ def _remove(repo: Path, tmp: Path) -> None:
             step()
 
 
-def _serve(  # noqa: PLR0913 - the widths and seed come from the settings
+def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy from the check's preparation
     c: Change,
     root: Path,
     out: Path,
@@ -53,9 +53,9 @@ def _serve(  # noqa: PLR0913 - the widths and seed come from the settings
     notes: list[str],
     *,
     widths: Sequence[int],
-    seed: str = "",
+    prepare: Callable[[Path], dict[str, str]] | None = None,
 ) -> list[visual.Shot]:
-    """Launch the Change's recipe in *root*, capture its states once it answers, dispose of it whatever happens."""
+    """Prepare the test copy, launch the Change's recipe in *root*, capture its states, dispose of all it started."""
     r = c.env
     if r is None:
         return []
@@ -63,7 +63,12 @@ def _serve(  # noqa: PLR0913 - the widths and seed come from the settings
     if check.answers(e.ready_url):
         notes.append(f"something else already answers at {e.ready_url}")
         return []
-    proc = check.start(e, root, out / "preview.log")
+    try:
+        env = prepare(root) if prepare else None  # TD-96: the same frozen snapshot the "after" capture restores
+    except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
+        notes.append(f"the test copy at the merge-base: {exc}"[:300])
+        return []
+    proc = check.start(e, root, out / "preview.log", env)
     if proc is None:
         notes.append(f"`{e.command}` did not start at the merge-base")
         return []
@@ -75,11 +80,8 @@ def _serve(  # noqa: PLR0913 - the widths and seed come from the settings
             return []
         e = e.model_copy(update={"pids": pids})
         check.journal(log, pids)
-        states = [s for s in c.brief.visual if seed or not s.steps]  # steps run only on seeded data (TD-65)
-        notes += [f"{s.name}: its steps need the project's seed command" for s in c.brief.visual if s not in states]
-        if seed and any(s.steps for s in states) and (note := check.run(shlex.split(seed), root, log)):
-            notes.append(f"the seed command at the merge-base: {note}")
-            return []
+        states = [s for s in c.brief.visual if prepare or not s.steps]  # steps run only on a test copy (TD-96)
+        notes += [f"{s.name}: its steps need a test preparation" for s in c.brief.visual if s not in states]
         return visual.CAPTURE(visual.root(e.ready_url), states, out, widths, pack=design.pack())
     finally:
         if left := check.dispose(e):
@@ -94,7 +96,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     log: Callable[[dict[str, Any]], None],
     *,
     widths: Sequence[int],
-    seed: str = "",
+    prepare: Callable[[Path], dict[str, str]] | None = None,
 ) -> VisualResult:
     """Render the brief's states at the merge-base; the findings say why any state is missing (B25)."""
     path, now, e = Path(c.names.worktree), datetime.now(UTC), c.env
@@ -122,7 +124,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
                 notes.append(note)
                 break
         else:
-            shots = _serve(c, tmp, out, log, notes, widths=widths, seed=seed)
+            shots = _serve(c, tmp, out, log, notes, widths=widths, prepare=prepare)
         if scan := design.sources(tmp, visual.ui_paths(c, worktree.head(path)), design.pack()):
             sources.append(scan)  # the Change's UI paths in the merge-base's whole tree, after the screenshots
     except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)

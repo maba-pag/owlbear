@@ -18,8 +18,8 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.results import Gate
 from owlbear_delivery_next.session_result import Run
 
-AGENTS = ("builder", "planner", "reviewer", "challenger", "designer")
-PENDING = {"preparer"}  # check preparation runs as the builder until the TD-96 preparation contract exists
+AGENTS = ("builder", "planner", "reviewer", "challenger", "designer", "preparer")
+PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
 SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research P24)
     *("bash", "read_bash", "list_bash", "stop_bash", "view", "create", "edit", "glob", "grep", "web_fetch"),
@@ -221,6 +221,18 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     reminder = prompts.reminder(role, judging=cfg.judging)
     assert (tools.ASK.name in granted_there) == (tools.ASK.name in note) == (tools.ASK.name in reminder) == asks
     assert wf.agent_path(sdk_adapter.role_of(cfg)) == f".github/agents/owlbear-{role}.agent.md"
+
+
+def test_check_preparation_runs_as_the_preparer_in_both_runtimes(tmp_path) -> None:
+    cfg = _session("check", kind=StepKind.CHECK, submit=tools.RECIPE, policy=Policy(Path(), write=True))
+    role = sdk_adapter.role_of(cfg)
+    opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
+    assert (role, opts["agent"], opts["custom_agents"][0]["skills"]) == ("preparer", "preparer", [])
+    assert {"create", "edit", "owlbear-memory/save_memory"} <= set(opts["custom_agents"][0]["tools"])
+    assert roles.SESSIONS[StepKind.CHECK] == role  # its model is the preparer's (TD-80)
+    window = wf.agent(role, INBOX, tmp_path)(None)
+    assert window.startswith("---\nname: owlbear-preparer\n")
+    assert wf.agent_path(role) == ".github/agents/owlbear-preparer.agent.md"
 
 
 def shaper_file() -> tuple[dict[str, str], list[str], str]:

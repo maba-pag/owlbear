@@ -17,6 +17,7 @@ from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Question, StepKind
+from owlbear_delivery_next.preparation import Preparation
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.store import Store
@@ -149,7 +150,7 @@ def test_a_saved_decision_reaches_the_workers_whole(repo):
         assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
 
 
-def test_a_brief_with_clicks_waits_for_a_seed_command_before_approval(tmp_path):
+def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approval(tmp_path):
     store = Store(tmp_path)
     c = client(store)
     states = [{"name": "dark", "path": "/", "expect": "Dark"}]
@@ -158,7 +159,8 @@ def test_a_brief_with_clicks_waits_for_a_seed_command_before_approval(tmp_path):
     slug = store.slugs()[0]
     refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
     assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)
-    store.update_config(lambda layer: layer.model_copy(update={"seed": "npm run seed"}))
+    option = Preparation(id="fixtures", kind="data-only", seed="npm run seed", cleanup="npm run drop")
+    store.update_config(lambda layer: layer.model_copy(update={"preparations": [option]}))
     assert c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1}).status_code == 200
 
 

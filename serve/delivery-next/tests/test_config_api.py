@@ -42,14 +42,18 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
     assert got["project"] == {
-        "format": 1, "agents": {}, "runtimes": {}, "widths": None, "seed": None, "design_failures": None
+        "format": 2, "agents": {}, "runtimes": {}, "widths": None, "preparations": None, "data": None,
+        "design_failures": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
     assert got["settings"]["sources"]["agents.builder.model"] == "default"
-    assert (got["settings"]["seed"], got["settings"]["sources"]["seed"]) == ("", "default")
+    assert (got["settings"]["preparations"], got["settings"]["sources"]["preparations"]) == ([], "default")
+    assert got["settings"]["data"] == {
+        "data_classes": [], "unmasked": [], "keys": False, "isolation": [], "retention": "delete"
+    }  # fmt: skip
     assert got["applied"] == [
-        "agents.*.context", "agents.*.effort", "agents.*.model", "widths", "seed", "design_failures"
+        "agents.*.context", "agents.*.effort", "agents.*.model", "widths", "preparations", "data", "design_failures"
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 
@@ -90,14 +94,14 @@ def test_a_project_save_needs_the_revision_it_was_based_on(store):
         {"widths": [999]},
         {"agents": {"builder": {"context": True}}},
         {"visible": True},
-        {"seed": "  "},
-        {"seed": "npm run 'seed"},
+        {"seed": "npm run seed"},  # format 2 replaced it by declared preparation options (TD-96)
+        {"preparations": [{"id": "copy", "kind": "live-copy", "cleanup": "drop", "data_classes": ["orders"]}]},
     ],
 )
 def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
-    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 1, **layer}})
+    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 2, **layer}})
 
     assert r.status_code == 422
     assert not (store.root / "config.json").exists()
@@ -106,19 +110,20 @@ def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
 def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tmp_path):
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
-    r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 1, "visible": True}})
+    r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 2, "visible": True}})
     assert r.status_code == 409
     assert "location" in r.json()["detail"]
 
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
-    assert (got["global"], got["global_location"]) == ({"format": 1, "agents": {}, "runtimes": {}, "widths": None,
-                                                         "seed": None, "design_failures": None, "visible": None},
+    assert (got["global"], got["global_location"]) == ({"format": 2, "agents": {}, "runtimes": {}, "widths": None,
+                                                         "preparations": None, "data": None, "design_failures": None,
+                                                         "visible": None},
                                                         True)  # fmt: skip
-    seeded = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": 1, "seed": "x"}})
-    assert seeded.status_code == 422  # the seed command is a project setting (TD-65)
-    layer = {"format": 1, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
+    data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": 2, "data": {}}})
+    assert data.status_code == 422  # test preparation is a project setting (TD-96)
+    layer = {"format": 2, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
     r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": layer})
     assert r.status_code == 200
     assert json.loads(path.read_text())["visible"] is True
@@ -133,7 +138,7 @@ def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store
     first = c.get("/api/next/config").json()
     a = first["project"] | {"agents": {"builder": {"effort": "low"}}}
     c.put("/api/next/config/project", json={"rev": first["project_rev"], "layer": a})
-    newer = {"format": 1, "agents": {"builder": {"effort": "high"}}, "runtimes": {}, "widths": None}
+    newer = {"format": 2, "agents": {"builder": {"effort": "high"}}, "runtimes": {}, "widths": None}
     path, real_text, real_bytes = store.root / "config.json", Path.read_text, Path.read_bytes
     landed = []
 
@@ -159,7 +164,7 @@ def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store
 
 
 def test_saves_need_the_token_and_a_local_host(store):
-    body = {"rev": "x", "layer": {"format": 1}}
+    body = {"rev": "x", "layer": {"format": 2}}
     assert client(store).put("/api/next/config/project", json=body).status_code == 401
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://example.com", headers=AUTH)
     assert c.put("/api/next/config/project", json=body).status_code == 403
@@ -170,11 +175,11 @@ def test_a_stale_or_invalid_global_save_changes_nothing(store, tmp_path):
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
-    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 1, "visible": True}})
+    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 2, "visible": True}})
     assert ok.status_code == 200
     before = path.read_bytes()
 
-    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 1, "visible": False}})
+    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 2, "visible": False}})
     bad = c.put("/api/next/config/global", json={"rev": ok.json()["global_rev"], "layer": {"widths": [100]}})
 
     assert (stale.status_code, bad.status_code) == (409, 422)
@@ -188,7 +193,7 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     monkeypatch.setattr("owlbear_delivery_next.store.update_layer", full)
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
-    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 1}})
+    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 2}})
 
     assert r.status_code == 503
     assert r.json()["detail"] == "the settings could not be saved: No space left on device"

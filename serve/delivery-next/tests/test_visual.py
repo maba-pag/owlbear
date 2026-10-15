@@ -883,7 +883,7 @@ def test_the_launch_recipe_needs_a_clean_worktree_directory_and_a_local_url(tmp_
         return tools.check_recipe(tools.CheckRecipe(**base | fields), tools.Worktree("h", "h", dirty), tmp_path)
 
     assert errors(command="npm run preview --prefix /outside") == []
-    assert errors(("a",))[0].startswith("changes: uncommitted files (a)")
+    assert errors(("a",))[0].startswith("changes: a edited; you may edit nothing without")
     assert errors(directory="../")[0].startswith("directory: ../ is not a directory in the worktree")
     assert errors(ready_url="https://example.com/")[0].startswith("ready_url: must be local")
 

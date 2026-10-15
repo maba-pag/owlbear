@@ -21,6 +21,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "reviewer": ("owlbear-acceptance", "owlbear-module-design", "owlbear-findings"),
     "challenger": ("owlbear-acceptance", "owlbear-module-design", "owlbear-findings"),
     "designer": ("owlbear-ui-design", "owlbear-ui-review"),
+    "preparer": (),  # its discovery order lives in its agent file, its only consumer (reuse study v2, 3.3)
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-ui-design",)}  # added when the brief has a UI (TD-76)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>

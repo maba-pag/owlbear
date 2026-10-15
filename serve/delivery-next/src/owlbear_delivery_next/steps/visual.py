@@ -9,11 +9,10 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import re
-import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.loop import StepResult
@@ -152,39 +151,6 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
 
 
 CAPTURE: Capturer = capture
-
-
-class SeedError(Exception):
-    """The capture cannot start on seeded data; its result says why (TD-65)."""
-
-    def __init__(self, result: StepResult) -> None:
-        super().__init__(result.reason)
-        self.result = result
-
-
-def seed(c: Change, path: Path, command: str, log: Callable[[dict[str, Any]], None]) -> None:
-    """Reset the test data before a capture whose states have steps; none of them run without the seed command.
-
-    Raises:
-        SeedError: The project names no seed command, or it failed.
-    """
-    if not any(s.steps for s in c.brief.visual):
-        return
-    if not command:
-        text = (
-            "The visual check has states with clicks or typing, which run only on seeded test data (TD-60), and "
-            "this project names no seed command. Set one in the project settings, or revise the brief's states."
-        )
-        options = [
-            Option(id="done", label="Seed command set, continue", next=StepKind.CHECK),
-            Option(id="brief", label="Revise the brief", next=StepKind.SHAPE),
-            Option(id="pause", label="Pause", next="pause"),
-        ]
-        raise SeedError(
-            engine.ask(StepKind.CHECK, text, cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "seed"), options)
-        )
-    if note := check.run(shlex.split(command), path, log):
-        raise SeedError(broken(f"the seed command {note}"))
 
 
 def oversize(out: Path, shots: Sequence[Shot]) -> list[Shot]:

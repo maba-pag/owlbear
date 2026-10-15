@@ -428,11 +428,12 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         brief = read(slug).brief
         if body.version != brief.version:
             raise HTTPException(409, f"brief version {body.version} is not the current draft")
-        if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().seed:
+        if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
             raise HTTPException(
                 409,
-                f"The visual states {', '.join(stepped)} have clicks or typing, which run only on seeded test data "
-                "(TD-60); set the project's seed command in Settings first, or revise the brief without those steps",
+                f"The visual states {', '.join(stepped)} have clicks or typing, which run only on a prepared test copy "
+                "(TD-96); declare the project's preparation options in its settings first, or revise the brief "
+                "without those steps",
             )
         return put(slug, BriefApproval(at=datetime.now(UTC), version=body.version))
 

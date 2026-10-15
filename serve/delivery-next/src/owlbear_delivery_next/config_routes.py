@@ -29,7 +29,8 @@ APPLIED = [
     "agents.*.effort",
     "agents.*.model",
     "widths",
-    "seed",
+    "preparations",
+    "data",
     "design_failures",
 ]  # the settings Delivery uses today
 

@@ -165,6 +165,19 @@ class CheckRecipe(Args):
     directory: str = _f(300, "Repository-relative directory to run it in", "packages/app")
     ready_url: str = _f(300, "Local URL that answers once the environment is ready", "http://127.0.0.1:4173/")
     summary: str = _f(1000, "How you verified it", "Ran it, fetched the page, stopped it")
+    preparation: str = Field(
+        default="",
+        max_length=40,
+        description="The id of the project's declared preparation option the check runs on; empty only when the "
+        "project declares none",
+        examples=["live-copy"],
+    )
+    reason: str = Field(
+        default="",
+        max_length=500,
+        description="Why that option gives the check the data it needs",
+        examples=["The empty cart state needs no live orders, so test data only"],
+    )
 
 
 class PlanTask(Args):
@@ -281,7 +294,8 @@ VISUAL_REVIEW = Spec(
 )
 RECIPE = Spec(
     "submit_result",
-    "Submit the verified launch recipe once, after you stopped everything you started.",
+    "Submit the launch recipe and its preparation option once, after you stopped everything you started; leave "
+    "your setup-file edits uncommitted.",
     CheckRecipe,
     "result",
 )
@@ -413,9 +427,13 @@ def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) 
     return errors
 
 
-def check_recipe(recipe: CheckRecipe, tree: Worktree, root: Path) -> list[str]:
-    """Return field errors for a recipe the host could not run: uncommitted, outside the worktree or not local."""
-    errors = [f"changes: uncommitted files ({_few(tree.dirty)}); commit or revert them"] if tree.dirty else []
+def check_recipe(recipe: CheckRecipe, tree: Worktree, root: Path, setup: Sequence[str] = ()) -> list[str]:
+    """Return field errors for a recipe the host could not run: edits beyond *setup* globs, outside, not local."""
+    if edits := [p for p in tree.dirty if not any(PurePosixPath(p).full_match(g) for g in setup)]:
+        allowed = f"only the setup files {', '.join(setup)}" if setup else "nothing without a preparation option"
+        errors = [f"changes: {_few(edits)} edited; you may edit {allowed} and no Change code - revert them"]
+    else:
+        errors = []
     where = (root / recipe.directory).resolve()
     if not (where.is_relative_to(root.resolve()) and where.is_dir()):
         errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')

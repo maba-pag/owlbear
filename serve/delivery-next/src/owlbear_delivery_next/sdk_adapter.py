@@ -36,11 +36,12 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.models import ItemRef
     from owlbear_delivery_next.permissions import Policy
+    from owlbear_delivery_next.preparation import Preparing
     from owlbear_delivery_next.processes import Pids
     from owlbear_delivery_next.session_result import Ending
 
 DEADLINES = {StepKind.PLAN: 900.0, StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
-ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "builder"}
+ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "preparer"}
 RESEARCHER = "researcher"  # the only subagent a session may start (TD-111)
 BUILTINS = (  # the runtime's own subagents, each excluded so none can start (benchmark 2026-10-15)
     *("explore", "task", "code-review", "rubber-duck", "research", "rem-agent", "security-review"),
@@ -141,6 +142,7 @@ class Session:
     first_look: tools.Spec | None = None  # a judgement submitted before the final result, which does not end it
     reveal: str = ""  # what the first look's reply releases, such as the detector's findings
     helpers: tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...] = ()  # Delivery tools that answer, not end
+    preparing: Preparing | None = None  # check preparation: the declared options a recipe is validated against
 
 
 def sent(events: Iterable[Any], message: str) -> bool:

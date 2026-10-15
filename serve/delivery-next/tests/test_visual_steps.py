@@ -1,4 +1,4 @@
-"""Item 8c (TD-49, TD-60, TD-65): click and type steps before a state's screenshot, on seeded test data only."""
+"""Item 8c (TD-49, TD-96): click and type steps before a state's screenshot, on a prepared test copy only."""
 
 import functools
 import http.server
@@ -15,7 +15,7 @@ from owlbear_delivery_next import brief_tools, briefs, loop
 from owlbear_delivery_next.inbox import BriefApproval
 from owlbear_delivery_next.models import Change, Exit, StepKind, VisualState, VisualStep
 from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.steps import before, browse, visual
+from owlbear_delivery_next.steps import before, browse, prepare, visual
 from owlbear_delivery_next.store import Store
 
 NOW = datetime(2026, 10, 13, 6, tzinfo=UTC)
@@ -96,25 +96,18 @@ def stepped(*steps: VisualStep) -> Change:
     return c
 
 
-def test_steps_run_only_after_the_seed_command_resets_the_data(tmp_path):
+def test_steps_run_only_on_a_prepared_test_copy():
     c = stepped(VisualStep(do="click", target="Show"))
-    with pytest.raises(visual.SeedError) as unseeded:
-        visual.seed(c, tmp_path, "", lambda _e: None)
-    asked = unseeded.value.result
+    with pytest.raises(prepare.PrepareError) as unprepared:
+        prepare.stepped(c, prepared=False)
+    asked = unprepared.value.result
     assert (asked.exit, asked.cause, [o.next for o in asked.question.options]) == (
         Exit.ASK,
-        "project-env:check:seed",
+        "project-env:check:preparation",
         [StepKind.CHECK, StepKind.SHAPE, "pause"],
     )
-    failing = f"{sys.executable} -c \"raise SystemExit('no fixtures')\""
-    with pytest.raises(visual.SeedError) as failed:
-        visual.seed(c, tmp_path, failing, lambda _e: None)
-    assert (failed.value.result.exit, "no fixtures" in failed.value.result.reason) == (Exit.RETRY, True)
-    events: list[dict] = []
-    visual.seed(c, tmp_path, f"{sys.executable} -c \"open('seeded', 'w').write('1')\"", events.append)
-    assert (tmp_path / "seeded").read_text() == "1"
-    assert events[0]["event"] == "pids"  # the seed's process is journaled like an install's
-    visual.seed(stepped(), tmp_path, "", lambda _e: None)  # static states need no seed
+    prepare.stepped(c, prepared=True)
+    prepare.stepped(stepped(), prepared=False)  # static states need no test copy
 
 
 PAGE = """<!doctype html><title>t</title>
@@ -206,7 +199,7 @@ def test_a_stepped_shot_stops_off_origin_sockets_and_a_framed_less_popup():
     assert (done[-1], left[-1]) == ("abort", "https://example.com")
 
 
-def test_the_before_capture_renders_only_static_states_without_a_seed(monkeypatch, tmp_path):
+def test_the_before_capture_renders_only_static_states_without_a_test_copy(monkeypatch, tmp_path):
     c = stepped(VisualStep(do="click", target="Show"))
     c.brief.visual.append(VisualState(name="home", path="/", expect="Hallo"))
     rendered: list[str] = []
@@ -220,4 +213,4 @@ def test_the_before_capture_renders_only_static_states_without_a_seed(monkeypatc
     c.env = c.env or before.Environment(check="visual", command="serve", directory=".", ready_url="http://127.0.0.1:1/")
     notes: list[str] = []
     before._serve(c, tmp_path, tmp_path, lambda _e: None, notes, widths=[1280])  # noqa: SLF001
-    assert (rendered, notes) == (["home"], ["search: its steps need the project's seed command"])
+    assert (rendered, notes) == (["home"], ["search: its steps need a test preparation"])

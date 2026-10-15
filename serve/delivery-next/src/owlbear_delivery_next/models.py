@@ -99,7 +99,7 @@ VISUAL = "visual"  # the reserved check-step task id of the engine's visual chec
 
 
 class VisualStep(Record):
-    """One owner-authored action before a state's screenshot (TD-49), on seeded test data only (TD-60, TD-65)."""
+    """One owner-authored action before a state's screenshot (TD-49), on a prepared test copy only (TD-96)."""
 
     do: Literal["click", "type"]
     target: str  # the control's accessible name: a button or link to click, a field's label to type into

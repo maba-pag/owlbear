@@ -166,7 +166,7 @@ def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
     except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
         msg = f"state of {path.stem} is unreadable"
         raise StoreError(msg) from exc
-    return _parse(text, path.stem, model, CONFIG_FORMAT, {}), raw
+    return _parse(text, path.stem, model, CONFIG_FORMAT, migrations.CONFIG), raw
 
 
 def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T]) -> T:

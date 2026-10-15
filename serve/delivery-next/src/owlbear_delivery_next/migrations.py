@@ -60,5 +60,15 @@ def visual_decided(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def seed_dropped(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 1 to 2: declared preparation options replace the seed command (TD-96); it is dropped.
+
+    A seed command names no isolation or cleanup, so it cannot become an option; the owner declares one instead.
+    """
+    data.pop("seed", None)
+    return data
+
+
 CHANGE: Migrations = {1: brief_challenged, 2: visual_decided}
 PROFILE: Migrations = {1: roles_moved}
+CONFIG: Migrations = {1: seed_dropped}

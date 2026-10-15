@@ -314,7 +314,7 @@ def environment(store, fake, monkeypatch, **env):
         return e.pids | {901: 2.0}
 
     monkeypatch.setattr(check, "dispose", dispose)
-    monkeypatch.setattr(check, "start", lambda e, _root, _log: calls["start"].append(e.command) or Proc())
+    monkeypatch.setattr(check, "start", lambda e, _root, _log, _env=None: calls["start"].append(e.command) or Proc())
     monkeypatch.setattr(check, "ready", ready)
     monkeypatch.setattr(check, "created", lambda _pid: 2.0)
     return calls

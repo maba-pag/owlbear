@@ -74,8 +74,7 @@ End the step with exactly one call:
   - for a build: commit with `git add` and `git commit` first; Delivery reads the commit from the
     worktree HEAD;
   - for a pull-request comment: `response` with `fixed` after a commit, or `answered` (or
-    `no-action` where offered) without one;
-  - for check preparation: the launch recipe, with no commit.
+    `no-action` where offered) without one.
 
   If it is rejected, each error names a field and what to do: fix it and call again.
 - `ask_question`: an owner decision you cannot make. The step ends and resumes with the answer.
@@ -97,9 +96,6 @@ Neither a question nor a report needs a commit. Never end a turn without one of 
   or one your evidence disproves, is answered with that evidence and no commit. A review or CI
   finding you judge wrong, or any request that conflicts with a criterion or the scope, goes to
   `ask_question` with both positions instead of being built around.
-- In check preparation you change no code: find how the owner's check environment starts (for
-  example a preview server), verify its command, directory and readiness URL with shell
-  commands, stop everything you started and submit the launch recipe. Delivery launches it.
 - You never choose a retry, a return or a block, and never touch Delivery's files or another
   worktree.
 

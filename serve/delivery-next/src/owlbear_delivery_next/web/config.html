@@ -300,7 +300,7 @@ function pure(label, attrs) {
 
 function saved(layer, key) {
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (key === "seed" || key === "design_failures") return loaded[layer]?.[key] ?? "";
+  if (key === "design_failures") return loaded[layer]?.[key] ?? "";
   const [role, field] = key.split(".");
   return loaded[layer]?.agents?.[role]?.[field] ?? "";
 }
@@ -313,15 +313,6 @@ function designFailures() {
     ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], value || INHERIT);
   input.dataset.key = key;
   return cell(input, source(key, loaded.settings.design_failures));
-}
-
-// TD-65: one command, run without a shell in the worktree root, that resets the test data before a capture.
-function seed() {
-  const value = "seed" in drafts.project ? drafts.project.seed : saved("project", "seed");
-  const label = "Seed command that resets this project's test data before screenshots with clicks or typing";
-  const input = typed(label, value, { placeholder: "none: only static states" });
-  input.dataset.key = "seed";
-  return cell(input, source("seed", loaded.settings.seed || "none"));
 }
 
 function widths() {
@@ -584,7 +575,6 @@ function render() {
   document.getElementById("general").replaceChildren(
     row(cell(el("p-text", "Screenshot widths")), widths()),
     row(cell(el("p-text", "Design failures")), designFailures()),
-    ...(rendered === "project" ? [row(cell(el("p-text", "Seed command")), seed())] : []),
   );
   document.getElementById("general-later").replaceChildren(...general.map(([label, value, key]) => row(
     cell(el("p-text", label)), inactive(label, value, key))));
@@ -615,7 +605,7 @@ function edited(layer) {
       next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
       continue;
     }
-    if (key === "seed" || key === "design_failures") {
+    if (key === "design_failures") {
       next[key] = value || null;
       continue;
     }

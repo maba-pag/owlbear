@@ -7,23 +7,22 @@ fields are stored for the config page and stay inactive until routing, visibilit
 
 from __future__ import annotations
 
-import shlex
 from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator
 
 from owlbear_delivery_next.models import Context, Effort, Record, Role
+from owlbear_delivery_next.preparation import DataPermissions, Preparation
 from owlbear_delivery_next.profile_record import named
 from owlbear_delivery_next.roles import DEFAULTS
 from owlbear_delivery_next.visual_records import DesignFailures  # noqa: TC001 - pydantic resolves it at runtime
 
-CONFIG_FORMAT = 1
+CONFIG_FORMAT = 2  # format 2 replaced the seed command by declared preparation options (TD-96)
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "project"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
-SEED_LIMIT = 300
 
 
 class Agent(Record):
@@ -53,7 +52,8 @@ class Layer(Record):
     agents: dict[Role, Agent] = Field(default_factory=dict)
     runtimes: dict[RuntimeName, bool] = Field(default_factory=dict)  # a runtime switched off or on
     widths: list[int] | None = None
-    seed: str | None = None  # TD-65: resets the test data before each capture with steps; one command, no shell
+    preparations: list[Preparation] | None = None  # TD-96: the project's test-copy options, owner-declared
+    data: DataPermissions | None = None  # TD-96: the owner's standing permissions for those test copies
     design_failures: DesignFailures | None = None  # TD-78: a design judge's fail goes back, or to the owner
 
     @field_validator("format")
@@ -70,24 +70,24 @@ class Layer(Record):
             raise ValueError(f"widths must be a non-empty list, each {WIDTHS[0]} to {WIDTHS[1]}")  # noqa: EM102, TRY003
         return v
 
-    @field_validator("seed")
+    @field_validator("preparations")
     @classmethod
-    def _seed(cls, v: str | None) -> str | None:
-        if v is not None and not (0 < len(v.strip()) <= SEED_LIMIT and shlex.split(v)):
-            raise ValueError(f"seed must be one command of 1 to {SEED_LIMIT} characters")  # noqa: EM102, TRY003
+    def _distinct(cls, v: list[Preparation] | None) -> list[Preparation] | None:
+        if v is not None and len({o.id for o in v}) < len(v):
+            raise ValueError("preparation option ids must be distinct")  # noqa: EM101, TRY003
         return v
 
 
 class GlobalLayer(Layer):
-    """The global settings; the visibility switch is global only (TD-35), the seed command per project (TD-65)."""
+    """The global settings; the visibility switch is global only (TD-35), test preparation per project (TD-96)."""
 
     visible: bool | None = None
 
-    @field_validator("seed")
+    @field_validator("preparations", "data")
     @classmethod
-    def _project_only(cls, v: str | None) -> str | None:
+    def _project_only(cls, v: object) -> object:
         if v is not None:
-            raise ValueError("seed is a project setting")  # noqa: EM101, TRY003
+            raise ValueError("test preparation is a project setting")  # noqa: EM101, TRY003
         return v
 
 
@@ -109,7 +109,8 @@ class Settings(Record):
     agents: dict[Role, Effective]
     runtimes: dict[RuntimeName, bool]
     widths: list[int]
-    seed: str = ""
+    preparations: list[Preparation] = Field(default_factory=list)
+    data: DataPermissions = Field(default_factory=DataPermissions)
     design_failures: DesignFailures = "ask"
     sources: dict[str, Source]
 
@@ -164,7 +165,8 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
     }
     widths = _pick("widths", sources, ("project", project.widths), ("global", glob.widths), ("default", base.widths))
     visible = _pick("visible", sources, ("global", glob.visible), ("default", base.visible))
-    seed = _pick("seed", sources, ("project", project.seed), ("default", ""))
+    prep = _pick("preparations", sources, ("project", project.preparations), ("default", []))
+    data = _pick("data", sources, ("project", project.data), ("default", DataPermissions()))
     design = _pick(
         "design_failures",
         sources,
@@ -177,7 +179,8 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         agents=agents,
         runtimes=runtimes,
         widths=widths,
-        seed=seed,
+        preparations=prep,
+        data=data,
         design_failures=design,
         sources=sources,
     )

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 READY_WITHIN = 60.0
 GRACE = 5.0
-WITHIN = 600.0  # seconds per install or seed command
+WITHIN = 600.0  # seconds per install or preparation command
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
@@ -39,13 +39,13 @@ def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
     log({"event": "pids", "at": datetime.now(UTC).isoformat(), "pids": {str(p): t for p, t in pids.items()}})
 
 
-def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None]) -> str:
+def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
     """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
     within = WITHIN
     try:
         proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
             argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            start_new_session=True,
+            start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
         return f"`{shlex.join(argv)}` did not start: {exc}"
@@ -169,8 +169,10 @@ def dispose(e: Environment) -> Found:
     return left
 
 
-def start(e: Environment, root: Path, log: Path) -> subprocess.Popen[bytes] | None:
-    """Spawn the recipe as leader of its own session and group; the caller records it before waiting."""
+def start(
+    e: Environment, root: Path, log: Path, env: Mapping[str, str] | None = None
+) -> subprocess.Popen[bytes] | None:
+    """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment."""
     try:
         with log.open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - argument vector of the Builder's launch recipe
@@ -180,6 +182,7 @@ def start(e: Environment, root: Path, log: Path) -> subprocess.Popen[bytes] | No
                 stdout=out,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
+                env=env,
             )
     except OSError, ValueError:
         return None

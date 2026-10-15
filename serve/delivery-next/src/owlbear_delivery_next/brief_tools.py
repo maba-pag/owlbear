@@ -33,7 +33,7 @@ class VisualStateDraft(Args):
 
 
 class VisualStepDraft(Args):
-    """One click or typing step before a state's screenshot, in order; runs only on the project's seeded data."""
+    """One click or typing step before a state's screenshot, in order; runs only on a prepared test copy."""
 
     state: str = Field(pattern=NAME, description="Name of the state this step belongs to", examples=["search"])
     do: Literal["click", "type"] = Field(description="click a button or link, or type into a field", examples=["type"])
@@ -70,7 +70,7 @@ class VisualDraft(Args):
     steps: list[VisualStepDraft] = Field(
         default_factory=list,
         max_length=30,
-        description="Clicks and typing before a state's screenshot, in order; needs the project's seed command",
+        description="Clicks and typing before a state's screenshot, in order; needs a declared test preparation",
         examples=[[{"state": "search", "do": "type", "target": "Search", "text": "Ada"}]],
     )
 

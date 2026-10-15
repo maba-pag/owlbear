@@ -27,8 +27,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    ("the Dark mode button is filled and darker than in light mode"), not as a state only the code
    knows ("the button is pressed"); ask the owner what should be visible when that is unclear.
    A state can need clicks or typing first (open a menu, search for a name): each step clicks a
-   control or types into a field, named exactly as the page shows it. Steps run only on the
-   project's seeded test data. If the project has no preview to render, offer three choices: add
+   control or types into a field, named exactly as the page shows it. Steps run only on a
+   test copy the project's declared preparation options prepare. If the project has no preview to render, offer three choices: add
    one in this Change, declare a person-only visual check, or change the scope.
 5. Propose a split when the idea is more than one reviewable pull request.
 6. Read back before saving for approval (see Read-Back below).
