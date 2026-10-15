@@ -1,4 +1,4 @@
-"""The Backlog page's API (TD-84): list, add the owner's ideas, triage, and start a Change from chosen entries.
+"""The Backlog page's API (TD-84, TD-103): list the backlog issues, add ideas, triage, and start a Change from them.
 
 Create Change opens the shaping chat like New Change (TD-83) with the chosen entries as its starting material, quoted
 as data. While the chat opens the entries show the launch as ``opening``; once it opened they are marked ``in-change``
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from owlbear_delivery_next.backlog import ID, Backlog, BacklogError, Entry, Kind, Status, ordered
+from owlbear_delivery_next.backlog import ID, Backlog, BacklogError, Entry, Kind, Scope, Status, ordered
 from owlbear_delivery_next.common import CommonError
 from owlbear_delivery_next.prompts import DETAIL, _quote
 
@@ -49,6 +49,7 @@ class PatchBody(Body):
 
     kind: Kind | None = None
     status: Status | None = None
+    scope: Scope | None = None
     notes: str | None = Field(default=None, max_length=4000)
     links: list[Annotated[str, Field(pattern=ID)]] | None = Field(default=None, max_length=50)
     change: str | None = Field(default=None, max_length=64)
@@ -64,8 +65,8 @@ def prompt(chosen: list[Entry], found: dict[str, Entry]) -> str:
     """The shaping chat's first message: each entry's title, text, notes, evidence and linked titles, quoted."""
     lines = [START, "", DATA]
     for e in chosen:
-        lines += ["", f"## Backlog entry {e.id} ({e.kind}, from {e.source}, seen {e.count} times)"]
-        linked = [f"{found[i].title} ({i})" if i in found else i for i in e.links]
+        lines += ["", f"## Backlog entry #{e.id} ({e.kind}, from {e.source}, seen {e.count} times)"]
+        linked = [f"{found[i].title} (#{i})" if i in found else f"#{i}" for i in e.links]
         parts = (("Title", e.title), ("Text", e.text), ("Owner's notes", e.notes))
         parts += (("Evidence", "\n".join(e.evidence)), ("Linked entries", "\n".join(linked)))
         for label, said in parts:
@@ -73,27 +74,26 @@ def prompt(chosen: list[Entry], found: dict[str, Entry]) -> str:
     return "\n".join(lines)
 
 
-def _shown(entry: Entry) -> dict[str, Any]:
-    return entry.model_dump(mode="json")
+def _shown(entry: Entry, raw: dict[str, Any]) -> dict[str, Any]:
+    return entry.model_dump(mode="json") | {"url": raw.get(entry.id, {}).get("html_url", "")}
 
 
 def _run[T](store: Store, work: Callable[[Backlog], T]) -> T:
-    """Run one write on the project's backlog; a refusal or a busy shared repository is the page's answer."""
+    """Run one call on the backlog; a refusal, an unreachable GitHub or a busy shared repository is the answer."""
     try:
         return work(Backlog.of(store))
     except BacklogError as exc:
         raise HTTPException(exc.status, exc.text) from exc
     except CommonError as exc:
         raise HTTPException(409, str(exc)) from exc
-    except OSError as exc:
-        raise HTTPException(503, f"the backlog could not be saved: {exc.strerror or exc}") from exc
 
 
 def _took(store: Store, ids: list[str], launch: str, end: dict[str, str]) -> dict[str, str]:
     """Mark the entries as in the Change the opened chat shapes; what failed joins the launch's warning."""
+    said = ""
     try:
-        said = Backlog.of(store).take(ids, launch)[1]
-    except (BacklogError, CommonError, OSError) as exc:
+        Backlog.of(store).take(ids, launch)
+    except (BacklogError, CommonError) as exc:
         said = f"the backlog entries could not be marked as in this Change ({exc})"
     warning = "; ".join(w for w in (end.get("warning", ""), said) if w)
     return end | ({"warning": warning} if warning else {})
@@ -116,31 +116,33 @@ def router(store: Store, start: Callable[..., dict[str, Any]]) -> APIRouter:
 
     @routes.get("/backlog")
     def listed() -> dict[str, Any]:
-        found, bad = Backlog.of(store).read()
+        backlog, (found, bad) = _run(store, lambda b: (b, b.read()))
         with guard:
             pending = {i: launch for launch, ids in opening.items() for i in ids}
         entries = [
-            _shown(e) | ({"opening": pending[e.id]} if e.id in pending and e.status in {"inbox", "open"} else {})
+            _shown(e, backlog.raw)
+            | ({"opening": pending[e.id]} if e.id in pending and e.status in {"inbox", "open"} else {})
             for e in ordered(found.values())
         ]
-        return {"entries": entries, "shared": store.shared is not None, "unreadable": bad, "changes": store.slugs()}
+        where = {"repository": backlog.repository, "project": store.name}
+        return {"entries": entries, "unreadable": bad, "changes": store.slugs()} | where
 
     @routes.post("/backlog")
     def add(body: AddBody) -> dict[str, Any]:
-        entry, new, notice = _run(store, lambda b: b.add(body.title, body.text, "owner"))
-        return {"entry": _shown(entry), "new": new, "notice": notice}
+        entry, new = _run(store, lambda b: b.add(body.title, body.text, "owner"))
+        return {"entry": entry.model_dump(mode="json"), "new": new, "notice": ""}
 
     @routes.patch("/backlog/{entry_id}")
     def patch(entry_id: str, body: PatchBody) -> dict[str, Any]:
         fields = body.model_dump(exclude_unset=True, exclude_none=True)
         if fields.get("change") and fields["change"] not in store.slugs():
             raise HTTPException(422, f"change: {fields['change']} is not a Change here")
-        entry, notice = _run(store, lambda b: b.update(entry_id, fields))
-        return {"entry": _shown(entry), "notice": notice}
+        entry = _run(store, lambda b: b.update(entry_id, fields))
+        return {"entry": entry.model_dump(mode="json"), "notice": ""}
 
     @routes.post("/backlog/change")
     def change(body: ChangeBody) -> dict[str, Any]:
-        found, _ = Backlog.of(store).read()
+        found, _ = _run(store, lambda b: b.read(fresh=True))
         if missing := [i for i in body.ids if i not in found]:
             raise HTTPException(404, f"no backlog entry {', '.join(missing)}")
         ids = list(dict.fromkeys(body.ids))

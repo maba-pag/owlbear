@@ -8,7 +8,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from subprocess import CalledProcessError
 
-from owlbear_delivery_next import common, design_pack, host, pack_replay, pack_update, profile, roles, setup
+from owlbear_delivery_next import (
+    backlog_migrate,
+    common,
+    design_pack,
+    host,
+    pack_replay,
+    pack_update,
+    profile,
+    roles,
+    setup,
+)
 from owlbear_delivery_next.backlog import Backlog, BacklogError
 from owlbear_delivery_next.config import Agent, Layer
 from owlbear_delivery_next.detector import DetectorError
@@ -179,14 +189,21 @@ def show_profile(
 
 
 def add_backlog(store: Store, a: argparse.Namespace) -> int:
-    """Add a finding to the project's backlog (TD-84), or count up the entry it repeats; print which."""
+    """Add a finding to the backlog issues (TD-84, TD-103), or count up the entry it repeats; print which."""
+    if a.action == "migrate":
+        if store.shared is None:
+            sys.stdout.write("no shared repository is set up: nothing to migrate\n")
+            return 1
+        return backlog_migrate.migrate(store.shared, lambda said: sys.stdout.write(said + "\n"))
     try:
-        entry, new, notice = Backlog.of(store).add(a.title, a.text, a.source, a.evidence)
+        entry, new = Backlog.of(store).add(a.title, a.text, a.source, a.evidence)
     except (BacklogError, common.CommonError) as exc:
         sys.stdout.write(f"not added: {exc}\n")
         return 1
-    said = f"added {entry.id}: {entry.title}" if new else f"seen again {entry.id}: {entry.title} ({entry.count} times)"
-    sys.stdout.write(said + (f"\nNotice: {notice}" if notice else "") + "\n")
+    said = (
+        f"added #{entry.id}: {entry.title}" if new else f"seen again #{entry.id}: {entry.title} ({entry.count} times)"
+    )
+    sys.stdout.write(said + "\n")
     return 0
 
 
@@ -265,14 +282,14 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     pack.add_argument("--to", metavar="TAG", help="the candidate tag --diff compares with")
     pack.add_argument("--golden", action="store_true", help="run the engine and the in-page bundle on the golden pages")
     pack.add_argument("--replay", action="store_true", help="rerun the design judge on decided rounds (costs requests)")
-    found = sub.add_parser("backlog", help="the improvement backlog (TD-84)").add_subparsers(
-        dest="action", required=True
-    )
+    found = sub.add_parser("backlog", help="the improvement backlog: issues in the shared repository (TD-84, TD-103)")
+    found = found.add_subparsers(dest="action", required=True)
     add = found.add_parser("add", help="add a finding; a repeat counts up its entry")
     add.add_argument("--title", required=True)
     add.add_argument("--text", default="")
     add.add_argument("--source", choices=("owner", "watcher", "assistant", "review", "run"), default="assistant")
     add.add_argument("--evidence", action="append", default=[], help="a Change, step, session, path or URL")
+    found.add_parser("migrate", help="once: move the file entries into GitHub issues, then delete the files")
     a = parser.parse_args(argv)
     if a.command == "design-pack" and bool(a.diff) != bool(a.to):
         parser.error("--diff and --to go together")

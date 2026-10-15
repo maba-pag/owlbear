@@ -48,6 +48,7 @@
 <p-text id="started" aria-live="polite"></p-text>
 <p-text id="status" role="status" aria-live="polite"></p-text>
 <p-text id="where" size="xs" color="contrast-medium"></p-text>
+<div id="filters" class="row" role="group" aria-label="Show only"></div>
 <section class="panel" aria-labelledby="add-title">
   <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
   <div id="add" class="row"></div>
@@ -84,10 +85,13 @@ if (hash.get("token")) {
 }
 const token = sessionStorage.getItem("token");
 const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
+const SCOPES = ["unassigned", "project", "cross-project", "global"];
 const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review", run: "a run" };
 const TAGS = { untriaged: "secondary", defect: "error", improvement: "info", idea: "success", question: "warning" };
 const DIALOG = "{ 'aria-haspopup': 'dialog' }";
 let pds = false, loaded = { entries: [], changes: [] }, creating = null;
+const filter = { scope: "all", project: "all", kind: "all" };
+let filtersFor = null;  // the projects the filter row was built for
 const selected = new Set(), opened = new Set();
 const built = new Map();  // entry id -> its card and a reader of the notes typed into it
 
@@ -126,9 +130,9 @@ function notify(message = "") {
 
 async function call(path, method = "GET", body = undefined) {
   if (!token) throw new Error("Open the URL the host printed, including #token=…");
-  // a write commits and pushes the shared repository, which can take a network round trip
+  // reads and writes go to GitHub's issues, a network round trip or several
   const init = { method, headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(method === "GET" ? 5000 : 60000) };
+    signal: AbortSignal.timeout(method === "GET" ? 15000 : 60000) };
   if (body) {
     init.body = JSON.stringify(body);
     init.headers["Content-Type"] = "application/json";
@@ -307,6 +311,12 @@ function kindPicker(e, inline = false) {
   return kind;
 }
 
+function scopePicker(e) {
+  const [scope, scopeOf] = select("Scope", SCOPES.map((s) => [s, s]), e.scope);
+  scope.addEventListener("change", () => { if (scopeOf() !== e.scope) patch(e, { scope: scopeOf() }); });
+  return scope;
+}
+
 function details(e, byId) {
   const more = el("details");
   more.open = opened.has(e.id);
@@ -323,7 +333,8 @@ function details(e, byId) {
     box.append(text("Evidence", { size: "xs", weight: "semibold" }), refs);
   }
   const [notes, notesOf] = entry("Your notes: context for whoever shapes the Change", e.notes, true);
-  if (!inbox) box.append(row(kindPicker(e)));  // an inbox card shows its kind outside, to triage it at a glance
+  // an inbox card shows its kind outside, to triage it at a glance
+  box.append(row(...(inbox ? [] : [kindPicker(e)]), scopePicker(e)));
   box.append(notes, row(button("Save notes", () => patch(e, { notes: notesOf() }),
     { variant: "secondary" })), linkPart(e, byId), statusPart(e, !inbox));
   more.append(el("summary", "Details, notes and links"), box);
@@ -350,9 +361,12 @@ function card(e, byId) {
   if (e.opening) title.append(el("p-tag", "chat opening", { variant: "info", compact: "true" }));
   const seen = e.count > 1 ? `seen ${e.count} times, last ${age(e.last_seen)}` : `seen ${age(e.last_seen)}`;
   const where = e.change ? ` · in Change ${e.change}` : "";
+  const scope = ` · ${e.scope}${e.scope === "project" && e.project ? ` ${e.project}` : ""}`;
   const [more, notesOf] = details(e, byId);
-  body.append(title, text(`From ${SOURCES[e.source] ?? e.source} · ${seen}${where}`,
-    { size: "xs", color: "contrast-medium" }));
+  const meta = text(`From ${SOURCES[e.source] ?? e.source} · ${seen}${where}${scope} · `,
+    { size: "xs", color: "contrast-medium" });
+  meta.append(e.url ? el("a", `#${e.id}`, { href: e.url, rel: "noopener" }) : `#${e.id}`);
+  body.append(title, meta);
   if (e.status === "inbox" && !e.opening) {
     const triage = row(kindPicker(e, true), dropButton(e));
     triage.classList.add("triage");
@@ -395,12 +409,32 @@ function showActions() {
   document.getElementById("selection").hidden = !chosen.length && !creating;
 }
 
+function shows(e) {
+  return ["scope", "project", "kind"].every((k) => filter[k] === "all" || e[k] === filter[k]);
+}
+
+// The filter row: scope, project and class; the state is the page's sections.
+function showFilters() {
+  const projects = [...new Set(loaded.entries.map((e) => e.project).filter(Boolean))].sort();
+  if (JSON.stringify(projects) === filtersFor) return;
+  filtersFor = JSON.stringify(projects);
+  if (filter.project !== "all" && !projects.includes(filter.project)) filter.project = "all";
+  const pick = (label, k, values) => {
+    const [node, value] = select(label, [["all", "all"], ...values.map((v) => [v, v])], filter[k]);
+    node.addEventListener("change", () => { filter[k] = value(); refresh(); });
+    return node;
+  };
+  document.getElementById("filters").replaceChildren(pick("Scope", "scope", SCOPES),
+    pick("Project", "project", projects), pick("Class", "kind", KINDS));
+}
+
 async function refresh(rebuild = null) {
   try {
     loaded = await call("/backlog");
   } catch (e) {
     return notify(e.message);
   }
+  showFilters();
   const byId = new Map(loaded.entries.map((e) => [e.id, e]));
   for (const id of [...selected]) {
     const e = byId.get(id);
@@ -409,7 +443,7 @@ async function refresh(rebuild = null) {
   for (const id of [...built.keys()]) if (!byId.has(id)) built.delete(id);
   const focused = document.activeElement;
   const lists = { inbox: [], open: [], later: [] };
-  for (const e of loaded.entries) {
+  for (const e of loaded.entries.filter(shows)) {
     lists[e.status in lists ? e.status : "later"].push(kept(e, rebuild) ?? card(e, byId));
   }
   const none = { inbox: "Nothing new to triage.", open: "No open entries.", later: "Nothing here yet." };
@@ -420,8 +454,8 @@ async function refresh(rebuild = null) {
   }
   for (const [id, b] of built) if (b.box) b.box.checked = selected.has(id);  // a kept card follows Clear
   if (focused?.isConnected && document.activeElement !== focused) focused.focus();
-  const notes = [loaded.shared ? "" : "No shared repository is set up: the backlog stays in this clone and is not "
-    + "committed.", loaded.unreadable.length ? `Unreadable backlog files: ${loaded.unreadable.join(", ")}.` : ""];
+  const notes = [`The backlog is the issues of ${loaded.repository} (this project: ${loaded.project || "none"}).`,
+    loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : ""];
   document.getElementById("where").textContent = notes.filter(Boolean).join(" ");
   showActions();
 }

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next import api, backlog_routes
 from owlbear_delivery_next.backlog import Backlog
 from owlbear_delivery_next.codebase import CURRENT
+from owlbear_delivery_next.common import Common
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.models import Change
 from owlbear_delivery_next.store import Store
@@ -39,8 +40,8 @@ class Launch:
 
 
 @pytest.fixture
-def store(tmp_path) -> Store:
-    return Store(tmp_path / "store")
+def store(tmp_path, shared_repo, github) -> Store:  # noqa: ARG001 - its issues are the fake GitHub's
+    return Store(tmp_path / "store", Common(shared_repo[0]), "shop-site")
 
 
 def client(store, launch=None, which=lambda _n: "/bin/code", headers=AUTH) -> TestClient:
@@ -76,7 +77,13 @@ def test_the_owner_adds_an_idea_and_the_list_puts_the_inbox_first(store):
         True,
     )
     assert [e["title"] for e in listed["entries"]] == ["Show the build date", "classified"]
-    assert (listed["shared"], listed["unreadable"], listed["changes"]) == (False, [], [])
+    assert listed["entries"][0]["url"] == "https://github.com/acme/owlbear-data/issues/2"
+    assert (listed["repository"], listed["project"], listed["unreadable"], listed["changes"]) == (
+        "acme/owlbear-data",
+        "shop-site",
+        [],
+        [],
+    )
     assert c.post("/api/next/backlog", json={"title": ""}).status_code == 422
     assert c.post("/api/next/backlog", json={"title": "x", "source": "watcher"}).status_code == 422
 
@@ -98,7 +105,7 @@ def test_the_owner_classifies_notes_links_drops_and_names_the_change_an_entry_we
         c.patch(f"/api/next/backlog/{a}", json={"kind": "bug"}),
         c.patch(f"/api/next/backlog/{a}", json={"change": "no-such-change"}),
         c.patch(f"/api/next/backlog/{a}", json={"links": [a]}),
-        c.patch("/api/next/backlog/20990101-abcdef", json={"notes": "x"}),
+        c.patch("/api/next/backlog/99", json={"notes": "x"}),
         c.patch("/api/next/backlog/..%2Fconfig", json={"notes": "x"}),
     ]
     assert [r.status_code for r in refused] == [422, 422, 422, 404, 404]
@@ -126,7 +133,7 @@ def test_create_change_opens_the_shaping_chat_with_the_entries_as_starting_mater
     [prompt] = launch.prompts
     assert prompt.startswith("Start a new Delivery Change from these backlog entries")
     for said in ("> Status line hides the step", "> it cuts at 80 columns", "> only on narrow terminals",
-                 "> c3 build\n> s-17", f"> Wider status line ({b.id})", f"Backlog entry {a.id}",
+                 "> c3 build\n> s-17", f"> Wider status line (#{b.id})", f"Backlog entry #{a.id}",
                  "seen 1 times"):  # fmt: skip
         assert said in prompt
     state = settled(c, started["launch"])
@@ -201,5 +208,22 @@ def test_create_change_without_code_gives_the_command_and_leaves_the_entries(sto
     )
     assert "`code` is not on PATH" in out["reason"]
     assert (Backlog.of(store).read()[0][entry.id].status, launch.prompts) == ("inbox", [])
-    assert c.post("/api/next/backlog/change", json={"ids": ["20990101-abcdef"]}).status_code == 404
+    assert c.post("/api/next/backlog/change", json={"ids": ["99"]}).status_code == 404
     assert c.post("/api/next/backlog/change", json={"ids": []}).status_code == 422
+
+
+def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(store, github):
+    c = client(store)
+    entry = Backlog.of(store).add("Wider status line")[0]
+    github.down = True
+
+    listed = c.get("/api/next/backlog")
+    added = c.post("/api/next/backlog", json={"title": "lost"})
+    github.down, github.fail_writes = False, True
+    patched = c.patch(f"/api/next/backlog/{entry.id}", json={"notes": "lost"})
+
+    assert [r.status_code for r in (listed, added, patched)] == [503] * 3
+    assert "could not be read from GitHub (acme/owlbear-data): list_issues: error connecting" in listed.json()["detail"]
+    assert "did not confirm the save" in patched.json()["detail"]
+    assert [i["title"] for i in github.issues.values()] == ["Wider status line"]
+    assert "lost" not in github.issues[1]["body"]
