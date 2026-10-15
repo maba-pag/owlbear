@@ -8,6 +8,7 @@ import secrets
 import shlex
 import shutil
 import time
+from dataclasses import asdict
 from datetime import UTC, datetime
 from importlib.resources import files
 from typing import TYPE_CHECKING, Annotated, Any, Literal
@@ -30,6 +31,7 @@ from owlbear_delivery_next.inbox import (
 from owlbear_delivery_next.launches import Launches, Refused
 from owlbear_delivery_next.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.profile_record import Profile
+from owlbear_delivery_next.progress import progress
 from owlbear_delivery_next.status import card, status, unloadable
 from owlbear_delivery_next.steps import check, decision, visual
 from owlbear_delivery_next.store import StoreError
@@ -156,6 +158,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     s = status(c, act, now, tool)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
     out |= card(c, act, store.events(slug), now, tool)
+    out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):

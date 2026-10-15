@@ -93,6 +93,16 @@
   .lightbox .caption { flex: 1; margin: 0; text-align: center; font-size: var(--p-typescale-sm); }
   .finding { display: grid; gap: var(--p-spacing-static-xs); padding-block: var(--p-spacing-static-xs); }
   .finding + .finding { border-top: 1px solid var(--p-color-contrast-lower); }
+  /* The stepper: the Change's stages in order, the current one marked, a loop badge on those that looped. */
+  .stepper { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding-left: 1.5rem; }
+  .stepper li { position: relative; padding-left: var(--p-spacing-static-xs); }
+  .stepper li > span { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-sm); }
+  .stepper [aria-current="step"] { font-weight: 600; }
+  .stepper .skipped { color: var(--p-color-contrast-medium); }
+  .loops { font-size: var(--p-typescale-xs); font-weight: 600; }
+  .sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
   .stale { opacity: .45; pointer-events: none; }
   .no-pds .card .open { text-decoration: underline; }
 </style>
@@ -774,6 +784,30 @@ function planList(d) {
   return node;
 }
 
+const STEP = { done: ["done", "success"], current: ["now", "info"], upcoming: ["to do", "secondary"],
+  skipped: ["not needed", "secondary"] };
+
+// The stages in order; the state is a word, never colour alone, and a loop badge says its rounds.
+function stepper(p) {
+  const node = el("ol", undefined, { class: "stepper" });
+  for (const s of p.stages) {
+    const [label, variant] = STEP[s.state], item = el("li", undefined, { class: s.state });
+    if (s.state === "current") item.setAttribute("aria-current", "step");
+    const line = el("span");
+    line.append(el("span", s.label), el("p-tag", label, { variant, compact: "true" }));
+    const where = [p.task ? `Task ${p.task} of ${p.tasks}` : "", p.sub || ""].filter(Boolean).join(" \u00b7 ");
+    if (s.state === "current" && where) line.append(plain("span", where, "meta"));
+    if (s.rounds > 1) {
+      const loops = plain("span", undefined, "loops"), said = `${s.rounds} rounds`;
+      loops.append(el("span", `\u00d7${s.rounds}`, { "aria-hidden": "true" }), plain("span", said, "sr"));
+      line.append(loops);
+    }
+    item.append(line);
+    node.append(item);
+  }
+  return node;
+}
+
 function screen(s) {
   const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
   return `${s.name} (${s.path}${steps.length ? `, then ${steps.join(", ")}` : ""}): ${s.expect}`;
@@ -879,6 +913,7 @@ async function showDetail() {
       disclosure(`Screenshots (${shots.querySelectorAll("button.zoom").length})`, shots)));
   }
   if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
+  if (d.progress) parts.push(info("Progress", stepper(d.progress)));
   if (d.plan.length) parts.push(info("Plan", planList(d)));
   if (!approving && (d.brief.outcome || d.criteria.length)) parts.push(briefInfo(d));
   if (d.pullback && !behind) parts.push(pullbackNote(d.pullback));
@@ -939,13 +974,16 @@ function card(c, label, variant) {
   };
   const top = el("div", undefined, { class: "top" }), [stage, rest] = split(c.line);
   top.append(open, el("p-tag", label, { variant, compact: "true" }));
+  node.append(top);
+  const step = c.progress?.line;  // the named step and its round, in place of the status line's short stage
+  if (step) node.append(plain("p", step, "says stage"));
   const says = plain("p", undefined, "says");
-  if (stage) says.append(plain("span", stage, "stage"), " \u00b7 ");
+  if (stage && !step) says.append(plain("span", stage, "stage"), " \u00b7 ");
   says.append(rest);
-  node.append(top, says);
+  node.append(says);
   if (c.action && groupOf(label) !== "working") node.append(plain("p", `Next: ${c.action}`, "next"));
   const bits = [];
-  if (c.now && label !== "Done") bits.push(split(c.now)[1]);
+  if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(c.now)[1]);
   if (c.step_time) bits.push(`step ${c.step_time}`);
   if (c.credits?.change || c.credits?.unknown) {
     const step = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
