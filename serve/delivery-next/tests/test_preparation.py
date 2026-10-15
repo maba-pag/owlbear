@@ -136,6 +136,25 @@ def test_the_owner_permissions_refuse_an_unsafe_option(tmp_path, change_, rules,
 
 
 @pytest.mark.parametrize(
+    ("kind", "fields", "errors"),
+    [
+        ("data-only", {}, []),
+        ("data-only", {"data_classes": ["customers"]}, ["it declares no isolation"]),
+        ("live-copy-plus-data", {}, ["it declares no isolation", UNCOVERED]),
+    ],
+)
+def test_only_a_data_only_option_copying_no_data_may_declare_no_isolation(env, kind, fields, errors):
+    repo, store, _log, tmp = env
+    bare = option(tmp, kind, isolation={}, **fields)
+    assert preparation.refusals(bare, DataPermissions(data_classes=["customers"]), LIVE) == errors
+    if not errors:  # its explicit environment is the process essentials alone
+        assert prepare.isolated(prepare.Prepared(check="visual", option=bare)).keys() <= set(preparation.BASE)
+        assert prepare.reusable(store, change(repo), settings(bare, isolation=[]), LIVE) is False  # nothing recorded
+        prepare._write(store, "c1", prepare.Prepared(check="visual", option=bare))  # noqa: SLF001 - as accepted
+        assert prepare.reusable(store, change(repo), settings(bare, isolation=[]), LIVE) is True
+
+
+@pytest.mark.parametrize(
     ("test", "live", "same"),
     [
         ("postgres://ro:x@db.live:5432/app", "postgres://admin:y@DB.live/app/", True),  # credentials never differ it

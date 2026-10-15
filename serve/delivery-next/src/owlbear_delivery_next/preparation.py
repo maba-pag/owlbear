@@ -4,6 +4,7 @@ A check never runs on live: it runs on a test copy that one declared option prep
 masked once into a frozen snapshot, which is restored into the isolated test environment before each capture; test
 data is seeded on top or alone. The owner's standing permissions bound which options may run (TD-102 restrictions).
 A live copy names its live resources; its isolation must point each of them elsewhere (owner decision 2026-10-15).
+A data-only option that copies no data classes may declare no isolation (TD-121).
 """
 
 from __future__ import annotations
@@ -143,7 +144,7 @@ def refusals(option: Preparation, rules: DataPermissions, live: Mapping[str, str
         why.append(f"data classes {', '.join(denied)} are not permitted")
     if option.copies_keys and not rules.keys:
         why.append("it copies keys or secrets, which are not permitted")
-    if not option.isolation:
+    if not option.isolation and (option.kind in LIVE or option.data_classes):  # TD-121: no-data reset needs none
         why.append("it declares no isolation")
     if lacking := sorted(set(rules.isolation) - set(option.isolation)):
         why.append(f"its isolation lacks {', '.join(lacking)}")
