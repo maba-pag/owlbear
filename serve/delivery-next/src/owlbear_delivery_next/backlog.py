@@ -1,10 +1,11 @@
 """Improvement backlog (TD-84, TD-103): what the owner, the watcher, the assistant, reviews and runs found.
 
 Each entry is one GitHub issue in the shared repository (``backlog_issues``); this module is the view over them. A
-finding seen again counts up its entry instead of adding one; untriaged entries form the inbox. Saving is online-only:
-when GitHub cannot be reached the save fails with GitHub's reason, nothing is kept locally. Reads are cached for a few
-seconds since the page refreshes often; every write reads afresh under the shared repository's lock, and reads each
-issue it changes directly first, so an edit made on GitHub meanwhile is kept.
+finding seen again in the same project counts up its entry instead of adding one; seen in another project it is a new
+entry, which the owner links to the first as a connected entry (TD-126). Untriaged entries form the inbox. Saving is
+online-only: when GitHub cannot be reached the save fails with GitHub's reason, nothing is kept locally. Reads are
+cached for a few seconds since the page refreshes often; every write reads afresh under the shared repository's lock,
+and reads each issue it changes directly first, so an edit made on GitHub meanwhile is kept.
 """
 
 from __future__ import annotations
@@ -83,6 +84,15 @@ def key(source: str, title: str) -> str:
     return f"{source}:{' '.join(re.findall(r'\w+', title.casefold()))}"
 
 
+def repeats(entry: Entry, project: str, source: str, title: str) -> bool:
+    """Whether a finding in *project* repeats *entry*: the same key, and the entry is that project's (TD-126).
+
+    An entry's project is its ``project:`` label once its scope is a project, else where it was found; so a global,
+    cross-project or unassigned entry still takes its own project's repeats, while another project's are its own.
+    """
+    return entry.project == project and key(entry.source, entry.title) == key(source, title)
+
+
 def ordered(entries: Iterable[Entry]) -> list[Entry]:
     """The inbox, then open entries, then the rest; the most recently seen first in each."""
     return sorted(entries, key=lambda e: (ORDER[e.status], -e.last_seen.timestamp()))
@@ -152,7 +162,7 @@ class Backlog:
         refs = list(dict.fromkeys(r.strip() for r in evidence if r.strip()))
 
         def work(found: dict[str, Entry], now: datetime) -> tuple[Entry, bool]:
-            same = next((e for e in found.values() if key(e.source, e.title) == key(source, title)), None)
+            same = next((e for e in found.values() if repeats(e, self.project, source, title)), None)
             if same is None:
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
                 fields |= {"evidence": refs[-EVIDENCE:], "project": self.project}

@@ -105,6 +105,23 @@ def test_a_finding_seen_again_counts_up_its_issue_and_comments_only_new_evidence
     assert (body.count("**Repeats:**"), github.issues[1]["title"]) == (1, "Status line hides the step")
 
 
+def test_a_repeat_counts_up_only_its_own_project_s_entry_and_another_project_s_is_a_new_one_to_link(shared, github):
+    root, title = shared[0], "Status line hides the step"
+    shop, docs = view(root), Backlog(Common(root), "docs-site", Clock())
+    first = shop.add(title, source="watcher")[0]
+
+    elsewhere, new = docs.add(title, source="watcher")
+    assert (new, elsewhere.id, elsewhere.project, len(github.issues)) == (True, "2", "docs-site", 2)
+    assert [shop.add(title, source="watcher")[0].id, docs.add(title, source="watcher")[0].id] == ["1", "2"]
+
+    shop.update(first.id, {"scope": "global", "links": [elsewhere.id]})  # shared: linked as connected entries
+    assert (shop.add(title, source="watcher")[0].count, docs.add(title, source="watcher")[0].count) == (3, 3)
+    docs.update(elsewhere.id, {"scope": "project", "project": "shop-site"})  # its project is now shop-site's
+    moved, new = docs.add(title, source="watcher")
+    assert (new, moved.id, names(github.issues[2])[-1]) == (True, "3", "project:shop-site")
+    assert docs.read(fresh=True)[0]["1"].links == ["2"]
+
+
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):
     root, _ = shared
     github.labels["scope:unassigned"] = {"name": "scope:unassigned", "color": "000000"}
