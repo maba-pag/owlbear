@@ -32,7 +32,7 @@ KINDS = ("untriaged", "defect", "improvement", "idea", "question")
 OURS = ("scope:", "project:", "class:")
 VISIBILITY = "repo_visibility"  # the operation whose failure refuses a write: the repository is not known private
 PRIVATE_SECONDS = 600.0  # how long GitHub's word that the repository is private is reused
-_BLOCK = re.compile(rf"<!-- {MARK} (\{{.*\}}) -->", re.DOTALL)
+_BLOCK = re.compile(rf"(?:\A|\n)<!-- {MARK} (\{{[^\n]*\}}) -->\s*\Z")  # the body's last line, never a pasted one
 _private: dict[str, float] = {}  # host/owner/name -> when GitHub last said it is private
 
 
@@ -56,7 +56,7 @@ class Issues(GhClient):
             got = self._api(
                 "list_issues", "GET", f"{repo(self.repository)}/issues?state=all&per_page={PAGE}&page={page}"
             )
-            found += [i for i in got if "pull_request" not in i and _BLOCK.search(i.get("body") or "")]
+            found += [i for i in got if "pull_request" not in i and f"<!-- {MARK} " in (i.get("body") or "")]
             if len(got) < PAGE:
                 return found
             page += 1
@@ -140,17 +140,22 @@ def _line(text: str) -> str:
     return " ".join(text.split())
 
 
+def _shown(text: str) -> str:
+    """The owner's text as Markdown shows it: a pasted comment opener hides nothing after it."""
+    return text.replace("<!--", "&lt;!--")
+
+
 def body(fields: dict[str, Any]) -> str:
     """The issue body: the entry's fields as Markdown, the Repeats line, and the block that round-trips them."""
     f = fields
     where = f" ({f['project']})" if f["project"] else ""
     head = f"**Class:** {f['kind']} · **Scope:** {f['scope']}{where} · **Source:** {f['source']}"
     head += f" · **State:** {f['status']}"
-    parts = [f["text"], head] if f["text"] else [head]
+    parts = [_shown(f["text"]), head] if f["text"] else [head]
     if f["notes"]:
-        parts.append(f"### Owner's notes\n\n{f['notes']}")
+        parts.append(f"### Owner's notes\n\n{_shown(f['notes'])}")
     if f["evidence"]:
-        parts.append("### Evidence\n\n" + "\n".join(f"- {_line(r)}" for r in f["evidence"]))
+        parts.append("### Evidence\n\n" + "\n".join(f"- {_shown(_line(r))}" for r in f["evidence"]))
     if f["change"] or f["launch"]:
         launch = f" (launch {f['launch']})" if f["launch"] else ""
         parts.append(f"### Change\n\n{f['change'] or 'not named yet'}{launch}")
@@ -182,9 +187,8 @@ def fields(issue: Json) -> dict[str, Any] | None:
             data[key] = said[0]
     if data.get("scope") == "project" and len(said := [n for n in names if n.startswith("project:")]) == 1:
         data["project"] = said[0].removeprefix("project:")
-    closed, status = issue.get("state") == "closed", data.get("status")
-    if closed and status not in {"done", "dropped"}:
-        data["status"] = "dropped" if issue.get("state_reason") == "not_planned" else "done"
-    elif not closed and status in {"done", "dropped"}:
+    if issue.get("state") == "closed":  # GitHub's closing reason, as it is now: a reopened and reclosed issue too
+        data["status"] = "dropped" if issue.get("state_reason") in {"not_planned", "duplicate"} else "done"
+    elif data.get("status") in {"done", "dropped"}:
         data["status"] = "inbox" if data.get("kind") == "untriaged" else "open"
     return data | {"id": str(issue["number"]), "title": issue["title"]}

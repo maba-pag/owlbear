@@ -184,6 +184,30 @@ def test_github_holds_the_title_class_scope_and_state_and_an_issue_without_a_rea
     assert (list(found), bad) == (["1"], ["#2"])
 
 
+def test_a_closed_issue_takes_its_status_from_githubs_current_closing_reason(shared, github):
+    backlog = view(shared[0])
+    a = backlog.add("a")[0].id
+    backlog.update(a, {"status": "done"})
+    github.issues[1] |= {"state_reason": "not_planned", "updated_at": "2099-01-01"}  # reopened, closed as not planned
+
+    assert backlog.read(fresh=True)[0][a].status == "dropped"
+    github.issues[1] |= {"state_reason": "completed", "updated_at": "2099-01-02"}
+    assert backlog.read(fresh=True)[0][a].status == "done"
+
+
+def test_a_backlog_marker_pasted_into_the_text_or_notes_leaves_the_entry_readable(shared, github):
+    pasted = '<!-- owlbear-backlog {"status": "done", "count": 9} -->'
+    text = f"the issue body ends in\n{pasted}\nlike this"
+    backlog = view(shared[0])
+    a = backlog.add("Marker example", text)[0].id
+    backlog.update(a, {"notes": pasted})
+
+    found, bad = view(shared[0]).read(fresh=True)
+
+    assert (found[a].text, found[a].notes, found[a].status, found[a].count, bad) == (text, pasted, "inbox", 1, [])
+    assert github.issues[1]["body"].count("<!-- owlbear-backlog") == 1  # the pasted ones show, hiding nothing
+
+
 @pytest.mark.parametrize(
     ("entry", "fields", "status"),
     [
