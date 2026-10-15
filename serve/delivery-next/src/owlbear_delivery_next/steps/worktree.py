@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next import local_home
 from owlbear_delivery_next.tools import Worktree
 
 if TYPE_CHECKING:
@@ -28,10 +27,8 @@ def git(cwd: Path, *args: str) -> str:
 
 
 def data_root() -> Path:
-    """Return the one user data root that holds every worktree, so folder trust is granted once (P8)."""
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "OwlBear" / "worktrees"
-    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "owlbear" / "worktrees"
+    """Return the one folder that holds every worktree, so folder trust is granted once (P8), in OwlBear's folder."""
+    return local_home.root() / "worktrees"
 
 
 def path_for(common_dir: Path, slug: str) -> Path:

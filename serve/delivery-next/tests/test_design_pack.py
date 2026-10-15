@@ -83,7 +83,7 @@ def test_the_pack_is_kept_only_in_a_private_folder(monkeypatch, tmp_path) -> Non
     pinned(monkeypatch, b"engine", b"bundle")
     shared = tmp_path / "shared"
     shared.mkdir()
-    monkeypatch.setattr(design_pack, "folder", lambda _pins=None: shared / "pack")
+    monkeypatch.setattr(design_pack, "folder", lambda _pins=None, **_how: shared / "pack")
     shared.chmod(0o777)
     with pytest.raises(design_pack.PackError, match="private folder"):
         design_pack.install(lambda url: b"engine" if "releases" in url else b"bundle")

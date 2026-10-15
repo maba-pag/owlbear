@@ -20,12 +20,13 @@ from typing import TYPE_CHECKING, Any
 
 import truststore
 
-from owlbear_delivery_next import preload
+from owlbear_delivery_next import local_home, preload
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 ENGINE, BUNDLE = "impeccable", "detect-antipatterns-browser.js"
+PACKS = local_home.PACKS
 RELEASE = "https://github.com/{repository}/releases/download/engine-v{engine}/impeccable-{platform}"
 RAW = "https://raw.githubusercontent.com/{repository}/{commit}/{path}"
 SECONDS = 120.0  # one download
@@ -81,10 +82,13 @@ def platform_name() -> str:
     return f"{system}-{machine}"
 
 
-def folder(pins: dict[str, Any] | None = None) -> Path:
-    """Where this machine keeps the pack's downloads, outside every project; *pins* name a candidate pack."""
-    home = Path(os.environ.get("OWLBEAR_HOME") or Path.home() / ".owlbear")
-    return home / "design-pack" / (pins or manifest())["pack"]
+def folder(pins: dict[str, Any] | None = None, *, writing: bool = False) -> Path:
+    """Where this machine keeps the pack's downloads, outside every project; *pins* name a candidate pack.
+
+    Reads fall back to the old ``~/.owlbear`` until it is moved; writes go to OwlBear's folder (TD-161).
+    """
+    packs = local_home.root() / PACKS if writing else local_home.found(PACKS)
+    return packs / (pins or manifest())["pack"]
 
 
 def _sha256(path: Path) -> str:
@@ -147,7 +151,7 @@ def _keep(target: Path, name: str, data: bytes) -> None:
 def install(download: Callable[[str], bytes] | None = None, pins: dict[str, Any] | None = None) -> Installed:
     """Download what is missing or changed, refuse any file that does not match its digest, and keep the rest."""
     download = download or fetch
-    target = folder(pins)
+    target = folder(pins, writing=True)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     target.mkdir(mode=0o700, exist_ok=True)
     if not (_private(target) and _private(target.parent)):

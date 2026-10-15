@@ -22,13 +22,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next import local_home
 from owlbear_delivery_next.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
-POINTER, OLD_POINTER = "data.json", "common.json"
+POINTER, OLD_POINTER = local_home.POINTER, "common.json"
 VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
@@ -51,8 +52,8 @@ def _held(path: Path) -> str:
 
 
 def pointer() -> Path:
-    """Where the machine records the shared repository; ``OWLBEAR_HOME`` moves it (tests)."""
-    return Path(os.environ.get("OWLBEAR_HOME") or Path.home() / ".owlbear") / POINTER
+    """Where the machine records the shared repository: OwlBear's folder, or the old ``~/.owlbear`` until moved."""
+    return local_home.found(POINTER, OLD_POINTER)
 
 
 def _move_old(path: Path) -> None:
@@ -273,7 +274,7 @@ def point(root: Path) -> DataRepo:
     if _top(root) != root:
         msg = f"{root} is not a git repository's top folder"
         raise DataRepoError(msg)
-    path = pointer()
+    path = local_home.root() / POINTER  # a new record goes to OwlBear's folder; an old one stays as a backup
     path.parent.mkdir(parents=True, exist_ok=True)
     _move_old(path)
     path.write_text(json.dumps({"repository": str(root)}) + "\n")

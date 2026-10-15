@@ -71,6 +71,7 @@ def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dic
     """The last check of upstream for the pinned tag, refreshed at most daily when asked; reading never goes online."""
     pack, tag = design_pack.manifest()["pack"], design_pack.manifest()["upstream"]["tag"]
     path, unknown = design_pack.folder().parent / NOTICE, {"behind": None, "checked_at": None}
+    written = design_pack.folder(writing=True).parent / NOTICE
     kept: Any = unknown
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
@@ -85,8 +86,8 @@ def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dic
             return {"pack": pack, **unknown}
         kept = {"tag": tag, "behind": found, "checked_at": datetime.now(UTC).isoformat(timespec="seconds")}
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(kept) + "\n", encoding="utf-8")
+            written.parent.mkdir(parents=True, exist_ok=True)
+            written.write_text(json.dumps(kept) + "\n", encoding="utf-8")
         except OSError:
             pass  # the notice is a hint; it is checked again next time
     return {"pack": pack, "behind": kept["behind"], "checked_at": kept["checked_at"]}
