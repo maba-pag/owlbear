@@ -36,7 +36,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    decisions and person checks. `decisions` holds every choice the owner made and each consequential
    choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
    came with something the owner approved without being asked) or `autonomous` (you chose it). Send
-   all of them again with every save. Leave `change` empty for a new Change; pass its handle
+   all of them again with every save. `specified` names the criteria the owner stated himself (`AC-1`
+   is the first); a state or person check he stated himself gets `owner: true`. Everything else is
+   your proposal, and the approval page shows it as such. Leave `change` empty for a new Change; pass its handle
    (`c3`) to revise. For a UI change then call
    `save_visual_check` with that handle, `ui`, the states and their steps. If either returns
    errors, each names a field: fix those and call again. Never invent a handle.

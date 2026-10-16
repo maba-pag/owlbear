@@ -150,6 +150,30 @@ def test_a_saved_decision_reaches_the_workers_whole(repo):
         assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
 
 
+def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_and_a_revision(repo):
+    store = Store.open(repo)
+    c = client(store)
+    checks = [
+        {"name": "feel", "steps": ["Flip five times"], "expect": "No stutter", "owner": True},
+        {"name": "copy", "steps": ["Read the label"], "expect": "It says Flip"},
+    ]
+    body = {**BRIEF, "criteria": [*BRIEF["criteria"], "farewell('') returns 'Bye!'"], "specified": ["AC-2"]}
+    body |= {"person_checks": checks}
+    assert c.post("/api/next/briefs", json=body).status_code == 200
+    states = [
+        {"name": "home", "path": "/", "expect": "Bye", "owner": True},
+        {"name": "empty", "path": "/", "expect": "!"},
+    ]
+    assert c.post("/api/next/briefs/visual", json={"change": "c1", "ui": True, "states": states}).status_code == 200
+    slug = store.slugs()[0]
+    assert store.read(slug).brief.specified == ["AC-2", "home", "feel"]
+    assert c.get(f"/api/next/changes/{slug}").json()["brief"]["specified"] == ["AC-2", "home", "feel"]
+    assert c.post("/api/next/briefs", json={**body, "change": "c1"}).status_code == 200  # keeps the visual check
+    assert store.read(slug).brief.specified == ["AC-2", "home", "feel"]
+    unknown = c.post("/api/next/briefs", json={**body, "specified": ["AC-3"]}).json()["errors"]
+    assert unknown == ["specified[0]: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
+
+
 def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approval(tmp_path):
     store = Store(tmp_path)
     c = client(store)

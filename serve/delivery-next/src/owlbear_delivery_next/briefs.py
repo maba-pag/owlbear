@@ -49,7 +49,8 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
             VisualState(name=s.name, path=s.path, expect=s.expect, steps=steps, version=prev.version if same else v)
         )
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
-    fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals}
+    owner = [*d.specified, *(s.name for s in d.visual if s.owner), *(p.name for p in d.person_checks if p.owner)]
+    fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals, "specified": list(dict.fromkeys(owner))}
     fields["decisions"] = [BriefDecision(**x.model_dump()) for x in d.decisions]
     c.brief = c.brief.model_copy(update=fields)
     ids, paths, shown = [k.id for k in criteria], evidence.coverage(c), {p.id: p for p in c.checks}
@@ -91,7 +92,8 @@ def _handles(store: Store) -> dict[str, str]:
 
 def _visual_of(c: Change) -> dict[str, Any]:
     """A Change's visual check as draft fields."""
-    states = [{"name": s.name, "path": s.path, "expect": s.expect} for s in c.brief.visual]
+    states = [{"name": s.name, "path": s.path, "expect": s.expect, "owner": s.name in c.brief.specified}
+              for s in c.brief.visual]  # fmt: skip
     steps = [{"state": s.name} | x.model_dump() for s in c.brief.visual for x in s.steps]
     return {"ui": c.brief.ui, "visual": states, "steps": steps}
 
@@ -144,9 +146,12 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
         c = store.read(slug)
     except StoreError as exc:
         return 409, {"errors": [f"change: {exc}"]}
-    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "visual": p.visual} for p in c.checks]
+    owner = set(c.brief.specified)
+    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "visual": p.visual, "owner": p.id in owner}
+              for p in c.checks]  # fmt: skip
     brief = {"change": draft.change, "title": c.brief.title, "outcome": c.brief.outcome, "scope": c.brief.scope}
     brief |= {"criteria": [k.text for k in c.brief.criteria], "person_checks": checks, "ui": draft.ui}
     brief |= {"non_goals": c.brief.non_goals, "decisions": [x.model_dump() for x in c.brief.decisions]}
+    brief |= {"specified": [k.id for k in c.brief.criteria if k.id in owner]}
     brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
     return save_brief(store, brief)

@@ -60,6 +60,15 @@
   .info { padding-top: var(--p-spacing-static-md); border-top: 1px solid var(--p-color-contrast-lower); }
   .panel > p-button, .panel > p-link-pure, .panel > button, .panel > a { justify-self: start; }
   .brief, .gallery { display: grid; gap: var(--p-spacing-static-sm); }
+  /* The brief: the agreement first, each part with room around it; details collapsed below. */
+  .brief { gap: var(--p-spacing-static-md); }
+  .brief section { display: grid; gap: var(--p-spacing-static-xs); }
+  .said { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .said li { display: grid; gap: 2px; overflow-wrap: anywhere; }
+  .said .label { font-size: var(--p-typescale-sm); color: var(--p-color-contrast-medium); }
+  .brief details { display: grid; gap: var(--p-spacing-static-xs); }
+  .brief details > :not(summary) { margin-block-start: var(--p-spacing-static-xs); }
+  .brief summary .count { display: block; font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
   .plan, .log { display: grid; gap: var(--p-spacing-static-xs); padding: 0; list-style: none; }
   .plan li { display: flex; align-items: baseline; gap: var(--p-spacing-static-sm); }
   .log li { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--p-spacing-static-sm); }
@@ -910,63 +919,142 @@ function screen(s) {
   return `${s.name} (${s.path}${steps.length ? `, then ${steps.join(", ")}` : ""}): ${s.expect}`;
 }
 
-// What the brief asks for, beyond its outcome: criteria, the screens the visual check takes, the owner's checks.
-function briefParts(d) {
-  const parts = [];
+// Who stated a technical item (TD-179 rule 1): the owner himself, or the shaper, whose proposal the approval accepts.
+function yours(d, id) {
+  return (d.brief.specified || []).includes(id);
+}
+
+// Each entry: what was asked (or what kind of item it is) as a small label, then the answer.
+function saidList(items) {
+  const node = el("ul", undefined, { class: "said" });
+  for (const [label, answer] of items) {
+    const item = el("li");
+    item.append(plain("span", label, "label"), plain("span", answer));
+    node.append(item);
+  }
+  return node;
+}
+
+function part(title, ...children) {
+  const node = el("section");
+  node.append(heading(4, title, "sm"), ...children);
+  return node;
+}
+
+// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions, what he specified among the technical
+// details, the shaper's choices that the approval accepts, and what is out.
+function agreement(d, approved = false) {
+  const decisions = d.brief.decisions || [], out = d.brief.non_goals || [], parts = [];
+  const mine = decisions.filter((x) => x.origin === "decided").map((x) => [x.question, x.answer]);
+  const specified = [
+    ...d.criteria.filter((k) => yours(d, k.id)).map((k) => ["Acceptance criterion", k.text]),
+    ...d.brief.visual.filter((s) => yours(d, s.name)).map((s) => ["Screen the visual check takes", screenSaid(s)]),
+    ...d.checks.filter((c) => yours(d, c.id)).map((c) => ["Check you do yourself", checkSaid(c)]),
+  ];
+  if (mine.length || specified.length) parts.push(part("Your decisions", saidList([...mine, ...specified])));
+  const proposed = decisions.filter((x) => x.origin !== "decided").map((x) => [x.question, x.answer]);
+  if (proposed.length) {
+    const accepts = approved ? "Your approval accepted these choices." : "Approving accepts these choices.";
+    parts.push(part("Choices proposed by the shaper", text(accepts), saidList(proposed)));
+  }
+  if (!decisions.length && !specified.length) parts.push(text("No separate decisions recorded."));
+  if (out.length) parts.push(part("Not in this Change", list(out)));
+  return parts;
+}
+
+function checkSaid(c) {
+  return `${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`;
+}
+
+// A screen as the owner reads it: what it must show, then where and after which clicks.
+function screenSaid(s) {
+  const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
+  return `${s.expect} (at ${s.path}${steps.length ? `, after: ${steps.join(", ")}` : ""})`;
+}
+
+function counted(n, one, many) {
+  return n ? `${n} ${n === 1 ? one : many}` : "";
+}
+
+// What the technical details hold, in a line that stays visible while they are collapsed.
+function detailCount(d) {
+  return [counted(d.criteria.length, "criterion", "criteria"), counted(d.brief.visual.length, "screen", "screens"),
+    counted(d.checks.length, "check for you", "checks for you")].filter(Boolean).join(" \u00b7 ");
+}
+
+// The technical details, collapsed (TD-122); an item the owner stated says so (TD-179 rule 1).
+function technical(d) {
+  const scope = d.brief.scope || [], mark = (id) => (yours(d, id) ? " (you specified)" : ""), inside = [];
   if (d.criteria.length) {
-    parts.push(heading(4, "Acceptance criteria", "sm"), list(d.criteria.map((k) => `${k.id}: ${k.text}`)));
+    const said = d.criteria.map((k) => `${k.id}: ${k.text}${mark(k.id)}`);
+    inside.push(heading(5, "Acceptance criteria", "sm"), list(said));
   }
   if (d.brief.visual.length) {
-    parts.push(heading(4, "Screens the visual check captures", "sm"), list(d.brief.visual.map(screen)));
+    inside.push(heading(5, "Screens the visual check captures", "sm"),
+      list(d.brief.visual.map((s) => `${screen(s)}${mark(s.name)}`)));
   }
   if (d.checks.length) {
-    const said = d.checks.map((c) => `${c.id}: ${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`);
-    parts.push(heading(4, "Checks you do yourself", "sm"), list(said));
+    inside.push(heading(5, "Checks you do yourself", "sm"),
+      list(d.checks.map((c) => `${c.id}: ${checkSaid(c)}${mark(c.id)}`)));
   }
-  const scope = d.brief.scope || [], out = d.brief.non_goals || [];
-  if (scope.length) parts.push(text(`Scope: ${scope.join(", ")}`));
-  if (out.length) parts.push(text(`Not in this Change: ${out.join("; ")}`));
-  return parts;
+  if (d.brief.ui) inside.push(text("This Change has a user interface, so the visual check runs."));
+  if (scope.length) inside.push(text(`Scope: ${scope.join(", ")}`));
+  if (!inside.length) return [];
+  const node = el("details"), head = el("summary", "Technical details"), count = detailCount(d);
+  if (count) head.append(plain("span", count, "count"));
+  node.append(head, ...inside);
+  return [node];
 }
 
 function approval(d) {
   const version = d.brief.version, box = el("div", undefined, { class: "brief" });
-  if (d.brief.outcome) box.append(text(d.brief.outcome));
-  box.append(...briefParts(d));
+  if (d.brief.outcome) box.append(text(d.brief.outcome, { size: "md" }));
+  box.append(...agreement(d), ...technical(d));
   const start = async () => {
     const origin = shown;
     if (await ask(approving(d))) send("/approve-brief", { version }, origin);
   };
   const approve = button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG });
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, box,
-    text("Nothing is built until you approve. To change the brief, say so in the shaping chat."), approve);
+    text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
+      + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
+      + "product commitments. To change the brief before approving, return to the shaping chat."), approve);
 }
 
-// What approving starts: the challenge, then planning, building and review, the visual round and the owner's checks
-// the brief asks for, and the merge as the project's setting has it.
+// What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,
+// building and review, the visual round and the merge; the owner's own parts come afterwards.
 function approving(d) {
   const v = d.brief.version, screens = d.brief.visual.length, checks = d.checks.length, you = [];
-  if (screens) you.push(`Delivery captures ${screens} screen${screens > 1 ? "s" : ""} and may ask you to judge them.`);
-  if (checks) you.push(checks > 1 ? `You do your ${checks} checks.` : "You do your check.");
+  const count = detailCount(d), then = ["The challenger reads the brief first and may come back with questions.",
+    "Then Delivery plans the work, builds and reviews each task, and opens a pull request."];
+  if (screens) then.push(`It captures ${screens} screen${screens > 1 ? "s" : ""} for the visual check.`);
+  then.push(`${merging(d)}. It takes on no new product commitment without you. AI credits are used from now on.`);
+  if (screens) you.push("Judge the screens when Delivery asks.");
+  if (checks) you.push(checks > 1 ? `Do your ${checks} checks once the pull request's checks pass.`
+    : "Do your check once the pull request's checks pass.");
   return {
     title: `Approve brief v${v} and start the work?`, yes: d.paused ? "Approve; stay paused" : "Approve and start",
     no: "Keep it waiting",
-    now: `Brief v${v} becomes the version every step follows${d.paused ? "; the Change stays paused until you resume"
-      : ""}.`,
-    then: ["The challenger reads the brief first and may come back with questions.",
-      "Then Delivery plans the work, builds and reviews each task, and opens a pull request.",
-      ...you,
-      `${merging(d)}. AI credits are used from now on.`].join(" "),
-    after: "Answer questions here as they come up. Pause at any time; a pause takes effect after the running step. To "
-      + "change the brief, revise it in the shaping chat and approve the new version.",
+    now: `Brief v${v}${count ? `, including its technical details (${count})` : ""}, becomes the approved version `
+      + `every step follows${d.paused ? "; the Change stays paused until you resume" : ""}.`,
+    then: then.join(" "),
+    after: ["Answer questions here as they come up.", ...you, "Pause at any time; a pause takes effect after the "
+      + "running step. Spent credits and finished work are not undone. To change the brief, revise it in the shaping "
+      + "chat and approve the new version."].join(" "),
     instead: "Nothing is built. The brief waits here; revise it in the shaping chat or come back later.",
   };
 }
 
+// The same agreement after approval (Sol, TD-179 rule 8): what was approved, and what changed since.
 function briefInfo(d) {
-  const rest = briefParts(d), box = info(`Brief v${d.brief.version}`);
-  if (d.brief.outcome) box.append(text(d.brief.outcome));
-  if (rest.length) box.append(disclosure("Criteria, screens and checks", ...rest));
+  const at = d.brief.approved_at ? new Date(d.brief.approved_at).toLocaleString() : "";
+  const v = d.brief.approved || d.brief.version, box = info(`Brief v${v}${at ? `, approved ${at}` : ""}`);
+  const body = el("div", undefined, { class: "brief" });
+  if (d.brief.outcome) body.append(text(d.brief.outcome));
+  body.append(...agreement(d, true), ...technical(d),
+    part("Changes since you approved", text("None. A change to an approved brief comes back to you as a new "
+      + "version to approve.")));
+  box.append(body);
   return box;
 }
 

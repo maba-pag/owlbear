@@ -120,7 +120,7 @@ mcp = MCPServer(
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-def save_brief(  # noqa: PLR0913 - the brief's eight fields
+def save_brief(  # noqa: PLR0913 - the brief's nine fields
     *,
     title: Annotated[str, _d("title")] = "",
     outcome: Annotated[str, _d("outcome")] = "",
@@ -129,13 +129,14 @@ def save_brief(  # noqa: PLR0913 - the brief's eight fields
     non_goals: Annotated[list[str] | None, _d("non_goals")] = None,
     decisions: Annotated[list[brief_tools.DecisionDraft] | None, _d("decisions")] = None,
     person_checks: Annotated[list[brief_tools.PersonCheckDraft] | None, _d("person_checks")] = None,
+    specified: Annotated[list[str] | None, _d("specified")] = None,
     change: Annotated[str, _d("change")] = "",
 ) -> dict[str, Any]:
     """Create or revise one Change's brief draft; the reply gives its handle or one error per field to fix."""
     fields = {"title": title, "outcome": outcome, "criteria": criteria or [], "scope": scope or []}
     fields |= {"non_goals": non_goals or [], "decisions": [d.model_dump() for d in decisions or []]}
     checks = [p.model_dump() for p in person_checks or []]
-    return _STATE["chat"].save_brief(fields | {"person_checks": checks, "change": change})
+    return _STATE["chat"].save_brief(fields | {"person_checks": checks, "specified": specified or [], "change": change})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))

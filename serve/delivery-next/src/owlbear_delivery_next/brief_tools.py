@@ -22,6 +22,7 @@ class PersonCheckDraft(Args):
     steps: list[str] = bounded(10, "What the owner does, step by step", ["Open the preview page"])
     expect: str = bounded(300, "What the owner should see", "The page shows 'Hallo, Ada!'")
     visual: bool = Field(default=False, description="Whether the owner judges how the UI looks", examples=[True])
+    owner: bool = Field(default=False, description="Whether the owner stated this check himself", examples=[True])
 
 
 class VisualStateDraft(Args):
@@ -30,6 +31,7 @@ class VisualStateDraft(Args):
     name: str = Field(pattern=NAME, description="Short id of the state", examples=["home"])
     path: str = Field(pattern=r"^/\S{0,199}$", description="URL path under the preview root", examples=["/settings"])
     expect: str = bounded(300, "What the rendered page must show", "The greeting is centred and readable")
+    owner: bool = Field(default=False, description="Whether the owner stated this state himself", examples=[True])
 
 
 class VisualStepDraft(Args):
@@ -122,6 +124,12 @@ class BriefDraft(Args):
         description="Clicks and typing before a state's screenshot, in order",
         examples=[[{"state": "search", "do": "type", "target": "Search", "text": "Ada"}]],
     )
+    specified: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="The criteria the owner stated himself: AC-1 is the first; the rest count as your proposals",
+        examples=[["AC-1"]],
+    )
 
 
 def _steps(brief: BriefDraft) -> list[str]:
@@ -170,4 +178,10 @@ def check_brief(brief: BriefDraft) -> list[str]:
             'visual: empty for a UI Change - add a state, e.g. {"name": "home", "path": "/", "expect": "..."}, '
             "or a person-only check with visual: true"
         )
+    known = [f"AC-{i}" for i in range(1, len(brief.criteria) + 1)]
+    errors += [
+        f"specified[{i}]: {s} names no criterion of this brief - use one of {', '.join(known) or 'AC-1'}"
+        for i, s in enumerate(brief.specified)
+        if s not in known
+    ]
     return errors + _steps(brief)

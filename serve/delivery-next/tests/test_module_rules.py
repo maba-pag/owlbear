@@ -14,7 +14,7 @@ from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
 SRC = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
 LIMIT = 500
 FIELDS = 6  # T5: about six fields per object
-WIDER = {"save_brief": 8}  # the owner added decisions and non_goals to the brief (reuse study v2, Sol finding 6)
+WIDER = {"save_brief": 9}  # decisions and non_goals (reuse study v2, Sol finding 6); specified (TD-179 rule 1)
 
 
 @pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))

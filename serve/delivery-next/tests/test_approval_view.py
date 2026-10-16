@@ -1,0 +1,94 @@
+"""The brief approval view in a real browser (TD-122, TD-179): the agreement open, technical details collapsed."""
+
+from __future__ import annotations
+
+import socket
+import threading
+import time
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+import pytest
+import uvicorn
+
+from owlbear_delivery_next import api
+from owlbear_delivery_next import models as m
+from owlbear_delivery_next.codebase import CURRENT
+from owlbear_delivery_next.host import HostRecord
+from owlbear_delivery_next.status import Activity
+from owlbear_delivery_next.store import Lock, Store
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+NOW = datetime(2026, 10, 16, 2, tzinfo=UTC)
+MINE, LEFT_TO_SHAPER = "Turns the hero 180 degrees in under 300 ms", "A second press returns the hero"
+
+
+class Host:
+    wake = type("W", (), {"set": staticmethod(lambda: None)})()
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
+
+    def activity(self, _slug: str) -> Activity:
+        return Activity(host_up=True)
+
+
+def change() -> m.Change:
+    decisions = [
+        m.BriefDecision(question="Where does the button sit?", answer="Top right of the hero", origin="decided"),
+        m.BriefDecision(question="Animation length", answer="250 ms ease-out", origin="autonomous"),
+    ]
+    brief = m.Brief(
+        version=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.",
+        criteria=[m.Criterion(id="AC-1", text=MINE), m.Criterion(id="AC-2", text=LEFT_TO_SHAPER)],
+        visual=[m.VisualState(name="flipped", path="/", expect="The hero faces left")], ui=True,
+        decisions=decisions, non_goals=["Saving the direction"], specified=["AC-1"],
+    )  # fmt: skip
+    checks = [m.PersonCheck(id="feel", steps=["Flip five times"], expect="No stutter")]
+    return m.Change(slug="flip", brief=brief, checks=checks, step=m.Step(kind=m.StepKind.SHAPE))
+
+
+@pytest.fixture
+def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
+    store = Store(tmp_path)
+    store.write(Lock("flip"), change())
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
+    server.should_exit = True
+
+
+@pytest.mark.browser
+def test_the_owner_approves_his_agreement_and_the_technical_details_stay_collapsed(page_url) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    with sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())  # offline
+        page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        page.goto(f"{base}/?change=flip")
+        brief = page.locator(".brief").first
+        yours = brief.locator("section", has_text="Your decisions")
+        expect(yours).to_contain_text("Top right of the hero")
+        expect(yours).to_contain_text(MINE)  # an owner-stated criterion is part of his agreement
+        expect(brief.locator("section", has_text="Choices proposed by the shaper")).to_contain_text("250 ms")
+        expect(brief.locator("section", has_text="Not in this Change")).to_contain_text("Saving the direction")
+        expect(brief.locator("summary")).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
+        expect(page.get_by_text(LEFT_TO_SHAPER, exact=False)).to_be_hidden()  # collapsed until opened
+        page.get_by_role("button", name="Approve brief v2").click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog).to_contain_text("including its technical details (2 criteria \u00b7 1 screen \u00b7 1 check")
+        expect(dialog).to_contain_text("Do your check once the pull request's checks pass")
+        page.get_by_role("button", name="Keep it waiting").click()
+        expect(dialog).to_be_hidden()
+        browser.close()
+    assert store.read("flip").brief.approved_version is None  # declining approves nothing
