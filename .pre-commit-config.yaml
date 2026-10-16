@@ -60,12 +60,15 @@ repos:
       - id: trailing-whitespace
         alias: trailing-whitespace-fix
         exclude: ^serve/cockpit/web/public/porsche-design-system/
+        stages: [manual]  # its manifest's own stages override default_stages
       - id: end-of-file-fixer
         alias: end-of-file-fix
         exclude: ^serve/cockpit/web/public/porsche-design-system/
+        stages: [manual]
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
+        stages: [manual]
 
   # ── Python (matches CI: PYTHON_RUFF + PYTHON_RUFF_FORMAT) ─
   - repo: https://github.com/astral-sh/ruff-pre-commit
