@@ -64,8 +64,7 @@ keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup id
 
 Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) tests every pull request
 into `main` and comments on it. The integration imports the repository's default branch, `main`;
-its projects are set never to retest. The `dev-snyk-checks` ruleset requires the three Snyk checks
-on the default branch, with a bypass for direct pushes; it is disabled while the workflows are.
+its projects are set never to retest. No ruleset requires its checks.
 Monitoring of `main` runs in Snyk's own UI; no workflow runs Snyk.
 
 ## MegaLinter toolchain updates

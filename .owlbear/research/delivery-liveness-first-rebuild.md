@@ -447,6 +447,8 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 | TD-226 | Supersedes TD-22: merge-queue support is built now | `decided`: chose "Build merge-queue support now" | 2026-10-17 |
 | TD-227 | Settles TD-7's "later": research moves into `owlbear-data` now, before the old-engine removal (TD-199) | `decided`: chose "Move research into owlbear-data now, before the old-engine removal" | 2026-10-17 |
 | TD-228 | Build order: TD-208 (all roles, TD-220/221) → TD-196 structure → research move (TD-227) → merge queue (TD-226) → window-step gate (TD-223) → watcher (TD-224); TD-199 after PR #449 is merged | `autonomous`: the owner chose "take your recommendation" | 2026-10-17 |
+| TD-229 | The assistant merges PRs, PR #449 included, at the right time (amends "never merge"); merge commits, not squash, so commits the records cite stay reachable | `decided`: "you take care of merging prs, i.e. 449, at the right time". The merge method is `autonomous` | 2026-10-17 |
+| TD-230 | The `SNYK_TOKEN` Actions secret is deleted. The `dev-snyk-checks` ruleset no longer exists (checked 2026-10-17); only the `main` ruleset (no deletion, no force push) remains | `decided`: "yes remove the snyk token"; done 2026-10-17 | 2026-10-17 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
