@@ -296,26 +296,39 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         return
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
     target = _target(q, item.option)
-    unnoted = target == "reconsider" and not item.text.strip()
-    if (target is None and {o.next for o in q.options} & DECISIONS) or unnoted:
+    if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
     gate = bool(c.outcome and c.outcome.question == q.id)
+    if q.repair and not gate:
+        return  # a round gate the Change has moved past changes nothing; its answer stays recorded
     if gate:
         c.outcome = None
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
     if target in DECISIONS:
         _decided(c, q, item, target, gate=gate)
-    elif target == "pause":
+    elif target is not None:
+        _moved(c, q, item, target, now)
+
+
+def _moved(c: Change, q: Question, item: AnswerItem, target: str, now: datetime) -> None:
+    """The answer's own move: a pause, done, abandon, or another step."""
+    if target == "pause":
         c.intent.paused_at, c.intent.pause_reason = now, q.text
         q.effect_observed_at = item.at  # the engine's decision; never resumed into a session as its answer
     elif target == "done":
         _done(c, None, now)
     elif target == "abandon":
         c.intent.abandoned_at = item.at
-    elif target is not None:
+    else:
         _entered(c, q, target)
+
+
+def _refused(q: Question, target: str | None, text: str) -> bool:
+    """An answer that settles nothing: a decision or a round gate needs one of its options, a reconsideration a note."""
+    unchosen = target is None and bool({o.next for o in q.options} & DECISIONS or q.repair)
+    return unchosen or (target == "reconsider" and not text.strip())
 
 
 def _entered(c: Change, q: Question, target: str) -> None:

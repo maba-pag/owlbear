@@ -411,7 +411,9 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             if body.option in {o.id for o in q.options}:  # an accept its hold no longer supports
                 raise HTTPException(409, "the held result no longer matches its step, brief or commit; run it again")
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
-        if body.option is None and {o.next for o in q.options} & loop.DECISIONS - {"retry"}:
+        if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
+            raise HTTPException(409, "the Change moved on since this round gate asked; reload")
+        if body.option is None and ({o.next for o in q.options} & loop.DECISIONS - {"retry"} or q.repair):
             raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")
         if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():
             raise HTTPException(422, "a reconsideration needs your note: what the reviewer should weigh")

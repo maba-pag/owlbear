@@ -19,6 +19,7 @@ from owlbear_delivery_next.models import (
     ItemRef,
     Names,
     Plan,
+    Question,
     Step,
     StepKind,
     Task,
@@ -281,21 +282,46 @@ def test_the_owners_fix_passes_the_round_gate_once():
     assert loop.apply(c, r.model_copy(update={"authorised": False}), NOW).outcome.exit == Exit.ASK
 
 
-@pytest.mark.parametrize(
-    ("option", "tasks", "kind", "task"), [("fix", 4, K.BUILD, "t4"), ("accept", 3, K.REVIEW, None)]
-)
-def test_the_round_gate_builds_the_held_findings_only_on_fix(option, tasks, kind, task):
+def gate_asked() -> Change:
+    """Round 3 of t3's review still finds something: the gate asks, holding the repair t4."""
     c = change(1)
     c.step = Step(kind=K.REVIEW, task="t3")
     c.budgets.rounds[budgets.round_key(c)] = budgets.ROUND_LIMIT
     fix = Task(id="t4", title="fix", origin="review", detail=f"- {TWO}")
-    asked = loop.apply(c, loop.StepResult(exit=Exit.RETRY, reason="1 finding(s) to fix", fix_task=fix), NOW)
+    return loop.apply(c, loop.StepResult(exit=Exit.RETRY, reason="1 finding(s) to fix", fix_task=fix), NOW)
+
+
+@pytest.mark.parametrize(
+    ("option", "tasks", "kind", "task"), [("fix", 4, K.BUILD, "t4"), ("accept", 3, K.REVIEW, None)]
+)
+def test_the_round_gate_builds_the_held_findings_only_on_fix(option, tasks, kind, task):
+    asked = gate_asked()
     q = loop.open_question(asked)
     assert (len(asked.plan.tasks), [t.id for t in q.repair]) == (3, ["t4"])
     after, _ = loop.schedule(asked, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option)], NOW)
     assert (len(after.plan.tasks), after.step.kind, after.step.task) == (tasks, kind, task)
     last = after.plan.tasks[-1]
     assert (last.id, last.fixes) == (("t4", "t3") if option == "fix" else ("t3", "t2"))
+
+
+def test_a_round_gate_settles_only_by_its_options_while_it_is_open(tmp_path):
+    asked = gate_asked()
+    q = loop.open_question(asked)
+    said = AnswerItem(at=NOW, channel="status-view", question=q.id, text="Fix the findings")
+    worded, _ = loop.schedule(asked, [said], NOW)
+    assert (worded.questions[-1].answer, loop.open_question(worded).id, len(worded.plan.tasks)) == (None, q.id, 3)
+    moved = asked.model_copy(deep=True)
+    ask(moved, Question(step=K.REVIEW, text="Another question"), NOW)  # the Change moved on
+    stale, _ = loop.schedule(moved, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="fix")], NOW)
+    assert (len(stale.plan.tasks), stale.step.kind, stale.step.task) == (3, K.REVIEW, "t3")
+    store = stored(tmp_path, asked)
+    client = TestClient(
+        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    url = "/api/next/changes/c1/answers"
+    assert client.post(url, json={"question": q.id, "text": "Fix the findings"}).status_code == 422
+    store.write(Lock("c1"), moved)
+    assert client.post(url, json={"question": q.id, "option": "fix"}).status_code == 409
 
 
 def test_the_owners_note_guides_the_fix_and_authorises_its_round():
