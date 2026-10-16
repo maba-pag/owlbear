@@ -292,16 +292,14 @@ def _target(q: Question, option: str | None) -> str | None:
 
 def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
-    if q is None:
-        return
+    gate = bool(q and c.outcome and c.outcome.question == q.id)
+    if q is None or (q.repair and not gate):
+        return  # a round gate the Change has moved past records nothing, so no session ever receives it
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
     target = _target(q, item.option)
     if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
-    gate = bool(c.outcome and c.outcome.question == q.id)
-    if q.repair and not gate:
-        return  # a round gate the Change has moved past changes nothing; its answer stays recorded
     if gate:
         c.outcome = None
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":

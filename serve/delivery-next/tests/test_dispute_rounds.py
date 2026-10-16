@@ -314,6 +314,7 @@ def test_a_round_gate_settles_only_by_its_options_while_it_is_open(tmp_path):
     ask(moved, Question(step=K.REVIEW, text="Another question"), NOW)  # the Change moved on
     stale, _ = loop.schedule(moved, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="fix")], NOW)
     assert (len(stale.plan.tasks), stale.step.kind, stale.step.task) == (3, K.REVIEW, "t3")
+    assert stale.questions[0].answer is None  # recorded, a resumed session would receive it as the owner's answer
     store = stored(tmp_path, asked)
     client = TestClient(
         api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
