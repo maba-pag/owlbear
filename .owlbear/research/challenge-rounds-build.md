@@ -111,7 +111,7 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
 
 ### 3.7 Retry mechanics (TD-210, TD-214)
 
-- The rejected head is archived first (`owlbear/archive/<slug>/a<attempt>`, with attempt metadata).
+- The rejected head is archived first (`owlbear/archive/<slug>/<subject>/a<attempt>-<head>`, TD-233).
 - Forward undo on the same branch and PR, never force: the commits each selected task (and its repairs)
   produced, recorded per attempt, are reverted in reverse commit order on a scratch branch; target merges are
   kept; mixed or ambiguous commits, or a revert conflict, stop with a question. The scratch result is promoted
@@ -144,9 +144,10 @@ step is built.
 
 1. Records, settings, stable IDs, migration.
 2. Task-review loops end to end (rounds, rejections to judge, owner disputes, termination, unreviewed
-   repairs, completion record, publish gate); removal of TD-189 and the REVIEW gate. Sol reviews.
-3. Final-review loop (one loop, task attribution, re-entry, restart button).
-4. Retry (archive, forward undo, rebuild, invalidation) and the owner's question with the task list.
+   repairs) and a task's retry (archive, forward undo, rebuild; TD-233); removal of TD-189 and the REVIEW
+   gate for task loops. Sol reviews.
+3. Final-review loop (one loop, task attribution, re-entry, restart button, completion record, publish gate).
+4. The final review's retry (the task list, invalidation) and the owner's question with the task list.
 5. Change page (markers, details, unreviewed repairs, standing rejections) and the config group. Sol reviews.
 6. Planner, 7. pack updater, 8. shaper's brief challenge (§3.9), each after its own design challenge.
 
