@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import config, sdk_adapter, sessions
+from owlbear_delivery_next import config, sdk_adapter, session_result, sessions
 from owlbear_delivery_next.models import Brief, Change, StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
@@ -115,12 +115,26 @@ def test_only_an_enabled_planner_may_start_one(tmp_path, kind, role, explore):
     assert (st.run.ending, st.run.detail) == ("error", "a subagent started: explore; no subagent may run")
 
 
-def test_a_hard_credit_limit_reaches_the_runtime_and_its_exhaustion_ends_the_step(tmp_path):
+def test_a_hard_credit_limit_reaches_the_runtime(tmp_path):
     assert step(tmp_path).options()["session_limits"] is None  # no limit unless an experiment's ledger sets one
-    st = step(tmp_path, limit=25.0)
-    assert st.options()["session_limits"] == {"max_ai_credits": 25.0}
-    st.on_event(event("session_limits_exhausted.requested", used_ai_credits=25.4, max_ai_credits=25.0, request_id="r"))
-    assert (st.run.ending, st.run.detail) == ("error", "credit limit reached: 25.4 of 25.0 credits")
+    assert step(tmp_path, limit=30.0).options()["session_limits"] == {"max_ai_credits": 30.0}
+
+
+@pytest.mark.parametrize(
+    ("ending", "used", "limit", "expected"),
+    [
+        ("no-result", 31.14, 30.0, ("error", "credit limit reached: 31.14 of 30 credits")),  # the live probe's run
+        ("deadline", 30.0, 30.0, ("error", "credit limit reached: 30.00 of 30 credits")),
+        ("no-result", 29.9, 30.0, ("no-result", "")),  # under the limit: an ordinary silent end
+        ("no-result", 31.14, None, ("no-result", "")),  # no limit set
+        ("no-result", None, 30.0, ("no-result", "")),  # credits unread: nothing is claimed
+        ("result", 31.14, 30.0, ("result", "")),  # a result within the last call stands
+    ],
+)
+def test_a_step_ending_silently_at_its_limit_is_reported_as_the_limit(ending, used, limit, expected):
+    run = Run("s1", ending=ending, usage={"credits": used})
+    session_result.limit_reached(run, limit)
+    assert (run.ending, run.detail) == expected
 
 
 def test_the_experiment_is_off_by_default_and_a_project_off_overrides_a_global_on():

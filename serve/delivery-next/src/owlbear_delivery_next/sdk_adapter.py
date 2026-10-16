@@ -27,7 +27,7 @@ from owlbear_delivery_next.results import ENDED, Gate
 from owlbear_delivery_next.sdk_teardown import CALL
 from owlbear_delivery_next.sdk_teardown import call as _call
 from owlbear_delivery_next.sdk_usage import USAGE_PAUSE, unexpected_models, unproven, unread, usage_read
-from owlbear_delivery_next.session_result import PROVEN, Run, note_quota
+from owlbear_delivery_next.session_result import PROVEN, Run, limit_reached, note_quota
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -170,7 +170,7 @@ class _Step:
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
         self.gate.finish(ending, payload, detail)
 
-    def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per event family
+    def on_event(self, ev: Any) -> None:  # noqa: ANN401 - an SDK session event; one branch per event family
         kind = getattr(ev.type, "value", str(ev.type))
         if kind == "assistant.turn_start":
             self.turn = True
@@ -193,9 +193,6 @@ class _Step:
             self.call_seen(ev.data)
         elif kind.startswith("subagent."):
             self.subagent_seen(kind, ev.data)
-        elif kind == "session_limits_exhausted.requested":  # the blocked request never runs: the step ends here
-            used, most = getattr(ev.data, "used_ai_credits", None), getattr(ev.data, "max_ai_credits", None)
-            self.finish("error", detail=f"credit limit reached: {used} of {most} credits")
 
     def subagent_seen(self, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
         """Only an allowed `explore` may run (TD-129); any other start voids the step; Auto is a wrong model (TD-53).
@@ -465,6 +462,7 @@ async def run(cfg: Session) -> Run:
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     session = st.session
     st.run.usage = await usage_read(session, cfg.model) if session else {}
+    limit_reached(st.run, cfg.credit_limit)
     st.run.subagents = st.watch.report()
     await _proven(st, session)
     st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)

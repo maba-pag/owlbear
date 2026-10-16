@@ -94,6 +94,17 @@ def effect_seen(run: Run) -> bool:
     return run.ending in {"result", "ask"} and run.payload is not None
 
 
+def limit_reached(run: Run, limit: float | None) -> None:
+    """A step without its result whose credits reached its hard limit ended there (TD-178, proven live).
+
+    The runtime allows one last call without tools at the limit and refuses every call after it, so the session
+    goes quiet and a reminder costs nothing; the usage, not the runtime's message text, shows why.
+    """
+    used = run.usage.get("credits")
+    if limit and used is not None and used >= limit and run.ending in {"no-result", "deadline"}:
+        run.ending, run.detail = "error", f"credit limit reached: {used:.2f} of {limit:g} credits"
+
+
 def note_quota(run: Run, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK event data
     """Record an exhausted Copilot quota and its reset time from a quota observation or a session error."""
     if kind == "session.error":
