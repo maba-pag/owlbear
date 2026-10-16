@@ -115,6 +115,7 @@ class Session:
     rejectable: tuple[str, ...] = ()  # finding keys a review repair's builder may reject (TD-124)
     rechecks: tuple[str, ...] = ()  # keys of rejected findings a review rechecks (TD-176)
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
+    skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
     context: str = "default"  # the model's context tier: "long" pins its long-context tier, else the runtime chooses
@@ -151,6 +152,7 @@ class _Step:
         self.created = False  # this invocation created its session, so the runtime preloads the role's skills
         self.preloaded: set[str] = set()  # skills the runtime loaded from Delivery's folder before the first turn
         self.checked = False  # the preload was checked at the first turn
+        self.skills = cfg.skills or preload.directory()  # the folder its skills load from
 
     @property
     def done(self) -> bool:
@@ -209,7 +211,7 @@ class _Step:
         """Note a skill the runtime loaded; a preload from Delivery's folder counts toward the role's skills."""
         trigger = getattr(getattr(data, "trigger", None), "value", getattr(data, "trigger", None))
         name, path = getattr(data, "name", "") or "", getattr(data, "path", "") or ""
-        if trigger == "context-load" and path and Path(path).resolve().is_relative_to(preload.directory().resolve()):
+        if trigger == "context-load" and path and Path(path).resolve().is_relative_to(self.skills.resolve()):
             self.preloaded.add(name)
         self.log(event="skill", name=name, trigger=trigger)
 
@@ -315,7 +317,7 @@ class _Step:
             "agent": role["name"],
             "excluded_builtin_agents": list(BUILTINS),
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
-            "skill_directories": [str(preload.directory())],
+            "skill_directories": [str(self.skills)],
             "mcp_servers": _memory(self.cfg.memory),
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "working_directory": str(self.cfg.worktree),
@@ -419,7 +421,7 @@ def _refused(cfg: Session) -> str:
     """Why the step cannot start: it names no model (TD-32), or Delivery's skills for its role are missing."""
     if not cfg.model:
         return "wrong model: the step names no model (TD-32)"
-    if gaps := preload.missing(role_of(cfg), ui=cfg.ui):
+    if gaps := preload.missing(role_of(cfg), ui=cfg.ui, folder=cfg.skills):
         return f"Delivery's worker skills are missing: {', '.join(gaps)}"
     return ""
 

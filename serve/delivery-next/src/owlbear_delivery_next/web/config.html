@@ -764,8 +764,10 @@ async function start() {
 }
 
 // TD-101: the design pack update runs in the host; the page starts it and follows its stages.
-const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped" };
-const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary" };
+const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
+  returned: "findings back to the updater" };
+const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
+  returned: "warning" };
 const ENDINGS = { idle: "Never run.", passed: "Last run passed: activated, committed and pushed.",
   failed: "Last run failed.", "up-to-date": "Last run: already up to date." };
 let polling = null, announced = "";
@@ -827,10 +829,11 @@ function poll() {
 async function startUpdate() {
   const sure = await ask({
     title: "Update the design pack?", yes: "Update", no: "Keep the current pack",
-    now: "Delivery takes the newest upstream pack, detector pins and design skills together, and validates it: "
-      + "rule diff, golden pages, calibration replay and a challenger. This uses AI credits.",
-    then: "Only if every stage passes, it activates the pack, commits design_pack.json and worker_skills/NOTICE.md "
-      + "on its package checkout's current branch and pushes that commit upstream.",
+    now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
+      + "brings the skills in line, then the rule diff, golden pages, calibration replay and a challenger check it. "
+      + "The challenger's findings go back to the updater. This uses AI credits.",
+    then: "Only if every stage passes, it activates the pack, commits design_pack.json, worker_skills/NOTICE.md and "
+      + "the skills the updater changed on its package checkout's current branch and pushes that commit upstream.",
     after: "Later visual rounds use the new pack. If a stage fails, nothing changes and the stages below say why.",
     instead: "The current pack stays active.",
   });

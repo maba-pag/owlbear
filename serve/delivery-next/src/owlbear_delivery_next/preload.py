@@ -22,6 +22,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "challenger": ("owlbear-acceptance", "owlbear-module-design", "owlbear-findings"),
     "designer": ("owlbear-ui-design", "owlbear-ui-review"),
     "preparer": (),  # its discovery order lives in its agent file, its only consumer (reuse study v2, 3.3)
+    "updater": (),  # it edits the pack's skills as files; preloading their old text would argue with its edits
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-ui-design",)}  # added when the brief has a UI (TD-76)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
@@ -58,14 +59,14 @@ def directory() -> Path:
     return Path(str(files("owlbear_delivery_next").joinpath(ROOT)))
 
 
-def text(name: str) -> str:
-    """One skill's ``SKILL.md``."""
-    return (directory() / name / "SKILL.md").read_text(encoding="utf-8")
+def text(name: str, folder: Path | None = None) -> str:
+    """One skill's ``SKILL.md``, from *folder* (a pack candidate's) or the package's."""
+    return ((folder or directory()) / name / "SKILL.md").read_text(encoding="utf-8")
 
 
-def _named(name: str) -> bool:
+def _named(name: str, folder: Path | None = None) -> bool:
     try:
-        head = text(name).split("---", 2)[1]
+        head = text(name, folder).split("---", 2)[1]
     except OSError, IndexError:
         return False
     return any(line.split(":", 1)[1].strip() == name for line in head.splitlines() if line.startswith("name:"))
@@ -76,6 +77,6 @@ def required(role: str, *, ui: bool = False) -> tuple[str, ...]:
     return (*REQUIRED.get(role, ()), *(UI.get(role, ()) if ui else ()))
 
 
-def missing(role: str, *, ui: bool = False) -> list[str]:
-    """The role's skills Delivery cannot preload: absent, or named otherwise in their front matter."""
-    return [name for name in required(role, ui=ui) if not _named(name)]
+def missing(role: str, *, ui: bool = False, folder: Path | None = None) -> list[str]:
+    """The role's skills Delivery cannot preload from *folder*: absent, or named otherwise in their front matter."""
+    return [name for name in required(role, ui=ui) if not _named(name, folder)]

@@ -18,7 +18,7 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.results import Gate
 from owlbear_delivery_next.session_result import Run
 
-AGENTS = ("builder", "planner", "reviewer", "challenger", "designer", "preparer")
+AGENTS = ("builder", "planner", "reviewer", "challenger", "designer", "preparer", "updater")
 PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
 SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research P24)
@@ -126,7 +126,7 @@ def test_no_role_has_subagent_tools() -> None:
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        assert asks == (role not in {"challenger", "designer"}), role
+        assert asks == (role not in {"challenger", "designer", "updater"}), role  # the updater's stops are the job's
         assert (tools.ASK.name in wf.tools_note(role)) == asks
         assert (tools.ASK.name in prompts.reminder(role)) == asks
     for label in tools.VERDICTS:

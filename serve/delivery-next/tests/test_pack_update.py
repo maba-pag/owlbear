@@ -21,6 +21,7 @@ from owlbear_delivery_next import (
     pack_candidate,
     pack_replay,
     pack_update,
+    preload,
     setup,
 )
 from owlbear_delivery_next.processes import Termination
@@ -312,12 +313,20 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
         final = design_tools.DesignResult(**look.model_dump())
         return Run(cfg.session_id, ending="result", payload=final, first=look, termination=Termination(confirmed=True))
 
-    result = pack_replay.replay(store, candidate(), run=run)
+    folder = tmp_path / "candidate-skills"  # the candidate's own skills, as the updater left them
+    for name in design_pack.manifest()["skills"]:
+        (folder / name).mkdir(parents=True)
+        (folder / name / "SKILL.md").write_text(preload.text(name) + "\nedited by the updater\n")
+    result = pack_replay.replay(store, candidate(folder), run=run)
     assert (result.rounds, result.agreed_before, result.agreed_after) == (1, 0, 1)  # the after's new problem fails
     assert result.left_out == 6
-    assert result.pack == design_pack.identity(candidate().manifest) != design_pack.identity()  # the candidate's
+    assert (
+        result.pack == design_pack.identity(candidate().manifest, folder) != design_pack.identity()
+    )  # the candidate's
+    assert result.pack != design_pack.identity(candidate().manifest)  # its edited skills count, not the package's
     assert result.pack.startswith("impeccable-4.6.0.1+")
     [cfg] = seen
+    assert cfg.skills == folder  # the judge loads the candidate's skills
     assert (cfg.role, cfg.message, cfg.reveal, cfg.model) == (
         "designer",
         "judge home",
@@ -347,9 +356,9 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
     assert len(started) == 1
 
 
-def candidate(**pins) -> pack_candidate.Candidate:
+def candidate(folder: Path | None = None, **pins) -> pack_candidate.Candidate:
     made = design_pack.manifest() | {"pack": "impeccable-4.6.0.1"} | pins
-    return pack_candidate.Candidate("skill-v4.6.0", made, json.dumps(made), "notice", None)
+    return pack_candidate.Candidate("skill-v4.6.0", made, json.dumps(made), "notice", None, folder)
 
 
 def test_a_replay_refuses_a_candidate_whose_skills_the_judge_does_not_load(repo) -> None:

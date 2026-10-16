@@ -9,6 +9,8 @@ is kept under the store, so it survives a host restart; a run the host stopped d
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -16,22 +18,34 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import design_pack, pack_candidate, pack_git, pack_replay, pack_update, sessions
+from owlbear_delivery_next import (
+    design_pack,
+    pack_candidate,
+    pack_git,
+    pack_replay,
+    pack_update,
+    pack_updater,
+    preload,
+    sessions,
+)
 from owlbear_delivery_next.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from owlbear_delivery_next import sdk_adapter
     from owlbear_delivery_next.calibration import Replay
     from owlbear_delivery_next.session_result import Run
     from owlbear_delivery_next.store import Store
 
 FILE = "design-pack-update.json"  # the last run, under the store
+CANDIDATE = "design-pack-candidate"  # the last run's candidate skills, under the store
 STAGES = (
     ("notice", "Notice: newer upstream release"),
     ("candidate", "Candidate: detector pins and skills"),
     ("diff", "Diff: rules and skill files"),
     ("golden", "Golden pages"),
+    ("update", "Updater: skills against upstream and the findings"),
     ("replay", "Calibration replay"),
     ("challenger", "Challenger on the whole pack"),
     ("activate", "Activate: one commit in the package"),
@@ -69,6 +83,7 @@ class Live:
     golden: Callable[[design_pack.Installed], dict[str, dict[str, list[str]]]] = pack_update.golden
     replay: Callable[[Store, pack_candidate.Candidate | None], Replay] = pack_replay.replay
     challenge: Callable[[Store, Any], Run] = sessions.run
+    update: Callable[[Store, Any], Run] = sessions.run  # the writing updater (TD-125)
     git: pack_git.Git = pack_git.git
 
 
@@ -188,22 +203,80 @@ class Job:
         def candidate() -> tuple[pack_git.Checkout, pack_candidate.Candidate]:
             co = pack_git.checkout(package, live.git)  # before any download: a checkout that cannot commit stops
             live.sync(live.clone, old["upstream"]["repository"])
-            return co, pack_candidate.prepare(live.clone, package, tag, live.download)
+            folder = store.root / CANDIDATE  # kept after the run, so the owner can read what was judged
+            shutil.rmtree(folder, ignore_errors=True)
+            return co, pack_candidate.prepare(live.clone, package, tag, live.download, folder)
 
         co, c = self._do("candidate", candidate, lambda out: _pack(*out))
         diff = self._do("diff", lambda: pack_update.diff(live.clone, tag))
         golden = self._do("golden", lambda: _golden(live.golden(c.installed)))
-        replayed = self._do("replay", lambda: _replayed(live.replay(store, c)))  # the candidate's judge, not the active
-        text = pack_candidate.message(c, diff, golden, replayed, package)
-        self._do("challenger", lambda: _passed(pack_candidate.challenge(store, c, live.clone, text, live.challenge)))
+        replayed = self._rounds(c, diff, golden, package)
+        edited = [n for n in c.pins["skills"] if pack_updater.skill(c, n).read_bytes() != c.baseline[n]]
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"
-        body = f"{why}\n\nGolden pages as expected. Calibration replay: {replayed}. Challenger passed the whole pack."
+        said = f"The updater changed {', '.join(edited)}." if edited else "The updater changed no skill."
+        body = f"{why}\n\nGolden pages as expected. Calibration replay: {replayed}. {said} The challenger passed."
         changed = {package / pack_candidate.MANIFEST: c.manifest, package / pack_candidate.NOTICE: c.notice}
-        commit = self._do("activate", lambda: pack_git.activate(co, changed, body, live.git))
+
+        def activate() -> str:  # the edited skills join the one commit, checked against the package just before
+            changed.update(_skills(package, c, edited))
+            return pack_git.activate(co, changed, body, live.git)
+
+        commit = self._do("activate", activate)
         self._do("push", lambda: pack_git.push(co, commit, live.git), lambda _o: f"{commit} to {co.remote} {co.merge}")
         with self.lock:
             files_ = sorted(str(p.relative_to(co.root)) for p in changed)
             self.state["pushed"] = {"commit": commit, "remote": co.remote, "branch": co.merge, "files": files_}
+
+    def _rounds(self, c: pack_candidate.Candidate, diff: str, golden: str, package: Path) -> str:
+        """Updater, replay and challenger until the challenger passes (TD-125); the last replay in words.
+
+        The producing updater repairs once, then a fresh one; the replay reruns only on changed skills.
+        """
+        live, store = self.live, self.store
+        with tempfile.TemporaryDirectory(prefix="owlbear-pack-update-") as tmp:
+            at = Path(tmp)
+            start = pack_updater.lay_out(at, c, live.clone)
+            sid, findings, summary, replayed, judged = pack_updater.new_id(), {}, "", "", ""
+            for n in range(pack_updater.ROUNDS):
+                sid = pack_updater.new_id() if n == pack_updater.ROUNDS - 1 else sid
+                whole = pack_updater.prompt(c, diff, findings, summary if n else "")
+                ask = pack_updater.repair(findings) if n == 1 else whole
+                cfg = pack_updater.config(store, at, sid, ask, resume=n == 1, fresh=whole, replaced=self._replaced)
+
+                def update(cfg: sdk_adapter.Session = cfg) -> pack_updater.UpdateResult:
+                    result = pack_updater.ended(live.update(store, cfg))
+                    pack_updater.taken(at, start, c)
+                    return result
+
+                result = self._do("update", update, lambda r: r.summary)
+                rejected = {r.finding: r.reason for r in result.rejected if r.finding in findings}
+                summary, now = result.summary, design_pack.identity(c.manifest, c.skills)
+                if now != judged:  # the affected check reruns after the updater's edits (TD-177)
+                    replayed, judged = self._do("replay", lambda: _replayed(live.replay(store, c))), now
+                text = pack_candidate.message(
+                    c, diff, golden, replayed, package, updated=summary,
+                    rechecks=pack_updater.rechecks(findings, rejected),
+                )  # fmt: skip
+
+                def challenge(text: str = text, rejected: dict[str, str] = rejected, findings: dict = findings) -> dict:
+                    done = pack_candidate.challenge(
+                        store, c, live.clone, text, live.challenge, rechecks=tuple(rejected)
+                    )
+                    return pack_updater.judged(done, findings, rejected)
+
+                findings = self._do("challenger", challenge, lambda f: "passed" if not f else f"{len(f)} finding(s)")
+                if not findings:
+                    return replayed
+                said = "; ".join(f"{k}: {v}" for k, v in findings.items())
+                last = n == pack_updater.ROUNDS - 1
+                self._stage("challenger", "failed" if last else "returned", said)
+        msg = f"findings remain after {pack_updater.ROUNDS} challenger rounds; the owner decides: {said}"
+        raise Stopped(msg[:2000])
+
+    def _replaced(self) -> str:
+        """The resumed updater is gone: a fresh one takes its repair, told the earlier work (TD-175)."""
+        self.log("update: the updater's session could not be resumed; a fresh one takes its repair")
+        return pack_updater.new_id()
 
     def _notice(self) -> str:
         found = pack_update.newer(self.live.releases)
@@ -244,6 +317,18 @@ def _passed(out: tuple[bool, str]) -> str:
         msg = f"challenger: {why}"
         raise Stopped(msg)
     return why
+
+
+def _skills(package: Path, c: pack_candidate.Candidate, edited: list[str]) -> dict[Path, str]:
+    """The edited skills' exact text over the package text they started from, which must be unchanged since."""
+    out = {}
+    for name in edited:
+        path = package / preload.ROOT / name / "SKILL.md"
+        if path.read_bytes() != c.baseline[name]:
+            msg = f"{name} changed in the package during the update; run the update again"
+            raise Stopped(msg)
+        out[path] = pack_updater.skill(c, name).read_text(encoding="utf-8")
+    return out
 
 
 def last(store: Store) -> dict[str, Any] | None:

@@ -5,7 +5,7 @@ from urllib.parse import parse_qsl
 
 import pytest
 
-from owlbear_delivery_next import backlog, backlog_issues, design_pack, model_choices
+from owlbear_delivery_next import backlog, backlog_issues, design_pack, model_choices, sdk_adapter
 from owlbear_delivery_next.steps import worktree
 
 
@@ -22,6 +22,11 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(backlog_issues, "_private", {})
     root = tmp_path_factory.mktemp("worktrees").resolve()
     monkeypatch.setattr(worktree, "data_root", lambda: root)  # never the machine's worktrees
+    monkeypatch.setattr(sdk_adapter, "CopilotClient", _no_runtime)  # never a real model session; fakes replace it
+
+
+def _no_runtime(**_kw: object) -> None:
+    pytest.fail("a test started a real Copilot runtime: fake the session at its boundary")
 
 
 class FakeGitHub:

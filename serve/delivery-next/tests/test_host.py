@@ -198,6 +198,7 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
         "  designer: claude-opus-5.5 effort high",
         "  preparer: claude-haiku-5.5 effort low",
         "  shaper: claude-opus-5.5 effort medium",
+        "  updater: claude-opus-5.5 effort high",
     ]
 
 

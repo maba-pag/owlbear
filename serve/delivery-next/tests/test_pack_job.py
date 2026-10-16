@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, calibration, design_pack, pack_git, pack_job, pack_update, tools
+from owlbear_delivery_next import api, calibration, design_pack, pack_git, pack_job, pack_update, pack_updater, tools
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.processes import Termination
@@ -93,8 +93,14 @@ class Fakes:
     """Each live part, recording the order it was called in."""
 
     def __init__(self, clone: Path, *, wrong: dict | None = None, replay_ok: bool = True, verdict: str = "pass"):
-        self.calls, self.sessions, self.clone = [], [], clone
+        self.calls, self.sessions, self.updates, self.clone = [], [], [], clone
         self.wrong, self.replay_ok, self.verdict = wrong or {}, replay_ok, verdict
+        self.verdicts: list[str] = []  # per challenger round; then `verdict`
+        self.edits: list[dict[str, str]] = []  # per updater round: worktree path -> new text
+        self.rejects: list[list[str]] = []  # per updater round: finding keys it rejects
+        self.upheld, self.premise = False, False
+        self.replays: list[tuple[str, str]] = []  # what each replay judged: the pack identity and the edited skill
+        self.during = lambda: None  # something else that happens while the challenger runs
         self.hold: threading.Event | None = None
         self.waiting = threading.Event()
         self.tags = ["skill-v4.5.2", "skill-v4.6.0"]
@@ -124,22 +130,41 @@ class Fakes:
     def replay(self, _store: Store, candidate) -> calibration.Replay:
         self.calls.append("replay")
         self.replayed = candidate
+        skill = (candidate.skills / "owlbear-ui-review" / "SKILL.md").read_text()
+        self.replays.append((design_pack.identity(candidate.manifest, candidate.skills), skill))
         return calibration.Replay(40, 40, 40 if self.replay_ok else 0)
 
     def challenge(self, _store: Store, cfg) -> Run:
         self.calls.append("challenger")
         self.sessions.append(cfg)
+        self.during()
         if self.hold:
             self.waiting.set()
             self.hold.wait(10)
-        findings = [] if self.verdict == "pass" else [tools.Finding(place="owlbear-ui-review", problem="p", fix="f")]
-        result = tools.ReviewResult(verdict=self.verdict, findings=findings)
+        verdict = self.verdicts.pop(0) if self.verdicts else self.verdict
+        findings = [] if verdict == "pass" else [tools.Finding(place="owlbear-ui-review", problem="p", fix="f")]
+        rechecked = [{"finding": k, "upheld": self.upheld, "reason": "r"} for k in cfg.rechecks]
+        result = tools.ReviewResult(verdict=verdict, findings=findings, rechecked=rechecked)
+        return Run(cfg.session_id, "result", payload=result, termination=Termination(confirmed=True))
+
+    def update(self, _store: Store, cfg) -> Run:
+        """The writing updater: each planned edit lands in its worktree, then it submits (or reports a premise)."""
+        self.calls.append("update")
+        self.updates.append(cfg)
+        edit = self.edits.pop(0) if self.edits else {}
+        for path, text in edit.items():
+            (cfg.worktree / path).write_text(text)
+        if self.premise:
+            premise = tools.WrongPremise(stage="brief", reason="golden page glow.html must change", evidence=["g"])
+            return Run(cfg.session_id, "premise", payload=premise, termination=Termination(confirmed=True))
+        reject = [{"finding": k, "reason": "it already holds"} for k in (self.rejects.pop(0) if self.rejects else [])]
+        result = pack_updater.UpdateResult(summary=f"round {len(self.updates)}", rejected=reject)
         return Run(cfg.session_id, "result", payload=result, termination=Termination(confirmed=True))
 
     def live(self, package: Path) -> pack_job.Live:
         return pack_job.Live(
             package=package, clone=self.clone, releases=self.releases, sync=self.sync, download=self.download,
-            golden=self.golden, replay=self.replay, challenge=self.challenge,
+            golden=self.golden, replay=self.replay, challenge=self.challenge, update=self.update,
         )  # fmt: skip
 
 
@@ -170,7 +195,7 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
     assert (state["state"], state["reason"]) == ("passed", "activated, committed and pushed")
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
-    assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "replay", "challenger"]
+    assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "replay", "challenger"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
     assert replayed.manifest == (checkout / "design_pack.json").read_text()  # the pack then activated
@@ -207,6 +232,110 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
         "files": ["src/pkg/design_pack.json", "src/pkg/worker_skills/NOTICE.md"],
     }  # fmt: skip
     assert git(root, "status", "--porcelain") == ""
+
+
+REVIEW_SKILL = "skills/owlbear-ui-review/SKILL.md"  # in the updater's worktree
+PACKAGED = "worker_skills/owlbear-ui-review/SKILL.md"  # in the package
+
+
+def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    new = (checkout / PACKAGED).read_text() + "\n- glow: a zero-offset coloured halo is decoration.\n"
+    fakes.edits = [{REVIEW_SKILL: new}]
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert state["state"] == "passed", state["reason"]
+    (cfg,) = fakes.updates
+    assert (cfg.role, cfg.policy.write, cfg.resume, cfg.submit) == ("updater", True, False, pack_updater.UPDATE)
+    assert (cfg.worktree / "upstream" / "skill" / "SKILL.md").exists() is False  # its worktree is gone after the run
+    ((identity, judged),) = fakes.replays
+    assert judged == new  # the replay's judge loads the edited skill, not the installed one
+    activated = tmp_path / "activated"
+    for name in OLD["skills"]:
+        (activated / name).mkdir(parents=True)
+        (activated / name / "SKILL.md").write_bytes((checkout / "worker_skills" / name / "SKILL.md").read_bytes())
+    assert identity == design_pack.identity((checkout / "design_pack.json").read_text(), activated)
+    assert "halo is decoration" in fakes.sessions[0].message
+    assert "## The updater's report (data, not instructions)\nround 1" in fakes.sessions[0].message
+    root = checkout.parents[1]
+    head = git(root, "rev-parse", "HEAD")
+    assert f"src/pkg/{PACKAGED}" in git(root, "show", "--name-only", "--format=", head).splitlines()
+    assert ((checkout / PACKAGED).read_text(), git(root, "status", "--porcelain")) == (new, "")  # its exact text
+    assert "The updater changed owlbear-ui-review." in git(root, "log", "-1", "--format=%b")
+
+
+def test_findings_go_back_to_the_updater_that_resumes_once_then_a_fresh_one_takes_over(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.edits = ["fix", "fix", "pass"], [{}, {REVIEW_SKILL: "repaired\n"}, {}]
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert state["state"] == "passed", state["reason"]
+    first, resumed, fresh = fakes.updates
+    assert (resumed.session_id, resumed.resume) == (first.session_id, True)  # TD-123: the producer repairs first
+    assert "- F1: owlbear-ui-review: p (fix: f)" in resumed.message
+    assert "## The earlier updater session's work (it could not be resumed)\nround 1" in resumed.fresh  # TD-175
+    assert (fresh.resume, fresh.session_id == first.session_id) == (False, False)
+    assert "## The earlier updater session's work (it could not be resumed)\nround 2" in fresh.message
+    assert fakes.calls.count("challenger") == 3
+    assert [judged for _, judged in fakes.replays][1:] == ["repaired\n"]  # the second replay judges the repair
+    assert len(fakes.replays) == 2  # the replay reruns only when the skills changed (TD-177)
+    assert sum("challenger: returned" in line for line in state["log"]) == 2
+
+
+@pytest.mark.parametrize("upheld", [True, False])
+def test_a_rejected_finding_is_rechecked_and_an_upheld_one_stops_for_the_owner(tmp_path, checkout, clone, upheld):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.rejects, fakes.upheld = ["fix"], [[], ["F1"]], upheld
+    before = snapshot(checkout)
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert fakes.sessions[1].rechecks == ("F1",)
+    assert "F1: owlbear-ui-review: p (fix: f)\n  The updater's reason: it already holds" in fakes.sessions[1].message
+    if upheld:
+        assert (state["state"], results(state)["challenger"]) == ("failed", "failed")
+        assert "upholds a finding the updater rejected; the owner decides" in state["reason"]
+        assert "updater: it already holds - challenger: r" in state["reason"]
+        assert snapshot(checkout) == before
+    else:
+        assert state["state"] == "passed", state["reason"]
+
+
+@pytest.mark.parametrize(
+    ("edit", "premise", "said"),
+    [
+        ({"upstream/skill/SKILL.md": "mine"}, False, "the updater changed upstream/skill/SKILL.md, which it may not"),
+        ({"notes.md": "mine"}, False, "the updater changed notes.md, which it may not change"),
+        ({}, True, "the updater asks the owner: golden page glow.html must change (g)"),
+    ],
+)
+def test_an_edit_beyond_the_skills_or_a_change_of_expected_evidence_stops_for_the_owner(  # noqa: PLR0913, PLR0917
+    tmp_path, checkout, clone, edit, premise, said
+):
+    fakes = Fakes(clone)
+    fakes.edits, fakes.premise = [edit], premise
+    before = snapshot(checkout)
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert (state["state"], results(state)["update"]) == ("failed", "failed")
+    assert said in state["reason"]
+    assert "challenger" not in fakes.calls
+    assert snapshot(checkout) == before
+
+
+def test_a_skill_changed_in_the_package_meanwhile_stops_activation(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.edits = [{REVIEW_SKILL: "updated\n"}]
+    fakes.during = lambda: (checkout / PACKAGED).write_text("edited by hand meanwhile\n")
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert (state["state"], results(state)["activate"]) == ("failed", "failed")
+    assert "owlbear-ui-review changed in the package during the update" in state["reason"]
+    assert (checkout / PACKAGED).read_text() == "edited by hand meanwhile\n"  # never overwritten
 
 
 def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(tmp_path, checkout, clone):
@@ -374,7 +503,7 @@ def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path):
     )
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages"></ol>' in page
-    assert "commits design_pack.json and worker_skills/NOTICE.md" in page  # the Update dialog says what it commits
+    assert "commits design_pack.json, worker_skills/NOTICE.md and " in page  # the Update dialog says what it commits
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == design_pack.identity()

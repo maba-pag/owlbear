@@ -57,10 +57,10 @@ def manifest() -> dict[str, Any]:
     return json.loads(files("owlbear_delivery_next").joinpath("design_pack.json").read_text(encoding="utf-8"))
 
 
-def identity(pins_text: str | None = None) -> str:
+def identity(pins_text: str | None = None, skills: Path | None = None) -> str:
     """What a review records as the pack it used: its version and a hash over its pins, adapter and skills.
 
-    *pins_text* is a candidate pack's ``design_pack.json``; by default the installed one's.
+    *pins_text* is a candidate pack's ``design_pack.json`` and *skills* its skill folder; by default the installed.
     """
     package = files("owlbear_delivery_next")
     text = package.joinpath("design_pack.json").read_bytes() if pins_text is None else pins_text.encode()
@@ -68,7 +68,7 @@ def identity(pins_text: str | None = None) -> str:
     digest.update(package.joinpath("detector.py").read_bytes())
     pins = json.loads(text)
     for name in pins["skills"]:
-        digest.update(preload.text(name).encode())
+        digest.update(preload.text(name, skills).encode())
     return f"{pins['pack']}+{digest.hexdigest()[:12]}"
 
 

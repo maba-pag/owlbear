@@ -321,8 +321,11 @@ VERDICTS = frozenset({"visual-review", "design-review", "plan-challenge", "brief
 
 
 def asks(role: str, *, judging: bool = False) -> bool:
-    """Whether a session may ask the owner with ``ask_question``: never a judge's, nor a judgement's."""
-    return role not in JUDGES and not judging
+    """Whether a session may ask the owner with ``ask_question``: never a judge's, a judgement's or the updater's.
+
+    The pack updater runs inside a host job, not a Change; its owner questions are the job's stops (TD-177).
+    """
+    return role not in JUDGES and role != "updater" and not judging
 
 
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:

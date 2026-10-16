@@ -48,11 +48,17 @@ def test_the_pack_pins_every_platform_its_skills_and_the_licence_text() -> None:
     assert pins["upstream"]["commit"] in (preload.directory() / "NOTICE.md").read_text()
 
 
-def test_the_pack_identity_covers_its_skills(monkeypatch) -> None:
+def test_the_pack_identity_covers_its_skills(monkeypatch, tmp_path) -> None:
     before = design_pack.identity()
     assert before.startswith(design_pack.manifest()["pack"] + "+")
+    for name in design_pack.manifest()["skills"]:  # a candidate's own skill folder, as the package holds it
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "SKILL.md").write_text(preload.text(name))
+    assert design_pack.identity(skills=tmp_path) == before
+    (tmp_path / name / "SKILL.md").write_text(preload.text(name) + "edited by the updater")
+    assert design_pack.identity(skills=tmp_path) != before
     text = preload.text
-    monkeypatch.setattr(preload, "text", lambda name: text(name) + "changed")
+    monkeypatch.setattr(preload, "text", lambda name, folder=None: text(name, folder) + "changed")
     assert design_pack.identity() != before
 
 

@@ -73,6 +73,7 @@ def replay(
             kind=StepKind.REVIEW, worktree=Path(tmp), session_id="", message="", resume=False,
             policy=Policy(Path(tmp), write=False), observe=lambda: tools.Worktree("", ""), checks=(),
             model=role.model, effort=role.effort, context=role.context, memory=memory,
+            skills=candidate.skills if candidate else None,  # the judge loads the candidate's skills, as edited
         )  # fmt: skip
         for kept, kept_files in calibration.cases(store.shared, store.name):
             images = _images(kept, {f.name: f for f in kept_files if _inside(f, root)})
@@ -94,7 +95,7 @@ def _pack(candidate: Candidate | None) -> str:
     if candidate.pins["skills"] != design_pack.manifest()["skills"]:
         msg = f"the candidate pack {candidate.pins['pack']} names skills the judge does not load; it cannot be replayed"
         raise design_pack.PackError(msg)
-    return design_pack.identity(candidate.manifest)
+    return design_pack.identity(candidate.manifest, candidate.skills)
 
 
 def _ran(run: Callable[[sdk_adapter.Session], Run], cfgs: list[sdk_adapter.Session]) -> list[Run]:
