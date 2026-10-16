@@ -867,7 +867,10 @@ class DraftPullRequestPublisher:
         except PublicationProviderError as exc:
             if exc.code is not PublicationProviderFailureCode.RESPONSE_UNKNOWN:
                 raise
-            reconciled = self._provider.read_pull_request(operation.repository, operation.number)
+            try:
+                reconciled = self._provider.read_pull_request(operation.repository, operation.number)
+            except PublicationProviderError as read_error:
+                raise exc from read_error
             self._validate_summary_pull_request(reconciled, operation, request)
             reconciled_body = _replace_generated_block(reconciled.body, request.generated_summary, request)
             if reconciled.body == reconciled_body:
@@ -1289,7 +1292,12 @@ class DraftPullRequestPublisher:
                 PublicationProviderFailureCode.RESPONSE_UNKNOWN,
             }:
                 raise
-            reconciled = self._find(operation)
+            try:
+                reconciled = self._find(operation)
+            except PublicationProviderError as find_error:
+                if exc.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN:
+                    raise exc from find_error
+                raise
             if reconciled is not None:
                 return reconciled
             raise

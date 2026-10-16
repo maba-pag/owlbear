@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from threading import Event
 
@@ -61,11 +63,23 @@ class _Provider:
     fail_update_before_write_once: bool = False
     draft_state_calls: int = 0
     lose_draft_state_response: bool = False
+    fail_reads_after_lost_write: bool = False
+    write_lost: bool = False
+
+    def _fail_read_after_lost_write(self, operation: str) -> None:
+        if self.fail_reads_after_lost_write and self.write_lost:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                operation,
+                "provider unavailable",
+                retry_safe=True,
+            )
 
     def read_repository(self, repository: str) -> PublicationRepository:
         return PublicationRepository(repository=repository, default_branch="main")
 
     def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None:
+        self._fail_read_after_lost_write("find_pull_request")
         matches = [
             pull_request
             for pull_request in self.pull_requests
@@ -105,6 +119,7 @@ class _Provider:
         )
         self.pull_requests.append(pull_request)
         if self.lose_create_response:
+            self.write_lost = True
             raise PublicationProviderError(
                 PublicationProviderFailureCode.RESPONSE_UNKNOWN,
                 "create_draft_pull_request",
@@ -114,6 +129,7 @@ class _Provider:
         return pull_request
 
     def read_pull_request(self, repository: str, number: int) -> PublicationPullRequest:
+        self._fail_read_after_lost_write("read_pull_request")
         return next(
             pull_request
             for pull_request in self.pull_requests
@@ -150,6 +166,7 @@ class _Provider:
         updated = current.model_copy(update={"title": request.title, "body": request.body})
         self.pull_requests[self.pull_requests.index(current)] = updated
         if self.lose_update_response:
+            self.write_lost = True
             raise PublicationProviderError(
                 PublicationProviderFailureCode.RESPONSE_UNKNOWN,
                 "update_pull_request",
@@ -712,6 +729,27 @@ def test_reconciles_lost_summary_update_response_without_second_write(tmp_path: 
     assert receipt.body_digest
     assert provider.update_calls == 1
     assert "Second reviewed checkpoint." in provider.pull_requests[0].body
+
+
+@pytest.mark.parametrize("write", ["create", "summary"])
+def test_failed_reconciliation_read_keeps_lost_write_response_unknown(tmp_path: Path, write: str) -> None:
+    provider = _Provider(fail_reads_after_lost_write=True)
+    publisher = _publisher(tmp_path, provider)
+    lost_write: Callable[[], object]
+    if write == "summary":
+        publisher.publish(_request())
+        provider.lose_update_response = True
+        lost_write = partial(publisher.update_generated_summary, _summary_request())
+    else:
+        provider.lose_create_response = True
+        lost_write = partial(publisher.publish, _request())
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        lost_write()
+
+    assert exc_info.value.code is PublicationProviderFailureCode.RESPONSE_UNKNOWN
+    assert exc_info.value.retry_safe is False
+    assert len(provider.pull_requests) == 1
 
 
 def test_retries_summary_after_user_prose_changes(tmp_path: Path) -> None:

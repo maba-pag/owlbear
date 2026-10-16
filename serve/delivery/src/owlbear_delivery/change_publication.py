@@ -188,6 +188,16 @@ class ChangeBranchPublisher:
                         retry_safe=False,
                     )
                     raise error from exc
+                except PublicationProviderError as exc:
+                    if not (attempt.write_outcome_ambiguous and exc.retry_safe):
+                        raise
+                    error = PublicationProviderError(
+                        PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                        request.operation_id,
+                        "Change branch push outcome could not be observed",
+                        retry_safe=False,
+                    )
+                    raise error from exc
             finally:
                 if (
                     attempt.reservation is not None
