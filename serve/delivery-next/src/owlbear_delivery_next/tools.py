@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
+
+from owlbear_delivery_next.tool_schema import parse, schema
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.models import ItemRef
+
+__all__ = ["parse", "schema"]  # kept importable from here, where every worker tool lives
 
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\d{1,5}(/\S*)?")
@@ -326,44 +329,6 @@ RECIPE = Spec(
     "result",
 )
 PLAN = Spec("submit_result", "Submit the ordered plan once, after reading the code it touches.", PlanResult, "result")
-
-
-def _inline(node: object, defs: dict[str, Any]) -> object:
-    if isinstance(node, dict):
-        if "$ref" in node:
-            return _inline(defs[node["$ref"].rsplit("/", 1)[-1]], defs)
-        return {k: _inline(v, defs) for k, v in node.items() if k != "$defs"}
-    return [_inline(v, defs) for v in node] if isinstance(node, list) else node
-
-
-def schema(spec: Spec) -> dict[str, Any]:
-    """Return the tool's JSON schema with every reference inlined."""
-    raw = spec.model.model_json_schema()
-    inlined = _inline(raw, raw.get("$defs", {}))
-    return inlined if isinstance(inlined, dict) else raw
-
-
-def _loc(loc: Sequence[int | str]) -> str:
-    out = ""
-    for part in loc:
-        out += f"[{part}]" if isinstance(part, int) else (f".{part}" if out else str(part))
-    return out or "arguments"
-
-
-def parse[T: Args](model: type[T], arguments: object) -> tuple[T | None, list[str]]:
-    """Validate tool arguments; return the instance, or one error per field with an example."""
-    try:
-        data = json.loads(arguments) if isinstance(arguments, str) else arguments
-        return model.model_validate(data), []
-    except ValidationError as exc:
-        errors = []
-        for err in exc.errors():
-            field = model.model_fields.get(str(err["loc"][0])) if err["loc"] else None
-            example = f" - e.g. {json.dumps(field.examples[0])}" if field and field.examples else ""
-            errors.append(f"{_loc(err['loc'])}: {err['msg']}{example}")
-        return None, errors
-    except ValueError:
-        return None, ["arguments: not a JSON object - send the fields as one object"]
 
 
 @dataclass(frozen=True)
