@@ -100,8 +100,8 @@ check below because it also depends on the selected browser and its allowlist.
 
 1. Open Copilot Chat and run **Chat: Open Customizations**.
 2. Confirm that OwlBear agents, skills, instructions, and prompts are listed.
-3. Run **MCP: List Servers** and confirm these five servers show `running`:
-   `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
+3. Run **MCP: List Servers** and confirm these four servers show `running`:
+   `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
 4. Before the first workflow, run `gh auth status` and confirm the GitHub CLI reports an active
   account.
 
