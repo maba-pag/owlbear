@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -53,3 +54,11 @@ def test_an_offline_check_records_its_notice_there(machine) -> None:
 
     assert pack_update.notice(refresh=True, fetch=offline)["behind"] is None
     assert (machine / ".owlbear" / "design-pack" / "notice.json").exists()
+
+
+def test_a_process_a_test_starts_never_reaches_the_machines_folder(machine_home) -> None:
+    """A test once let child processes claim folders in the owner's real shared data repository and push them."""
+    code = "from owlbear_delivery_next import local_home; print(local_home.root())"
+    child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
+    assert child.stdout.strip() == str(local_home.root())
+    assert not child.stdout.startswith(str(machine_home))

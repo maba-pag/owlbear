@@ -199,8 +199,8 @@ def test_golden_pages_report_what_an_engine_missed_or_found_unexpectedly(monkeyp
 
 
 @pytest.mark.browser
-def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypatch) -> None:
-    monkeypatch.setattr(local_home, "root", lambda: Path.home() / ".owlbear")  # this machine's pack, read only
+def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypatch, machine_home) -> None:
+    monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
     pack = design_pack.installed()
     if pack is None:
         pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")

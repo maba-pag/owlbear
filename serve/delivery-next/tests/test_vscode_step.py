@@ -1178,6 +1178,6 @@ def test_an_unreachable_editor_leaves_no_shaping_files(wt: Path) -> None:
     def refuse(_folder: Path) -> ahp.Transport:
         raise HostError("VS Code published no agent host within 60 s")  # noqa: EM101, TRY003
 
-    out, warning = shape(wt, vscode_adapter.Env(connect=refuse))
+    out, warning = shape(wt, vscode_adapter.Env(connect=refuse, shaper=None))
     assert (out.end, out.detail, warning) == ("error", "HostError: VS Code published no agent host within 60 s", "")
     assert git(wt, "status", "--porcelain", "--ignored") == ""

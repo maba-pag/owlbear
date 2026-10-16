@@ -174,8 +174,10 @@ class _Csp(http.server.SimpleHTTPRequestHandler):
 
 
 @pytest.mark.browser
-def test_a_real_capture_scans_each_state_in_its_page_and_falls_back_where_csp_refuses(tmp_path, monkeypatch):
-    monkeypatch.setattr(local_home, "root", lambda: Path.home() / ".owlbear")  # this machine's pack, read only
+def test_a_real_capture_scans_each_state_in_its_page_and_falls_back_where_csp_refuses(
+    tmp_path, monkeypatch, machine_home
+):
+    monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
     pack = design_pack.installed()
     if pack is None:
         pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
@@ -297,8 +299,8 @@ def test_the_scan_answers_without_ending_the_builders_step_in_both_runtimes(tmp_
     assert f"{relay}/{tools.SCAN_DESIGN}" in window_files.agent("builder", tmp_path / "inbox.json", ui=True)(None)
 
 
-def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(local_home, "root", lambda: Path.home() / ".owlbear")  # this machine's pack, read only
+def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch, machine_home) -> None:
+    monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
     if design_pack.installed() is None:
         pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
     (tmp_path / "index.html").write_text(BAD)

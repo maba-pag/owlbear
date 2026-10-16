@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -8,11 +10,28 @@ import pytest
 from owlbear_delivery_next import backlog, backlog_issues, design_pack, local_home, model_choices, sdk_adapter
 from owlbear_delivery_next.steps import worktree
 
+MACHINE_HOME = Path.home()  # read before any test replaces HOME
+
+
+@pytest.fixture
+def machine_home() -> Path:
+    """This machine's real home, for a test that reads what is installed there and never writes."""
+    return MACHINE_HOME
+
 
 @pytest.fixture(autouse=True)
 def _no_shared_settings(tmp_path_factory, monkeypatch):
-    """Tests never read the machine's pointer to the shared settings repository (TD-57), nor go online."""
-    home = tmp_path_factory.mktemp("owlbear-home")
+    """Tests never read the machine's pointer to the shared settings repository (TD-57), nor go online.
+
+    HOME is replaced too, so a child process a test starts resolves the same folder: a patch never reaches it.
+    Playwright still finds the machine's browsers.
+    """
+    fake = tmp_path_factory.mktemp("home")
+    monkeypatch.setenv("HOME", str(fake))
+    browsers = MACHINE_HOME / ("Library/Caches" if sys.platform == "darwin" else ".cache") / "ms-playwright"
+    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(browsers))
+    home = fake / ".owlbear"
+    home.mkdir()
     monkeypatch.setattr(local_home, "root", lambda: home)  # never the machine's ~/.owlbear
     monkeypatch.delenv("OWLBEAR_DATA", raising=False)
     monkeypatch.setattr(design_pack, "fetch", _offline)
