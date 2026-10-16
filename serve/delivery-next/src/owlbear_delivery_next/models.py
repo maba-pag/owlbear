@@ -281,6 +281,9 @@ class Task(Record):
     base: str | None = None  # HEAD when the task's build first started; its changes are measured from here
     item: ItemRef | None = None  # the conversation item a pr-feedback task answers
     response: Response | None = None  # the Builder's handling of that item
+    built_by: str = ""  # the session whose build Delivery accepted last (TD-123)
+    resume: str = ""  # a review repair's producing session, given its one repair chance; "" starts fresh
+    earlier: str = Field(default="", max_length=2000)  # that session's accepted work, for a fresh fallback (TD-175)
 
 
 class Plan(Record):
@@ -311,6 +314,7 @@ class Step(Record):
     attempt: int = 1
     started_at: datetime | None = None
     session: str | None = None
+    resumed: str = ""  # the planner session that had its repair chance after a plan challenge (TD-123)
 
 
 class Outcome(Record):

@@ -6,7 +6,6 @@ import argparse
 import dataclasses
 import json
 import sys
-import uuid
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -22,8 +21,10 @@ from owlbear_delivery_next import (
     permissions,
     profile,
     prompts,
+    repairs,
     roles,
     sdk_adapter,
+    session_choice,
     session_result,
     sessions,
     setup,
@@ -99,17 +100,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
-    answer = next(
-        (q for q in reversed(change.questions) if q.step == s.kind and q.answer and not q.effect_observed_at), None
-    )
-    accepted = held.take(store, lock, change)  # TD-56: processed in place of a new session
-    resume = bool(answer and s.session)
-    if not resume:
-        s.session = (
-            accepted.session_id if accepted else f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}"
-        )
-    s.started_at = now
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)
+    s.started_at = now
     if s.kind == StepKind.BUILD and task and task.base is None:
         task.base = worktree.head(path)
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
@@ -124,10 +117,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
     def replaced() -> str | None:
         nonlocal change
-        change, within = budgets.charge(change, session_result.missing_cause(s.kind), datetime.now(UTC))
-        change.step.session = f"{slug}-{s.kind}-{s.task or s.mode or 'all'}-{uuid.uuid4().hex[:8]}" if within else None
-        store.write(lock, change)
-        return change.step.session
+        change, new = session_choice.replaced(store, lock, change, repair)
+        return new
 
     role = roles.chosen(store.settings(), s.kind)
     ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
@@ -148,7 +139,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             model=role.model,
             effort=role.effort,
             context=role.context,
-            fresh=parts.message,
+            fresh=parts.message + (repairs.fallback(task) if repair else ""),
             previous=_previous(store, slug, s.session) if resume else {},
             journal=sdk_adapter.Journal(
                 lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
@@ -167,6 +158,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
+    if s.kind == StepKind.BUILD:
+        repairs.bind(task, run, result)
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     sessions.logged(
