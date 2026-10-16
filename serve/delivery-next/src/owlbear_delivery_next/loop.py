@@ -243,7 +243,7 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                         )
             case Recovery(action=action) if c.stop and c.stop.action == action:
                 c.stop = c.outcome = None
-            case ConsentItem():
+            case ConsentItem() if waiting_consent(c):  # a consent a restart retired, or older, counts for nothing
                 c.consent = MergeConsent(head=item.head, at=item.at, channel=item.channel, delta=item.delta)
                 if c.outcome and c.outcome.cause == CONSENT:
                     answer = AnswerItem(

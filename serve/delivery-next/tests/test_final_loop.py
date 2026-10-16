@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, loop, round_flow, runner, sdk_adapter, tools
-from owlbear_delivery_next.inbox import AnswerItem, RestartItem
+from owlbear_delivery_next import api, dispute_tools, loop, round_flow, runner, sdk_adapter, tools
+from owlbear_delivery_next.inbox import AnswerItem, ConsentItem, RestartItem
 from owlbear_delivery_next.models import (
     Brief,
     Change,
@@ -33,7 +33,7 @@ from owlbear_delivery_next.results import ACCEPTED, Gate
 from owlbear_delivery_next.round_records import FINAL, RECHECK, RoundLoop, RoundPolicy
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import publish, review
+from owlbear_delivery_next.steps import publish, reconsider, review
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
@@ -203,6 +203,26 @@ def test_a_final_dispute_the_owner_decides_is_fixed_and_ends_the_loop(tmp_path, 
     )
 
 
+def test_a_final_reconsideration_the_owner_asks_for_runs_before_the_review_completes(tmp_path, clone, monkeypatch):
+    store = stored(tmp_path)
+    reviewed(store, clone, monkeypatch, range(1, 6))
+    built(store, clone, monkeypatch, "c\n", "F2")
+    reviewed(store, clone, monkeypatch, F2=True)
+    assert at(answer(store, "reconsider", "AC-1 allows English")) == (K.REVIEW, None, "disputed")
+    seen = []
+
+    def run(_store, _lock, _change, path, made, _label, **_kw):
+        seen.append(made(path))
+        verdict = {"finding": "F2", "verdict": "withdrawn", "reason": "AC-1 allows English"}
+        result = dispute_tools.ReconsiderResult(reconsidered=[verdict])
+        return loop.StepResult(exit=Exit.DONE, reason="judged"), Run("s", "result", result, termination=DONE)
+
+    monkeypatch.setattr(reconsider.sessions, "review_run", run)
+    c = step(store, clone)
+    assert (seen[0].rechecks, "The owner's note: AC-1 allows English" in seen[0].message) == (("F2",), True)
+    assert (c.loops[FINAL].findings[1].state, at(c)) == ("withdrawn", (K.PUBLISH, None, None))
+
+
 @pytest.mark.parametrize(
     ("finding", "error"),
     [
@@ -344,7 +364,12 @@ def test_the_restart_runs_only_at_or_after_the_final_review_and_starts_a_new_att
         True,
         FINAL_STEP,
     )
-    c.consent = MergeConsent(head="b" * 40, at=NOW)
+    late = loop.fold(c, [RestartItem(at=NOW), ConsentItem(at=NOW, head="b" * 40)], NOW)
+    assert (late.consent, at(late)) == (None, FINAL_STEP)  # a consent from the old dialog revives nothing
+    assert loop.fold(c, [ConsentItem(at=NOW, head="b" * 40)], NOW).consent.head == "b" * 40  # while it waits
+    c.consent = MergeConsent(head="a" * 40, at=NOW)  # an earlier head's consent while the new head waits for one
+    assert round_flow.restartable(c) == ""
+    c.outcome = None  # consented: the merge runs
     assert round_flow.restartable(c) == "a merge is under way"
     assert loop.fold(c, [RestartItem(at=NOW)], NOW).loops[FINAL].attempt == 1  # refused again under the lock
     c.step = Step(kind=K.FOLLOW)  # an earlier head's consent, while the pull request is followed

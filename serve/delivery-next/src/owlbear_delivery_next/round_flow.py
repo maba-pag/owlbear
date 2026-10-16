@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.evidence import criteria
 from owlbear_delivery_next.failures import cause_key
-from owlbear_delivery_next.models import Answer, ErrorKind, Option, Question, StepKind
+from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.moves import ask, go, loop_of, open_task, resolved
 from owlbear_delivery_next.round_records import FINAL, RECHECK, Completion, RoundLoop
 
@@ -53,6 +53,9 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
     s = c.step
     task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
     if task is not None and (task.origin in ADDED or (task.origin == "review" and task.fixes is None)):
+        if any(d.upheld is None for d in task.disputes):
+            go(c, StepKind.REVIEW, task.id)  # a rejection of its findings is judged by its own review
+            return
         task.done = True
         if nxt := open_task(c):
             go(c, StepKind.BUILD, nxt.id)
@@ -166,7 +169,7 @@ def restartable(c: Change) -> str:
         return "the Change has ended"
     if c.stop or c.env is not None:
         return "the Change is stopped or runs your check's environment; settle that first"
-    if s.kind == StepKind.MERGE and c.consent is not None:
+    if s.kind == StepKind.MERGE and c.consent is not None and not (c.outcome and c.outcome.exit == Exit.ASK):
         return "a merge is under way"
     at = s.kind in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.CHECK, StepKind.MERGE}
     repairing = any(t.id == s.task and t.fixes == FINAL for t in (c.plan.tasks if c.plan else []))

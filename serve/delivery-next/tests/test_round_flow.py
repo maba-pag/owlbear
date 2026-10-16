@@ -332,3 +332,15 @@ def test_work_added_to_reviewed_work_gets_no_review_of_its_own(tmp_path, clone, 
     built(store, clone, monkeypatch, "b\n")
     c = store.read("c1")
     assert (c.plan.tasks[-1].done, c.loops, at(c)) == (True, {}, (K.REVIEW, None, "final"))  # the final round
+
+
+def test_a_repair_of_no_task_whose_builder_rejects_a_finding_keeps_its_own_review(tmp_path, clone, monkeypatch):
+    store = stored(tmp_path)
+    c = store.read("c1")
+    c.plan.tasks[0].done = c.plan.tasks[1].done = True
+    c.plan.tasks.append(Task(id="t3", title="fix", scope=["a.txt"], origin="review", detail="- a.txt:1: p - fix: f"))
+    c.step = Step(kind=K.BUILD, task="t3")  # a final-review repair of a Change from before TD-208
+    store.write(Lock("c1"), c)
+    built(store, clone, monkeypatch, "b\n", "F1")
+    c = store.read("c1")
+    assert (c.plan.tasks[-1].done, at(c)) == (False, (K.REVIEW, "t3", None))  # its review judges the rejection

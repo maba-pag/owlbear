@@ -35,6 +35,7 @@ from owlbear_delivery_next.models import (
     Exit,
     Inputs,
     ItemRef,
+    MergeConsent,
     Names,
     PersonCheck,
     Plan,
@@ -190,7 +191,8 @@ def test_consent_holds_only_for_the_exact_head():
 
 def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone):
     gh = FakeGh(pr(head=A))
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=B)], NOW)
+    c = change(worktree=str(clone))
+    c.consent = MergeConsent(head=B, at=NOW)  # given while B waited for it
     cx = ctx(tmp_path, gh, prof(**ASKING))
     _, result = merge.run(cx, c)
     offer = cx.events("c1", "merge-offer")[-1]

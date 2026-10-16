@@ -31,11 +31,11 @@ FINISH = (
 
 
 def due(change: Change) -> Task | None:
-    """The disputed review's task while a finding the owner sent back waits for its reconsideration."""
+    """The disputed review's repair while a finding the owner sent back waits for its reconsideration."""
     s = change.step
     if s.kind != StepKind.REVIEW or s.mode != disputes.DISPUTED or change.plan is None:
         return None
-    task = next((t for t in change.plan.tasks if t.id == s.task), None)
+    task = disputes.target(change, next((t for t in change.plan.tasks if t.id == s.task), None))
     return task if disputes.waiting(task) else None
 
 
