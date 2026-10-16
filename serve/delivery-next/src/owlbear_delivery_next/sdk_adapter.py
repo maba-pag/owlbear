@@ -323,6 +323,8 @@ class _Step:
 
     def options(self) -> dict[str, Any]:
         role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging)
+        if self.watch.allowed:
+            role["tools"].append(subagents.LAUNCHER)
         return {
             "on_permission_request": self.permission,
             "tools": self.tools(),

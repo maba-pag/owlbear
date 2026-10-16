@@ -14,6 +14,7 @@ from typing import Any
 from owlbear_delivery_next.models import StepKind
 
 ALLOWED = "explore"  # the one built-in the experiment admits (TD-129)
+LAUNCHER = "task"  # the runtime tool that starts a subagent; without it an admitted explore cannot start (live)
 
 
 @dataclass

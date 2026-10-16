@@ -47,6 +47,7 @@ def usage(parent: str | None, nano: float | None, model: str = HELPER) -> Simple
 def test_an_enabled_planner_runs_one_explore_and_each_of_its_calls_is_counted(tmp_path):
     st = step(tmp_path)
     assert "explore" not in st.options()["excluded_builtin_agents"]
+    assert "task" in st.options()["custom_agents"][0]["tools"]  # the launcher, or explore can never start (live)
     for ev in (
         started("c1"),
         event("assistant.message", content="", model=HELPER, parent_tool_call_id="c1"),
@@ -111,6 +112,7 @@ def test_anything_beyond_one_explore_still_voids_the_step(tmp_path, events, deta
 def test_only_an_enabled_planner_may_start_one(tmp_path, kind, role, explore):
     st = step(tmp_path, kind=kind, explore=explore, role=role)
     assert "explore" in st.options()["excluded_builtin_agents"]
+    assert "task" not in st.options()["custom_agents"][0]["tools"]
     st.on_event(started("c1"))
     assert (st.run.ending, st.run.detail) == ("error", "a subagent started: explore; no subagent may run")
 
