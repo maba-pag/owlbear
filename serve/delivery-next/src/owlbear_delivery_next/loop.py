@@ -102,6 +102,7 @@ class StepResult(Record):
     detail: str = ""  # the raw error behind a stable reason; shown when the owner is asked, never part of a signature
     operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
     challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
+    authorised: bool = False  # a repair the owner decided to fix: it passes the round gate once (TD-193)
 
 
 def waiting_consent(c: Change) -> bool:
@@ -132,7 +133,7 @@ def usage_gated(c: Change) -> bool:
     return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
 
 
-DECISIONS = frozenset({"retry", "accept", "repair"})  # engine decisions an answer can only choose, never type
+DECISIONS = frozenset({"retry", "accept", "repair", "reconsider"})  # engine decisions an answer can only choose
 
 
 def owner_gated(c: Change) -> bool:
@@ -295,15 +296,16 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         return
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
     target = _target(q, item.option)
-    if target is None and {o.next for o in q.options} & DECISIONS:
-        q.answer = None  # such a question is settled only by one of its options
+    unnoted = target == "reconsider" and not item.text.strip()
+    if (target is None and {o.next for o in q.options} & DECISIONS) or unnoted:
+        q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
     gate = bool(c.outcome and c.outcome.question == q.id)
     if gate:
         c.outcome = None
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
-    if target in {"retry", "accept", "repair"}:
+    if target in DECISIONS:
         _decided(c, q, item, target, gate=gate)
     elif target == "pause":
         c.intent.paused_at, c.intent.pause_reason = now, q.text
@@ -322,7 +324,7 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     if not gate:
         return  # the Change moved on since it asked
     if (q.cause or "").startswith(disputes.PREFIX):  # TD-176: the owner's decision on one upheld finding
-        disputes.decided(c, q, target, item.at)
+        disputes.decided(c, q, target, item.at, item.text)
     elif (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
         kept = c.visual_rounds[-1] if c.visual_rounds else None
         if kept and kept.outcome == "model":

@@ -413,6 +413,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
         if body.option is None and {o.next for o in q.options} & loop.DECISIONS - {"retry"}:
             raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")
+        if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():
+            raise HTTPException(422, "a reconsideration needs your note: what the reviewer should weigh")
         if q.cause == decision.CAUSE and body.option in {"pass", "fail"} and (why := decision_refused(c, body)):
             raise HTTPException(*why)
         item = AnswerItem(

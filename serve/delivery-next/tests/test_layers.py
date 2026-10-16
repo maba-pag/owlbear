@@ -18,7 +18,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
     ),
     "change_contracts": (
         "models", "failures", "evidence", "spend", "visual_records", "inbox", "profile_record", "tools", "tool_schema",
-        "preparation", "permissions", "amendment_records",
+        "preparation", "permissions", "amendment_records", "dispute_tools",
     ),
     "change_flow": ("loop", "moves", "budgets", "status", "progress", "brief_tools", "steps.worktree", "repairs",
                     "disputes"),

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next.budgets import round_key
+from owlbear_delivery_next.budgets import review_round
 from owlbear_delivery_next.loop import brief_due
 from owlbear_delivery_next.models import VISUAL, StepKind
 
@@ -127,7 +127,7 @@ def _position(c: Change) -> tuple[int | None, int | None]:
 def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]:  # noqa: C901, PLR0911 - one case per step
     """The sub-step and the round of its loop."""
     s, kind, task = c.step, _kind(c), _task(c)
-    own = c.budgets.loops.get(round_key(c), 0) + 1
+    own = review_round(c)
     if s.kind == StepKind.INTEGRATE and kind != StepKind.INTEGRATE:  # the round of the loop it interrupted
         return _SUB[s.kind], _work(c.model_copy(update={"step": s.model_copy(update={"kind": kind})}), rounds)[1]
     if s.kind in _SUB:

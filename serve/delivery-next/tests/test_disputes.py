@@ -20,6 +20,7 @@ NOW = datetime(2026, 10, 16, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)
 K = StepKind
 FOUND = "- a.txt:1: AC-1 greets in English - fix: use Hallo\n- a.txt:2: no test - fix: add one"
+RECONSIDER = "Ask the reviewer to reconsider"
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -164,7 +165,7 @@ def test_an_upheld_rejection_goes_to_the_owner_before_any_repair_round(tmp_path,
     assert (c.step.kind, c.step.task, [d.key for d in c.plan.tasks[1].disputes]) == (K.REVIEW, "t2", ["F1", "F2"])
     c = run_review(store, c, clone, monkeypatch, {"F1": True, "F2": False})
     q = loop.open_question(c)
-    assert (c.outcome.exit, [o.label for o in q.options]) == (Exit.ASK, ["Fix it", "Drop it"])
+    assert (c.outcome.exit, [o.label for o in q.options]) == (Exit.ASK, ["Fix it", RECONSIDER, "Drop it"])
     assert q.cause.startswith(disputes.PREFIX)
     assert "F1" in q.text
     assert "F1 judged" in q.text
@@ -181,7 +182,7 @@ def test_an_upheld_rejection_goes_to_the_owner_before_any_repair_round(tmp_path,
             f"- {FOUND.splitlines()[0][2:]}",
         )
         assert sum(c.budgets.rounds.values()) == 1
-        assert disputes.rejectable(c, fix) == ()  # the subject had its one recheck
+        assert (disputes.rejectable(fix), fix.settled, fix.found_in) == ((), ["F1"], 1)  # the owner's: decided
 
 
 def test_each_upheld_finding_is_decided_on_its_own(tmp_path, clone, monkeypatch):

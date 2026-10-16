@@ -151,8 +151,10 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
             ),
             item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
-            rejectable=disputes.rejectable(change, task) if s.kind == StepKind.BUILD else (),
+            rejectable=disputes.rejectable(task) if s.kind == StepKind.BUILD else (),
+            settled=disputes.settled(task) if s.kind == StepKind.BUILD else (),
             rechecks=disputes.pending(task) if s.kind == StepKind.REVIEW else (),
+            repeats=disputes.repeats(change, task) if s.kind == StepKind.REVIEW else (),
             amendable=amendments.amendable(change),
             explore=s.kind == StepKind.PLAN
             and store.settings().explore,  # TD-129: the SDK planner only, off by default
@@ -464,7 +466,7 @@ def _step(  # noqa: C901 - one branch per phase
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind in AGENT:
             agent = _reused(store, lock, change) or prepare.refused(store, lock, change)
-            agent or review.completed(store, lock, change) or _agent(store, lock, change, repo)
+            agent or review.completed(store, lock, change, repo) or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and loop.brief_due(change):
             _brief_challenge(store, lock, change, repo)
         else:

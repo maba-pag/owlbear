@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from owlbear_delivery_next import design_tools, missing, tools
+from owlbear_delivery_next import design_tools, dispute_tools, missing, tools
 from owlbear_delivery_next.failures import (
     QUOTA,
     READ_ONLY,
@@ -189,6 +189,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
         case "result" if isinstance(p, design_tools.DesignResult):  # the round's verdict matrix decides what follows
             found = "; ".join(f"{f.image}: {f.problem}" for f in p.findings)[:1500]
             return StepResult(exit=Exit.DONE, reason=f"design {p.verdict}: {found or p.doubt or 'no findings'}")
+        case "result" if isinstance(p, dispute_tools.ReconsiderResult):  # the disputes record each verdict
+            return StepResult(exit=Exit.DONE, reason=f"{len(p.reconsidered)} finding(s) reconsidered")
         case "result" if isinstance(p, tools.CheckRecipe):
             reason = f"starting `{p.command}` for the check"
             return StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)

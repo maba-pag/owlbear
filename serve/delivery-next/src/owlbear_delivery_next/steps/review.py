@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import disputes, loop, tools
+from owlbear_delivery_next import budgets, disputes, loop, tools
 from owlbear_delivery_next.failures import signature
 from owlbear_delivery_next.models import ErrorKind, Exit, Inputs, Review, Score, StepKind, Task
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.steps import reconsider, worktree
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
 
     from owlbear_delivery_next.loop import StepResult
@@ -75,15 +76,18 @@ def score(found: list[str], kind: str) -> Score:
     return Score(failing=len(found), findings=sorted(ids))
 
 
-def repair(change: Change, task: Task | None, found: list[str]) -> list[Task]:
-    """The repair task carrying every finding line, in parts that each fit a task's details."""
+def repair(change: Change, task: Task | None, found: list[str], kept: Collection[str] = ()) -> list[Task]:
+    """The repair task carrying every finding line, in parts that each fit a task's details.
+
+    Each part records the review round that found its findings and which of them the owner decided to fix (*kept*).
+    """
     n = len(change.plan.tasks) + 1 if change.plan else 1
     task = task or (change.plan.tasks[-1] if change.plan and change.plan.tasks else None)
     scope, checks = (task.scope, task.checks) if task else ([], [])
     of = f"task {change.step.task}" if change.step.task else "the final review"
     title = f"Fix {len(found)} review finding(s) of {of}"
     item = task.item if task and change.step.task else None  # a conversation task's repair answers the same item
-    parts = pack(found) or [""]
+    parts, round_ = pack(found) or [""], budgets.review_round(change)
     return [
         Task(
             id=f"t{n + i}",
@@ -93,13 +97,20 @@ def repair(change: Change, task: Task | None, found: list[str]) -> list[Task]:
             origin="review",
             detail=part,
             item=item,
+            found_in=round_,
+            settled=[f"F{j}" for j, line in enumerate(part.splitlines(), 1) if line in kept],
         )
         for i, part in enumerate(parts)
     ]
 
 
-def completed(store: Store, lock: Lock, change: Change) -> bool:
-    """A review whose upheld findings the owner decided completes from its held verdict, without a session."""
+def completed(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
+    """A review whose disputed findings the owner decided completes from its held verdict, without a review session.
+
+    A finding the owner sent back with a note is reconsidered first (TD-193).
+    """
+    if reconsider.judged(store, lock, change, repo):
+        return True
     if (result := disputed(change)) is None:
         return False
     now = datetime.now(UTC)
@@ -110,20 +121,27 @@ def completed(store: Store, lock: Lock, change: Change) -> bool:
 
 
 def disputed(change: Change) -> StepResult | None:
-    """A review whose upheld findings the owner decided: its held verdict plus the findings kept to fix (TD-176).
+    """A review whose disputed findings the owner decided: its held verdict plus the findings kept to fix (TD-176).
 
-    A repair round is counted only when something is left to fix; the recheck itself never counts one.
+    A repair round is counted only when something is left to fix; the recheck itself never counts one. A finding the
+    owner decided to fix passes the round gate once (TD-193).
     """
     s = change.step
     if s.kind != StepKind.REVIEW or s.mode != disputes.DISPUTED:
         return None
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     held = next((v for v in reversed(change.reviews) if v.task == s.task), None)
-    found = [*(held.findings if held and held.verdict == "fix" else []), *disputes.kept(task)]
+    kept = disputes.kept(task)
+    found = [*(held.findings if held and held.verdict == "fix" else []), *kept]
     if not found:
-        return loop.StepResult(exit=Exit.DONE, reason="the owner dropped each upheld finding")
-    fixes = repair(change, task, found)
+        return loop.StepResult(exit=Exit.DONE, reason="the owner settled each disputed finding")
+    fixes = repair(change, task, found, kept)
     reason = f"{len(found)} finding(s) to fix"
     return loop.StepResult(
-        exit=Exit.RETRY, reason=reason, fix_task=fixes[0], more_fixes=fixes[1:], score=score(found, s.kind)
+        exit=Exit.RETRY,
+        reason=reason,
+        fix_task=fixes[0],
+        more_fixes=fixes[1:],
+        score=score(found, s.kind),
+        authorised=disputes.authorised(task),
     )

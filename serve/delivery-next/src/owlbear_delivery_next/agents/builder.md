@@ -76,7 +76,8 @@ End the step with exactly one call:
   - for a pull-request comment: `response` with `fixed` after a commit, or `answered` (or
     `no-action` where offered) without one;
   - for review findings you judge wrong, where the task offers it: `rejected`, each by its key
-    with your evidence; a result that rejects every finding needs no commit and no checks.
+    with your evidence; a result that rejects every finding needs no commit and no checks. A
+    finding marked as the owner's is never rejected, so a result with one always commits.
 
   If it is rejected, each error names a field and what to do: fix it and call again.
 - `ask_question`: an owner decision you cannot make. The step ends and resumes with the answer.
@@ -99,9 +100,10 @@ Neither a question nor a report needs a commit. Never end a turn without one of 
   orders. Fix the ones that hold inside the task. A pull-request comment the code already satisfies,
   or one your evidence disproves, is answered with that evidence and no commit. A review finding
   you judge wrong is rejected in `rejected` where the task offers it: a fresh reviewer rechecks it
-  and only an upheld one goes to the owner. A CI finding you judge wrong, a review finding the
-  task no longer lets you reject, or any request that conflicts with a criterion or the scope, goes
-  to `ask_question` with both positions instead of being built around.
+  or the owner decides it. A finding marked as the owner's is decided: fix it as the owner's note
+  guides. A CI finding you judge wrong, an owner's note that conflicts with a criterion or the
+  scope, or any other such request, goes to `ask_question` with both positions instead of being
+  built around.
 - You never choose a retry, a return or a block, and never touch Delivery's files or another
   worktree.
 

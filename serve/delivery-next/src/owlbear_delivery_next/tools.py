@@ -147,7 +147,15 @@ class Recheck(Args):
     """Your independent recheck of one finding a builder rejected (TD-176)."""
 
     finding: str = _f(10, "The finding's key as Rechecks lists it", "F2")
-    upheld: bool = Field(description="true if it still holds on this commit; false if the reason disproves it")
+    upheld: bool | None = Field(
+        default=None, description="true if it still holds on this commit; false if the reason disproves it"
+    )
+    repeat_of: str = Field(
+        default="",
+        max_length=10,
+        description="Only to name a repeat under Earlier rechecks, its reference",
+        examples=["E1"],
+    )
     reason: str = _f(1000, "Why, with evidence", "src/greet.ts:4 trims the name")
 
 
@@ -313,7 +321,9 @@ FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the d
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 JUDGES = frozenset({"challenger", "designer"})  # they answer with a verdict, never a question (TD-108)
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
-VERDICTS = frozenset({"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge"})
+VERDICTS = frozenset(
+    {"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider"}
+)
 
 
 def asks(role: str, *, judging: bool = False) -> bool:

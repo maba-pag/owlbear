@@ -366,6 +366,11 @@ function consequence(o, d) {
       then: "Delivery goes on with the next step by itself.",
       after: "Pause at any time; a pause takes effect after the running step." };
   }
+  if (o.id === "drop") {
+    return { ...choices, title: "Drop this finding?",
+      now: "The finding is not fixed. Your note in words tells later reviewers why.",
+      then: "Delivery asks about the next disputed finding, or completes the review." };
+  }
   if (o.next === "accept") {
     return { ...choices, title: `${o.label}?`,
       now: "Delivery cannot prove which model produced this result; you take it as it is. Its verdict still "

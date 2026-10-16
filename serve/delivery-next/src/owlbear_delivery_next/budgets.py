@@ -98,6 +98,11 @@ def round_key(c: Change) -> str:
     return _scope(c, c.step.task) or c.step.mode or str(c.step.kind)
 
 
+def review_round(c: Change) -> int:
+    """The round of the current review loop as the owner sees it: one plus the loops already counted (TD-189)."""
+    return c.budgets.loops.get(round_key(c), 0) + 1
+
+
 def _progress(c: Change, cause: str, score: Score | None) -> bool:
     """Record *score* against the streak's best; True when it is progress, which then becomes the best.
 
@@ -238,7 +243,7 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
         c.budgets.rounds[key] = 0
     c.budgets.rounds[key] = c.budgets.rounds.get(key, 0) + 1
     c.budgets.loops[key] = c.budgets.loops.get(key, 0) + 1  # what the owner sees; resets nowhere (TD-97)
-    if c.budgets.rounds[key] > ROUND_LIMIT:
+    if c.budgets.rounds[key] > ROUND_LIMIT and not r.authorised:  # the owner's Fix it passes one batch (TD-193)
         fix = StepKind.BUILD if s.kind == StepKind.REVIEW else s.kind
         options = [
             Option(id="fix", label="Fix the findings", next=fix),

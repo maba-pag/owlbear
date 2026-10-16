@@ -192,7 +192,7 @@ class Option(Record):
 
     id: str
     label: str
-    next: StepKind | Literal["done", "pause", "abandon", "retry", "accept", "repair"] | None = None
+    next: StepKind | Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider"] | None = None
 
 
 class Answer(Record):
@@ -269,7 +269,12 @@ class Dispute(Record):
     reason: str  # the builder's
     upheld: bool | None = None
     recheck: str = ""  # the reviewer's reason
-    owner: Literal["", "fix", "drop"] = ""
+    owner: Literal["", "fix", "drop", "reconsider"] = ""
+    direct: bool = False  # found in round 3 or later: the owner decides without a recheck (TD-189)
+    repeat_of: str = ""  # the round-1 finding a round-2 recheck named it a repeat of (TD-189)
+    note: str = Field(default="", max_length=2000)  # the owner's note with the decision (TD-193)
+    reconsidered: Literal["", "withdrawn", "clarified", "unsure"] = ""  # a fresh reviewer, after the note
+    clarified: str = ""  # the finding as that reviewer restated it
 
 
 class Task(Record):
@@ -290,6 +295,8 @@ class Task(Record):
     resume: str = ""  # a review repair's producing session, given its one repair chance; "" starts fresh
     earlier: str = Field(default="", max_length=2000)  # that session's accepted work, for a fresh fallback (TD-175)
     disputes: list[Dispute] = Field(default_factory=list)  # findings of this repair task its builder rejected
+    found_in: int = 0  # the review round that found a repair's findings, as the owner sees it (TD-189)
+    settled: list[str] = Field(default_factory=list)  # finding keys the owner decided to fix: never rejected
 
 
 class Plan(Record):
