@@ -24,11 +24,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.config import Settings
-    from owlbear_delivery_next.models import Change, PageError
+    from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.profile_record import RoleModel
     from owlbear_delivery_next.sdk_adapter import Session
     from owlbear_delivery_next.session_result import Run
-    from owlbear_delivery_next.visual_records import DetectorScan
+    from owlbear_delivery_next.visual_records import DetectorScan, PageError
 
 type Errors = tuple[Sequence[PageError], Sequence[PageError]]
 

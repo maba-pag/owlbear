@@ -17,8 +17,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.models import VISUAL, Environment, StepKind, VisualResult
+from owlbear_delivery_next.models import VISUAL, Environment, StepKind
 from owlbear_delivery_next.steps import check, design, visual, worktree
+from owlbear_delivery_next.visual_records import VisualResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

@@ -15,12 +15,12 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next import design_pack, design_tools, detector, sdk_adapter, tools, window_files
-from owlbear_delivery_next.models import Change, Names, StepKind, VisualResult, VisualState, VisualStep
+from owlbear_delivery_next.models import Change, Names, StepKind, VisualState, VisualStep
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.results import Gate
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.steps import design, visual
-from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
+from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan, VisualResult
 
 NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
 PACK = design_pack.Installed(Path("/nowhere/impeccable"), "0" * 64, "")

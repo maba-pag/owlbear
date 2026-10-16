@@ -14,10 +14,10 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-    from owlbear_delivery_next.models import Change, PageError, Plan, Question, Task
+    from owlbear_delivery_next.models import Change, Plan, Question, Task
     from owlbear_delivery_next.profile_record import Profile
     from owlbear_delivery_next.tools import Worktree
-    from owlbear_delivery_next.visual_records import DetectorScan
+    from owlbear_delivery_next.visual_records import DetectorScan, PageError
 
 LIMIT = 1500
 PLAN_LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mid-sentence

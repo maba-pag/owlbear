@@ -29,7 +29,6 @@ from owlbear_delivery_next.models import (
     Step,
     StepKind,
     Task,
-    VisualResult,
     VisualState,
 )
 from owlbear_delivery_next.preparation import BASE, Preparation
@@ -39,6 +38,7 @@ from owlbear_delivery_next.status import Activity, status
 from owlbear_delivery_next.steps import check, disposable, prepare, worktree
 from owlbear_delivery_next.storage_io import open_lock
 from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.visual_records import VisualResult
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOLD = """\

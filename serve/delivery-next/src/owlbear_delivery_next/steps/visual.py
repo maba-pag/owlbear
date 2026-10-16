@@ -16,9 +16,10 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, PageError, StepKind, VisualResult
+from owlbear_delivery_next.models import VISUAL, Decision, ErrorKind, Exit, Option, StepKind
 from owlbear_delivery_next.steps import browse, check, decision, design, engine, worktree
 from owlbear_delivery_next.steps.browse import root
+from owlbear_delivery_next.visual_records import PageError, VisualResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

@@ -17,7 +17,6 @@ from owlbear_delivery_next.models import (
     Change,
     Environment,
     Names,
-    PageError,
     Plan,
     Step,
     StepKind,
@@ -29,6 +28,7 @@ from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import before, check, prepare, visual
 from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.visual_records import PageError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")

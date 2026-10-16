@@ -6,7 +6,7 @@ import contextlib
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from owlbear_delivery_next.models import PageError
+from owlbear_delivery_next.visual_records import PageError
 
 if TYPE_CHECKING:
     from playwright.sync_api import ConsoleMessage, Page, Route, WebSocketRoute

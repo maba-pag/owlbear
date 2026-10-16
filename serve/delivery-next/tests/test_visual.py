@@ -39,14 +39,12 @@ from owlbear_delivery_next.models import (
     ErrorKind,
     Exit,
     Names,
-    PageError,
     PersonCheck,
     Plan,
     Step,
     StepKind,
     Stop,
     Task,
-    VisualResult,
     VisualState,
 )
 from owlbear_delivery_next.permissions import Policy
@@ -60,6 +58,8 @@ from owlbear_delivery_next.visual_records import (
     DetectorScan,
     JudgeFinding,
     JudgeVerdict,
+    PageError,
+    VisualResult,
     VisualRound,
 )
 

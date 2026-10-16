@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.design_pack import Installed
     from owlbear_delivery_next.design_tools import ScanDesign
-    from owlbear_delivery_next.models import VisualResult, VisualState
-    from owlbear_delivery_next.visual_records import Freshness
+    from owlbear_delivery_next.models import VisualState
+    from owlbear_delivery_next.visual_records import Freshness, VisualResult
 
 SOURCES = frozenset(  # the UI files the engine reads (its SCANNABLE_EXTENSIONS)
     {".html", ".htm", ".css", ".scss", ".sass", ".less", ".jsx", ".tsx", ".js", ".ts", ".vue", ".svelte", ".astro"}

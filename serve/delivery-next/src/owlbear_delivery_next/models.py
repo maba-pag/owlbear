@@ -10,13 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.amendment_records import Amendment
 from owlbear_delivery_next.spend import ModelSpend, Spend
-from owlbear_delivery_next.visual_records import OwnerCriterion, PageError, VisualResult, VisualRound
+from owlbear_delivery_next.visual_records import OwnerCriterion, VisualResult, VisualRound
 
 __all__ = [
     "ModelSpend",
-    "PageError",
     "Spend",
-    "VisualResult",
 ]  # kept importable from here, where every other record lives
 
 FORMAT = 3

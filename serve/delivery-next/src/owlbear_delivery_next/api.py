@@ -56,9 +56,10 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.host import Host, HostRecord
     from owlbear_delivery_next.inbox import InboxItem
     from owlbear_delivery_next.launches import Ended
-    from owlbear_delivery_next.models import Inputs, VisualResult
+    from owlbear_delivery_next.models import Inputs
     from owlbear_delivery_next.status import Activity
     from owlbear_delivery_next.store import Store
+    from owlbear_delivery_next.visual_records import VisualResult
     from owlbear_delivery_next.vscode_contract import Outcome
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")

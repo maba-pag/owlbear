@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next import calibration, config_routes, sessions, visual_settled
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
-from owlbear_delivery_next.models import Change, VisualResult
+from owlbear_delivery_next.models import Change
 from owlbear_delivery_next.store import Lock, Store
 from owlbear_delivery_next.visual_records import (
     DetectorFinding,
@@ -19,6 +19,7 @@ from owlbear_delivery_next.visual_records import (
     JudgeVerdict,
     OwnerCriterion,
     OwnerDecision,
+    VisualResult,
     VisualRound,
 )
 
