@@ -843,3 +843,29 @@ async def test_live_server_reports_git_hook_failure(
     assert "exited with status 1" in message
     assert "HOOKFAIL: review hook rejected this commit" in message
     assert "Memory paths may remain staged after this failure" in message
+
+
+@pytest.mark.asyncio
+async def test_live_server_uses_an_explicit_store_outside_any_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``OWLBEAR_MEMORY_DIR`` names the store; the working folder needs no ``.owlbear`` (TD-72)."""
+    store = tmp_path / "common" / "project" / "memory"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
+    args = {
+        "title": "Shared store",
+        "content": "Saved into the shared repository's project folder.",
+        "categories": ["process"],
+        "confidence": 0.8,
+        "source_agent": "builder",
+    }
+
+    async with mcp.Client(memory_mcp) as client:
+        saved = await client.call_tool("save_memory", args)
+
+    assert not saved.is_error
+    (entry,) = store.iterdir()
+    assert "title: Shared store" in entry.read_text(encoding="utf-8")
+    assert not (tmp_path / ".owlbear").exists()

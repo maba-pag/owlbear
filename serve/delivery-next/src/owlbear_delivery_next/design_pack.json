@@ -1,0 +1,24 @@
+{
+  "pack": "impeccable-4.5.2.1",
+  "upstream": {
+    "repository": "pbakaus/impeccable",
+    "tag": "skill-v4.5.2",
+    "commit": "d631a8827f99414d2b6daba4ef08b7f8701751d7",
+    "engine": "0.1.14"
+  },
+  "engine": {
+    "darwin-arm64": "abbd69d540532b91e9599c41d3a6127dfbaabae5e24bafd74ff7e2fb18f4f87c",
+    "darwin-x64": "dfa4570309939f49615a441baa9c73f1c2d339bf07494517a6c6eb2eb28aa0f5",
+    "linux-arm64": "396263ee694780db942483fc80933a012ef08bf981f5f26b0da5e16b6208c948",
+    "linux-x64": "3d31ec1a664ac35c815ea1d7c10abad1155ce364d0f461157eb837a34368efb6"
+  },
+  "bundle": {
+    "path": "crates/live/assets/detect-antipatterns-browser.js",
+    "sha256": "d71d1c762197231f8dfb7cc34eca3bff536ad2dfb34300b320e355939bbd9483"
+  },
+  "licence": {
+    "IMPECCABLE-LICENSE": "02bb8c3b4e70190e3986c0404ad2fd8d639b4f534252d82379cc1b502b6d1812"
+  },
+  "skills": ["owlbear-ui-design", "owlbear-ui-review"],
+  "extracted": "2026-10-14"
+}

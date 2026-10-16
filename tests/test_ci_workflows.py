@@ -144,6 +144,18 @@ def test_python_browser_tests_run_alone_with_chromium() -> None:
     assert "pytest serve/browser serve/browser-mcp -m browser" in runs
 
 
+def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> None:
+    workflow = _workflow("python-browser.yml")
+    job = _jobs("python-browser.yml")["delivery-next-browser"]
+    runs = _runs(job)
+
+    assert {"serve/delivery-next/**", "serve/memory/**"} <= set(workflow["on"]["pull_request"]["paths"])
+    assert "serve/delivery-next serve/memory" in next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
+    assert "uv sync --locked --package owlbear-delivery-next --group dev" in runs
+    assert "uv run --no-sync playwright install --with-deps chromium" in runs
+    assert "pytest serve/delivery-next -m browser" in runs
+
+
 def test_cockpit_unit_and_browser_proofs_run_in_parallel() -> None:
     workflow = _workflow("cockpit.yml")
     jobs = _jobs("cockpit.yml")
@@ -185,7 +197,7 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
             continue
         setup = steps[setups[0]]["with"]
         if name != "copilot-setup-steps.yml":
-            assert setup["cache-suffix"] in {"python-tests", "python-browser", "dev-tools"}
+            assert setup["cache-suffix"] in {"python-tests", "python-browser", "delivery-next-browser", "dev-tools"}
         check = next(index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", "")))
         first_uv = next(
             index

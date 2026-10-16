@@ -1,0 +1,64 @@
+/* Shared by every host page; pages.py puts it in place of the base marker, before the page's own styles. */
+:not(:defined) { visibility: hidden; }
+.no-pds :not(:defined) { visibility: visible; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--p-color-canvas); color: var(--p-color-primary);
+  font-family: var(--p-font-sans, system-ui), system-ui, sans-serif; line-height: var(--p-leading-normal, 1.5);
+}
+main {
+  display: grid; gap: var(--p-spacing-fluid-md); max-width: 80rem; margin: 0 auto;
+  padding: var(--p-spacing-static-md) var(--p-spacing-fluid-md) var(--p-spacing-fluid-xl);
+}
+header {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--p-spacing-static-md);
+}
+section { display: grid; gap: var(--p-spacing-static-md); }
+.panel {
+  display: grid; gap: var(--p-spacing-static-md); padding: var(--p-spacing-fluid-sm);
+  background: var(--p-color-surface); border-radius: var(--p-radius-lg);
+}
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+.heading-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-sm); }
+.empty {
+  padding: var(--p-spacing-static-lg) var(--p-spacing-static-md); text-align: center;
+  border: 1px dashed var(--p-color-contrast-low); border-radius: var(--p-radius-lg);
+}
+ul, ol { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
+li { font-size: var(--p-typescale-sm); }
+details > summary { cursor: pointer; font-size: var(--p-typescale-sm); padding-block: var(--p-spacing-static-xs); }
+:is(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--p-color-focus); outline-offset: 2px;
+}
+[tabindex="-1"]:focus { outline: none; }
+.field, fieldset { display: grid; gap: var(--p-spacing-static-xs); }
+textarea, input, select, button { font: inherit; }
+/* The sticky bar holding a page's one primary action while there is something to act on. */
+.bar {
+  position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+  padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+  background: var(--p-color-surface); border: 1px solid var(--p-color-contrast-lower);
+  border-radius: var(--p-radius-lg); box-shadow: var(--p-shadow-md);
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+/* Without the PDS CDN the page keeps working: native controls, and layout for the display elements. */
+.no-pds body { font-family: system-ui, sans-serif; line-height: 1.5; }
+.no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
+.no-pds p-heading > * { margin: 0; }
+.no-pds p-text[size="xs"] { font-size: var(--p-typescale-xs); }
+.no-pds p-text[size="sm"] { font-size: var(--p-typescale-sm); }
+.no-pds p-text[color="contrast-medium"] { color: var(--p-color-contrast-medium); }
+.no-pds p-text[weight="semibold"] { font-weight: 600; }
+.no-pds p-tag {
+  display: inline-block; padding: 0 var(--p-spacing-static-xs); font-size: var(--p-typescale-xs); font-weight: 600;
+  border: 1px solid currentColor; border-radius: var(--p-radius-sm);
+}
+.no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
+.no-pds p-inline-notification {
+  padding: var(--p-spacing-static-sm); border: 1px solid; border-radius: var(--p-radius-md);
+}
+.ask .parts { display: grid; gap: var(--p-spacing-static-md); max-width: 38rem; }
+.ask .parts ul { margin: var(--p-spacing-static-xs) 0 0; padding-inline-start: var(--p-spacing-static-lg); }
+.ask .row { margin-block-start: var(--p-spacing-static-md); }

@@ -81,6 +81,7 @@ _M04_ALLOWED_ELEMENTS = [
     "path",
     "persona",
     "required_reading",
+    "tools",
 ]
 _M09_PACKAGE_MARKDOWN_PATH = ".owlbear/delivery/packages/website-to-knowledge-vertical/design.md"
 _M09_RUNTIME_MARKDOWN_PATH = ".owlbear/delivery/runtime/changes/current.md"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +66,7 @@ __all__ = [
     "delete_memory",
     "list_memories",
     "mcp",
+    "memory_dir",
     "read_memory",
     "recall_memory",
     "rename_agent_memories",
@@ -73,6 +75,7 @@ __all__ = [
 
 _DEFAULT_MEMORY_DIR = Path(".owlbear/memory")
 _WORKSPACE_MARKER = Path(".owlbear")
+MEMORY_DIR_ENV = "OWLBEAR_MEMORY_DIR"  # an explicit store, such as a project's folder in the shared repository
 _Title = Annotated[str, Field(min_length=1)]
 _Content = Annotated[str, Field(max_length=1024)]
 _Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
@@ -92,19 +95,24 @@ class AppContext:
     memory_dir: Path
 
 
+def memory_dir() -> Path:
+    """The memory store: ``OWLBEAR_MEMORY_DIR`` when set, else the current OwlBear workspace's."""
+    if explicit := os.environ.get(MEMORY_DIR_ENV):
+        return Path(explicit).expanduser().resolve()
+    workspace_root = Path.cwd().resolve()
+    if not (workspace_root / _WORKSPACE_MARKER).is_dir():
+        message = f"OwlBear workspace marker not found: {_WORKSPACE_MARKER}"
+        raise RuntimeError(message)
+    return workspace_root / _DEFAULT_MEMORY_DIR
+
+
 @asynccontextmanager
 async def app_lifespan(
     _server: MCPServer,
 ) -> AsyncGenerator[AppContext]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
-    workspace_root = Path.cwd().resolve()
-    if not (workspace_root / _WORKSPACE_MARKER).is_dir():
-        message = f"OwlBear workspace marker not found: {_WORKSPACE_MARKER}"
-        raise RuntimeError(message)
-    yield AppContext(
-        engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR),
-        memory_dir=workspace_root / _DEFAULT_MEMORY_DIR,
-    )
+    store = memory_dir()
+    yield AppContext(engine=MemoryEngine(memory_dir=store), memory_dir=store)
 
 
 mcp = MCPServer("owlbear-memory", lifespan=app_lifespan)

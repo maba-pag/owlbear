@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OwlBear Delivery · Backlog</title>
+<link rel="stylesheet" href="/assets/pds/index.css">
+<script type="module">
+  import { load } from "/assets/pds/load.mjs";
+  load();
+</script>
+<!-- base -->
+<style>
+  main > p-text:empty { display: none !important; }
+  .row { align-items: end; }
+  #add > * { flex: 1 1 14rem; }
+  #add > :nth-child(2) { flex-grow: 2; }
+  #add > :last-child { flex: 0 0 auto; }
+  .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .entry {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--p-spacing-static-md);
+    padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+    background: var(--p-color-surface); border-radius: var(--p-radius-lg);
+  }
+  .entry.unselectable { grid-template-columns: minmax(0, 1fr); }
+  .entry .body, .entry .more { display: grid; gap: var(--p-spacing-static-sm); min-width: 0; }
+  .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  .entry .title, .entry li { overflow-wrap: anywhere; }
+  .entry .more { padding-top: var(--p-spacing-static-sm); }
+  .entry .triage { flex-wrap: nowrap; }
+  .entry .triage p-select, .entry .triage label { flex: 0 1 14rem; min-width: 0; }
+  .said { white-space: pre-wrap; }
+  .later > summary { font-size: var(--p-typescale-lg); }
+  .later[open] > summary { margin-bottom: var(--p-spacing-static-sm); }
+  .quiet .entry { background: none; box-shadow: inset 0 0 0 1px var(--p-color-contrast-lower); }
+  ul.plain { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
+  pre { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>Backlog</h1></p-heading>
+</header>
+<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
+  uses plain controls. Reload to try again.</p>
+<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
+<p-text id="started" aria-live="polite"></p-text>
+<p-text id="status" role="status" aria-live="polite"></p-text>
+<p-text id="where" size="xs" color="contrast-medium"></p-text>
+<div id="filters" class="row" role="group" aria-label="Show only"></div>
+<section class="panel" aria-labelledby="add-title">
+  <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
+  <div id="add" class="row"></div>
+</section>
+<section aria-labelledby="inbox-title">
+  <div>
+    <p-heading size="xl"><h2 id="inbox-title">Inbox</h2></p-heading>
+    <p-text>Choose a kind to move an entry to Open, or drop it.</p-text>
+  </div>
+  <ul id="inbox" class="entries"></ul>
+</section>
+<section aria-labelledby="open-title">
+  <div>
+    <p-heading size="xl"><h2 id="open-title">Open</h2></p-heading>
+    <p-text>Tick entries to shape a Change from them.</p-text>
+  </div>
+  <ul id="open" class="entries"></ul>
+</section>
+<details class="later quiet">
+  <summary id="later-title">In a Change, done or dropped</summary>
+  <ul id="later" class="entries" aria-labelledby="later-title"></ul>
+</details>
+<div id="selection" class="bar" role="region" aria-label="Selected entries" hidden>
+  <p-text id="chosen" weight="semibold"></p-text>
+  <div id="actions" class="row"></div>
+</div>
+</main>
+<!-- ask -->
+<script>
+"use strict";
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get("token")) {
+  sessionStorage.setItem("token", hash.get("token"));
+  history.replaceState(null, "", location.pathname);
+}
+const token = sessionStorage.getItem("token");
+const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
+const SCOPES = ["unassigned", "project", "cross-project", "global"];
+const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review", run: "a run" };
+const TAGS = { untriaged: "secondary", defect: "error", improvement: "info", idea: "success", question: "warning" };
+const DIALOG = "{ 'aria-haspopup': 'dialog' }";
+let pds = false, loaded = { entries: [], changes: [] }, creating = null;
+const filter = { scope: "all", project: "all", kind: "all" };
+let filtersFor = null;  // the projects the filter row was built for
+const selected = new Set(), opened = new Set();
+const built = new Map();  // entry id -> its card and a reader of the notes typed into it
+
+function el(tag, text, attrs = {}) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function text(value, attrs = {}) {
+  return el("p-text", value, attrs);
+}
+
+function heading(level, title, size) {
+  const node = el("p-heading", undefined, { size });
+  node.append(el(`h${level}`, title));
+  return node;
+}
+
+function row(...children) {
+  const node = el("div", undefined, { class: "row" });
+  node.append(...children);
+  return node;
+}
+
+function say(message) {
+  document.getElementById("status").textContent = message;
+}
+
+function notify(message = "") {
+  const error = document.getElementById("error");
+  error.textContent = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
+  error.hidden = !message;
+}
+
+async function call(path, method = "GET", body = undefined) {
+  if (!token) throw new Error("Open the URL the host printed, including #token=…");
+  // reads and writes go to GitHub's issues, a network round trip or several
+  const init = { method, headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(method === "GET" ? 15000 : 60000) };
+  if (body) {
+    init.body = JSON.stringify(body);
+    init.headers["Content-Type"] = "application/json";
+  }
+  let response;
+  try {
+    response = await fetch(`/api/next${path}`, init);
+  } catch {
+    throw new Error("Delivery is not running. Start it, then reload this page.");
+  }
+  if (response.status === 401) {
+    throw new Error("Delivery restarted at a new address. Open the link from chat or owlbear-next status.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data === null) {
+    const detail = data?.detail;
+    const said = Array.isArray(detail) ? detail.map((e) => `${(e.loc ?? []).slice(1).join(".")}: ${e.msg}`).join("; ")
+      : detail;
+    throw new Error(said || `Delivery answered ${response.status} ${response.statusText}`);
+  }
+  return data;
+}
+
+function button(label, onclick, attrs = {}) {
+  const node = pds
+    ? el("p-button", label, { type: "button", compact: "true", ...attrs })
+    : el("button", label, { type: "button", ...(attrs.disabled ? { disabled: "" } : {}) });
+  node.onclick = onclick;
+  return node;
+}
+
+function waiting(node, on) {
+  if (pds) node.loading = on;
+  else node.disabled = on;
+}
+
+function tick(label, checked) {
+  if (pds) {
+    const node = el("p-checkbox", undefined, { label, "hide-label": "true", ...(checked ? { checked: "true" } : {}) });
+    return [node, () => node.checked === true];
+  }
+  const node = el("input", undefined, { type: "checkbox", "aria-label": label });
+  node.checked = checked;
+  return [node, () => node.checked];
+}
+
+function entry(label, value = "", multiline = false, rows = "3") {
+  const max = multiline ? "4000" : "200";
+  if (pds) {
+    const node = el(multiline ? "p-textarea" : "p-input-text", undefined,
+      { label, "max-length": max, ...(multiline ? { rows } : {}) });
+    node.value = value;
+    return [node, () => (node.value || "").trim(), () => { node.value = ""; }];
+  }
+  const node = el("label", label, { class: "field" });
+  const box = el(multiline ? "textarea" : "input", undefined,
+    { maxlength: max, ...(multiline ? { rows } : { type: "text" }) });
+  box.value = value;
+  node.append(box);
+  return [node, () => box.value.trim(), () => { box.value = ""; }];
+}
+
+function select(label, options, value, attrs = {}) {
+  if (pds) {
+    const node = el("p-select", undefined, { label, ...attrs });
+    for (const [v, said] of options) node.append(el("p-select-option", said, { value: v }));
+    node.value = value;
+    return [node, () => node.value];
+  }
+  const node = el("label", label, { class: "field" }), box = el("select");
+  for (const [v, said] of options) box.append(el("option", said, { value: v }));
+  box.value = value;
+  node.append(box);
+  return [node, () => box.value];
+}
+
+function age(iso) {
+  const minutes = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60 * 48) return `${Math.round(minutes / 60)} h ago`;
+  return `${Math.round(minutes / 1440)} d ago`;
+}
+
+function reference(ref) {
+  try {
+    if (["http:", "https:"].includes(new URL(ref).protocol)) return el("a", ref, { href: ref, rel: "noopener" });
+  } catch {
+    // not a URL: a Change, step, session or path
+  }
+  return document.createTextNode(ref);
+}
+
+async function patch(e, fields, said = `Saved "${e.title}".`) {
+  try {
+    const r = await call(`/backlog/${encodeURIComponent(e.id)}`, "PATCH", fields);
+    notify();
+    say(`${said}${r.notice ? ` ${r.notice}` : ""}`);
+    await refresh(e.id);
+  } catch (error) {
+    notify(error.message);
+  }
+}
+
+function latest(e) {  // a card kept across a refresh still acts on the entry as last loaded
+  return loaded.entries.find((x) => x.id === e.id) ?? e;
+}
+
+function linkPart(e, byId) {
+  const box = el("div", undefined, { class: "more" });
+  const linked = el("ul", undefined, { class: "plain" });
+  for (const id of e.links) {
+    const other = byId.get(id);
+    const item = el("li", other ? other.title : id);
+    item.append(" ", button("Unlink", () => patch(e, { links: latest(e).links.filter((x) => x !== id) }),
+      { variant: "secondary" }));
+    linked.append(item);
+  }
+  if (e.links.length) box.append(text("Linked entries", { size: "xs", weight: "semibold" }), linked);
+  const others = loaded.entries.filter((o) => o.id !== e.id && !e.links.includes(o.id));
+  if (others.length) {
+    const [choose, chosen] = select("Link to another entry", others.map((o) => [o.id, o.title]), others[0].id);
+    box.append(row(choose, button("Link", () => patch(e, { links: [...latest(e).links, chosen()] }),
+      { variant: "secondary" })));
+  }
+  return box;
+}
+
+function statusPart(e, drop = true) {
+  if (e.status === "inbox" || e.status === "open") {
+    const done = button("Mark done", () => patch(e, { status: "done" }), { variant: "secondary", icon: "check" });
+    return drop ? row(done, dropButton(e)) : row(done);
+  }
+  const reopen = button("Reopen", () => patch(e, { status: e.kind === "untriaged" ? "inbox" : "open" }),
+    { variant: "secondary", icon: "refresh" });
+  if (e.status !== "in-change") return row(reopen);
+  const options = [["-", "not named yet"], ...loaded.changes.map((s) => [s, s])];
+  const [which, chosen] = select("The Change it went into", options, e.change || "-");
+  which.addEventListener("change", () => {
+    const slug = chosen() === "-" ? "" : chosen();
+    if (slug !== e.change) patch(e, { change: slug });
+  });
+  return row(which, reopen);
+}
+
+function dropButton(e) {
+  const drop = () => patch(e, { status: "dropped" }, `Dropped "${e.title}"; Reopen brings it back.`);
+  return button("Drop", drop, { variant: "secondary", icon: "close" });
+}
+
+function kindPicker(e, inline = false) {
+  const options = KINDS.map((k) => [k, inline && k === "untriaged" ? "Choose a kind" : k]);
+  const [kind, kindOf] = select("Kind", options, e.kind, inline ? { compact: "true", "hide-label": "true" } : {});
+  kind.addEventListener("change", () => { if (kindOf() !== e.kind) patch(e, { kind: kindOf() }); });
+  return kind;
+}
+
+function scopePicker(e) {
+  const [scope, scopeOf] = select("Scope", SCOPES.map((s) => [s, s]), e.scope);
+  scope.addEventListener("change", () => { if (scopeOf() !== e.scope) patch(e, { scope: scopeOf() }); });
+  return scope;
+}
+
+function details(e, byId) {
+  const more = el("details");
+  more.open = opened.has(e.id);
+  more.addEventListener("toggle", () => (more.open ? opened.add(e.id) : opened.delete(e.id)));
+  const box = el("div", undefined, { class: "more" }), inbox = e.status === "inbox";
+  if (e.text) box.append(text(e.text, { class: "said" }));
+  if (e.evidence.length) {
+    const refs = el("ul", undefined, { class: "plain" });
+    for (const ref of e.evidence) {
+      const item = el("li");
+      item.append(reference(ref));
+      refs.append(item);
+    }
+    box.append(text("Evidence", { size: "xs", weight: "semibold" }), refs);
+  }
+  const [notes, notesOf] = entry("Your notes: context for whoever shapes the Change", e.notes, true);
+  // an inbox card shows its kind outside, to triage it at a glance
+  box.append(row(...(inbox ? [] : [kindPicker(e)]), scopePicker(e)));
+  box.append(notes, row(button("Save notes", () => patch(e, { notes: notesOf() }),
+    { variant: "secondary" })), linkPart(e, byId), statusPart(e, !inbox));
+  more.append(el("summary", "Details, notes and links"), box);
+  return [more, notesOf];
+}
+
+function card(e, byId) {
+  const choosable = (e.status === "inbox" || e.status === "open") && !e.opening;
+  const node = el("li", undefined, { class: choosable ? "entry" : "entry unselectable" });
+  let box = null;
+  if (choosable) {
+    let on;
+    [box, on] = tick(`Select ${e.title}`, selected.has(e.id));
+    box.addEventListener("change", () => {
+      if (on()) selected.add(e.id);
+      else selected.delete(e.id);
+      showActions();
+    });
+    node.append(box);
+  }
+  const body = el("div", undefined, { class: "body" }), title = el("div", undefined, { class: "title" });
+  title.append(text(e.title, { weight: "semibold" }), el("p-tag", e.kind, { variant: TAGS[e.kind], compact: "true" }));
+  if (e.status !== "inbox" && e.status !== "open") title.append(el("p-tag", e.status, { compact: "true" }));
+  if (e.opening) title.append(el("p-tag", "chat opening", { variant: "info", compact: "true" }));
+  const seen = e.count > 1 ? `seen ${e.count} times, last ${age(e.last_seen)}` : `seen ${age(e.last_seen)}`;
+  const where = e.change ? ` · in Change ${e.change}` : "";
+  const scope = ` · ${e.scope}${e.scope === "project" && e.project ? ` ${e.project}` : ""}`;
+  const [more, notesOf] = details(e, byId);
+  const meta = text(`From ${SOURCES[e.source] ?? e.source} · ${seen}${where}${scope} · `,
+    { size: "xs", color: "contrast-medium" });
+  meta.append(e.url ? el("a", `#${e.id}`, { href: e.url, rel: "noopener" }) : `#${e.id}`);
+  body.append(title, meta);
+  if (e.status === "inbox" && !e.opening) {
+    const triage = row(kindPicker(e, true), dropButton(e));
+    triage.classList.add("triage");
+    body.append(triage);
+  }
+  body.append(more);
+  node.append(body);
+  built.set(e.id, { node, notes: notesOf, box });
+  return node;
+}
+
+// The card already shown while the person works in it (focus inside or notes not saved); null to build it anew.
+function kept(e, rebuild) {
+  const was = built.get(e.id);
+  if (!was || e.id === rebuild) return null;
+  return was.node.contains(document.activeElement) || was.notes() !== e.notes.trim() ? was.node : null;
+}
+
+// Put the nodes in order, moving only those out of place, so a kept card keeps its focus.
+function place(list, nodes) {
+  nodes.forEach((node, i) => { if (list.children[i] !== node) list.insertBefore(node, list.children[i] ?? null); });
+  while (list.children.length > nodes.length) list.lastElementChild.remove();
+}
+
+function empty(message) {
+  const node = el("li");
+  node.append(text(message, { size: "sm", color: "contrast-medium" }));
+  return node;
+}
+
+// The selection bar: shown while entries are ticked, so Create Change stays in reach wherever they are.
+function showActions() {
+  const chosen = [...selected].filter((id) => loaded.entries.some((e) => e.id === id && !e.opening
+    && ["inbox", "open"].includes(e.status)));
+  const node = button(`Create Change from ${chosen.length}`, createChange, { icon: "add", aria: DIALOG });
+  if (creating) waiting(node, true);
+  const clear = button("Clear selection", () => { selected.clear(); refresh(); }, { variant: "secondary" });
+  document.getElementById("actions").replaceChildren(node, clear);
+  document.getElementById("chosen").textContent = `${chosen.length} selected`;
+  document.getElementById("selection").hidden = !chosen.length && !creating;
+}
+
+function shows(e) {
+  return ["scope", "project", "kind"].every((k) => filter[k] === "all" || e[k] === filter[k]);
+}
+
+// The filter row: scope, project and class; the state is the page's sections.
+function showFilters() {
+  const projects = [...new Set(loaded.entries.map((e) => e.project).filter(Boolean))].sort();
+  if (JSON.stringify(projects) === filtersFor) return;
+  filtersFor = JSON.stringify(projects);
+  if (filter.project !== "all" && !projects.includes(filter.project)) filter.project = "all";
+  const pick = (label, k, values) => {
+    const [node, value] = select(label, [["all", "all"], ...values.map((v) => [v, v])], filter[k]);
+    node.addEventListener("change", () => { filter[k] = value(); refresh(); });
+    return node;
+  };
+  document.getElementById("filters").replaceChildren(pick("Scope", "scope", SCOPES),
+    pick("Project", "project", projects), pick("Class", "kind", KINDS));
+}
+
+async function refresh(rebuild = null) {
+  try {
+    loaded = await call("/backlog");
+  } catch (e) {
+    return notify(e.message);
+  }
+  showFilters();
+  const byId = new Map(loaded.entries.map((e) => [e.id, e]));
+  for (const id of [...selected]) {
+    const e = byId.get(id);
+    if (!e || e.opening || !["inbox", "open"].includes(e.status)) selected.delete(id);
+  }
+  for (const id of [...built.keys()]) if (!byId.has(id)) built.delete(id);
+  const focused = document.activeElement;
+  const lists = { inbox: [], open: [], later: [] };
+  for (const e of loaded.entries.filter(shows)) {
+    lists[e.status in lists ? e.status : "later"].push(kept(e, rebuild) ?? card(e, byId));
+  }
+  const none = { inbox: "Nothing new to triage.", open: "No open entries.", later: "Nothing here yet." };
+  const titles = { inbox: "Inbox", open: "Open", later: "In a Change, done or dropped" };
+  for (const [id, cards] of Object.entries(lists)) {
+    place(document.getElementById(id), cards.length ? cards : [empty(none[id])]);
+    document.getElementById(`${id}-title`).textContent = `${titles[id]} (${cards.length})`;
+  }
+  for (const [id, b] of built) if (b.box) b.box.checked = selected.has(id);  // a kept card follows Clear
+  if (focused?.isConnected && document.activeElement !== focused) focused.focus();
+  const notes = [`The backlog is the issues of ${loaded.repository} (this project: ${loaded.project || "none"}).`,
+    loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : ""];
+  document.getElementById("where").textContent = notes.filter(Boolean).join(" ");
+  showActions();
+}
+
+async function addIdea(trigger, title, said, clear) {
+  if (!title()) return notify("Give the idea a title.");
+  waiting(trigger, true);
+  try {
+    const r = await call("/backlog", "POST", { title: title(), text: said() });
+    clear();
+    notify();
+    const what = r.new ? `Added "${r.entry.title}" to the inbox.` : `"${r.entry.title}" was already there; `
+      + `seen ${r.entry.count} times now.`;
+    say(`${what}${r.notice ? ` ${r.notice}` : ""}`);
+    await refresh();
+  } catch (e) {
+    notify(e.message);
+  } finally {
+    waiting(trigger, false);
+  }
+}
+
+async function launched(id) {  // the host opens the chat in the background; VS Code may first have to start
+  for (;;) {
+    const s = await call(`/new-change/${encodeURIComponent(id)}`);
+    if (s.state !== "opening") return s;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+async function createChange() {
+  const chosen = loaded.entries.filter((e) => selected.has(e.id));
+  if (!chosen.length) return notify("Select one or more entries first.");
+  const titles = chosen.map((e) => e.title), many = chosen.length > 1;
+  const wanted = await ask({
+    title: `Shape a Change from ${many ? `these ${chosen.length} entries` : "this entry"}?`, yes: "Open the chat",
+    no: "Keep selected",
+    now: "A chat opens in VS Code where the shaper turns them, with their notes, evidence and links, into a brief; "
+      + "the chat uses AI credits. Once it opens, they are marked as in a Change.",
+    items: titles,
+    then: "Nothing is built. The brief appears on the Changes page for your approval.",
+    after: "Approve the brief there to start the work; set each entry's Change here once it exists.",
+    instead: "The entries stay selected and unchanged.",
+  });
+  if (!wanted) return;
+  const result = document.getElementById("started");
+  creating = true;
+  showActions();
+  result.textContent = "Opening the shaping chat…";
+  try {
+    const r = await call("/backlog/change", "POST", { ids: chosen.map((e) => e.id) });
+    const s = r.started ? await launched(r.launch) : { state: "failed", ...r };
+    if (r.started) selected.clear();
+    notify();
+    if (s.state === "open") {
+      result.textContent = `A chat opened in VS Code to shape a Change from ${chosen.length} entries.`
+        + (s.warning ? ` Note: ${s.warning}.` : "");
+    } else {
+      const command = el("pre");
+      command.append(el("code", s.command));
+      result.replaceChildren(`Could not open the chat: ${s.reason}. Run this command instead:`, command);
+    }
+  } catch (e) {
+    result.textContent = "";
+    notify(e.message);
+  } finally {
+    creating = null;
+    await refresh();
+  }
+}
+
+async function start() {
+  // The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
+  const ready = customElements.whenDefined("p-button").then(() => true);
+  pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
+  if (!pds) {
+    document.documentElement.classList.add("no-pds");
+    document.getElementById("offline").hidden = false;
+  }
+  const [title, titleOf, clearTitle] = entry("Title");
+  const [said, saidOf, clearSaid] = entry("What you noticed (optional)", "", true, "1");
+  const add = button("Add idea", () => addIdea(add, titleOf, saidOf, () => { clearTitle(); clearSaid(); }),
+    { icon: "add" });
+  document.getElementById("add").append(title, said, add);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !creating) refresh(); });
+  refresh();
+}
+
+start();
+</script>
+</body>
+</html>

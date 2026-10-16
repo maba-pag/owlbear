@@ -15,7 +15,8 @@
       "output_format",
       "path",
       "persona",
-      "required_reading"
+      "required_reading",
+      "tools"
     ]
   },
   "MD041": {

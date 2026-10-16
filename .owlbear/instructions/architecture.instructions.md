@@ -51,6 +51,7 @@ constant in that file maps each package namespace to its permitted owlbear-names
 - Core libraries do not import applications, MCP servers, provider adapters, or repository tools.
 - The Delivery GitHub provider adapter may import only the Delivery core.
 - Cockpit may import Delivery, the Delivery GitHub provider adapter, and Memory for its read API.
+- Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab, and nothing else.
 - Each MCP server may import its corresponding core package and any provider adapter required by
   its public operations, but MCP servers must not import other MCP servers.
 - Repository tools may import Delivery, but product packages must not import repository tools.

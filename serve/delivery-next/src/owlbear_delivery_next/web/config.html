@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en" class="scheme-light-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OwlBear Delivery · Settings</title>
+<link rel="stylesheet" href="/assets/pds/index.css">
+<script type="module">
+  import { load } from "/assets/pds/load.mjs";
+  load();
+</script>
+<!-- base -->
+<style>
+  p-text:empty { display: none !important; }
+  .row { align-items: end; gap: var(--p-spacing-static-md); }
+  #scope { min-width: 16rem; }
+  p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
+  details.panel > summary { font-size: var(--p-typescale-md); }
+  details.panel[open] { gap: var(--p-spacing-static-md); }
+  .scroll { min-width: 0; overflow-x: auto; }
+  .no-pds table { width: 100%; border-collapse: collapse; font-size: var(--p-typescale-sm); }
+  .no-pds caption { text-align: start; font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
+  .no-pds :is(th, td) {
+    padding: var(--p-spacing-static-xs) var(--p-spacing-static-sm); text-align: start; vertical-align: top;
+    border-bottom: 1px solid var(--p-color-contrast-lower);
+  }
+  .no-pds td { min-width: 7rem; }
+  .no-pds td label { display: block; }
+  .no-pds td :is(select, input:not([type="checkbox"])) { min-width: 11rem; }
+  .no-pds td select { max-width: 14rem; }
+  .no-pds p-text[color="error"] { color: var(--p-color-error); }
+  #pack-stages { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding-inline-start: 1.5rem; }
+  #pack-stages li > * { display: inline-block; vertical-align: middle; margin-inline-end: var(--p-spacing-static-xs); }
+  #pack-log { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
+</style>
+</head>
+<body>
+<main>
+<!-- tabs -->
+<header>
+  <p-heading size="2xl"><h1>Settings</h1></p-heading>
+</header>
+<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
+  uses plain controls. Reload to try again.</p>
+<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
+<p-text id="status" role="status" aria-live="polite"></p-text>
+<section class="panel" aria-labelledby="scope-title">
+  <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
+  <div class="row">
+    <p-select id="scope" label="Layer" value="project">
+      <p-select-option value="project">This project</p-select-option>
+      <p-select-option value="global">All projects (global)</p-select-option>
+    </p-select>
+    <p-text id="scope-note" size="xs" color="contrast-medium"></p-text>
+  </div>
+  <p-text>A blank project value uses the global one; a blank global value uses the built-in default.</p-text>
+</section>
+<section class="panel" aria-labelledby="folder-title">
+  <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
+  <div class="row">
+    <p-input-text id="folder" label="Folder in the shared settings repository"></p-input-text>
+    <p-button id="rename" type="button" compact="true" icon="edit">Rename folder</p-button>
+  </div>
+  <p-text id="folder-note"></p-text>
+</section>
+<section class="panel" aria-labelledby="agents-title">
+  <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
+  <p-table caption="Agents: model, effort and context apply to the next session">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Agent</p-table-head-cell>
+      <p-table-head-cell>Model</p-table-head-cell>
+      <p-table-head-cell>Effort</p-table-head-cell>
+      <p-table-head-cell>Context</p-table-head-cell>
+      <p-table-head-cell>AI credits per 1M tokens</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="agents"></p-table-body>
+  </p-table>
+  <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite"></p-text>
+</section>
+<section class="panel" aria-labelledby="general-title">
+  <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
+  <p-table caption="Visual check settings: they apply to the next visual check">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Setting</p-table-head-cell>
+      <p-table-head-cell>Value</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="general"></p-table-body>
+  </p-table>
+  <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
+  <p-text id="design-pack" size="xs"></p-text>
+  <p-text id="agreement-note" size="xs" color="contrast-medium"></p-text>
+  <p-table id="agreement-table" caption="How often each judge's verdict matched your Pass or Fail, per model">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Judge</p-table-head-cell>
+      <p-table-head-cell>Model</p-table-head-cell>
+      <p-table-head-cell>Decided</p-table-head-cell>
+      <p-table-head-cell>Agreed</p-table-head-cell>
+      <p-table-head-cell>Disagreed</p-table-head-cell>
+      <p-table-head-cell>Unsure</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="agreement"></p-table-body>
+  </p-table>
+</section>
+<section id="pack" class="panel" aria-labelledby="pack-title">
+  <p-heading size="lg"><h2 id="pack-title">Design pack</h2></p-heading>
+  <p-text id="pack-active"></p-text>
+  <p-text id="pack-notice" size="xs" color="contrast-medium"></p-text>
+  <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
+    only if every stage passes.</p-text>
+  <div class="row">
+    <p-button id="pack-update" type="button" compact="true" icon="refresh">Update design pack</p-button>
+    <p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>
+  </div>
+  <ol id="pack-stages" aria-label="Update stages"></ol>
+  <p-text id="pack-reason" size="sm"></p-text>
+  <p-text id="pack-pushed" size="sm"></p-text>
+  <details>
+    <summary>Log of the last run</summary>
+    <pre id="pack-log"></pre>
+  </details>
+</section>
+<details class="panel">
+  <summary>Not applied yet: runtimes, visibility and tool categories</summary>
+  <p-table caption="Per agent; not applied yet">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Agent</p-table-head-cell>
+      <p-table-head-cell>Runtime</p-table-head-cell>
+      <p-table-head-cell>Needs visibility</p-table-head-cell>
+      <p-table-head-cell>Categories</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="agents-later"></p-table-body>
+  </p-table>
+  <p-table caption="Switches; not applied yet">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Setting</p-table-head-cell>
+      <p-table-head-cell>Value</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="general-later"></p-table-body>
+  </p-table>
+  <p-text id="baseline" size="xs" color="contrast-medium"></p-text>
+  <p-table caption="What each runtime adds; not used for routing yet">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Runtime</p-table-head-cell>
+      <p-table-head-cell>Adds over the baseline</p-table-head-cell>
+      <p-table-head-cell>MCP servers</p-table-head-cell>
+      <p-table-head-cell>Live view</p-table-head-cell>
+      <p-table-head-cell>Writes outside the work folder stopped by</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="runtimes"></p-table-body>
+  </p-table>
+  <p-table caption="Tool categories an agent can ask for; not applied yet">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Category</p-table-head-cell>
+      <p-table-head-cell>Runtime</p-table-head-cell>
+      <p-table-head-cell>Tools</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="categories"></p-table-body>
+  </p-table>
+</details>
+<div class="bar" role="region" aria-label="Save settings">
+  <p-button id="save" type="button" compact="true" icon="check">Save</p-button>
+  <p-text id="pending" size="sm" aria-live="polite"></p-text>
+</div>
+</main>
+<!-- ask -->
+<script>
+"use strict";
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get("token")) {
+  sessionStorage.setItem("token", hash.get("token"));
+  history.replaceState(null, "", location.pathname);
+}
+const token = sessionStorage.getItem("token");
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+const INHERIT = "inherit";  // the effort option that clears the layer's own value
+const SOURCES = { default: "built-in default", global: "global", project: "this project" };
+const LAYERS = { project: "This project", global: "All projects" };
+let pds = false, loaded = null, rendered = "project", saving = false;
+let offered = null;  // the models this machine's Copilot offers, once read; null while reading or unreadable
+// Unsaved edits per layer ("role.field" -> typed value); a save applies them over the newest saved layer.
+const drafts = { project: {}, global: {} };
+
+function el(tag, text, attrs = {}) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function say(message) {
+  document.getElementById("status").textContent = message;
+}
+
+function notify(message) {
+  const error = document.getElementById("error");
+  error.textContent = message.charAt(0).toUpperCase() + message.slice(1);
+  error.hidden = !message;
+}
+
+function problem(response, data, body) {
+  const detail = data?.detail;
+  if (Array.isArray(detail)) {
+    return detail.map((e) => {
+      const at = (e.loc ?? []).filter((p, i) => !(i === 0 && p === "body")).join(".");
+      return at ? `${at}: ${e.msg}` : e.msg;
+    }).join("; ");
+  }
+  if (typeof detail === "string") return detail;
+  return `Delivery answered ${response.status} ${response.statusText} ${body.slice(0, 200)}`.trim();
+}
+
+async function call(path, method = "GET", body = undefined, wait = undefined) {
+  if (!token) throw new Error("Open the URL the host printed, including #token=…");
+  // a save commits and pushes the shared settings repository (TD-64), which can take a network round trip
+  const timeout = AbortSignal.timeout(wait ?? (method === "GET" ? 5000 : 60000));
+  const init = { method, headers: { Authorization: `Bearer ${token}` }, signal: timeout };
+  if (body) {
+    init.body = JSON.stringify(body);
+    init.headers["Content-Type"] = "application/json";
+  }
+  let response, text;
+  try {
+    response = await fetch(`/api/next${path}`, init);
+    text = await response.text();
+  } catch {
+    throw new Error("Delivery is not running. Start it, then reload this page.");
+  }
+  if (response.status === 401) {
+    throw new Error("Delivery restarted at a new address. Open the link from chat or owlbear-next status.");
+  }
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;  // a proxy or a crash page; the status line says what happened
+  }
+  if (!response.ok || data === null) {
+    const error = new Error(problem(response, data, text));
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function shown(value) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  return String(value);
+}
+
+function source(key, inUse) {
+  const from = SOURCES[loaded.settings.sources[key]];
+  const line = inUse === undefined ? `from ${from}` : `in use: ${shown(inUse)}, from ${from}`;
+  return el("p-text", line, { size: "xs", color: "contrast-medium" });
+}
+
+function cell(...nodes) {
+  const node = pds ? el("p-table-cell", undefined, { multiline: "true" }) : el("td");
+  node.append(...nodes);
+  return node;
+}
+
+function row(...cells) {
+  const node = el(pds ? "p-table-row" : "tr");
+  node.append(...cells);
+  return node;
+}
+
+// A table cell's control: its column says what it is, so the label is for assistive technology only.
+function choose(label, options, value, attrs = {}) {
+  const node = pds ? el("p-select", undefined, { label, "hide-label": "true", ...attrs })
+    : el("select", undefined, { "aria-label": label, ...(attrs.disabled ? { disabled: "" } : {}) });
+  for (const [v, said] of options) node.append(el(pds ? "p-select-option" : "option", said, { value: v }));
+  node.value = value;
+  return node;
+}
+
+function typed(label, value, attrs = {}) {
+  const { disabled, ...rest } = attrs;
+  const node = pds ? el("p-input-text", undefined, { label, "hide-label": "true", ...attrs })
+    : el("input", undefined, { type: "text", "aria-label": label, ...rest, ...(disabled ? { disabled: "" } : {}) });
+  node.value = value;
+  return node;
+}
+
+function tick(label, checked, hideLabel = true) {
+  if (pds) {
+    const on = checked ? { checked: "true" } : {};
+    return el("p-checkbox", undefined, { label, "hide-label": `${hideLabel}`, disabled: "true", ...on });
+  }
+  const box = el("input", undefined, { type: "checkbox", disabled: "", ...(hideLabel ? { "aria-label": label } : {}) });
+  box.checked = checked;
+  if (hideLabel) return box;
+  const node = el("label");
+  node.append(box, ` ${label}`);
+  return node;
+}
+
+function pure(label, attrs) {
+  return el(pds ? "p-button-pure" : "button", label, pds ? { type: "button", size: "x-small", icon: "reset", ...attrs }
+    : { type: "button", ...attrs });
+}
+
+function saved(layer, key) {
+  if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
+  if (key === "design_failures") return loaded[layer]?.[key] ?? "";
+  const [role, field] = key.split(".");
+  return loaded[layer]?.agents?.[role]?.[field] ?? "";
+}
+
+// TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
+function designFailures() {
+  const key = "design_failures", below = loaded.inherited[rendered][key];
+  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  const input = choose("When the design judge fails a change", [[INHERIT, `inherit (${below})`],
+    ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], value || INHERIT);
+  input.dataset.key = key;
+  return cell(input, source(key, loaded.settings.design_failures));
+}
+
+function widths() {
+  const value = "widths" in drafts[rendered] ? drafts[rendered].widths : saved(rendered, "widths");
+  const below = loaded.inherited[rendered].widths.join(", ");
+  const label = "Screenshot widths in px, comma-separated (1280 to 2400)";
+  const input = typed(label, value, { placeholder: `inherit (${below})` });
+  input.dataset.key = "widths";
+  return cell(input, source("widths", loaded.settings.widths));
+}
+
+function tokens(n) {
+  return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
+}
+
+// The model a role runs with in the edited layer: its own draft or saved value, else what it inherits.
+function modelOf(role) {
+  const key = `${role}.model`;
+  const own = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  return own || loaded.inherited[rendered].agents[role].model;
+}
+
+// Why the role's effort, its own or inherited, cannot run with its model; empty when it can or nothing is known.
+function mismatch(role) {
+  const key = `${role}.effort`, model = offered?.find((m) => m.id === modelOf(role));
+  const own = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  const effort = own || loaded.inherited[rendered].agents[role].effort;
+  if (!model || !model.efforts.length || model.efforts.includes(effort)) return "";
+  return `${model.id} does not offer effort ${effort}${own ? "" : " (inherited)"}; choose one it offers`;
+}
+
+function ownTier(role) {
+  const key = `${role}.context`;
+  return key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+}
+
+function tierOf(role) {
+  return ownTier(role) || loaded.inherited[rendered].agents[role].context;
+}
+
+// Why the role's context tier cannot run with its model; empty when it can or nothing is known.
+function tierMismatch(role) {
+  const model = offered?.find((m) => m.id === modelOf(role));
+  if (!model || model.long || tierOf(role) !== "long") return "";
+  return `${model.id} has no long context${ownTier(role) ? "" : " (inherited)"}; choose its default`;
+}
+
+// The long tier costs more per token: higher input or output rates than the default tier.
+function dearer(model) {
+  const [base, long] = [model.rates, model.long?.rates];
+  return Boolean(base && long && (long.input > base.input || long.output > base.output));
+}
+
+function contextCell(role) {
+  const key = `${role}.context`, own = ownTier(role), model = offered?.find((m) => m.id === modelOf(role));
+  const parts = [];
+  if (model?.long) {
+    const up = dearer(model), more = up ? "higher rates per token" : "same rates per token";
+    const label = `Context for ${role}`;
+    let input;
+    if (pds) {
+      input = el("p-segmented-control", undefined,
+        { label, "hide-label": "true", compact: "true", columns: "2" });
+      input.append(
+        el("p-segmented-control-item", tokens(model.context),
+          { value: "default", aria: `{ 'aria-label': '${tokens(model.context)}, default context' }` }),
+        el("p-segmented-control-item", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
+          { value: "long", aria: `{ 'aria-label': '${tokens(model.long.context)}, long context, ${more}' }` }),
+      );
+      input.value = tierOf(role);
+    } else {
+      input = choose(label, [["default", `${tokens(model.context)}, default context`],
+        ["long", `${tokens(model.long.context)}, long context, ${more}`]], tierOf(role));
+    }
+    input.dataset.key = key;
+    parts.push(input);
+  } else if (model) {
+    const node = el("p-text", `${tokens(model.context)} \u00b7 only tier`, { size: "sm" });
+    const wrong = tierMismatch(role);
+    parts.push(node, ...(wrong ? [el("p-text", wrong, { size: "xs", color: "error" }),
+      pure("Use the default tier", { "data-tier": role })] : []));
+  } else {
+    const below = loaded.inherited[rendered].agents[role].context;
+    const input = choose(`Context for ${role}`,
+      [[INHERIT, `inherit (${below})`], ["default", "default"], ["long", "long"]], own || INHERIT);
+    input.dataset.key = key;
+    parts.push(input);
+  }
+  if (model) {
+    const node = pure("Use inherited", { "data-inherit": role });
+    node.hidden = !own;
+    parts.push(node);
+  }
+  const node = cell(...parts, source(`agents.${key}`, loaded.settings.agents[role].context));
+  node.dataset.cell = key;
+  return node;
+}
+
+function amount(n) {
+  return n.toLocaleString("en", { maximumFractionDigits: 2 });
+}
+
+function ratesCell(role) {
+  const model = offered?.find((m) => m.id === modelOf(role)), long = tierOf(role) === "long" && model?.long;
+  const rates = long ? model.long.rates : model?.rates;
+  const node = cell();
+  node.dataset.cell = `${role}.rates`;
+  if (!rates) {
+    node.append(el("p-text", "\u2014"), el("p-text", "not known", { size: "xs", color: "contrast-medium" }));
+    return node;
+  }
+  const write = rates.cache_write ? ` \u00b7 cache write ${amount(rates.cache_write)}` : "";
+  const flow = `in ${amount(rates.input)} \u00b7 out ${amount(rates.output)}`;
+  const line = `${flow} \u00b7 cache ${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
+  node.append(el("p-text", line),
+    el("p-text", `${model.id}, ${long ? "long" : "default"} context`, { size: "xs", color: "contrast-medium" }));
+  return node;
+}
+
+function refreshRow(role, fields) {
+  const make = {
+    effort: () => editable(role, "effort"), context: () => contextCell(role), rates: () => ratesCell(role),
+  };
+  for (const field of fields) document.querySelector(`[data-cell="${role}.${field}"]`)?.replaceWith(make[field]());
+}
+
+function flag(input, wrong) {
+  if (pds) {
+    input.setAttribute("state", wrong ? "error" : "none");
+    input.setAttribute("message", wrong);
+    return;
+  }
+  let said = input.nextElementSibling;
+  if (!said?.classList.contains("message")) {
+    said = el("p-text", "", { size: "xs", color: "error", class: "message", id: `${input.dataset.key}-message` });
+    input.after(said);
+  }
+  said.textContent = wrong;
+  input.setAttribute("aria-invalid", wrong ? "true" : "false");
+  input.setAttribute("aria-describedby", said.id);
+}
+
+function editable(role, field) {
+  const key = `${role}.${field}`, below = loaded.inherited[rendered].agents[role][field];
+  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  const label = `${field === "model" ? "Model" : "Effort"} for ${role}`;
+  const model = offered?.find((m) => m.id === modelOf(role));
+  let input;
+  if (field === "effort") {
+    const efforts = model ? model.efforts : EFFORTS;
+    const options = [[INHERIT, `inherit (${below})`],
+      ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
+    if (value && !efforts.includes(value)) {
+      options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
+    }
+    input = choose(label, options, value || INHERIT);
+  } else if (offered?.length) {
+    const options = [[INHERIT, `inherit (${below})`], ...offered.map((m) => {
+      const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
+      const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
+      return [m.id, `${m.name} (${m.id})${sizes}`];
+    })];
+    if (value && !offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
+    input = choose(label, options, value || INHERIT, { filter: "true" });
+  } else {
+    input = typed(label, value, { placeholder: `inherit (${below})` });
+  }
+  input.dataset.key = key;
+  const efforts = field === "effort" && model && !model.efforts.length
+    ? [el("p-text", `${model.id} takes no effort setting`, { size: "xs", color: "contrast-medium" })] : [];
+  const node = cell(input, ...efforts, source(`agents.${key}`, loaded.settings.agents[role][field]));
+  node.dataset.cell = key;
+  if (field === "effort") flag(input, mismatch(role));  // after cell(): the plain message goes beside the input
+  return node;
+}
+
+// A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
+function inactive(label, value, key) {
+  let control;
+  if (typeof value === "boolean") {
+    control = tick(label, value);
+  } else if (key.endsWith(".runtime")) {
+    control = choose(label, loaded.catalogue.runtimes.map((r) => [r.runtime, r.runtime]), value, { disabled: "true" });
+  } else if (key.endsWith(".categories")) {
+    control = el("div", undefined, pds ? {} : { role: "group", "aria-label": label });
+    const names = Object.keys(loaded.catalogue.categories);
+    for (const name of names) control.append(tick(name, value.includes(name), false));
+  } else {
+    control = typed(label, shown(value), { disabled: "true" });
+  }
+  return cell(control, source(key));
+}
+
+function edit(event) {
+  const input = event.target.closest("[data-key]");
+  if (!input) return;
+  const key = input.dataset.key, value = input.value === INHERIT ? "" : (input.value ?? "").trim();
+  if (value === saved(rendered, key)) delete drafts[rendered][key];
+  else drafts[rendered][key] = value;
+  const [role, field] = key.split(".");
+  if (offered && field === "model") {  // the effort, context and rates follow the model
+    refreshRow(role, ["effort", "context", "rates"]);
+  } else if (offered && field === "effort") {
+    flag(input, mismatch(role));
+  } else if (field === "context") {
+    refreshRow(role, ["rates"]);
+    const reset = document.querySelector(`[data-inherit="${role}"]`);
+    if (reset) reset.hidden = !ownTier(role);
+  }
+  pending();
+}
+
+function inherit(event) {
+  const found = event.target.closest("[data-inherit], [data-tier]");
+  if (!found) return;
+  const role = found.dataset.inherit ?? found.dataset.tier, key = `${role}.context`;
+  const value = found.dataset.tier ? "default" : "";  // the default tier overrides an inherited long one
+  if (saved(rendered, key) === value) delete drafts[rendered][key];
+  else drafts[rendered][key] = value;
+  refreshRow(role, ["context", "rates"]);
+  pending();
+}
+
+// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.
+function changes(layer) {
+  const shown = (v) => (v === "" || v === null || v === undefined ? "inherited" : v);
+  return Object.entries(drafts[layer]).map(([key, value]) =>
+    `${key.replace(".", " ").replaceAll("_", " ")}: ${shown(saved(layer, key))} → ${shown(value)}`);
+}
+
+function pending() {
+  const other = rendered === "global" ? "project" : "global", count = Object.keys(drafts[other]).length;
+  const mine = changes(rendered), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
+  if (count) parts.push(`${LAYERS[other]}: ${count} more unsaved.`);
+  document.getElementById("pending").textContent = parts.join(" ");
+  const save = document.getElementById("save");
+  if (save) save.textContent = rendered === "global" ? "Save global defaults" : "Save project settings";
+}
+
+function render() {
+  const scope = document.getElementById("scope");
+  scope.querySelector('[value="global"]').toggleAttribute("disabled", !loaded.global_location);
+  if (!loaded.global_location && scope.value === "global") scope.value = "project";
+  rendered = scope.value;
+  document.getElementById("scope-note").textContent = loaded.global_location
+    ? "" : "No shared settings location is set up (run owlbear-next data PATH), so only this project's settings "
+      + "can be saved, in this clone.";
+  const folder = document.getElementById("folder");
+  if (document.activeElement !== folder) folder.value = loaded.folder ?? "";
+  folder.disabled = document.getElementById("rename").disabled = !loaded.folder || saving;
+  document.getElementById("folder-note").textContent = loaded.folder
+    ? "Named after the repository unless renamed. Renaming moves the folder with its settings, memory and visual "
+      + "decisions, then commits and pushes the move; it is refused while a step of this project runs."
+    : "No shared settings location is set up, so this project has no folder there.";
+  const agents = Object.entries(loaded.settings.agents).map(([role]) => row(
+    cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"), contextCell(role), ratesCell(role),
+  ));
+  document.getElementById("agents").replaceChildren(...agents);
+  const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
+  document.getElementById("agents-later").replaceChildren(...Object.entries(loaded.settings.agents).map(
+    ([role, eff]) => row(cell(el("p-text", role)),
+      ...later.map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`))),
+  ));
+  const { baseline, runtimes, categories } = loaded.catalogue;
+  document.getElementById("baseline").textContent = `Every runtime has the baseline: ${baseline}.`;
+  document.getElementById("runtimes").replaceChildren(...runtimes.map((r) => row(
+    ...[r.runtime, r.adds, r.mcp, r.live_view, r.outside_writes].map((v) => cell(el("p-text", v))))));
+  document.getElementById("categories").replaceChildren(...Object.entries(categories).map(([name, c]) => row(
+    ...[name, c.runtime, c.tools.join(", ")].map((v) => cell(el("p-text", v))))));
+  const general = [["Always visible (global switch)", loaded.settings.visible, "visible"],
+    ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
+  document.getElementById("general").replaceChildren(
+    row(cell(el("p-text", "Screenshot widths")), widths()),
+    row(cell(el("p-text", "Design failures")), designFailures()),
+  );
+  document.getElementById("general-later").replaceChildren(...general.map(([label, value, key]) => row(
+    cell(el("p-text", label)), inactive(label, value, key))));
+  const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
+  document.getElementById("agreement").replaceChildren(...loaded.agreement.map((a) => row(
+    ...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided), share(a.disagreed, a.decided),
+      share(a.unsure, a.decided)].map((v) => cell(el("p-text", v))))));
+  document.getElementById("agreement-table").hidden = !loaded.agreement.length;
+  document.getElementById("agreement-note").textContent = loaded.agreement.length
+    ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
+    : "No decided visual rounds yet, or no shared repository is set up.";
+  document.getElementById("design-pack").textContent = loaded.design_pack;
+  pending();
+}
+
+function lock(on) {
+  saving = on;
+  const button = document.getElementById("save");
+  if (pds) button.loading = on;
+  else button.disabled = on;
+  for (const input of document.querySelectorAll("#scope, #folder, #rename, main [data-key]")) input.disabled = on;
+}
+
+function edited(layer) {
+  const next = structuredClone(loaded[layer]);
+  for (const [key, value] of Object.entries(drafts[layer])) {
+    if (key === "widths") {
+      next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
+      continue;
+    }
+    if (key === "design_failures") {
+      next[key] = value || null;
+      continue;
+    }
+    const [role, field] = key.split(".");
+    const agent = next.agents[role] ?? {};
+    agent[field] = value || null;
+    if (Object.values(agent).some((v) => v !== null)) next.agents[role] = agent;
+    else delete next.agents[role];
+  }
+  return next;
+}
+
+async function reload() {
+  try {
+    loaded = await call("/config");
+    notify(loaded.notice || "");
+    return true;
+  } catch (e) {
+    notify(e.message);
+    return false;
+  }
+}
+
+async function save() {
+  if (saving || !loaded) return;
+  const wrong = Object.keys(loaded.settings.agents).flatMap((r) => [mismatch(r), tierMismatch(r)]).filter(Boolean);
+  if (wrong.length) {
+    notify(`Not saved: ${wrong.join("; ")}.`);
+    return;
+  }
+  const layer = rendered, sent = { ...drafts[layer] };
+  if (layer === "global" && !(await ask({
+    title: "Change the defaults for all projects?", yes: "Save global defaults", no: "Keep editing",
+    now: "These become the defaults for every project:", items: changes(layer),
+    then: "Each project's next session uses them, unless the project sets its own value; sessions running now keep "
+      + "theirs.",
+    after: "Change them back here at any time.",
+    instead: "Your edits stay unsaved on this page.",
+  }))) return;
+  lock(true);
+  say("Saving…");
+  try {
+    loaded = await call(`/config/${layer}`, "PUT", { rev: loaded[`${layer}_rev`], layer: edited(layer) });
+    for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
+    notify(loaded.notice || "");
+    say(`Saved ${layer === "global" ? "the global" : "this project's"} settings. They apply to the next session.`);
+  } catch (e) {
+    say("");
+    if (e.status === 409 && await reload()) {
+      notify(`${e.message}. The page loaded the current settings and kept your unsaved edits; `
+        + "check them and save again.");
+    } else {
+      notify(e.message);
+    }
+  } finally {
+    lock(false);
+    if (loaded) render();
+  }
+}
+
+async function rename() {
+  const name = document.getElementById("folder").value.trim();
+  if (saving || !loaded?.folder || !name || name === loaded.folder) return;
+  const sure = await ask({
+    title: `Rename the folder ${loaded.folder} to ${name}?`, yes: "Rename", no: "Keep the name",
+    now: "Delivery moves the folder with this project's settings, memory and visual decisions in the shared "
+      + "settings repository, then commits and pushes the move. It refuses while a step of this project runs.",
+    then: "Other clones of this project use the new name the next time they start.",
+    after: "Rename it again here at any time; your source checkout keeps its name.",
+    instead: "The folder keeps its name.",
+  });
+  if (!sure) return;
+  lock(true);
+  say("Renaming…");
+  try {
+    loaded = await call("/config/folder", "PUT", { name });
+    notify(loaded.notice || "");
+    say(`This project's folder is now ${loaded.folder}.`);
+  } catch (e) {
+    say("");
+    notify(e.message);
+  } finally {
+    lock(false);
+    if (loaded) render();
+  }
+}
+
+// Without the design system: native tables, layer switch and Save button in place of the page's p-* ones.
+function plain() {
+  for (const old of document.querySelectorAll("p-table")) {
+    const caption = old.getAttribute("caption");  // the box scrolls on a narrow screen, so it takes the keyboard
+    const box = el("div", undefined, { class: "scroll", role: "region", tabindex: "0", "aria-label": caption });
+    const table = el("table"), head = el("tr"), thead = el("thead");
+    for (const h of old.querySelectorAll("p-table-head-cell")) head.append(el("th", h.textContent, { scope: "col" }));
+    thead.append(head);
+    table.append(el("caption", caption), thead,
+      el("tbody", undefined, { id: old.querySelector("p-table-body").id }));
+    if (old.id) box.id = old.id;
+    box.append(table);
+    old.replaceWith(box);
+  }
+  const scope = document.getElementById("scope"), field = el("label", scope.getAttribute("label"), { class: "field" });
+  const layer = el("select", undefined, { id: "scope" });
+  for (const o of scope.querySelectorAll("p-select-option")) {
+    layer.append(el("option", o.textContent, { value: o.getAttribute("value") }));
+  }
+  layer.value = scope.getAttribute("value");
+  field.append(layer);
+  scope.replaceWith(field);
+  document.getElementById("save").replaceWith(el("button", "Save", { id: "save", type: "button" }));
+  const folder = el("label", document.getElementById("folder").getAttribute("label"), { class: "field" });
+  folder.append(el("input", undefined, { id: "folder", type: "text" }));
+  document.getElementById("folder").replaceWith(folder);
+  document.getElementById("rename").replaceWith(el("button", "Rename folder", { id: "rename", type: "button" }));
+  document.getElementById("pack-update").replaceWith(
+    el("button", "Update design pack", { id: "pack-update", type: "button" }));
+  document.getElementById("error").setAttribute("role", "alert");
+}
+
+async function start() {
+  // PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
+  const used = ["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"];
+  const ready = Promise.all(used.map((t) => customElements.whenDefined(t))).then(() => true);
+  pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
+  if (!pds) {
+    document.documentElement.classList.add("no-pds");
+    document.getElementById("offline").hidden = false;
+    plain();
+  }
+  for (const type of ["input", "change"]) {
+    for (const id of ["agents", "general"]) document.getElementById(id).addEventListener(type, edit);
+  }
+  document.getElementById("agents").addEventListener("click", inherit);
+  document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });
+  document.getElementById("save").addEventListener("click", save);
+  document.getElementById("rename").addEventListener("click", rename);
+  document.getElementById("pack-update").addEventListener("click", startUpdate);
+  if (await reload()) render();
+  await readPack();
+  await readModels();
+}
+
+// TD-101: the design pack update runs in the host; the page starts it and follows its stages.
+const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
+  returned: "findings back to the updater" };
+const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
+  returned: "warning" };
+const ENDINGS = { idle: "Never run.", passed: "Last run passed: activated, committed and pushed.",
+  failed: "Last run failed.", "up-to-date": "Last run: already up to date." };
+let polling = null, announced = "";
+
+function when(iso) {
+  return iso ? new Date(iso).toLocaleString() : "";
+}
+
+function renderUpdate(u) {
+  const at = u.stages.findIndex((s) => s.name === u.stage);
+  let line = ENDINGS[u.state] ?? u.state;
+  if (u.state === "running") {
+    line = at < 0 ? "Starting the update…" : `Running stage ${at + 1} of ${u.stages.length}: ${u.stages[at].label}…`;
+  } else if (u.started_at) {
+    line += ` Started ${when(u.started_at)}, ended ${when(u.ended_at)}.`;
+  }
+  if (line !== announced) document.getElementById("pack-state").textContent = announced = line;
+  document.getElementById("pack-stages").replaceChildren(...u.stages.map((s) => {
+    const item = el("li"), result = RESULTS[s.result] ?? s.result;
+    item.append(el("p-text", `${s.label}: `, { size: "sm" }),
+      el("p-tag", result, { variant: TAGS[s.result], compact: "true" }));
+    if (s.detail) item.append(el("p-text", ` ${s.detail}`, { size: "xs", color: "contrast-medium" }));
+    return item;
+  }));
+  document.getElementById("pack-reason").textContent = u.state === "running" ? "" : u.reason;
+  const p = u.pushed;
+  document.getElementById("pack-pushed").textContent = p
+    ? `Pushed commit ${p.commit.slice(0, 12)} to ${p.remote} ${p.branch}: ${p.files.join(", ")}.` : "";
+  document.getElementById("pack-log").textContent = u.log.length ? u.log.join("\n") : "No run yet.";
+  document.getElementById("pack-update").disabled = u.state === "running";
+  if (u.state === "running") poll();
+}
+
+async function readPack() {
+  try {
+    const pack = await call("/design-pack");
+    const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
+    document.getElementById("pack-active").textContent = `Active: ${pack.pack} from upstream ${pack.upstream}, `
+      + `identity ${pack.identity}. ${plain(pack.status)}.`;
+    document.getElementById("pack-notice").textContent = `Last notice: ${pack.notice}.`;
+    renderUpdate(pack.update);
+  } catch (e) {
+    document.getElementById("pack-state").textContent = `Could not read the design pack: ${e.message}`;
+  }
+}
+
+function poll() {
+  clearTimeout(polling);
+  polling = setTimeout(async () => {
+    try {
+      renderUpdate(await call("/design-pack/update"));
+    } catch (e) {
+      document.getElementById("pack-state").textContent = `Could not read the update: ${e.message}`;
+      poll();
+    }
+  }, 2000);
+}
+
+async function startUpdate() {
+  const sure = await ask({
+    title: "Update the design pack?", yes: "Update", no: "Keep the current pack",
+    now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
+      + "brings the skills in line, then the rule diff, golden pages, calibration replay and a challenger check it. "
+      + "The challenger's findings go back to the updater. This uses AI credits.",
+    then: "Only if every stage passes, it activates the pack, commits design_pack.json, worker_skills/NOTICE.md and "
+      + "the skills the updater changed on its package checkout's current branch and pushes that commit upstream.",
+    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and the stages below say why.",
+    instead: "The current pack stays active.",
+  });
+  if (!sure) return;
+  try {
+    renderUpdate(await call("/design-pack/update", "POST", undefined, 10000));
+  } catch (e) {
+    notify(e.message);
+    await readPack();
+  }
+}
+
+// The offered models replace typing once read; the runtime starts for it, so this can take a while.
+async function readModels() {
+  const note = document.getElementById("models-note");
+  note.textContent = "Reading the models this machine's Copilot offers…";
+  try {
+    const answer = await call("/config/models", "GET", undefined, 45000);
+    offered = answer.models.length ? answer.models : null;
+    note.textContent = offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
+      : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
+  } catch (e) {
+    note.textContent = `Could not read the offered models (${e.message}); type a model name.`;
+  }
+  if (!loaded || !offered || saving) return;
+  renderIdle();
+}
+
+// Render once no setting holds the focus, so arriving choices never replace the control being used.
+function renderIdle() {
+  if (!document.activeElement?.closest?.("main [data-key]")) return render();
+  document.querySelector("main").addEventListener("focusout", () => setTimeout(renderIdle), { once: true });
+}
+
+start();
+</script>
+</body>
+</html>
