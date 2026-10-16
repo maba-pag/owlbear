@@ -73,16 +73,19 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
 - Rejections-only check (TD-218): when a round ends early by its count before the last allowed round and the
   worker rejected findings, one short session judges only those rejections on the repaired head, without new
   findings; a rejection it does not accept goes to the owner. It takes the next round's slot. The last
-  allowed round's rejections stay unjudged.
+  allowed round's rejections stay unjudged until new work reopens the loop (TD-235).
 - Completion without a pass: an engine-issued completion record binds the policy, the last verdict, the
-  complete repair batch, the criteria and the resulting head and tree. `publish.reviewed` and merge accept it
-  for that head only; fingerprints and later changes invalidate it like a review.
+  complete repair batch, the criteria and the resulting head. `publish.reviewed` and merge accept it for
+  identical content under the same criteria only (TD-237); later changes invalidate it like a review.
 
-### 3.5 Re-entry and restart (TD-215)
+### 3.5 Re-entry and restart (TD-215, TD-235)
 
 - New work after the final loop ended adds one round to the same loop (beyond `max_rounds` if needed). The
   reviewer gets the diff since the loop's last reviewed head, judges it with what it affects or calls and
-  obvious low-hanging issues, without a deep review of unrelated code. Normal end rules apply.
+  obvious low-hanging issues, without a deep review of unrelated code, and judges the rejections the former
+  last round left unjudged. Normal end rules apply. The added work (a CI, PR-comment or check fix, a target
+  merge, a visual or pre-push repair) gets no review of its own; work added during a task's loop is
+  reviewed by that task's next round.
 - Repeated CI ↔ final-review cycles keep no-progress accounting across the chain, so they reach the owner.
 - "Restart review loop" (Change page): only for a live, unmerged Change at or after its final review with no
   running step or merge; checked again under the lock; starts a new attempt at round 0, keeps the history,
