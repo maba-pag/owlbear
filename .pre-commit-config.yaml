@@ -16,6 +16,9 @@
 # Auto-fix on commit: Ruff, trailing-whitespace, end-of-file-fixer, and
 # markdownlint.
 
+# Deactivated: no hook runs on commit; run them with `pre-commit run --hook-stage manual`.
+default_stages: [manual]
+
 # Exclude the same generated, archived, and third-party paths as MegaLinter
 # where pre-commit's path matching can express them.
 exclude: |
