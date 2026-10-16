@@ -1,4 +1,4 @@
-"""A builder's rejection of review findings (TD-124, TD-176): rechecked by a fresh reviewer, then the owner decides."""
+"""A builder's rejection of review findings (TD-124, TD-208): judged by the next round's reviewer, then the owner."""
 
 import subprocess
 from datetime import UTC, datetime
@@ -140,7 +140,7 @@ def run_review(store: Store, c: Change, clone: Path, monkeypatch, upheld: dict[s
     monkeypatch.setattr(runner, "_kept", kept)
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
     assert seen[0].rechecks == tuple(upheld)
-    assert "## Rechecks" in seen[0].message
+    assert "## Rejections to judge" in seen[0].message
     return store.read("c1")
 
 
@@ -182,7 +182,7 @@ def test_an_upheld_rejection_goes_to_the_owner_before_any_repair_round(tmp_path,
             f"- {FOUND.splitlines()[0][2:]}",
         )
         assert sum(c.budgets.rounds.values()) == 1
-        assert (disputes.rejectable(fix), fix.settled, fix.found_in) == ((), ["F1"], 1)  # the owner's: decided
+        assert (disputes.rejectable(fix), fix.settled) == ((), ["F1"])  # the owner's: decided
 
 
 def test_each_upheld_finding_is_decided_on_its_own(tmp_path, clone, monkeypatch):

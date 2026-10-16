@@ -5,19 +5,44 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import budgets, disputes, loop, tools
+from owlbear_delivery_next import disputes, loop, round_records, rounds, tools
 from owlbear_delivery_next.failures import signature
 from owlbear_delivery_next.models import ErrorKind, Exit, Inputs, Review, Score, StepKind, Task
-from owlbear_delivery_next.steps import reconsider, worktree
+from owlbear_delivery_next.moves import subject_of
+from owlbear_delivery_next.round_records import FINAL, RECHECK
+from owlbear_delivery_next.steps import reconsider, retry, worktree
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from owlbear_delivery_next.config import Settings
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change
+    from owlbear_delivery_next.round_records import RoundLoop
     from owlbear_delivery_next.session_result import Run
     from owlbear_delivery_next.store import Lock, Store
+
+
+def started(c: Change, task: Task | None, path: Path, settings: Settings) -> None:
+    """Before a session: a task build's base, and a task review's loop with the policy it pins (TD-208)."""
+    s = c.step
+    if s.kind == StepKind.BUILD and task and task.base is None:
+        task.base = worktree.head(path)
+    if s.kind == StepKind.REVIEW and (subject := _subject(c, task)):
+        rounds.loop(c, subject, settings)
+
+
+def _subject(c: Change, task: Task | None) -> str | None:
+    """The plan task whose loop a review of *task* counts in; none for the final review, CI or PR tasks."""
+    subject = subject_of(c, task) if task else FINAL
+    root = next((t for t in c.plan.tasks if t.id == subject), None) if c.plan and subject != FINAL else None
+    return subject if root and root.origin == "plan" else None
+
+
+def looped(c: Change, task: Task | None) -> RoundLoop | None:
+    """The challenge loop a task review counts in; the final review keeps its own rounds until it has one."""
+    return c.loops.get(subject) if (subject := _subject(c, task)) else None
 
 
 def lines(review: tools.ReviewResult) -> list[str]:
@@ -59,62 +84,73 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     covered = worktree.observe(path, change.names.target, since).changed
     inputs = Inputs(criteria=criteria, paths=worktree.fingerprints(path, covered, run.head))
     tree = worktree.tree(path, run.head)
-    review = Review(
-        task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree, findings=lines(p)
-    )
+    found = lines(p)
+    if (lp := looped(change, task)) is not None and result.cause is None:
+        found = _counted(change, lp, found, task)
+    review = Review(task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree, findings=found)
     if p.verdict == "pass":
         return result.model_copy(update={"review": review})
-    found = lines(p)
     fixes = repair(change, task, found)
-    update = {"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:]}
+    update = {"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "ungated": lp is not None}
     return result.model_copy(update=update | {"score": score(found, change.step.kind)})
+
+
+def _counted(c: Change, lp: RoundLoop, found: list[str], task: Task | None) -> list[str]:
+    """Count one verdict and give its new findings their IDs; whether this round is the last is decided now."""
+    lp.round += 1
+    new = lp.raise_findings(found)
+    lp.found = len(new)
+    recheck = c.step.mode == RECHECK
+    lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
+    if recheck and task:
+        lp.unreviewed.append(task.id)  # the check judged its rejections, never its fixes
+    return [f.line for f in new]
 
 
 def score(found: list[str], kind: str) -> Score:
     """The failing findings, each known by its place and problem and not its fix, so rounds compare progress."""
-    ids = {signature(ErrorKind.REVIEW, kind, line.removeprefix("- ").rsplit(" - fix: ", 1)[0]) for line in found}
+    text = [(round_records.parse(line) or ("", line.removeprefix("- ")))[1] for line in found]
+    ids = {signature(ErrorKind.REVIEW, kind, t.rsplit(" - fix: ", 1)[0]) for t in text}
     return Score(failing=len(found), findings=sorted(ids))
 
 
 def repair(change: Change, task: Task | None, found: list[str], kept: Mapping[str, str] | None = None) -> list[Task]:
-    """The repair task carrying every finding line, in parts that each fit a task's details.
+    """The repair task carrying every finding line: one task for a looped batch, else parts that fit a task.
 
-    Each part records the review round that found its findings, and which of them the owner decided to fix (*kept*:
-    finding line to the owner's note).
+    *kept* maps the findings the owner decided to fix to the owner's note; the builder never rejects those.
     """
     kept = kept or {}
     n = len(change.plan.tasks) + 1 if change.plan else 1
+    whole = looped(change, task) is not None
     task = task or (change.plan.tasks[-1] if change.plan and change.plan.tasks else None)
     scope, checks = (task.scope, task.checks) if task else ([], [])
     of = f"task {change.step.task}" if change.step.task else "the final review"
     title = f"Fix {len(found)} review finding(s) of {of}"
     item = task.item if task and change.step.task else None  # a conversation task's repair answers the same item
-    parts, round_, tasks = pack(found) or [""], budgets.review_round(change), []
+    parts, tasks = (["\n".join(found)] if whole else pack(found)) or [""], []
     for i, part in enumerate(parts):
-        mine = {f"F{j}": line for j, line in enumerate(part.splitlines(), 1) if line in kept}
-        tasks.append(
-            Task(
-                id=f"t{n + i}",
-                title=title + (f" (part {i + 1} of {len(parts)})" if len(parts) > 1 else ""),
-                scope=scope,
-                checks=checks,
-                origin="review",
-                detail=part,
-                item=item,
-                found_in=round_,
-                settled=list(mine),
-                notes={k: kept[line] for k, line in mine.items() if kept[line]},
-            )
+        fix = Task(
+            id=f"t{n + i}",
+            title=title + (f" (part {i + 1} of {len(parts)})" if len(parts) > 1 else ""),
+            scope=scope,
+            checks=checks,
+            origin="review",
+            detail=part,
+            item=item,
         )
+        listed = dict(zip(disputes.keyed(fix), [ln for ln in part.splitlines() if ln.startswith("- ")], strict=True))
+        fix.settled = [k for k, line in listed.items() if line in kept]
+        fix.notes = {k: kept[listed[k]] for k in fix.settled if kept[listed[k]]}
+        tasks.append(fix)
     return tasks
 
 
 def completed(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     """A review whose disputed findings the owner decided completes from its held verdict, without a review session.
 
-    A finding the owner sent back with a note is reconsidered first (TD-193).
+    A finding the owner sent back with a note is reconsidered first (TD-193); a retry's undo runs before its build.
     """
-    if reconsider.judged(store, lock, change, repo):
+    if retry.undone(store, lock, change, repo) or reconsider.judged(store, lock, change, repo):
         return True
     if (result := disputed(change)) is None:
         return False
@@ -148,5 +184,5 @@ def disputed(change: Change) -> StepResult | None:
         fix_task=fixes[0],
         more_fixes=fixes[1:],
         score=score(found, s.kind),
-        authorised=disputes.authorised(task),
+        ungated=looped(change, task) is not None or disputes.authorised(task),
     )

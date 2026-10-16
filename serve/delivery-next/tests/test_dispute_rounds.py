@@ -1,4 +1,4 @@
-"""TD-189, TD-193: the review round decides who judges a rejection; the owner decides each finding with a note."""
+"""TD-193, TD-208: the next round judges a rejection; the owner decides each one it does not accept, with a note."""
 
 import subprocess
 from datetime import UTC, datetime
@@ -74,14 +74,13 @@ def clone(tmp_path, monkeypatch) -> Path:
     return work
 
 
-def change(found_in: int, *earlier: Dispute) -> Change:
-    """Task t3 repairs the findings of review round *found_in*; t2 repaired round 1's with *earlier* disputes."""
+def change() -> Change:
+    """Task t3 repairs the findings of t1's review that its earlier repair t2 left."""
     tasks = [
         Task(id="t1", title="one", scope=["a.txt"], built_by="s-build", done=True),
-        Task(id="t2", title="fix", scope=["a.txt"], origin="review", fixes="t1", detail=f"- {ONE}", found_in=1,
-             disputes=list(earlier), done=True),
+        Task(id="t2", title="fix", scope=["a.txt"], origin="review", fixes="t1", detail=f"- {ONE}", done=True),
         Task(id="t3", title="fix", scope=["a.txt"], origin="review", fixes="t2", detail=f"- {ONE}\n- {TWO}",
-             found_in=found_in, resume="s-build"),
+             resume="s-build"),
     ]  # fmt: skip
     names = Names(branch="owlbear/c1", target="main")
     return Change(
@@ -144,42 +143,33 @@ def gate(tmp_path: Path, kind: StepKind, tree: tools.Worktree, submit: tools.Spe
     return Gate(cfg, Run("s1"), lambda **_e: None, lambda: None)
 
 
-def test_a_round_two_rejection_may_be_named_a_repeat_and_goes_to_the_owner(tmp_path, clone, monkeypatch):
-    first = Dispute(key="F1", finding=ONE, reason="r", upheld=True, recheck="it still greets in English", owner="drop")
-    store = stored(tmp_path, change(2, first))
+def test_the_next_round_judges_each_rejection_and_the_owner_decides_one_it_does_not_accept(
+    tmp_path, clone, monkeypatch
+):
+    store = stored(tmp_path, change())
     cfg = build(store, clone, monkeypatch, "F1", "F2")
     assert (cfg.rejectable, cfg.settled) == (("F1", "F2"), ())
     rechecked = [
-        {"finding": "F1", "repeat_of": "E1", "reason": "the same finding"},
+        {"finding": "F1", "upheld": True, "reason": "it still greets in English"},
         {"finding": "F2", "upheld": False, "reason": "a test exists"},
     ]
     cfg = review_(store, clone, monkeypatch, rechecked)
-    assert (cfg.rechecks, cfg.repeats) == (("F1", "F2"), ("E1",))
-    assert f"- E1: {ONE} (upheld: it still greets in English)" in cfg.message
+    assert (cfg.rechecks, "## Rejections to judge" in cfg.message, disputes.ONLY in cfg.message) == (
+        ("F1", "F2"),
+        True,
+        False,
+    )
     c = store.read("c1")
     q = loop.open_question(c)
-    assert "repeats a round-1 finding" in q.text
-    assert "Round 1's recheck of it: it still greets in English" in q.text
+    assert ("did not accept the builder's rejection" in q.text, "it still greets in English" in q.text) == (True, True)
     assert [o.label for o in q.options] == ["Fix it", RECONSIDER, "Drop it"]
-    found = [(d.key, d.upheld, d.repeat_of) for d in c.plan.tasks[2].disputes]
-    assert found == [("F1", None, "E1"), ("F2", False, "")]
-
-
-def test_from_round_three_the_owner_decides_a_rejection_without_a_recheck(tmp_path, clone, monkeypatch):
-    store = stored(tmp_path, change(3))
-    build(store, clone, monkeypatch, "F1", "F2")
-    assert [d.direct for d in store.read("c1").plan.tasks[2].disputes] == [True, True]
-    cfg = review_(store, clone, monkeypatch, [])
-    assert (cfg.rechecks, "## Rechecks" in cfg.message) == ((), False)
-    q = loop.open_question(store.read("c1"))
-    assert ("From review round 3" in q.text, "F1" in q.text) == (True, True)
-    answer(store, "drop", "out of scope")
-    assert "F2" in loop.open_question(store.read("c1")).text
+    assert [(d.key, d.upheld) for d in c.plan.tasks[2].disputes] == [("F1", True), ("F2", False)]
+    assert "(rejection accepted by the reviewer)" in disputes.review_lines(c, None)[-1]
 
 
 def reconsidering(tmp_path: Path, clone: Path, monkeypatch) -> Store:
-    """Round 1: the builder rejects both findings, the review upholds F1, the owner asks for a reconsideration."""
-    store = stored(tmp_path, change(1))
+    """The builder rejects both findings, the next round upholds F1, the owner asks for a reconsideration."""
+    store = stored(tmp_path, change())
     build(store, clone, monkeypatch, "F1", "F2")
     upheld = {"finding": "F1", "upheld": True, "reason": "it greets in English"}
     review_(store, clone, monkeypatch, [upheld, {"finding": "F2", "upheld": False, "reason": "a test exists"}])
@@ -249,7 +239,7 @@ def test_a_failed_reconsideration_is_the_steps_result_and_runs_again(tmp_path, c
 
 
 def asked(tmp_path: Path) -> tuple[Store, Change]:
-    c = change(1)
+    c = change()
     c.step = Step(kind=K.REVIEW, task="t3")
     task = c.plan.tasks[2]
     task.disputes = [Dispute(key="F1", finding=ONE, reason="r", upheld=True, recheck="holds")]
@@ -272,19 +262,19 @@ def test_a_reconsideration_needs_the_owners_note(tmp_path):
 
 
 def test_the_owners_fix_passes_the_round_gate_once():
-    c = change(1)
+    c = change()
     c.step = Step(kind=K.REVIEW, task="t3")
     c.budgets.rounds[budgets.round_key(c)] = budgets.ROUND_LIMIT
     fix = Task(id="t4", title="fix", origin="review", detail=f"- {ONE}")
-    r = loop.StepResult(exit=Exit.RETRY, reason="1 finding(s) to fix", fix_task=fix, authorised=True)
+    r = loop.StepResult(exit=Exit.RETRY, reason="1 finding(s) to fix", fix_task=fix, ungated=True)
     done = loop.apply(c, r, NOW)
     assert (done.step.kind, done.step.task, done.outcome.question) == (K.BUILD, "t4", None)
-    assert loop.apply(c, r.model_copy(update={"authorised": False}), NOW).outcome.exit == Exit.ASK
+    assert loop.apply(c, r.model_copy(update={"ungated": False}), NOW).outcome.exit == Exit.ASK
 
 
 def gate_asked() -> Change:
     """Round 3 of t3's review still finds something: the gate asks, holding the repair t4."""
-    c = change(1)
+    c = change()
     c.step = Step(kind=K.REVIEW, task="t3")
     c.budgets.rounds[budgets.round_key(c)] = budgets.ROUND_LIMIT
     fix = Task(id="t4", title="fix", origin="review", detail=f"- {TWO}")
@@ -326,14 +316,14 @@ def test_a_round_gate_settles_only_by_its_options_while_it_is_open(tmp_path):
 
 
 def test_the_owners_note_guides_the_fix_and_authorises_its_round():
-    task = change(1).plan.tasks[2]
+    task = change().plan.tasks[2]
     note = "use Grüß Gott " * 140  # a whole note of 2000 characters reaches the builder
     task.disputes = [
         Dispute(key="F1", finding=ONE, reason="r", upheld=True, owner="fix", note=note),
         Dispute(key="F2", finding=TWO, reason="r", upheld=True, owner="drop", note="out of scope"),
     ]
     assert (disputes.kept(task), disputes.authorised(task)) == ({f"- {ONE}": note}, True)
-    c = change(1)
+    c = change()
     c.step = Step(kind=K.REVIEW, task="t3")
     fix = review.repair(c, task, [f"- {ONE}", f"- {TWO}"], disputes.kept(task))[0]
     assert f"> F1: {note.strip()}" in disputes.build_lines(fix)
@@ -367,17 +357,18 @@ def test_a_conversation_reply_never_skips_a_finding_the_owner_decided(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("recheck", "error"),
+    ("given", "cap", "error"),
     [
-        ({"repeat_of": "E1"}, None),
-        ({"repeat_of": "E9"}, "rechecked: F1 repeat_of E9 is not under Earlier rechecks - use one of E1"),
-        ({"repeat_of": "E1", "upheld": False}, "rechecked: F1 names a repeat and a verdict"),
-        ({}, "rechecked: F1 needs upheld true or false"),
+        ({"upheld": True}, 1, None),
+        ({}, 1, "rechecked: F1 needs upheld true or false"),
+        ({"upheld": False}, 0, "findings: 1 given, at most 0"),  # a rejections-only check finds nothing new
     ],
 )
-def test_a_repeat_names_an_earlier_recheck_and_any_other_recheck_a_verdict(tmp_path, recheck, error):
-    g = gate(tmp_path, K.REVIEW, tools.Worktree(head="b", base="a"), tools.REVIEW, rechecks=("F1",), repeats=("E1",))
-    text, ok = g.call(tools.REVIEW, {"verdict": "pass", "rechecked": [{"finding": "F1", "reason": "r"} | recheck]})
+def test_a_judgement_needs_a_verdict_and_new_findings_stay_within_the_cap(tmp_path, given, cap, error):
+    g = gate(tmp_path, K.REVIEW, tools.Worktree(head="b", base="a"), tools.REVIEW, rechecks=("F1",), cap=cap)
+    found = [{"place": "a.txt:3", "problem": "p", "fix": "f"}]
+    args = {"verdict": "fix", "findings": found, "rechecked": [{"finding": "F1", "reason": "r"} | given]}
+    text, ok = g.call(tools.REVIEW, args)
     assert (ok, text) == (True, ACCEPTED) if error is None else (not ok and error in text)
 
 
@@ -398,16 +389,15 @@ def test_a_reconsideration_answers_each_finding_and_restates_a_clarified_one(tmp
 
 
 def test_each_repair_part_marks_the_findings_the_owner_decided():
-    c = change(1)
+    c = change()
     c.step = Step(kind=K.REVIEW, task="t3")
-    c.budgets.loops[budgets.round_key(c)] = 1
     found = [f"- a.txt:{i}: {'x' * 1500} - fix: y" for i in range(1, 5)]
     parts = review.repair(c, c.plan.tasks[2], found, kept={found[2]: "a note", found[3]: ""})
-    assert [(t.settled, t.notes, t.found_in) for t in parts] == [([], {}, 2), (["F1", "F2"], {"F1": "a note"}, 2)]
+    assert [(t.settled, t.notes) for t in parts] == [([], {}), (["F1", "F2"], {"F1": "a note"})]
 
 
 def test_a_repair_lists_every_finding_and_marks_the_owners():
-    task = change(1).plan.tasks[2]
+    task = change().plan.tasks[2]
     task.settled = ["F1"]
     assert (disputes.rejectable(task), disputes.settled(task)) == (("F2",), ("F1",))
     lines = disputes.build_lines(task)
@@ -418,7 +408,7 @@ def test_a_repair_lists_every_finding_and_marks_the_owners():
 
 
 def test_every_finding_settled_not_to_fix_reaches_later_reviews():
-    c = change(1)
+    c = change()
     c.plan.tasks[1].disputes = [
         Dispute(key=f"F{i}", finding=f"a.txt:{i}: p - fix: f", reason="r", upheld=True, owner="drop", note="later")
         for i in range(12)

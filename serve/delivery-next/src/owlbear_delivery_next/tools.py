@@ -76,7 +76,7 @@ class BuildResult(Args):
     rejected: list[Rejection] = Field(
         default_factory=list,
         max_length=20,
-        description="Only where the task offers it: findings you judge wrong; a fresh reviewer rechecks each",
+        description="Only where the task offers it: findings you judge wrong; the next round's reviewer judges each",
         examples=[[{"finding": "F2", "reason": "src/greet.ts:4 already trims; greet.test.ts:12 proves it"}]],
     )
 
@@ -144,17 +144,11 @@ class Finding(Args):
 
 
 class Recheck(Args):
-    """Your independent recheck of one finding a builder rejected (TD-176)."""
+    """Your independent judgement of one finding a worker rejected (TD-176, TD-208)."""
 
-    finding: str = _f(10, "The finding's key as Rechecks lists it", "F2")
+    finding: str = _f(10, "The finding's key as your message lists it", "F2")
     upheld: bool | None = Field(
-        default=None, description="true if it still holds on this commit; false if the reason disproves it"
-    )
-    repeat_of: str = Field(
-        default="",
-        max_length=10,
-        description="Only to name a repeat under Earlier rechecks, its reference",
-        examples=["E1"],
+        default=None, description="true if the rejection is not acceptable (the finding still holds); false if it is"
     )
     reason: str = _f(1000, "Why, with evidence", "src/greet.ts:4 trims the name")
 
@@ -180,7 +174,7 @@ class ReviewResult(Args):
     rechecked: list[Recheck] = Field(
         default_factory=list,
         max_length=20,
-        description="Only when your message lists Rechecks: your verdict on each finding listed there",
+        description="Only when your message lists rejected findings to judge: your verdict on each one listed",
         examples=[[{"finding": "F2", "upheld": False, "reason": "src/greet.ts:4 trims the name"}]],
     )
 

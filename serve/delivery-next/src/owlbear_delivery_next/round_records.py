@@ -15,6 +15,8 @@ type FindingState = Literal[
 ]
 type Ended = Literal["", "clean", "count", "max", "accepted", "retried"]
 MAX_FINDINGS = 20  # a review result's own cap
+FINAL = "final"  # the final review's subject
+RECHECK = "rejections"  # a review step that judges only an early last round's rejections (TD-218)
 KEYED = re.compile(r"- (F\d+): (.*)")
 
 
@@ -66,12 +68,14 @@ class RoundLoop(_Record):
     subject: str
     attempt: int = 1
     round: int = 0  # completed verdicts
+    found: int = 0  # the latest verdict's new findings
     extra: int = 0  # rounds the owner granted beyond max rounds
     policy: RoundPolicy
     findings: list[RoundFinding] = Field(default_factory=list)
     last: bool = False  # the latest verdict made its round the last
     ended: Ended = ""
     unreviewed: list[str] = Field(default_factory=list)  # repair tasks no round reviewed
+    history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry replaced (TD-210)
 
     def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]:
         """Record new findings of the current round under the next free IDs, in order."""

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next import budgets, disputes, evidence
+from owlbear_delivery_next import budgets, disputes, evidence, round_flow
 from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, VISUAL_MODEL, kind_of
 from owlbear_delivery_next.inbox import (
     AnswerItem,
@@ -102,7 +102,7 @@ class StepResult(Record):
     detail: str = ""  # the raw error behind a stable reason; shown when the owner is asked, never part of a signature
     operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
     challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
-    authorised: bool = False  # a repair the owner decided to fix: it passes the round gate once (TD-193)
+    ungated: bool = False  # a task loop or the owner's Fix it governs the repair: no round gate (TD-193, TD-208)
 
 
 def waiting_consent(c: Change) -> bool:
@@ -133,7 +133,7 @@ def usage_gated(c: Change) -> bool:
     return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
 
 
-DECISIONS = frozenset({"retry", "accept", "repair", "reconsider"})  # engine decisions an answer can only choose
+DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "rebuild"})  # engine decisions only
 
 
 def owner_gated(c: Change) -> bool:
@@ -345,6 +345,8 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
         return  # the Change moved on since it asked
     if (q.cause or "").startswith(disputes.PREFIX):  # TD-176: the owner's decision on one upheld finding
         disputes.decided(c, q, target, item.at, item.text)
+    elif (q.cause or "").startswith(round_flow.PREFIX):  # TD-208: another round, or a retry of the work
+        round_flow.decided(c, q, target)
     elif (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
         kept = c.visual_rounds[-1] if c.visual_rounds else None
         if kept and kept.outcome == "model":
@@ -427,10 +429,11 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             task = open_task(c) if s.kind == StepKind.PLAN else None
             go(c, StepKind.BUILD if s.kind == StepKind.PLAN else StepKind.PLAN, task.id if task else None)
         case StepKind.BUILD:
-            go(c, StepKind.REVIEW, s.task)
+            round_flow.built(c, now)
         case StepKind.REVIEW:
             if r and r.review:
                 c.reviews.append(r.review)
+            round_flow.passed(c)
             c.budgets.rounds.pop(budgets.round_key(c), None)
             done = resolved(c, s.task)
             for t in c.plan.tasks if c.plan else []:

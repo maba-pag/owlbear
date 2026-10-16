@@ -108,8 +108,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)
     s.started_at = now
-    if s.kind == StepKind.BUILD and task and task.base is None:
-        task.base = worktree.head(path)
+    review.started(change, task, path, store.settings())  # a build's base; a task review's loop (TD-208)
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
@@ -154,7 +153,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             rejectable=disputes.rejectable(task) if s.kind == StepKind.BUILD else (),
             settled=disputes.settled(task) if s.kind == StepKind.BUILD else (),
             rechecks=disputes.pending(task) if s.kind == StepKind.REVIEW else (),
-            repeats=disputes.repeats(change, task) if s.kind == StepKind.REVIEW else (),
+            cap=disputes.cap(change),
             amendable=amendments.amendable(change),
             explore=s.kind == StepKind.PLAN
             and store.settings().explore,  # TD-129: the SDK planner only, off by default

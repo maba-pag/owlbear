@@ -105,7 +105,7 @@ class Session:
     item: ItemRef | None = None  # the conversation item a build task answers, if any
     rejectable: tuple[str, ...] = ()  # finding keys a review repair's builder may reject (TD-124)
     rechecks: tuple[str, ...] = ()  # keys of rejected findings a review rechecks or reconsiders (TD-176, TD-193)
-    repeats: tuple[str, ...] = ()  # round 1's rechecks a round-2 recheck may name as repeated (TD-189)
+    cap: int = 20  # new findings a review may return: the loop's max findings, none in a rejections-only check
     settled: tuple[str, ...] = ()  # finding keys the owner decided to fix: never rejected (TD-193)
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's

@@ -13,13 +13,15 @@ from owlbear_delivery_next.round_records import RoundLoop
 from owlbear_delivery_next.spend import Spend
 from owlbear_delivery_next.visual_records import OwnerCriterion, VisualResult, VisualRound
 
-FORMAT = 3
+FORMAT = 4
+DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
 type Role = Literal["planner", "builder", "reviewer", "challenger", "designer", "preparer", "shaper", "updater"]
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
+type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild"]
 
 
 class StepKind(StrEnum):
@@ -193,7 +195,7 @@ class Option(Record):
 
     id: str
     label: str
-    next: StepKind | Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider"] | None = None
+    next: StepKind | Move | None = None
 
 
 class Answer(Record):
@@ -272,8 +274,6 @@ class Dispute(Record):
     upheld: bool | None = None
     recheck: str = ""  # the reviewer's reason
     owner: Literal["", "fix", "drop", "reconsider"] = ""
-    direct: bool = False  # found in round 3 or later: the owner decides without a recheck (TD-189)
-    repeat_of: str = ""  # the round-1 finding a round-2 recheck named it a repeat of (TD-189)
     note: str = Field(default="", max_length=2000)  # the owner's note with the decision (TD-193)
     reconsidered: Literal["", "withdrawn", "clarified", "unsure"] = ""  # a fresh reviewer, after the note
     clarified: str = ""  # the finding as that reviewer restated it
@@ -287,7 +287,7 @@ class Task(Record):
     scope: list[str] = Field(default_factory=list)
     checks: list[str] = Field(default_factory=list)
     origin: Literal["plan", "review", "ci", "pr-feedback", "person-check", "integration"] = "plan"
-    detail: str = Field(default="", max_length=4000)  # CI log tail, review thread or merge instruction
+    detail: str = Field(default="", max_length=DETAIL)  # a review batch's findings, CI log tail, thread, instruction
     done: bool = False
     fixes: str | None = None  # the task whose review findings this fix task resolves
     base: str | None = None  # HEAD when the task's build first started; its changes are measured from here
@@ -297,7 +297,6 @@ class Task(Record):
     resume: str = ""  # a review repair's producing session, given its one repair chance; "" starts fresh
     earlier: str = Field(default="", max_length=2000)  # that session's accepted work, for a fresh fallback (TD-175)
     disputes: list[Dispute] = Field(default_factory=list)  # findings of this repair task its builder rejected
-    found_in: int = 0  # the review round that found a repair's findings, as the owner sees it (TD-189)
     settled: list[str] = Field(default_factory=list)  # finding keys the owner decided to fix: never rejected
     notes: dict[str, str] = Field(default_factory=dict)  # the owner's whole note per settled finding key (TD-193)
 

@@ -243,7 +243,7 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
         c.budgets.rounds[key] = 0
     c.budgets.rounds[key] = c.budgets.rounds.get(key, 0) + 1
     c.budgets.loops[key] = c.budgets.loops.get(key, 0) + 1  # what the owner sees; resets nowhere (TD-97)
-    if c.budgets.rounds[key] > ROUND_LIMIT and not r.authorised:  # the owner's Fix it passes one batch (TD-193)
+    if c.budgets.rounds[key] > ROUND_LIMIT and not r.ungated:  # task loops end by TD-208; the owner's Fix it once
         fix = StepKind.BUILD if s.kind == StepKind.REVIEW else s.kind
         options = [
             Option(id="fix", label="Fix the findings", next=fix),

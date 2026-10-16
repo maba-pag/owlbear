@@ -72,7 +72,7 @@ def judged(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     if verdict.exit != Exit.DONE or not isinstance(done.payload, dispute_tools.ReconsiderResult):
         store.write(lock, loop.apply(change, verdict, now))
         return True
-    disputes.judged(task, done.payload)
+    disputes.judged(change, task, done.payload)
     unsure = next((d for d in task.disputes if d.reconsidered == "unsure" and not d.owner), None)
     if unsure is not None:
         ask(change, disputes.question(task, unsure), now)

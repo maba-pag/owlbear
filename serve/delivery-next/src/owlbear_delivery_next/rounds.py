@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.round_records import FINAL, RoundLoop, RoundPolicy
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.config import Settings
     from owlbear_delivery_next.models import Change, Role
-
-FINAL = "final"  # the final review's subject
 
 
 def policy(settings: Settings, subject: str, role: Role = "builder") -> RoundPolicy:

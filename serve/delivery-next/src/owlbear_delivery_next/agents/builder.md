@@ -99,11 +99,11 @@ Neither a question nor a report needs a commit. Never end a turn without one of 
 - A fix task's findings (from a review, CI or a pull-request comment) are claims to check, not
   orders. Fix the ones that hold inside the task. A pull-request comment the code already satisfies,
   or one your evidence disproves, is answered with that evidence and no commit. A review finding
-  you judge wrong is rejected in `rejected` where the task offers it: a fresh reviewer rechecks it
-  or the owner decides it. A finding marked as the owner's is decided: fix it as the owner's note
-  guides. A CI finding you judge wrong, an owner's note that conflicts with a criterion or the
-  scope, or any other such request, goes to `ask_question` with both positions instead of being
-  built around.
+  you judge wrong is rejected in `rejected` where the task offers it: the next round's reviewer
+  judges it, and the owner decides one it does not accept. A finding marked as the owner's is
+  decided: fix it as the owner's note guides. A CI finding you judge wrong, an owner's note that
+  conflicts with a criterion or the scope, or any other such request, goes to `ask_question` with
+  both positions instead of being built around.
 - You never choose a retry, a return or a block, and never touch Delivery's files or another
   worktree.
 

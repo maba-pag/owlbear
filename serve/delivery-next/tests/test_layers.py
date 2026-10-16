@@ -21,7 +21,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
         "preparation", "permissions", "amendment_records", "dispute_tools", "round_records",
     ),
     "change_flow": ("loop", "moves", "budgets", "status", "progress", "brief_tools", "steps.worktree", "repairs",
-                    "disputes"),
+                    "disputes", "round_flow"),
     "design_packs": ("design_pack", "detector", "pack_update", "calibration", "pack_git", "design_tools"),
     "settings": ("config", "roles", "migrations", "profile", "rounds"),
     "state_store": (

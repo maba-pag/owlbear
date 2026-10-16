@@ -11,7 +11,19 @@ from owlbear_delivery_next import loop, migrations, status
 from owlbear_delivery_next import store as store_mod
 from owlbear_delivery_next.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import FORMAT, Brief, Change, Exit, MergeConsent, Question, Step, StepKind
+from owlbear_delivery_next.models import (
+    FORMAT,
+    Brief,
+    Change,
+    Dispute,
+    Exit,
+    MergeConsent,
+    Plan,
+    Question,
+    Step,
+    StepKind,
+    Task,
+)
 from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
 
@@ -142,6 +154,17 @@ def test_a_format_1_consent_drops_the_merge_queue_field(store):
     old["format"], old["consent"]["queued_at"] = 1, None
     path.write_text(json.dumps(old))
     assert store.read("c1").consent.head == "a" * 40
+
+
+def test_a_format_3_change_drops_the_td_189_round_fields(store):
+    fix = Task(id="t2", title="fix", origin="review", fixes="t1", disputes=[Dispute(key="F1", finding="f", reason="r")])
+    save(store, Change(slug="c1", plan=Plan(tasks=[Task(id="t1", title="one"), fix])))
+    path = store.root / "changes" / "c1" / "change.json"
+    old = json.loads(path.read_text())
+    old["format"], old["plan"]["tasks"][1]["found_in"] = 3, 2
+    old["plan"]["tasks"][1]["disputes"][0] |= {"direct": True, "repeat_of": "E1"}
+    path.write_text(json.dumps(old))
+    assert store.read("c1").plan.tasks[1].disputes[0].key == "F1"
 
 
 def test_write_keeps_prev_and_restore_brings_it_back(store):

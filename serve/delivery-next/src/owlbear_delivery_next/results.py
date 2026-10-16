@@ -161,5 +161,5 @@ class Gate:
         errors = tools.check_result(
             args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
         )
-        found = disputes.check(args, tree, cfg.rejectable, cfg.rechecks, repeats=cfg.repeats, settled=cfg.settled)
+        found = disputes.check(args, tree, cfg.rejectable, cfg.rechecks, settled=cfg.settled, cap=cfg.cap)
         return errors + found, tree

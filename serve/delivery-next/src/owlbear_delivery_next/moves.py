@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import repairs
 from owlbear_delivery_next.evidence import cover
 from owlbear_delivery_next.models import Exit, Outcome, Step, StepKind
+from owlbear_delivery_next.round_records import FINAL
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -28,6 +29,16 @@ def enter(c: Change, kind: StepKind, task: str | None = None) -> None:
     caller = s.mode if s.kind == StepKind.INTEGRATE else str(s.kind)
     final = "final" if kind == StepKind.REVIEW and keep is None else None  # a review without a task is final
     go(c, kind, keep, caller if kind == StepKind.INTEGRATE else final)
+
+
+def subject_of(c: Change, task: Task) -> str:
+    """The plan task a review repair descends from: its challenge loop's subject, or ``final`` (TD-208)."""
+    tasks = {t.id: t for t in c.plan.tasks} if c.plan else {}
+    seen = {task.id}
+    while task.fixes in tasks and task.fixes not in seen:
+        task = tasks[task.fixes]
+        seen.add(task.id)
+    return FINAL if task.origin == "review" and task.fixes is None else task.id
 
 
 def open_task(c: Change) -> Task | None:

@@ -69,6 +69,18 @@ def seed_dropped(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-CHANGE: Migrations = {1: brief_challenged, 2: visual_decided}
+def rounds_kept(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 3 to 4: TD-208's loops replace TD-189's round fields on tasks and disputes; they are dropped."""
+    for task in (data.get("plan") or {}).get("tasks") or []:
+        if isinstance(task, dict):
+            task.pop("found_in", None)
+            for d in task.get("disputes") or []:
+                if isinstance(d, dict):
+                    d.pop("direct", None)
+                    d.pop("repeat_of", None)
+    return data
+
+
+CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept}
 PROFILE: Migrations = {1: roles_moved}
 CONFIG: Migrations = {1: seed_dropped}
