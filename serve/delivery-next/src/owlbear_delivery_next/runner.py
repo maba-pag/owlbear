@@ -152,6 +152,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             rejectable=disputes.rejectable(change, task) if s.kind == StepKind.BUILD else (),
             rechecks=disputes.pending(task) if s.kind == StepKind.REVIEW else (),
             amendable=amendments.amendable(change),
+            explore=s.kind == StepKind.PLAN
+            and store.settings().explore,  # TD-129: the SDK planner only, off by default
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=((design_tools.SCAN, partial(design.builder_scan, at)),)

@@ -18,7 +18,7 @@ from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, tools
+from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, subagents, tools
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import decide, identities, view
@@ -116,6 +116,7 @@ class Session:
     rechecks: tuple[str, ...] = ()  # keys of rejected findings a review rechecks (TD-176)
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
+    explore: bool = False  # the experiment setting (TD-129); only an SDK planner session acts on it
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
     context: str = "default"  # the model's context tier: "long" pins its long-context tier, else the runtime chooses
@@ -153,6 +154,7 @@ class _Step:
         self.preloaded: set[str] = set()  # skills the runtime loaded from Delivery's folder before the first turn
         self.checked = False  # the preload was checked at the first turn
         self.skills = cfg.skills or preload.directory()  # the folder its skills load from
+        self.watch = subagents.Watch(allowed=subagents.eligible(cfg.kind, role_of(cfg), enabled=cfg.explore))
 
     @property
     def done(self) -> bool:
@@ -188,24 +190,33 @@ class _Step:
             self.model_seen(getattr(ev.data, "model", None), getattr(ev.data, "parent_tool_call_id", None))
         elif kind == "assistant.usage":
             self.call_seen(ev.data)
-        elif kind == "subagent.started":
-            self.subagent_started(ev.data)
+        elif kind.startswith("subagent."):
+            self.subagent_seen(kind, ev.data)
 
-    def subagent_started(self, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
-        """No subagent may run (owner decision 2026-10-15); Auto is still a wrong model (TD-53)."""
-        model, name = getattr(data, "model", None), getattr(data, "agent_name", None)
-        if model and model.lower() == "auto":
-            self.gate.wrong_model("a subagent ran on auto")
-        else:
-            self.gate.revoke(f"a subagent started: {name}; no subagent may run")
+    def subagent_seen(self, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
+        """Only an allowed `explore` may run (TD-129); any other start voids the step; Auto is a wrong model (TD-53).
+
+        Each end is journaled as it arrives, so a runner killed later keeps what its subagents did.
+        """
+        if kind == "subagent.started":
+            why = self.watch.started(data)
+            self.log(event="subagent-started", agent=getattr(data, "agent_name", ""), allowed=not why)
+            if why == "auto":
+                self.gate.wrong_model("a subagent ran on auto")
+            elif why:
+                self.gate.revoke(why)
+        elif kind in {"subagent.completed", "subagent.failed"}:
+            if (ended := self.watch.ended(data, kind.removeprefix("subagent."))) is not None:
+                self.log(event="subagent", **ended)
 
     def call_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK usage event data
-        """One billed call: Auto voids the step for anyone (TD-53); the main agent's own calls name its model."""
+        """One billed call: Auto voids the step for anyone (TD-53); an allowed subagent's is counted as its own."""
         parent = getattr(data, "parent_tool_call_id", None)
         if getattr(data, "is_auto", None):
             self.gate.wrong_model(f"a {'subagent ' if parent else ''}call ran on auto")
             return
-        self.model_seen(getattr(data, "model", None), parent)
+        if not self.watch.call(data):
+            self.model_seen(getattr(data, "model", None), parent)
 
     def skill_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK skill event data
         """Note a skill the runtime loaded; a preload from Delivery's folder counts toward the role's skills."""
@@ -224,11 +235,12 @@ class _Step:
             self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
-        """Void the step when its own agent runs on another model (TD-94) or a subagent runs at all."""
+        """Void the step when its own agent runs on another model (TD-94) or a subagent runs that may not (TD-129)."""
         if model and parent and model.lower() == "auto":
             self.gate.wrong_model("a subagent ran on auto")
         elif model and parent:
-            self.gate.revoke("a subagent ran; no subagent may run")
+            if not self.watch.owns(parent):  # an allowed subagent's own turns are its model's, not the step's
+                self.gate.revoke("a subagent ran; no subagent may run")
         elif model and self.cfg.model and model != self.cfg.model:
             self.gate.wrong_model(f"a turn ran on {model}, the step needs {self.cfg.model}")
 
@@ -315,7 +327,7 @@ class _Step:
             "tools": self.tools(),
             "custom_agents": [role | {"infer": False}],  # the role never starts itself as a subagent
             "agent": role["name"],
-            "excluded_builtin_agents": list(BUILTINS),
+            "excluded_builtin_agents": [b for b in BUILTINS if not (self.watch.allowed and b == subagents.ALLOWED)],
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
             "skill_directories": [str(self.skills)],
             "mcp_servers": _memory(self.cfg.memory),
@@ -448,6 +460,7 @@ async def run(cfg: Session) -> Run:
         st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
     session = st.session
     st.run.usage = await usage_read(session, cfg.model) if session else {}
+    st.run.subagents = st.watch.report()
     await _proven(st, session)
     st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)
     return st.run
@@ -463,7 +476,7 @@ async def _proven(st: _Step, session: Any) -> None:  # noqa: ANN401 - the SDK se
     if not st.sending:
         return
     for again in (False, True):
-        if wrong := unexpected_models(st.billed, st.run.usage, st.cfg.model):
+        if wrong := sorted(set(unexpected_models(st.billed, st.run.usage, st.cfg.model)) - st.watch.child_models()):
             st.gate.wrong_model(f"the usage names {', '.join(wrong)}, the step needs {st.cfg.model}")
         if st.run.model_check == "mismatch":
             return

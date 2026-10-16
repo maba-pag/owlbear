@@ -55,6 +55,7 @@ class Layer(Record):
     preparations: list[Preparation] | None = None  # TD-96: the project's test-copy options, owner-declared
     data: DataPermissions | None = None  # TD-96: the owner's standing permissions for those test copies
     design_failures: DesignFailures | None = None  # TD-78: a design judge's fail goes back, or to the owner
+    explore: bool | None = None  # TD-129: experimental, SDK planner only: one built-in `explore` at a time
 
     @field_validator("format")
     @classmethod
@@ -112,6 +113,7 @@ class Settings(Record):
     preparations: list[Preparation] = Field(default_factory=list)
     data: DataPermissions = Field(default_factory=DataPermissions)
     design_failures: DesignFailures = "ask"
+    explore: bool = False
     sources: dict[str, Source]
 
 
@@ -174,6 +176,7 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         ("global", glob.design_failures),
         ("default", "ask"),  # autonomous default (TD-78)
     )
+    explore = _pick("explore", sources, ("project", project.explore), ("global", glob.explore), ("default", False))
     return Settings(
         visible=visible,
         agents=agents,
@@ -182,5 +185,6 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         preparations=prep,
         data=data,
         design_failures=design,
+        explore=bool(explore),
         sources=sources,
     )

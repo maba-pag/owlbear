@@ -5,7 +5,7 @@ import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from owlbear_delivery_next import sdk_adapter, sdk_usage, sessions, vscode_adapter
+from owlbear_delivery_next import sdk_adapter, sdk_usage, sessions, subagents, vscode_adapter
 from owlbear_delivery_next.models import Exit, StepKind
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import Gate
@@ -67,6 +67,7 @@ def _step(usage: dict, *, ending: str = "result") -> SimpleNamespace:
         log=lambda **e: events.append(e),
         events=events,
         gate=Gate(SimpleNamespace(), run, lambda **_: None, lambda: None),
+        watch=subagents.Watch(allowed=False),
     )
 
 

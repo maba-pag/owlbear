@@ -97,6 +97,7 @@ def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, f
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": done.session_id}
     step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage, "model": done.model_check}
     step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
+    step |= {"subagents": done.subagents} if done.subagents else {}  # within the usage, never added to the spend
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None
     if done.usage.get("error") != "held":
         change.spend = change.spend.plus(done.usage, done.session_id)

@@ -550,7 +550,13 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     assert '<p-text id="status" role="status" aria-live="polite"></p-text>' in page.text
 
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
-    assert list(got) == ["Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage"]
+    assert list(got) == [
+        "Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage",
+        "Explore experiment",
+    ]  # fmt: skip
+    assert (got["Explore experiment"]["built"], "proven spending bound" in got["Explore experiment"]["note"]) == (
+        False, True
+    )  # fmt: skip
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
     assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("/config#pack", None)
     assert (got["Engine update"]["built"], got["Engine update"]["note"]) == (False, "Not built yet.")

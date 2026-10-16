@@ -43,7 +43,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
 
     assert got["project"] == {
         "format": 2, "agents": {}, "runtimes": {}, "widths": None, "preparations": None, "data": None,
-        "design_failures": None,
+        "design_failures": None, "explore": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -119,7 +119,7 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     got = c.get("/api/next/config").json()
     assert (got["global"], got["global_location"]) == ({"format": 2, "agents": {}, "runtimes": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
-                                                         "visible": None},
+                                                         "explore": None, "visible": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": 2, "data": {}}})
     assert data.status_code == 422  # test preparation is a project setting (TD-96)

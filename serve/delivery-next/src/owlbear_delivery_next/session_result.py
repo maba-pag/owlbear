@@ -62,6 +62,7 @@ class Run:
     quota: bool = False  # the runtime reported the Copilot quota exhausted
     quota_reset: datetime | None = None  # when it said the quota resets
     usage_unread: str = ""  # why the usage does not prove the model; such a run is never processed (TD-54, TD-94)
+    subagents: list[dict[str, Any]] = field(default_factory=list)  # each subagent's record, a breakdown (TD-129)
     model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns once after a wait
 
 
