@@ -162,14 +162,18 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     assert c.post("/api/next/briefs", json=body).status_code == 200
     states = [
         {"name": "home", "path": "/", "expect": "Bye", "owner": True},
-        {"name": "empty", "path": "/", "expect": "!"},
+        {"name": "copy", "path": "/", "expect": "!"},  # named like a check the owner did not state
     ]
     assert c.post("/api/next/briefs/visual", json={"change": "c1", "ui": True, "states": states}).status_code == 200
-    slug = store.slugs()[0]
-    assert store.read(slug).brief.specified == ["AC-2", "home", "feel"]
-    assert c.get(f"/api/next/changes/{slug}").json()["brief"]["specified"] == ["AC-2", "home", "feel"]
+    slug, owned = store.slugs()[0], ["AC-2", "screen:home", "check:feel"]
+    assert store.read(slug).brief.specified == owned
+    assert c.get(f"/api/next/changes/{slug}").json()["brief"]["specified"] == owned
     assert c.post("/api/next/briefs", json={**body, "change": "c1"}).status_code == 200  # keeps the visual check
-    assert store.read(slug).brief.specified == ["AC-2", "home", "feel"]
+    assert store.read(slug).brief.specified == owned
+    read_back = Chat(repo).show_status("c1")["brief"]  # what a resumed chat resaves
+    assert read_back["specified"] == ["AC-2"]
+    assert read_back["states"] == [{"name": "home", "owner": True}, {"name": "copy", "owner": False}]
+    assert read_back["person_checks"] == [{"name": "feel", "owner": True}, {"name": "copy", "owner": False}]
     unknown = c.post("/api/next/briefs", json={**body, "specified": ["AC-3"]}).json()["errors"]
     assert unknown == ["specified[0]: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
 

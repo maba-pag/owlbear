@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_delivery_next import cli, data_repo, design_pack, local_home
+from owlbear_delivery_next import cli, data_repo, design_pack, local_home, pack_update
 from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ def test_old_files_are_read_until_moved_and_new_writes_win(machine) -> None:
     assert data_repo.locate() == data_repo.DataRepo(shared)
     assert design_pack.folder({"pack": "p1"}) == old / "design-pack" / "p1"
     assert design_pack.folder({"pack": "p1"}, writing=True) == new / "design-pack" / "p1"
-    assert [o for o, _n in local_home.plan()] == [old / "data.json", old / "design-pack"]
+    assert [o for o, _n in local_home.plan()] == [old / "data.json", old / "design-pack" / "p1"]
 
     assert "still read from the old folder" in cli.show_home(move=False)
     moved = cli.show_home(move=True)
@@ -78,3 +78,44 @@ def test_recording_a_repository_writes_only_the_new_folder(machine) -> None:
 def test_worktrees_live_in_owlbears_folder() -> None:
     assert DATA_ROOT() == local_home.root() / "worktrees"
     assert local_home.root().name in {"OwlBear", "owlbear"}
+
+
+def test_a_notice_in_the_new_folder_never_hides_the_old_pack_and_offline_never_deletes_old_files(machine) -> None:
+    old, new = machine / ".owlbear" / "design-pack", local_home.root() / "design-pack"
+    (old / "p1").mkdir(parents=True)
+    (old / "notice.json").write_text('{"tag": "old"}')
+
+    def offline(_url: str) -> bytes:
+        msg = "offline"
+        raise OSError(msg)
+
+    assert pack_update.notice(refresh=True, fetch=offline)["behind"] is None
+    assert (old / "notice.json").read_text() == '{"tag": "old"}'  # the backup stays as it was
+    assert (new / "notice.json").exists()
+    assert design_pack.folder({"pack": "p1"}) == old / "p1"  # the pack is still found, each item on its own
+    assert [o for o, _n in local_home.plan()] == [old / "p1"]
+
+
+def test_the_oldest_pointer_is_read_where_it_is_and_moved_under_its_new_name(machine) -> None:
+    old, shared = machine / ".owlbear", repo(machine / "owlbear-data")
+    old.mkdir()
+    (old / "common.json").write_text(json.dumps({"repository": str(shared)}))
+    assert data_repo.locate() == data_repo.DataRepo(shared)
+    assert sorted(p.name for p in old.iterdir()) == ["common.json"]  # read, never renamed in the backup
+    assert local_home.move() == [(old / "common.json", local_home.root() / "data.json")]
+    assert data_repo.pointer() == local_home.root() / "data.json"
+
+
+def test_a_copy_that_fails_leaves_nothing_that_would_hide_the_backup(machine, monkeypatch) -> None:
+    old = machine / ".owlbear" / "design-pack" / "p1"
+    old.mkdir(parents=True)
+
+    def broken(*_a: object, **_k: object) -> None:
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(local_home.shutil, "copytree", broken)
+    with pytest.raises(OSError, match="disk full"):
+        local_home.move()
+    assert list((local_home.root() / "design-pack").iterdir()) == []
+    assert design_pack.folder({"pack": "p1"}) == old

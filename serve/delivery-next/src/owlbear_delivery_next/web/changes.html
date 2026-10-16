@@ -920,8 +920,9 @@ function screen(s) {
 }
 
 // Who stated a technical item (TD-179 rule 1): the owner himself, or the shaper, whose proposal the approval accepts.
-function yours(d, id) {
-  return (d.brief.specified || []).includes(id);
+// Keys: a criterion's id, `screen:<name>`, `check:<name>`.
+function yours(d, key) {
+  return (d.brief.specified || []).includes(key);
 }
 
 // Each entry: what was asked (or what kind of item it is) as a small label, then the answer.
@@ -948,8 +949,9 @@ function agreement(d, approved = false) {
   const mine = decisions.filter((x) => x.origin === "decided").map((x) => [x.question, x.answer]);
   const specified = [
     ...d.criteria.filter((k) => yours(d, k.id)).map((k) => ["Acceptance criterion", k.text]),
-    ...d.brief.visual.filter((s) => yours(d, s.name)).map((s) => ["Screen the visual check takes", screenSaid(s)]),
-    ...d.checks.filter((c) => yours(d, c.id)).map((c) => ["Check you do yourself", checkSaid(c)]),
+    ...d.brief.visual.filter((s) => yours(d, `screen:${s.name}`)).map((s) => ["Screen the visual check takes",
+      screenSaid(s)]),
+    ...d.checks.filter((c) => yours(d, `check:${c.id}`)).map((c) => ["Check you do yourself", checkSaid(c)]),
   ];
   if (mine.length || specified.length) parts.push(part("Your decisions", saidList([...mine, ...specified])));
   const proposed = decisions.filter((x) => x.origin !== "decided").map((x) => [x.question, x.answer]);
@@ -984,20 +986,23 @@ function detailCount(d) {
 
 // The technical details, collapsed (TD-122); an item the owner stated says so (TD-179 rule 1).
 function technical(d) {
-  const scope = d.brief.scope || [], mark = (id) => (yours(d, id) ? " (you specified)" : ""), inside = [];
+  const scope = d.brief.scope || [], mark = (key) => (yours(d, key) ? " (you specified)" : ""), inside = [];
   if (d.criteria.length) {
     const said = d.criteria.map((k) => `${k.id}: ${k.text}${mark(k.id)}`);
     inside.push(heading(5, "Acceptance criteria", "sm"), list(said));
   }
   if (d.brief.visual.length) {
     inside.push(heading(5, "Screens the visual check captures", "sm"),
-      list(d.brief.visual.map((s) => `${screen(s)}${mark(s.name)}`)));
+      list(d.brief.visual.map((s) => `${screen(s)}${mark(`screen:${s.name}`)}`)));
   }
   if (d.checks.length) {
     inside.push(heading(5, "Checks you do yourself", "sm"),
-      list(d.checks.map((c) => `${c.id}: ${checkSaid(c)}${mark(c.id)}`)));
+      list(d.checks.map((c) => `${c.id}: ${checkSaid(c)}${mark(`check:${c.id}`)}`)));
   }
-  if (d.brief.ui) inside.push(text("This Change has a user interface, so the visual check runs."));
+  if (d.brief.ui) {
+    inside.push(text(d.brief.visual.length ? "This Change has a user interface: the visual check captures its screens."
+      : "This Change has a user interface: you judge it in your own check."));
+  }
   if (scope.length) inside.push(text(`Scope: ${scope.join(", ")}`));
   if (!inside.length) return [];
   const node = el("details"), head = el("summary", "Technical details"), count = detailCount(d);
@@ -1028,7 +1033,8 @@ function approving(d) {
   const count = detailCount(d), then = ["The challenger reads the brief first and may come back with questions.",
     "Then Delivery plans the work, builds and reviews each task, and opens a pull request."];
   if (screens) then.push(`It captures ${screens} screen${screens > 1 ? "s" : ""} for the visual check.`);
-  then.push(`${merging(d)}. It takes on no new product commitment without you. AI credits are used from now on.`);
+  then.push(`${merging(d)}. It takes on no new product commitment without you. AI credits are used `
+    + `${d.paused ? "once you resume" : "from now on"}.`);
   if (screens) you.push("Judge the screens when Delivery asks.");
   if (checks) you.push(checks > 1 ? `Do your ${checks} checks once the pull request's checks pass.`
     : "Do your check once the pull request's checks pass.");
@@ -1051,9 +1057,10 @@ function briefInfo(d) {
   const v = d.brief.approved || d.brief.version, box = info(`Brief v${v}${at ? `, approved ${at}` : ""}`);
   const body = el("div", undefined, { class: "brief" });
   if (d.brief.outcome) body.append(text(d.brief.outcome));
-  body.append(...agreement(d, true), ...technical(d),
-    part("Changes since you approved", text("None. A change to an approved brief comes back to you as a new "
-      + "version to approve.")));
+  const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
+  body.append(...agreement(d, true), ...technical(d), part("Changes since you approved", added.length
+    ? saidList(added)
+    : text("None. A change to an approved brief comes back to you as a new version to approve.")));
   box.append(body);
   return box;
 }

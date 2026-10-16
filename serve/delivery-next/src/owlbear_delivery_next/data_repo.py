@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
 CONFIG, CLAIM, MEMORY = "config.json", "repository", "memory"
-POINTER, OLD_POINTER = local_home.POINTER, "common.json"
+POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
 VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
@@ -52,14 +52,17 @@ def _held(path: Path) -> str:
 
 
 def pointer() -> Path:
-    """Where the machine records the shared repository: OwlBear's folder, or the old ``~/.owlbear`` until moved."""
-    return local_home.found(POINTER, OLD_POINTER)
+    """Where the machine records the shared repository: OwlBear's folder, else the old ``~/.owlbear`` (read only)."""
+    path, old = local_home.found(POINTER), local_home.legacy()
+    if path.exists() or old is None or not (old / OLD_POINTER).is_file():
+        return path
+    return old / OLD_POINTER  # its oldest name; the move copies it as data.json
 
 
 def _move_old(path: Path) -> None:
     """Move the pointer's old ``common.json`` to *path* once: written atomically, then the old file removed."""
     old = path.with_name(OLD_POINTER)
-    if path.exists() or not old.is_file():
+    if path.exists() or not old.is_file() or local_home.is_old(path):  # the old folder is a backup, never changed
         return
     try:
         atomic_write(path, old.read_text())

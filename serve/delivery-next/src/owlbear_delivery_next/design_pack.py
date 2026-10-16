@@ -87,8 +87,8 @@ def folder(pins: dict[str, Any] | None = None, *, writing: bool = False) -> Path
 
     Reads fall back to the old ``~/.owlbear`` until it is moved; writes go to OwlBear's folder (TD-161).
     """
-    packs = local_home.root() / PACKS if writing else local_home.found(PACKS)
-    return packs / (pins or manifest())["pack"]
+    name = f"{PACKS}/{(pins or manifest())['pack']}"
+    return local_home.root() / name if writing else local_home.found(name)
 
 
 def _sha256(path: Path) -> str:

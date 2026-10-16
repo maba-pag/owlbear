@@ -83,6 +83,10 @@ class Chat:
         except StoreError:
             return None
         out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals", "decisions"})
+        owner = set(b.specified)  # sent back as saved, so a resave keeps who stated what
+        states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]
+        checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in self.store.read(slug).checks]
+        out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
         return out | {"criteria": [k.text for k in b.criteria]}
 
     def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:

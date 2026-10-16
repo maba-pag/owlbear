@@ -22,7 +22,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import design_pack, detector
+from owlbear_delivery_next import design_pack, detector, local_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -70,8 +70,8 @@ def newer(fetch: Callable[[str], bytes] | None = None) -> list[str] | None:
 def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]:
     """The last check of upstream for the pinned tag, refreshed at most daily when asked; reading never goes online."""
     pack, tag = design_pack.manifest()["pack"], design_pack.manifest()["upstream"]["tag"]
-    path, unknown = design_pack.folder().parent / NOTICE, {"behind": None, "checked_at": None}
-    written = design_pack.folder(writing=True).parent / NOTICE
+    path, unknown = local_home.found(f"{design_pack.PACKS}/{NOTICE}"), {"behind": None, "checked_at": None}
+    written = local_home.root() / design_pack.PACKS / NOTICE
     kept: Any = unknown
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
@@ -82,7 +82,8 @@ def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dic
     if refresh and (checked is None or datetime.now(UTC) - checked > STALE):
         if (found := behind(fetch)) is None:  # offline: unknown now, also to the settings page, and checked next time
             with contextlib.suppress(OSError):
-                path.unlink(missing_ok=True)
+                written.parent.mkdir(parents=True, exist_ok=True)
+                written.write_text(json.dumps({"tag": tag, **unknown}) + "\n", encoding="utf-8")  # wins over an old one
             return {"pack": pack, **unknown}
         kept = {"tag": tag, "behind": found, "checked_at": datetime.now(UTC).isoformat(timespec="seconds")}
         try:

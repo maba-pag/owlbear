@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import socket
 import threading
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
@@ -17,6 +18,7 @@ from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.visual_records import OwnerCriterion
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -62,20 +64,30 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     server.should_exit = True
 
 
-@pytest.mark.browser
-def test_the_owner_approves_his_agreement_and_the_technical_details_stay_collapsed(page_url) -> None:
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+@contextlib.contextmanager
+def opened(base: str, slug: str) -> Iterator[Any]:
+    """The Changes page on *slug* in a real browser, offline: only the test host answers."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    store, base = page_url
     with sync_playwright() as pw:
         try:
             browser = pw.chromium.launch()
         except Error as exc:
             pytest.skip(f"no Playwright Chromium: {exc}")
         page = browser.new_page()
-        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())  # offline
+        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.goto(f"{base}/?change=flip")
+        page.goto(f"{base}/?change={slug}")
+        yield page
+        browser.close()
+
+
+@pytest.mark.browser
+def test_the_owner_approves_his_agreement_and_the_technical_details_stay_collapsed(page_url) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    with opened(base, "flip") as page:
         brief = page.locator(".brief").first
         yours = brief.locator("section", has_text="Your decisions")
         expect(yours).to_contain_text("Top right of the hero")
@@ -90,5 +102,21 @@ def test_the_owner_approves_his_agreement_and_the_technical_details_stay_collaps
         expect(dialog).to_contain_text("Do your check once the pull request's checks pass")
         page.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
-        browser.close()
     assert store.read("flip").brief.approved_version is None  # declining approves nothing
+
+
+@pytest.mark.browser
+def test_the_approved_brief_lists_what_the_owner_added_since(page_url) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    built = change().model_copy(update={"slug": "built", "step": m.Step(kind=m.StepKind.BUILD)})
+    built.brief = built.brief.model_copy(update={"approved_version": 2, "approved_at": NOW})
+    added = OwnerCriterion(id="O-1", text="The caption stays readable", round=1, brief_version=2, at=NOW)
+    built.owner_criteria = [added]
+    store.write(Lock("built"), built)
+    with opened(base, "built") as page:
+        since = page.locator(".brief section", has_text="Changes since you approved")
+        expect(since).to_contain_text("You added in visual round 1")
+        expect(since).to_contain_text("The caption stays readable")
+        expect(page.locator(".brief").first).to_contain_text("Your approval accepted these choices.")
