@@ -267,6 +267,17 @@ class Handling(Record):
     at: datetime
 
 
+class Dispute(Record):
+    """A review finding the builder rejected (TD-124/176): the fresh reviewer's recheck and, if upheld, the owner's."""
+
+    key: str  # the finding's key in its repair task, e.g. F2
+    finding: str
+    reason: str  # the builder's
+    upheld: bool | None = None
+    recheck: str = ""  # the reviewer's reason
+    owner: Literal["", "fix", "drop"] = ""
+
+
 class Task(Record):
     """One plan task; fix tasks are appended without a new plan version."""
 
@@ -284,6 +295,7 @@ class Task(Record):
     built_by: str = ""  # the session whose build Delivery accepted last (TD-123)
     resume: str = ""  # a review repair's producing session, given its one repair chance; "" starts fresh
     earlier: str = Field(default="", max_length=2000)  # that session's accepted work, for a fresh fallback (TD-175)
+    disputes: list[Dispute] = Field(default_factory=list)  # findings of this repair task its builder rejected
 
 
 class Plan(Record):

@@ -6,7 +6,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import design_tools, lint, preparation, tools
+from owlbear_delivery_next import design_tools, disputes, lint, preparation, tools
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -157,6 +157,7 @@ class Gate:
             return design_tools.check(args, tree), tree
         if isinstance(args, tools.CheckRecipe):  # TD-96, TD-107: a declared, permitted option and setup edits only
             return preparation.check(args, tree, cfg.policy.root, cfg.preparing or preparation.Preparing()), tree
-        return tools.check_result(
+        errors = tools.check_result(
             args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
-        ), tree
+        )
+        return errors + disputes.check(args, tree, cfg.rejectable, cfg.rechecks), tree

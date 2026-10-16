@@ -52,6 +52,13 @@ class Response(Args):
     text: str = _f(3000, "The reply Delivery posts, or the reason no action is needed", "greet() trims the name.")
 
 
+class Rejection(Args):
+    """A finding of a review repair task you judge wrong, by its key, with your reason (TD-124)."""
+
+    finding: str = _f(10, "The finding's key as the task lists it", "F2")
+    reason: str = _f(1000, "Why it does not hold, with evidence", "src/greet.ts:4 already trims; greet.test.ts:12")
+
+
 class BuildResult(Args):
     """``submit_result`` for the build step."""
 
@@ -66,6 +73,12 @@ class BuildResult(Args):
         default=None,
         description="Only for a pull-request conversation task: how you handled it and the text to post",
         examples=[{"how": "answered", "text": "greet() trims the name."}],
+    )
+    rejected: list[Rejection] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Only where the task offers it: findings you judge wrong; a fresh reviewer rechecks each",
+        examples=[[{"finding": "F2", "reason": "src/greet.ts:4 already trims; greet.test.ts:12 proves it"}]],
     )
 
 
@@ -117,6 +130,14 @@ class Finding(Args):
     fix: str = _f(500, "The change that resolves it", "Use Hallo")
 
 
+class Recheck(Args):
+    """Your independent recheck of one finding a builder rejected (TD-176)."""
+
+    finding: str = _f(10, "The finding's key as Rechecks lists it", "F2")
+    upheld: bool = Field(description="true if it still holds on this commit; false if the reason disproves it")
+    reason: str = _f(1000, "Why, with evidence", "src/greet.ts:4 trims the name")
+
+
 class ReviewResult(Args):
     """``submit_result`` for the review step."""
 
@@ -134,6 +155,12 @@ class ReviewResult(Args):
         max_length=200,
         description="Paths you read, as reading evidence; for a visual review every screenshot file name",
         examples=[["packages/app/src/greet.ts"]],
+    )
+    rechecked: list[Recheck] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Only when your message lists Rechecks: your verdict on each finding listed there",
+        examples=[[{"finding": "F2", "upheld": False, "reason": "src/greet.ts:4 trims the name"}]],
     )
 
 
@@ -244,7 +271,7 @@ class Spec:
 SUBMIT = Spec(
     "submit_result",
     "Submit this step's result once: after committing your work and running every task check on that commit. "
-    "Delivery reads the commit from the worktree HEAD.",
+    "Delivery reads the commit from the worktree HEAD. A result that only rejects every finding needs neither.",
     BuildResult,
     "result",
 )
@@ -368,10 +395,11 @@ def _response(result: BuildResult, item: ItemRef | None) -> list[str]:
 def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: ItemRef | None = None) -> list[str]:
     """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks.
 
-    *item* is the conversation item the task answers, if any; an answer or no-action needs no commit.
+    *item* is the conversation item the task answers, if any; an answer or no-action needs no commit, nor does a
+    result that rejects findings (``disputes.check`` then demands every finding rejected).
     """
     errors = _response(result, item)
-    reply = result.response is not None and result.response.how != "fixed"
+    reply = (result.response is not None and result.response.how != "fixed") or bool(result.rejected)
     if reply and tree.head == tree.base and not tree.dirty:
         return errors
     if tree.head == tree.base:

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import tools
+from owlbear_delivery_next import disputes, loop, tools
 from owlbear_delivery_next.failures import signature
-from owlbear_delivery_next.models import ErrorKind, Inputs, Review, Score, Task
+from owlbear_delivery_next.models import ErrorKind, Exit, Inputs, Review, Score, StepKind, Task
 from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 
 def lines(review: tools.ReviewResult) -> list[str]:
-    """Every finding as one line."""
-    return [f"- {f.place}: {f.problem} - fix: {f.fix}" for f in review.findings]
+    """Every finding as one line, so a repair task can list it by key."""
+    return [" ".join(f"- {f.place}: {f.problem} - fix: {f.fix}".split()) for f in review.findings]
 
 
 def findings(review: tools.ReviewResult, limit: int = 4000) -> list[str]:
@@ -64,14 +64,20 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     kind = change.step.kind
     found = sorted({signature(ErrorKind.REVIEW, kind, f"{f.place} {f.problem}") for f in p.findings})
     score = Score(failing=len(p.findings), findings=found)
+    fixes = repair(change, task, lines(p))
+    return result.model_copy(update={"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "score": score})
+
+
+def repair(change: Change, task: Task | None, found: list[str]) -> list[Task]:
+    """The repair task carrying every finding line, in parts that each fit a task's details."""
     n = len(change.plan.tasks) + 1 if change.plan else 1
     task = task or (change.plan.tasks[-1] if change.plan and change.plan.tasks else None)
     scope, checks = (task.scope, task.checks) if task else ([], [])
     of = f"task {change.step.task}" if change.step.task else "the final review"
-    title = f"Fix {len(p.findings)} review finding(s) of {of}"
+    title = f"Fix {len(found)} review finding(s) of {of}"
     item = task.item if task and change.step.task else None  # a conversation task's repair answers the same item
-    parts = findings(p) or [""]
-    fixes = [
+    parts = pack(found) or [""]
+    return [
         Task(
             id=f"t{n + i}",
             title=title + (f" (part {i + 1} of {len(parts)})" if len(parts) > 1 else ""),
@@ -83,4 +89,22 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
         )
         for i, part in enumerate(parts)
     ]
-    return result.model_copy(update={"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "score": score})
+
+
+def disputed(change: Change) -> StepResult | None:
+    """A review whose upheld findings the owner decided: its held verdict plus the findings kept to fix (TD-176).
+
+    A repair round is counted only when something is left to fix; the recheck itself never counts one.
+    """
+    s = change.step
+    if s.kind != StepKind.REVIEW or s.mode != disputes.DISPUTED:
+        return None
+    task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    held = next((v for v in reversed(change.reviews) if v.task == s.task), None)
+    found = [*(held.findings if held and held.verdict == "fix" else []), *disputes.kept(task)]
+    if not found:
+        return loop.StepResult(exit=Exit.DONE, reason="the owner dropped each upheld finding")
+    fixes = repair(change, task, found)
+    score = Score(failing=len(found), findings=sorted({signature(ErrorKind.REVIEW, s.kind, f) for f in found}))
+    reason = f"{len(found)} finding(s) to fix"
+    return loop.StepResult(exit=Exit.RETRY, reason=reason, fix_task=fixes[0], more_fixes=fixes[1:], score=score)
