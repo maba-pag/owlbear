@@ -73,7 +73,8 @@ cd ~/Dev/my-project
 uv run --project ../owlbear cockpit
 ```
 
-This serves the prebuilt Cockpit bundle from owlbear while keeping target change, delivery,
+This serves the Cockpit bundle built in the owlbear checkout
+([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)) while keeping target change, delivery,
 Memory, and Ideas state scoped to the project.
 
 ---
@@ -160,4 +161,4 @@ organization agent registry as a complement to the local installation.
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then run `/upgrade-delivery` in each project ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) and rerun `init.py` to refresh copied runtime files |
+| Different owlbear checkout states between teammates | Use the same commit of `main`, then run `/upgrade-delivery` in each project ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) and rerun `init.py` to refresh copied runtime files |

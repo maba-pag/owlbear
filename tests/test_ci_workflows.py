@@ -53,11 +53,11 @@ def test_replaced_workflows_are_gone() -> None:
 
 
 @pytest.mark.parametrize("name", PULL_REQUEST_WORKFLOWS)
-def test_pull_request_workflows_target_dev_and_skip_drafts(name: str) -> None:
+def test_pull_request_workflows_target_main_and_skip_drafts(name: str) -> None:
     workflow = _workflow(name)
     pull_request = workflow["on"]["pull_request"]
 
-    assert pull_request["branches"] == ["dev"]
+    assert pull_request["branches"] == ["main"]
     assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
     for job_name, job in _jobs(name).items():
         condition = job["if"]

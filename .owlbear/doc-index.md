@@ -77,7 +77,6 @@
 - # `GitHub Automation`
 - ## `What lives here`
 - ## `What belongs elsewhere`
-- ## `Changing the sync boundary`
 
 ### Outbound links
 - [`share/`](../share/README.md)
@@ -85,9 +84,6 @@
 - [`serve/`](../serve/README.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
-- [`sync-manifest.json`](../.github/sync-manifest.json)
-- [sync workflow](../.github/workflows/sync-to-main.yml)
-- [`tests/test_sync_manifest.py`](../tests/test_sync_manifest.py)
 
 ## .github/copilot-instructions.md
 - # `OwlBear — Copilot Workspace Instructions`

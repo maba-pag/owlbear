@@ -262,7 +262,8 @@ to re-decide it.
 
 Under T7 the tool-count limits stay (the [charter](delivery-next-charter.md#39-size-and-style-rules)
 sets at most six agent-facing tools, at most three per role); TD-19 removes line ceilings for agent
-instructions in favour of a language style.
+instructions in favour of a language style. TD-63 (2026-10-12) later removed the tool-count limits:
+each tool serves one process action, and T4/T5 are checked per tool.
 
 On the Copilot runtime ([rebuild research §3.9](delivery-liveness-first-rebuild.md#39-platform-migration-interplay)),
 T2 and T3 become easier: a code-driven loop holds identities in code and asks agents only for judgment,

@@ -26,6 +26,5 @@ truth for their own content; do not use this directory as a substitute for regis
 | Cross-package regression tests | `tests/` |
 | Portable consumer templates | `seed/` |
 
-`store/` is not included by `.github/sync-manifest.json`, so it is not copied to the rolling
-consumer `main` branch. Database files and other runtime artifacts are ignored by the repository
+Database files and other runtime artifacts are ignored by the repository
 rules; do not add them here as a substitute for the managed runtime stores.

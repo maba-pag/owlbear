@@ -14,10 +14,18 @@ import pytest
 from mcp import Client
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_browser import AcquisitionStatus, AcquisitionSuccess, Diagnostics
+from owlbear_browser import AcquisitionFailure, AcquisitionStatus, AcquisitionSuccess, Diagnostics
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
+from owlbear_browser_mcp import server as server_module
 from owlbear_browser_mcp.allowlist import DomainAllowlist
-from owlbear_browser_mcp.server import AppContext, _serialize_acquisition, acquire, mcp, navigate
+from owlbear_browser_mcp.server import (
+    AppContext,
+    _serialize_acquisition,
+    acquire,
+    browser_status,
+    mcp,
+    navigate,
+)
 
 
 class _InternalFixtureHandler(BaseHTTPRequestHandler):
@@ -31,11 +39,28 @@ class _InternalFixtureHandler(BaseHTTPRequestHandler):
         return
 
 
+class _FakePage:
+    def __init__(self, *, closed: bool = False) -> None:
+        self.closed = closed
+
+    def is_closed(self) -> bool:
+        return self.closed
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _live_launcher() -> MagicMock:
+    launcher = MagicMock()
+    launcher.is_running = True
+    return launcher
+
+
 @pytest.mark.asyncio
 async def test_acquire_delegates_allowed_public_url_after_security_checks() -> None:
     """Allowed public acquisition passes SSRF and domain checks before delegation."""
     url = "https://target.example.com/delayed"
-    launcher = MagicMock()
+    launcher = _live_launcher()
     launcher.acquire = AsyncMock(
         return_value=AcquisitionSuccess(
             status=AcquisitionStatus.SUCCESS,
@@ -50,10 +75,15 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
             diagnostics=Diagnostics("complete"),
         )
     )
-    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["target.example.com"]), launcher=launcher)
+    app_ctx = AppContext(
+        allowlist=DomainAllowlist(domains=["target.example.com"]),
+        launcher=launcher,
+        page=_FakePage(),
+    )
     ctx = MagicMock()
     ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
 
+    assert (await browser_status(ctx))["latest_acquisition_status"] is None
     with patch("socket.getaddrinfo", return_value=[("AF_INET", 0, 0, "", ("93.184.216.34", 443))]):
         result = await acquire(ctx, url)
 
@@ -61,6 +91,182 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
     assert request.url == url
     assert result["status"] == "success"
     assert result["markdown"] == "Rendered fixture content"
+    assert app_ctx.latest_acquisition_status is AcquisitionStatus.SUCCESS
+    assert (await browser_status(ctx))["latest_acquisition_status"] == AcquisitionStatus.SUCCESS.value
+
+
+@pytest.mark.asyncio
+async def test_first_acquire_lazily_launches_managed_edge() -> None:
+    url = "https://target.example.com/page"
+    page = MagicMock()
+    page.is_closed.return_value = False
+    page.close = AsyncMock()
+    launcher = MagicMock()
+    launcher.is_running = False
+
+    async def start_launcher() -> None:
+        launcher.is_running = True
+
+    launcher.launch = AsyncMock(side_effect=start_launcher)
+    launcher.page = AsyncMock(return_value=page)
+    launcher.acquire = AsyncMock(
+        return_value=AcquisitionFailure(
+            status=AcquisitionStatus.ACCESS_DENIED,
+            diagnostics=Diagnostics("denied"),
+        )
+    )
+    launcher.close = AsyncMock()
+
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(
+            server_module.os.environ,
+            {"BROWSER_ALLOWED_DOMAINS": "target.example.com"},
+            clear=True,
+        ),
+        patch.object(server_module, "_check_ssrf", new_callable=AsyncMock) as ssrf_check,
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with server_module.app_lifespan(mcp) as context:
+            ctx = MagicMock()
+            ctx.request_context = SimpleNamespace(lifespan_context=context)
+            assert (await browser_status(ctx))["startup_state"] == "not-launched"
+            launcher_factory.assert_not_called()
+
+            result = await acquire(ctx, url)
+
+            assert result["status"] == "access_denied"
+            assert context.page is page
+            status = await browser_status(ctx)
+            assert status["browser_mode"] == "managed-edge"
+            assert status["startup_state"] == "ready"
+            assert status["startup_reason"] is None
+            assert status["startup_diagnostic"] is None
+            assert launcher_factory.call_count == 1
+            assert launcher_factory.call_args.kwargs["mode"].value == "managed-edge"
+            assert launcher_factory.call_args.kwargs["user_data_dir"] == context.user_data_dir
+            ssrf_check.assert_awaited_once()
+
+    launcher.launch.assert_awaited_once()
+    launcher.page.assert_awaited_once()
+    launcher.acquire.assert_awaited_once()
+    launcher.close.assert_awaited_once()
+    page.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_acquire_reopens_closed_shared_page_without_relaunching() -> None:
+    url = "https://target.example.com/page"
+    closed_page = _FakePage(closed=True)
+    reopened_page = _FakePage()
+    launcher = _live_launcher()
+    launcher.page = AsyncMock()
+    launcher.new_shared_page = AsyncMock(return_value=reopened_page)
+    launcher.acquire = AsyncMock(
+        return_value=AcquisitionFailure(
+            status=AcquisitionStatus.ACCESS_DENIED,
+            diagnostics=Diagnostics("validation", {"signal": "access_denied"}),
+        )
+    )
+    app_ctx = AppContext(
+        allowlist=DomainAllowlist(domains=["target.example.com"]),
+        launcher=launcher,
+        page=closed_page,
+    )
+    ctx = MagicMock()
+    ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+
+    with (
+        patch.object(server_module, "_check_ssrf", new_callable=AsyncMock),
+        patch.object(server_module, "PlaywrightLauncher") as launcher_factory,
+    ):
+        result = await acquire(ctx, url)
+        status = await browser_status(ctx)
+
+    assert result["status"] == "access_denied"
+    assert status["startup_state"] == "ready"
+    assert app_ctx.page is reopened_page
+    launcher.new_shared_page.assert_awaited_once()
+    launcher.page.assert_not_awaited()
+    launcher_factory.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_acquire_keeps_shared_page_open_when_reusing_retained_authentication_page() -> None:
+    url = "https://target.example.com/page"
+    shared_page = _FakePage()
+    retained_page = _FakePage()
+    reopened_page = _FakePage()
+    launcher = _live_launcher()
+    launcher.new_shared_page = AsyncMock(return_value=reopened_page)
+    pages_used: list[_FakePage] = []
+
+    async def acquire_from_retained_page(_request: object) -> AcquisitionFailure:
+        if not pages_used:
+            pages_used.append(retained_page)
+            return AcquisitionFailure(
+                status=AcquisitionStatus.AUTHENTICATION_REQUIRED,
+                diagnostics=Diagnostics("validation", {"signal": "authentication"}),
+            )
+        page = pages_used[0]
+        pages_used.append(page)
+        await page.close()
+        return AcquisitionFailure(
+            status=AcquisitionStatus.ACCESS_DENIED,
+            diagnostics=Diagnostics("validation", {"signal": "access_denied"}),
+        )
+
+    launcher.acquire = AsyncMock(side_effect=acquire_from_retained_page)
+    app_ctx = AppContext(
+        allowlist=DomainAllowlist(domains=["target.example.com"]),
+        launcher=launcher,
+        page=shared_page,
+    )
+    ctx = MagicMock()
+    ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+
+    with patch.object(server_module, "_check_ssrf", new_callable=AsyncMock):
+        first_result = await acquire(ctx, url)
+        assert first_result["status"] == "authentication_required"
+        assert app_ctx.page is shared_page
+        assert not retained_page.is_closed()
+
+        await shared_page.close()
+        second_result = await acquire(ctx, url)
+
+    assert second_result["status"] == "access_denied"
+    assert pages_used == [retained_page, retained_page]
+    assert retained_page.is_closed()
+    assert app_ctx.page is reopened_page
+    assert app_ctx.page is not retained_page
+    assert app_ctx.page is not shared_page
+    assert not reopened_page.is_closed()
+    launcher.new_shared_page.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_acquisition_failure_updates_status_and_fresh_context_starts_empty() -> None:
+    url = "https://target.example.com/failure"
+    launcher = _live_launcher()
+    launcher.acquire = AsyncMock(
+        return_value=AcquisitionFailure(
+            status=AcquisitionStatus.ACCESS_DENIED,
+            diagnostics=Diagnostics("denied"),
+        )
+    )
+    app_ctx = AppContext(
+        allowlist=DomainAllowlist(domains=["target.example.com"]),
+        launcher=launcher,
+        page=_FakePage(),
+    )
+    ctx = MagicMock()
+    ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+    with patch("socket.getaddrinfo", return_value=[("AF_INET", 0, 0, "", ("93.184.216.34", 443))]):
+        result = await acquire(ctx, url)
+    assert result["status"] == "access_denied"
+    assert app_ctx.latest_acquisition_status is AcquisitionStatus.ACCESS_DENIED
+    assert (await browser_status(ctx))["latest_acquisition_status"] == AcquisitionStatus.ACCESS_DENIED.value
+    assert AppContext(allowlist=DomainAllowlist(domains=["example.com"])).latest_acquisition_status is None
 
 
 def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
@@ -91,10 +297,12 @@ def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
 
 @pytest.mark.asyncio
 async def test_acquire_schema_does_not_advertise_removed_diagnostic_html_option() -> None:
-    async with Client(mcp) as client:
-        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    with patch("owlbear_browser_mcp.server.PlaywrightLauncher") as launcher_factory:
+        async with Client(mcp) as client:
+            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     assert "include_diagnostic_html" not in tools["acquire"].input_schema["properties"]
+    launcher_factory.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -142,7 +350,7 @@ async def test_acquire_rejects_a_domain_outside_the_allowlist() -> None:
 async def test_acquire_wildcard_allows_public_domains_but_not_private_targets() -> None:
     """Wildcard testing mode still relies on the SSRF check for private targets."""
     url = "https://public.example.com/page"
-    launcher = MagicMock()
+    launcher = _live_launcher()
     launcher.acquire = AsyncMock(
         return_value=AcquisitionSuccess(
             status=AcquisitionStatus.SUCCESS,
@@ -157,7 +365,7 @@ async def test_acquire_wildcard_allows_public_domains_but_not_private_targets() 
             diagnostics=Diagnostics("complete"),
         )
     )
-    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["*"]), launcher=launcher)
+    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["*"]), launcher=launcher, page=_FakePage())
     ctx = MagicMock()
     ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
 
@@ -180,7 +388,7 @@ async def test_acquire_wildcard_allows_public_domains_but_not_private_targets() 
 async def test_acquire_uses_app_context_resolver(address: str, expected_error: str | None) -> None:
     """Injected resolution controls SSRF checks without consulting the system resolver."""
     url = "http://pages.synthetic.example/a"
-    launcher = MagicMock()
+    launcher = _live_launcher()
     launcher.acquire = AsyncMock(
         return_value=AcquisitionSuccess(
             status=AcquisitionStatus.SUCCESS,
@@ -196,7 +404,12 @@ async def test_acquire_uses_app_context_resolver(address: str, expected_error: s
         )
     )
     resolver = MagicMock(return_value=[("AF_INET", 0, 0, "", (address, 80))])
-    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["*"]), launcher=launcher, resolver=resolver)
+    app_ctx = AppContext(
+        allowlist=DomainAllowlist(domains=["*"]),
+        launcher=launcher,
+        page=_FakePage(),
+        resolver=resolver,
+    )
     ctx = MagicMock()
     ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
 
@@ -219,7 +432,7 @@ async def test_acquire_uses_app_context_resolver(address: str, expected_error: s
 async def test_acquire_default_resolver_looks_up_socket_getaddrinfo_at_call_time() -> None:
     """An AppContext without an override uses the current socket.getaddrinfo."""
     url = "http://pages.synthetic.example/a"
-    launcher = MagicMock()
+    launcher = _live_launcher()
     launcher.acquire = AsyncMock(
         return_value=AcquisitionSuccess(
             status=AcquisitionStatus.SUCCESS,
@@ -234,7 +447,7 @@ async def test_acquire_default_resolver_looks_up_socket_getaddrinfo_at_call_time
             diagnostics=Diagnostics("complete"),
         )
     )
-    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["*"]), launcher=launcher)
+    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["*"]), launcher=launcher, page=_FakePage())
     ctx = MagicMock()
     ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
 

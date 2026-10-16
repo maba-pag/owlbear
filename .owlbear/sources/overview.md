@@ -24,6 +24,9 @@ External repos and resources studied during OwlBear development.
 | T3 Code | <https://github.com/pingdotgg/t3code> | Open-source agent control surface; supported providers; maturity | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
 | Copilot CLI ACP server | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server> | GitHub-documented route for custom front-ends to drive Copilot | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
 | OpenCode providers | <https://opencode.ai/docs/providers/> | Third-party GitHub Copilot provider via device login | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
+| claude-mem | <https://github.com/thedotmack/claude-mem> | Agent memory system (Apache-2.0): lifecycle hooks, model-compressed observations, progressive-disclosure search, transcript watching, File Read Gate, Copilot CLI MCP-only install, telemetry defaults | [watcher options](../research/delivery-next-watcher-options.md) | 2026-10-12 |
+| claude-mem docs | <https://docs.claude-mem.ai/architecture/overview> | Architecture, hook lifecycle, platform integration, telemetry pages | [watcher options](../research/delivery-next-watcher-options.md) | 2026-10-12 |
+| VS Code approvals | <https://code.visualstudio.com/docs/agents/run/approvals> | Permission levels (Assisted, Allow all), Autopilot auto-approval, terminal rules, outside-write detection | [watcher options](../research/delivery-next-watcher-options.md) | 2026-10-12 |
 
 ## OwlBear Distribution Under the Agent Host
 
@@ -5078,3 +5081,31 @@ No external sources — analysis based entirely on codebase static analysis of `
 | PDS v3 Modal configurator docs | <https://designsystem.porsche.com/v3/components/modal/configurator/> | PModal component behavior: native dialog, focus trap, top-layer, dismiss event, controlled open prop | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
 | PDS v3 Modal accessibility docs | <https://designsystem.porsche.com/v3/components/modal/accessibility/> | ARIA support: aria-label, role (dialog/alertdialog), keyboard behavior (Tab trap, Escape), focus return | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
 | RFC 9110 §8.8.2 Last-Modified | <https://httpwg.org/specs/rfc9110.html#field.last-modified> | Prior art for two-field timestamp model (Last-Modified vs Date semantics) | `.owlbear/research/refresh-honesty-two-field-timestamps.md` | 2026-05-18 |
+
+## Delivery-next Visual Baseline, PDS Loading and Preview Ports
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 initialization, vanilla JS | <https://designsystem.porsche.com/v4/must-know/initialization/vanilla-js/> | `load()` fetches the core chunk from the CDN, which registers every tag and loads component chunks on use; `:not(:defined)` hides undefined tags | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| PDS v4 performance, CDN | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | Components, icons, fonts and styles from `cdn.ui.porsche.com`; only `cdn: 'auto' \| 'cn'` configurable | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| PDS v4 components ready | <https://designsystem.porsche.com/v4/developing/components-ready/> | `componentsReady()` resolves when all used components are loaded; `whenDefined` proves registration only | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| PDS issue #4730 | <https://github.com/porsche-design-system/porsche-design-system/issues/4730> | CDN-free local delivery is a goal of an open v5 spike | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| Vite server options and CLI | <https://vite.dev/config/server-options#server-strictport>, <https://vite.dev/guide/cli> | `--port`, `--strictPort`; Vite moves to the next free port without it | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| Next.js CLI | <https://nextjs.org/docs/app/api-reference/cli/next> | `-p/--port` or `PORT` env; `npm run` needs `--` to forward flags | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| Playwright web server | <https://playwright.dev/docs/test-webserver> | With `reuseExistingServer: false`, refuses an answering URL, then waits for it; no ownership check | [visual baseline](../research/delivery-next-visual-baseline.md) | 2026-10-11 |
+| pbakaus/impeccable README (4.5.2) | <https://github.com/pbakaus/impeccable> | Apache-2.0; 24 commands, 59-rule detector CLI without LLM, installer writes project files and a Copilot hook, engine binary download, roll API and opt-out telemetry | [design skill](../research/delivery-next-design-skill.md) | 2026-10-14 |
+| VS Code agent host (installed build) | `out/vs/platform/agentHost/node/agentHostMain.js` | `_handleSubagentStarted`: each subagent gets its own chat, announced on the parent's `task` call as a `subagent` content part | [watcher design](../research/delivery-next-watcher-design.md) | 2026-10-14 |
+
+## Repository Quality Service
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter coding agents | <https://megalinter.io/latest/coding-agents/> | Agent skills; rule disables need human confirmation | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| Trunk ignoring issues | <https://docs.trunk.io/code-quality/linters/ignoring-issues-and-files> | Ignore comments, unused-ignore reports | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| qlty | <https://docs.qlty.sh/> | One CLI for many linters; argues MCP is unnecessary for agents | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| eslint-comments require-description | <https://eslint-community.github.io/eslint-plugin-eslint-comments/rules/require-description.html> | Reason required on disable comments | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| Biome suppressions | <https://biomejs.dev/analyzer/suppressions/> | Suppression syntax with explanation, unused suppressions | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| MCP sampling (latest) | <https://modelcontextprotocol.io/specification/latest/client/sampling> | Sampling deprecated 2026-07-28 (SEP-2577) | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| OWASP LLM prompt injection cheat sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Code comments as injection channel | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
+| ECC (affaan-m/ECC) at b92f181 | <https://github.com/affaan-m/ECC> | Agents, skills, subagent guidance (MIT); adoptions TD-115 | [ECC evaluation](../research/ecc-evaluation.md) | 2026-10-15 |
+| WCAG 2.2 target size minimum | <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html> | 24×24 CSS px with spacing and other exceptions | [ECC evaluation](../research/ecc-evaluation.md) | 2026-10-15 |

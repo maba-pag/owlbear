@@ -116,8 +116,8 @@ See the [setup guide](setup/setup-guide.md#quick-start) for the copy-paste varia
 
 1. Run **Chat: Open Customizations** and confirm OwlBear agents, skills, instructions, and prompts
    are listed.
-2. Run **MCP: List Servers** and confirm five servers are running: `owlbear-delivery`,
-   `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
+2. Run **MCP: List Servers** and confirm four servers are running: `owlbear-knowledge`,
+   `owlbear-memory`, `owlbear-browser`, and `markitdown`.
 3. Run `gh auth status` and confirm an active account.
 
 If something is missing, go to [Verify the installation](setup/setup-guide.md#verify-the-installation)

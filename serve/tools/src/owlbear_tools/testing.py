@@ -21,7 +21,6 @@ _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = (
     "tests/test_deny_code_writes.py",
     "tests/test_package_boundary.py",
-    "tests/test_sync_manifest.py",
     "tests/test_write_guard_hooks.py",
 )
 

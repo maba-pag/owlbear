@@ -24,7 +24,7 @@ From the repository root:
 uv run test --all
 
 # One narrow Python regression
-uv run pytest tests/test_sync_manifest.py -q
+uv run pytest tests/test_ci_workflows.py -q
 ```
 
 A focused run should report the selected tests and a zero exit status. If collection or imports
@@ -33,6 +33,5 @@ behavioral failure as a product defect.
 
 ## What is not here
 
-The top-level suite is not listed in the sync manifest and is therefore absent from consumer
-`main`. Runtime source belongs under `serve/`, portable agent assets belong under `share/`, and
+Runtime source belongs under `serve/`, portable agent assets belong under `share/`, and
 consumer-project templates belong under `seed/`.

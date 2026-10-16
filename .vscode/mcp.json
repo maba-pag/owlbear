@@ -1,10 +1,5 @@
 {
   "servers": {
-    "owlbear-delivery": {
-      "type": "stdio",
-      "command": "${workspaceFolder}/.owlbear/controller/bin/delivery-mcp",
-      "args": []
-    },
     "owlbear-knowledge": {
       "type": "stdio",
       "command": "uv",
@@ -19,11 +14,6 @@
       "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "owlbear_browser_mcp"]
-    },
-    "markitdown": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["markitdown-mcp"]
     }
   }
 }

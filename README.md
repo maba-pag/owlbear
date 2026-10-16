@@ -5,8 +5,8 @@ to a reviewed change inside VS Code, combining reusable agent instructions with 
 execution, memory, knowledge, browser access, and human review.
 
 If you want to know what OwlBear is or how to install it in a project, read
-[README-consumer.md](README-consumer.md). That file becomes the front page of the `main` branch and
-owns the product story, the requirements, and the install path.
+[README-consumer.md](README-consumer.md). That file owns the product story, the requirements, and
+the install path.
 
 ## Choose your path
 
@@ -50,9 +50,8 @@ Current surface maturity is published on the consumer front door in
 
 ## Develop OwlBear
 
-The `dev` branch is the development checkout. The `main` branch is generated from it and is the
-rolling supported consumer branch; do not edit `main` directly. OwlBear has no numbered product
-releases.
+`main` is the only long-lived branch: the development checkout and the branch consumers clone.
+OwlBear has no numbered product releases yet; versions will be git tags.
 
 Requirements: Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
 [GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also needs the Node
@@ -74,12 +73,6 @@ use `uv run dep-sync --all` when you also need optional workspace assets or brow
 Open this checkout directly in VS Code. Its repository settings already load the shared
 `share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run
 consumer setup against the OwlBear checkout itself.
-
-This checkout's `owlbear-delivery` server runs a pinned controller release through
-`.owlbear/controller/bin/delivery-mcp`, so new `dev` commits never change running Delivery. It
-fails to start until `uv run delivery-controller install --pin <commit>` installs and pins a
-release; later upgrades use `/upgrade-delivery`. See
-[Pinned controller releases](setup/operating-owlbear.md#pinned-controller-releases).
 
 Run the repository checks:
 

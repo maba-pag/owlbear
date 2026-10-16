@@ -185,10 +185,19 @@ async def test_read_text_and_snapshot_use_live_page_output() -> None:
 
 
 @pytest.mark.asyncio
-async def test_interactive_tool_names_and_annotations_match_their_contracts() -> None:
+async def test_tool_names_and_annotations_match_their_contracts() -> None:
     tools = {tool.name: tool for tool in await mcp.list_tools()}
 
-    assert set(tools) == {"acquire", "navigate", "click", "type_input", "select", "read_text", "snapshot"}
+    assert set(tools) == {
+        "acquire",
+        "navigate",
+        "click",
+        "type_input",
+        "select",
+        "read_text",
+        "snapshot",
+        "browser_status",
+    }
     assert tools["click"].annotations == ToolAnnotations(
         read_only_hint=False, idempotent_hint=False, destructive_hint=True
     )
@@ -202,3 +211,6 @@ async def test_interactive_tool_names_and_annotations_match_their_contracts() ->
         assert tools[name].annotations == ToolAnnotations(
             read_only_hint=True, idempotent_hint=True, destructive_hint=False
         )
+    assert tools["browser_status"].annotations == ToolAnnotations(
+        read_only_hint=True, idempotent_hint=True, destructive_hint=False
+    )

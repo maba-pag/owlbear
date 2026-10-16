@@ -1,10 +1,5 @@
 {
   "servers": {
-    "owlbear-delivery": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_delivery_mcp"]
-    },
     "owlbear-knowledge": {
       "type": "stdio",
       "command": "uv",

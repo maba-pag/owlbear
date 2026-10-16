@@ -9,3 +9,11 @@ class AuthenticationRequired(Exception):
 
 class SSOExtensionNotFoundError(RuntimeError):
     """Raised when the Microsoft SSO extension cannot be located."""
+
+
+class ManagedEdgeUnavailableError(RuntimeError):
+    """Raised when the managed Edge executable cannot be started."""
+
+
+class ManagedProfileInUseError(RuntimeError):
+    """Raised when the owned managed Edge profile is already in use."""

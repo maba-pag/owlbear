@@ -128,7 +128,7 @@ def test_init_warns_when_existing_mcp_json_is_malformed(tmp_path: Path, init_mod
         )
 
     mcp = json.loads(mcp_path.read_text(encoding="utf-8"))
-    assert "owlbear-delivery" in mcp["servers"]
+    assert "owlbear-memory" in mcp["servers"]
 
 
 def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
@@ -181,15 +181,16 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     mcp = json.loads((target_dir / ".vscode/mcp.json").read_text(encoding="utf-8"))
     owlbear_rel_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
     assert set(mcp["servers"]) == {
-        "owlbear-delivery",
         "owlbear-knowledge",
         "owlbear-memory",
         "owlbear-browser",
         "markitdown",
     }
-    assert mcp["servers"]["owlbear-browser"]["env"] == {"BROWSER_ALLOWED_DOMAINS": "*"}
+    browser_env = mcp["servers"]["owlbear-browser"]["env"]
+    assert browser_env["BROWSER_ALLOWED_DOMAINS"] == "*"
+    assert "BROWSER_MODE" not in browser_env
+    assert "PLAYWRIGHT_USER_DATA_DIR" not in browser_env
     for server_name in (
-        "owlbear-delivery",
         "owlbear-knowledge",
         "owlbear-memory",
         "owlbear-browser",
@@ -198,7 +199,6 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         assert server["command"] == "uv"
         assert server["args"][:2] == ["--project", owlbear_rel_path]
     delivery_config_path = target_dir / ".owlbear/delivery/config.json"
-    assert "env" not in mcp["servers"]["owlbear-delivery"]
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())
     assert delivery_config.schema_version == 2
     assert delivery_config.remote == "origin"

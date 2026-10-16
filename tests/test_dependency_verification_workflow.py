@@ -22,7 +22,6 @@ COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
 COPILOT_SETUP_PATH = ROOT / ".github/workflows/copilot-setup-steps.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
-SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
 UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
@@ -245,7 +244,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     workflow = _workflow(VERIFY_PATH)
     pull_request = workflow["on"]["pull_request"]
 
-    assert pull_request["branches"] == ["dev"]
+    assert pull_request["branches"] == ["main"]
     assert pull_request["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
     assert set(pull_request["paths"]) == {
         ".github/renovate.json",
@@ -567,7 +566,7 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
         ("share/diagrams/mcp-topology.architecture.json", "diagrams"),
         ("share/diagrams/mcp-topology.svg", "diagrams"),
         (".pre-commit-config.yaml", "precommit"),
-        (".github/workflows/sync-to-main.yml", "workflows"),
+        (".github/workflows/python.yml", "workflows"),
         (".github/renovate.json", "renovate"),
         (".mega-linter.yml", "megalinter"),
     ],
@@ -766,29 +765,6 @@ def test_classifier_outputs_do_not_include_fix_policy() -> None:
     assert "fix_mode" not in outputs
 
 
-def test_sync_manifest_preserves_workflow_support_paths() -> None:
-    manifest = json.loads((ROOT / ".github/sync-manifest.json").read_text(encoding="utf-8"))
-    workflow = SYNC_PATH.read_text(encoding="utf-8")
-
-    assert ".github" not in manifest["consumer_excluded_paths"]
-    assert {
-        ".github/renovate.json",
-        ".github/scripts",
-        ".github/sync-manifest.json",
-        ".github/workflows",
-    }.issubset(manifest["scopes"]["infra"])
-    assert manifest["scopes"]["web-content"] == ["serve/web-content"]
-    assert {
-        ".github/copilot-instructions.md",
-        ".github/skills",
-    }.issubset(manifest["consumer_excluded_paths"])
-    assert ".mega-linter.yml" in manifest["consumer_excluded_paths"]
-    assert "python3 .github/scripts/sync_manifest.py paths" in workflow
-    assert "python3 .github/scripts/sync_manifest.py excluded" in workflow
-    assert "for excluded_path in $CONSUMER_EXCLUDED_PATHS" in workflow
-    assert "sync_web_content:" in workflow
-
-
 def test_shared_web_content_dependency_edges_are_declared() -> None:
     browser = tomllib.loads((ROOT / "serve/browser/pyproject.toml").read_text(encoding="utf-8"))
     knowledge = tomllib.loads((ROOT / "serve/knowledge/pyproject.toml").read_text(encoding="utf-8"))
@@ -798,20 +774,6 @@ def test_shared_web_content_dependency_edges_are_declared() -> None:
     assert "owlbear-web-content" in knowledge["project"]["optional-dependencies"]["intake"]
     assert "owlbear-web-content" in knowledge["project"]["optional-dependencies"]["full"]
     assert "serve/web-content/src" in root["tool"]["ruff"]["src"]
-
-
-def test_sync_delivery_scope_carries_the_github_adapter() -> None:
-    manifest = json.loads((ROOT / ".github/sync-manifest.json").read_text(encoding="utf-8"))
-    workflow = SYNC_PATH.read_text(encoding="utf-8")
-
-    assert manifest["scopes"]["delivery"] == [
-        "serve/delivery",
-        "serve/delivery-mcp",
-        "serve/delivery-github",
-    ]
-    assert "delivery_paths=$(manifest_paths delivery)" in workflow
-    assert "git rm -rf --quiet $scope_paths" in workflow
-    assert "git checkout dev -- $scope_paths" in workflow
 
 
 def test_node_runtime_checker_accepts_the_checked_in_contract() -> None:
