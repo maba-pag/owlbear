@@ -4,49 +4,49 @@
 
 ### Imports
 
-- `import { defineConfig, devices } from '@playwright/test'`
+- `import { defineConfig, devices } from "@playwright/test"`
 
 ### Interfaces
 
 - `const compatibilitySpecs`
-- `export default defineConfig({ testDir: 'e2e', use: { baseURL: 'http://localhost:4173', headless: true, trace: 'retain-on-failure', }, reporter: [ ['line'], ['html', { outputFolder: 'playwright-report', open: 'never' }], ], projects: [ { name: 'compatibility-chromium', testMatch: compatibilitySpecs, use: { ...devices['Desktop Chrome'] }, }, { name: 'compatibility-firefox', testMatch: compatibilitySpecs, use: { ...devices['Desktop Firefox'] }, }, { name: 'compatibility-webkit', testMatch: compatibilitySpecs, use: { ...devices['Desktop Safari'] }, }, ], webServer: { command: 'npm run build && npm run preview', url: 'http://localhost:4173', reuseExistingServer: !process.env['CI'], timeout: 120_000, }, })`
+- `export default defineConfig({ testDir: "e2e", use: { baseURL: "http://localhost:4173", headless: true, trace: "retain-on-failure", }, reporter: [["line"], ["html", { outputFolder: "playwright-report", open: "never" }]], projects: [ { name: "compatibility-chromium", testMatch: compatibilitySpecs, use: { ...devices["Desktop Chrome"] }, }, ], webServer: { command: "npm run build && npm run preview", url: "http://localhost:4173", reuseExistingServer: !process.env.CI, timeout: 120_000, }, })`
 
 ## serve/cockpit/web/playwright.config.ts
 
 ### Imports
 
-- `import { defineConfig, devices } from '@playwright/test'`
+- `import { defineConfig, devices } from "@playwright/test"`
 
 ### Interfaces
 
-- `export default defineConfig({ testDir: 'e2e', use: { baseURL: 'http://localhost:4173', headless: true, }, projects: [ { name: 'chromium', testIgnore: [ '**/memory-purge-assembled.spec.ts', '**/memory-lifecycle-assembled.spec.ts', '**/work-portfolio.spec.ts', ], use: { ...devices['Desktop Chrome'] }, }, { name: 'memory-purge-assembled', testMatch: /memory-purge-assembled\.spec\.ts/, use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8421' }, }, { name: 'memory-lifecycle-assembled', testMatch: /memory-lifecycle-assembled\.spec\.ts/, use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8422' }, }, { name: 'work-portfolio', testMatch: /work-portfolio\.spec\.ts/, use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:4175' }, }, ], webServer: process.env['WORK_PORTFOLIO_E2E'] ? { command: 'npm run build && node e2e/support/start-work-portfolio-stack.mjs', url: 'http://127.0.0.1:4175/health/live', reuseExistingServer: false, timeout: 120_000, } : process.env['LIFECYCLE_E2E'] ? { command: 'npm run build && node e2e/support/start-memory-lifecycle-stack.mjs', url: 'http://127.0.0.1:8422/health', reuseExistingServer: false, timeout: 120_000, } : process.env['PURGE_E2E'] ? { command: 'npm run build && node e2e/support/start-memory-purge-stack.mjs', url: 'http://127.0.0.1:8421/health', reuseExistingServer: false, timeout: 120_000, } : { command: 'npm run build && npm run preview', url: 'http://localhost:4173', reuseExistingServer: !process.env['CI'], }, })`
+- `export default defineConfig({ testDir: "e2e", use: { baseURL: "http://localhost:4173", headless: true, }, projects: [ { name: "chromium", testIgnore: [ "**/memory-purge-assembled.spec.ts", "**/memory-lifecycle-assembled.spec.ts", "**/work-portfolio.spec.ts", ], use: { ...devices["Desktop Chrome"] }, }, { name: "memory-purge-assembled", testMatch: /memory-purge-assembled\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:8421" }, }, { name: "memory-lifecycle-assembled", testMatch: /memory-lifecycle-assembled\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:8422" }, }, { name: "work-portfolio", testMatch: /work-portfolio\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:4175" }, }, ], webServer: process.env.WORK_PORTFOLIO_E2E ? { command: "npm run build && node e2e/support/start-work-portfolio-stack.mjs", url: "http://127.0.0.1:4175/health/live", reuseExistingServer: false, timeout: 120_000, } : process.env.LIFECYCLE_E2E ? { command: "npm run build && node e2e/support/start-memory-lifecycle-stack.mjs", url: "http://127.0.0.1:8422/health", reuseExistingServer: false, timeout: 120_000, } : process.env.PURGE_E2E ? { command: "npm run build && node e2e/support/start-memory-purge-stack.mjs", url: "http://127.0.0.1:8421/health", reuseExistingServer: false, timeout: 120_000, } : { command: "npm run build && npm run preview", url: "http://localhost:4173", reuseExistingServer: !process.env.CI, }, })`
 
 ## serve/cockpit/web/vite.config.ts
 
 ### Imports
 
-- `import { defineConfig } from 'vitest/config'`
-- `import react, { reactCompilerPreset } from '@vitejs/plugin-react'`
-- `import tailwindcss from '@tailwindcss/vite'`
-- `import babel from '@rolldown/plugin-babel'`
-- `import * as fs from 'node:fs'`
-- `import { join } from 'node:path'`
+- `import * as fs from "node:fs"`
+- `import { join } from "node:path"`
+- `import babel from "@rolldown/plugin-babel"`
+- `import tailwindcss from "@tailwindcss/vite"`
+- `import react, { reactCompilerPreset } from "@vitejs/plugin-react"`
+- `import { defineConfig } from "vitest/config"`
 
 ### Interfaces
 
 - `const BROWSER_TARGET`
 - `function cspPlugin()`
 - `function pdsVersionCheckPlugin()`
-- `export default defineConfig({ plugins: [ tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin(), ], build: { outDir: '../dist', emptyOutDir: true, target: BROWSER_TARGET, cssTarget: BROWSER_TARGET, }, css: { transformer: 'lightningcss', }, test: { environment: 'jsdom', setupFiles: ['./vitest.setup.ts'], globals: true, include: ['src/**/*.{test,spec}.{ts,tsx}'], testTimeout: 20_000, teardownTimeout: 3_000, // Suppress React act() warnings — thousands of these drown real errors. // Keep all other console output for debugging. onConsoleLog(log) { if (log.includes('not wrapped in act')) return false }, }, })`
+- `export default defineConfig({ plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()], build: { outDir: "../dist", emptyOutDir: true, target: BROWSER_TARGET, cssTarget: BROWSER_TARGET, }, css: { transformer: "lightningcss", }, test: { environment: "jsdom", setupFiles: ["./vitest.setup.ts"], globals: true, include: ["src/**/*.{test,spec}.{ts,tsx}"], testTimeout: 20_000, teardownTimeout: 3_000, // Suppress React act() warnings — thousands of these drown real errors. // Keep all other console output for debugging. onConsoleLog(log) { if (log.includes("not wrapped in act")) return false; }, }, })`
 
 ## serve/cockpit/web/vitest.setup.ts
 
 ### Imports
 
-- `import '@porsche-design-system/components-react/jsdom-polyfill'`
-- `import '@testing-library/jest-dom/vitest'`
-- `import { skipCheckForPorscheDesignSystemProviderDuringTests, skipPorscheDesignSystemCDNRequestsDuringTests, } from '@porsche-design-system/components-react'`
-- `import { vi } from 'vitest'`
+- `import "@porsche-design-system/components-react/jsdom-polyfill"`
+- `import "@testing-library/jest-dom/vitest"`
+- `import { skipCheckForPorscheDesignSystemProviderDuringTests, skipPorscheDesignSystemCDNRequestsDuringTests, } from "@porsche-design-system/components-react"`
+- `import { vi } from "vitest"`
 
 ## serve/cockpit/web/e2e/support/api-fixtures.ts
 
@@ -69,7 +69,7 @@
 - `const WORKSPACE_SELECTOR`
 - `export interface PageErrorTracker`
 - `export function trackPageErrors(page: Page): PageErrorTracker`
-- `export async function waitForWorkspaceWithoutPageErrors( page: Page, tracker: PageErrorTracker, ): Promise<void>`
+- `export async function waitForWorkspaceWithoutPageErrors(page: Page, tracker: PageErrorTracker): Promise<void>`
 
 ## serve/cockpit/web/e2e/support/workspace-readiness.ts
 
@@ -86,18 +86,18 @@
 - `export type WorkspaceReadinessSnapshot = RawWorkspaceSnapshot & { stableAcrossFrames: boolean; }`
 - `const workspaceSelector`
 - `const routeLoadingSelector`
-- `export async function waitForWorkspaceReady( page: Page, options: WorkspaceReadinessOptions = {}, ): Promise<void>`
+- `export async function waitForWorkspaceReady(page: Page, options: WorkspaceReadinessOptions = {}): Promise<void>`
 - `export async function getWorkspaceReadinessSnapshot( page: Page, options: WorkspaceReadinessOptions = {}, ): Promise<WorkspaceReadinessSnapshot>`
 - `async function waitForNextAnimationFrame(page: Page): Promise<void>`
-- `async function readWorkspaceSnapshot( page: Page, options: WorkspaceReadinessOptions, ): Promise<RawWorkspaceSnapshot>`
-- `function snapshotsAreStable( firstSnapshot: RawWorkspaceSnapshot, secondSnapshot: RawWorkspaceSnapshot, ): boolean`
-- `function nearlyEqual( firstValue: number | null, secondValue: number | null, ): boolean`
+- `async function readWorkspaceSnapshot(page: Page, options: WorkspaceReadinessOptions): Promise<RawWorkspaceSnapshot>`
+- `function snapshotsAreStable(firstSnapshot: RawWorkspaceSnapshot, secondSnapshot: RawWorkspaceSnapshot): boolean`
+- `function nearlyEqual(firstValue: number | null, secondValue: number | null): boolean`
 
 ## serve/cockpit/web/src/App.tsx
 
 ### Imports
 
-- `import { PorscheDesignSystemProvider, PToast, } from "@porsche-design-system/components-react"`
+- `import { PorscheDesignSystemProvider, PToast } from "@porsche-design-system/components-react"`
 - `import { useMemo } from "react"`
 - `import { createBrowserRouter, Navigate, RouterProvider } from "react-router"`
 - `import CockpitShell from "./CockpitShell"`
@@ -114,7 +114,7 @@
 
 ### Imports
 
-- `import { PButtonPure, PFlyout, PHeading, PIcon, PLinkPure, } from "@porsche-design-system/components-react"`
+- `import { PButtonPure, PFlyout, PHeading, PIcon, PLinkPure } from "@porsche-design-system/components-react"`
 - `import { Suspense, useState } from "react"`
 - `import { useLocation, useNavigate } from "react-router"`
 - `import ThemeToggle from "./components/ThemeToggle"`
@@ -126,7 +126,7 @@
 
 - `const ICONS`
 - `interface ProductNavigationProps`
-- `function ProductNavigation({ activePath, compact = false, onNavigate, }: ProductNavigationProps)`
+- `function ProductNavigation({ activePath, compact = false, onNavigate }: ProductNavigationProps)`
 - `export default function CockpitShell()`
 
 ## serve/cockpit/web/src/main.tsx
@@ -176,7 +176,7 @@
 - `function readValidationField(loc: unknown): string | null`
 - `function readDetailArray(detail: unknown): string | null`
 - `function readMessageField(payload: unknown): string | null`
-- `export async function getResponseErrorMessage( response: Response, fallbackMessage: string, ): Promise<string>`
+- `export async function getResponseErrorMessage(response: Response, fallbackMessage: string): Promise<string>`
 
 ## serve/cockpit/web/src/api/errors.ts
 
@@ -213,7 +213,7 @@
   - `readonly updatedAt: string | null`
   - `constructor(content: string, updatedAt: string | null)`
 - `export async function fetchIdeas(): Promise<IdeasResponse>`
-- `export async function saveIdeas( content: string, options: IdeasSaveOptions = {}, ): Promise<string | null>`
+- `export async function saveIdeas(content: string, options: IdeasSaveOptions = {}): Promise<string | null>`
 
 ## serve/cockpit/web/src/api/memories.ts
 
@@ -224,7 +224,8 @@
 
 ### Interfaces
 
-- `export type MemoryState = | "pending" | "curated" | "approved" | "contested" | "disputed" | "stale" | "deleted"`
+- `export type MemoryState = "pending" | "curated" | "approved" | "contested" | "disputed" | "stale" | "deleted"`
+- `export interface MemoryChallenge`
 - `export interface MemoryEntry`
 - `export interface MemoryEditPayload`
 - `export interface MemoriesResponse`
@@ -233,16 +234,16 @@
 - `export class MemoryMutationError extends Error`
   - `readonly apiError: ApiError`
   - `readonly validationMessages: ValidationMessage[]`
-  - `constructor( apiError: ApiError, validationMessages: ValidationMessage[] = [], )`
+  - `constructor(apiError: ApiError, validationMessages: ValidationMessage[] = [])`
 - `function parseValidationField(loc: unknown): string`
 - `function parseValidationErrors(payload: unknown): ValidationMessage[]`
 - `function parseMutationErrorCode(payload: unknown): string | null`
 - `function parseMutationErrorPayload(payload: unknown): { validationMessages: ValidationMessage[]; message: string | null; code: string | null; }`
-- `async function postMemoryMutation<T>( url: string, body?: Record<string, unknown>, ): Promise<T>`
-- `export async function approveMemory( entryId: string, expectedUpdatedAt: string, ): Promise<MemoryMutationResponse>`
-- `export async function resolveMemory( entryId: string, expectedUpdatedAt: string, ): Promise<MemoryMutationResponse>`
-- `export async function deleteMemory( entryId: string, expectedUpdatedAt: string, ): Promise<MemoryMutationResponse>`
-- `export async function editMemory( entryId: string, payload: MemoryEditPayload, ): Promise<MemoryMutationResponse>`
+- `async function postMemoryMutation<T>(url: string, body?: Record<string, unknown>): Promise<T>`
+- `export async function approveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse>`
+- `export async function resolveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse>`
+- `export async function deleteMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse>`
+- `export async function editMemory(entryId: string, payload: MemoryEditPayload): Promise<MemoryMutationResponse>`
 
 ## serve/cockpit/web/src/api/memoryPurge.ts
 
@@ -255,34 +256,44 @@
 - `export interface MemoryPurgePreview`
 - `export interface MemoryPurgeReceipt`
 - `async function postPurge<T>(url: string, minAgeDays: number): Promise<T>`
-- `export function previewMemoryPurge( minAgeDays: number, ): Promise<MemoryPurgePreview>`
+- `export function previewMemoryPurge(minAgeDays: number): Promise<MemoryPurgePreview>`
 - `export function purgeMemories(minAgeDays: number): Promise<MemoryPurgeReceipt>`
 
 ## serve/cockpit/web/src/api/workItems.ts
 
 ### Interfaces
 
-- `export type WorkItemStage = | "design" | "planning" | "implementation" | "completed"`
+- `export type WorkItemStage = "design" | "planning" | "implementation" | "completed"`
 - `export type WorkItemScope = "outcome" | "change-publication"`
 - `export type WorkItemNeed = "you" | "dependency" | "none"`
 - `export type WorkItemNextActor = "you" | "agent" | "dependency" | "none"`
 - `export type WorkItemActivityState = "idle" | "ready" | "working"`
-- `export type WorkItemActionKind = | "none" | "resume-design" | "answer-request" | "clear-block" | "recover-claim" | "finalize" | "reconcile-checkpoint" | "sync-target" | "mark-ready" | "observe-acceptance" | "resolve-attention" | "adopt-external-head" | "resume-change" | "start-orchestration"`
-- `export type WorkItemProgressKind = | "tasks" | "design-return" | "plan" | "publication"`
+- `export type WorkItemActionKind = | "none" | "resume-design" | "answer-request" | "clear-block" | "grant-attempt" | "recover-claim" | "finalize" | "reconcile-checkpoint" | "sync-target" | "mark-ready" | "observe-acceptance" | "resolve-attention" | "adopt-external-head" | "resume-change" | "start-orchestration"`
+- `export type WorkItemProgressKind = "tasks" | "design-return" | "plan" | "publication"`
 - `export type WorkItemChangeLifecycle = | "in-delivery" | "finalization" | "publication" | "awaiting-merge" | "acceptance" | "deferred" | "abandoned"`
 - `export type DeliveryWorkerRole = "planner" | "builder"`
 - `export type WorkItemPublicationPhase = | "finalization-invalidated" | "review-repair" | "ready-for-finalization" | "checkpoint-pending" | "pull-request-draft" | "awaiting-merge" | "acceptance-observed" | "deferred" | "abandoned"`
 - `export interface WorkItemActivity`
 - `export interface WorkItemAction`
 - `export interface WorkItemProgress`
-- `export type DeliveryReadinessStatus = | "ready" | "running" | "waiting" | "blocked" | "unavailable" | "complete"`
-- `export type DeliveryReadinessChecksState = | "not-run" | "failed" | "passed" | "unknown"`
-- `export type DeliveryReadinessReasonCode = | "ready" | "active-custody" | "finalization-failed" | "claim-activation-failed" | "coordination-unavailable" | "execution-occupancy-unavailable" | "engine-action-pending" | "engine-action-blocked" | "target-sync-required" | "claim-custody-unreconciled" | "runtime-unavailable" | "dependency-wait" | "request-action" | "change-paused" | "change-terminal" | "task-incomplete" | "workspace-inspection-failed" | "workspace-dirty" | "workspace-preflight-failed" | "review-repair" | "publication-wait" | "checkpoint-pending" | "report-store-unavailable"`
-- `export type FinalizationFailureCode = | "workspace-dirty" | "workspace-preflight-failed" | "maintained-check-failed" | "maintained-check-unavailable" | "independent-review-failed" | "independent-review-unavailable"`
-- `export type FinalizationFailureCategory = | "custody-preflight" | "maintained-check" | "independent-review"`
+- `export type DeliveryReadinessStatus = "ready" | "running" | "waiting" | "blocked" | "unavailable" | "complete"`
+- `export type DeliveryReadinessChecksState = "not-run" | "failed" | "passed" | "unknown"`
+- `export type DeliveryReadinessReasonCode = | "ready" | "design-attention" | "active-custody" | "builder-transition-contained" | "retry-transition-contained" | "finalization-failed" | "settled-attention-target-drift" | "claim-activation-failed" | "coordination-unavailable" | "execution-occupancy-unavailable" | "engine-action-pending" | "engine-action-blocked" | "engine-action-interrupted" | "engine-action-failed" | "engine-action-incomplete" | "target-sync-required" | "target-commit-missing" | "claim-custody-unreconciled" | "runtime-unavailable" | "dependency-wait" | "request-action" | "change-paused" | "change-terminal" | "outcome-complete" | "task-incomplete" | "workspace-inspection-failed" | "workspace-dirty" | "workspace-preflight-failed" | "review-repair" | "publication-wait" | "checkpoint-pending" | "report-store-unavailable" | "retry-backoff" | "retry-exhausted" | "acceptance-wait" | "retry-containment" | "retry-ledger-unavailable" | "worker-stall-wait" | "merge-approval-required" | "merge-checking" | "merge-blocked" | "checks-running" | "provider-unavailable" | "merge-in-progress" | "merge-response-unknown"`
+- `export type MergeBlockReason = | "conflicts" | "behind" | "protection" | "draft" | "closed" | "checks-failed" | "queue-required" | "stacked" | "wrong-base" | "capability-unavailable" | "method-not-allowed"`
+- `export interface MergeBlock`
+- `export interface MergeAttemptSummary`
+- `export interface MergeOffer`
+- `export type DeliverySituation = | "with-agent" | "ready-for-next-step" | "your-decision" | "waiting-on-github" | "waiting-on-delivery" | "waiting-on-dependency" | "retrying-automatically" | "needs-attention" | "pausing" | "paused" | "abandoned" | "done"`
+- `export type DeliveryWaitingOn = "you" | "agent" | "delivery" | "github" | "outcome" | "change" | "none"`
+- `export type TargetSyncAvailability = "required" | "optional" | "unavailable" | "unnecessary"`
+- `export interface DeliveryProgress`
+- `export type ChangePauseUnavailableReason = | "finalizer-custody" | "step-in-progress" | "recovery-required" | "state-unavailable" | "change-inactive" | "pause-requested"`
+- `export type FinalizationFailureCode = | "workspace-dirty" | "workspace-preflight-failed" | "maintained-check-failed" | "maintained-check-unavailable" | "independent-review-failed" | "independent-review-unavailable" | "proof-mutated-worktree" | "finalizer-ended-without-report"`
+- `export type FinalizationFailureCategory = | "custody-preflight" | "maintained-check" | "independent-review" | "proof-mutation" | "worker-ended"`
 - `export interface DeliveryReadinessBasis`
 - `export interface FinalizationReport`
 - `export interface FinalizationAttempt`
+- `export interface DeliveryRetryAttempt`
 - `export interface DeliveryReadiness`
 - `export interface WorkItemCardView`
 - `export interface ChangeGroupView`
@@ -299,27 +310,36 @@
 - `export interface PortfolioOperatingView`
 - `export type DeliveryHealthStatus = "healthy" | "attention"`
 - `export type DeliveryHealthResolution = "retry" | "inspect" | "authority-gap"`
-- `export type DeliveryHealthReason = | "unknown" | "remote-state-unavailable" | "remote-state-reconciliation" | "remote-change-head-ahead" | "remote-change-head-mismatch" | "local-change-head-out-of-band" | "local-frontier-mismatch" | "runtime-unavailable" | "state-publication-invalid" | "state-publication-pending" | "runtime-reconciliation-required"`
-- `export type DeliveryHealthHeadRelation = | "equal" | "descendant" | "ancestor" | "divergent"`
+- `export type DeliveryHealthReason = | "unknown" | "remote-state-unavailable" | "remote-state-reconciliation" | "remote-state-version-unsupported" | "remote-change-head-ahead" | "remote-change-head-mismatch" | "local-change-head-out-of-band" | "local-frontier-mismatch" | "runtime-unavailable" | "state-publication-invalid" | "state-publication-pending" | "runtime-reconciliation-required"`
+- `export type DeliveryHealthHeadRelation = "equal" | "descendant" | "ancestor" | "divergent"`
 - `export interface DeliveryHealthDiagnostic`
 - `export interface DeliveryHealthResponse`
-- `export type DeliveryUnavailableDiagnostic = | "runtime-unavailable" | "coordination-unavailable"`
+- `export type DeliveryUnavailableDiagnostic = "runtime-unavailable" | "coordination-unavailable"`
 - `export type DeliveryCoordinationStatus = "missing" | "unreadable"`
 - `export interface DeliveryUnavailableChangeResponse`
 - `export interface WorkItemPortfolioResponse`
-- `export type AcceptanceReconciliationStatus = | "completed" | "waiting" | "head-moved" | "attention" | "provider-unavailable" | "skipped"`
-- `export interface AcceptanceReconciliationOutcome`
-- `export interface AcceptanceReconciliationResponse`
 - `export interface DesignWorkDetailResponse`
 - `export interface DeliveryRequestResolution`
+- `export interface DeliveryAcceptanceRef`
+- `export type DeliveryConfirmationKind = "waive" | "confirm-check"`
+- `export interface DeliveryConfirmationScope`
 - `export interface DeliveryRequest`
+- `export type DeliveryCriterionStatus = "covered" | "waived" | "missing" | "uncovered" | "unknown"`
+- `export type DeliveryEvidenceVerdict = "passed" | "expected-negative" | "failed" | "missing" | "waived"`
+- `export type DeliveryAcceptanceIdentitySource = "authored" | "legacy-position"`
+- `export type DeliveryFinalizationRules = "typed" | "legacy" | "none"`
+- `export interface DeliveryEvidenceItem`
+- `export interface DeliveryAcceptanceEvidence`
+- `export interface DeliveryEvidenceProjection`
 - `export interface DeliveryBlock`
 - `export interface WorkItemCommitment`
+- `export type DeliveryDecisionOrigin = "decided" | "approved" | "autonomous"`
+- `export interface DeliveryDecision`
 - `export interface WorkItemDependency`
 - `export interface WorkItemTaskEvidence`
 - `export interface WorkItemPublicationGeneration`
 - `export type PublicationCheckKind = "check_run" | "status_context"`
-- `export type PublicationCheckBlockingState = | "blocking" | "required-pending" | "not-blocking"`
+- `export type PublicationCheckBlockingState = "blocking" | "required-pending" | "not-blocking"`
 - `export interface PublicationCheckView`
 - `export interface PublicationChecksObservationResponse`
 - `export interface WorkItemPublicationReconciliationResponse`
@@ -334,18 +354,20 @@
 - `export interface TargetSyncAbortResponse`
 - `export interface ExternalHeadAdoptionResponse`
 - `export interface PublicationSupersessionResponse`
+- `export type BuilderTransitionDiagnostic = | { action: "block"; outcome_id: string; claim_id: string; block_id: string; reason: string; unblock_condition: string; expected_evidence: string[]; locators: string[]; request: DeliveryRequest | null; resume_commit: string | null; } | { action: "return"; outcome_id: string; claim_id: string; target: WorkItemStage; reason: string; locators: string[]; preserved_commit: string | null; attempt_id: string | null; source_boundary: string | null; }`
+- `export interface WorkItemRetryDiagnostic`
 - `export interface WorkItemDetailView`
 - `export interface WorkItemAvailableDetailResponse`
 - `export interface WorkItemUnavailableDetailResponse`
-- `export type WorkItemDetailResponse = | WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse`
-- `export function isUnavailableDetail( detail: WorkItemDetailResponse, ): detail is WorkItemUnavailableDetailResponse`
+- `export type WorkItemDetailResponse = WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse`
+- `export function isUnavailableDetail(detail: WorkItemDetailResponse): detail is WorkItemUnavailableDetailResponse`
 - `export interface BackwardMoveResult`
 - `export interface BackwardMovePreview`
 - `interface CompletedChangeRecordBase`
 - `export interface CompletionPullRequestIdentity`
 - `export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase`
 - `export interface AbandonedChangeRecord`
-- `export type CompletedChangeRecord = | ReceiptCompletedChangeRecord | AbandonedChangeRecord`
+- `export type CompletedChangeRecord = ReceiptCompletedChangeRecord | AbandonedChangeRecord`
 - `export interface CompletedChangePage`
 - `interface WorkItemRequestOptions extends RequestInit`
 - `export class WorkItemApiError extends Error`
@@ -353,38 +375,42 @@
   - `readonly code: string`
   - `readonly authority: string | null`
   - `readonly retrySafe: boolean`
-  - `constructor( status: number, code: string, detail: string, authority: string | null, retrySafe: boolean, )`
-- `async function workItemRequest<T>( url: string, options: WorkItemRequestOptions, ): Promise<T>`
-- `function controlRequest<T>( url: string, fallbackCode: string, body?: object, signal?: AbortSignal, ): Promise<T>`
+  - `readonly retryAfter: string | null`
+  - `constructor( status: number, code: string, detail: string, authority: string | null, retrySafe: boolean, retryAfter: string | null = null, )`
+- `async function workItemRequest<T>(url: string, options: WorkItemRequestOptions): Promise<T>`
+- `function controlRequest<T>(url: string, fallbackCode: string, body?: object, signal?: AbortSignal): Promise<T>`
 - `export function listWorkItems(): Promise<WorkItemPortfolioResponse>`
-- `export function listCompletedChanges( cursor?: string, signal?: AbortSignal, ): Promise<CompletedChangePage>`
+- `export function listCompletedChanges(cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage>`
 - `export function searchCompletedChanges( query: string, cursor?: string, signal?: AbortSignal, ): Promise<CompletedChangePage>`
 - `export function completedChangeRecordId(record: CompletedChangeRecord): string`
-- `export function showCompletedChange( changeId: string, recordId: string, ): Promise<CompletedChangeRecord>`
+- `export function showCompletedChange(changeId: string, recordId: string): Promise<CompletedChangeRecord>`
 - `export function workItemDetailUrl(changeId: string, itemKey: string): string`
-- `export function showWorkItem( changeId: string, itemKey: string, ): Promise<WorkItemDetailResponse>`
+- `export function showWorkItem(changeId: string, itemKey: string): Promise<WorkItemDetailResponse>`
 - `export function designWorkDetailUrl(changeId: string): string`
-- `export function showDesignWork( changeId: string, ): Promise<DesignWorkDetailResponse>`
+- `export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse>`
 - `export function answerWorkItemRequest( changeId: string, requestId: string, resolution: DeliveryRequestResolution, expectedFrontierDigest: string, ): Promise<DeliveryRequest>`
 - `export function clearWorkItemBlock( changeId: string, outcomeId: string, blockId: string, operatorNote: string, locators: string[], expectedFrontierDigest: string, ): Promise<unknown>`
-- `export function recoverWorkItemClaim( changeId: string, outcomeId: string, attemptId: string, claimId: string, ): Promise<unknown>`
+- `export function grantWorkItemAttempt( changeId: string, outcomeId: string, blockId: string, expectedFrontierDigest: string, ): Promise<unknown>`
+- `export function grantRetryAttempt( changeId: string, attemptId: string, expectedFrontierDigest: string, ): Promise<unknown>`
+- `export function releaseStuckWorker( changeId: string, outcomeId: string | null, attemptId: string, claimId: string, ): Promise<unknown>`
 - `export function moveWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, reason: string, snapshotVersion: string, ): Promise<BackwardMoveResult>`
 - `export function previewWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, ): Promise<BackwardMovePreview>`
-- `export function reconcileWorkItemPublication( changeId: string, ): Promise<WorkItemPublicationReconciliationResponse>`
-- `export function markWorkItemPublicationReady( changeId: string, ): Promise<unknown>`
-- `export function observeWorkItemPublicationChecks( changeId: string, ): Promise<PublicationChecksObservationResponse>`
+- `export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse>`
+- `export function markWorkItemPublicationReady(changeId: string): Promise<unknown>`
+- `export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse>`
 - `export function observeWorkItemAcceptance(changeId: string): Promise<unknown>`
+- `export interface MergeApprovalResponse`
+- `export function approveWorkItemMerge( changeId: string, offerId: string, submissionId: string, ): Promise<MergeApprovalResponse>`
 - `export function adoptExternalHeadAfterAcceptanceAttention( changeId: string, expectedDispositionId: string, expectedHead: string, adoptedHead: string, operationId: string, ): Promise<ExternalHeadAdoptionResponse>`
-- `export function reconcileWorkItemAcceptance( changeIds: string[], signal?: AbortSignal, ): Promise<AcceptanceReconciliationResponse>`
 - `export function resolveWorkItemAttention( changeId: string, expectedDispositionId: string, expectedFrontierDigest: string, ): Promise<unknown>`
 - `export function supersedeWorkItemPublication( changeId: string, operationId: string, ): Promise<PublicationSupersessionResponse>`
-- `export function syncWorkItemTarget( changeId: string, operationId: string, ): Promise<TargetSyncResponse>`
+- `export function syncWorkItemTarget(changeId: string, operationId: string): Promise<TargetSyncResponse>`
 - `export function abortWorkItemTargetSync( changeId: string, expectedDispositionId: string, targetHead: string, operationId: string, ): Promise<TargetSyncAbortResponse>`
 - `export function resolveWorkItemTargetSync( changeId: string, expectedDispositionId: string, targetHead: string, operationId: string, ): Promise<TargetSyncResponse>`
 - `export function deferWorkItemChange( changeId: string, reason: string, expectedFrontierDigest: string, ): Promise<unknown>`
-- `export function resumeWorkItemChange( changeId: string, expectedFrontierDigest: string, ): Promise<unknown>`
+- `export function resumeWorkItemChange(changeId: string, expectedFrontierDigest: string): Promise<unknown>`
 - `export function abandonWorkItemChange( changeId: string, reason: string, expectedFrontierDigest: string, ): Promise<unknown>`
-- `export function cleanupAbandonedWorkItemChange( changeId: string, ): Promise<ChangeWorktreeCleanupResponse>`
+- `export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse>`
 - `export function discardAbandonedTargetSyncAndCleanup( changeId: string, expectedTargetHead: string, expectedOperationId: string, ): Promise<ChangeWorktreeCleanupResponse>`
 - `export function cleanupCompletedWorkItemChange( changeId: string, completionId: string, ): Promise<ChangeWorktreeCleanupResponse>`
 - `export function recoverWorkItemChange( changeId: string, recoveryReviewedHead: string, ): Promise<ChangeWorktreeRecoveryResponse>`
@@ -393,8 +419,8 @@
 
 ### Imports
 
-- `import { PButton, PFlyout, PHeading, PIcon, PInputSearch, PModal, PTag, } from "@porsche-design-system/components-react"`
-- `import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, } from "react"`
+- `import { PButton, PFlyout, PHeading, PIcon, PInputSearch, PModal, PTag } from "@porsche-design-system/components-react"`
+- `import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react"`
 - `import { useLocation, useNavigate } from "react-router"`
 - `import { type AbandonedChangeRecord, type CompletedChangeRecord, cleanupAbandonedWorkItemChange, completedChangeRecordId, discardAbandonedTargetSyncAndCleanup, type ReceiptCompletedChangeRecord, WorkItemApiError, } from "../api/workItems"`
 - `import { useCompletedChange, useCompletedHistory } from "../hooks/useWorkItems"`
@@ -410,11 +436,11 @@
 - `function historyDetailPath(record: CompletedChangeRecord): string`
 - `function fieldValue(event: FieldValueEvent): string`
 - `function useDebouncedValue<T>(value: T, delayMs: number): T`
-- `function isAbandoned( record: CompletedChangeRecord, ): record is AbandonedChangeRecord`
+- `function isAbandoned(record: CompletedChangeRecord): record is AbandonedChangeRecord`
 - `function formatCompletedAt(value: string): string`
 - `function pullRequestUrl(repositoryIdentity: string, number: number): string`
 - `function PullRequestLink({ record }: { record: ReceiptCompletedChangeRecord })`
-- `function CopyValue({ label, value, truncate = false, }: { label: string; value: string; truncate?: boolean; })`
+- `function CopyValue({ label, value, truncate = false }: { label: string; value: string; truncate?: boolean })`
 - `function CompletedRecord({ record, stale, onSelect, }: { record: CompletedChangeRecord; stale: boolean; onSelect: (trigger: HTMLElement) => void; })`
 - `function CompletedDetail({ record, onClose, onCleanup, }: { record: CompletedChangeRecord; onClose: () => void; onCleanup: () => Promise<Error | null>; })`
 - `export default function CompletedHistoryWorkspace()`
@@ -423,15 +449,15 @@
 
 ### Imports
 
-- `import { PIcon, useToastManager, } from "@porsche-design-system/components-react"`
-- `import { type MouseEvent, useEffect, useRef, useState } from "react"`
+- `import { PIcon, useToastManager } from "@porsche-design-system/components-react"`
+- `import { type MouseEvent, useEffect, useId, useRef, useState } from "react"`
 
 ### Interfaces
 
 - `interface CopyCommandProps`
 - `export type CopyState = "idle" | "copied" | "failed"`
 - `export function useCopyToClipboard()`
-- `export default function CopyCommand({ command, className = "", }: CopyCommandProps)`
+- `export default function CopyCommand({ command, className = "", label, helper }: CopyCommandProps)`
 
 ## serve/cockpit/web/src/components/DeliveryPrimitives.tsx
 
@@ -439,7 +465,7 @@
 
 - `import type { ReactNode } from "react"`
 - `import type { WorkItemNeed } from "../api/workItems"`
-- `import { type WorkItemStatusTone, workItemStatusClassName, } from "./workItemPresentation"`
+- `import { type WorkItemStatusTone, workItemStatusClassName } from "./workItemPresentation"`
 
 ### Interfaces
 
@@ -465,7 +491,7 @@
 
 ### Interfaces
 
-- `export default function DesignWorkDetail({ detail, }: { detail: DesignWorkDetailResponse; })`
+- `export default function DesignWorkDetail({ detail }: { detail: DesignWorkDetailResponse })`
 
 ## serve/cockpit/web/src/components/DesignWorkSection.tsx
 
@@ -479,7 +505,7 @@
 ### Interfaces
 
 - `interface DesignWorkSectionProps`
-- `export default function DesignWorkSection({ statuses, selectedChangeId, onSelect, }: DesignWorkSectionProps)`
+- `export default function DesignWorkSection({ statuses, selectedChangeId, onSelect }: DesignWorkSectionProps)`
 
 ## serve/cockpit/web/src/components/ErrorBoundary.tsx
 
@@ -516,6 +542,21 @@
 - `export interface MarkdownPreviewProps extends Omit<HTMLAttributes<HTMLDivElement>, "children">`
 - `export default function MarkdownPreview({ children, className = "", remarkPlugins = [remarkGfm], rehypePlugins = [rehypeSanitize], ...rest }: MarkdownPreviewProps)`
 
+## serve/cockpit/web/src/components/MergeApprovalDialog.tsx
+
+### Imports
+
+- `import { PButton, PHeading, PModal } from "@porsche-design-system/components-react"`
+- `import { useState } from "react"`
+- `import { type MergeOffer, WorkItemApiError } from "../api/workItems"`
+
+### Interfaces
+
+- `const STALE_OFFER`
+- `interface MergeApprovalDialogProps`
+- `function OfferRow({ label, value }: { label: string; value: string })`
+- `export default function MergeApprovalDialog({ offer, pendingAction, onApproveMerge }: MergeApprovalDialogProps)`
+
 ## serve/cockpit/web/src/components/PortfolioOperatingSummary.tsx
 
 ### Imports
@@ -532,10 +573,10 @@
 - `interface PortfolioHeaderSummaryProps`
 - `interface PortfolioOperatingSummaryProps`
 - `interface AttentionMetricProps`
-- `function AttentionMetric({ count, filter, icon, label, selected, onSelect, }: AttentionMetricProps)`
-- `function ActivityMetric({ count, icon, label, }: { count: number; icon: "play" | "list"; label: string; })`
-- `export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeedsFilter, }: PortfolioHeaderSummaryProps)`
-- `export default function PortfolioOperatingSummary({ operating, commands = [], }: PortfolioOperatingSummaryProps)`
+- `function AttentionMetric({ count, filter, icon, label, selected, onSelect }: AttentionMetricProps)`
+- `function ActivityMetric({ count, icon, label }: { count: number; icon: "play" | "list" | "chat"; label: string })`
+- `export function PortfolioHeaderSummary({ operating, totals, runPromptCount, needsFilter, onNeedsFilter, }: PortfolioHeaderSummaryProps)`
+- `export default function PortfolioOperatingSummary({ operating, commands = [] }: PortfolioOperatingSummaryProps)`
 
 ## serve/cockpit/web/src/components/ThemeToggle.tsx
 
@@ -554,7 +595,7 @@
 - `const THEME_OPTIONS: Theme[]`
 - `const MENU_WIDTH`
 - `const ESTIMATED_MENU_HEIGHT`
-- `function getMenuPosition( trigger: HTMLElement, menuHeight: number, ): { top: string; left: string }`
+- `function getMenuPosition(trigger: HTMLElement, menuHeight: number): { top: string; left: string }`
 - `interface ThemeToggleProps`
 - `export default function ThemeToggle({ compact = false }: ThemeToggleProps)`
 
@@ -564,51 +605,71 @@
 
 - `import { PButton, PHeading, PIcon, PInputText, PModal, PSelect, PSelectOption, PTag, } from "@porsche-design-system/components-react"`
 - `import { type ReactNode, useEffect, useState } from "react"`
-- `import { type BackwardMovePreview, type DeliveryReadiness, type DeliveryRequest, type DeliveryRequestResolution, type DeliveryWorkerRole, isUnavailableDetail, type PublicationCheckBlockingState, type PublicationChecksObservationResponse, WorkItemApiError, type WorkItemAvailableDetailResponse, type WorkItemDetailResponse, type WorkItemPublicationPhase, type WorkItemStage, type WorkItemUnavailableDetailResponse, } from "../api/workItems"`
+- `import { useLocation } from "react-router"`
+- `import { type BackwardMovePreview, type DeliveryConfirmationScope, type DeliveryCriterionStatus, type DeliveryEvidenceItem, type DeliveryReadiness, type DeliveryRequest, type DeliveryRequestResolution, type DeliveryWorkerRole, isUnavailableDetail, type MergeOffer, type PublicationCheckBlockingState, type PublicationChecksObservationResponse, WorkItemApiError, type WorkItemAvailableDetailResponse, type WorkItemDetailResponse, type WorkItemPublicationPhase, type WorkItemStage, type WorkItemUnavailableDetailResponse, } from "../api/workItems"`
 - `import CopyCommand from "./CopyCommand"`
 - `import { SectionCard, StatusChip } from "./DeliveryPrimitives"`
-- `import { NEXT_ACTOR_LABELS, PROGRESS_STAGE_LABELS, READINESS_CHECKS_LABELS, READINESS_REASON_LABELS, READINESS_STATUS_LABELS, readinessTone, workItemStatus, workItemStatusLabel, } from "./workItemPresentation"`
+- `import MergeApprovalDialog from "./MergeApprovalDialog"`
+- `import { CONFIRMATION_KIND_LABELS, CONTINUATION_PROMPT_HELP, changePauseUnavailableMessage, DECISION_ORIGIN_LABELS, EVIDENCE_STATUS_LABELS, EVIDENCE_STATUS_TONES, EVIDENCE_VERDICT_LABELS, FINALIZATION_RULES_LABELS, IDENTITY_SOURCE_LABELS, isContinuationPrompt, MERGE_BLOCK_LABELS, NEXT_ACTOR_LABELS, OPEN_REQUEST_ANCHOR, PROGRESS_STAGE_LABELS, progressLabel, progressTone, progressWaitLine, READINESS_CHECKS_LABELS, READINESS_STATUS_LABELS, REVISION_PROMPT_HELP, readinessTone, retryAttemptCause, workItemStatus, workItemStatusLabel, } from "./workItemPresentation"`
 
 ### Interfaces
 
 - `type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown }; }`
 - `function fieldValue(event: FieldValueEvent): string`
-- `function ConfirmationContent({ children, onClose, }: { children: ReactNode; onClose: () => void; })`
+- `const FULL_COMMIT`
+- `export function CommitText({ text }: { text: string })`
+- `function focusOpenRequest(): void`
+- `function ConfirmationContent({ children, onClose }: { children: ReactNode; onClose: () => void })`
 - `interface WorkItemDetailProps`
 - `const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string>`
 - `const REQUEST_KIND_LABELS: Record<DeliveryRequest["kind"], string>`
-- `const TASK_STATUS_LABELS: Record< WorkItemAvailableDetailResponse["item"]["tasks"][number]["status"], string >`
+- `const TASK_STATUS_LABELS: Record<WorkItemAvailableDetailResponse["item"]["tasks"][number]["status"], string>`
 - `function DetailHeader({ detail }: Pick<WorkItemDetailProps, "detail">)`
-- `function RequestControl({ request, pending, onAnswer, }: { request: DeliveryRequest; pending: boolean; onAnswer: WorkItemDetailProps["onAnswerRequest"]; })`
-- `function RequestsSection({ detail, pendingAction, onAnswerRequest, }: WorkItemDetailProps)`
+- `function RequestControl({ request, superseded, pending, onAnswer, }: { request: DeliveryRequest; superseded: boolean; pending: boolean; onAnswer: WorkItemDetailProps["onAnswerRequest"]; })`
+- `function uncountedReason( requestId: string, reference: DeliveryConfirmationScope["acceptance"][number], detail: WorkItemAvailableDetailResponse, ): string | null`
+- `function RequestScope({ scope, detail, answeredRequestId, }: { scope: DeliveryConfirmationScope; detail: WorkItemAvailableDetailResponse; answeredRequestId: string | null; })`
+- `function RequestArticle({ request, detail, anchor, superseded, pending, onAnswer, }: { request: DeliveryRequest; detail: WorkItemAvailableDetailResponse; anchor: boolean; superseded: boolean; pending: boolean; onAnswer: WorkItemDetailProps["onAnswerRequest"]; })`
+- `function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps)`
 - `function ChangeDispositionSection(props: WorkItemDetailProps)`
-- `function BlockSection({ detail, pendingAction, onClearBlock, }: WorkItemDetailProps)`
+- `export interface ChangePauseControlProps`
+- `export function ChangePauseControl(props: ChangePauseControlProps)`
+- `function ChangePauseSection(props: WorkItemDetailProps)`
+- `function requiredTargetCommit(block: { request_id: string | null; locators: string[] }): string | null`
+- `function BlockSection({ detail, pendingAction, onClearBlock, onGrantAttempt }: WorkItemDetailProps)`
+- `function RetryGrantControl({ detail, pendingAction, onGrantRetryAttempt }: WorkItemDetailProps)`
 - `function elapsedAge(startedAt: string): string`
-- `function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim, }: WorkItemDetailProps)`
-- `function ExceptionalStateSection({ detail, }: Pick<WorkItemDetailProps, "detail">)`
+- `function ClaimSection({ detail, pendingAction, actionError, onReleaseStuckWorker }: WorkItemDetailProps)`
+- `function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, "detail">)`
 - `function CourseChangesSection({ detail }: Pick<WorkItemDetailProps, "detail">)`
 - `function AttentionItem({ label, reason, retry, evidence, sourceBoundary, }: { label: string; reason: string; retry?: string; evidence?: string; sourceBoundary?: string | null; })`
 - `const STAGES: WorkItemStage[]`
-- `function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveBackward, }: WorkItemDetailProps)`
+- `function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveBackward }: WorkItemDetailProps)`
 - `function SemanticDetail({ detail }: Pick<WorkItemDetailProps, "detail">)`
+- `function DecisionsSection({ detail }: Pick<WorkItemDetailProps, "detail">)`
+- `function EvidenceRecord({ item }: { item: DeliveryEvidenceItem })`
+- `function EvidenceSummary({ detail }: Pick<WorkItemDetailProps, "detail">)`
 - `const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string>`
-- `function IdentityRow({ label, value, }: { label: string; value: string | number | null; })`
+- `function IdentityRow({ label, value }: { label: string; value: string | number | null })`
 - `function ReadinessBasisRows({ basis }: { basis: DeliveryReadiness["basis"] })`
-- `function ReadinessAttempt({ attempt, }: { attempt: NonNullable<DeliveryReadiness["last_attempt"]>; })`
-- `function ReadinessSection({ readiness, }: { readiness: DeliveryReadiness | null | undefined; })`
-- `function UnavailableChangeDetail({ detail, }: { detail: WorkItemUnavailableDetailResponse; })`
+- `function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness["last_attempt"]> })`
+- `function MergeOfferSummary({ offer }: { offer: MergeOffer })`
+- `function ReadinessSection({ readiness, changeId, openRequestId, children, }: { readiness: DeliveryReadiness | null | undefined; changeId: string; openRequestId: string | null; children?: ReactNode; })`
+- `function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetailResponse })`
 - `function pullRequestUrl(repository: string, number: number): string`
 - `function ExternalHeadAdoptionSection(props: WorkItemDetailProps)`
 - `function WorktreeRecoverySection(props: WorkItemDetailProps)`
 - `function WorktreeCleanupSection(props: WorkItemDetailProps)`
 - `function AbandonedTargetSyncCleanupSection(props: WorkItemDetailProps)`
+- `const ABORT_TARGET_SYNC_HELP`
+- `const SUBMIT_RESOLVED_MERGE_HELP =`
 - `function TargetSyncConflictSection(props: WorkItemDetailProps)`
+- `const TARGET_SYNC_COPY: Record<"required" | "optional", string>`
 - `function TargetSyncSection(props: WorkItemDetailProps)`
-- `const PUBLICATION_CHECK_STATE_LABELS: Record< PublicationCheckBlockingState, string >`
-- `function PublicationCheckItem({ check, }: { check: PublicationChecksObservationResponse["checks"][number]; })`
+- `const PUBLICATION_CHECK_STATE_LABELS: Record<PublicationCheckBlockingState, string>`
+- `function PublicationCheckItem({ check }: { check: PublicationChecksObservationResponse["checks"][number] })`
 - `function PublicationChecksSection(props: WorkItemDetailProps)`
 - `function PublicationSection(props: WorkItemDetailProps)`
-- `function ActionFeedback({ error, result, }: { error: Error | null; result: string | null; })`
+- `function ActionFeedback({ error, result }: { error: Error | null; result: string | null })`
 - `export default function WorkItemDetail( props: Omit<WorkItemDetailProps, "detail"> & { detail: WorkItemDetailResponse; }, )`
 
 ## serve/cockpit/web/src/components/WorkPortfolioTable.tsx
@@ -616,26 +677,28 @@
 ### Imports
 
 - `import { PLinkPure } from "@porsche-design-system/components-react"`
+- `import type { ReactNode } from "react"`
 - `import { Link, useNavigate } from "react-router"`
 - `import type { ChangeGroupView, WorkItemCardView } from "../api/workItems"`
 - `import { type WorkItemIdentity, workItemIdentity } from "../hooks/useWorkItems"`
+- `import CopyCommand from "./CopyCommand"`
 - `import { StatusChip, WorkRow } from "./DeliveryPrimitives"`
-- `import { PROGRESS_STAGE_LABELS, workItemStatus } from "./workItemPresentation"`
+- `import { CONTINUATION_PROMPT_HELP, isContinuationPrompt, OPEN_REQUEST_ANCHOR, PROGRESS_STAGE_LABELS, progressLabel, progressTone, workItemStatus, } from "./workItemPresentation"`
 
 ### Interfaces
 
 - `interface WorkPortfolioTableProps`
-- `type GroupTableProps = Pick< WorkPortfolioTableProps, "selected" | "onSelect" > & { group: ChangeGroupView }`
+- `type GroupTableProps = Pick<WorkPortfolioTableProps, "selected" | "onSelect"> & { group: ChangeGroupView }`
 - `function attentionBorder(item: WorkItemCardView): string`
 - `function workItemPath(item: WorkItemCardView): string`
 - `function ItemLink({ item, selected, onSelect, }: { item: WorkItemCardView; selected: boolean; onSelect: WorkPortfolioTableProps["onSelect"]; })`
 - `function ActionLink({ item, onSelect, subdued = false, }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps["onSelect"]; subdued?: boolean; })`
 - `function ProgressState({ item }: { item: WorkItemCardView })`
-- `function CurrentState({ item, onSelect, }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps["onSelect"]; })`
+- `function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps["onSelect"] })`
 - `function DesktopTable({ group, selected, onSelect }: GroupTableProps)`
 - `function CompactRows({ group, selected, onSelect }: GroupTableProps)`
 - `function PublicationGate({ group, selected, onSelect }: GroupTableProps)`
-- `export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect, }: WorkPortfolioTableProps)`
+- `export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect, renderGroupControls, }: WorkPortfolioTableProps)`
 
 ## serve/cockpit/web/src/components/WorkspaceHeader.tsx
 
@@ -649,15 +712,15 @@
 - `interface WorkspaceHeaderMetricProps`
 - `interface WorkspaceHeaderPillProps`
 - `export function WorkspaceHeader({ title, titleId, headingLevel = 1, summaryLabel, summary, actions, flush = false, }: WorkspaceHeaderProps)`
-- `export function WorkspaceHeaderMetric({ value, label, tone = "neutral", }: WorkspaceHeaderMetricProps)`
-- `export function WorkspaceHeaderPill({ children, tone = "neutral", }: WorkspaceHeaderPillProps)`
+- `export function WorkspaceHeaderMetric({ value, label, tone = "neutral" }: WorkspaceHeaderMetricProps)`
+- `export function WorkspaceHeaderPill({ children, tone = "neutral" }: WorkspaceHeaderPillProps)`
 
 ## serve/cockpit/web/src/components/WorkspaceStatus.tsx
 
 ### Imports
 
 - `import { PButtonPure } from "@porsche-design-system/components-react"`
-- `import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, } from "react"`
+- `import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react"`
 - `import { createPortal } from "react-dom"`
 - `import { type UseWorkspaceHealthResult, WORKSPACE_HEALTH_LABELS, type WorkspaceHealthStatus, } from "../hooks/useWorkspaceHealth"`
 - `import { getRailPanelPosition } from "./railPanelPosition"`
@@ -674,7 +737,7 @@
 - `const STATUS_TEXT_CLASSES: Record<WorkspaceHealthStatus, string>`
 - `function checkAge(checkedAt: number | null, now: number): string`
 - `function StatusDot({ status, variant = "semantic", className = "", }: { status: WorkspaceHealthStatus; variant?: "semantic" | "trigger"; className?: string; })`
-- `export default function WorkspaceStatus({ health, }: { health: UseWorkspaceHealthResult; })`
+- `export default function WorkspaceStatus({ health }: { health: UseWorkspaceHealthResult })`
 
 ## serve/cockpit/web/src/components/WorkspaceViewHeader.tsx
 
@@ -685,7 +748,7 @@
 ### Interfaces
 
 - `interface WorkspaceViewHeaderProps`
-- `export default function WorkspaceViewHeader({ headingId, title, meta, metaTestId, tools, }: WorkspaceViewHeaderProps)`
+- `export default function WorkspaceViewHeader({ headingId, title, meta, metaTestId, tools }: WorkspaceViewHeaderProps)`
 - `export function WorkspaceViewCount({ value, unit, separator = false, }: { value: ReactNode; unit: string; separator?: boolean; })`
 
 ## serve/cockpit/web/src/components/designWorkPresentation.ts
@@ -708,23 +771,50 @@
 
 ### Imports
 
-- `import type { DeliveryReadinessChecksState, DeliveryReadinessReasonCode, DeliveryReadinessStatus, DeliveryWorkerRole, WorkItemCardView, WorkItemNextActor, WorkItemPublicationPhase, WorkItemStage, } from "../api/workItems"`
+- `import type { ChangePauseUnavailableReason, DeliveryAcceptanceIdentitySource, DeliveryConfirmationKind, DeliveryCriterionStatus, DeliveryDecisionOrigin, DeliveryEvidenceVerdict, DeliveryFinalizationRules, DeliveryProgress, DeliveryReadinessChecksState, DeliveryReadinessStatus, DeliveryRetryAttempt, DeliverySituation, DeliveryWaitingOn, DeliveryWorkerRole, MergeBlockReason, WorkItemActionKind, WorkItemCardView, WorkItemNextActor, WorkItemPublicationPhase, WorkItemStage, } from "../api/workItems"`
 
 ### Interfaces
 
 - `export const PROGRESS_STAGE_LABELS: Record<WorkItemStage, string>`
-- `export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string> =`
-- `export const READINESS_REASON_LABELS: Record< DeliveryReadinessReasonCode, string >`
-- `export const READINESS_CHECKS_LABELS: Record< DeliveryReadinessChecksState, string >`
+- `export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string>`
+- `export const MERGE_BLOCK_LABELS: Record<MergeBlockReason, string>`
+- `export const READINESS_CHECKS_LABELS: Record<DeliveryReadinessChecksState, string>`
 - `export const NEXT_ACTOR_LABELS: Record<WorkItemNextActor, string>`
-- `export function readinessTone( status: DeliveryReadinessStatus, ): WorkItemStatusTone`
+- `export const EVIDENCE_STATUS_LABELS: Record<DeliveryCriterionStatus, string>`
+- `export const EVIDENCE_STATUS_TONES: Record<DeliveryCriterionStatus, WorkItemStatusTone>`
+- `export const EVIDENCE_VERDICT_LABELS: Record<DeliveryEvidenceVerdict, string>`
+- `export const IDENTITY_SOURCE_LABELS: Record<DeliveryAcceptanceIdentitySource, string>`
+- `export const FINALIZATION_RULES_LABELS: Record<DeliveryFinalizationRules, string>`
+- `export const CONFIRMATION_KIND_LABELS: Record<DeliveryConfirmationKind, string>`
+- `export const DECISION_ORIGIN_LABELS: Record<DeliveryDecisionOrigin, string>`
+- `const RETRY_FAILURE_CAUSES: Readonly<Record<string, string>>`
+- `const RETRY_STATUS_CAUSES: Record<Exclude<DeliveryRetryAttempt["status"], "failed">, string>`
+- `export function retryAttemptCause(attempt: DeliveryRetryAttempt): string`
+- `export function readinessTone(status: DeliveryReadinessStatus): WorkItemStatusTone`
 - `const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string>`
-- `export type WorkItemStatusTone = | "attention" | "blocked" | "active" | "ready" | "complete" | "neutral"`
+- `export type WorkItemStatusTone = "attention" | "blocked" | "active" | "ready" | "complete" | "neutral"`
+- `export const SITUATION_LABELS: Record<DeliverySituation, string>`
+- `const SITUATION_TONES: Record<DeliverySituation, WorkItemStatusTone>`
+- `export function progressTone(progress: DeliveryProgress): WorkItemStatusTone`
+- `export function progressLabel(progress: DeliveryProgress): string`
+- `export const OPEN_REQUEST_ANCHOR`
+- `function formatClock(iso: string | null | undefined): string | null`
+- `const WAITING_ON_LABELS: Record<Exclude<DeliveryWaitingOn, "none">, string>`
+- `export function progressWaitLine(progress: DeliveryProgress): string | null`
+- `export function changeAwaitsPrompt(group: { change_id: string; progress?: DeliveryProgress | null; items: WorkItemCardView[]; }): boolean`
+- `export function isContinuationPrompt(prompt: string | null | undefined, changeId: string): prompt is string`
+- `const CONTINUATION_OPERATIONS: ReadonlySet<WorkItemActionKind>`
+- `export function changeContinuationPrompt(items: WorkItemCardView[], changeId: string): string | null`
+- `export const CONTINUATION_PROMPT_HELP`
+- `export const REVISION_PROMPT_HELP =`
+- `export const PAUSE_UNAVAILABLE_COPY: Record<ChangePauseUnavailableReason, string>`
+- `export function changePauseUnavailableMessage(view: { pause_available?: boolean; pause_unavailable_reason?: ChangePauseUnavailableReason | null; }): string | null`
 - `export interface WorkItemStatusPresentation`
 - `function distinctDetail(label: string, detail: string | null): string | null`
 - `const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string>`
-- `function publicationStatus( item: WorkItemCardView, ): WorkItemStatusPresentation | null`
-- `export function workItemStatus( item: WorkItemCardView, ): WorkItemStatusPresentation`
+- `function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation | null`
+- `export function progressStatus(progress: DeliveryProgress): WorkItemStatusPresentation`
+- `export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentation`
 - `export function workItemStatusClassName(tone: WorkItemStatusTone): string`
 - `export function workItemStatusLabel(item: WorkItemCardView): string`
 
@@ -737,11 +827,11 @@
 
 ### Interfaces
 
-- `export type MemoryPurgePhase = | "idle" | "configuring" | "previewing" | "confirming" | "running" | "done" | "error"`
+- `export type MemoryPurgePhase = "idle" | "configuring" | "previewing" | "confirming" | "running" | "done" | "error"`
 - `export interface UseMemoryPurgeFlowOptions`
 - `export interface UseMemoryPurgeFlowResult`
 - `function parseThreshold(value: string): number | null`
-- `export function useMemoryPurgeFlow( options?: UseMemoryPurgeFlowOptions, ): UseMemoryPurgeFlowResult`
+- `export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemoryPurgeFlowResult`
 
 ## serve/cockpit/web/src/hooks/usePendingMemoryCount.ts
 
@@ -800,7 +890,7 @@
 ### Imports
 
 - `import { useEffect, useMemo, useRef, useState } from "react"`
-- `import { abandonWorkItemChange, abortWorkItemTargetSync, adoptExternalHeadAfterAcceptanceAttention, answerWorkItemRequest, type CompletedChangePage, type CompletedChangeRecord, cleanupAbandonedWorkItemChange, cleanupCompletedWorkItemChange, clearWorkItemBlock, completedChangeRecordId, type DeliveryRequestResolution, type DesignWorkDetailResponse, deferWorkItemChange, designWorkDetailUrl, discardAbandonedTargetSyncAndCleanup, isUnavailableDetail, listCompletedChanges, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, observeWorkItemPublicationChecks, type PublicationChecksObservationResponse, previewWorkItemBackward, reconcileWorkItemAcceptance, reconcileWorkItemPublication, recoverWorkItemChange, recoverWorkItemClaim, resolveWorkItemAttention, resolveWorkItemTargetSync, resumeWorkItemChange, searchCompletedChanges, showCompletedChange, supersedeWorkItemPublication, syncWorkItemTarget, WorkItemApiError, type WorkItemAvailableDetailResponse, type WorkItemCardView, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemStage, type WorkItemUnavailableDetailResponse, workItemDetailUrl, } from "../api/workItems"`
+- `import { abandonWorkItemChange, abortWorkItemTargetSync, adoptExternalHeadAfterAcceptanceAttention, answerWorkItemRequest, approveWorkItemMerge, type ChangeGroupView, type CompletedChangePage, type CompletedChangeRecord, cleanupAbandonedWorkItemChange, cleanupCompletedWorkItemChange, clearWorkItemBlock, completedChangeRecordId, type DeliveryRequestResolution, type DesignWorkDetailResponse, deferWorkItemChange, designWorkDetailUrl, discardAbandonedTargetSyncAndCleanup, grantRetryAttempt, grantWorkItemAttempt, isUnavailableDetail, listCompletedChanges, type MergeApprovalResponse, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, observeWorkItemPublicationChecks, type PublicationChecksObservationResponse, previewWorkItemBackward, reconcileWorkItemPublication, recoverWorkItemChange, releaseStuckWorker, resolveWorkItemAttention, resolveWorkItemTargetSync, resumeWorkItemChange, searchCompletedChanges, showCompletedChange, supersedeWorkItemPublication, syncWorkItemTarget, WorkItemApiError, type WorkItemAvailableDetailResponse, type WorkItemCardView, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemStage, type WorkItemUnavailableDetailResponse, workItemDetailUrl, } from "../api/workItems"`
 - `import { usePollingFetch } from "./usePollingFetch"`
 
 ### Interfaces
@@ -809,16 +899,15 @@
 - `interface AsyncResource<T>`
 - `const EMPTY_PORTFOLIO: WorkItemPortfolioResponse`
 - `const EMPTY_HISTORY: CompletedChangePage`
-- `const ACCEPTANCE_RECONCILIATION_INTERVAL_MS`
-- `const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS`
-- `function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[]`
 - `export function useWorkPortfolio(paused = false)`
-- `export function useAcceptanceReconciliation( portfolio: WorkItemPortfolioResponse, onChanged: () => void, paused = false, ): { providerError: Error | null; providerChangeIds: string[]; isRetrying: boolean; retry: () => void; }`
 - `export function useDesignWorkDetail(changeId: string)`
 - `export function useCompletedHistory(query: string)`
-- `export function useCompletedChange( identity: { changeId: string; recordId: string } | null, )`
-- `export function useWorkItemDetail( identity: WorkItemIdentity, onChanged: () => void, )`
+- `export function useCompletedChange(identity: { changeId: string; recordId: string } | null)`
+- `export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => void)`
 - `export function workItemIdentity(item: WorkItemCardView): string`
+- `const MERGE_STATE_MESSAGES: Record<Exclude<MergeApprovalResponse["state"], "merged" | "refused">, string>`
+- `function mergeApprovalMessage(result: MergeApprovalResponse): string`
+- `export function useChangeIntent(onChanged: () => void)`
 
 ## serve/cockpit/web/src/hooks/useWorkspaceHealth.ts
 
@@ -830,22 +919,22 @@
 
 ### Interfaces
 
-- `export type WorkspaceHealthStatus = | "healthy" | "attention" | "unhealthy" | "unavailable" | "checking" | "unknown"`
+- `export type WorkspaceHealthStatus = "healthy" | "attention" | "unhealthy" | "unavailable" | "checking" | "unknown"`
 - `export interface WorkspaceHealthModule`
 - `export interface UseWorkspaceHealthResult`
 - `export const WORKSPACE_HEALTH_LABELS: Record<WorkspaceHealthStatus, string>`
 - `const SEVERITY: Record<WorkspaceHealthStatus, number>`
 - `function toStatus(reported: string): WorkspaceHealthStatus`
-- `function findingLine(finding: { path?: string; code?: string; detail?: string; }): string`
-- `async function fetchHealth<TPayload>( url: string, init?: RequestInit, ): Promise<TPayload>`
-- `function memoryModule(state: { status: WorkspaceHealthStatus; findings: string[]; }): WorkspaceHealthModule`
+- `function findingLine(finding: { path?: string; code?: string; detail?: string }): string`
+- `async function fetchHealth<TPayload>(url: string, init?: RequestInit): Promise<TPayload>`
+- `function memoryModule(state: { status: WorkspaceHealthStatus; findings: string[] }): WorkspaceHealthModule`
 - `export function useWorkspaceHealth(): UseWorkspaceHealthResult`
 
 ## serve/cockpit/web/src/pages/IdeasPage.tsx
 
 ### Imports
 
-- `import { PButton, PHeading, PModal, } from "@porsche-design-system/components-react"`
+- `import { PButton, PHeading, PModal } from "@porsche-design-system/components-react"`
 - `import { useCallback, useEffect, useMemo, useRef, useState } from "react"`
 - `import { useBeforeUnload, useBlocker } from "react-router"`
 - `import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from "../api/ideas"`
@@ -870,14 +959,14 @@
 - `import { getResponseErrorMessage } from "../api/errorMessage"`
 - `import { approveMemory, deleteMemory, editMemory, type MemoriesResponse, type MemoryEditPayload, type MemoryEntry, MemoryMutationError, type MemoryState, resolveMemory, type ValidationMessage, } from "../api/memories"`
 - `import MarkdownPreview from "../components/MarkdownPreview"`
-- `import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill, } from "../components/WorkspaceHeader"`
+- `import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from "../components/WorkspaceHeader"`
 - `import { useMemoryPurgeFlow } from "../hooks/useCleanupFlow"`
 - `import { MEMORY_PENDING_COUNT_EVENT } from "../hooks/usePendingMemoryCount"`
 - `import { usePollingFetch } from "../hooks/usePollingFetch"`
 
 ### Interfaces
 
-- `type AgentFilter = | { mode: "any" } | { mode: "all" } | { mode: "unscoped" } | { mode: "named"; agent: string }`
+- `type AgentFilter = { mode: "any" } | { mode: "all" } | { mode: "unscoped" } | { mode: "named"; agent: string }`
 - `interface MemoryFilterState`
 - `type MemoryConflictStatus = "refreshing" | "ready" | "error"`
 - `interface MemoryConflictState`
@@ -908,9 +997,9 @@
 - `function splitCSV(value: string): string[]`
 - `function mergeListValues(existing: string[], additions: string[]): string[]`
 - `function pendingValue(entry: MemoryEntry | null): number`
-- `function emitPendingCountDelta( before: MemoryEntry, after: MemoryEntry | null, ): void`
+- `function emitPendingCountDelta(before: MemoryEntry, after: MemoryEntry | null): void`
 - `function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload`
-- `async function parseMemoriesResponse( response: Response, ): Promise<MemoriesResponse>`
+- `async function parseMemoriesResponse(response: Response): Promise<MemoriesResponse>`
 - `function MemoryTab()`
 - `export default MemoryTab`
 
@@ -923,16 +1012,17 @@
 - `import { Link, useLocation, useNavigate } from "react-router"`
 - `import type { ChangeGroupView, DeliveryHealthDiagnostic, DeliveryUnavailableChangeResponse, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed, } from "../api/workItems"`
 - `import CompletedHistoryWorkspace from "../components/CompletedHistoryWorkspace"`
+- `import CopyCommand from "../components/CopyCommand"`
 - `import DesignWorkDetail from "../components/DesignWorkDetail"`
 - `import DesignWorkSection from "../components/DesignWorkSection"`
-- `import { designCommand, designWorkTitle, } from "../components/designWorkPresentation"`
-- `import PortfolioOperatingSummary, { PortfolioHeaderSummary, } from "../components/PortfolioOperatingSummary"`
-- `import WorkItemDetail from "../components/WorkItemDetail"`
+- `import { designCommand, designWorkTitle } from "../components/designWorkPresentation"`
+- `import PortfolioOperatingSummary, { PortfolioHeaderSummary } from "../components/PortfolioOperatingSummary"`
+- `import WorkItemDetail, { ChangePauseControl } from "../components/WorkItemDetail"`
 - `import WorkPortfolioTable from "../components/WorkPortfolioTable"`
 - `import { WorkspaceHeader } from "../components/WorkspaceHeader"`
 - `import { WorkspaceViewCount } from "../components/WorkspaceViewHeader"`
-- `import { READINESS_CHECKS_LABELS, READINESS_REASON_LABELS, } from "../components/workItemPresentation"`
-- `import { useAcceptanceReconciliation, useDesignWorkDetail, useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity, } from "../hooks/useWorkItems"`
+- `import { CONTINUATION_PROMPT_HELP, changeAwaitsPrompt, changeContinuationPrompt, changePauseUnavailableMessage, READINESS_CHECKS_LABELS, } from "../components/workItemPresentation"`
+- `import { useChangeIntent, useDesignWorkDetail, useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity, } from "../hooks/useWorkItems"`
 
 ### Interfaces
 
@@ -943,7 +1033,7 @@
 - `function unavailableChangePath(changeId: string): string`
 - `const CHANGE_STAGE_LABELS: Record<PortfolioChangeStage, string>`
 - `function isUnadmittedDesign(status: PortfolioChangeLifecycleStatus): boolean`
-- `function isUnavailableAdmitted( status: PortfolioChangeLifecycleStatus, ): boolean`
+- `function isUnavailableAdmitted(status: PortfolioChangeLifecycleStatus): boolean`
 - `function selectedValue(event: SelectValueEvent): string`
 - `function PortfolioViewSwitch({ workspace, onChange, }: { workspace: "current" | "history"; onChange: (workspace: "current" | "history") => void; })`
 - `interface FilterProps`
@@ -951,14 +1041,22 @@
 - `function PortfolioFilterPanel(props: FilterProps)`
 - `function parseSelection(pathname: string): WorkItemIdentity | null`
 - `function isHistoryRoute(pathname: string): boolean`
-- `function SelectedDesignDetail({ changeId, onClose, }: { changeId: string; onClose: () => void; })`
-- `function SelectedWorkItemDetail({ identity, onChanged, onClose, }: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void; })`
-- `function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void; })`
-- `function PortfolioWorkspace({ groups, selected, emptyMessage, onSelect, }: { groups: ChangeGroupView[]; selected: WorkItemIdentity | null; emptyMessage?: string; onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void; })`
+- `function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose: () => void })`
+- `function SelectedWorkItemDetail({ identity, onChanged, onClose, continuationPrompt, onAbandoned, }: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void; continuationPrompt: string | null; onAbandoned: (changeId: string, title: string) => void; })`
+- `function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void; continuationPrompt: string | null; onAbandoned: (changeId: string, title: string) => void; })`
+- `function PortfolioWorkspace({ groups, selected, emptyMessage, onSelect, onChanged, }: { groups: ChangeGroupView[]; selected: WorkItemIdentity | null; emptyMessage?: string; onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void; onChanged: () => void; })`
 - `function EmptyPortfolioState({ filtered }: { filtered: boolean })`
+- `function attentionCommand(diagnostic: DeliveryHealthDiagnostic): string`
+- `function healthCommand(diagnostic: DeliveryHealthDiagnostic): string | null`
 - `function healthNextStep(diagnostic: DeliveryHealthDiagnostic): string`
-- `function HealthDiagnosticDetails({ diagnostic, }: { diagnostic: DeliveryHealthDiagnostic; })`
+- `function HealthDiagnosticDetails({ diagnostic }: { diagnostic: DeliveryHealthDiagnostic })`
 - `function DeliveryIssuesSection({ diagnostics, statuses, unavailable, onSelect, }: { diagnostics: DeliveryHealthDiagnostic[]; statuses: PortfolioChangeLifecycleStatus[]; unavailable: DeliveryUnavailableChangeResponse[]; onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void; })`
 - `function guidanceCommands(guidance: PortfolioGuidance): string[]`
 - `function EmptyDetail({ error, retry, onClose, subject = "Work Item", retryLabel = "Retry item", }: { error: Error | null; retry: () => void; onClose: () => void; subject?: string; retryLabel?: string; })`
 - `export default function WorkPortfolioPage()`
+
+## serve/delivery-next/src/owlbear_delivery_next/web/ask.js
+
+### Interfaces
+
+- `function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel" })`

@@ -25,6 +25,8 @@ _EXCLUDED_PATHS: frozenset[Path] = frozenset(
         ".owlbear/target",
         ".owlbear/worktrees",
         ".owlbear/cache",
+        ".owlbear/controller",
+        ".owlbear/delivery-migrations",
         "seed/.github",
         "store",
         "tests",

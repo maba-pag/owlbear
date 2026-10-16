@@ -136,7 +136,9 @@ def test_indexes_are_deterministic_and_skip_non_product_paths(tmp_path: Path, ge
 
 
 @pytest.mark.parametrize("generator", [generate_py_index, generate_ts_index])
-@pytest.mark.parametrize("state_root", ["delivery", "legacy", "target", "worktrees"])
+@pytest.mark.parametrize(
+    "state_root", ["delivery", "legacy", "target", "worktrees", "cache", "controller", "delivery-migrations"]
+)
 def test_indexes_skip_owlbear_runtime_and_secondary_trees(tmp_path: Path, generator, state_root: str) -> None:
     _write(tmp_path, "src/keep.py", "def keep():\n    pass\n")
     _write(tmp_path, "src/keep.ts", "export const keep = true;\n")

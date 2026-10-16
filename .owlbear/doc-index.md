@@ -21,6 +21,7 @@
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 - [First successful workflow](../setup/setup-guide.md#first-successful-workflow)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [Sharing guide](../setup/sharing-guide.md)
@@ -77,6 +78,9 @@
 - # `GitHub Automation`
 - ## `What lives here`
 - ## `What belongs elsewhere`
+- ## `Pull-request checks`
+- ## `Snyk`
+- ## `MegaLinter toolchain updates`
 
 ### Outbound links
 - [`share/`](../share/README.md)
@@ -84,15 +88,50 @@
 - [`serve/`](../serve/README.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
+- [Python](../.github/workflows/python.yml)
+- [Python browser](../.github/workflows/python-browser.yml)
+- [Cockpit](../.github/workflows/cockpit.yml)
+- [Static checks](../.github/workflows/static.yml)
+- [Tooling](../.github/workflows/tooling.yml)
+- [Agent ecosystem](../.github/workflows/agent-ecosystem.yml)
+- [`test_ci_workflows.py`](../tests/test_ci_workflows.py)
+- [Renovate](../.github/renovate.json)
+- [synchronization workflow](../.github/workflows/sync-megalinter-toolchain.yml)
+- [Biome schema](../biome.json)
+- [synchronizer](../.github/scripts/sync_megalinter_toolchain.py)
+- [Tooling workflow](../.github/workflows/tooling.yml)
 
 ## .github/copilot-instructions.md
 - # `OwlBear — Copilot Workspace Instructions`
 - ## `1. Project Identity`
 - ## `2. Repository Branches`
+- ### `Direct Delivery Redesign`
+- ### `Asking the Owner`
 - ## `Directory Structure`
 - ## `3. Cockpit Frontend`
 - ## `4. Cockpit Backend`
 - ## `5. Test Domain Mapping`
+- ### `GitHub Cloud Sessions`
+- ### `Local Development and CI`
+
+### Outbound links
+- [the execution plan](research/delivery-redesign-execution-plan.md)
+- [the programme](research/change-continuation-delivery-redesign.md)
+- [the decision record](research/delivery-liveness-first-rebuild.md)
+- [cloud-agent](../.github/instructions/cloud-agent.instructions.md)
+- [code-review](../.github/instructions/code-review.instructions.md)
+
+## .github/instructions/cloud-agent.instructions.md
+- # `GitHub Copilot Cloud Work`
+- ## `Scope and Verification`
+- ## `Result and Next Request`
+- ## `Delivery Redesign Tasks`
+
+### Outbound links
+- [the execution plan](research/delivery-redesign-execution-plan.md)
+
+## .github/instructions/code-review.instructions.md
+- # `GitHub Copilot Code Review`
 
 ## .github/prompts/challenge-implementation_sol.prompt.md
 - ## `Implementation Frame`
@@ -284,27 +323,42 @@
 - ### `Fetch a page with Playwright`
 - ### `Public API`
 - ## `Configuration`
+- ## `Acquisition Contract`
 - ## `Dependencies`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [Browser MCP guide](../serve/browser-mcp/README.md#configuration)
+- [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
+- [acquisition tests](../serve/browser/tests/test_acquisition.py)
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 
 ## serve/browser-mcp/README.md
 - # `owlbear-browser-mcp — Browser MCP Server`
 - ## `Launch / Usage`
 - ### `Tools`
 - ## `Configuration`
+- ### `Startup reason codes`
+- ### ``browser_status` fields`
 - ## `Dependencies`
+- ## `Browser and Knowledge Boundaries`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [managed Mac pilot](../setup/setup-guide.md#browser-readiness)
+- [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
+- [Browser package guide](../serve/browser/README.md)
+- [acquisition tests](../serve/browser-mcp/tests/test_acquire.py)
+- [SSRF policy tests](../serve/browser-mcp/tests/test_ssrf_preflight.py)
 
 ## serve/cockpit/README.md
 - # `owlbear-cockpit — Steering Cockpit Package`
 - ## `Launch / Usage`
 - ## `Frontend Surface`
+- ## `Frontend Quality`
 - ## `Browser-backed tests`
 - ## `Delivery Evidence`
 - ## `Configuration`
@@ -314,11 +368,17 @@
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [Biome configuration](../biome.json)
+- [EditorConfig](../.editorconfig)
+- [Delivery Packaging](../serve/cockpit/README.md#delivery-packaging)
+- [operator recovery boundary](../setup/operating-owlbear.md#correction-and-recovery)
 
 ## serve/delivery/README.md
 - # `owlbear-delivery`
 - ## `Launch / Usage`
 - ## `Admission And Portfolio Freshness`
+- ## `Readiness And Finalization Diagnostics`
+- ## `Acceptance Evidence`
 - ## `Configuration`
 - ### `Portability And Recovery`
 - ## `Dependencies`
@@ -327,11 +387,13 @@
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 - [serve/delivery-mcp/README.md](../serve/delivery-mcp/README.md)
+- [operating guide](../setup/operating-owlbear.md#correction-and-recovery)
 
 ## serve/delivery-github/README.md
 - # `owlbear-delivery-github — GitHub Publication Adapter`
 - ## `Launch / Usage`
 - ### `Pull-request read contract`
+- ### `Merge transport contract`
 - ## `Configuration`
 - ## `Dependencies`
 
@@ -351,6 +413,118 @@
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 - [core Delivery configuration reference](../serve/delivery/README.md#configuration)
+
+## serve/delivery-next/DEMO-slice1.md
+- # `Delivery-next slice 1, phase B: live demonstration`
+- ## `Results`
+- ## `State and branches`
+- ## `Limits`
+- ## `Re-demonstration after review`
+- ## `Phase C demonstration`
+- ## `Repairs after review of `25c2dd89b``
+- ## `Known deviations`
+- ## `Slice 2 demonstration`
+- ### `Main journey: `greeter` (PR #3), times UTC`
+- ### `Failure (a): `clock` (PR #4), CI fails, Builder fixes`
+- ### `Other runs`
+- ### `Limits and deviations`
+- ## `Slice 3 demonstration`
+- ## `Slice 3 repairs`
+- ## `Failure demonstrations (M4 exit)`
+- ## `First-release flow after the reshape (TD-13 to TD-16, TD-20), 2026-10-10, times UTC`
+- ## `Visual review, window runtime and G2 failures, 2026-10-13, times UTC`
+- ### `Visual review: `promo-hero` (PR #12)`
+- ### `Window runtime: design judge (calibration replay of round 1)`
+- ### `G2 failures: `g2exit` (PR #13) and `g2head``
+- ### `Gaps against architecture §3.7 (hand-triggered and M4 demonstration items)`
+- ## `Owner session: New Change, sleep and overlap, 2026-10-13, times UTC`
+- ### ``add-a-notes-textarea-with-an-800-charact` (PR #16)`
+- ### ``overlap-footer` (PR #15)`
+- ### `Sleep during agent steps`
+- ### `Findings, not fixed`
+- ## `Overnight UI run, 2026-10-14, times UTC`
+- ### `What the findings above became`
+- ### `Two Changes planning at the same time`
+- ### `New findings`
+
+### Outbound links
+- [design skill research §3.8](research/delivery-next-design-skill.md)
+- [owner session](../serve/delivery-next/DEMO-slice1.md#owner-session-new-change-sleep-and-overlap-2026-10-13-times-utc)
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/builder.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/challenger.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/designer.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/planner.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/preparer.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/reviewer.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/updater.md
+
+## serve/delivery-next/src/owlbear_delivery_next/chat_agents/owlbear-shaper.agent.md
+
+## serve/delivery-next/src/owlbear_delivery_next/skills/delivery/SKILL.md
+- # `Delivery in chat`
+- ## `Shape a brief`
+- ## `Read-Back`
+- ## `Status and questions`
+
+## serve/delivery-next/src/owlbear_delivery_next/worker_skills/NOTICE.md
+- # `Notices`
+
+## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-acceptance/SKILL.md
+- # `Acceptance Criteria and Proof`
+- ## `Proof Selection`
+- ## `Durable Tests`
+- ## `Rules for a Criterion`
+- ### `C1 - One Observable Boundary`
+- ### `C2 - Input and Output`
+- ### `C3 - No Naked Quantifiers`
+- ### `C4 - Proof at the Claimed Boundary`
+- ### `C5 - Literals From Their Source`
+- ## `Bad and Good`
+
+## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-findings/SKILL.md
+- # `Findings`
+- ## `Evidence`
+- ## `Where Defects Hide`
+- ## `Operating Context`
+- ## `Finding Quality`
+
+## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-module-design/SKILL.md
+- # `Module Design`
+- ## `Module Quality Vocabulary`
+- ## `Deletion Test`
+- ## `Interface Is the Test Surface`
+- ## `Seam Discipline`
+- ## `Dependency Classification`
+- ## `Applying the Diagnostics`
+
+## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-ui-design/SKILL.md
+- # `UI Design`
+- ## `Context first`
+- ## `The visitor's mode`
+- ## `Craft floor: verify on the rendered result`
+- ## `Accessibility`
+- ## `Refuse unless the brief asks for it`
+- ## `Typography`
+- ## `Colour`
+- ## `Layout`
+- ## `Order of fixes`
+- ## `Evidence`
+
+## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-ui-review/SKILL.md
+- # `UI Review`
+- ## `What you judge`
+- ## `Two phases`
+- ## `Blind comparison`
+- ## `Rubric`
+- ## `Findings`
+- ## `Verdict`
 
 ## serve/knowledge/README.md
 - # `owlbear-knowledge — Knowledge Engine`
@@ -431,6 +605,7 @@
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 
 ## serve/memory/README.md
 - # `owlbear-memory — Memory Primitives`
@@ -440,6 +615,7 @@
 - ### ``MemoryEntry``
 - ### ``MemoryCategory` (StrEnum)`
 - ### ``MemoryState` (StrEnum)`
+- ### `Revision-Bound Assessment Receipts`
 - ## `Storage Primitives`
 - ### ``read_entry(path: Path) -> MemoryEntry | None``
 - ### ``read_entry_strict(path: Path) -> MemoryEntry``
@@ -455,13 +631,16 @@
 - #### ``validate_scope_agents(value: list[str]) → list[str]``
 - #### `State Machine`
 - #### `OCC`
+- #### `Writer model`
 - #### `Lenient Read`
-- ### ``MtimeScanCache``
+- ### `Read freshness`
+- ### `Batch commit integration`
 - ## `Dependencies`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [Memory MCP batch-commit contract](../serve/memory-mcp/README.md#batch-commits)
 
 ## serve/memory-mcp/README.md
 - # `owlbear-memory-mcp — Memory MCP Server`
@@ -470,9 +649,12 @@
 - ### `Modules`
 - ### `State Model`
 - ## `Tools`
+- ## `Revision-bound mutations`
+- ## `Revision-Bound Assessments`
 - ## `Entry Schema`
 - ## `Agent Identity`
 - ## `Configuration`
+- ## `Writer Model and Freshness`
 - ## `Batch Commits`
 - ## `Dependencies`
 
@@ -511,14 +693,17 @@
 - ### `Where these files come from`
 - ## `Shared vs Copied`
 - ## `Refreshing Consumer Configs`
+- ## `Upgrading OwlBear`
 - ## `Uninstalling`
 - ## `Delivery Workflow`
 - ### `Specification`
 - ### `Delivery`
+- ### `Exceptional Entries`
 - ### `Correction And Recovery`
 - ### `Publication, Acceptance, And Completed History`
 - ### `Current Manual Boundaries`
 - ## `Portability and recovery`
+- ### `Pinned controller releases`
 - ## `Cockpit details`
 - ## `Project-Specific Customization`
 - ### `Adding local agents`
@@ -531,6 +716,7 @@
 - [sharing guide](../setup/sharing-guide.md)
 - [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
 - [Shared vs Copied](../setup/operating-owlbear.md#shared-vs-copied)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
@@ -540,9 +726,13 @@
 - [`seed/`](../seed)
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
+- [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Delivery MCP reference](../serve/delivery-mcp/README.md)
 - [WIRING.md](../share/WIRING.md)
 - [Cockpit package guide](../serve/cockpit/README.md)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
 ## setup/setup-guide.md
@@ -556,6 +746,7 @@
 - ## `Verify the installation`
 - ### `Browser readiness`
 - ## `macOS Copilot profile settings`
+- ## `Managed Mac browser pilot`
 - ## `First successful workflow`
 - ## `Troubleshooting`
 - ## `Next`
@@ -575,10 +766,15 @@
 - [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
 - [Verify the installation](../setup/setup-guide.md#verify-the-installation)
 - [Browser MCP guide](../serve/browser-mcp/README.md)
+- [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 - [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
+- [Exceptional entries](../setup/operating-owlbear.md#exceptional-entries)
 - [Delivery workflow reference](../setup/operating-owlbear.md#delivery-workflow)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Adding local agents](../setup/operating-owlbear.md#adding-local-agents)
 - [Operating OwlBear](../setup/operating-owlbear.md)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [Sharing guide](../setup/sharing-guide.md)
@@ -592,8 +788,6 @@
 - ### `3. Bootstrap OwlBear into the project workspace`
 - ### `4. Open the project in VS Code`
 - ## `Platform Notes`
-- ### `macOS and Linux`
-- ### `Windows`
 - ## `What's Shared vs. Project-Local`
 - ## `Team Conventions`
 - ### `Agent naming`
@@ -604,8 +798,10 @@
 
 ### Outbound links
 - [installation verification](../setup/setup-guide.md#verify-the-installation)
+- [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 
 ## share/README.md
 - # `share/ - Agent Ecosystem`
@@ -683,6 +879,9 @@
 - ### `Channel A`
 - ### `Channel B`
 
+### Outbound links
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
+
 ## share/agents/memory-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
@@ -694,6 +893,8 @@
 ## share/agents/planner-challenger.agent.md
 
 ## share/agents/planner.agent.md
+
+## share/agents/repairer.agent.md
 
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
@@ -732,6 +933,8 @@
 - ## `Step 3 - Present Candidates`
 - ## `Step 4 - Explore the Selected Design`
 
+## share/prompts/continue-change.prompt.md
+
 ## share/prompts/design.prompt.md
 
 ## share/prompts/finalize-change.prompt.md
@@ -746,6 +949,8 @@
 - ## `Guardrails`
 
 ## share/prompts/ideate.prompt.md
+
+## share/prompts/inspect-change.prompt.md
 
 ## share/prompts/kb-enrich.prompt.md
 - ## `Execution Contract`
@@ -787,7 +992,7 @@
 - ## `6. Continuation And Batch Review Helper`
 - ## `7. Tool Failure Rules`
 
-## share/prompts/orchestrate.prompt.md
+## share/prompts/repair-delivery.prompt.md
 
 ## share/prompts/resolve-delivery-attention.prompt.md
 
@@ -795,6 +1000,8 @@
 
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`
+
+## share/prompts/upgrade-delivery.prompt.md
 
 ## share/skills/h-ac-quality/SKILL.md
 - # `AC Quality Schema`
@@ -901,6 +1108,7 @@
 - ## `Tool Reference`
 - ### `knowledge_search`
 - ### `knowledge_ingest`
+- ### `Browser capture rounds`
 - ### `list_knowledge_sources`
 - ### `refresh_knowledge_source`
 - ## `Typed failure and extraction rules`
@@ -922,12 +1130,16 @@
 - ## `Configuration`
 - ## `Known Gotchas`
 
+### Outbound links
+- [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
+
 ## share/skills/h-mcp-memory/SKILL.md
 - # `MCP Memory Tool Reference`
 - ## `Agent Access Matrix`
 - ## `Usage Patterns`
 - ### `Curator lifecycle (list -> read -> curate -> delete)`
 - ### `User approval flow`
+- ## `Revision-bound mutations`
 - ### `Exceptional-state resolution`
 - ### `Batch commits`
 - ## `Tool Summary`
@@ -952,12 +1164,17 @@
 - ## `Configuration`
 - ## `Error Behavior`
 
+### Outbound links
+- [memory package README](../serve/memory/README.md)
+- [Memory MCP README](../serve/memory-mcp/README.md)
+
 ## share/skills/h-memory-structure/SKILL.md
 - # `Memory Entry Structure`
 - ## `Entry Shape`
 - ## `Tier-Content Fit`
 - ## `MCP Relationship`
 - ## `State Model`
+- ## `Revision-Bound Assessment Feedback`
 - ## `Candidate Production`
 - ## `Content-Quality Bar`
 - ## `Anti-Patterns`
@@ -992,7 +1209,6 @@
 - ## `General Gotchas`
 - ## `OwlBear Workspace Notes`
 - ### `MegaLinter reports`
-- ### `Windows-Only Notes`
 
 ## share/skills/h-python-conventions/SKILL.md
 - # `Python Conventions`
@@ -1041,6 +1257,8 @@
 - ## `Evidence Rules`
 - ### `Test Evidence Boundary`
 - ### `Minimum Change Review`
+- ## `Operating Context`
+- ## `Finding Quality`
 - ## `Caller Routing`
 - ## `Memory Candidate Routing`
 
@@ -1063,21 +1281,28 @@
 
 ## share/skills/w-address-pr-feedback/SKILL.md
 - # `Address Pull-Request Feedback`
-- ## `Step 0 - Route The Requested Mode`
+- ## `Step 0 - Derive The Phase Before Mutation`
 - ## `Step 1 - Bind The Change And Pull Request`
 - ## `Step 2 - Critically Triage Every Thread`
+- ### `Start Re-entry`
+- ### `First-Entry Start`
 - ## `Step 3 - Prepare The Provider And Delivery State`
 - ## `Step 4 - Repair One Thread At A Time`
 - ## `Step 5 - Hand Off To Finalization`
 - ## `Step 6 - Publish Then Reply And Resolve Threads`
+- ### `Resume Order`
+- ### `No-Fix First-Entry Start`
+- ### `Shared Reply And Resolve Procedure`
 - ## `Output Template`
 - ## `Known Pitfalls`
 
 ## share/skills/w-change-finalization/SKILL.md
 - # `Change Finalization`
 - ## `Step 0 - Resolve Current Authority`
+- ## `Step 0a - Bind One Issued Finalization Attempt`
 - ## `Step 1 - Establish Exact Managed Custody`
 - ## `Step 2 - Capture Exact-Head Observations`
+- ## `Step 2a - Retain A Trusted Failure`
 - ## `Step 3 - Obtain Independent Exact-Commit Review`
 - ## `Step 4 - Construct Exact Evidence`
 - ## `Step 5 - Re-check And Finalize`
@@ -1095,6 +1320,14 @@
 - ## `Step 4 - Verify And Close`
 - ## `Known Pitfalls`
 
+## share/skills/w-delivery-repair/SKILL.md
+- # `Delivery Repair`
+- ## `Step 0 - Bootstrap`
+- ## `Step 1 - Present Every Finding`
+- ## `Step 2 - Propose and Confirm (U1)`
+- ## `Step 3 - Stop, Apply, Verify`
+- ## `Step 4 - Restart and Report`
+
 ## share/skills/w-design-session/SKILL.md
 - # `Target Design Session`
 - ## `Companion Skills`
@@ -1103,12 +1336,14 @@
 - ## `Step 2 - Rehydrate Before Revision`
 - ## `Step 3 - Persist Authored Revisions By Compare-And-Swap`
 - ## `Step 4 - Discover Intent And Preserve The Product Promise`
+- ### `Operating Context`
 - ## `Step 5 - Ground Claims And Use Qualified Memory`
 - ## `Step 6 - Resolve One Material Decision`
 - ## `Step 7 - Review Adaptive Architecture`
 - ## `Step 8 - Build Complete Delivery Contract`
 - ## `Step 9 - Challenge, Baseline, Checkpoint, And Validate`
 - ## `Step 10 - Obtain Explicit Approval And Admit`
+- ## `Revise An Admitted Change`
 - ## `Session Output`
 - ## `Known Pitfalls`
 
@@ -1130,6 +1365,7 @@
 - ## `Step 3 - Ask the Next Refinement Question`
 - ## `Step 4 - Update the Working Understanding`
 - ## `Proposal-Readiness Gate`
+- ## `Read-Back`
 - ## `Refined Idea Summary`
 - ## `Examples`
 - ## `Known Pitfalls`
@@ -1151,6 +1387,7 @@
 ## share/skills/w-mem-curation/SKILL.md
 - # `Memory Curation`
 - ## `Architecture`
+- ## `Revision-bound mutations`
 - ## `State Machine`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Gather Candidates`
@@ -1165,13 +1402,17 @@
 
 ## share/skills/w-orchestration/SKILL.md
 - # `Delivery Orchestration`
-- ## `Step 1 - Acquire One Current Batch`
+- ## `Change Continuation Entry`
+- ### `Continuation Bindings`
+- ### `Continuation Observation`
+- ### `Continuation Dispatch`
+- ### `Continuation Dispositions`
+- ### `Merge Offer And Unknown Merge`
+- ### `Continuation Refresh And Output`
 - ## `Step 2 - Dispatch Or Recover Each Launch`
-- ## `Step 3 - Forward One Worker Transition`
+- ### `Release A User-Stopped Worker`
+- ## `Step 3 - Route One Completed Worker Result`
 - ## `Step 4 - Preserve Typed Integration Attention`
-- ## `Step 5 - Run Periodic Housekeeping`
-- ## `Step 6 - Refresh`
-- ## `Output`
 - ## `Known Pitfalls`
 
 ## share/skills/w-packet-building/SKILL.md

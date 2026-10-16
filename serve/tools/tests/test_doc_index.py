@@ -34,6 +34,8 @@ _EXCLUDED_PATHS = [
     ".owlbear/target",
     ".owlbear/worktrees",
     ".owlbear/cache",
+    ".owlbear/controller",
+    ".owlbear/delivery-migrations",
     "seed/.github",
     "store",
     "tests",
