@@ -100,8 +100,14 @@ def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: 
     """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice."""
     try:
         new = model.model_validate(body.layer)
+        if isinstance(new, GlobalLayer):
+            resolve(new, store.read_config())  # the combination this project would run with (TD-209)
+        else:
+            resolve(read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None, new)
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
+    except StoreError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
     def change(_current: T) -> T:
         if _rev(path) != body.rev:

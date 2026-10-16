@@ -9,18 +9,19 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery_next.models import Context, Effort, Record, Role
 from owlbear_delivery_next.preparation import DataPermissions, Preparation
 from owlbear_delivery_next.profile_record import named
 from owlbear_delivery_next.roles import DEFAULTS
+from owlbear_delivery_next.round_records import RoundPolicy
 from owlbear_delivery_next.visual_records import DesignFailures  # noqa: TC001 - pydantic resolves it at runtime
 
 CONFIG_FORMAT = 2  # format 2 replaced the seed command by declared preparation options (TD-96)
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
-type Source = Literal["default", "global", "project"]
+type Source = Literal["default", "global", "project", "builder"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
 
@@ -36,11 +37,26 @@ class Agent(Record):
     runtime: RuntimeName | None = None
     visible: bool | None = None  # the agent "needs visibility" (TD-35)
     categories: list[Category] | None = None  # extra tool categories beyond the baseline (R5)
+    max_rounds: int | None = None  # TD-209: the challenge loops of this role's work
+    max_findings: int | None = None
+    last_round_at: int | None = None
+    ask_owner_at: int | None = None
 
     @field_validator("model")
     @classmethod
     def _named(cls, v: str | None) -> str | None:
         return None if v is None else named(v)
+
+
+class FinalReview(Record):
+    """The final review's round values in a layer; ``None`` inherits, down to the builder's (TD-211)."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    max_rounds: int | None = None
+    max_findings: int | None = None
+    last_round_at: int | None = None
+    ask_owner_at: int | None = None
 
 
 class Layer(Record):
@@ -56,6 +72,7 @@ class Layer(Record):
     data: DataPermissions | None = None  # TD-96: the owner's standing permissions for those test copies
     design_failures: DesignFailures | None = None  # TD-78: a design judge's fail goes back, or to the owner
     explore: bool | None = None  # TD-129: experimental, SDK planner only: one built-in `explore` at a time
+    final_review: FinalReview | None = None  # TD-211
 
     @field_validator("format")
     @classmethod
@@ -101,6 +118,15 @@ class Effective(Record):
     runtime: RuntimeName
     visible: bool
     categories: list[Category]
+    max_rounds: int
+    max_findings: int
+    last_round_at: int
+    ask_owner_at: int
+
+    @model_validator(mode="after")
+    def _rounds(self) -> Effective:
+        RoundPolicy.model_validate(self.model_dump(include=set(RoundPolicy.model_fields)))
+        return self
 
 
 class Settings(Record):
@@ -114,12 +140,16 @@ class Settings(Record):
     data: DataPermissions = Field(default_factory=DataPermissions)
     design_failures: DesignFailures = "ask"
     explore: bool = False
+    final_review: RoundPolicy = Field(default_factory=RoundPolicy)
     sources: dict[str, Source]
 
 
 def _defaults() -> GlobalLayer:
+    rounds = RoundPolicy().model_dump()
     agents = {
-        role: Agent(model=rm.model, effort=rm.effort, context="default", runtime="sdk", visible=False, categories=[])
+        role: Agent(
+            model=rm.model, effort=rm.effort, context="default", runtime="sdk", visible=False, categories=[], **rounds
+        )
         for role, rm in DEFAULTS.items()
     }
     return GlobalLayer(visible=False, agents=agents, runtimes={"sdk": True, "window": True}, widths=DEFAULT_WIDTHS)
@@ -177,6 +207,17 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         ("default", "ask"),  # autonomous default (TD-78)
     )
     explore = _pick("explore", sources, ("project", project.explore), ("global", glob.explore), ("default", False))
+    own, theirs = project.final_review or FinalReview(), glob.final_review or FinalReview()
+    final = {
+        name: _pick(
+            f"final_review.{name}",
+            sources,
+            ("project", getattr(own, name)),
+            ("global", getattr(theirs, name)),
+            ("builder", getattr(agents["builder"], name)),
+        )
+        for name in RoundPolicy.model_fields
+    }
     return Settings(
         visible=visible,
         agents=agents,
@@ -186,5 +227,6 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         data=data,
         design_failures=design,
         explore=bool(explore),
+        final_review=RoundPolicy.model_validate(final),
         sources=sources,
     )

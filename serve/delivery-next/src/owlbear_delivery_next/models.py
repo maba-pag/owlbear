@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.amendment_records import Amendment
+from owlbear_delivery_next.round_records import RoundLoop
 from owlbear_delivery_next.spend import Spend
 from owlbear_delivery_next.visual_records import OwnerCriterion, VisualResult, VisualRound
 
@@ -487,6 +488,7 @@ class Change(Record):
     visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round
     owner_criteria: list[OwnerCriterion] = Field(default_factory=list)  # TD-79: checked by every later round
     amendments: list[Amendment] = Field(default_factory=list)  # TD-179: proposed brief wording, challenged
+    loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
     finished_at: datetime | None = None

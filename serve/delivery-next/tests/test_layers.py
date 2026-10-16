@@ -18,12 +18,12 @@ LAYERS: dict[str, tuple[str, ...]] = {
     ),
     "change_contracts": (
         "models", "failures", "evidence", "spend", "visual_records", "inbox", "profile_record", "tools", "tool_schema",
-        "preparation", "permissions", "amendment_records", "dispute_tools",
+        "preparation", "permissions", "amendment_records", "dispute_tools", "round_records",
     ),
     "change_flow": ("loop", "moves", "budgets", "status", "progress", "brief_tools", "steps.worktree", "repairs",
                     "disputes"),
     "design_packs": ("design_pack", "detector", "pack_update", "calibration", "pack_git", "design_tools"),
-    "settings": ("config", "roles", "migrations", "profile"),
+    "settings": ("config", "roles", "migrations", "profile", "rounds"),
     "state_store": (
         "store", "profile_share", "briefs", "change_record", "backlog", "backlog_issues", "backlog_migrate",
     ),

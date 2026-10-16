@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import dispute_tools, repairs, tools
+from owlbear_delivery_next import dispute_tools, repairs, round_records, tools
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import Dispute, ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.moves import ask, go
@@ -57,11 +57,17 @@ def _flat(text: str, limit: int = 1400) -> str:
 
 
 def keyed(task: Task) -> dict[str, str]:
-    """A review repair task's findings by key, in the order its review listed them, one line each."""
+    """A review repair task's findings by key, in the order its review listed them, one line each.
+
+    A line that carries its loop's ID keeps it (TD-208); lines without IDs are keyed by position.
+    """
     if task.origin != "review":
         return {}
-    found = [line[2:] for line in task.detail.splitlines() if line.startswith("- ")]
-    return {f"F{i}": f for i, f in enumerate(found, 1)}
+    lines = [line for line in task.detail.splitlines() if line.startswith("- ")]
+    ids = [round_records.parse(line) for line in lines]
+    if ids and all(ids):
+        return dict(i for i in ids if i)
+    return {f"F{i}": line[2:] for i, line in enumerate(lines, 1)}
 
 
 def _subject(c: Change, task: Task) -> str:

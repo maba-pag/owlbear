@@ -260,7 +260,11 @@ class Store:
     def settings(self) -> Settings:
         """The resolved settings: the project layer over the global one over the defaults."""
         glob = read_layer(self.global_path, GlobalLayer) if self.global_path else None
-        return resolve(glob, self.read_config())
+        try:
+            return resolve(glob, self.read_config())
+        except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
+            msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
+            raise StoreError(msg) from exc
 
     def _dir(self, slug: str) -> Path:
         if "." in slug:
