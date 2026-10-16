@@ -46,8 +46,8 @@ from owlbear_delivery_next.models import (
     Waiting,
 )
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.readiness import Check as SetupCheck
 from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.setup import Check as SetupCheck
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.steps import (
     check,

@@ -19,7 +19,7 @@ import psutil
 import uvicorn
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, codebase, data_repo, failures, loop, processes, profile, setup, tools
+from owlbear_delivery_next import api, codebase, data_repo, failures, loop, processes, profile, readiness, tools
 from owlbear_delivery_next.models import VISUAL, ErrorKind, Exit, Recipe, Record, StepKind, Stop, Waiting
 from owlbear_delivery_next.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.profile_record import Profile
@@ -153,7 +153,7 @@ class Host:
         group: Callable[[int], Found] = check.members,
         alive: Callable[[int, float | None], bool | None] = processes.alive,
         code: Callable[[], str] = codebase.identity,
-        reach: Callable[[str], str | None] = lambda name: setup.reach(name, timeout=PROBE_TIMEOUT),
+        reach: Callable[[str], str | None] = lambda name: readiness.reach(name, timeout=PROBE_TIMEOUT),
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
         self.spawn, self.code, self.reach = spawn or self._spawn, code, reach
@@ -481,7 +481,7 @@ def serve(repo: Path) -> int:
     host.say(f"Delivery host {os.getpid()} on {api.link(host.record)}")
 
     def ready() -> None:
-        failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in setup.ready(store, repo) if not c.ok]
+        failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in readiness.ready(store, repo) if not c.ok]
         host.record = host.record.model_copy(update={"ready": failed})
         if not host.stopped.is_set():
             atomic_write(store.root / "host.json", host.record.model_dump_json())

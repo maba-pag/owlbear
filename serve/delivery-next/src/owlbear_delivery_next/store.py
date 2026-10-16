@@ -7,9 +7,7 @@ import fcntl
 import json
 import os
 import re
-import shutil
 import socket
-import subprocess
 import time
 import uuid
 from datetime import UTC, datetime
@@ -19,6 +17,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next import data_repo, loop, migrations, profile, profile_share
 from owlbear_delivery_next.config import CONFIG_FORMAT, GlobalLayer, Layer, Settings, resolve
+from owlbear_delivery_next.git_files import git_common_dir
 from owlbear_delivery_next.inbox import InboxItem
 from owlbear_delivery_next.models import FORMAT, Change, ErrorKind, Record, Stop
 from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile
@@ -94,15 +93,6 @@ class Lock:
         if not (self.held and self.slug == slug):
             msg = f"writer lock for {slug} is not held"
             raise RuntimeError(msg)
-
-
-def git_common_dir(cwd: Path) -> Path:
-    """Return the clone's common git directory; the same from every worktree."""
-    git = shutil.which("git") or "git"
-    out = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
-        [git, "rev-parse", "--git-common-dir"], cwd=cwd, capture_output=True, text=True, check=True
-    ).stdout.strip()
-    return (cwd / out).resolve()
 
 
 def _load[T: Record](path: Path, model: type[T], current: int, forward: Migrations) -> T:

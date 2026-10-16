@@ -18,9 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git_files import git_common_dir
 from owlbear_delivery_next.steps import ro_installs, worktree
 from owlbear_delivery_next.storage_io import atomic_write
-from owlbear_delivery_next.store import StoreError, git_common_dir
+from owlbear_delivery_next.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Collection

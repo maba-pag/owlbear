@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next import (
     design_pack,
+    git_files,
     pack_update,
     preload,
     prompts,
     roles,
     sdk_adapter,
     sessions,
-    setup,
     tools,
 )
 from owlbear_delivery_next.models import StepKind
@@ -217,7 +217,7 @@ def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the 
     role = roles.chosen(store.settings(), LABEL)
     with tempfile.TemporaryDirectory(prefix="owlbear-pack-") as tmp:
         at = Path(tmp)
-        code, said = setup.probe_in(at)(["git", "init", "-q"])  # the window places its files only in a repository
+        code, said = git_files.probe_in(at)(["git", "init", "-q"])  # the window places its files only in a repository
         if code:
             return Run(f"{LABEL}-none", "error", detail=f"the challenger's worktree is no repository: {said[:200]}")
         upstream_skill(clone, c.tag, at / "upstream")

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, briefs, loop, prompts, setup, tools
+from owlbear_delivery_next import api, briefs, loop, prompts, readiness, setup, tools
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
@@ -254,7 +254,7 @@ GPG = "gpg --batch --yes --pinentry-mode error -u ABC --clearsign -o /dev/null /
 
 
 def failed(table, network=None):
-    checks = setup.readiness("github.com", lambda argv: table.get(" ".join(argv), (0, "")), network, "copilot")
+    checks = readiness.readiness("github.com", lambda argv: table.get(" ".join(argv), (0, "")), network, "copilot")
     return [(c.name, c.fix) for c in checks if not c.ok]
 
 
@@ -282,7 +282,7 @@ def test_a_failed_sign_in_names_the_failed_account_not_the_last_one_listed():
         "  - Active account: false\n  - Token scopes: 'repo'"
     )
     probe = READY | {"gh auth status --hostname github.com": (1, status)}
-    *_, sign_in = setup.publishing("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None)
+    *_, sign_in = readiness.publishing("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None)
     assert (sign_in.name, sign_in.ok) == ("github sign-in", False)
     assert sign_in.detail.endswith("The token in GH_TOKEN is invalid.")
     assert sign_in.fix.startswith("Unset GH_TOKEN")
@@ -309,7 +309,7 @@ def test_the_chat_skill_installs_user_locally_and_never_over_another_skill(tmp_p
 
 def test_the_shaper_agent_installs_where_the_window_lists_user_agents_idempotently(tmp_path):
     path = tmp_path / ".copilot" / "agents" / "owlbear-shaper.agent.md"
-    assert setup.shaper_path(tmp_path) == path
+    assert readiness.shaper_path(tmp_path) == path
     assert setup.install_agent(tmp_path) == f"shaper agent installed for you only (not tracked): {path}"
     shipped = path.read_text()
     assert setup.install_agent(tmp_path).startswith("shaper agent installed")
@@ -560,10 +560,10 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
 ):
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr(setup, "check", lambda *_a: [])
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
     written = [repo / ".vscode" / "tasks.json", repo / ".mcp.json", home / ".copilot" / "skills" / "delivery"]
-    written.append(setup.shaper_path(home))
+    written.append(readiness.shaper_path(home))
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
     assert [p.exists() for p in written] == [False, False, False, False]
@@ -578,7 +578,7 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
 
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
-    monkeypatch.setattr(setup, "check", lambda *_a: [])
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(repo)
     store.root.mkdir(parents=True, exist_ok=True)

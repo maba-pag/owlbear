@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, get_args
 from copilot import CopilotClient, RuntimeConnection
 from copilot.generated.rpc import ModelsListRequest
 
+from owlbear_delivery_next.copilot_cli import cli_path
 from owlbear_delivery_next.models import Effort
-from owlbear_delivery_next.sdk_adapter import cli_path
 
 if TYPE_CHECKING:
     from copilot.generated.rpc import Model, ModelBillingTokenPrices, ModelBillingTokenPricesLongContext

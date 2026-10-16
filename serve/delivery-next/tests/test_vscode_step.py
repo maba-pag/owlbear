@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import ahp, sdk_adapter, session_result, setup, step_mcp, vscode_adapter
+from owlbear_delivery_next import ahp, readiness, sdk_adapter, session_result, step_mcp, vscode_adapter
 from owlbear_delivery_next.ahp import HostError
 from owlbear_delivery_next.config import Layer, resolve
 from owlbear_delivery_next.models import Exit, StepKind
@@ -1070,7 +1070,7 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
 
 
 def test_the_installed_shaper_agent_is_selected_by_its_uri_on_the_first_turn(wt: Path, tmp_path: Path) -> None:
-    agent = setup.shaper_path(tmp_path)
+    agent = readiness.shaper_path(tmp_path)
     agent.parent.mkdir(parents=True)
     agent.write_text("---\nname: owlbear-shaper\n---\n")
     host = shaping_host(wt)
@@ -1085,7 +1085,7 @@ def test_the_installed_shaper_agent_is_selected_by_its_uri_on_the_first_turn(wt:
 
 
 def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_path: Path) -> None:
-    agent = setup.shaper_path(tmp_path)
+    agent = readiness.shaper_path(tmp_path)
     agent.parent.mkdir(parents=True)
     agent.write_text("---\nname: owlbear-shaper\n---\n")
     host = shaping_host(wt)
@@ -1098,7 +1098,7 @@ def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_p
 
 def test_without_the_installed_shaper_agent_the_chat_never_opens_with_every_tool(wt: Path, tmp_path: Path) -> None:
     host = shaping_host(wt)
-    out, warning = shape(wt, shaping_env(host, shaper=setup.shaper_path(tmp_path)))
+    out, warning = shape(wt, shaping_env(host, shaper=readiness.shaper_path(tmp_path)))
     assert (out.end, warning) == ("no-agent", "")
     assert out.detail.startswith("the shaper agent is not installed at")
     assert out.detail.endswith("run `owlbear-next setup`")

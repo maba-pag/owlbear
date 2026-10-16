@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
-import shutil
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -19,6 +17,7 @@ from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
 from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, subagents, tools
+from owlbear_delivery_next.copilot_cli import cli_path
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import decide, identities, view
@@ -50,14 +49,6 @@ POLL = 5.0
 START = 60.0  # runtime start, session create or resume
 NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
-
-
-def cli_path() -> str:
-    """Return the installed Copilot CLI; the SDK's own runtime download fails behind the proxy (P3, S02)."""
-    if not (path := os.environ.get("COPILOT_CLI_PATH") or shutil.which("copilot")):
-        msg = "Copilot CLI not found; install it or set COPILOT_CLI_PATH"
-        raise FileNotFoundError(msg)
-    return path
 
 
 def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = False) -> dict[str, Any]:

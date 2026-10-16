@@ -1,8 +1,8 @@
 """TD-171: each layer imports only itself and the layers before it.
 
 The modules are still flat; the folders follow this allocation (`layers-4`, agreed with Sol) when the code moves. Until
-then this test keeps today's imports movable: a module in no layer, or an import of a later layer, fails it. The only
-upward edges are the planned split of `setup` into readiness and installs, listed in PENDING; a fixed one must leave it.
+then this test keeps today's imports movable: a module in no layer, or an import of a later layer, fails it. PENDING
+lists planned upward edges still open; a fixed one must leave it (the `setup` split closed the last six).
 """
 
 import ast
@@ -14,7 +14,7 @@ NAME = "owlbear_delivery_next"
 LAYERS: dict[str, tuple[str, ...]] = {
     "local_system": (
         "storage_io", "mask", "codebase", "shell_parse", "processes", "process_probe", "lint", "preload", "data_repo",
-        "local_home", "git", "git.*", "github", "github.*",
+        "local_home", "git", "git.*", "github", "github.*", "git_files", "text_files",
     ),
     "change_contracts": (
         "models", "failures", "evidence", "spend", "visual_records", "inbox", "profile_record", "tools", "tool_schema",
@@ -30,7 +30,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
     "runtimes": (
         "ahp", "catalogue", "sdk_usage", "session_result", "missing", "results", "sdk_adapter", "sdk_teardown",
         "prompts", "step_inbox", "window_files", "vscode_adapter", "vscode_contract", "vscode_step", "leftovers",
-        "model_choices", "subagents", "amendments",
+        "model_choices", "subagents", "amendments", "copilot_cli", "readiness",
     ),
     "workflow_steps": ("steps", "steps.*", "held", "overlap", "sessions", "session_choice"),
     "pack_runs": ("pack_candidate", "pack_job", "pack_replay", "visual_settled", "pack_updater"),
@@ -39,10 +39,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
     "commands": ("__init__", "__main__", "cli", "mcp_server", "step_mcp", "runner", "setup"),
 }  # fmt: skip
 ORDER = list(LAYERS)
-PENDING = {  # TD-171's split of setup: probes into readiness (runtimes), git and text helpers into local_system
-    ("pack_candidate", "setup"), ("pack_replay", "setup"), ("host", "setup"), ("vscode_adapter", "setup"),
-    ("window_files", "setup"), ("steps.publish", "setup"),
-}  # fmt: skip
+PENDING: set[tuple[str, str]] = set()
 
 
 def _name(path: Path) -> str:

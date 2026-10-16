@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.github.provider import PullRequest
     from owlbear_delivery_next.models import Change
-    from owlbear_delivery_next.setup import Check
+    from owlbear_delivery_next.readiness import Check
     from owlbear_delivery_next.steps.engine import Ctx
 
 P = StepKind.PUBLISH

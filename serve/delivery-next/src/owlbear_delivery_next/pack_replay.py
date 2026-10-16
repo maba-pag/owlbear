@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next import calibration, design_pack, roles, sdk_adapter, sessions, setup, tools
+from owlbear_delivery_next import calibration, design_pack, git_files, roles, sdk_adapter, sessions, tools
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.steps import judges
@@ -65,7 +65,7 @@ def replay(
         msg = f"the calibration folder leads outside the shared repository, to {root}"
         raise design_pack.PackError(msg)
     with tempfile.TemporaryDirectory(prefix="owlbear-replay-") as tmp:
-        code, text = setup.probe_in(Path(tmp))(["git", "init", "-q"])  # the window places its files only in a repo
+        code, text = git_files.probe_in(Path(tmp))(["git", "init", "-q"])  # the window places its files only in a repo
         if code:
             msg = f"the replay's worktree could not be made a git repository: {text[:200] or f'exit {code}'}"
             raise design_pack.PackError(msg)

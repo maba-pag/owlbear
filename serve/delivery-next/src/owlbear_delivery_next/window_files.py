@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import preload, setup
+from owlbear_delivery_next import git_files, preload, text_files
 from owlbear_delivery_next import tools as tool_specs
 
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ def add_harness(folder: Path) -> Added | None:
     Nothing else changes in the owner's folder, git metadata included: each turn Delivery sends names its model.
     """
     path = folder / SETTINGS
-    if part := setup.linked_part(folder, path):
+    if part := text_files.linked_part(folder, path):
         raise SettingsError(f"{part} is a symbolic link; Delivery writes nothing through it")  # noqa: EM102, TRY003
     try:
         old = path.read_text()
@@ -111,7 +111,7 @@ def add_harness(folder: Path) -> Added | None:
     if (at := _opening(old)) is None:
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {HARNESS} by hand")  # noqa: EM102, TRY003
     comma = "" if old[at:].lstrip().startswith("}") else ","
-    setup.replace_text(path, old[:at] + HARNESS_LINE + comma + old[at:])
+    text_files.replace_text(path, old[:at] + HARNESS_LINE + comma + old[at:])
     return Added(file=False, folder=False)
 
 
@@ -128,7 +128,7 @@ def remove_harness(folder: Path, added: Added) -> str:
                 with contextlib.suppress(OSError):  # a folder the owner filled meanwhile stays
                     path.parent.rmdir()
         else:
-            setup.replace_text(path, rest)
+            text_files.replace_text(path, rest)
     except FileNotFoundError:
         return ""
     except OSError as exc:
@@ -218,23 +218,23 @@ class Placed:
 
 
 def _git(folder: Path, *args: str) -> None:
-    code, text = setup.probe_in(folder)(["git", *args])
+    code, text = git_files.probe_in(folder)(["git", *args])
     if code:
         raise SettingsError(f"git {' '.join(args[:2])}: {text[:200] or f'exit {code}'}")  # noqa: EM102, TRY003
 
 
 def _skipped(folder: Path, rel: str) -> bool:
     """Marked ``skip-worktree``: an earlier step of Delivery's that did not end cleanly placed it."""
-    return setup.probe_in(folder)(["git", "ls-files", "-v", "--", rel])[1].startswith("S ")
+    return git_files.probe_in(folder)(["git", "ls-files", "-v", "--", rel])[1].startswith("S ")
 
 
 def place(folder: Path, rel: str, render: Render) -> Placed:
     """Write ``rel`` in ``folder`` without following a link, and keep it out of every commit."""
     path = folder / rel
-    if part := setup.linked_part(folder, path):
+    if part := text_files.linked_part(folder, path):
         raise SettingsError(f"{part} is a symbolic link; Delivery writes nothing through it")  # noqa: EM102, TRY003
-    tracked = not setup.untracked(folder, path)
-    if tracked and not _skipped(folder, rel) and setup.probe_in(folder)(["git", "diff", "--quiet", "--", rel])[0]:
+    tracked = not git_files.untracked(folder, path)
+    if tracked and not _skipped(folder, rel) and git_files.probe_in(folder)(["git", "diff", "--quiet", "--", rel])[0]:
         raise SettingsError(f"{rel} has local edits; Delivery never overwrites them")  # noqa: EM102, TRY003
     old = path.read_text() if path.is_file() else None
     text = render(old)
@@ -243,8 +243,8 @@ def place(folder: Path, rel: str, render: Render) -> Placed:
     if tracked:
         _git(folder, "update-index", "--skip-worktree", "--", rel)
     else:
-        setup.exclude(folder, path)
-    setup.replace_text(path, text)
+        git_files.exclude(folder, path)
+    text_files.replace_text(path, text)
     return Placed(rel, tracked, None if tracked else old, made)
 
 
@@ -260,7 +260,7 @@ def restore(folder: Path, placed: Sequence[Placed]) -> list[str]:
             elif p.old is None:
                 path.unlink(missing_ok=True)
             else:
-                setup.replace_text(path, p.old)
+                text_files.replace_text(path, p.old)
             for d in p.made:
                 with contextlib.suppress(OSError):  # a folder something else filled stays
                     (folder / d).rmdir()

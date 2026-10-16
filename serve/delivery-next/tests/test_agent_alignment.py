@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import mcp_server, preload, prompts, roles, sdk_adapter, sessions, setup, tools
+from owlbear_delivery_next import mcp_server, preload, prompts, readiness, roles, sdk_adapter, sessions, setup, tools
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.config import Layer, resolve
 from owlbear_delivery_next.models import StepKind
@@ -223,7 +223,7 @@ def test_check_preparation_runs_as_the_preparer_in_both_runtimes(tmp_path) -> No
 
 
 def shaper_file() -> tuple[dict[str, str], list[str], str]:
-    text = files("owlbear_delivery_next").joinpath("chat_agents", setup.SHAPER).read_text(encoding="utf-8")
+    text = files("owlbear_delivery_next").joinpath("chat_agents", readiness.SHAPER).read_text(encoding="utf-8")
     _, front, body = text.split("---", 2)
     meta = {k.strip(): v.strip() for k, v in (line.split(":", 1) for line in front.strip().splitlines())}
     return meta, [n.strip() for n in meta["tools"].strip("[]").split(",")], body

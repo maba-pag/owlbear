@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import ahp, leftovers, prompts, setup
+from owlbear_delivery_next import ahp, leftovers, prompts, readiness
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import Gate
@@ -95,7 +95,7 @@ class Env:
     clock: Callable[[], float] = time.monotonic
     settle: Callable[[Path, datetime], Termination] = leftovers.settle
     reminder: str | None = None  # None: the session role's own reminder
-    shaper: Path | None = field(default_factory=lambda: setup.shaper_path(Path.home()))  # the chat's agent (TD-93)
+    shaper: Path | None = field(default_factory=lambda: readiness.shaper_path(Path.home()))  # the chat's agent (TD-93)
 
 
 def _grace(control: Control) -> Callable[[], None]:

@@ -9,13 +9,14 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next import briefs, cli, loop, profile_record, runner, sdk_adapter, sessions, tools
+from owlbear_delivery_next.git_files import git_common_dir
 from owlbear_delivery_next.models import Brief, Change, ErrorKind, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.steps import disposable, worktree
-from owlbear_delivery_next.store import Lock, Store, StoreError, git_common_dir
+from owlbear_delivery_next.store import Lock, Store, StoreError
 
 K = StepKind
 VOIDED = "policy:review:read-only-write"

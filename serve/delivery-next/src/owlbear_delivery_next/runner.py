@@ -16,6 +16,7 @@ from owlbear_delivery_next import (
     budgets,
     design_tools,
     disputes,
+    git_files,
     held,
     host,
     loop,
@@ -23,18 +24,19 @@ from owlbear_delivery_next import (
     permissions,
     profile,
     prompts,
+    readiness,
     repairs,
     roles,
     sdk_adapter,
     session_choice,
     session_result,
     sessions,
-    setup,
     tools,
     visual_settled,
 )
 from owlbear_delivery_next.cli import describe
 from owlbear_delivery_next.failures import cause_key
+from owlbear_delivery_next.git_files import git_common_dir
 from owlbear_delivery_next.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.sessions import UsageUnreadError
@@ -55,7 +57,7 @@ from owlbear_delivery_next.steps import (
     visual,
     worktree,
 )
-from owlbear_delivery_next.store import STORE_DIR, LockHeldError, Store, StoreError, git_common_dir
+from owlbear_delivery_next.store import STORE_DIR, LockHeldError, Store, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -362,7 +364,7 @@ def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> No
 def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
-    return publish.gate(setup.publishing(host, setup.probe_in(path), setup.reach(host)), now)
+    return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host)), now)
 
 
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
