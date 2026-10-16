@@ -100,6 +100,7 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
     assert pack_update.said(pack_update.notice(refresh=False)) == shown
     assert config_routes._state(Store.open(repo))["design_pack"] == shown  # noqa: SLF001
     monkeypatch.setattr(readiness, "readiness", lambda *_a: [])  # the other facts probe the machine and the network
+    monkeypatch.setattr(readiness, "reach", lambda *_a: None)  # its argument is evaluated first: no real request
     assert readiness.check(repo, None) == [readiness.Check("design pack updates", ok=True, detail=shown)]  # host start
     path = design_pack.folder().parent / pack_update.NOTICE
     path.write_text(json.dumps(json.loads(path.read_text()) | {"tag": "skill-v4.0.0"}))
