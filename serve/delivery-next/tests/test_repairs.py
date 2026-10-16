@@ -115,7 +115,7 @@ def test_a_challenged_planner_resumes_until_its_plan_is_accepted_then_a_fresh_pl
     c.outcome = Outcome(exit=Exit.RETRY, reason="network", at=NOW)  # the repair failed before a plan came back
     assert repairs.session(c, None) == "p1"  # the chance is still in flight: the replay resumes it again
     planned = loop.StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
-    repairs.bind(c, None, Run("p1", "result"), planned)
+    repairs.bind(c, None, "p1", None, planned)
     assert (c.step.resumed, c.step.repair) == ("p1", "")
     c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: still no check", at=NOW)
     assert repairs.session(c, None) == ""

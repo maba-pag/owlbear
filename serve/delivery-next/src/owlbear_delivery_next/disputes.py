@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change, Task
-    from owlbear_delivery_next.session_result import Run
 
 DISPUTED = "disputed"  # a review step's mode once the owner decided each upheld finding: it completes unrun
 PREFIX = cause_key(ErrorKind.REVIEW, StepKind.REVIEW, "dispute ")
@@ -111,13 +110,13 @@ def _rechecks(keys: list[str], wanted: tuple[str, ...]) -> list[str]:
     return errors
 
 
-def processed(c: Change, task: Task | None, run: Run, result: StepResult) -> StepResult:
+def processed(c: Change, task: Task | None, session: str, payload: object, result: StepResult) -> StepResult:
     """What an accepted build or review leaves for the findings loop (TD-123, TD-124, TD-176)."""
     if c.step.kind in {StepKind.BUILD, StepKind.PLAN}:
-        repairs.bind(c, task, run, result)
+        repairs.bind(c, task, session, payload, result)
     if c.step.kind == StepKind.BUILD:
-        _record(task, run.payload, result)
-    return _settle(c, task, run.payload, result) if c.step.kind == StepKind.REVIEW else result
+        _record(task, payload, result)
+    return _settle(c, task, payload, result) if c.step.kind == StepKind.REVIEW else result
 
 
 def _record(task: Task | None, payload: object, result: StepResult) -> None:

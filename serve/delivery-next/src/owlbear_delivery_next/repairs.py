@@ -10,7 +10,6 @@ from owlbear_delivery_next.models import Exit, StepKind
 if TYPE_CHECKING:
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change, Task
-    from owlbear_delivery_next.session_result import Run
 
 EARLIER = (
     "\n\n## The earlier session's work (from Delivery's records; its session could not be resumed)\n\n{}\n\n"
@@ -54,18 +53,13 @@ def session(change: Change, task: Task | None) -> str:
     return s.repair
 
 
-def bind(change: Change, task: Task | None, run: Run, result: StepResult) -> None:
+def bind(change: Change, task: Task | None, session: str, payload: object, result: StepResult) -> None:
     """Bind an accepted build to the session that made it and what it made; an accepted plan uses up its chance."""
     s = change.step
     if s.kind == StepKind.PLAN and s.repair and result.exit == Exit.DONE:
         s.resumed, s.repair = s.repair, ""
-    if (
-        s.kind == StepKind.BUILD
-        and task
-        and result.exit == Exit.DONE
-        and isinstance(p := run.payload, tools.BuildResult)
-    ):
-        task.built_by, task.earlier = run.session_id, f"{p.summary} Changed: {', '.join(p.changed_paths)}"[:2000]
+    if s.kind == StepKind.BUILD and task and result.exit == Exit.DONE and isinstance(p := payload, tools.BuildResult):
+        task.built_by, task.earlier = session, f"{p.summary} Changed: {', '.join(p.changed_paths)}"[:2000]
 
 
 def fallback(task: Task | None) -> str:
