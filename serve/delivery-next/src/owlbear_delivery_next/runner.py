@@ -333,7 +333,12 @@ def _challenge(
     if verdict.exit in {Exit.ASK, Exit.STOP} or (verdict.operational and verdict.exit == Exit.BACK):
         return verdict
     return verdict.model_copy(
-        update={"exit": Exit.RETRY, "plan": planned.plan, "reason": f"plan challenge: {verdict.reason}"}
+        update={
+            "exit": Exit.RETRY,
+            "plan": planned.plan,
+            "reason": f"plan challenge: {verdict.reason}",
+            "challenged": True,
+        }
     )
 
 

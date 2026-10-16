@@ -47,7 +47,7 @@ def session(change: Change, task: Task | None) -> str:
         return task.resume
     if s.kind != StepKind.PLAN:
         return ""
-    challenged = o and o.exit == Exit.RETRY and o.reason.startswith("plan challenge:")
+    challenged = o and o.exit == Exit.RETRY and o.challenged
     if not s.repair and challenged and s.session and s.resumed != s.session:
         s.repair = s.session
     return s.repair

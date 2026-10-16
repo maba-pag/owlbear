@@ -101,6 +101,7 @@ class StepResult(Record):
     score: Score | None = None  # how far a work failure got; better than the streak's best is progress
     detail: str = ""  # the raw error behind a stable reason; shown when the owner is asked, never part of a signature
     operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
+    challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
 
 
 def waiting_consent(c: Change) -> bool:
@@ -361,6 +362,7 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
         waiting=result.waiting,
         wake_at=result.wake_at,
         denial=result.denial,
+        challenged=result.challenged,
         at=now,
     )
     budgets.streaks(c, result)

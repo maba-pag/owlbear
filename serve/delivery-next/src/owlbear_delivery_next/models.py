@@ -335,6 +335,7 @@ class Outcome(Record):
     wake_at: datetime | None = None
     question: str | None = None
     denial: str | None = None
+    challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
     at: datetime
 
 

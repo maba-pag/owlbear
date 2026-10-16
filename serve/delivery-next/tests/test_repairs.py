@@ -110,17 +110,34 @@ def test_a_final_review_repair_starts_fresh_then_its_repairer_gets_one_chance():
 def test_a_challenged_planner_resumes_until_its_plan_is_accepted_then_a_fresh_planner_gets_its_own_chance():
     c = change()
     c.step = Step(kind=K.PLAN, session="p1")
-    c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: t2 has no check", at=NOW)
+    c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: t2 has no check", challenged=True, at=NOW)
     assert (repairs.session(c, None), c.step.repair) == ("p1", "p1")
     c.outcome = Outcome(exit=Exit.RETRY, reason="network", at=NOW)  # the repair failed before a plan came back
     assert repairs.session(c, None) == "p1"  # the chance is still in flight: the replay resumes it again
     planned = loop.StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
     repairs.bind(c, None, "p1", None, planned)
     assert (c.step.resumed, c.step.repair) == ("p1", "")
-    c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: still no check", at=NOW)
+    c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: still no check", challenged=True, at=NOW)
     assert repairs.session(c, None) == ""
     c.step.session = "p2"
     assert repairs.session(c, None) == "p2"
+
+
+def test_only_the_typed_flag_marks_a_challenged_plan_never_its_reason_text():
+    c = change()
+    c.step = Step(kind=K.PLAN, session="p1")
+    c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: t2 has no check", at=NOW)  # text only
+    assert (repairs.session(c, None), c.step.repair) == ("", "")
+    result = loop.StepResult(exit=Exit.RETRY, reason="t2 has no check", challenged=True)
+    assert loop.apply(c, result, NOW).outcome.challenged is True  # the loop keeps the runner's flag
+
+
+def test_a_challenged_plan_comes_back_with_the_flag_and_a_display_reason(monkeypatch):
+    found = loop.StepResult(exit=Exit.RETRY, reason="t2 has no check")
+    monkeypatch.setattr(runner.sessions, "reviewer", lambda *_: found)
+    planned = loop.StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
+    back = runner._challenge(None, None, change(), None, planned)  # noqa: SLF001
+    assert (back.exit, back.challenged, back.reason) == (Exit.RETRY, True, "plan challenge: t2 has no check")
 
 
 def built_run(cfg, head: str) -> Run:
