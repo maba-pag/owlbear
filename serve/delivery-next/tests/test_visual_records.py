@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import calibration, config_routes, sessions, visual_settled
+from owlbear_delivery_next import calibration, config_routes, local_home, sessions, visual_settled
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.models import Change
 from owlbear_delivery_next.store import Lock, Store
@@ -44,7 +44,7 @@ def shared_repo(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setenv("OWLBEAR_HOME", str(home))
+    monkeypatch.setattr(local_home, "root", lambda: home)
     repo = tmp_path / "shop"
     git(tmp_path, "init", "-q", "-b", "main", str(repo))
     git(repo, "commit", "--allow-empty", "-qm", "start")

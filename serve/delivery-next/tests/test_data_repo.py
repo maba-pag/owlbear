@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, change_record, cli, data_repo, profile_share, sessions, setup
+from owlbear_delivery_next import api, change_record, cli, data_repo, local_home, profile_share, sessions, setup
 from owlbear_delivery_next import host as host_module
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.config import Layer
@@ -44,7 +44,7 @@ def shared(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setenv("OWLBEAR_HOME", str(home))
+    monkeypatch.setattr(local_home, "root", lambda: home)
     return root, remote
 
 
@@ -252,7 +252,7 @@ def test_a_pointer_to_no_repository_stops_delivery(tmp_path: Path, repo, monkeyp
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(tmp_path / "missing")}))
-    monkeypatch.setenv("OWLBEAR_HOME", str(home))
+    monkeypatch.setattr(local_home, "root", lambda: home)
     with pytest.raises(StoreError, match="not a git repository"):
         Store.open(repo)
 

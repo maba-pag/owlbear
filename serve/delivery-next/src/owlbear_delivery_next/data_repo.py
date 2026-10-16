@@ -52,17 +52,14 @@ def _held(path: Path) -> str:
 
 
 def pointer() -> Path:
-    """Where the machine records the shared repository: OwlBear's folder, else the old ``~/.owlbear`` (read only)."""
-    path, old = local_home.found(POINTER), local_home.legacy()
-    if path.exists() or old is None or not (old / OLD_POINTER).is_file():
-        return path
-    return old / OLD_POINTER  # its oldest name; the move copies it as data.json
+    """Where the machine records the shared repository: ``data.json`` in OwlBear's folder."""
+    return local_home.root() / POINTER
 
 
 def _move_old(path: Path) -> None:
     """Move the pointer's old ``common.json`` to *path* once: written atomically, then the old file removed."""
     old = path.with_name(OLD_POINTER)
-    if path.exists() or not old.is_file() or local_home.is_old(path):  # the old folder is a backup, never changed
+    if path.exists() or not old.is_file():
         return
     try:
         atomic_write(path, old.read_text())
@@ -277,7 +274,7 @@ def point(root: Path) -> DataRepo:
     if _top(root) != root:
         msg = f"{root} is not a git repository's top folder"
         raise DataRepoError(msg)
-    path = local_home.root() / POINTER  # a new record goes to OwlBear's folder; an old one stays as a backup
+    path = local_home.root() / POINTER
     path.parent.mkdir(parents=True, exist_ok=True)
     _move_old(path)
     path.write_text(json.dumps({"repository": str(root)}) + "\n")

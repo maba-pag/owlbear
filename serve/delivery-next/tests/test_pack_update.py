@@ -18,6 +18,7 @@ from owlbear_delivery_next import (
     design_pack,
     design_tools,
     detector,
+    local_home,
     pack_candidate,
     pack_replay,
     pack_update,
@@ -51,7 +52,7 @@ def repo(tmp_path: Path, monkeypatch) -> Path:
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setenv("OWLBEAR_HOME", str(home))
+    monkeypatch.setattr(local_home, "root", lambda: home)
     project = tmp_path / "shop"
     git(tmp_path, "init", "-q", "-b", "main", str(project))
     git(project, "commit", "--allow-empty", "-qm", "start")
@@ -199,7 +200,7 @@ def test_golden_pages_report_what_an_engine_missed_or_found_unexpectedly(monkeyp
 
 @pytest.mark.browser
 def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypatch) -> None:
-    monkeypatch.setenv("OWLBEAR_HOME", str(Path.home() / ".owlbear"))  # this machine's pack, read only
+    monkeypatch.setattr(local_home, "root", lambda: Path.home() / ".owlbear")  # this machine's pack, read only
     pack = design_pack.installed()
     if pack is None:
         pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")

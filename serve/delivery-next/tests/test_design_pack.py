@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import design_pack, detector, preload, sdk_adapter
+from owlbear_delivery_next import design_pack, detector, local_home, preload, sdk_adapter
 from owlbear_delivery_next import window_files as wf
 from owlbear_delivery_next.models import StepKind
 
@@ -73,7 +73,7 @@ def test_install_keeps_only_files_that_match_their_digests(monkeypatch) -> None:
     found = design_pack.install(fetch)
     assert (found.engine.read_bytes(), found.bundle) == (b"engine", "bundle")
     assert os.access(found.engine, os.X_OK)
-    assert design_pack.folder().is_relative_to(Path(os.environ["OWLBEAR_HOME"]))
+    assert design_pack.folder().is_relative_to(local_home.root())
     assert design_pack.folder().stat().st_mode & 0o077 == 0
     design_pack.install(fetch)
     assert len(fetched) == 2  # nothing is downloaded again

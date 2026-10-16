@@ -68,7 +68,7 @@ class Stopped(Exception):  # noqa: N818 - how a stage ends the run
 
 
 def _upstream() -> Path:
-    return design_pack.folder(writing=True).parent / "upstream"  # beside the packs, outside every project
+    return design_pack.folder().parent / "upstream"  # beside the packs, outside every project
 
 
 @dataclass

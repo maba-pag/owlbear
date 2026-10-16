@@ -5,14 +5,15 @@ from urllib.parse import parse_qsl
 
 import pytest
 
-from owlbear_delivery_next import backlog, backlog_issues, design_pack, model_choices, sdk_adapter
+from owlbear_delivery_next import backlog, backlog_issues, design_pack, local_home, model_choices, sdk_adapter
 from owlbear_delivery_next.steps import worktree
 
 
 @pytest.fixture(autouse=True)
 def _no_shared_settings(tmp_path_factory, monkeypatch):
     """Tests never read the machine's pointer to the shared settings repository (TD-57), nor go online."""
-    monkeypatch.setenv("OWLBEAR_HOME", str(tmp_path_factory.mktemp("owlbear-home")))
+    home = tmp_path_factory.mktemp("owlbear-home")
+    monkeypatch.setattr(local_home, "root", lambda: home)  # never the machine's ~/.owlbear
     monkeypatch.delenv("OWLBEAR_DATA", raising=False)
     monkeypatch.setattr(design_pack, "fetch", _offline)
     monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))

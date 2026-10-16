@@ -1,7 +1,7 @@
 """The design pack (TD-76): Impeccable's detector, pinned together with the design skills extracted from it.
 
 Delivery downloads the engine and the in-page detector once, unmodified, checks each against the pack's digest and
-keeps them outside every project, in ``<OWLBEAR_HOME>/design-pack/<pack>/``. The pack changes only as a whole.
+keeps them outside every project, in ``~/.owlbear/design-pack/<pack>/``. The pack changes only as a whole.
 """
 
 from __future__ import annotations
@@ -82,13 +82,9 @@ def platform_name() -> str:
     return f"{system}-{machine}"
 
 
-def folder(pins: dict[str, Any] | None = None, *, writing: bool = False) -> Path:
-    """Where this machine keeps the pack's downloads, outside every project; *pins* name a candidate pack.
-
-    Reads fall back to the old ``~/.owlbear`` until it is moved; writes go to OwlBear's folder (TD-161).
-    """
-    name = f"{PACKS}/{(pins or manifest())['pack']}"
-    return local_home.root() / name if writing else local_home.found(name)
+def folder(pins: dict[str, Any] | None = None) -> Path:
+    """Where this machine keeps the pack's downloads, in OwlBear's folder; *pins* name a candidate pack."""
+    return local_home.root() / PACKS / (pins or manifest())["pack"]
 
 
 def _sha256(path: Path) -> str:
@@ -151,7 +147,7 @@ def _keep(target: Path, name: str, data: bytes) -> None:
 def install(download: Callable[[str], bytes] | None = None, pins: dict[str, Any] | None = None) -> Installed:
     """Download what is missing or changed, refuse any file that does not match its digest, and keep the rest."""
     download = download or fetch
-    target = folder(pins, writing=True)
+    target = folder(pins)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     target.mkdir(mode=0o700, exist_ok=True)
     if not (_private(target) and _private(target.parent)):

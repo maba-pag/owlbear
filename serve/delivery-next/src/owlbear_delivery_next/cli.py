@@ -62,15 +62,9 @@ def show_data(path: Path | None) -> str:
     return f"Shared data repository: {shared.root} (pointer {data_repo.pointer()}). Restart a running host to use it."
 
 
-def show_home(*, move: bool) -> str:
-    """Say where OwlBear keeps its files on this machine; with ``move``, copy what only the old folder holds."""
-    lines = [f"OwlBear's folder: {local_home.root()}"]
-    if move:
-        lines += [f"copied {old} to {new}; the old copy stays as a backup" for old, new in local_home.move()]
-    lines += [
-        f"still read from the old folder: {old} (`owlbear-next home --move` copies it)" for old, _ in local_home.plan()
-    ]
-    return "\n".join(lines)
+def show_home() -> str:
+    """Say where OwlBear keeps its files on this machine."""
+    return f"OwlBear's folder: {local_home.root()}"
 
 
 def show_pack(*, install: bool) -> int:
@@ -297,10 +291,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     show.add_argument("change")
     shared = sub.add_parser("data", help="show or set the shared settings repository (TD-57)")
     shared.add_argument("path", nargs="?", type=Path)
-    home = sub.add_parser("home", help="show OwlBear's folder on this machine (TD-161)")
-    home.add_argument(
-        "--move", action="store_true", help="copy what only the old ~/.owlbear holds; it stays as a backup"
-    )
+    sub.add_parser("home", help="show OwlBear's folder on this machine (TD-198)")
     pack = sub.add_parser("design-pack", help="show, install or update the pinned design pack (TD-76)")
     pack.add_argument("--install", action="store_true", help="download and verify what is missing")
     pack.add_argument("--check", action="store_true", help="count upstream releases since the pinned one")
@@ -322,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     if a.command == "design-pack" and bool(a.diff) != bool(a.to):
         parser.error("--diff and --to go together")
     if a.command in {"data", "home"}:
-        sys.stdout.write((show_data(a.path) if a.command == "data" else show_home(move=a.move)) + "\n")
+        sys.stdout.write((show_data(a.path) if a.command == "data" else show_home()) + "\n")
         return 0
     if a.command == "design-pack":
         updating = a.check or a.diff or a.golden or a.replay

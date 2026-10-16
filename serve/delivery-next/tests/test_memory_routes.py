@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine
 
-from owlbear_delivery_next import api, data_repo
+from owlbear_delivery_next import api, data_repo, local_home
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import Store
@@ -39,7 +39,7 @@ def shared(tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path]:
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setenv("OWLBEAR_HOME", str(home))
+    monkeypatch.setattr(local_home, "root", lambda: home)
     git(tmp_path, "init", "-q", "-b", "main", str(repo))
     git(repo, "commit", "--allow-empty", "-qm", "start")
     return root, remote, repo

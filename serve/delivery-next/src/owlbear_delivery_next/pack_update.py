@@ -70,8 +70,7 @@ def newer(fetch: Callable[[str], bytes] | None = None) -> list[str] | None:
 def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]:
     """The last check of upstream for the pinned tag, refreshed at most daily when asked; reading never goes online."""
     pack, tag = design_pack.manifest()["pack"], design_pack.manifest()["upstream"]["tag"]
-    path, unknown = local_home.found(f"{design_pack.PACKS}/{NOTICE}"), {"behind": None, "checked_at": None}
-    written = local_home.root() / design_pack.PACKS / NOTICE
+    path, unknown = local_home.root() / design_pack.PACKS / NOTICE, {"behind": None, "checked_at": None}
     kept: Any = unknown
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
@@ -82,13 +81,13 @@ def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dic
     if refresh and (checked is None or datetime.now(UTC) - checked > STALE):
         if (found := behind(fetch)) is None:  # offline: unknown now, also to the settings page, and checked next time
             with contextlib.suppress(OSError):
-                written.parent.mkdir(parents=True, exist_ok=True)
-                written.write_text(json.dumps({"tag": tag, **unknown}) + "\n", encoding="utf-8")  # wins over an old one
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({"tag": tag, **unknown}) + "\n", encoding="utf-8")
             return {"pack": pack, **unknown}
         kept = {"tag": tag, "behind": found, "checked_at": datetime.now(UTC).isoformat(timespec="seconds")}
         try:
-            written.parent.mkdir(parents=True, exist_ok=True)
-            written.write_text(json.dumps(kept) + "\n", encoding="utf-8")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(kept) + "\n", encoding="utf-8")
         except OSError:
             pass  # the notice is a hint; it is checked again next time
     return {"pack": pack, "behind": kept["behind"], "checked_at": kept["checked_at"]}

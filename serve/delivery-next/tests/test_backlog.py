@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next import backlog as backlog_module
-from owlbear_delivery_next import backlog_migrate, cli
+from owlbear_delivery_next import backlog_migrate, cli, local_home
 from owlbear_delivery_next.backlog import Backlog, BacklogError
 from owlbear_delivery_next.backlog_issues import Issues
 from owlbear_delivery_next.data_repo import DataRepo
@@ -26,7 +26,7 @@ def shared(shared_repo, tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(shared_repo[0])}))
-    monkeypatch.setenv("OWLBEAR_HOME", str(home))
+    monkeypatch.setattr(local_home, "root", lambda: home)
     return shared_repo
 
 
