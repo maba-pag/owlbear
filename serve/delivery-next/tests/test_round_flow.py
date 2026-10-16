@@ -304,13 +304,10 @@ def test_a_challenged_review_leaves_out_the_owners_answers_on_findings():
     ]
 
 
-@pytest.mark.parametrize(("origin", "base"), [("ci", None), ("plan", "built before its loop existed")])
-def test_only_a_plan_tasks_first_build_starts_a_loop(tmp_path, clone, monkeypatch, origin, base):
+def test_a_task_built_before_its_loop_existed_keeps_the_earlier_rules(tmp_path, clone, monkeypatch):
     store = stored(tmp_path)
     c = store.read("c1")
-    c.plan.tasks[0] = c.plan.tasks[0].model_copy(
-        update={"origin": origin, "base": base and git(clone, "rev-parse", "HEAD")}
-    )
+    c.plan.tasks[0].base = git(clone, "rev-parse", "HEAD")
     store.write(Lock("c1"), c)
     built(store, clone, monkeypatch, "b\n")
     cfg = reviewed(store, clone, monkeypatch, range(1, 3))
@@ -321,3 +318,17 @@ def test_only_a_plan_tasks_first_build_starts_a_loop(tmp_path, clone, monkeypatc
         Exit.RETRY,
         True,
     )
+
+
+@pytest.mark.parametrize("origin", ["ci", "pr-feedback", "integration", "person-check", "review"])
+def test_work_added_to_reviewed_work_gets_no_review_of_its_own(tmp_path, clone, monkeypatch, origin):
+    store = stored(tmp_path)
+    c = store.read("c1")
+    c.plan.tasks[0].done = True
+    c.plan.tasks[1].done = True
+    c.plan.tasks.append(Task(id="t3", title="fix", scope=["a.txt"], origin=origin))  # a visual repair, if "review"
+    c.step = Step(kind=K.BUILD, task="t3")
+    store.write(Lock("c1"), c)
+    built(store, clone, monkeypatch, "b\n")
+    c = store.read("c1")
+    assert (c.plan.tasks[-1].done, c.loops, at(c)) == (True, {}, (K.REVIEW, None, "final"))  # the final round

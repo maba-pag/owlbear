@@ -152,8 +152,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
             rejectable=disputes.rejectable(task) if s.kind == StepKind.BUILD else (),
             settled=disputes.settled(task) if s.kind == StepKind.BUILD else (),
-            rechecks=disputes.pending(task) if s.kind == StepKind.REVIEW else (),
+            rechecks=disputes.pending(disputes.target(change, task)) if s.kind == StepKind.REVIEW else (),
             cap=disputes.cap(change),
+            plan_tasks=disputes.planned(change),
             amendable=amendments.amendable(change),
             explore=s.kind == StepKind.PLAN
             and store.settings().explore,  # TD-129: the SDK planner only, off by default

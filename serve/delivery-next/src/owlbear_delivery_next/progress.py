@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_delivery_next.budgets import review_round
 from owlbear_delivery_next.loop import brief_due
 from owlbear_delivery_next.models import VISUAL, StepKind
+from owlbear_delivery_next.round_records import FINAL
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change, Task
@@ -143,6 +144,8 @@ def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]:  # noqa:
         return ("Visual review", rounds["visual"]) if s.task == VISUAL else (f"Check {s.task}", 1)
     if kind != StepKind.BUILD or task is None:
         return None, 1
+    if task.fixes == FINAL:
+        return "Fixing final review findings", rounds["final"]
     if task.origin == "review" and task.fixes is None:  # a repair of no task: the visual check's or the final review's
         if task.title.startswith(_VISUAL_FIX):
             return "Fixing visual findings", rounds["visual"]

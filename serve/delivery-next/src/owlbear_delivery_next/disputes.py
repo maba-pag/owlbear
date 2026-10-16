@@ -14,15 +14,15 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import dispute_tools, repairs, round_records, tools
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import Dispute, ErrorKind, Exit, Option, Question, StepKind
-from owlbear_delivery_next.moves import ask, go, subject_of
-from owlbear_delivery_next.round_records import MAX_FINDINGS, RECHECK
+from owlbear_delivery_next.moves import ask, go, loop_of
+from owlbear_delivery_next.round_records import FINAL, MAX_FINDINGS, RECHECK
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change, Task
-    from owlbear_delivery_next.round_records import FindingState
+    from owlbear_delivery_next.round_records import FindingState, RoundLoop
 
 DISPUTED = "disputed"  # a review step's mode once the owner decided each finding left standing
 PREFIX = cause_key(ErrorKind.REVIEW, StepKind.REVIEW, "dispute ")
@@ -94,13 +94,33 @@ def cap(c: Change) -> int:
     """How many new findings the current review may return: none in a rejections-only check (TD-218)."""
     if c.step.mode == RECHECK:
         return 0
-    subject = next((subject_of(c, t) for t in (c.plan.tasks if c.plan else []) if t.id == c.step.task), "")
-    return lp.policy.max_findings if (lp := c.loops.get(subject)) else MAX_FINDINGS
+    return lp.policy.max_findings if (lp := _looped(c)) else MAX_FINDINGS
+
+
+def planned(c: Change) -> tuple[str, ...]:
+    """The plan tasks a final-review round's findings name (TD-216); none for any other review."""
+    if c.step.task is not None or c.step.mode == RECHECK or _looped(c) is None or c.plan is None:
+        return ()
+    return tuple(t.id for t in c.plan.tasks if t.origin == "plan")
+
+
+def _looped(c: Change) -> RoundLoop | None:
+    if c.step.kind != StepKind.REVIEW:
+        return None
+    return loop_of(c, next((t for t in (c.plan.tasks if c.plan else []) if t.id == c.step.task), None))
+
+
+def target(c: Change, task: Task | None) -> Task | None:
+    """The repair whose rejections a review judges: its own task, or the final loop's latest built repair."""
+    if task is not None:
+        return task
+    lp = c.loops.get(FINAL)
+    return next((t for t in (c.plan.tasks if c.plan else []) if lp and t.id in lp.batch), None)
 
 
 def challenged(c: Change, task: Task | None) -> bool:
-    """Whether a review is a round of its task's challenge loop: it never sees earlier findings (TD-208)."""
-    return bool(task and c.loops.get(subject_of(c, task)))
+    """Whether a review is a round of a challenge loop: it never sees earlier findings (TD-208)."""
+    return c.step.kind == StepKind.REVIEW and loop_of(c, task) is not None
 
 
 def hidden(q: Question, *, challenged: bool) -> bool:
@@ -116,6 +136,7 @@ def check(  # noqa: PLR0913 - the result, its tree and the four bounds its field
     *,
     settled: tuple[str, ...] = (),
     cap: int = MAX_FINDINGS,
+    tasks: tuple[str, ...] = (),
 ) -> list[str]:
     """Field errors of a build result's rejections, a review's judgements and new findings, or a reconsideration."""
     if isinstance(args, tools.BuildResult):
@@ -123,7 +144,7 @@ def check(  # noqa: PLR0913 - the result, its tree and the four bounds its field
     if isinstance(args, tools.ReviewResult):
         over = len(args.findings) - cap
         many = [f"findings: {len(args.findings)} given, at most {cap} - keep the most important"] if over > 0 else []
-        return many + _rechecks(args.rechecked, rechecks)
+        return many + (_named(args.findings, tasks) if tasks else []) + _rechecks(args.rechecked, rechecks)
     if isinstance(args, dispute_tools.ReconsiderResult):
         return _reconsidered(args.reconsidered, rechecks)
     return []
@@ -163,6 +184,17 @@ def _rechecks(given: list[tools.Recheck], wanted: tuple[str, ...]) -> list[str]:
     return errors + [f"rechecked: {r.finding} needs upheld true or false" for r in given if r.upheld is None]
 
 
+def _named(findings: list[tools.Finding], tasks: tuple[str, ...]) -> list[str]:
+    """Each final-review finding names known plan tasks, or says why none fits (TD-216)."""
+    errors = []
+    for i, f in enumerate(findings, 1):
+        if unknown := [t for t in f.tasks if t not in tasks]:
+            errors.append(f"findings[{i}].tasks: {', '.join(unknown)} is no plan task - use {', '.join(tasks)}")
+        elif not f.tasks and not f.no_task.strip():
+            errors.append(f"findings[{i}]: name its plan tasks in `tasks`, or say in `no_task` why none fits")
+    return errors
+
+
 def _reconsidered(given: list[dispute_tools.Reconsidered], wanted: tuple[str, ...]) -> list[str]:
     errors = _listed("reconsidered", [r.finding for r in given], wanted, "Reconsider")
     return errors + [
@@ -178,12 +210,12 @@ def processed(c: Change, task: Task | None, session: str, payload: object, resul
         repairs.bind(c, task, session, payload, result)
     if c.step.kind == StepKind.BUILD:
         _record(c, task, payload, result)
-    return _settle(c, task, payload, result) if c.step.kind == StepKind.REVIEW else result
+    return _settle(c, target(c, task), payload, result) if c.step.kind == StepKind.REVIEW else result
 
 
 def mark(c: Change, task: Task, key: str, state: FindingState, **fields: str) -> None:
     """Keep the loop's record of one finding in step with the repair and its dispute (TD-208)."""
-    lp = c.loops.get(subject_of(c, task))
+    lp = loop_of(c, task)
     found = next((f for f in lp.findings if f.id == key), None) if lp else None
     if found is not None:
         found.state = state
@@ -258,7 +290,7 @@ def decided(c: Change, q: Question, target: str, at: datetime, note: str = "") -
     if (later := _open(task)) is not None:
         ask(c, question(task, later), at)
     else:
-        go(c, StepKind.REVIEW, task.id, DISPUTED)
+        go(c, StepKind.REVIEW, c.step.task, DISPUTED)  # the review that asked: a task's, or the final one
 
 
 def waiting(task: Task | None) -> list[Dispute]:
@@ -313,9 +345,9 @@ def build_lines(task: Task) -> list[str]:
 def review_lines(c: Change, task: Task | None) -> list[str]:
     """The previous round's rejections this review judges; a review outside a loop also gets the findings not to fix."""
     lines = []
-    if task and (keys := pending(task)):
+    if (judged := target(c, task)) and (keys := pending(judged)):
         lines += ["", "## Rejections to judge", RECHECK_TEXT, *([ONLY] if c.step.mode == RECHECK else [])]
-        for d in (d for d in task.disputes if d.key in keys):
+        for d in (d for d in judged.disputes if d.key in keys):
             lines += [f"- {d.key}: {_flat(d.finding)}", f"  Builder's reason: {_flat(d.reason)}"]
     gone = [] if challenged(c, task) else [d for t in (c.plan.tasks if c.plan else []) for d in t.disputes if _how(d)]
     if gone:

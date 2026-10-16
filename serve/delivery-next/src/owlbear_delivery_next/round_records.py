@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 type FindingState = Literal[
     "open", "fixed", "rejected", "standing", "escalated", "owner-fix", "owner-drop", "withdrawn"
 ]
-type Ended = Literal["", "clean", "count", "max", "accepted", "retried"]
+type Ended = Literal["", "clean", "count", "max", "accepted", "retried", "restarted"]
 MAX_FINDINGS = 20  # a review result's own cap
 FINAL = "final"  # the final review's subject
 RECHECK = "rejections"  # a review step that judges only an early last round's rejections (TD-218)
@@ -62,6 +62,13 @@ class RoundFinding(_Record):
         return f"- {self.id}: {self.text}"
 
 
+class Completion(_Record):
+    """The engine's record that the final loop ended without a pass (TD-208): it stands for this content only."""
+
+    head: str  # the commit the last, unreviewed repair left
+    criteria: dict[str, int] = Field(default_factory=dict)  # the brief's criterion versions then
+
+
 class RoundLoop(_Record):
     """One subject's challenge loop: a root plan task, the final review, a plan, a pack update or a brief."""
 
@@ -76,7 +83,11 @@ class RoundLoop(_Record):
     last: bool = False  # the latest verdict made its round the last
     ended: Ended = ""
     unreviewed: list[str] = Field(default_factory=list)  # repair tasks no round reviewed
-    history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry replaced (TD-210)
+    batch: list[str] = Field(default_factory=list)  # the final loop's built repair, whose rejections it judges next
+    head: str = ""  # the commit the latest verdict reviewed
+    reentry: bool = False  # new work after the loop ended: this round focuses on it (TD-215)
+    completion: Completion | None = None  # set when the final loop's last repair is built
+    history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry or restart replaced
 
     def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]:
         """Record new findings of the current round under the next free IDs, in order."""

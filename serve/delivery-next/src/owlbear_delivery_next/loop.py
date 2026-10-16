@@ -17,6 +17,7 @@ from owlbear_delivery_next.inbox import (
     IntentItem,
     PullItem,
     Recovery,
+    RestartItem,
     WithdrawItem,
 )
 from owlbear_delivery_next.models import (
@@ -97,7 +98,7 @@ class StepResult(Record):
     paths: dict[str, str] = Field(default_factory=dict)
     preserved: list[str] = Field(default_factory=list)
     denial: str | None = None
-    head: str | None = None  # the pull-request head a passing CI observation was for
+    head: str | None = None  # a passing CI observation's pull-request head, or an accepted build's commit
     score: Score | None = None  # how far a work failure got; better than the streak's best is progress
     detail: str = ""  # the raw error behind a stable reason; shown when the owner is asked, never part of a signature
     operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
@@ -254,6 +255,8 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                 _intent(c, item)
             case PullItem():
                 c.pull_requested = item.at
+            case RestartItem() if not round_flow.restartable(c):  # checked again under the lock (TD-215)
+                round_flow.restart(c, item.at)
             case WithdrawItem():
                 for k in c.owner_criteria:
                     if k.id == item.criterion and k.withdrawn_at is None:
@@ -429,7 +432,7 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             task = open_task(c) if s.kind == StepKind.PLAN else None
             go(c, StepKind.BUILD if s.kind == StepKind.PLAN else StepKind.PLAN, task.id if task else None)
         case StepKind.BUILD:
-            round_flow.built(c, now)
+            round_flow.built(c, r, now)
         case StepKind.REVIEW:
             if r and r.review:
                 c.reviews.append(r.review)
@@ -441,7 +444,7 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             task = open_task(c)
             if task:
                 go(c, StepKind.BUILD, task.id)
-            elif s.mode == "final":
+            elif s.task is None:  # the final review, in any of its modes
                 go(c, StepKind.PUBLISH)
             else:
                 go(c, StepKind.REVIEW, mode="final")

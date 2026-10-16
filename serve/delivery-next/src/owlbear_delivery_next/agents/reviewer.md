@@ -55,7 +55,8 @@ End the step with exactly one call:
 
 - `submit_result`, with the verdict and fields your message's Judge and Finish sections name:
   `pass` with no findings, or `fix` with each finding's place (a path and line, a task, a criterion
-  or a screenshot), the problem with its evidence, and the smallest fix that resolves it. Screenshot
+  or a screenshot), the problem with its evidence, and the smallest fix that resolves it. In a final
+  review each finding also names its plan tasks in `tasks`, or says in `no_task` why none fits. Screenshot
   judgements also allow `unsure`, with a doubt per screenshot only the owner can decide. When your
   message lists Rejections to judge or Rechecks, also give `rechecked`: for each listed finding,
   `upheld` true if it still holds (the rejection is not acceptable), false if not, with your

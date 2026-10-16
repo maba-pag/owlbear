@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import disputes, loop, round_records, rounds, tools
 from owlbear_delivery_next.failures import signature
 from owlbear_delivery_next.models import ErrorKind, Exit, Inputs, Review, Score, StepKind, Task
-from owlbear_delivery_next.moves import subject_of
+from owlbear_delivery_next.moves import loop_of, subject_of
 from owlbear_delivery_next.round_records import FINAL, RECHECK
 from owlbear_delivery_next.steps import reconsider, retry, worktree
 
@@ -29,6 +29,8 @@ def started(c: Change, task: Task | None, path: Path, settings: Settings) -> Non
 
     A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end.
     """
+    if c.step.kind == StepKind.REVIEW and task is None:
+        _final(c, settings)
     if c.step.kind != StepKind.BUILD or task is None or task.base is not None:
         return
     task.base = worktree.head(path)
@@ -36,16 +38,29 @@ def started(c: Change, task: Task | None, path: Path, settings: Settings) -> Non
         rounds.loop(c, task.id, settings).since = len(c.plan.tasks) if c.plan else 0
 
 
-def _subject(c: Change, task: Task | None) -> str | None:
-    """The plan task whose loop a review of *task* counts in; none for the final review, CI or PR tasks."""
-    subject = subject_of(c, task) if task else FINAL
-    root = next((t for t in c.plan.tasks if t.id == subject), None) if c.plan and subject != FINAL else None
+def _final(c: Change, settings: Settings) -> None:
+    """The final loop starts with the first final review; new work after it ended adds one round (TD-215).
+
+    That round also judges the rejections its former last round left unjudged.
+    """
+    lp = c.loops.get(FINAL)
+    if lp is None and not any(v.task is None for v in c.reviews):  # an earlier final review keeps the old rules
+        rounds.loop(c, FINAL, settings)
+    elif lp is not None and lp.ended:
+        lp.ended, lp.last, lp.reentry, lp.completion = "", False, True, None
+        lp.extra = max(lp.extra, lp.round + 1 - lp.policy.max_rounds)
+
+
+def _subject(c: Change, task: Task) -> str | None:
+    """The plan task whose loop a review of *task* counts in; none for CI or PR tasks."""
+    subject = subject_of(c, task)
+    root = next((t for t in c.plan.tasks if t.id == subject), None) if c.plan else None
     return subject if root and root.origin == "plan" else None
 
 
 def looped(c: Change, task: Task | None) -> RoundLoop | None:
-    """The challenge loop a task review counts in; the final review keeps its own rounds until it has one."""
-    return c.loops.get(subject) if (subject := _subject(c, task)) else None
+    """The challenge loop a review counts in: its plan task's, or for no task the final review's."""
+    return loop_of(c, task)
 
 
 def lines(review: tools.ReviewResult) -> list[str]:
@@ -80,6 +95,8 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     review only with identical covered content.
     """
     p = run.payload
+    if change.step.kind == StepKind.BUILD and result.exit == Exit.DONE and run.head:
+        return result.model_copy(update={"head": run.head})  # what a final loop's completion binds (TD-208)
     if not (isinstance(p, tools.ReviewResult) and run.head):
         return result
     criteria = {c.id: c.version for c in change.brief.criteria}
@@ -89,7 +106,7 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     tree = worktree.tree(path, run.head)
     found = lines(p)
     if (lp := looped(change, task)) is not None and result.cause is None:
-        found = _counted(change, lp, found, task)
+        found = _counted(change, lp, p, task, run.head)
     review = Review(task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree, findings=found)
     if p.verdict == "pass":
         return result.model_copy(update={"review": review})
@@ -98,15 +115,17 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     return result.model_copy(update=update | {"score": score(found, change.step.kind)})
 
 
-def _counted(c: Change, lp: RoundLoop, found: list[str], task: Task | None) -> list[str]:
+def _counted(c: Change, lp: RoundLoop, p: tools.ReviewResult, task: Task | None, head: str) -> list[str]:
     """Count one verdict and give its new findings their IDs; whether this round is the last is decided now."""
     lp.round += 1
-    new = lp.raise_findings([line.removeprefix("- ") for line in found])
-    lp.found = len(new)
+    new = lp.raise_findings([line.removeprefix("- ") for line in lines(p)], [f.tasks for f in p.findings])
+    lp.found, lp.head, lp.reentry = len(new), head, False
     recheck = c.step.mode == RECHECK
     lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
-    if recheck and task:
-        lp.unreviewed.append(task.id)  # the check judged its rejections, never its fixes
+    if recheck:
+        lp.unreviewed += [task.id] if task else lp.batch  # the check judged its rejections, never its fixes
+    elif task is None:
+        lp.unreviewed = []  # a full final round reviews the whole Change, every earlier repair included
     return [f.line for f in new]
 
 
@@ -174,8 +193,9 @@ def disputed(change: Change) -> StepResult | None:
     if s.kind != StepKind.REVIEW or s.mode != disputes.DISPUTED:
         return None
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    judged = disputes.target(change, task)
     held = next((v for v in reversed(change.reviews) if v.task == s.task), None)
-    kept = disputes.kept(task)
+    kept = disputes.kept(judged)
     found = [*(held.findings if held and held.verdict == "fix" else []), *kept]
     if not found:
         return loop.StepResult(exit=Exit.DONE, reason="the owner settled each disputed finding")
@@ -187,5 +207,5 @@ def disputed(change: Change) -> StepResult | None:
         fix_task=fixes[0],
         more_fixes=fixes[1:],
         score=score(found, s.kind),
-        ungated=looped(change, task) is not None or disputes.authorised(task),
+        ungated=looped(change, task) is not None or disputes.authorised(judged),
     )

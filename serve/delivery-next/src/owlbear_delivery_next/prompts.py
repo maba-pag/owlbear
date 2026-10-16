@@ -5,7 +5,7 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, NamedTuple
 
-from owlbear_delivery_next import disputes, preparation, tools
+from owlbear_delivery_next import disputes, preparation, round_flow, tools
 from owlbear_delivery_next.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.preparation import Preparing
 from owlbear_delivery_next.steps import worktree as wt
@@ -226,6 +226,7 @@ def review(change: Change, task: Task | None, worktree: Path, tree: Worktree) ->
             *_brief(change, challenged=challenged),
             *_fixes(change, challenged=challenged),
             *disputes.review_lines(change, task),
+            *round_flow.review_lines(change, task),
             "",
             "## Finish",
             REVIEW_FINISH,

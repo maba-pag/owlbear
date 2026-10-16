@@ -1540,9 +1540,8 @@ def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
     c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW), NOW)
     assert (c.step.task, c.plan.tasks[-1].origin) == ("t2", "integration")
     assert "greet() exists only on main" in c.plan.tasks[-1].detail
-    for _ in ("build", "review"):
-        c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)
-    assert (c.step.kind, c.step.task) == (StepKind.BUILD, "t1")
+    c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)  # its build; the task's next round reviews the merge
+    assert (c.step.kind, c.step.task, c.plan.tasks[-1].done) == (StepKind.BUILD, "t1", True)
 
 
 def test_a_target_premise_from_a_session_whose_processes_remain_is_never_acted_on(tmp_path, clone, monkeypatch):

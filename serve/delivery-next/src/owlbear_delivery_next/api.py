@@ -28,6 +28,7 @@ from owlbear_delivery_next import (
     pack_routes,
     pages,
     profile,
+    round_flow,
 )
 from owlbear_delivery_next.briefs import save_brief, save_visual
 from owlbear_delivery_next.inbox import (
@@ -37,6 +38,7 @@ from owlbear_delivery_next.inbox import (
     ConsentItem,
     IntentItem,
     PullItem,
+    RestartItem,
     WithdrawItem,
 )
 from owlbear_delivery_next.launches import Launches, Refused
@@ -376,6 +378,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 else None,
                 "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
                 "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
+                "restartable": not round_flow.restartable(c),
                 "activity": events[-20:],
             }
         )
@@ -476,6 +479,14 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     def pull(slug: str) -> dict[str, str]:
         read(slug)
         return put(slug, PullItem(at=datetime.now(UTC)))
+
+    @router.post("/changes/{slug}/restart-review")
+    def restart_review(slug: str) -> dict[str, str]:
+        if why := round_flow.restartable(read(slug)):
+            raise HTTPException(409, f"the review loop cannot restart: {why}")
+        if host.activity(slug).runner_alive:
+            raise HTTPException(409, "a step is running; restart the review loop once it has ended")
+        return put(slug, RestartItem(at=datetime.now(UTC)))
 
     router.include_router(config_routes.router(store, host))
     router.include_router(backlog_routes.router(store, start_chat))

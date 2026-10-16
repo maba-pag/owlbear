@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import profile
-from owlbear_delivery_next.evidence import review_valid
+from owlbear_delivery_next.evidence import criteria, review_valid
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.git.remote_git import (
     RemoteGitWriteUnknown,
@@ -18,6 +18,7 @@ from owlbear_delivery_next.git.remote_git import (
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.loop import StepResult
 from owlbear_delivery_next.models import Episode, ErrorKind, Exit, StepKind, Waiting
+from owlbear_delivery_next.round_records import FINAL
 from owlbear_delivery_next.steps import engine, worktree
 
 if TYPE_CHECKING:
@@ -105,21 +106,32 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
 
 
 def reviewed(c: Change, path: Path, head: str) -> bool:
-    """Whether the last final review passed and still holds for *head* (P5, F3).
+    """Whether the last final review passed and still holds for *head* (P5, F3), or the final loop's completion does.
 
-    It holds on its own commit, on an identical tree, or when every path that differs between the reviewed
+    A review holds on its own commit, on an identical tree, or when every path that differs between the reviewed
     tree and *head*'s tree, a target merge's included, is one the review covered with unchanged fingerprints.
     """
+    if not worktree.known(path, head):
+        return False  # a head someone else pushed and nobody fetched was never reviewed (live G2)
+    if _completed(c, path, head):
+        return True
     final = next((v for v in reversed(c.reviews) if v.task is None), None)
     if final is None or (final.commit != head and not final.tree):
         return False  # carrying a review to another head needs its engine-recorded tree and coverage
-    if not worktree.known(path, head):
-        return False  # a head someone else pushed and nobody fetched was never reviewed (live G2)
     candidate = worktree.tree(path, head)
     if final.tree == candidate:
         return review_valid(c, final, final.inputs.paths)  # identical content: only the criteria can have moved
     changed = worktree.between(path, final.tree, candidate) if final.tree else None
     return review_valid(c, final, worktree.fingerprints(path, list(final.inputs.paths), head), changed=changed)
+
+
+def _completed(c: Change, path: Path, head: str) -> bool:
+    """The final loop ended without a pass (TD-208): its completion stands for its own content and criteria only."""
+    lp = c.loops.get(FINAL)
+    done = lp.completion if lp and lp.ended in {"count", "max", "accepted"} else None
+    if done is None or done.criteria != criteria(c) or not worktree.known(path, done.head):
+        return False
+    return worktree.tree(path, done.head) == worktree.tree(path, head)
 
 
 def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:

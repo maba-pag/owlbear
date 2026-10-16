@@ -141,6 +141,13 @@ class Finding(Args):
     place: str = _f(300, "File and line or area", "src/greet.ts:4")
     problem: str = _f(500, "What is wrong, naming the criterion", "AC-1: English")
     fix: str = _f(500, "The change that resolves it", "Use Hallo")
+    tasks: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Final review only: the plan tasks it belongs to",
+        examples=[["t2"]],
+    )
+    no_task: str = Field(default="", max_length=300, description="Final review only, when no plan task fits: why")
 
 
 class Recheck(Args):

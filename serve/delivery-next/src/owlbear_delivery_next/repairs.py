@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import tools
 from owlbear_delivery_next.models import Exit, StepKind
+from owlbear_delivery_next.round_records import FINAL
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.loop import StepResult
@@ -20,9 +21,9 @@ EARLIER = (
 def _producer(c: Change, fixes: str | None) -> Task | None:
     """The task whose session gets the repair chance: the reviewed task, or a final review's previous repair."""
     tasks = c.plan.tasks if c.plan else []
-    if fixes:
+    if fixes and fixes != FINAL:
         return next((t for t in tasks if t.id == fixes), None)
-    return next((t for t in reversed(tasks) if t.origin == "review" and t.fixes is None and t.built_by), None)
+    return next((t for t in reversed(tasks) if t.origin == "review" and t.fixes in {None, FINAL} and t.built_by), None)
 
 
 def lineage(c: Change, fixes: str | None, origin: str) -> dict[str, str | None]:

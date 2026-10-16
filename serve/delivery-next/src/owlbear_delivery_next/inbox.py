@@ -79,7 +79,21 @@ class PullItem(_Item):
     kind: Literal["pull"] = "pull"
 
 
+class RestartItem(_Item):
+    """Restart the final review loop from round 0 (TD-215)."""
+
+    kind: Literal["restart-review"] = "restart-review"
+
+
 type InboxItem = Annotated[
-    BriefApproval | AnswerItem | CheckResult | Recovery | ConsentItem | IntentItem | PullItem | WithdrawItem,
+    BriefApproval
+    | AnswerItem
+    | CheckResult
+    | Recovery
+    | ConsentItem
+    | IntentItem
+    | PullItem
+    | RestartItem
+    | WithdrawItem,
     Field(discriminator="kind"),
 ]

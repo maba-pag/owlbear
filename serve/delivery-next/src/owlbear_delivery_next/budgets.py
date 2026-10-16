@@ -17,6 +17,7 @@ from owlbear_delivery_next.failures import (
 )
 from owlbear_delivery_next.models import Budget, ErrorKind, Exit, Option, Outcome, Question, StepKind, Stop, Waiting
 from owlbear_delivery_next.moves import ask, enter, fix_task, go
+from owlbear_delivery_next.round_records import FINAL
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -95,6 +96,8 @@ def _scope(c: Change, task_id: str | None) -> str | None:
 
 def round_key(c: Change) -> str:
     """Review rounds count per task scope, so a renamed task with the same scope keeps its rounds."""
+    if c.step.kind == StepKind.REVIEW and c.step.task is None:
+        return FINAL  # in every mode of the final review: a rejections-only check or a disputed verdict
     return _scope(c, c.step.task) or c.step.mode or str(c.step.kind)
 
 
@@ -254,7 +257,7 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
         held = [r.fix_task, *r.more_fixes] if s.kind == StepKind.REVIEW and r.fix_task else []
         ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held), now)
     elif s.kind == StepKind.REVIEW:
-        go(c, StepKind.BUILD, fix_task(c, r, s.task) or s.task)
+        go(c, StepKind.BUILD, fix_task(c, r, s.task or FINAL) or s.task)
     else:
         s.attempt += 1
 
@@ -272,7 +275,7 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
         if s.kind not in {StepKind.SHAPE, StepKind.PLAN, StepKind.REVIEW}:
             msg = f"{s.kind} retry needs a cause"
             raise ValueError(msg)
-        if s.mode == "final" and r.fix_task is None:
+        if s.kind == StepKind.REVIEW and s.task is None and r.fix_task is None:
             msg = 'fix_task: empty - final review findings need a repair task, e.g. Task(id="f1", title="fix")'
             raise ValueError(msg)
         _round(c, r, now)

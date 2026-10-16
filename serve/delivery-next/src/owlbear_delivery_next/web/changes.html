@@ -659,6 +659,21 @@ function mergeForm(m, d) {
   return box;
 }
 
+function restartButton() {
+  const restart = async () => {
+    const origin = shown, sure = await ask({
+      title: "Restart the final review loop?", yes: "Restart", no: "Keep it",
+      now: "A fresh final review starts at round 1 and reviews the whole Change; this uses AI credits.",
+      then: "Its findings go to a builder as before, under the same round rules.",
+      after: "The earlier rounds stay in this Change's history. An open question about them closes, and an approval "
+        + "to merge no longer counts.",
+      instead: "The review loop goes on as it is.",
+    });
+    if (sure) send("/restart-review", {}, origin);
+  };
+  return button("Restart review loop", restart, { variant: "secondary", icon: "refresh", aria: DIALOG });
+}
+
 function pullbackNote(p, d) {
   const behind = p.state === "behind", title = `Pull-back: ${p.state}`;
   const pull = async () => {
@@ -1152,7 +1167,7 @@ async function showDetail() {
       disclosure(`Screenshots (${shots.querySelectorAll("button.zoom").length})`, shots)));
   }
   if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
-  if (d.progress) parts.push(info("Progress", stepper(d.progress)));
+  if (d.progress) parts.push(info("Progress", stepper(d.progress), ...(d.restartable ? [restartButton()] : [])));
   if (d.plan.length) parts.push(info("Plan", planList(d)));
   if (!approving && (d.brief.outcome || d.criteria.length)) parts.push(briefInfo(d));
   if (d.pullback && !behind) parts.push(pullbackNote(d.pullback, d));

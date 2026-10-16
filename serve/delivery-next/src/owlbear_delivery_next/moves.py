@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change, Question, Task
+    from owlbear_delivery_next.round_records import RoundLoop
 
 
 def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = None) -> None:
@@ -32,13 +33,21 @@ def enter(c: Change, kind: StepKind, task: str | None = None) -> None:
 
 
 def subject_of(c: Change, task: Task) -> str:
-    """The plan task a review repair descends from: its challenge loop's subject, or ``final`` (TD-208)."""
+    """The task a review repair descends from, or ``final`` for a final-review repair (TD-208).
+
+    Other repairs of no task, the visual check's and the pre-push hook's, are their own subjects: no loop has them.
+    """
     tasks = {t.id: t for t in c.plan.tasks} if c.plan else {}
     seen = {task.id}
     while task.fixes in tasks and task.fixes not in seen:
         task = tasks[task.fixes]
         seen.add(task.id)
-    return FINAL if task.origin == "review" and task.fixes is None else task.id
+    return FINAL if task.fixes == FINAL else task.id
+
+
+def loop_of(c: Change, task: Task | None) -> RoundLoop | None:
+    """The challenge loop a task's work counts in; for no task, the final review's."""
+    return c.loops.get(subject_of(c, task) if task else FINAL)
 
 
 def open_task(c: Change) -> Task | None:
