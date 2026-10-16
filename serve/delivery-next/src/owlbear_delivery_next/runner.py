@@ -126,11 +126,12 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
     def config(at: Path) -> sdk_adapter.Session:
         parts = prompts.session(change, profile, at, others, ctx)
+        told = parts.message + (repairs.fallback(task) if repair else "")  # a fresh session taking a repair chance
         return sdk_adapter.Session(
             kind=s.kind,
             worktree=at,
             session_id=s.session or "",
-            message=prompts.answer(answer) if resume and answer else parts.message,
+            message=prompts.answer(answer) if resume and answer else (parts.message if resume else told),
             resume=resume,
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
@@ -140,7 +141,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             model=role.model,
             effort=role.effort,
             context=role.context,
-            fresh=parts.message + (repairs.fallback(task) if repair else ""),
+            fresh=told,
             previous=_previous(store, slug, s.session) if resume else {},
             journal=sdk_adapter.Journal(
                 lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)

@@ -13,6 +13,7 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.results import ACCEPTED, Gate
 from owlbear_delivery_next.session_result import Run
+from owlbear_delivery_next.steps import review
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 16, 3, tzinfo=UTC)
@@ -72,6 +73,13 @@ def rejecting(*keys: str) -> dict:
 def test_both_results_offer_their_dispute_fields_to_every_runtime():
     assert "rejected" in tools.schema(tools.SUBMIT)["properties"]
     assert "rechecked" in tools.schema(tools.REVIEW)["properties"]
+
+
+def test_a_finding_is_known_by_its_place_and_problem_on_every_path():
+    finding = tools.Finding(place="a.txt:1", problem="AC-1\n greets in English", fix="use Hallo")
+    line = review.lines(tools.ReviewResult(verdict="fix", findings=[finding]))[0]
+    assert line == "- a.txt:1: AC-1 greets in English - fix: use Hallo"  # one line, so a repair task can key it
+    assert review.score([line], K.REVIEW) == review.score([line.replace("Hallo", "Servus")], K.REVIEW)
 
 
 @pytest.mark.parametrize(

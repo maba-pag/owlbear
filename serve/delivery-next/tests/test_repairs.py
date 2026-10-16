@@ -6,8 +6,20 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import loop, repairs, runner, session_result, tools
-from owlbear_delivery_next.models import Brief, Change, Exit, Names, Outcome, Plan, Step, StepKind, Task
+from owlbear_delivery_next import loop, repairs, runner, session_choice, session_result, tools
+from owlbear_delivery_next.models import (
+    Answer,
+    Brief,
+    Change,
+    Exit,
+    Names,
+    Outcome,
+    Plan,
+    Question,
+    Step,
+    StepKind,
+    Task,
+)
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.store import Lock, Store
@@ -95,17 +107,20 @@ def test_a_final_review_repair_starts_fresh_then_its_repairer_gets_one_chance():
     assert task(c, "r3").resume == ""
 
 
-def test_a_challenged_planner_resumes_once_then_a_fresh_planner_gets_its_own_chance():
+def test_a_challenged_planner_resumes_until_its_plan_is_accepted_then_a_fresh_planner_gets_its_own_chance():
     c = change()
     c.step = Step(kind=K.PLAN, session="p1")
     c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: t2 has no check", at=NOW)
-    assert (repairs.session(c, None), c.step.resumed) == ("p1", "p1")
+    assert (repairs.session(c, None), c.step.repair) == ("p1", "p1")
+    c.outcome = Outcome(exit=Exit.RETRY, reason="network", at=NOW)  # the repair failed before a plan came back
+    assert repairs.session(c, None) == "p1"  # the chance is still in flight: the replay resumes it again
+    planned = loop.StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
+    repairs.bind(c, None, Run("p1", "result"), planned)
+    assert (c.step.resumed, c.step.repair) == ("p1", "")
+    c.outcome = Outcome(exit=Exit.RETRY, reason="plan challenge: still no check", at=NOW)
     assert repairs.session(c, None) == ""
     c.step.session = "p2"
     assert repairs.session(c, None) == "p2"
-    c.outcome = Outcome(exit=Exit.RETRY, reason="network", at=NOW)
-    c.step.session = "p3"
-    assert repairs.session(c, None) == ""
 
 
 def built_run(cfg, head: str) -> Run:
@@ -156,3 +171,40 @@ def test_a_missing_producer_falls_back_to_a_fresh_session_without_charging_a_bud
     assert [e["session"] for e in fell] == ["s-build"]
     assert task(after, "f1").built_by == fell[0]["fresh"] != "s-build"
     assert session_result.missing_cause(K.BUILD) not in after.budgets.causes
+
+
+def test_the_window_gives_a_repair_chance_to_a_fresh_session_and_records_the_fallback(tmp_path, clone, monkeypatch):
+    store, c = repairing(tmp_path)
+    seen = []
+
+    def window(_store, cfg, **_kw):
+        seen.append(cfg)
+        return built_run(cfg, git(clone, "rev-parse", "HEAD"))
+
+    monkeypatch.setattr(session_choice, "in_window", lambda _profile: True)  # the window cannot resume a chat
+    monkeypatch.setattr(runner.sessions, "run", window)
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    fell = [e for e in store.events("c1") if e.get("event") == "repair-fallback"]
+    assert [e["session"] for e in fell] == ["s-build"]
+    assert (seen[0].session_id, seen[0].resume) == (fell[0]["fresh"], False)
+    assert seen[0].message.endswith(repairs.EARLIER.format("Added b."))
+    assert task(store.read("c1"), "f1").built_by == fell[0]["fresh"]
+
+
+def test_an_answered_repair_session_keeps_its_free_fallback(tmp_path, clone, monkeypatch):
+    store, c = repairing(tmp_path)
+    c.step.session = "s-build"  # the resumed producer asked the owner during its repair
+    c.questions = [Question(id="q1", step=K.BUILD, text="Which?", answer=Answer(text="This one.", at=NOW))]
+    store.write(Lock("c1"), c)
+    seen = []
+
+    async def build(cfg):
+        seen.append(cfg)
+        fresh = cfg.journal.replaced()
+        return built_run(type("C", (), {"session_id": fresh})(), git(clone, "rev-parse", "HEAD"))
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", build)
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    assert (seen[0].session_id, seen[0].resume) == ("s-build", True)
+    assert [e["session"] for e in store.events("c1") if e.get("event") == "repair-fallback"] == ["s-build"]
+    assert session_result.missing_cause(K.BUILD) not in store.read("c1").budgets.causes

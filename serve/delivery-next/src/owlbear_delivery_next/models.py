@@ -327,6 +327,7 @@ class Step(Record):
     started_at: datetime | None = None
     session: str | None = None
     resumed: str = ""  # the planner session that had its repair chance after a plan challenge (TD-123)
+    repair: str = ""  # the planner session whose repair chance is in flight until its plan is accepted
 
 
 class Outcome(Record):

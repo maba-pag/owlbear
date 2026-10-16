@@ -39,20 +39,32 @@ def lineage(c: Change, fixes: str | None, origin: str) -> dict[str, str | None]:
 
 
 def session(change: Change, task: Task | None) -> str:
-    """The session a step resumes for its one repair chance: a fix task's producer, or the challenged planner."""
+    """The session a step resumes for its one repair chance: a fix task's producer, or the challenged planner.
+
+    The planner's chance stays in flight, and a replay resumes it again, until its plan is accepted (``bind``).
+    """
     s, o = change.step, change.outcome
     if s.kind == StepKind.BUILD and task and task.resume and not task.built_by:
         return task.resume
+    if s.kind != StepKind.PLAN:
+        return ""
     challenged = o and o.exit == Exit.RETRY and o.reason.startswith("plan challenge:")
-    if s.kind == StepKind.PLAN and challenged and s.session and s.resumed != s.session:
-        s.resumed = s.session
-        return s.session
-    return ""
+    if not s.repair and challenged and s.session and s.resumed != s.session:
+        s.repair = s.session
+    return s.repair
 
 
-def bind(task: Task | None, run: Run, result: StepResult) -> None:
-    """Bind an accepted build to the session that made it and what it made, for a later repair chance."""
-    if task and result.exit == Exit.DONE and isinstance(p := run.payload, tools.BuildResult):
+def bind(change: Change, task: Task | None, run: Run, result: StepResult) -> None:
+    """Bind an accepted build to the session that made it and what it made; an accepted plan uses up its chance."""
+    s = change.step
+    if s.kind == StepKind.PLAN and s.repair and result.exit == Exit.DONE:
+        s.resumed, s.repair = s.repair, ""
+    if (
+        s.kind == StepKind.BUILD
+        and task
+        and result.exit == Exit.DONE
+        and isinstance(p := run.payload, tools.BuildResult)
+    ):
         task.built_by, task.earlier = run.session_id, f"{p.summary} Changed: {', '.join(p.changed_paths)}"[:2000]
 
 

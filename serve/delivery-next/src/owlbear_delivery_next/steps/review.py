@@ -61,11 +61,16 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     )
     if p.verdict == "pass":
         return result.model_copy(update={"review": review})
-    kind = change.step.kind
-    found = sorted({signature(ErrorKind.REVIEW, kind, f"{f.place} {f.problem}") for f in p.findings})
-    score = Score(failing=len(p.findings), findings=found)
-    fixes = repair(change, task, lines(p))
-    return result.model_copy(update={"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "score": score})
+    found = lines(p)
+    fixes = repair(change, task, found)
+    update = {"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:]}
+    return result.model_copy(update=update | {"score": score(found, change.step.kind)})
+
+
+def score(found: list[str], kind: str) -> Score:
+    """The failing findings, each known by its place and problem and not its fix, so rounds compare progress."""
+    ids = {signature(ErrorKind.REVIEW, kind, line.removeprefix("- ").rsplit(" - fix: ", 1)[0]) for line in found}
+    return Score(failing=len(found), findings=sorted(ids))
 
 
 def repair(change: Change, task: Task | None, found: list[str]) -> list[Task]:
@@ -105,6 +110,7 @@ def disputed(change: Change) -> StepResult | None:
     if not found:
         return loop.StepResult(exit=Exit.DONE, reason="the owner dropped each upheld finding")
     fixes = repair(change, task, found)
-    score = Score(failing=len(found), findings=sorted({signature(ErrorKind.REVIEW, s.kind, f) for f in found}))
     reason = f"{len(found)} finding(s) to fix"
-    return loop.StepResult(exit=Exit.RETRY, reason=reason, fix_task=fixes[0], more_fixes=fixes[1:], score=score)
+    return loop.StepResult(
+        exit=Exit.RETRY, reason=reason, fix_task=fixes[0], more_fixes=fixes[1:], score=score(found, s.kind)
+    )
