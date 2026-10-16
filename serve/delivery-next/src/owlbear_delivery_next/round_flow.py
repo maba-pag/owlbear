@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.evidence import criteria
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Question, StepKind
-from owlbear_delivery_next.moves import ask, go, loop_of, open_task, resolved
+from owlbear_delivery_next.moves import ask, go, loop_of, open_task, resolved, subject_of
 from owlbear_delivery_next.round_records import FINAL, RECHECK, Completion, RoundLoop
 
 if TYPE_CHECKING:
@@ -52,11 +52,14 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
     """
     s = c.step
     task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
-    if task is not None and (task.origin in ADDED or (task.origin == "review" and task.fixes is None)):
+    root = next((t for t in c.plan.tasks if t.id == subject_of(c, task)), None) if task and c.plan else None
+    if root is not None and (root.origin in ADDED or (root.origin == "review" and root.fixes is None)):
         if any(d.upheld is None for d in task.disputes):
-            go(c, StepKind.REVIEW, task.id)  # a rejection of its findings is judged by its own review
+            go(c, StepKind.REVIEW, task.id, RECHECK)  # its rejections are judged, never its work twice (TD-235)
             return
-        task.done = True
+        done = resolved(c, task.id)
+        for t in c.plan.tasks:
+            t.done = t.done or t.id in done
         if nxt := open_task(c):
             go(c, StepKind.BUILD, nxt.id)
         else:

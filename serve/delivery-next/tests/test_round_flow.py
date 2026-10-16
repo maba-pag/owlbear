@@ -334,13 +334,24 @@ def test_work_added_to_reviewed_work_gets_no_review_of_its_own(tmp_path, clone, 
     assert (c.plan.tasks[-1].done, c.loops, at(c)) == (True, {}, (K.REVIEW, None, "final"))  # the final round
 
 
-def test_a_repair_of_no_task_whose_builder_rejects_a_finding_keeps_its_own_review(tmp_path, clone, monkeypatch):
+@pytest.mark.parametrize("upheld", [False, True])
+def test_a_repair_of_no_task_whose_builder_rejects_a_finding_gets_only_that_judged(
+    tmp_path, clone, monkeypatch, upheld
+):
     store = stored(tmp_path)
     c = store.read("c1")
     c.plan.tasks[0].done = c.plan.tasks[1].done = True
     c.plan.tasks.append(Task(id="t3", title="fix", scope=["a.txt"], origin="review", detail="- a.txt:1: p - fix: f"))
-    c.step = Step(kind=K.BUILD, task="t3")  # a final-review repair of a Change from before TD-208
+    c.step = Step(kind=K.BUILD, task="t3")  # a visual check's repair, or a final review's from before TD-208
     store.write(Lock("c1"), c)
     built(store, clone, monkeypatch, "b\n", "F1")
+    assert at(store.read("c1")) == (K.REVIEW, "t3", RECHECK)
+    cfg = reviewed(store, clone, monkeypatch, F1=upheld)
+    assert (cfg.cap, disputes.ONLY in cfg.message) == (0, True)
+    if upheld:  # you decide it; the repair you asked for goes to the final round, unreviewed on its own (TD-235)
+        answer(store, "fix")
+        monkeypatch.setattr(runner, "_kept", lambda *_a: pytest.fail("a decided dispute starts no session"))
+        step(store, clone)
+        built(store, clone, monkeypatch, "c\n")
     c = store.read("c1")
-    assert (c.plan.tasks[-1].done, at(c)) == (False, (K.REVIEW, "t3", None))  # its review judges the rejection
+    assert ([t.done for t in c.plan.tasks[2:]], at(c)) == ([True] * (2 if upheld else 1), (K.REVIEW, None, "final"))
