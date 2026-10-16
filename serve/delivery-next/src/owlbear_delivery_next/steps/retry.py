@@ -1,8 +1,10 @@
 """A rejected task attempt before its fresh build (TD-210, TD-214): archived on a branch, then undone forward.
 
 The attempt's own commits since the task's base are reverted in one commit, made in a scratch worktree and promoted
-by a fast-forward only while the Change head is still the archived one; target merges stay. A restart finds a
-promoted undo by its message. Any failure asks the owner: another round on the kept work, or a pause.
+by a fast-forward; target merges stay. An attempt whose range also holds another task's build (an integration) is
+not undone: its commits cannot be told apart. Each retried head keeps its own archive, so a retry after another round
+archives again; a restart finds a promoted undo by its message and archive. Any failure asks the owner: another
+round on the kept work, or a pause.
 """
 
 from __future__ import annotations
@@ -33,9 +35,9 @@ OPTIONS = [
 ]
 
 
-def archive(slug: str, subject: str, attempt: int) -> str:
-    """The branch that keeps a rejected attempt; nothing deletes it."""
-    return f"refs/heads/owlbear/archive/{slug}/{subject}/a{attempt}"
+def archive(slug: str, subject: str, attempt: int, head: str) -> str:
+    """The branch that keeps a rejected attempt at *head*; nothing deletes it."""
+    return f"refs/heads/owlbear/archive/{slug}/{subject}/a{attempt}-{head[:12]}"
 
 
 def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
@@ -47,7 +49,7 @@ def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         return False
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     try:
-        why = _undo(path, archive(change.slug, task.id, lp.attempt), task, lp.attempt)
+        why = _undo(path, change, task, lp)
     except (OSError, subprocess.SubprocessError) as exc:
         why = " ".join(str(getattr(exc, "stderr", "") or exc).split())[:300]
     now = datetime.now(UTC)
@@ -61,18 +63,22 @@ def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     return True
 
 
-def _undo(path: Path, ref: str, task: Task, attempt: int) -> str:
-    """Keep the head on *ref*, then promote one commit reverting the attempt's commits; why not, else ""."""
-    head, message = worktree.head(path), UNDO.format(attempt=attempt, task=task.id)
-    kept = _rev(path, ref)
-    if kept and head != kept:  # promoted by an earlier run that stopped before its record was written
-        last = worktree.git(path, "log", "-1", "--format=%s").strip()
-        return "" if _rev(path, "HEAD^") == kept and last == message else f"the branch moved from {kept[:12]}"
+def _undo(path: Path, c: Change, task: Task, lp: RoundLoop) -> str:
+    """Archive the head, then promote one commit reverting the attempt's commits; why not, else ""."""
+    head, message = worktree.head(path), UNDO.format(attempt=lp.attempt, task=task.id)
+    if worktree.git(path, "log", "-1", "--format=%s").strip() == message:
+        parent = _rev(path, "HEAD^")
+        if parent and _rev(path, archive(c.slug, task.id, lp.attempt, parent)) == parent:
+            return ""  # promoted by an earlier run that stopped before its record was written
     if worktree.git(path, "status", "--porcelain").strip():
         return "the worktree has uncommitted edits"
     if task.base is None:
         return "the commit the task's first build started from is unknown"
-    if kept is None:
+    inside = [t.id for t in (c.plan.tasks if c.plan else [])[lp.since :] if t.base and subject_of(c, t) != task.id]
+    if inside:
+        return f"task {', '.join(inside)} was built during this attempt, so the attempt's own commits are unclear"
+    ref = archive(c.slug, task.id, lp.attempt, head)
+    if _rev(path, ref) is None:
         worktree.git(path, "update-ref", "-m", message, ref, head, "")
     commits = worktree.git(path, "rev-list", "--first-parent", "--no-merges", f"{task.base}..{head}").split()
     if commits:
@@ -127,8 +133,11 @@ def _question(c: Change, task: Task, lp: RoundLoop, why: str) -> Question:
 def _rotated(c: Change, task: Task, lp: RoundLoop) -> None:
     """The undone attempt goes to the loop's history and its repairs retire; a fresh builder starts the task."""
     old = lp.model_copy(update={"history": [], "ended": "retried"})
-    c.loops[task.id] = RoundLoop(subject=task.id, attempt=lp.attempt + 1, policy=lp.policy, history=[*lp.history, old])
-    for t in c.plan.tasks if c.plan else []:
+    tasks = c.plan.tasks if c.plan else []
+    c.loops[task.id] = RoundLoop(
+        subject=task.id, attempt=lp.attempt + 1, since=len(tasks), policy=lp.policy, history=[*lp.history, old]
+    )
+    for t in tasks:
         if t.fixes and subject_of(c, t) == task.id:
             t.done = True
     task.base, task.built_by, task.earlier = None, "", ""

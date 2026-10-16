@@ -25,12 +25,15 @@ if TYPE_CHECKING:
 
 
 def started(c: Change, task: Task | None, path: Path, settings: Settings) -> None:
-    """Before a session: a task build's base, and a task review's loop with the policy it pins (TD-208)."""
-    s = c.step
-    if s.kind == StepKind.BUILD and task and task.base is None:
-        task.base = worktree.head(path)
-    if s.kind == StepKind.REVIEW and (subject := _subject(c, task)):
-        rounds.loop(c, subject, settings)
+    """Before a session: a task's first build records its base, and a plan task's starts its loop (TD-208).
+
+    A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end.
+    """
+    if c.step.kind != StepKind.BUILD or task is None or task.base is not None:
+        return
+    task.base = worktree.head(path)
+    if _subject(c, task) == task.id and task.id not in c.loops:
+        rounds.loop(c, task.id, settings).since = len(c.plan.tasks) if c.plan else 0
 
 
 def _subject(c: Change, task: Task | None) -> str | None:
@@ -98,7 +101,7 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
 def _counted(c: Change, lp: RoundLoop, found: list[str], task: Task | None) -> list[str]:
     """Count one verdict and give its new findings their IDs; whether this round is the last is decided now."""
     lp.round += 1
-    new = lp.raise_findings(found)
+    new = lp.raise_findings([line.removeprefix("- ") for line in found])
     lp.found = len(new)
     recheck = c.step.mode == RECHECK
     lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra

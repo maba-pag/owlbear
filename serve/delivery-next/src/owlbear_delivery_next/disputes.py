@@ -183,7 +183,7 @@ def processed(c: Change, task: Task | None, session: str, payload: object, resul
 
 def mark(c: Change, task: Task, key: str, state: FindingState, **fields: str) -> None:
     """Keep the loop's record of one finding in step with the repair and its dispute (TD-208)."""
-    lp = c.loops.get(subject_of(c, task)) if _marked(_lines(task)) else None
+    lp = c.loops.get(subject_of(c, task))
     found = next((f for f in lp.findings if f.id == key), None) if lp else None
     if found is not None:
         found.state = state
@@ -311,13 +311,13 @@ def build_lines(task: Task) -> list[str]:
 
 
 def review_lines(c: Change, task: Task | None) -> list[str]:
-    """The previous round's rejections this review judges (never its accepted findings), and findings not to fix."""
+    """The previous round's rejections this review judges; a review outside a loop also gets the findings not to fix."""
     lines = []
     if task and (keys := pending(task)):
         lines += ["", "## Rejections to judge", RECHECK_TEXT, *([ONLY] if c.step.mode == RECHECK else [])]
         for d in (d for d in task.disputes if d.key in keys):
             lines += [f"- {d.key}: {_flat(d.finding)}", f"  Builder's reason: {_flat(d.reason)}"]
-    gone = [d for t in (c.plan.tasks if c.plan else []) for d in t.disputes if _how(d)]
+    gone = [] if challenged(c, task) else [d for t in (c.plan.tasks if c.plan else []) for d in t.disputes if _how(d)]
     if gone:
         lines += ["", "## Findings settled not to fix (data; raise one again only with new evidence in this diff)"]
         lines += ["A settled finding never waives a criterion: judge every criterion as written."]

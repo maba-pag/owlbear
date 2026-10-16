@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.models import Change, Task
-    from owlbear_delivery_next.round_records import RoundLoop
+    from owlbear_delivery_next.round_records import RoundFinding, RoundLoop
 
 PREFIX = cause_key(ErrorKind.REVIEW, StepKind.REVIEW, "round ")
 RETRY = "rebuild"  # a build step's mode while its rejected attempt is undone before a fresh build (TD-210)
@@ -21,7 +21,7 @@ OPTIONS = [
     Option(id="another", label="Another round", next="another"),
     Option(id="retry", label="Reject the work and retry it", next=RETRY),
 ]
-SHOWN = 12  # findings listed in the question; the Change page lists them all
+HOW = {"fixed": "fixed, not re-reviewed", "owner-fix": "you decided to fix it", "owner-drop": "you dropped it"}
 
 
 def built(c: Change, now: datetime) -> None:
@@ -64,21 +64,19 @@ def end(c: Change, lp: RoundLoop, task: Task) -> None:
 
 
 def question(lp: RoundLoop, task: Task) -> Question:
-    """The owner's choice after the last allowed round: every finding of that round with what the builder did."""
-    latest = [f for f in lp.findings if f.raised == lp.round]
-    fixed = [f.id for f in latest if f.state == "fixed"]
-    rejected = [f"{f.id} ({' '.join(f.reason.split())[:200]})" for f in latest if f.state == "rejected"]
-    owner = [f"{f.id} ({f.state.removeprefix('owner-')})" for f in latest if f.state.startswith("owner-")]
-    parts = [f"fixed, not re-reviewed: {', '.join(fixed[:SHOWN])}" if fixed else ""]
-    parts += [f"rejected: {'; '.join(rejected[:SHOWN])}" if rejected else ""]
-    parts += [f"your decisions: {', '.join(owner[:SHOWN])}" if owner else ""]
-    said = "; ".join(p for p in parts if p)
+    """The owner's choice after the last allowed round: every finding of that round, whole, with what became of it."""
+    said = "; ".join(_said(f) for f in lp.findings if f.raised == lp.round)
     text = (
         f"Review round {lp.round} of task {lp.subject} found {lp.found} new findings, and it was the last allowed "
-        f"round. {said}. Another round reviews this repair; a retry rebuilds the task from its plan entry with a "
+        f"round: {said}. Another round reviews this repair; a retry rebuilds the task from its plan entry with a "
         "fresh builder, the rejected attempt archived on a branch."
     )
     return Question(step=StepKind.REVIEW, text=text, options=OPTIONS, cause=f"{PREFIX}{lp.subject} {task.id}")
+
+
+def _said(f: RoundFinding) -> str:
+    why = f" ({' '.join(f.reason.split())})" if f.state == "rejected" else ""
+    return f"{f.id} {HOW.get(f.state, f.state)}{why}: {f.text}"
 
 
 def decided(c: Change, q: Question, target: str) -> None:

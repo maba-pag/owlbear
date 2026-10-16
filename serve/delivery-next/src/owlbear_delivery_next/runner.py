@@ -108,7 +108,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)
     s.started_at = now
-    review.started(change, task, path, store.settings())  # a build's base; a task review's loop (TD-208)
+    review.started(change, task, path, store.settings())  # a build's base; a plan task's loop (TD-208)
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.

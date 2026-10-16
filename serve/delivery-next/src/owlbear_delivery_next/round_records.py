@@ -67,6 +67,7 @@ class RoundLoop(_Record):
 
     subject: str
     attempt: int = 1
+    since: int = 0  # the plan's task count when the attempt began: later tasks were made during it
     round: int = 0  # completed verdicts
     found: int = 0  # the latest verdict's new findings
     extra: int = 0  # rounds the owner granted beyond max rounds

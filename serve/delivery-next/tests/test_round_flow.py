@@ -120,6 +120,7 @@ def test_a_task_loop_judges_rejections_counts_rounds_and_ends_early_with_a_rejec
     c = store.read("c1")
     lp = c.loops["t1"]
     assert (cfg.cap, lp.round, lp.found, lp.last, at(c)) == (10, 1, 5, False, (K.BUILD, "t3", None))
+    assert c.plan.tasks[-1].detail.splitlines()[0] == "- F1: a.txt:1: problem 1 - fix: fix 1"
     assert [line.split(":")[0] for line in c.plan.tasks[-1].detail.splitlines()] == [f"- F{n}" for n in range(1, 6)]
     cfg = built(store, clone, monkeypatch, "c\n", "F2")
     assert cfg.rejectable == ("F1", "F2", "F3", "F4", "F5")
@@ -138,7 +139,8 @@ def test_a_task_loop_judges_rejections_counts_rounds_and_ends_early_with_a_rejec
     built(store, clone, monkeypatch, "d\n", "F7")
     assert at(store.read("c1")) == (K.REVIEW, "t4", RECHECK)
     cfg = reviewed(store, clone, monkeypatch, F7=False)
-    assert (cfg.cap, disputes.ONLY in cfg.message) == (0, True)
+    assert (cfg.cap, disputes.ONLY in cfg.message, "settled not to fix" in cfg.message) == (0, True, False)
+    assert "(rejection accepted by the reviewer)" in disputes.review_lines(store.read("c1"), None)[-1]  # outside
     c = store.read("c1")
     lp = c.loops["t1"]
     assert (lp.round, lp.ended, lp.unreviewed, at(c)) == (3, "count", ["t4"], (K.BUILD, "t2", None))
@@ -163,8 +165,9 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
     built(store, clone, monkeypatch, "c\n", "F8")
     q = loop.open_question(store.read("c1"))
     assert [o.label for o in q.options] == ["Another round", "Reject the work and retry it"]
-    assert "Review round 1 of task t1 found 8 new findings" in q.text
-    assert ("fixed, not re-reviewed: F1, F2" in q.text, "rejected: F8 (F8 is wrong)" in q.text) == (True, True)
+    assert "Review round 1 of task t1 found 8 new findings, and it was the last allowed round: " in q.text
+    assert "F1 fixed, not re-reviewed: a.txt:1: problem 1 - fix: fix 1; F2 " in q.text
+    assert "; F8 rejected (F8 is wrong): a.txt:8: problem 8 - fix: fix 8. Another round" in q.text
     c = answer(store, "another")
     assert (c.loops["t1"].extra, at(c)) == (1, (K.REVIEW, "t3", None))
     reviewed(store, clone, monkeypatch, range(9, 17), F8=False)
@@ -174,13 +177,18 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
     base, archived = git(clone, "rev-list", "--max-parents=0", "HEAD"), git(clone, "rev-parse", "HEAD")
     monkeypatch.setattr(runner, "_kept", lambda *_a: pytest.fail("the undo starts no session"))
     c = step(store, clone)
-    assert (git(clone, "rev-parse", f"{retry.archive('c1', 't1', 1)}"), git(clone, "rev-parse", "HEAD^")) == (
+    assert (git(clone, "rev-parse", retry.archive("c1", "t1", 1, archived)), git(clone, "rev-parse", "HEAD^")) == (
         archived,
         archived,
     )
     assert ((clone / "a.txt").read_text(), git(clone, "diff", base, "HEAD")) == ("a\n", "")
     lp = c.loops["t1"]
-    assert (lp.attempt, lp.round, [(h.attempt, h.round, h.ended) for h in lp.history]) == (2, 0, [(1, 2, "retried")])
+    assert (lp.attempt, lp.round, lp.since, [(h.attempt, h.round, h.ended) for h in lp.history]) == (
+        2,
+        0,
+        4,
+        [(1, 2, "retried")],
+    )
     assert ([t.done for t in c.plan.tasks], c.plan.tasks[0].base, at(c)) == (
         [False, False, True, True],
         None,
@@ -221,24 +229,35 @@ def test_an_undo_that_conflicts_asks_the_owner_and_leaves_the_branch_as_it_was(t
     assert (c.loops["t1"].extra, at(c)) == (1, (K.REVIEW, "t3", None))
 
 
-def test_a_promoted_undo_is_found_again_and_a_moved_branch_is_refused(clone):
+def undoing(clone: Path, *tasks: Task) -> tuple[Change, Task, RoundLoop]:
+    """Task t1, built from the clone's base commit, and the loop of its first attempt."""
     task = Task(id="t1", title="one", base=git(clone, "rev-parse", "HEAD"))
+    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[task, *tasks]))
+    return c, task, RoundLoop(subject="t1", since=1, policy=RoundPolicy())
+
+
+def test_a_promoted_undo_is_found_again_and_each_retried_head_keeps_its_own_archive(clone):
+    c, task, lp = undoing(clone)
     (clone / "a.txt").write_text("b\n")
     git(clone, "commit", "-qam", "build b")
-    ref = retry.archive("c1", "t1", 1)
+    first = git(clone, "rev-parse", "HEAD")
+    git(clone, "update-ref", retry.archive("c1", "t1", 1, first), first)  # an undo that failed after archiving
+    (clone / "a.txt").write_text("c\n")
+    git(clone, "commit", "-qam", "another round's repair")
     (clone / "left.txt").write_text("an edit")
-    assert retry._undo(clone, ref, task, 1) == "the worktree has uncommitted edits"  # noqa: SLF001
+    assert retry._undo(clone, c, task, lp) == "the worktree has uncommitted edits"  # noqa: SLF001
     (clone / "left.txt").unlink()
-    assert retry._undo(clone, ref, task, 1) == ""  # noqa: SLF001
+    assert retry._undo(clone, c, task, lp) == ""  # noqa: SLF001
     undone = git(clone, "rev-parse", "HEAD")
-    assert retry._undo(clone, ref, task, 1) == ""  # noqa: SLF001 - a restart before the record was written
+    assert git(clone, "rev-parse", retry.archive("c1", "t1", 1, git(clone, "rev-parse", "HEAD^"))) != first
+    assert retry._undo(clone, c, task, lp) == ""  # noqa: SLF001 - a restart before the record was written
     assert (git(clone, "rev-parse", "HEAD"), (clone / "a.txt").read_text()) == (undone, "a\n")
-    git(clone, "commit", "-q", "--allow-empty", "-m", "someone else's")
-    assert retry._undo(clone, ref, task, 1).startswith("the branch moved")  # noqa: SLF001
+    assert git(clone, "rev-parse", retry.archive("c1", "t1", 1, first)) == first  # never deleted
+    assert len(git(clone, "for-each-ref", "refs/heads/owlbear/archive").splitlines()) == 2  # none of the undo
 
 
 def test_an_undo_keeps_the_target_merges_in_its_range(clone):
-    task = Task(id="t1", title="one", base=git(clone, "rev-parse", "HEAD"))
+    c, task, lp = undoing(clone)
     (clone / "a.txt").write_text("b\n")
     git(clone, "commit", "-qam", "build b")
     git(clone, "switch", "-qc", "side", "main")
@@ -247,19 +266,29 @@ def test_an_undo_keeps_the_target_merges_in_its_range(clone):
     git(clone, "commit", "-qm", "target change")
     git(clone, "switch", "-q", "owlbear/c1")
     git(clone, "merge", "-q", "--no-ff", "-m", "merge the target", "side")
-    assert retry._undo(clone, retry.archive("c1", "t1", 1), task, 1) == ""  # noqa: SLF001
+    assert retry._undo(clone, c, task, lp) == ""  # noqa: SLF001
     assert ((clone / "a.txt").read_text(), (clone / "t.txt").read_text()) == ("a\n", "target\n")
 
 
-def test_a_looped_review_batch_is_one_repair_and_a_positional_one_marks_no_loop_finding():
+def test_an_attempt_with_another_tasks_build_inside_it_is_not_undone(clone):
+    integration = Task(id="t2", title="merge", origin="integration", base=git(clone, "rev-parse", "HEAD"))
+    c, task, lp = undoing(clone, integration)
+    git(clone, "switch", "-q", "main")
+    (clone / "t.txt").write_text("target\n")
+    git(clone, "add", "t.txt")
+    git(clone, "commit", "-qm", "target change")
+    git(clone, "switch", "-q", "owlbear/c1")
+    git(clone, "merge", "-q", "--ff-only", "main")  # the integration's fast-forward: no merge commit marks it
+    assert retry._undo(clone, c, task, lp).startswith("task t2 was built during this attempt")  # noqa: SLF001
+    assert ((clone / "t.txt").read_text(), git(clone, "for-each-ref", "refs/heads/owlbear/archive")) == ("target\n", "")
+
+
+def test_a_looped_review_batch_is_one_repair():
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[Task(id="t1", title="one", scope=["a.txt"])]))
     c.step = Step(kind=K.REVIEW, task="t1")
     lp = c.loops["t1"] = RoundLoop(subject="t1", policy=RoundPolicy())
     long = [f.line for f in lp.raise_findings([f"a.txt:{i}: {'x' * 1500} - fix: y" for i in range(4)])]
     assert [len(t.detail.splitlines()) for t in review.repair(c, c.plan.tasks[0], long)] == [4]
-    old = Task(id="t2", title="fix", origin="review", fixes="t1", detail="- a.txt:1: p - fix: f")
-    disputes.mark(c, old, "F1", "fixed")  # a repair from before its loop: its F1 is not the loop's F1
-    assert lp.findings[0].state == "open"
 
 
 def test_a_challenged_review_leaves_out_the_owners_answers_on_findings():
@@ -275,12 +304,20 @@ def test_a_challenged_review_leaves_out_the_owners_answers_on_findings():
     ]
 
 
-def test_a_review_without_a_plan_task_root_starts_no_loop(tmp_path, clone, monkeypatch):
+@pytest.mark.parametrize(("origin", "base"), [("ci", None), ("plan", "built before its loop existed")])
+def test_only_a_plan_tasks_first_build_starts_a_loop(tmp_path, clone, monkeypatch, origin, base):
     store = stored(tmp_path)
     c = store.read("c1")
-    c.plan.tasks[0] = c.plan.tasks[0].model_copy(update={"origin": "ci"})
-    c.step = Step(kind=K.REVIEW, task="t1")
+    c.plan.tasks[0] = c.plan.tasks[0].model_copy(
+        update={"origin": origin, "base": base and git(clone, "rev-parse", "HEAD")}
+    )
     store.write(Lock("c1"), c)
+    built(store, clone, monkeypatch, "b\n")
     cfg = reviewed(store, clone, monkeypatch, range(1, 3))
     c = store.read("c1")
-    assert (cfg.cap, c.loops, c.outcome.exit) == (20, {}, Exit.RETRY)
+    assert (cfg.cap, c.loops, c.outcome.exit, c.plan.tasks[-1].detail.startswith("- a.txt:1:")) == (
+        20,
+        {},
+        Exit.RETRY,
+        True,
+    )
