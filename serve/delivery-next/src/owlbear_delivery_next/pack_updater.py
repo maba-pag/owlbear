@@ -154,8 +154,9 @@ def judged(done: Run, findings: dict[str, str], rejected: dict[str, str]) -> dic
     """
     ok, why = pack_candidate.verdict(done)
     p = done.payload
-    if not isinstance(p, tools.ReviewResult):
-        raise design_pack.PackError(why)
+    confirmed = done.termination is not None and done.termination.confirmed
+    if not confirmed or done.ending != "result" or not isinstance(p, tools.ReviewResult):
+        raise design_pack.PackError(why)  # an unconfirmed or unfinished challenger never passes the pack
     if upheld := [r for r in p.rechecked if r.upheld and r.finding in rejected]:
         said = "; ".join(f"{r.finding} {findings[r.finding]} - updater: {rejected[r.finding]} - challenger: {r.reason}"
                          for r in upheld)  # fmt: skip

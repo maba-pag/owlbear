@@ -320,15 +320,14 @@ def _passed(out: tuple[bool, str]) -> str:
 
 
 def _skills(package: Path, c: pack_candidate.Candidate, edited: list[str]) -> dict[Path, str]:
-    """The edited skills' exact text over the package text they started from, which must be unchanged since."""
-    out = {}
-    for name in edited:
-        path = package / preload.ROOT / name / "SKILL.md"
-        if path.read_bytes() != c.baseline[name]:
+    """The edited skills' exact text; every skill in the package must still be what the candidate started from."""
+    for name, start in c.baseline.items():
+        if (package / preload.ROOT / name / "SKILL.md").read_bytes() != start:
             msg = f"{name} changed in the package during the update; run the update again"
             raise Stopped(msg)
-        out[path] = pack_updater.skill(c, name).read_text(encoding="utf-8")
-    return out
+    return {
+        package / preload.ROOT / n / "SKILL.md": pack_updater.skill(c, n).read_text(encoding="utf-8") for n in edited
+    }
 
 
 def last(store: Store) -> dict[str, Any] | None:

@@ -6,23 +6,32 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import amendments, sdk_adapter, sessions
-from owlbear_delivery_next.models import StepKind
+from owlbear_delivery_next.models import Exit, StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.session_result import Run
     from owlbear_delivery_next.store import Lock, Store
 
 
-def challenge(store: Store, lock: Lock, change: Change, path: Path, run: Run) -> None:
-    """Record the exact candidate first, then judge it; the proposing step's own result keeps its route."""
+def challenge(  # noqa: PLR0913 - the proposing run and its result decide whether a challenge may start
+    store: Store, lock: Lock, change: Change, path: Path, run: Run, *, result: StepResult
+) -> StepResult:
+    """Record the exact candidate first, then judge it; the proposing step's own result keeps its route.
+
+    Nothing starts while the proposer's processes are not confirmed gone (its result is then a stop); a challenger
+    whose own processes are not confirmed gone stops the Change instead, its proposal left unjudged.
+    """
+    if result.exit == Exit.STOP or not (run.termination and run.termination.confirmed):
+        return result
     made = amendments.prepared(change, run, datetime.now(UTC))
     if made is None:
-        return
+        return result
     store.write(lock, change)  # durable before its challenge runs: a lost challenge leaves it unjudged
 
     def config(at: Path) -> sdk_adapter.Session:
@@ -39,6 +48,7 @@ def challenge(store: Store, lock: Lock, change: Change, path: Path, run: Run) ->
             memory=sessions.memory(store),
         )
 
-    _, done = sessions.review_run(store, lock, change, path, config, amendments.LABEL, submit=amendments.SUBMIT)
+    verdict, done = sessions.review_run(store, lock, change, path, config, amendments.LABEL, submit=amendments.SUBMIT)
     amendments.judged(made, done)
     store.write(lock, change)
+    return verdict if verdict.exit == Exit.STOP else result

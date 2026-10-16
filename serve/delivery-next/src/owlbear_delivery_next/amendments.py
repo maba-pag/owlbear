@@ -74,7 +74,7 @@ def prepared(c: Change, run: Run, at: datetime) -> Amendment | None:
     items = [
         AmendedCriterion(criterion=k.id, version=k.version, old=k.text, new=a.text, why=a.why)
         for a in p.amendment
-        if (k := current.get(a.criterion)) and _flat(a.text) != _flat(k.text)
+        if (k := current.get(a.criterion)) and a.text != k.text  # exact: whitespace can be the criterion's point
     ]
     if not items:
         return None
@@ -106,9 +106,10 @@ def prompt(c: Change, a: Amendment, worktree: Path) -> str:
 
 
 def judged(a: Amendment, run: Run) -> None:
-    """Keep the challenger's verdict on the record; a run without one leaves it unjudged."""
+    """Keep the challenger's verdict on the record; a run that did not end with one, confirmed, leaves it unjudged."""
     p = run.payload
-    if run.ending != "result" or not isinstance(p, tools.VisualReviewResult):
+    confirmed = run.termination is not None and run.termination.confirmed
+    if run.ending != "result" or not confirmed or not isinstance(p, tools.VisualReviewResult):
         return
     said = [f"{f.place}: {f.problem}" for f in p.findings] + [f"{d.place}: {d.question}" for d in p.doubts]
     a.verdict, a.judged, a.challenger = VERDICT[p.verdict], _flat("; ".join(said), 2000), run.session_id

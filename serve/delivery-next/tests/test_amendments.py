@@ -142,9 +142,38 @@ def test_a_lost_challenge_leaves_the_exact_candidate_unjudged(tmp_path):
         raise TimeoutError  # the challenger session never returned
 
     run = Run("c1-build", "premise", payload, termination=DONE)
+    back = loop.StepResult(exit=Exit.BACK, back_to=K.PLAN)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(amend.sessions, "review_run", lost)
         with pytest.raises(TimeoutError):
-            amend.challenge(store, Lock("c1"), c, tmp_path, run)
+            amend.challenge(store, Lock("c1"), c, tmp_path, run, result=back)
     (a,) = store.read("c1").amendments
     assert ([i.criterion for i in a.items], a.verdict) == (["AC-1"], "")  # the owner's AC-2 is never a candidate
+
+
+def test_a_whitespace_change_is_a_change():
+    c = change()
+    c.brief.criteria[0].text = "Prints `Hello  Ada`"
+    payload, _ = tools.parse(tools.WrongPremise, premise(("AC-1", "Prints `Hello Ada`")))
+    made = amendments.prepared(c, Run("s", "premise", payload), NOW)
+    assert made is not None
+    assert [(i.old, i.new) for i in made.items] == [("Prints `Hello  Ada`", "Prints `Hello Ada`")]
+
+
+def test_no_challenge_starts_or_counts_without_confirmed_processes(tmp_path, monkeypatch):
+    store, c = Store(tmp_path / "store"), change()
+    store.write(Lock("c1"), c)
+    payload, _ = tools.parse(tools.WrongPremise, premise(("AC-1", "trims spaces")))
+    back = loop.StepResult(exit=Exit.BACK, back_to=K.PLAN)
+    monkeypatch.setattr(amend.sessions, "review_run", lambda *_a, **_kw: pytest.fail("the proposer may still run"))
+    gone = Run("p", "premise", payload, termination=Termination(confirmed=False))
+    assert amend.challenge(store, Lock("c1"), c, tmp_path, gone, result=back) is back
+    assert c.amendments == []
+
+    stop = loop.StepResult(exit=Exit.STOP, reason="the challenger may still run")
+    verdict = tools.VisualReviewResult(verdict="pass")
+    left = Run("j", "result", verdict, termination=Termination(confirmed=False))
+    monkeypatch.setattr(amend.sessions, "review_run", lambda *_a, **_kw: (stop, left))
+    done = Run("p", "premise", payload, termination=DONE)
+    assert amend.challenge(store, Lock("c1"), c, tmp_path, done, result=back) is stop
+    assert [a.verdict for a in store.read("c1").amendments] == [""]  # never "equivalent" from a run left going

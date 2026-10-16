@@ -166,7 +166,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run, result)
-    amend.challenge(store, lock, change, path, run)  # TD-179: a proposed amendment is judged, never applied here
+    result = amend.challenge(store, lock, change, path, run, result=result)  # TD-179: judged, never applied here
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     sessions.logged(

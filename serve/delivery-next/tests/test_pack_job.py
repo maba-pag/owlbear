@@ -98,7 +98,7 @@ class Fakes:
         self.verdicts: list[str] = []  # per challenger round; then `verdict`
         self.edits: list[dict[str, str]] = []  # per updater round: worktree path -> new text
         self.rejects: list[list[str]] = []  # per updater round: finding keys it rejects
-        self.upheld, self.premise = False, False
+        self.upheld, self.premise, self.confirmed = False, False, True
         self.replays: list[tuple[str, str]] = []  # what each replay judged: the pack identity and the edited skill
         self.during = lambda: None  # something else that happens while the challenger runs
         self.hold: threading.Event | None = None
@@ -145,7 +145,7 @@ class Fakes:
         findings = [] if verdict == "pass" else [tools.Finding(place="owlbear-ui-review", problem="p", fix="f")]
         rechecked = [{"finding": k, "upheld": self.upheld, "reason": "r"} for k in cfg.rechecks]
         result = tools.ReviewResult(verdict=verdict, findings=findings, rechecked=rechecked)
-        return Run(cfg.session_id, "result", payload=result, termination=Termination(confirmed=True))
+        return Run(cfg.session_id, "result", payload=result, termination=Termination(confirmed=self.confirmed))
 
     def update(self, _store: Store, cfg) -> Run:
         """The writing updater: each planned edit lands in its worktree, then it submits (or reports a premise)."""
@@ -336,6 +336,33 @@ def test_a_skill_changed_in_the_package_meanwhile_stops_activation(tmp_path, che
     assert (state["state"], results(state)["activate"]) == ("failed", "failed")
     assert "owlbear-ui-review changed in the package during the update" in state["reason"]
     assert (checkout / PACKAGED).read_text() == "edited by hand meanwhile\n"  # never overwritten
+
+
+def test_a_skill_the_updater_left_alone_but_committed_meanwhile_stops_activation_too(tmp_path, checkout, clone):
+    fakes, root, design = Fakes(clone), checkout.parents[1], checkout / "worker_skills/owlbear-ui-design/SKILL.md"
+
+    def committed() -> None:  # the owner commits and pushes another skill while the challenger runs
+        design.write_text("theirs\n")
+        git(root, "commit", "-qam", "theirs")
+        git(root, "push", "-q")
+
+    fakes.during = committed
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert (state["state"], results(state)["activate"]) == ("failed", "failed")
+    assert "owlbear-ui-design changed in the package during the update" in state["reason"]
+
+
+def test_a_passing_challenger_whose_processes_are_not_confirmed_gone_never_passes_the_pack(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.confirmed = False
+    before = snapshot(checkout)
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert (state["state"], results(state)["challenger"]) == ("failed", "failed")
+    assert "may still be running" in state["reason"]
+    assert snapshot(checkout) == before
 
 
 def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(tmp_path, checkout, clone):
