@@ -5,8 +5,8 @@ to a reviewed change inside VS Code, combining reusable agent instructions with 
 execution, memory, knowledge, browser access, and human review.
 
 If you want to know what OwlBear is or how to install it in a project, read
-[README-consumer.md](README-consumer.md). That file becomes the front page of the `main` branch and
-owns the product story, the requirements, and the install path.
+[README-consumer.md](README-consumer.md). That file owns the product story, the requirements, and
+the install path.
 
 ## Choose your path
 
@@ -50,9 +50,8 @@ Current surface maturity is published on the consumer front door in
 
 ## Develop OwlBear
 
-The `dev` branch is the development checkout. The `main` branch is generated from it and is the
-rolling supported consumer branch; do not edit `main` directly. OwlBear has no numbered product
-releases.
+`main` is the only long-lived branch: the development checkout and the branch consumers clone.
+OwlBear has no numbered product releases yet; versions will be git tags.
 
 Requirements: Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
 [GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also needs the Node

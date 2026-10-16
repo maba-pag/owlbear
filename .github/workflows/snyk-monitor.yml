@@ -4,7 +4,7 @@ name: Snyk monitor
 "on":
   push:
     branches:
-      - dev
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -21,11 +21,11 @@ env:
 
 jobs:
   monitor:
-    name: Snyk monitor (dev)
+    name: Snyk monitor (main)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout dev
+      - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -41,7 +41,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: >-
           snyk monitor --all-projects --org="$SNYK_ORG"
-          --target-reference=dev --remote-repo-url="$SNYK_REPO_URL"
+          --target-reference=main --remote-repo-url="$SNYK_REPO_URL"
 
       - name: Report Snyk Code results
         env:
@@ -49,6 +49,6 @@ jobs:
         run: |
           status=0
           snyk code test --report --org="$SNYK_ORG" --project-name="maba-pag/owlbear" \
-            --target-reference=dev --remote-repo-url="$SNYK_REPO_URL" || status=$?
+            --target-reference=main --remote-repo-url="$SNYK_REPO_URL" || status=$?
           # Exit code 1 only means issues were found; the report still reached Snyk.
           if [ "$status" -gt 1 ]; then exit "$status"; fi

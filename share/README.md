@@ -220,9 +220,7 @@ project-local `.owlbear/` roots:
 
 ## Validation
 
-These validator commands are for the OwlBear development checkout. The consumer `main` branch
-ships the shared customization files but not the development-only `.owlbear/` validator scripts or
-the repository test suite; contributors should run them from the `dev` checkout.
+These validator commands are for the OwlBear checkout; consumer projects do not run them.
 
 Run structural validators after changing agents, skills, or prompts:
 

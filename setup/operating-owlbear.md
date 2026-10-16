@@ -84,7 +84,7 @@ guide is the canonical explanation of the seed tree instead.
 Two neighbouring trees are never copied. [`share/`](../share/README.md) holds the portable agents,
 skills, instructions, and prompts that VS Code reads live from the OwlBear checkout, and
 [`serve/`](../serve/README.md) holds the runtime packages and MCP servers launched from it.
-Repository-only CI automation lives in the OwlBear `dev` checkout's `.github/` tree and is not
+Repository-only CI automation lives in the OwlBear checkout's `.github/` tree and is not
 installed into consumer projects.
 
 ## Shared vs Copied
@@ -475,7 +475,7 @@ resolve the typed attention before acquiring work.
 ### Pinned controller releases
 
 The OwlBear development checkout runs Delivery from a pinned, immutable controller release so that
-new commits on `dev` never change the running controller. Consumer projects run unpinned by default:
+new commits on `main` never change the running controller. Consumer projects run unpinned by default:
 the `uv --project <owlbear clone>` entries that setup writes start the checkout's code, and
 [Upgrading OwlBear](#upgrading-owlbear) moves it forward.
 

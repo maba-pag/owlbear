@@ -4,19 +4,17 @@ This guide intentionally is not named `README.md`: GitHub gives `.github/README.
 the root README when choosing the repository landing page. The non-special filename keeps the root
 OwlBear front door visible while still giving this folder a durable orientation guide.
 
-`.github/` contains development-only repository automation and Copilot support. The consumer
-`main` branch deliberately excludes this directory; changes here affect the OwlBear repository,
-its checks, or its manual sync process rather than an installed project directly.
+`.github/` contains repository automation and Copilot support. Changes here affect the OwlBear
+repository and its checks rather than an installed project directly.
 
 ## What lives here
 
 | Path | Purpose |
 | --- | --- |
-| `workflows/` | CI, dependency checks, ecosystem validation, and the manual `dev` to `main` sync |
-| `scripts/` | Small checks used by workflows and the sync manifest projection |
+| `workflows/` | CI, dependency checks, and ecosystem validation |
+| `scripts/` | Small checks used by workflows |
 | `skills/` | Development-only specialist guidance, including session review and hook authoring |
 | `copilot-instructions.md` | The development checkout's workspace identity and repository map |
-| `sync-manifest.json` | The allowlisted source paths and consumer exclusions for rolling `main` |
 | `renovate.json` | Repository configuration for dependency update automation |
 
 ## What belongs elsewhere
@@ -33,6 +31,9 @@ consumer template at `seed/.github/copilot-instructions.md`. The former describe
 the latter is a placeholder that `init.py` adapts for a project using OwlBear.
 
 ## Pull-request checks
+
+Every automatically triggered workflow is disabled on GitHub (TD-204); `gh workflow enable <file>`
+restores one. The pre-commit hooks run only by hand (`pre-commit run --hook-stage manual`).
 
 Agents wait for every check on the head commit, so the checks are shaped to finish fast and to
 report few rows. Each workflow is path-filtered, every job starts immediately (no `needs`), and
@@ -62,17 +63,15 @@ keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup id
 ## Snyk
 
 Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) tests every pull request
-into `dev` and comments on it. The integration can only import the repository's default branch, so
-its projects follow `main` and are set never to retest; they exist only to anchor those
-pull-request checks. The `dev-snyk-checks` ruleset requires the three Snyk checks, with a bypass for
-direct pushes.
+into `main` and comments on it. The integration imports the repository's default branch, `main`;
+its projects are set never to retest. The `dev-snyk-checks` ruleset requires the three Snyk checks
+on the default branch, with a bypass for direct pushes; it is disabled while the workflows are.
 
-The [Snyk monitor workflow](workflows/snyk-monitor.yml) records `dev` itself. Every push to `dev`
+The [Snyk monitor workflow](workflows/snyk-monitor.yml) records `main` itself. Every push to `main`
 reports open-source dependencies (`snyk monitor --all-projects`) and Snyk Code results to the org
-with target reference `dev`; Snyk retests those snapshots daily. It authenticates with the
+with target reference `main`; Snyk retests those snapshots daily. It authenticates with the
 `SNYK_TOKEN` Actions secret, the API key of the org-collaborator service account
-`github-actions-owlbear`. The workflow is development-only, so the sync manifest keeps it off
-`main`.
+`github-actions-owlbear`.
 
 ## MegaLinter toolchain updates
 
@@ -83,7 +82,7 @@ to the same PR using the proposed release's tagged linter-version manifest. It a
 [Biome schema](../biome.json); it never follows a moving `latest` manifest.
 
 Activation requires the workflow and [synchronizer](scripts/sync_megalinter_toolchain.py) on the
-repository's default branch and the PR's `dev` base. Configure the repository `PAT` Actions secret
+repository's default branch and the PR's `main` base. Configure the repository `PAT` Actions secret
 with single-repository Contents write and Pull requests read access. A PAT is required for changed
 pins so its push triggers fresh CI; the workflow deliberately has no `GITHUB_TOKEN` write fallback.
 The commit author remains `github-actions[bot]`, which Renovate already accepts through
@@ -111,12 +110,3 @@ bundled downgrade is reflected exactly in the reviewable PR, rather than silentl
 Keep GitHub Dependabot alerts enabled: disabling independent Renovate updates is not a security
 exception policy. An urgent Ruff or Biome fix unavailable in MegaLinter requires an explicit reviewed
 exception or a newer MegaLinter release; the parity check intentionally blocks silent divergence.
-
-## Changing the sync boundary
-
-Treat [`sync-manifest.json`](sync-manifest.json) as the source of truth for the source allowlists
-and excluded roots that feed `main`. The [sync workflow](workflows/sync-to-main.yml) owns the
-transformations around those inputs, including the consumer README rename, pruning, and generated
-outputs. When a projection changes, update the manifest, workflow, and regression coverage in
-[`tests/test_sync_manifest.py`](../tests/test_sync_manifest.py). Do not edit `main` directly; the
-manual sync workflow generates it from `dev`.

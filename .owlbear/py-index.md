@@ -120,30 +120,6 @@ Prove that uv lock regeneration observes workspace-member changes.
 - `def _run_uv(root: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]`
 - `def main() -> int`
 
-## .github/scripts/sync_manifest.py
-
-Read the dev-to-main consumer sync manifest.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `json`
-- `pathlib`
-- `typing`
-
-### Interfaces
-
-- `def _load_manifest(path: Path = _MANIFEST_PATH) -> dict[str, Any]`
-- `def _validate_scope_groups(scope_groups: object, scopes: dict[str, Any]) -> None`
-- `def _validate_source_only_paths(source_only_paths: object) -> None`
-- `def paths_for_scope(scope: str, manifest: dict[str, Any] | None = None) -> list[str]`
-- `def consumer_excluded_paths(manifest: dict[str, Any] | None = None) -> list[str]`
-- `def scope_names_for_group(group: str, manifest: dict[str, Any] | None = None) -> list[str]`
-- `def paths_for_group(group: str, manifest: dict[str, Any] | None = None) -> list[str]`
-- `def source_only_paths(manifest: dict[str, Any] | None = None) -> list[str]`
-- `def main() -> int`
-
 ## .github/skills/session-review/scripts/__init__.py
 
 Session-review executable helpers.

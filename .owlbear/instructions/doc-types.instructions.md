@@ -22,8 +22,8 @@ cross-reference integrity, audience fitness, and the eight audit dimensions.
 
 ### 1.1 Root READMEs (`README.md`, `README-consumer.md`)
 
-`README-consumer.md` is renamed to `README.md` by the sync workflow and is therefore the public
-front page of the repository. `README.md` on `dev` is the development checkout's front door.
+`README.md` is the repository's front page and the development checkout's front door; it routes
+product readers to `README-consumer.md` first.
 
 `STR-1` `README-consumer.md` must contain, in this order: product name and tagline, what using
 OwlBear looks like, fit and non-fit expectations, requirements, quick start, verification, first
@@ -33,7 +33,7 @@ authority. Value and expectations come before vocabulary, architecture, and rout
 `STR-2` Neither root README may duplicate content from `setup/setup-guide.md` or
 `setup/operating-owlbear.md` beyond the shortest usable form. Link to the authority instead.
 
-`STR-3` `README.md` on `dev` must contain: project identity, a pointer to `README-consumer.md` for
+`STR-3` `README.md` must contain: project identity, a pointer to `README-consumer.md` for
 the product story and installation, a reader route, the development checkout and its checks, and a
 directory structure overview. It must not carry consumer status tables or installation procedure.
 

@@ -3,7 +3,7 @@ name: Sync MegaLinter toolchain
 
 "on":  # zizmor: ignore[dangerous-triggers] -- Trusted base code; same-repo bot guard; version-only inputs; leased push.
   pull_request_target:
-    branches: [dev]
+    branches: [main]
     types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - .mega-linter.yml
@@ -95,7 +95,7 @@ jobs:
           jq --exit-status --arg head "$HEAD_SHA" --arg branch "$HEAD_BRANCH" \
             --arg repo "$REPOSITORY" \
             '.state == "open" and .draft == false and .user.login == "renovate[bot]" and
-             .base.ref == "dev" and .head.repo.full_name == $repo and
+             .base.ref == "main" and .head.repo.full_name == $repo and
              .head.sha == $head and .head.ref == $branch' "$RUNNER_TEMP/toolchain-pr.json"
           git -c core.hooksPath=/dev/null \
             -c user.name='github-actions[bot]' \

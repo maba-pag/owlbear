@@ -52,8 +52,7 @@ cd -
 This downloads the core chunk, 60 component chunks, and 290 icon SVGs from
 `cdn.ui.porsche.com` into `public/porsche-design-system/` and commits them for offline
 use. Assets are version-pinned to the installed `@porsche-design-system/components-js`.
-CI and sync-to-main run this automatically; developers only need to run it locally when
-preparing or debugging PDS upgrades.
+CI runs this automatically; run it locally only when preparing or debugging PDS upgrades.
 
 ## Frontend Surface
 
@@ -112,7 +111,8 @@ uv run test-e2e
 ```
 
 Expected result: the Cockpit smoke tests start without an executable-missing error. Consumer
-workspaces use the prebuilt bundle and do not run this developer-only procedure.
+workspaces only build the bundle ([Delivery Packaging](#delivery-packaging)) and do not run this
+developer-only procedure.
 
 Run the Chromium compatibility smoke gate used by pull requests:
 
@@ -125,7 +125,7 @@ npm run test:e2e:compat
 The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
 smoke scenarios against the Playwright-pinned Chromium engine. Pull-request CI and manual dispatch
 both install and test Chromium only. Chrome and Edge are the supported browser families; consumers
-use the prebuilt bundle and do not run these developer-only tests.
+do not run these developer-only tests.
 
 ## Delivery Evidence
 
@@ -195,11 +195,10 @@ package's bundled `dist/` directory.
 
 ## Delivery Packaging
 
-- Developer branch (`dev`): frontend source (`serve/cockpit/web/`) is present and used for
-  build/test/lint workflows.
-- Consumer branch (`main`): sync-to-main builds and stages prebuilt
-  `serve/cockpit/dist/` artifacts; consumers launch Cockpit from their project root with
-  `uv run --project ../owlbear cockpit` and do not need Node/npm.
+- `main` carries the frontend source (`serve/cockpit/web/`) and no built bundle. After cloning or
+  updating OwlBear, build it once with Node 24.21.0 or later:
+  `npm ci --prefix serve/cockpit/web && npm run build --prefix serve/cockpit/web`.
+- Consumers then launch Cockpit from their project root with `uv run --project ../owlbear cockpit`.
 
 ## Dependencies
 
