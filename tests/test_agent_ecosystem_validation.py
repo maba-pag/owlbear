@@ -240,7 +240,7 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
     pytest_run = next(str(step["run"]) for step in job["steps"] if "pytest" in str(step.get("run", "")))
 
     assert set(trigger) == {"pull_request"}
-    assert pull_request["branches"] == ["dev"]
+    assert pull_request["branches"] == ["main"]
     assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
     assert {
         ".owlbear/instructions/**",
