@@ -1,13 +1,13 @@
 """Built-in subagents (TD-129): monitoring per subagent and the experiment's one allowed `explore`, by event replay."""
 
 import dataclasses
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 
 from owlbear_delivery_next import config, sdk_adapter, session_result, sessions
-from owlbear_delivery_next.models import Brief, Change, StepKind
+from owlbear_delivery_next.models import Brief, Change, ErrorKind, Exit, StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.session_result import Run
@@ -125,8 +125,8 @@ def test_a_hard_credit_limit_reaches_the_runtime(tmp_path):
 @pytest.mark.parametrize(
     ("ending", "used", "limit", "expected"),
     [
-        ("no-result", 31.14, 30.0, ("error", "credit limit reached: 31.14 of 30 credits")),  # the live probe's run
-        ("deadline", 30.0, 30.0, ("error", "credit limit reached: 30.00 of 30 credits")),
+        ("no-result", 31.14, 30.0, ("credit-limit", "credit limit reached: 31.14 of 30 (ended no-result)")),  # live
+        ("deadline", 30.0, 30.0, ("credit-limit", "credit limit reached: 30.00 of 30 (ended deadline: step deadline)")),
         ("no-result", 29.9, 30.0, ("no-result", "")),  # under the limit: an ordinary silent end
         ("no-result", 31.14, None, ("no-result", "")),  # no limit set
         ("no-result", None, 30.0, ("no-result", "")),  # credits unread: nothing is claimed
@@ -134,9 +134,19 @@ def test_a_hard_credit_limit_reaches_the_runtime(tmp_path):
     ],
 )
 def test_a_step_ending_silently_at_its_limit_is_reported_as_the_limit(ending, used, limit, expected):
-    run = Run("s1", ending=ending, usage={"credits": used})
+    run = Run("s1", ending=ending, usage={"credits": used}, detail="step deadline" if ending == "deadline" else "")
     session_result.limit_reached(run, limit)
     assert (run.ending, run.detail) == expected
+
+
+def test_a_reached_limit_stops_for_the_owner_and_is_never_waited_out_as_a_quota():
+    run = Run("s1", ending="no-result", usage={"credits": 31.14}, termination=Termination(confirmed=True))
+    run.quota = True  # even when the runtime's words also looked like an exhausted quota
+    session_result.limit_reached(run, 30.0)
+    result = session_result.to_result(run, StepKind.PLAN, datetime(2026, 10, 16, tzinfo=UTC))
+    assert (result.exit, result.stop.kind if result.stop else None, result.wake_at) == (
+        Exit.STOP, ErrorKind.POLICY, None
+    )  # fmt: skip
 
 
 def test_the_experiment_is_off_by_default_and_a_project_off_overrides_a_global_on():

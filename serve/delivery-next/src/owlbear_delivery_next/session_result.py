@@ -35,6 +35,7 @@ type Ending = Literal[
     "read-only-write",
     "read-only-refused",
     "shared-git-changed",
+    "credit-limit",
 ]
 type ModelCheck = Literal["verified", "mismatch", "unknown"]
 PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
@@ -98,11 +99,13 @@ def limit_reached(run: Run, limit: float | None) -> None:
     """A step without its result whose credits reached its hard limit ended there (TD-178, proven live).
 
     The runtime allows one last call without tools at the limit and refuses every call after it, so the session
-    goes quiet and a reminder costs nothing; the usage, not the runtime's message text, shows why.
+    goes quiet and a reminder costs nothing; the usage, not the runtime's message text, shows the limit was reached,
+    and the original ending stays in the detail.
     """
     used = run.usage.get("credits")
     if limit and used is not None and used >= limit and run.ending in {"no-result", "deadline"}:
-        run.ending, run.detail = "error", f"credit limit reached: {used:.2f} of {limit:g} credits"
+        was = f"{run.ending}: {run.detail}" if run.detail else run.ending
+        run.ending, run.detail = "credit-limit", f"credit limit reached: {used:.2f} of {limit:g} (ended {was})"
 
 
 def note_quota(run: Run, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK event data
@@ -152,6 +155,15 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
             reason=run.detail,
             action="Check the repository's shared Git config and hooks folder; undo any change you did not make",
             resume="The shared Git config and hooks are as you want them",
+            at=now,
+        )
+        return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
+    if run.ending == "credit-limit":  # the owner's spending bound: never retried, nor waited out as a quota
+        stop = Stop(
+            kind=ErrorKind.POLICY,
+            reason=run.detail,
+            action="Raise the step's credit limit, or run it without one",
+            resume="The step's credit limit allows it to finish",
             at=now,
         )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
