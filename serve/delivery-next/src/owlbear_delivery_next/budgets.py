@@ -251,7 +251,8 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
         ]
         text = f"Findings remain after {ROUND_LIMIT} rounds: {r.reason}"
         cause = cause_key(ErrorKind.REVIEW, s.kind, key)
-        ask(c, Question(step=s.kind, text=text, options=options, cause=cause), now)
+        held = [r.fix_task, *r.more_fixes] if s.kind == StepKind.REVIEW and r.fix_task else []
+        ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held), now)
     elif s.kind == StepKind.REVIEW:
         go(c, StepKind.BUILD, fix_task(c, r, s.task) or s.task)
     else:

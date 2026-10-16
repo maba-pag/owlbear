@@ -215,6 +215,7 @@ class Question(Record):
     text: str
     options: list[Option] = Field(default_factory=list)
     cause: str | None = None
+    repair: list[Task] = Field(default_factory=list)  # a review round gate's pending repair, built only on its Fix
     answer: Answer | None = None
     delivered_at: datetime | None = None
     effect_observed_at: datetime | None = None

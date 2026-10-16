@@ -38,7 +38,7 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.moves import ask, enter, go, open_task, resolved
+from owlbear_delivery_next.moves import ask, enter, fix_task, go, open_task, resolved
 from owlbear_delivery_next.visual_records import OwnerDecision
 
 if TYPE_CHECKING:
@@ -315,6 +315,15 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     elif target == "abandon":
         c.intent.abandoned_at = item.at
     elif target is not None:
+        _entered(c, q, target)
+
+
+def _entered(c: Change, q: Question, target: str) -> None:
+    """Move to the answer's step; the round gate's Fix builds the review's held findings as its repair."""
+    if target == StepKind.BUILD and q.repair:
+        held = StepResult(exit=Exit.RETRY, fix_task=q.repair[0], more_fixes=q.repair[1:])
+        go(c, StepKind.BUILD, fix_task(c, held, c.step.task))
+    else:
         enter(c, StepKind(target))
 
 

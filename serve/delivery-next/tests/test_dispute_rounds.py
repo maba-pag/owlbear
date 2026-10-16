@@ -281,6 +281,23 @@ def test_the_owners_fix_passes_the_round_gate_once():
     assert loop.apply(c, r.model_copy(update={"authorised": False}), NOW).outcome.exit == Exit.ASK
 
 
+@pytest.mark.parametrize(
+    ("option", "tasks", "kind", "task"), [("fix", 4, K.BUILD, "t4"), ("accept", 3, K.REVIEW, None)]
+)
+def test_the_round_gate_builds_the_held_findings_only_on_fix(option, tasks, kind, task):
+    c = change(1)
+    c.step = Step(kind=K.REVIEW, task="t3")
+    c.budgets.rounds[budgets.round_key(c)] = budgets.ROUND_LIMIT
+    fix = Task(id="t4", title="fix", origin="review", detail=f"- {TWO}")
+    asked = loop.apply(c, loop.StepResult(exit=Exit.RETRY, reason="1 finding(s) to fix", fix_task=fix), NOW)
+    q = loop.open_question(asked)
+    assert (len(asked.plan.tasks), [t.id for t in q.repair]) == (3, ["t4"])
+    after, _ = loop.schedule(asked, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option)], NOW)
+    assert (len(after.plan.tasks), after.step.kind, after.step.task) == (tasks, kind, task)
+    last = after.plan.tasks[-1]
+    assert (last.id, last.fixes) == (("t4", "t3") if option == "fix" else ("t3", "t2"))
+
+
 def test_the_owners_note_guides_the_fix_and_authorises_its_round():
     task = change(1).plan.tasks[2]
     note = "use Grüß Gott " * 140  # a whole note of 2000 characters reaches the builder
