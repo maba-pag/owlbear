@@ -12,13 +12,13 @@ from owlbear_delivery_next.models import (
     Exit,
     Plan,
     Score,
-    Spend,
     Step,
     StepKind,
     Task,
     Waiting,
 )
 from owlbear_delivery_next.processes import Termination
+from owlbear_delivery_next.spend import Spend
 from owlbear_delivery_next.status import Activity, card, status
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)

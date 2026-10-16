@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, briefs, loop, prompts, readiness, setup, tools
+from owlbear_delivery_next import api, briefs, loop, prompts, readiness, setup, tool_schema, tools
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.config import Agent, Layer, resolve
 from owlbear_delivery_next.host import HostRecord
@@ -193,7 +193,7 @@ def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approv
 
 
 def test_plan_checks_come_from_the_profile():
-    plan, _ = tools.parse(
+    plan, _ = tool_schema.parse(
         tools.PlanResult, {"tasks": [{"title": "t", "goal": "AC-1", "scope": ["/x"], "checks": ["make"]}]}
     )
     assert tools.check_plan(plan, tools.Worktree("a", "a"), ["npm test"]) == [
@@ -205,7 +205,7 @@ def test_plan_checks_come_from_the_profile():
 def test_plan_scopes_stay_within_the_approved_brief():
     tasks = [{"title": "t", "goal": "AC-1", "scope": s, "checks": ["make"]} for s in ([".", "packages/app/src"],)]
     tasks += [{"title": "t", "goal": "AC-1", "scope": [s], "checks": ["make"]} for s in ("packages", ".github/ci.yml")]
-    plan, _ = tools.parse(tools.PlanResult, {"tasks": tasks})
+    plan, _ = tool_schema.parse(tools.PlanResult, {"tasks": tasks})
     outside = "is outside the approved brief scope packages/app; keep to the brief or report_wrong_premise to widen it"
     assert tools.check_plan(plan, tools.Worktree("a", "a"), ["make"], ["packages/app"]) == [
         f"tasks[0].scope: . {outside}",

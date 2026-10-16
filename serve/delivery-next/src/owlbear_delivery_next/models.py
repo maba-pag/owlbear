@@ -9,13 +9,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.amendment_records import Amendment
-from owlbear_delivery_next.spend import ModelSpend, Spend
+from owlbear_delivery_next.spend import Spend
 from owlbear_delivery_next.visual_records import OwnerCriterion, VisualResult, VisualRound
-
-__all__ = [
-    "ModelSpend",
-    "Spend",
-]  # kept importable from here, where every other record lives
 
 FORMAT = 3
 

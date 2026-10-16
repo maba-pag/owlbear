@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import amendments, loop, runner, sdk_adapter, tools
+from owlbear_delivery_next import amendments, loop, runner, sdk_adapter, tool_schema, tools
 from owlbear_delivery_next.models import Brief, Change, Criterion, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
@@ -85,7 +85,7 @@ def test_a_premise_may_propose_wording_only_for_generated_criteria(tmp_path, arg
 
 def proposing(store: Store, clone: Path, monkeypatch, args: dict) -> list:
     async def build(cfg):
-        payload, _ = tools.parse(tools.WrongPremise, args)
+        payload, _ = tool_schema.parse(tools.WrongPremise, args)
         return Run(cfg.session_id, "premise", payload, head=git(clone, "rev-parse", "HEAD"), termination=DONE)
 
     judged = []
@@ -136,7 +136,7 @@ def test_a_lost_challenge_leaves_the_exact_candidate_unjudged(tmp_path):
     store = Store(tmp_path / "store")
     c = change()
     store.write(Lock("c1"), c)
-    payload, _ = tools.parse(tools.WrongPremise, premise(("AC-1", "trims spaces"), ("AC-2", "Says Hello")))
+    payload, _ = tool_schema.parse(tools.WrongPremise, premise(("AC-1", "trims spaces"), ("AC-2", "Says Hello")))
 
     def lost(*_a, **_kw):
         raise TimeoutError  # the challenger session never returned
@@ -154,7 +154,7 @@ def test_a_lost_challenge_leaves_the_exact_candidate_unjudged(tmp_path):
 def test_a_whitespace_change_is_a_change():
     c = change()
     c.brief.criteria[0].text = "Prints `Hello  Ada`"
-    payload, _ = tools.parse(tools.WrongPremise, premise(("AC-1", "Prints `Hello Ada`")))
+    payload, _ = tool_schema.parse(tools.WrongPremise, premise(("AC-1", "Prints `Hello Ada`")))
     made = amendments.prepared(c, Run("s", "premise", payload), NOW)
     assert made is not None
     assert [(i.old, i.new) for i in made.items] == [("Prints `Hello  Ada`", "Prints `Hello Ada`")]
@@ -163,7 +163,7 @@ def test_a_whitespace_change_is_a_change():
 def test_no_challenge_starts_or_counts_without_confirmed_processes(tmp_path, monkeypatch):
     store, c = Store(tmp_path / "store"), change()
     store.write(Lock("c1"), c)
-    payload, _ = tools.parse(tools.WrongPremise, premise(("AC-1", "trims spaces")))
+    payload, _ = tool_schema.parse(tools.WrongPremise, premise(("AC-1", "trims spaces")))
     back = loop.StepResult(exit=Exit.BACK, back_to=K.PLAN)
     monkeypatch.setattr(amend.sessions, "review_run", lambda *_a, **_kw: pytest.fail("the proposer may still run"))
     gone = Run("p", "premise", payload, termination=Termination(confirmed=False))

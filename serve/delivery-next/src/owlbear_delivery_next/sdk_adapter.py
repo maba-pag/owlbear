@@ -16,7 +16,7 @@ from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, subagents, tools
+from owlbear_delivery_next import preload, processes, prompts, sdk_teardown, subagents, tool_schema, tools
 from owlbear_delivery_next.copilot_cli import cli_path
 from owlbear_delivery_next.mask import redact
 from owlbear_delivery_next.models import StepKind
@@ -278,7 +278,7 @@ class _Step:
             for s in self.gate.specs
         }
         return [
-            made(s.name, s.description, partial(handlers[s], s), tools.schema(s),
+            made(s.name, s.description, partial(handlers[s], s), tool_schema.schema(s),
                  is_terminal=s not in helped and s is not self.cfg.first_look)
             for s in self.gate.specs
         ]  # fmt: skip

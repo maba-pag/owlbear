@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import brief_tools, evidence, profile, tools
+from owlbear_delivery_next import brief_tools, evidence, profile, tool_schema
 from owlbear_delivery_next.models import (
     BriefDecision,
     Change,
@@ -112,7 +112,7 @@ def _kept(store: Store, body: object) -> object:
 
 def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     """Validate a brief draft and write a new Change, or a new version of a shaping one, awaiting approval."""
-    draft, errors = tools.parse(brief_tools.BriefDraft, _kept(store, body))
+    draft, errors = tool_schema.parse(brief_tools.BriefDraft, _kept(store, body))
     errors = brief_tools.check_brief(draft) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
@@ -138,7 +138,7 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
 
 def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     """Set a shaping Change's UI flag, states and steps as a new brief version; the rest of its brief stays."""
-    draft, errors = tools.parse(brief_tools.VisualDraft, body)
+    draft, errors = tool_schema.parse(brief_tools.VisualDraft, body)
     if draft is None:
         return 422, {"errors": errors}
     if (slug := _handles(store).get(draft.change)) is None:

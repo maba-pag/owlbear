@@ -9,15 +9,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.tool_schema import parse, schema
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.models import ItemRef
-
-__all__ = ["parse", "schema"]  # kept importable from here, where every worker tool lives
 
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\d{1,5}(/\S*)?")

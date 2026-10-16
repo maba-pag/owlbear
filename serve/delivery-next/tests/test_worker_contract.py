@@ -8,7 +8,16 @@ from typing import ClassVar
 import psutil
 import pytest
 
-from owlbear_delivery_next import processes, prompts, sdk_adapter, sdk_teardown, sdk_usage, session_result, tools
+from owlbear_delivery_next import (
+    processes,
+    prompts,
+    sdk_adapter,
+    sdk_teardown,
+    sdk_usage,
+    session_result,
+    tool_schema,
+    tools,
+)
 from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination, verdict
@@ -26,7 +35,7 @@ GOOD = {
 
 
 def build(**changes) -> BuildResult:
-    result, errors = tools.parse(BuildResult, {**GOOD, **changes})
+    result, errors = tool_schema.parse(BuildResult, {**GOOD, **changes})
     assert errors == []
     return result
 
@@ -59,11 +68,13 @@ def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
 
 
 def test_schema_errors_name_the_field_and_the_agent_cannot_name_a_commit() -> None:
-    result, errors = tools.parse(BuildResult, {**GOOD, "commit": "3f2c1ab", "checks": [{"command": "npm test"}]})
+    result, errors = tool_schema.parse(BuildResult, {**GOOD, "commit": "3f2c1ab", "checks": [{"command": "npm test"}]})
     assert result is None
     assert any(e.startswith("commit: Extra inputs are not permitted") for e in errors)
     assert any(e.startswith("checks[0].exit_code:") for e in errors)
-    assert tools.parse(AskQuestion, "not json")[1] == ["arguments: not a JSON object - send the fields as one object"]
+    assert tool_schema.parse(AskQuestion, "not json")[1] == [
+        "arguments: not a JSON object - send the fields as one object"
+    ]
 
 
 def test_the_derived_head_must_move_past_the_base_with_a_clean_worktree() -> None:
@@ -104,7 +115,7 @@ def test_only_a_bot_comment_or_review_may_be_left_without_a_reply() -> None:
 
 
 def test_question_options_must_differ() -> None:
-    q, _ = tools.parse(AskQuestion, {"question": "q", "why": "w", "options": [{"label": "A", "effect": "x"}] * 2})
+    q, _ = tool_schema.parse(AskQuestion, {"question": "q", "why": "w", "options": [{"label": "A", "effect": "x"}] * 2})
     assert tools.check_question(q) == ["options: labels repeat - give each option a distinct answer"]
 
 

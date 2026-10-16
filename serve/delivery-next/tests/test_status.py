@@ -7,18 +7,17 @@ from owlbear_delivery_next.models import (
     ErrorKind,
     Exit,
     Intent,
-    ModelSpend,
     Names,
     Outcome,
     Plan,
     Pullback,
-    Spend,
     Step,
     StepKind,
     Stop,
     Task,
     Waiting,
 )
+from owlbear_delivery_next.spend import ModelSpend, Spend
 from owlbear_delivery_next.status import Activity, Status, card, status
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)

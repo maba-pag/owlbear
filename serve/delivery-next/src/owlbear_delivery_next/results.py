@@ -6,7 +6,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import amendments, design_tools, disputes, lint, preparation, tools
+from owlbear_delivery_next import amendments, design_tools, disputes, lint, preparation, tool_schema, tools
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -85,7 +85,7 @@ class Gate:
         """A helper answers and the step goes on; its rejected calls never count toward ending the step."""
         if self.done:
             return ENDED, False
-        args, errors = tools.parse(spec.model, arguments)
+        args, errors = tool_schema.parse(spec.model, arguments)
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors)
         if args is None:
             return "Rejected. Fix each field, then call again:\n" + "\n".join(f"- {e}" for e in errors), False
@@ -103,7 +103,7 @@ class Gate:
         return args, errors, tree
 
     def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
-        args, errors = tools.parse(spec.model, arguments)
+        args, errors = tool_schema.parse(spec.model, arguments)
         if args is None:
             return None, errors, None
         errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None

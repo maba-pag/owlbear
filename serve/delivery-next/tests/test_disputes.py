@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import disputes, loop, runner, sdk_adapter, tools
+from owlbear_delivery_next import disputes, loop, runner, sdk_adapter, tool_schema, tools
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.permissions import Policy
@@ -71,8 +71,8 @@ def rejecting(*keys: str) -> dict:
 
 
 def test_both_results_offer_their_dispute_fields_to_every_runtime():
-    assert "rejected" in tools.schema(tools.SUBMIT)["properties"]
-    assert "rechecked" in tools.schema(tools.REVIEW)["properties"]
+    assert "rejected" in tool_schema.schema(tools.SUBMIT)["properties"]
+    assert "rechecked" in tool_schema.schema(tools.REVIEW)["properties"]
 
 
 def test_a_finding_is_known_by_its_place_and_problem_on_every_path():

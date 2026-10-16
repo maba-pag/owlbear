@@ -14,7 +14,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import TYPE_CHECKING, Any, Self
 
-from owlbear_delivery_next import tools
+from owlbear_delivery_next import tool_schema
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,7 +61,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._reply(404, {"error": "not found"})
             return
         specs = self.server.gate.specs
-        listed = [{"name": s.name, "description": s.description, "inputSchema": tools.schema(s)} for s in specs]
+        listed = [{"name": s.name, "description": s.description, "inputSchema": tool_schema.schema(s)} for s in specs]
         self._reply(200, {"tools": listed})
 
     def do_POST(self) -> None:

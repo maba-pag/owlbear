@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, budgets, evidence, failures, loop, processes, profile, runner, tools
+from owlbear_delivery_next import api, budgets, evidence, failures, loop, processes, profile, runner, tool_schema, tools
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.gh import GhProvider
@@ -733,7 +733,7 @@ def test_a_review_repair_of_a_conversation_task_replies_with_its_response_and_th
     c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
     c = handled(c, result, "answered", "First answer.")
     root = c.plan.tasks[-1]
-    review_, _ = tools.parse(
+    review_, _ = tool_schema.parse(
         tools.ReviewResult,
         {"verdict": "fix", "findings": [{"place": "a", "problem": "p", "fix": "f"}], "covered_paths": ["a.txt"]},
     )
@@ -1550,7 +1550,7 @@ def test_a_target_premise_from_a_session_whose_processes_remain_is_never_acted_o
     c = change(StepKind.BUILD, worktree=str(clone))
     c.step.task = "t1"
     cx.store.write(cx.lock, c)
-    premise, _ = tools.parse(
+    premise, _ = tool_schema.parse(
         tools.WrongPremise, {"stage": "target", "reason": "greet() exists only on main", "evidence": ["main"]}
     )
 
@@ -1587,7 +1587,9 @@ def test_a_task_is_measured_from_its_own_start_without_merged_target_paths(clone
 
 def test_findings_beyond_one_tasks_detail_limit_are_kept_whole_across_repair_tasks(clone):
     findings = [{"place": f"a.txt:{i}", "problem": "AC-1: " + "p" * 400, "fix": "f" * 400} for i in range(10)]
-    review_, _ = tools.parse(tools.ReviewResult, {"verdict": "fix", "findings": findings, "covered_paths": ["a.txt"]})
+    review_, _ = tool_schema.parse(
+        tools.ReviewResult, {"verdict": "fix", "findings": findings, "covered_paths": ["a.txt"]}
+    )
     c = change(StepKind.REVIEW)
     c.step.task = "t1"
     run = Run("s", "result", review_, head=worktree.head(clone))
