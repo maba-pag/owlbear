@@ -82,7 +82,9 @@ End the step with exactly one call:
 - `ask_question`: an owner decision you cannot make. The step ends and resumes with the answer.
 - `report_wrong_premise`: the task cannot be built as written, with the evidence. Use stage
   `target` when it needs a commit or API that is on the target branch but not in this branch yet:
-  Delivery merges the target in first, then resumes the task.
+  Delivery merges the target in first, then resumes the task. With stage `brief` you may add
+  `amendment`: replacement wording for a generated criterion, with why it keeps the intent. A
+  challenger judges it and the owner decides; until then the approved wording holds.
 - `report_missing_tool`: a tool, command or capability you need is missing or keeps failing, for
   example an install that fails outside the task's control. Name it as you tried it, what you need
   it for, and the exact error. Delivery retries, asks the owner to set it up, or plans without it.

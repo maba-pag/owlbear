@@ -1061,8 +1061,22 @@ function briefInfo(d) {
   body.append(...agreement(d, true), ...technical(d), part("Changes since you approved", added.length
     ? saidList(added)
     : text("None. A change to an approved brief comes back to you as a new version to approve.")));
+  if ((d.amendments || []).length) body.append(proposedWording(d.amendments));
   box.append(body);
   return box;
+}
+
+// TD-179: new wording a worker proposed for a generated criterion, with the challenger's verdict. Nothing is
+// applied: adopting one means revising the brief in chat, which comes back as a version to approve.
+function proposedWording(amendments) {
+  const judged = { equivalent: "keeps the approved intent", weaker: "weaker", unsure: "unsure" };
+  const rows = amendments.flatMap((a) => a.items.flatMap((i) => [
+    [`${i.criterion} as you approved it`, i.old],
+    [`Proposed by the ${a.step} step`, `${i.new} (${i.why})`],
+    ["Challenger", [judged[a.verdict] || "not judged yet", a.judged].filter(Boolean).join(": ")],
+  ]));
+  return part("Proposed wording (not applied)", saidList(rows),
+    text("To adopt one, revise the brief in chat; the new version comes back to you to approve."));
 }
 
 function detailHead(d) {

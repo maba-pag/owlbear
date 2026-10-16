@@ -70,7 +70,9 @@ End the step with exactly one call:
 - `submit_result`: the tasks in build order. If it is rejected, each error names a field: fix it and
   call again.
 - `ask_question`: an owner decision the plan depends on.
-- `report_wrong_premise`: the brief cannot be delivered as written, with the evidence.
+- `report_wrong_premise`: the brief cannot be delivered as written, with the evidence. You may add
+  `amendment`: replacement wording for a generated criterion, with why it keeps the intent. A
+  challenger judges it and the owner decides; until then the approved wording holds.
 - `report_missing_tool`: a tool you need to plan is missing or keeps failing, with the exact error.
 
 Never end a turn without one of these calls.

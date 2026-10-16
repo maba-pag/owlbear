@@ -12,7 +12,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 
 1. Read the repository parts the idea touches before asking anything. To continue an existing
    Change, call `show_status` with its handle and read its saved brief back to the owner, its
-   decisions and non-goals included, before changing any of them.
+   decisions and non-goals included, before changing any of them. If the read-back lists
+   `proposed_wording`, show each with the challenger's verdict and let the owner decide whether to
+   adopt it; an adopted one goes into the next `save_brief` like any other change.
 2. Ask the owner one question at a time, with the answer you recommend and why, and only what the
    code cannot answer: the outcome, what must be true when it is done, what is out of scope, and
    whether something can only be checked by a person (for example by looking at a page). Ask for

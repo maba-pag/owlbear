@@ -31,6 +31,7 @@ SESSIONS: dict[str, Role] = {
     "design-review": "designer",
     "plan-challenge": "challenger",
     "brief-challenge": "challenger",
+    "amendment-challenge": "challenger",  # a worker's proposed brief wording (TD-179)
     "pack-challenge": "challenger",  # a design pack update, before it is activated (TD-101)
 }
 

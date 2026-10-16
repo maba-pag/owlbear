@@ -79,15 +79,18 @@ class Chat:
     def brief(self, slug: str) -> dict[str, Any] | None:
         """The Change's current brief as the chat saved it, decisions and non-goals included, to read back."""
         try:
-            b = self.store.read(slug).brief
+            change = self.store.read(slug)
         except StoreError:
             return None
+        b = change.brief
         out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals", "decisions"})
         owner = set(b.specified)  # sent back as saved, so a resave keeps who stated what
         states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]
-        checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in self.store.read(slug).checks]
+        checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in change.checks]
         out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
-        return out | {"criteria": [k.text for k in b.criteria]}
+        proposed = [i.model_dump(include={"criterion", "old", "new", "why"}) | {"verdict": a.verdict or "not judged"}
+                    for a in change.amendments for i in a.items]  # fmt: skip
+        return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}
 
     def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:
         """Answer one worker question; recovery decisions are refused with the Changes page (T6)."""

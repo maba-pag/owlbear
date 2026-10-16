@@ -6,7 +6,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import design_tools, disputes, lint, preparation, tools
+from owlbear_delivery_next import amendments, design_tools, disputes, lint, preparation, tools
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -107,6 +107,7 @@ class Gate:
         if args is None:
             return None, errors, None
         errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
+        errors += amendments.check(args, self.cfg.amendable)  # a premise's proposed wording (TD-179)
         if spec is self.cfg.submit or spec is self.cfg.first_look:
             order = self._order(spec)
             more, tree = (order, None) if order else self._check_result(args)

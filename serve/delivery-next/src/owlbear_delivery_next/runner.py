@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import (
+    amendments,
     budgets,
     design_tools,
     disputes,
@@ -38,6 +39,7 @@ from owlbear_delivery_next.models import VISUAL, Environment, ErrorKind, Exit, S
 from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.sessions import UsageUnreadError
 from owlbear_delivery_next.steps import (
+    amend,
     before,
     check,
     cleanup,
@@ -149,6 +151,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
             rejectable=disputes.rejectable(change, task) if s.kind == StepKind.BUILD else (),
             rechecks=disputes.pending(task) if s.kind == StepKind.REVIEW else (),
+            amendable=amendments.amendable(change),
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=((design_tools.SCAN, partial(design.builder_scan, at)),)
@@ -163,6 +166,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run, result)
+    amend.challenge(store, lock, change, path, run)  # TD-179: a proposed amendment is judged, never applied here
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     sessions.logged(
@@ -380,17 +384,6 @@ def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _out(json.dumps(event, default=str))
 
 
-def _disputed(store: Store, lock: Lock, change: Change) -> bool:
-    """A review whose upheld findings the owner decided completes from its held verdict, without a session."""
-    if (result := review.disputed(change)) is None:
-        return False
-    now = datetime.now(UTC)
-    event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": StepKind.REVIEW, "exit": result.exit}
-    store.log(lock, change.slug, event | {"reason": result.reason, "disputed": True})
-    store.write(lock, loop.apply(change, result, now))
-    return True
-
-
 def _reused(store: Store, lock: Lock, change: Change) -> bool:
     """Check prep without an agent: this check's last launched recipe, while still valid and its inputs unchanged.
 
@@ -462,7 +455,7 @@ def _step(  # noqa: C901 - one branch per phase
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind in AGENT:
             agent = _reused(store, lock, change) or prepare.refused(store, lock, change)
-            agent or _disputed(store, lock, change) or _agent(store, lock, change, repo)
+            agent or review.completed(store, lock, change) or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and loop.brief_due(change):
             _brief_challenge(store, lock, change, repo)
         else:

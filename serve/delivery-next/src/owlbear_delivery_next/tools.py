@@ -105,6 +105,14 @@ class AskQuestion(Args):
     )
 
 
+class Amend(Args):
+    """New wording for one generated acceptance criterion (TD-179); the owner decides whether to adopt it."""
+
+    criterion: str = _f(10, "The criterion id", "AC-2")
+    text: str = _f(1000, "The whole new wording", "greet() trims surrounding spaces from the name")
+    why: str = _f(500, "Why the approved wording is wrong and the new one keeps its intent", "Tabs are not names")
+
+
 class WrongPremise(Args):
     """``report_wrong_premise``: the brief or plan cannot be built as written, or the target has what is missing."""
 
@@ -115,6 +123,12 @@ class WrongPremise(Args):
     )
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
     evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
+    amendment: list[Amend] = Field(
+        default_factory=list,
+        max_length=5,
+        description="Only for stage brief, optional: replacement wording for generated criteria; a challenger "
+        "judges it and the owner decides",
+    )
 
 
 class MissingTool(Args):
@@ -303,7 +317,7 @@ FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the d
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 JUDGES = frozenset({"challenger", "designer"})  # they answer with a verdict, never a question (TD-108)
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
-VERDICTS = frozenset({"visual-review", "design-review", "plan-challenge", "brief-challenge"})
+VERDICTS = frozenset({"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge"})
 
 
 def asks(role: str, *, judging: bool = False) -> bool:

@@ -114,6 +114,7 @@ class Session:
     item: ItemRef | None = None  # the conversation item a build task answers, if any
     rejectable: tuple[str, ...] = ()  # finding keys a review repair's builder may reject (TD-124)
     rechecks: tuple[str, ...] = ()  # keys of rejected findings a review rechecks (TD-176)
+    amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
     context: str = "default"  # the model's context tier: "long" pins its long-context tier, else the runtime chooses

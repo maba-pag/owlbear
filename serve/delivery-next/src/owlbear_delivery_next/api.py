@@ -331,49 +331,53 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
             waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
-        return summary_of(slug) | {
-            "brief": {
-                "version": c.brief.version,
-                "approved": c.brief.approved_version,
-                "title": c.brief.title,
-                "outcome": c.brief.outcome,
-                "scope": c.brief.scope,
-                "non_goals": c.brief.non_goals,
-                "decisions": [x.model_dump() for x in c.brief.decisions],
-                "specified": c.brief.specified,
-                "approved_at": c.brief.approved_at.isoformat() if c.brief.approved_at else None,
-                "ui": c.brief.ui,
-                "visual": [s.model_dump() for s in c.brief.visual],
-            },
-            "criteria": [k.model_dump() for k in c.brief.criteria],
-            "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
-            "handled": [
-                h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
-                for h in c.handled
-            ],
-            "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
-            "checks": checks,
-            "pr": c.names.pr,
-            "target": c.names.target,
-            "asks_merge": profile.value(prof, profile.ASK) == "yes",
-            "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
-            "paused": c.intent.paused_at is not None,
-            "merge": merge,
-            "consent": c.consent.model_dump(mode="json") if c.consent else None,
-            "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
-            "visual": c.visual.model_dump(mode="json") if c.visual else None,
-            "visual_existing_errors": [
-                f"{e.state} at {e.width}px, {e.kind} error: {e.text}"
-                for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
-            ],
-            "before": c.before.model_dump(mode="json") if c.before else None,
-            "visual_round": c.visual_rounds[-1].model_dump(mode="json")
-            | {"proposed": decision.proposed(c.visual_rounds[-1])}
-            if c.visual_rounds
-            else None,
-            "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
-            "activity": events[-20:],
-        }
+        return (
+            summary_of(slug)
+            | {
+                "brief": {
+                    "version": c.brief.version,
+                    "approved": c.brief.approved_version,
+                    "title": c.brief.title,
+                    "outcome": c.brief.outcome,
+                    "scope": c.brief.scope,
+                    "non_goals": c.brief.non_goals,
+                    "decisions": [x.model_dump() for x in c.brief.decisions],
+                    "specified": c.brief.specified,
+                    "approved_at": c.brief.approved_at.isoformat() if c.brief.approved_at else None,
+                    "ui": c.brief.ui,
+                    "visual": [s.model_dump() for s in c.brief.visual],
+                },
+                "criteria": [k.model_dump() for k in c.brief.criteria],
+                "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
+                "handled": [
+                    h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
+                    for h in c.handled
+                ],
+                "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
+                "checks": checks,
+                "pr": c.names.pr,
+                "target": c.names.target,
+                "asks_merge": profile.value(prof, profile.ASK) == "yes",
+                "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
+                "paused": c.intent.paused_at is not None,
+                "merge": merge,
+                "consent": c.consent.model_dump(mode="json") if c.consent else None,
+                "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
+                "visual": c.visual.model_dump(mode="json") if c.visual else None,
+                "visual_existing_errors": [
+                    f"{e.state} at {e.width}px, {e.kind} error: {e.text}"
+                    for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
+                ],
+                "before": c.before.model_dump(mode="json") if c.before else None,
+                "visual_round": c.visual_rounds[-1].model_dump(mode="json")
+                | {"proposed": decision.proposed(c.visual_rounds[-1])}
+                if c.visual_rounds
+                else None,
+                "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
+                "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
+                "activity": events[-20:],
+            }
+        )
 
     def png(shots: VisualResult | None, folder_of: Callable[[str], Path], name: str) -> FileResponse:
         if not (shots and visual.FILE.fullmatch(name) and name in shots.files):

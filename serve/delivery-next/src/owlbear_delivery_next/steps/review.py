@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next import disputes, loop, tools
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.loop import StepResult
     from owlbear_delivery_next.models import Change
     from owlbear_delivery_next.session_result import Run
+    from owlbear_delivery_next.store import Lock, Store
 
 
 def lines(review: tools.ReviewResult) -> list[str]:
@@ -94,6 +96,17 @@ def repair(change: Change, task: Task | None, found: list[str]) -> list[Task]:
         )
         for i, part in enumerate(parts)
     ]
+
+
+def completed(store: Store, lock: Lock, change: Change) -> bool:
+    """A review whose upheld findings the owner decided completes from its held verdict, without a session."""
+    if (result := disputed(change)) is None:
+        return False
+    now = datetime.now(UTC)
+    event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": StepKind.REVIEW, "exit": result.exit}
+    store.log(lock, change.slug, event | {"reason": result.reason, "disputed": True})
+    store.write(lock, loop.apply(change, result, now))
+    return True
 
 
 def disputed(change: Change) -> StepResult | None:
