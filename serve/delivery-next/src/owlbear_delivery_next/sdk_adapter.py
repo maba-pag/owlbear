@@ -117,6 +117,7 @@ class Session:
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
     explore: bool = False  # the experiment setting (TD-129); only an SDK planner session acts on it
+    credit_limit: float | None = None  # the runtime's hard session limit; an experiment's ledger sets it (TD-178)
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
     context: str = "default"  # the model's context tier: "long" pins its long-context tier, else the runtime chooses
@@ -169,7 +170,7 @@ class _Step:
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
         self.gate.finish(ending, payload, detail)
 
-    def on_event(self, ev: Any) -> None:  # noqa: ANN401 - SDK session event
+    def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per event family
         kind = getattr(ev.type, "value", str(ev.type))
         if kind == "assistant.turn_start":
             self.turn = True
@@ -192,6 +193,9 @@ class _Step:
             self.call_seen(ev.data)
         elif kind.startswith("subagent."):
             self.subagent_seen(kind, ev.data)
+        elif kind == "session_limits_exhausted.requested":  # the blocked request never runs: the step ends here
+            used, most = getattr(ev.data, "used_ai_credits", None), getattr(ev.data, "max_ai_credits", None)
+            self.finish("error", detail=f"credit limit reached: {used} of {most} credits")
 
     def subagent_seen(self, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
         """Only an allowed `explore` may run (TD-129); any other start voids the step; Auto is a wrong model (TD-53).
@@ -336,6 +340,7 @@ class _Step:
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,
             "context_tier": "long_context" if self.cfg.context == "long" else None,
+            "session_limits": {"max_ai_credits": self.cfg.credit_limit} if self.cfg.credit_limit else None,
             "on_event": self.on_event,
         }
 

@@ -17,11 +17,14 @@ from owlbear_delivery_next.tools import Worktree
 PLANNER, HELPER = "claude-opus-5.5", "claude-haiku-5.5"
 
 
-def step(tmp_path, *, kind: StepKind = StepKind.PLAN, explore: bool = True, role: str = "") -> sdk_adapter._Step:
+def step(
+    tmp_path, *, kind: StepKind = StepKind.PLAN, explore: bool = True, role: str = "", limit: float | None = None
+) -> sdk_adapter._Step:
     log: list[dict] = []
     cfg = sdk_adapter.Session(
         kind, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path), observe=lambda: Worktree("a", "a"),
         checks=(), model=PLANNER, explore=explore, role=role, journal=sdk_adapter.Journal(event=log.append),
+        credit_limit=limit,
     )  # fmt: skip
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     st.events = log
@@ -110,6 +113,14 @@ def test_only_an_enabled_planner_may_start_one(tmp_path, kind, role, explore):
     assert "explore" in st.options()["excluded_builtin_agents"]
     st.on_event(started("c1"))
     assert (st.run.ending, st.run.detail) == ("error", "a subagent started: explore; no subagent may run")
+
+
+def test_a_hard_credit_limit_reaches_the_runtime_and_its_exhaustion_ends_the_step(tmp_path):
+    assert step(tmp_path).options()["session_limits"] is None  # no limit unless an experiment's ledger sets one
+    st = step(tmp_path, limit=25.0)
+    assert st.options()["session_limits"] == {"max_ai_credits": 25.0}
+    st.on_event(event("session_limits_exhausted.requested", used_ai_credits=25.4, max_ai_credits=25.0, request_id="r"))
+    assert (st.run.ending, st.run.detail) == ("error", "credit limit reached: 25.4 of 25.0 credits")
 
 
 def test_the_experiment_is_off_by_default_and_a_project_off_overrides_a_global_on():
