@@ -9,8 +9,8 @@
 The owner corrected the built TD-189 rule (round-2 repeats, round 3+ to the owner) with TD-208..217 in
 [the decision record](delivery-liveness-first-rebuild.md). This document is the build design Sol
 challenged three times (75% → corrections, 90% for the retry list, 90% for the markers). It covers the
-builder's task reviews and the Change's final review; the planner, the pack updater, a recheck-only round,
-TD-193's reconsideration and more rounds for the designer or shaper stay postponed (TD-212).
+builder's task reviews and the Change's final review in detail; TD-220 and TD-221 add the planner, the pack
+updater and the shaper's brief challenge to the same build (§3.9). More rounds for the design judge stay out.
 
 ## 2. Sources Studied
 
@@ -57,7 +57,8 @@ TD-193's reconsideration and more rounds for the designer or shaper stay postpon
 - The engine assigns IDs before packing a repair; repair lines carry them (`- F3: place: problem - fix: fix`)
   and `keyed` parses them, so parts keep IDs. The builder rejects by ID.
 - A rejection judged not acceptable goes to the owner before the repair (TD-193 as built: Fix it with a
-  note, Ask the reviewer to reconsider, Drop it with a note). DISPUTED mode, the held verdict and the
+  note, Ask the reviewer to reconsider, Drop it with a note). A reconsideration runs only when the owner picks
+  it and never counts as a round (TD-219). DISPUTED mode, the held verdict and the
   reconsideration bind to subject, attempt, round and head instead of a task.
 
 ### 3.4 After a verdict
@@ -69,6 +70,10 @@ TD-193's reconsideration and more rounds for the designer or shaper stay postpon
   `max_rounds + extra` with `new ≥ ask_owner_at` → the owner is asked (3.6). Otherwise the batch is done
   unreviewed: its tasks are listed as unreviewed repairs, its rejections stand unjudged, the subject resolves.
 - Final review: its repair batch is reviewed by the next final-review round, not by a task review.
+- Rejections-only check (TD-218): when a round ends early by its count before the last allowed round and the
+  worker rejected findings, one short session judges only those rejections on the repaired head, without new
+  findings; a rejection it does not accept goes to the owner. It takes the next round's slot. The last
+  allowed round's rejections stay unjudged.
 - Completion without a pass: an engine-issued completion record binds the policy, the last verdict, the
   complete repair batch, the criteria and the resulting head and tree. `publish.reviewed` and merge accept it
   for that head only; fingerprints and later changes invalidate it like a review.
@@ -119,7 +124,21 @@ TD-193's reconsideration and more rounds for the designer or shaper stay postpon
 
 TD-189's `Dispute.direct`, `repeat_of`, `disputes.earlier/repeats/REPEAT`, `Session.repeats`, `Task.found_in`;
 the REVIEW round gate and `StepResult.authorised`; `_progress` resets for review loops. The PLAN gate and its
-`Question.repair` fencing stay until the planner adopts TD-208. Removed fields get an explicit store migration.
+`Question.repair` fencing go when the planner adopts TD-208 (§3.9). Removed fields get an explicit store migration.
+
+### 3.9 The other challenged roles (TD-220, TD-221)
+
+Each adopts the shared round module with its own TD-209 values; each gets its own design challenge before its
+step is built.
+
+- Planner (TD-190): plan-challenge findings become stored findings with IDs instead of one quoted text; the
+  planner may reject them with reasons in its result; the 2-round PLAN gate goes. Retry means planning again
+  from the brief (TD-210).
+- Pack updater (TD-194's flow): its rounds, rejections and judgements use the module; an escalated rejection
+  needs a place for the owner's question outside a Change (the pack page). Its TD-194 rework stays separate.
+- Shaper (TD-221): the brief challenge runs in the shaping chat before the approve button; the shaper revises
+  on findings it accepts and may reject others with reasons; the owner approves the challenged draft seeing
+  its standing rejections; the challenge after approval (`brief_due`, `_brief_challenge`) goes away.
 
 ## 4. Build Order, Confidence, And Limits
 
@@ -129,6 +148,7 @@ the REVIEW round gate and `StepResult.authorised`; `_progress` resets for review
 3. Final-review loop (one loop, task attribution, re-entry, restart button).
 4. Retry (archive, forward undo, rebuild, invalidation) and the owner's question with the task list.
 5. Change page (markers, details, unreviewed repairs, standing rejections) and the config group. Sol reviews.
+6. Planner, 7. pack updater, 8. shaper's brief challenge (§3.9), each after its own design challenge.
 
 Each step keeps the full suite green, mutation-proves its key rules, and respects the 500-line module limit
 (`runner.py` is at 500, `prompts.py` at 495, `models.py` at 497: new code goes to new modules).

@@ -66,12 +66,7 @@ Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) test
 into `main` and comments on it. The integration imports the repository's default branch, `main`;
 its projects are set never to retest. The `dev-snyk-checks` ruleset requires the three Snyk checks
 on the default branch, with a bypass for direct pushes; it is disabled while the workflows are.
-
-The [Snyk monitor workflow](workflows/snyk-monitor.yml) records `main` itself. Every push to `main`
-reports open-source dependencies (`snyk monitor --all-projects`) and Snyk Code results to the org
-with target reference `main`; Snyk retests those snapshots daily. It authenticates with the
-`SNYK_TOKEN` Actions secret, the API key of the org-collaborator service account
-`github-actions-owlbear`.
+Monitoring of `main` runs in Snyk's own UI; no workflow runs Snyk.
 
 ## MegaLinter toolchain updates
 
