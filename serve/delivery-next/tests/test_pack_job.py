@@ -554,7 +554,7 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
         "Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage",
         "Explore experiment",
     ]  # fmt: skip
-    assert (got["Explore experiment"]["built"], "proven spending bound" in got["Explore experiment"]["note"]) == (
+    assert (got["Explore experiment"]["built"], "availability only" in got["Explore experiment"]["note"]) == (
         False, True
     )  # fmt: skip
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)

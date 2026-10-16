@@ -63,8 +63,8 @@ def overview(store: Store) -> list[dict[str, Any]]:
         {"name": "Backlog triage", "where": "Backlog", "href": "/backlog", "built": True, "recorded": False,
          "last": None, "note": "Triage items in the Backlog tab; Delivery keeps no run record for it."},
         {"name": "Explore experiment", "where": "Report", "href": None, "built": False, "recorded": False,
-         "last": None, "note": "Subagent monitoring is built; the paired pilot (TD-178) waits for a proven "
-                                 "spending bound."},
+         "last": None, "note": "Pilot run 2026-10-16 under a proven credit limit: explore never started "
+                                 "unprompted in three pairs, so it tested availability only. The setting stays off."},
     ]  # fmt: skip
 
 
