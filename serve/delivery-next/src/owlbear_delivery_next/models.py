@@ -297,6 +297,7 @@ class Task(Record):
     disputes: list[Dispute] = Field(default_factory=list)  # findings of this repair task its builder rejected
     found_in: int = 0  # the review round that found a repair's findings, as the owner sees it (TD-189)
     settled: list[str] = Field(default_factory=list)  # finding keys the owner decided to fix: never rejected
+    notes: dict[str, str] = Field(default_factory=dict)  # the owner's whole note per settled finding key (TD-193)
 
 
 class Plan(Record):

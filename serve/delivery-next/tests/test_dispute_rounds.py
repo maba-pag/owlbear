@@ -10,7 +10,19 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next import api, budgets, dispute_tools, disputes, loop, runner, sdk_adapter, tools
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import Brief, Change, Dispute, ErrorKind, Exit, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.models import (
+    Brief,
+    Change,
+    Dispute,
+    ErrorKind,
+    Exit,
+    ItemRef,
+    Names,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
 from owlbear_delivery_next.moves import ask
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
@@ -212,7 +224,7 @@ def test_a_clarified_finding_goes_to_the_builder_as_the_owners(tmp_path, clone, 
     c = step(store, clone)
     fix = c.plan.tasks[-1]
     assert (c.step.kind, c.step.task, fix.settled) == (K.BUILD, fix.id, ["F1"])
-    assert fix.detail == f"- {narrower} (clarified after the owner's note: {NOTE})"
+    assert (fix.detail, fix.notes) == (f"- {narrower}", {"F1": NOTE})
 
 
 def test_an_unsure_reconsideration_asks_the_owner_to_fix_or_drop(tmp_path, clone, monkeypatch):
@@ -223,7 +235,7 @@ def test_an_unsure_reconsideration_asks_the_owner_to_fix_or_drop(tmp_path, clone
     assert "only the owner knows the audience" in q.text
     c = answer(store, "fix", "use Hallo")
     assert (c.step.kind, c.step.mode) == (K.REVIEW, disputes.DISPUTED)
-    assert disputes.kept(c.plan.tasks[2]) == [f"- {ONE} (the owner: use Hallo)"]
+    assert disputes.kept(c.plan.tasks[2]) == {f"- {ONE}": "use Hallo"}
 
 
 def test_a_failed_reconsideration_is_the_steps_result_and_runs_again(tmp_path, clone, monkeypatch):
@@ -271,13 +283,18 @@ def test_the_owners_fix_passes_the_round_gate_once():
 
 def test_the_owners_note_guides_the_fix_and_authorises_its_round():
     task = change(1).plan.tasks[2]
+    note = "use Grüß Gott " * 140  # a whole note of 2000 characters reaches the builder
     task.disputes = [
-        Dispute(key="F1", finding=ONE, reason="r", upheld=True, owner="fix", note="use  Grüß Gott"),
+        Dispute(key="F1", finding=ONE, reason="r", upheld=True, owner="fix", note=note),
         Dispute(key="F2", finding=TWO, reason="r", upheld=True, owner="drop", note="out of scope"),
     ]
-    assert (disputes.kept(task), disputes.authorised(task)) == ([f"- {ONE} (the owner: use Grüß Gott)"], True)
+    assert (disputes.kept(task), disputes.authorised(task)) == ({f"- {ONE}": note}, True)
+    c = change(1)
+    c.step = Step(kind=K.REVIEW, task="t3")
+    fix = review.repair(c, task, [f"- {ONE}", f"- {TWO}"], disputes.kept(task))[0]
+    assert f"> F1: {note.strip()}" in disputes.build_lines(fix)
     task.disputes[0].owner = "drop"
-    assert (disputes.kept(task), disputes.authorised(task)) == ([], False)
+    assert (disputes.kept(task), disputes.authorised(task)) == ({}, False)
 
 
 @pytest.mark.parametrize(
@@ -296,11 +313,21 @@ def test_a_finding_the_owner_decided_is_never_rejected(tmp_path, offered, keys, 
     assert (ok, error in text, "or reject" in text) == (False, True, False)
 
 
+def test_a_conversation_reply_never_skips_a_finding_the_owner_decided(tmp_path):
+    item = ItemRef(id="c1", kind="comment", version="v1", task="t1")
+    tree = tools.Worktree(head="a", base="a")
+    g = gate(tmp_path, K.BUILD, tree, tools.SUBMIT, rejectable=("F2",), settled=("F1",), item=item)
+    reply = {"how": "answered", "text": "It already greets in German."}
+    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "changed_paths": [], "checks": [], "response": reply})
+    assert (ok, "changes: no commit - fix and commit F2, F1" in text) == (False, True)
+
+
 @pytest.mark.parametrize(
     ("recheck", "error"),
     [
         ({"repeat_of": "E1"}, None),
         ({"repeat_of": "E9"}, "rechecked: F1 repeat_of E9 is not under Earlier rechecks - use one of E1"),
+        ({"repeat_of": "E1", "upheld": False}, "rechecked: F1 names a repeat and a verdict"),
         ({}, "rechecked: F1 needs upheld true or false"),
     ],
 )
@@ -331,8 +358,8 @@ def test_each_repair_part_marks_the_findings_the_owner_decided():
     c.step = Step(kind=K.REVIEW, task="t3")
     c.budgets.loops[budgets.round_key(c)] = 1
     found = [f"- a.txt:{i}: {'x' * 1500} - fix: y" for i in range(1, 5)]
-    parts = review.repair(c, c.plan.tasks[2], found, kept=[found[2]])
-    assert [(t.settled, t.found_in) for t in parts] == [([], 2), (["F1"], 2)]
+    parts = review.repair(c, c.plan.tasks[2], found, kept={found[2]: "a note", found[3]: ""})
+    assert [(t.settled, t.notes, t.found_in) for t in parts] == [([], {}, 2), (["F1", "F2"], {"F1": "a note"}, 2)]
 
 
 def test_a_repair_lists_every_finding_and_marks_the_owners():

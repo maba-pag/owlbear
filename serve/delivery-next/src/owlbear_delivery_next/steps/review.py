@@ -11,7 +11,7 @@ from owlbear_delivery_next.models import ErrorKind, Exit, Inputs, Review, Score,
 from owlbear_delivery_next.steps import reconsider, worktree
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Mapping
     from pathlib import Path
 
     from owlbear_delivery_next.loop import StepResult
@@ -76,32 +76,37 @@ def score(found: list[str], kind: str) -> Score:
     return Score(failing=len(found), findings=sorted(ids))
 
 
-def repair(change: Change, task: Task | None, found: list[str], kept: Collection[str] = ()) -> list[Task]:
+def repair(change: Change, task: Task | None, found: list[str], kept: Mapping[str, str] | None = None) -> list[Task]:
     """The repair task carrying every finding line, in parts that each fit a task's details.
 
-    Each part records the review round that found its findings and which of them the owner decided to fix (*kept*).
+    Each part records the review round that found its findings, and which of them the owner decided to fix (*kept*:
+    finding line to the owner's note).
     """
+    kept = kept or {}
     n = len(change.plan.tasks) + 1 if change.plan else 1
     task = task or (change.plan.tasks[-1] if change.plan and change.plan.tasks else None)
     scope, checks = (task.scope, task.checks) if task else ([], [])
     of = f"task {change.step.task}" if change.step.task else "the final review"
     title = f"Fix {len(found)} review finding(s) of {of}"
     item = task.item if task and change.step.task else None  # a conversation task's repair answers the same item
-    parts, round_ = pack(found) or [""], budgets.review_round(change)
-    return [
-        Task(
-            id=f"t{n + i}",
-            title=title + (f" (part {i + 1} of {len(parts)})" if len(parts) > 1 else ""),
-            scope=scope,
-            checks=checks,
-            origin="review",
-            detail=part,
-            item=item,
-            found_in=round_,
-            settled=[f"F{j}" for j, line in enumerate(part.splitlines(), 1) if line in kept],
+    parts, round_, tasks = pack(found) or [""], budgets.review_round(change), []
+    for i, part in enumerate(parts):
+        mine = {f"F{j}": line for j, line in enumerate(part.splitlines(), 1) if line in kept}
+        tasks.append(
+            Task(
+                id=f"t{n + i}",
+                title=title + (f" (part {i + 1} of {len(parts)})" if len(parts) > 1 else ""),
+                scope=scope,
+                checks=checks,
+                origin="review",
+                detail=part,
+                item=item,
+                found_in=round_,
+                settled=list(mine),
+                notes={k: kept[line] for k, line in mine.items() if kept[line]},
+            )
         )
-        for i, part in enumerate(parts)
-    ]
+    return tasks
 
 
 def completed(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
