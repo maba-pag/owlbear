@@ -885,8 +885,8 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     page = c.get("/maintenance")
     assert page.status_code == 200
     assert "<h1>Maintenance</h1>" in page.text
-    assert '<ul id="actions" class="actions"></ul>' in page.text
-    assert '<p-text id="status" role="status" aria-live="polite"></p-text>' in page.text
+    assert '<div id="page"></div>' in page.text  # lit-html renders the actions from the API (TD-264)
+    assert 'from "/assets/lit-html/lit-html.js"' in page.text
 
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
     assert list(got) == [

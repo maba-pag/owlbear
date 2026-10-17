@@ -2,6 +2,7 @@
 :not(:defined) { visibility: hidden; }
 .no-pds :not(:defined) { visibility: visible; }
 [hidden] { display: none !important; }
+#page { display: contents; }  /* the part a page renders with lit-html sits in main's grid (TD-264) */
 body {
   margin: 0; background: var(--p-color-canvas); color: var(--p-color-primary);
   font-family: var(--p-font-sans, system-ui), system-ui, sans-serif; line-height: var(--p-leading-normal, 1.5);

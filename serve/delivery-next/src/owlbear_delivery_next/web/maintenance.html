@@ -11,7 +11,7 @@
 </script>
 <!-- base -->
 <style>
-  main > p-text:empty { display: none !important; }
+  #page > p-text:empty { display: none !important; }
   .actions { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
   .action {
     display: grid; gap: var(--p-spacing-static-xs); padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
@@ -27,104 +27,73 @@
 <header>
   <p-heading size="2xl"><h1>Maintenance</h1></p-heading>
 </header>
-<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
-  uses plain controls. Reload to try again.</p>
-<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
-<p-text id="status" role="status" aria-live="polite"></p-text>
-<section aria-labelledby="actions-title">
-  <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
-  <ul id="actions" class="actions"></ul>
-</section>
+<div id="page"></div>
 </main>
-<script>
-"use strict";
-const hash = new URLSearchParams(location.hash.slice(1));
-if (hash.get("token")) {
-  sessionStorage.setItem("token", hash.get("token"));
-  history.replaceState(null, "", location.pathname);
-}
-const token = sessionStorage.getItem("token");
+<script type="module">
+import { html, nothing, render } from "/assets/lit-html/lit-html.js";
+import { call, designSystem } from "/assets/ui.mjs";
+
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
-
-function el(tag, text, attrs = {}) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-  return node;
-}
-
-function notify(message = "") {
-  const error = document.getElementById("error");
-  error.textContent = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
-  error.hidden = !message;
-}
-
-async function call(path) {
-  if (!token) throw new Error("Open the URL the host printed, including #token=…");
-  let response;
-  try {
-    response = await fetch(`/api/next${path}`,
-      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
-  } catch {
-    throw new Error("Delivery is not running. Start it, then reload this page.");
-  }
-  if (response.status === 401) {
-    throw new Error("Delivery restarted at a new address. Open the link from chat or owlbear-next status.");
-  }
-  const data = await response.json().catch(() => null);
-  if (!response.ok || data === null) throw new Error(data?.detail || `Delivery answered ${response.status}`);
-  return data;
-}
+const state = { pds: true, actions: [], error: "" };
 
 // The last run in words, so its state never rests on the tag's colour alone.
 function lastRun(a) {
-  if (!a.built) return [el("p-tag", "not built yet", { variant: "secondary", compact: "true" })];
-  if (!a.recorded) return [el("p-text", "No run record kept.", { size: "xs", color: "contrast-medium" })];
-  if (!a.last) return [el("p-text", "Never run.", { size: "sm" })];
+  if (!a.built) return html`<p-tag variant="secondary" compact="true">not built yet</p-tag>`;
+  if (!a.recorded) return html`<p-text size="xs" color="contrast-medium">No run record kept.</p-text>`;
+  if (!a.last) return html`<p-text size="sm">Never run.</p-text>`;
   const at = a.last.ended_at || a.last.started_at;
   const when = at ? `, ${new Date(at).toLocaleString()}` : "";
-  const said = [el("p-text", `Last run: ${a.last.state}${when}`, { size: "sm" })];
-  if (RESULTS[a.last.state]) said.push(el("p-tag", a.last.state, { variant: RESULTS[a.last.state], compact: "true" }));
-  if (a.last.reason) said.push(el("p-text", a.last.reason, { size: "xs", color: "contrast-medium" }));
-  return said;
+  const tag = RESULTS[a.last.state];
+  return html`<p-text size="sm">Last run: ${a.last.state}${when}</p-text>
+    ${tag ? html`<p-tag variant=${tag} compact="true">${a.last.state}</p-tag>` : nothing}
+    ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}`;
 }
 
-function render(actions) {
-  document.getElementById("actions").replaceChildren(...actions.map((a) => {
-    const item = el("li", undefined, { class: "action" }), title = el("div", undefined, { class: "title" });
-    const head = el("p-heading", undefined, { size: "md" });
-    head.append(el("h3", a.name));
-    title.append(head, el("p-text", `in ${a.where}`, { size: "sm", color: "contrast-medium" }));
-    item.append(title, el("p-text", a.note, { size: "sm" }));
-    if (a.href) item.append(el("a", `Open ${a.name} in ${a.where}`, { href: a.href }));
-    const last = el("div", undefined, { class: "title" });
-    last.append(...lastRun(a));
-    item.append(last);
-    return item;
-  }));
+function action(a) {
+  return html`<li class="action">
+    <div class="title">
+      <p-heading size="md"><h3>${a.name}</h3></p-heading>
+      <p-text size="sm" color="contrast-medium">in ${a.where}</p-text>
+    </div>
+    <p-text size="sm">${a.note}</p-text>
+    ${a.href ? html`<a href=${a.href}>Open ${a.name} in ${a.where}</a>` : nothing}
+    <div class="title">${lastRun(a)}</div>
+  </li>`;
+}
+
+function view() {
+  const error = state.error ? state.error.charAt(0).toUpperCase() + state.error.slice(1) : "";
+  return html`
+    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from cdn.ui.porsche.com,
+      so the page uses plain controls. Reload to try again.</p>
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!error}>${error}
+    </p-inline-notification>
+    <p-text id="status" role="status" aria-live="polite"></p-text>
+    <section aria-labelledby="actions-title">
+      <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
+      <ul id="actions" class="actions">${state.actions.map(action)}</ul>
+    </section>`;
+}
+
+function show() {
+  render(view(), document.getElementById("page"));
 }
 
 async function refresh() {
   try {
-    render(await call("/maintenance"));
-    notify();
+    state.actions = await call("/maintenance", { timeout: 15000 });
+    state.error = "";
   } catch (e) {
-    notify(e.message);
+    state.error = e.message;
   }
+  show();
 }
 
-async function start() {
-  const ready = customElements.whenDefined("p-heading").then(() => true);
-  const pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
-  if (!pds) {
-    document.documentElement.classList.add("no-pds");
-    document.getElementById("offline").hidden = false;
-  }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
-  refresh();
-}
-
-start();
+show();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+refresh();
+state.pds = await designSystem();
+show();
 </script>
 </body>
 </html>
