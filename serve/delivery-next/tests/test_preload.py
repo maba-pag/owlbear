@@ -91,6 +91,22 @@ def test_a_missing_or_misnamed_skill_is_reported() -> None:
     assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance"]
 
 
+def test_front_matter_is_read_as_yaml() -> None:
+    doc = '---\nname: x\ndescription: "a: b, c"\ntools:\n  - view\n  - owlbear-memory/recall_memory\n---\n\nProse.\n'
+    meta, body = preload.front_matter(doc)
+    assert meta == {"name": "x", "description": "a: b, c", "tools": ["view", "owlbear-memory/recall_memory"]}
+    assert body.strip() == "Prose."
+    for bad in ("name: x\n", "---\nname: x\n", "---\n- x\n---\n"):
+        with pytest.raises(ValueError, match="no front matter"):
+            preload.front_matter(bad)
+
+
+def test_a_skill_whose_front_matter_is_not_yaml_counts_as_missing(gap) -> None:
+    (gap / "owlbear-acceptance").mkdir()
+    (gap / "owlbear-acceptance" / "SKILL.md").write_text('---\nname: "owlbear-acceptance\n---\n')
+    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance"]
+
+
 def test_the_sdk_session_searches_delivery_folder_for_the_role_skills() -> None:
     st = sdk_adapter._Step(session(), SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     opts = st.options()

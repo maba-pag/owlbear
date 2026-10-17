@@ -13,6 +13,8 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = "worker_skills"
 CHAT = "delivery"  # the owner's chat skill, shipped in the package's skills folder, never in this one
 REQUIRED: dict[str, tuple[str, ...]] = {
@@ -30,17 +32,29 @@ MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json 
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
 
 
-def agent_file(role: str) -> tuple[dict[str, str], str]:
+def front_matter(doc: str) -> tuple[dict[str, Any], str]:
+    """A Markdown file's YAML front matter and the prose after it (TD-269).
+
+    Raises:
+        ValueError: The file opens no front matter, or it is not a mapping.
+        yaml.YAMLError: The front matter is not YAML.
+    """
+    head, end, body = doc.removeprefix("---\n").partition("\n---")
+    meta = yaml.safe_load(head) if doc.startswith("---\n") and end else None
+    if not isinstance(meta, dict):
+        msg = "no front matter mapping"
+        raise ValueError(msg)  # noqa: TRY004 - a file without front matter is bad input, not a wrong type
+    return meta, body
+
+
+def agent_file(role: str) -> tuple[dict[str, Any], str]:
     """The role's agent file: its front matter fields and its prose."""
-    text = files("owlbear_delivery_next").joinpath("agents", f"{role}.md").read_text(encoding="utf-8")
-    _, front, body = text.split("---", 2)
-    return {k.strip(): v.strip() for k, v in (line.split(":", 1) for line in front.strip().splitlines())}, body
+    return front_matter(files("owlbear_delivery_next").joinpath("agents", f"{role}.md").read_text(encoding="utf-8"))
 
 
 def tools(role: str) -> list[str]:
     """The runtime tools the role may use, as its agent file names them; Delivery adds its result tools."""
-    names = agent_file(role)[0].get("tools", "").strip("[]")
-    return [n.strip() for n in names.split(",") if n.strip()]
+    return [str(name) for name in agent_file(role)[0].get("tools") or []]
 
 
 def memory(store: Path | None) -> dict[str, Any] | None:
@@ -66,10 +80,9 @@ def text(name: str, folder: Path | None = None) -> str:
 
 def _named(name: str, folder: Path | None = None) -> bool:
     try:
-        head = text(name, folder).split("---", 2)[1]
-    except OSError, IndexError:
+        return front_matter(text(name, folder))[0].get("name") == name
+    except OSError, ValueError, yaml.YAMLError:
         return False
-    return any(line.split(":", 1)[1].strip() == name for line in head.splitlines() if line.startswith("name:"))
 
 
 def required(role: str, *, ui: bool = False) -> tuple[str, ...]:
