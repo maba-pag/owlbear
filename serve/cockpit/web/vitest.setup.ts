@@ -66,13 +66,18 @@ if (typeof window !== "undefined") {
   );
 }
 
-// jsdom does not implement showModal/close on HTMLDialogElement
+// jsdom does not implement showModal/close on HTMLDialogElement. Like a browser they toggle `open`: since
+// jsdom 30.1.2, focus() refuses elements inside a dialog that is not open.
 if (typeof HTMLDialogElement !== "undefined") {
   if (!HTMLDialogElement.prototype.showModal) {
-    HTMLDialogElement.prototype.showModal = vi.fn();
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    });
   }
   if (!HTMLDialogElement.prototype.close) {
-    HTMLDialogElement.prototype.close = vi.fn();
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    });
   }
 }
 

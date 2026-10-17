@@ -2,25 +2,7 @@
 name: Static checks
 
 "on":
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    paths:
-      - .github/workflows/static.yml
-      - "**/*.py"
-      - "**/*.json"
-      - "**/*.jsonc"
-      - "**/.editorconfig"
-      - "**/.gitignore"
-      - biome.json
-      - pyproject.toml
-      - uv.lock
-      - serve/cockpit/web/**
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -33,9 +15,6 @@ permissions:
 jobs:
   lint:
     name: Static checks
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

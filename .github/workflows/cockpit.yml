@@ -2,19 +2,7 @@
 name: Cockpit
 
 "on":
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    paths:
-      - .github/workflows/cockpit.yml
-      - .github/scripts/check_node_runtime.py
-      - biome.json
-      - serve/cockpit/web/**
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -27,9 +15,6 @@ permissions:
 jobs:
   unit:
     name: Cockpit unit
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -117,9 +102,6 @@ jobs:
 
   browser:
     name: Cockpit browser
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:

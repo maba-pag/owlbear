@@ -36,8 +36,12 @@ Every automatically triggered workflow is disabled on GitHub (TD-204); `gh workf
 restores one. The pre-commit hooks run only by hand (`pre-commit run --hook-stage manual`).
 
 Agents wait for every check on the head commit, so the checks are shaped to finish fast and to
-report few rows. Each workflow is path-filtered, every job starts immediately (no `needs`), and
-each job installs only what it uses.
+report few rows. One [CI](workflows/ci.yml) workflow runs on every pull request into `main`,
+including drafts. Its scope job lists the suites the PR touches with
+[`ci_scope.py`](scripts/ci_scope.py), which owns the path lists below. CI then calls each touched
+suite as a reusable workflow; a change to the gate itself runs every suite. Its final job, named
+**CI**, passes only when every selected suite passed; it is the one check a ruleset requires (TD-278).
+Within a suite every job starts immediately (no `needs`) and installs only what it uses.
 
 | Workflow | Jobs | Runs when the PR touches |
 | --- | --- | --- |
@@ -48,7 +52,7 @@ each job installs only what it uses.
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, PDS, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
 
-`paths` filters evaluate the whole PR diff, so a follow-up push reruns every workflow the PR ever
+The scope evaluates the whole PR diff, so a follow-up push reruns every suite the PR ever
 touched. To avoid repeating identical proofs, each job fingerprints its inputs with
 `git ls-files -s` and stores a marker cache entry after it passes. A later run in the same PR with
 the same fingerprint reports the reused result and skips its work. Python and static fingerprints

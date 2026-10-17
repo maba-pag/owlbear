@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -9,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
-PULL_REQUEST_WORKFLOWS = (
+SUITE_WORKFLOWS = (
     "agent-ecosystem.yml",
     "cockpit.yml",
     "python.yml",
@@ -19,6 +21,9 @@ PULL_REQUEST_WORKFLOWS = (
 )
 REUSING_WORKFLOWS = ("cockpit.yml", "python.yml", "python-browser.yml", "static.yml", "tooling.yml")
 SKIPPED_PACKAGE_WORKFLOWS = ("python.yml", "copilot-setup-steps.yml")
+_SPEC = importlib.util.spec_from_file_location("ci_scope", ROOT / ".github/scripts/ci_scope.py")
+ci_scope = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(ci_scope)
 
 
 def _workflow(name: str) -> dict[str, object]:
@@ -52,17 +57,85 @@ def test_replaced_workflows_are_gone() -> None:
         assert not (WORKFLOWS / name).exists()
 
 
-@pytest.mark.parametrize("name", PULL_REQUEST_WORKFLOWS)
-def test_pull_request_workflows_target_main_and_skip_drafts(name: str) -> None:
-    workflow = _workflow(name)
-    pull_request = workflow["on"]["pull_request"]
-
-    assert pull_request["branches"] == ["main"]
-    assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
+@pytest.mark.parametrize("name", SUITE_WORKFLOWS)
+def test_suites_run_only_when_the_ci_gate_calls_them_and_also_on_drafts(name: str) -> None:
+    assert set(_workflow(name)["on"]) == {"workflow_call", "workflow_dispatch"}
     for job_name, job in _jobs(name).items():
-        condition = job["if"]
-        assert "github.event.pull_request.draft == false" in condition, f"{name}:{job_name}"
+        assert "draft" not in str(job.get("if", "")), f"{name}:{job_name}"
         assert "needs" not in job, f"{name}:{job_name} must start without waiting for another job"
+
+
+def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_passed() -> None:
+    gate = _workflow("ci.yml")
+    jobs = gate["jobs"]
+    pull_request = gate["on"]["pull_request"]
+    called = {name: job for name, job in jobs.items() if "uses" in job}
+
+    assert (pull_request["branches"], "paths" in pull_request) == (["main"], False)
+    assert "ready_for_review" in pull_request["types"]
+    assert set(called) == set(ci_scope.SUITES)
+    assert {job["uses"] for job in called.values()} == {f"./.github/workflows/{n}" for n in SUITE_WORKFLOWS}
+    for name, job in called.items():
+        assert job["if"] == f"contains(fromJSON(needs.scope.outputs.suites), '{name}')"
+    final = jobs["ci"]
+    assert (final["name"], final["if"]) == ("CI", "always()")
+    assert set(final["needs"]) == {"scope", *ci_scope.SUITES}
+    check = final["steps"][0]["run"]
+    assert 'needs["scope"]["result"] != "success"' in check
+    assert 'needs[name]["result"] != "success"' in check
+
+
+@pytest.mark.parametrize(
+    ("paths", "touched"),
+    [
+        (["README.md"], []),
+        (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static"]),
+        (["serve/cockpit/web/src/app.tsx"], ["cockpit", "static"]),
+        ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
+        ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),
+        (["share/skills/x/SKILL.md"], ["agent-ecosystem"]),
+        (["serve/a/b/src/x.txt"], []),
+    ],
+)
+def test_the_scope_follows_github_path_filters(paths: list[str], touched: list[str]) -> None:
+    assert ci_scope.suites(paths) == touched
+
+
+def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
+    def git(*args: str) -> str:
+        done = subprocess.run(  # noqa: S603 - fixed git argument vector
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return done.stdout.strip()
+
+    git("init", "-q")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    source = tmp_path / "serve/delivery-next/src/caf\u00e9 x.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "head")
+
+    paths = subprocess.run(  # noqa: S603
+        ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    assert paths == 'suites=["python", "python-browser", "static"]\n'
+
+
+def test_every_suite_lists_its_own_workflow_and_no_glob_twice() -> None:
+    for name, globs in ci_scope.SUITES.items():
+        assert len(globs) == len(set(globs)), name
+        assert f".github/workflows/{name}.yml" in globs or ".github/workflows/**" in globs, name
 
 
 @pytest.mark.parametrize("name", sorted(path.name for path in WORKFLOWS.glob("*.yml")))
@@ -133,11 +206,10 @@ def test_skipped_packages_cover_the_locked_gpu_stack_and_stay_aligned() -> None:
 
 
 def test_python_browser_tests_run_alone_with_chromium() -> None:
-    workflow = _workflow("python-browser.yml")
     runs = _runs(_jobs("python-browser.yml")["browser"])
 
     assert {"serve/browser/**", "serve/browser-mcp/**", "serve/web-content/**"} <= set(
-        workflow["on"]["pull_request"]["paths"]
+        ci_scope.SUITES["python-browser"]
     )
     assert "uv sync --locked --package owlbear-browser-mcp --group dev" in runs
     assert "uv run --no-sync playwright install --with-deps chromium" in runs
@@ -145,11 +217,10 @@ def test_python_browser_tests_run_alone_with_chromium() -> None:
 
 
 def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> None:
-    workflow = _workflow("python-browser.yml")
     job = _jobs("python-browser.yml")["delivery-next-browser"]
     runs = _runs(job)
 
-    assert {"serve/delivery-next/**", "serve/memory/**"} <= set(workflow["on"]["pull_request"]["paths"])
+    assert {"serve/delivery-next/**", "serve/memory/**"} <= set(ci_scope.SUITES["python-browser"])
     assert "serve/delivery-next serve/memory" in next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
     assert "uv sync --locked --package owlbear-delivery-next --group dev" in runs
     assert "uv run --no-sync playwright install --with-deps chromium" in runs
@@ -157,13 +228,12 @@ def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> Non
 
 
 def test_cockpit_unit_and_browser_proofs_run_in_parallel() -> None:
-    workflow = _workflow("cockpit.yml")
     jobs = _jobs("cockpit.yml")
     unit = _runs(jobs["unit"])
     browser = _runs(jobs["browser"])
 
-    assert "**/*.json" not in workflow["on"]["pull_request"]["paths"]
-    assert "serve/cockpit/web/**" in workflow["on"]["pull_request"]["paths"]
+    assert "**/*.json" not in ci_scope.SUITES["cockpit"]
+    assert "serve/cockpit/web/**" in ci_scope.SUITES["cockpit"]
     for command in ("npm test", "npm run typecheck:e2e", "npm run test:biome-pds", "npm run test:sync-pds"):
         assert command in unit
     assert "check_node_runtime.py" in unit
@@ -175,12 +245,9 @@ def test_cockpit_unit_and_browser_proofs_run_in_parallel() -> None:
 
 
 def test_static_checks_own_repository_lint() -> None:
-    workflow = _workflow("static.yml")
     runs = _runs(_jobs("static.yml")["lint"])
 
-    assert {"**/*.py", "**/*.json", "**/*.jsonc", "biome.json", "pyproject.toml"} <= set(
-        workflow["on"]["pull_request"]["paths"]
-    )
+    assert {"**/*.py", "**/*.json", "**/*.jsonc", "biome.json", "pyproject.toml"} <= set(ci_scope.SUITES["static"])
     assert "uv sync --locked --only-group dev" in runs
     assert "uv run --no-sync ruff check ." in runs
     assert "uv run --no-sync ruff format --check ." in runs
@@ -188,7 +255,7 @@ def test_static_checks_own_repository_lint() -> None:
     assert "npm run lint:html" in runs
 
 
-@pytest.mark.parametrize("name", [*PULL_REQUEST_WORKFLOWS, "copilot-setup-steps.yml"])
+@pytest.mark.parametrize("name", [*SUITE_WORKFLOWS, "copilot-setup-steps.yml"])
 def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> None:
     for job in _jobs(name).values():
         steps = job["steps"]

@@ -2,25 +2,7 @@
 name: Python browser
 
 "on":
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    paths:
-      - .github/workflows/python-browser.yml
-      - .python-version
-      - conftest.py
-      - pyproject.toml
-      - uv.lock
-      - serve/browser/**
-      - serve/browser-mcp/**
-      - serve/web-content/**
-      - serve/delivery-next/**
-      - serve/memory/**
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -33,9 +15,6 @@ permissions:
 jobs:
   browser:
     name: Python browser tests
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -111,9 +90,6 @@ jobs:
 
   delivery-next-browser:
     name: Delivery-next browser tests
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
