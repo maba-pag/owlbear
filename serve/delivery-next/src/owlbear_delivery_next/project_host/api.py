@@ -69,9 +69,9 @@ PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored P
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
-PICKER_NOTE = (
-    "\n\nYour turns from Delivery run on {model} at {effort} effort; messages the owner types run on the chat's "
-    "model picker. In your first answer, tell the owner once to set the picker to {model} at {effort} effort."
+PICKER_NOTE = (  # the owner's typed messages run on the picker, not on the role's model (TD-277)
+    '\n\nBegin your first message or question to the owner with this line: "Messages you type here run on this '
+    'chat\'s model picker: set it to {model} at {effort} effort."'
 )
 LAUNCH_GAP = 5.0  # seconds after a new-Change launch ends before the next may start
 

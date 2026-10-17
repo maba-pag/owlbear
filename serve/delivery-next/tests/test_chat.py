@@ -430,7 +430,8 @@ def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_w
     out = api.new_chat(tmp_path, SHAPER, start=lambda *a: asked.append(a) or (ending, warning))
     [(repo, role, prompt)] = asked
     assert (repo, role, prompt.startswith(api.START_PROMPT)) == (tmp_path, SHAPER, True)
-    assert "tell the owner once to set the picker to claude-opus-5.5 at medium effort" in prompt
+    assert "Begin your first message or question to the owner with this line" in prompt
+    assert "model picker: set it to claude-opus-5.5 at medium effort." in prompt
     assert "owlbear-change-shaping skill" in api.START_PROMPT
     assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "medium", "default")
     assert {k: v for k, v in out.items() if k != "reason"} == state
