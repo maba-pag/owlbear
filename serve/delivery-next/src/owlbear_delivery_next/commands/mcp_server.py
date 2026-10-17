@@ -47,7 +47,7 @@ class Chat:
             return 503, {"error": down}
         headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json"}
         data = None if body is None else json.dumps(body).encode()
-        url = f"{rec.url}api/next{path}"
+        url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{path}"  # the machine host's (TD-242)
         request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
         try:
             with _LOCAL.open(request, timeout=15) as response:

@@ -127,7 +127,8 @@ class Job:
     def _copy(self) -> dict[str, Any]:
         return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
 
-    def _busy(self) -> bool:
+    def busy(self) -> bool:
+        """Whether an update's thread runs now."""
         return self.thread is not None and self.thread.is_alive()
 
     def start(self) -> dict[str, Any]:
@@ -137,7 +138,7 @@ class Job:
             Busy: A run is in progress, or waits for the owner's answers.
         """
         with self.lock:
-            if self.state["state"] == "running" or self._busy():
+            if self.state["state"] == "running" or self.busy():
                 msg = "a design pack update is already running"
                 raise Busy(msg)
             if self.state["state"] == "waiting":
@@ -159,7 +160,7 @@ class Job:
             Refused: The option is not one of the question's, or a reconsideration lacks its note.
         """
         with self.lock:
-            asked = self.state["questions"] if self.state["state"] == "waiting" and not self._busy() else []
+            asked = self.state["questions"] if self.state["state"] == "waiting" and not self.busy() else []
             q = next((q for q in asked if q["id"] == question), None)
             if q is None:
                 msg = "this question is no longer open; reload the page"
@@ -199,7 +200,7 @@ class Job:
             Stale: No run waits for the owner.
         """
         with self.lock:
-            if self.state["state"] != "waiting" or self._busy():
+            if self.state["state"] != "waiting" or self.busy():
                 msg = "no design pack update waits for you"
                 raise Stale(msg)
             self._log("you discarded the update")

@@ -68,6 +68,7 @@ class HostRecord(Record):
     started_at: datetime
     code: str
     ready: list[str] | None = None  # failed readiness facts with their fix; None while the check runs
+    project: str = ""  # the project's id on the machine host, whose API it is under (TD-242)
 
 
 class RunnerRecord(Record):
@@ -80,15 +81,20 @@ class RunnerRecord(Record):
 
 def running(store: Store) -> HostRecord | None:
     """Return the live host's record; None when no process holds the host lock, so Delivery is not running."""
+    return running_at(store.root)
+
+
+def running_at(root: Path) -> HostRecord | None:
+    """The record of the host whose ``host.lock`` and ``host.json`` are in *root*, if one holds the lock."""
     try:
-        fd = os.open(store.root / "host.lock", os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(root / "host.lock", os.O_RDONLY | os.O_NOFOLLOW)
     except FileNotFoundError:
         return None
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
     except BlockingIOError:
         with contextlib.suppress(OSError, ValidationError):
-            return HostRecord.model_validate_json((store.root / "host.json").read_text())
+            return HostRecord.model_validate_json((root / "host.json").read_text())
         return HostRecord(url="(starting)", token="", pid=0, started_at=datetime.now(UTC), code="")
     finally:
         os.close(fd)
@@ -420,7 +426,9 @@ class Host:
         if len(recent) >= BURST[0]:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
         self.launches[slug] = [*recent, time.monotonic()]
-        with self.launching:  # a project folder rename waits, so no runner starts during it
+        with self.launching:  # a project folder rename or a project's stop waits, so no runner starts during it
+            if self.paused():
+                return False
             rec = self.spawn(slug)
             atomic_write(self._path(slug), rec.model_dump_json())
         self.say(f"{slug}: runner {rec.pid} started")

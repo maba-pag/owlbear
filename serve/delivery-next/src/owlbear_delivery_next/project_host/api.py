@@ -123,8 +123,13 @@ class IntentBody(Body):
 
 
 def link(rec: HostRecord | None) -> str | None:
-    """The Changes-page URL with its token, as the host prints it; None until the host has one."""
-    return f"{rec.url}#token={rec.token}" if rec and rec.token else None
+    """The Changes-page URL with its token, as the host prints it; None until the host has one.
+
+    Under the machine host it opens the page on the record's project (TD-242).
+    """
+    if not (rec and rec.token):
+        return None
+    return f"{rec.url}{f'?project={rec.project}' if rec.project else ''}#token={rec.token}"
 
 
 def fixed_page(html: str) -> Callable[[], HTMLResponse]:
@@ -477,6 +482,11 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(brief_routes.router(store, read, put, wake, paused))
     router.include_router(backlog_routes.router(store, start_chat))
     router.include_router(memory_routes.router(store))
-    router.include_router(pack_routes.router(store, pack or pack_job.Job(store), paused))
+    job = pack or pack_job.Job(store)
+    router.include_router(pack_routes.router(store, job, paused))
     app.include_router(router)
+    app.state.busy = lambda: [  # work admitted outside a request, which a project's stop waits for (TD-242)
+        *(["a shaping chat opening"] if launches.opening else []),
+        *(["a design pack update"] if job.busy() else []),
+    ]
     return app
