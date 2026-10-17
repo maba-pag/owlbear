@@ -217,6 +217,20 @@ def test_global_round_values_are_valid_on_their_own_whatever_this_project_overri
     assert (r.status_code, path.exists(), c.get("/api/next/config").status_code) == (422, False, 200)
 
 
+def test_round_values_stored_out_of_fit_show_on_the_page_to_be_fixed(store, tmp_path):
+    path = tmp_path / "global" / "config.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps({"format": 2, "agents": {"builder": {"last_round_at": 8}}}))  # e.g. edited by hand
+    c = client(store, path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    assert got["notice"].startswith("The challenge-round values in use here do not fit together (Value error, last")
+    assert got["settings"]["agents"]["builder"]["last_round_at"] == 4  # shown without them meanwhile
+    fixed = {"format": 2, "agents": {"builder": {"ask_owner_at": 9}}}
+    saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": fixed}).json()
+    assert saved["settings"]["agents"]["builder"]["last_round_at"] == 8
+    assert saved["notice"].startswith("The global challenge-round values do not fit together on their own")
+
+
 def test_a_global_save_must_suit_every_project_sharing_it(tmp_path):
     root = tmp_path / "data"
     for name, last in (("a", None), ("b", 6)):

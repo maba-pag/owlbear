@@ -20,11 +20,13 @@ from owlbear_delivery_next import calibration, data_repo, model_choices, pack_up
 from owlbear_delivery_next.catalogue import CATALOGUE
 from owlbear_delivery_next.config import GlobalLayer, Layer, resolve
 from owlbear_delivery_next.data_repo import DataRepoError
+from owlbear_delivery_next.round_records import RoundPolicy
 from owlbear_delivery_next.store import StoreError, read_layer_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.config import Settings
     from owlbear_delivery_next.host import Host
     from owlbear_delivery_next.store import Store
 
@@ -72,6 +74,17 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         project, project_raw = read_layer_bytes(store.config_path, Layer)
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
+    here, alone = list[str](), list[str]()
+    settings, below = _resolved(glob, project, here), _resolved(glob, Layer(), alone)
+    if here:
+        notice = (
+            f"The challenge-round values in use here do not fit together ({here[0]}); steps stop until you fix them"
+        )
+    elif alone:
+        notice = (
+            f"The global challenge-round values do not fit together on their own ({alone[0]}); a project without its "
+            "own values stops until you fix them in the global layer"
+        )
     return {
         "project": project.model_dump(mode="json"),
         "project_rev": hashlib.sha256(project_raw).hexdigest(),
@@ -80,9 +93,9 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "global_location": global_path is not None,
         "folder": store.name or None,
         "notice": notice or (store.shared.pending() if store.shared else ""),
-        "settings": resolve(glob, project).model_dump(mode="json"),
+        "settings": settings.model_dump(mode="json"),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only
-            "project": resolve(glob, Layer()).model_dump(mode="json"),
+            "project": below.model_dump(mode="json"),
             "global": resolve(None, Layer()).model_dump(mode="json"),
         },
         "applied": APPLIED,
@@ -90,6 +103,26 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "agreement": _agreement(store),
         "design_pack": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
     }
+
+
+def _resolved(glob: GlobalLayer | None, project: Layer, misfit: list[str]) -> Settings:
+    """The settings; when stored round values do not fit together, those without them, the problem in *misfit*.
+
+    A hand edit, two saves at once or another machine's save can store such a combination; the page shows it so the
+    owner can fix it, while runners stop on it.
+    """
+    try:
+        return resolve(glob, project)
+    except ValidationError as exc:
+        misfit.append("; ".join(e["msg"] for e in exc.errors(include_url=False)))
+        return resolve(_unrounded(glob), _unrounded(project))
+
+
+def _unrounded[T: Layer](layer: T | None) -> T | None:
+    if layer is None:
+        return None
+    agents = {role: a.model_copy(update=dict.fromkeys(RoundPolicy.model_fields)) for role, a in layer.agents.items()}
+    return layer.model_copy(update={"agents": agents, "final_review": None})
 
 
 def _agreement(store: Store) -> list[dict[str, Any]]:
