@@ -938,7 +938,7 @@ async function answerUpdate(q, o, note) {
     ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
   if (o.id === "activate" && !(await ask({
     title: "Activate the pack without a passing challenge?", yes: "Activate and push", no: "Keep it waiting",
-    now: "Delivery activates the candidate as it is now, commits design_pack.json, worker_skills/NOTICE.md and the "
+    now: "Delivery activates the candidate as it is now, commits design_pack.json, skills/NOTICE.md and the "
       + "skills the updater changed on the package checkout's current branch, and pushes that commit. It activates "
       + (items.length ? "with these left as they are:" : "with no repair left unreviewed and no finding left open."),
     items,
@@ -996,7 +996,7 @@ async function startUpdate() {
     now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
       + "brings the skills in line, then the rule diff, golden pages, calibration replay and a challenger check it. "
       + "The challenger's findings go back to the updater. This uses AI credits.",
-    then: "Only if every stage passes, it activates the pack, commits design_pack.json, worker_skills/NOTICE.md and "
+    then: "Only if every stage passes, it activates the pack, commits design_pack.json, skills/NOTICE.md and "
       + "the skills the updater changed on its package checkout's current branch and pushes that commit upstream. "
       + "If the challenge rounds end without a pass, or the challenger upholds a finding the updater rejected, it "
       + "stops before activating and asks you here.",

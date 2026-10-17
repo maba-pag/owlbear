@@ -35,7 +35,9 @@ FINISH = (
 class UpdateResult(tools.Args):
     """``submit_result`` for the design pack updater."""
 
-    summary: str = tools.bounded(2000, "What you changed and why, skill by skill", "owlbear-ui-review: checks glow.")
+    summary: str = tools.bounded(
+        2000, "What you changed and why, skill by skill", "owlbear-design-review: checks glow."
+    )
     rejected: list[tools.Rejection] = Field(
         default_factory=list,
         max_length=20,

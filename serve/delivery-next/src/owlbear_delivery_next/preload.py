@@ -1,8 +1,8 @@
 """What each worker role starts with: its tools (TD-69), the project's memory (TD-70, TD-72) and preloaded skills.
 
 The tools are those its agent file names. Mandatory material loads at session start; only situational references
-stay on demand (§3.13 Q-B). The skills ship in the package's ``worker_skills`` folder under Delivery-unique names,
-apart from the owner's chat skill.
+stay on demand (§3.13 Q-B). Every skill ships in the package's ``skills`` folder under a Delivery-unique name (TD-170),
+the owner's chat skill among them; a step sees only its own role's.
 """
 
 from __future__ import annotations
@@ -15,18 +15,22 @@ from typing import Any
 
 import yaml
 
-ROOT = "worker_skills"
-CHAT = "delivery"  # the owner's chat skill, shipped in the package's skills folder, never in this one
+ROOT = "skills"
+CHAT = "owlbear-change-shaping"  # the owner's chat skill: only the shaper loads it
 REQUIRED: dict[str, tuple[str, ...]] = {
-    "builder": ("owlbear-module-design", "owlbear-acceptance"),
-    "planner": ("owlbear-acceptance", "owlbear-module-design"),
-    "reviewer": ("owlbear-acceptance", "owlbear-module-design", "owlbear-findings"),
-    "challenger": ("owlbear-acceptance", "owlbear-module-design", "owlbear-findings"),
-    "designer": ("owlbear-ui-design", "owlbear-ui-review"),
+    "builder": ("owlbear-module-design", "owlbear-acceptance-criteria"),
+    "planner": ("owlbear-acceptance-criteria", "owlbear-module-design"),
+    "reviewer": ("owlbear-acceptance-criteria", "owlbear-module-design", "owlbear-review-judgment"),
+    "challenger": ("owlbear-acceptance-criteria", "owlbear-module-design", "owlbear-review-judgment"),
+    "design-judge": ("owlbear-interface-design", "owlbear-design-review"),
     "preparer": (),  # its discovery order lives in its agent file, its only consumer (reuse study v2, 3.3)
     "updater": (),  # it edits the pack's skills as files; preloading their old text would argue with its edits
 }
-UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-ui-design",)}  # added when the brief has a UI (TD-76)
+UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
+JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)
+JOBS: dict[str, tuple[str, ...]] = dict.fromkeys(
+    ("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge"), JUDGED
+)
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
@@ -48,8 +52,9 @@ def front_matter(doc: str) -> tuple[dict[str, Any], str]:
 
 
 def agent_file(role: str) -> tuple[dict[str, Any], str]:
-    """The role's agent file: its front matter fields and its prose."""
-    return front_matter(files("owlbear_delivery_next").joinpath("agents", f"{role}.md").read_text(encoding="utf-8"))
+    """The role's agent file, ``agents/owlbear-<role>.agent.md`` (TD-169): its front matter fields and its prose."""
+    path = files("owlbear_delivery_next").joinpath("agents", f"owlbear-{role}.agent.md")
+    return front_matter(path.read_text(encoding="utf-8"))
 
 
 def tools(role: str) -> list[str]:
@@ -85,11 +90,16 @@ def _named(name: str, folder: Path | None = None) -> bool:
         return False
 
 
-def required(role: str, *, ui: bool = False) -> tuple[str, ...]:
-    """The skills a session of *role* preloads; a Change with a user interface adds the role's design skills."""
-    return (*REQUIRED.get(role, ()), *(UI.get(role, ()) if ui else ()))
+def required(role: str, *, ui: bool = False, job: str = "") -> tuple[str, ...]:
+    """The skills a session of *role* preloads for its *job*; a Change with a user interface adds design skills."""
+    return (*JOBS.get(job, REQUIRED.get(role, ())), *(UI.get(role, ()) if ui else ()))
 
 
-def missing(role: str, *, ui: bool = False, folder: Path | None = None) -> list[str]:
+def folders(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None) -> list[str]:
+    """One folder per skill the session preloads, so it sees no other (TD-166)."""
+    return [str((folder or directory()) / name) for name in required(role, ui=ui, job=job)]
+
+
+def missing(role: str, *, ui: bool = False, job: str = "", folder: Path | None = None) -> list[str]:
     """The role's skills Delivery cannot preload from *folder*: absent, or named otherwise in their front matter."""
-    return [name for name in required(role, ui=ui) if not _named(name, folder)]
+    return [name for name in required(role, ui=ui, job=job) if not _named(name, folder)]

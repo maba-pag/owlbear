@@ -1,5 +1,5 @@
 ---
-name: owlbear-ui-review
+name: owlbear-design-review
 description: "The design judge's rubric for a visual review: blind before and after, two phases, specificity, heuristics, severities and what fails a change"
 user-invocable: false
 ---
@@ -7,7 +7,7 @@ user-invocable: false
 # UI Review
 
 Use when you judge the design of a Change's screenshots. Adapted from Impeccable's critique (see `NOTICE.md` beside
-this folder). Read it together with `owlbear-ui-design`, whose rules you cite.
+this folder). Read it together with `owlbear-interface-design`, whose rules you cite.
 
 ## What you judge
 
@@ -54,7 +54,7 @@ product. Correctness against the brief is another judge's question; you judge de
 ## Findings
 
 - Each finding names the image, what is wrong, why it matters, the rule or principle it breaks (a section of
-  `owlbear-ui-design`, a detector rule id, or an owner's criterion by its id) and its severity. Report a problem
+  `owlbear-interface-design`, a detector rule id, or an owner's criterion by its id) and its severity. Report a problem
   on every image that shows it, A and B alike: Delivery maps them back, so a problem both show is one the Change
   did not cause.
 - Taste alone is not a finding. "I would prefer" without a cited rule is not reported.

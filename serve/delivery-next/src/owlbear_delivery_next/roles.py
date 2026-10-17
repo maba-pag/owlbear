@@ -17,7 +17,7 @@ DEFAULTS: dict[Role, RoleModel] = {
     "builder": RoleModel(model="claude-opus-5.5", effort="medium"),
     "reviewer": RoleModel(model="gpt-6.1-sol", effort="xhigh"),
     "challenger": RoleModel(model="gpt-6.1-sol", effort="high"),
-    "designer": RoleModel(model="claude-opus-5.5", effort="high"),  # the visual review's design judge
+    "design-judge": RoleModel(model="claude-opus-5.5", effort="high"),  # the visual review's design judge (TD-169)
     "preparer": RoleModel(model="claude-haiku-5.5", effort="low"),  # check prep: finds the launch recipe
     "shaper": RoleModel(model="claude-opus-5.5", effort="medium"),  # the New Change chat (TD-83); owner's effort
     "updater": RoleModel(model="claude-opus-5.5", effort="high"),  # writes the design pack's skills (TD-125)
@@ -29,7 +29,7 @@ SESSIONS: dict[str, Role] = {
     StepKind.CHECK: "preparer",
     StepKind.REVIEW: "reviewer",  # task and final review
     "visual-review": "reviewer",
-    "design-review": "designer",
+    "design-review": "design-judge",
     "plan-challenge": "challenger",
     "brief-challenge": "challenger",
     "amendment-challenge": "challenger",  # a worker's proposed brief wording (TD-179)

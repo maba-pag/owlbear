@@ -1,5 +1,5 @@
 ---
-name: delivery
+name: owlbear-change-shaping
 description: Shape a Change into a brief with the owner, save it for approval, show Delivery status, answer worker questions
 ---
 

@@ -330,7 +330,7 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     [cfg] = seen
     assert cfg.skills == folder  # the judge loads the candidate's skills
     assert (cfg.role, cfg.message, cfg.reveal, cfg.model) == (
-        "designer",
+        "design-judge",
         "judge home",
         "The detector found: none.",
         "claude-opus-5.5",

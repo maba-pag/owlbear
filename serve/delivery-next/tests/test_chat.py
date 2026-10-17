@@ -311,7 +311,7 @@ def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):
 
 def test_the_chat_skill_installs_user_locally_and_never_over_another_skill(tmp_path):
     assert setup.install_skill(tmp_path).startswith("chat skill installed for you only (not tracked)")
-    path = tmp_path / ".copilot" / "skills" / "delivery" / "SKILL.md"
+    path = tmp_path / ".copilot" / "skills" / "owlbear-change-shaping" / "SKILL.md"
     assert "save_brief" in path.read_text()
     path.write_text("---\nname: delivery\n---\nsomeone else's")
     assert "holds another skill" in setup.install_skill(tmp_path)
@@ -573,7 +573,11 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
-    written = [repo / ".vscode" / "tasks.json", repo / ".mcp.json", home / ".copilot" / "skills" / "delivery"]
+    written = [
+        repo / ".vscode" / "tasks.json",
+        repo / ".mcp.json",
+        home / ".copilot" / "skills" / "owlbear-change-shaping",
+    ]
     written.append(readiness.shaper_path(home))
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0

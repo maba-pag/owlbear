@@ -35,10 +35,10 @@ type Errors = tuple[Sequence[PageError], Sequence[PageError]]
 SHUFFLE = random.SystemRandom()  # which of A and B is "after"; tests replace it
 VERDICT: dict[str, Verdict] = {"pass": "pass", "fix": "fail", "unsure": "unsure"}
 JUDGE = (
-    "Use `owlbear-ui-review`. Per blind pair, say which image is better (A, B or equal) and why; you are not told "
+    "Use `owlbear-design-review`. Per blind pair, say which image is better (A, B or equal) and why; you are not told "
     "which is the Change, and Delivery maps your findings and preferences back. Judge each image against "
-    "`owlbear-ui-design` and the owner's criteria. A finding names its image, the problem and why it matters, the "
-    "rule it breaks (an owner's criterion by its id) and its severity."
+    "`owlbear-interface-design` and the owner's criteria. A finding names its image, the problem and why it matters, "
+    "the rule it breaks (an owner's criterion by its id) and its severity."
 )
 FINISH = (
     "First call `submit_first_look` with `verdict`, `findings`, `preferences` (one per pair) and `covered_paths` "
@@ -154,7 +154,7 @@ def sessions(  # noqa: PLR0913 - one session per batch, from the correctness jud
 ) -> list[Session]:
     """The design judge's sessions: one per batch, each two-phase, its detector findings held back."""
     return [
-        _designer(
+        _design_judge(
             base,
             head,
             DesignInput(
@@ -186,13 +186,13 @@ def replayed(base: Session, kept: VisualRound, images: Sequence[Image]) -> list[
     ):
         msg = f"round {kept.number}'s design inputs do not show its {len(named)} images once each within the budget"
         raise ValueError(msg)
-    return [_designer(base, kept.head, sent, p) for sent, p in zip(kept.design_inputs, parts, strict=True)]
+    return [_design_judge(base, kept.head, sent, p) for sent, p in zip(kept.design_inputs, parts, strict=True)]
 
 
-def _designer(base: Session, head: str, sent: DesignInput, batch: Sequence[Image]) -> Session:
+def _design_judge(base: Session, head: str, sent: DesignInput, batch: Sequence[Image]) -> Session:
     return dataclasses.replace(
         base,
-        role="designer",
+        role="design-judge",
         message=sent.message,
         submit=design_tools.FINAL,
         first_look=design_tools.FIRST,

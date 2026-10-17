@@ -1,5 +1,5 @@
 ---
-name: owlbear-acceptance
+name: owlbear-acceptance-criteria
 description: "Acceptance criteria that can be checked, and the cheapest proof that can falsify each one"
 user-invocable: false
 ---

@@ -1,5 +1,5 @@
 ---
-name: planner
+name: owlbear-planner
 description: Plans one approved Delivery brief as ordered, checkable tasks without changing files
 tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, web_fetch, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 ---
@@ -11,7 +11,7 @@ anything that changes files. Delivery publishes the plan, has it challenged and 
 </persona>
 
 <required_reading>
-Delivery loads two skills into your context before your first turn: `owlbear-acceptance` (checkable
+Delivery loads two skills into your context before your first turn: `owlbear-acceptance-criteria` (checkable
 criteria and the cheapest proof that can falsify each) and `owlbear-module-design` (module depth,
 seams, the deletion test). Apply them to the tasks you plan and the checks you choose.
 

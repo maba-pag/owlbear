@@ -188,10 +188,10 @@ def test_the_in_page_detector_runs_without_overlay_and_a_refusing_page_is_an_err
 
 
 def test_a_ui_change_gives_its_builder_the_design_skill_in_both_runtimes() -> None:
-    assert preload.required("builder", ui=True) == (*preload.REQUIRED["builder"], "owlbear-ui-design")
+    assert preload.required("builder", ui=True) == (*preload.REQUIRED["builder"], "owlbear-interface-design")
     assert preload.required("reviewer", ui=True) == preload.REQUIRED["reviewer"]
-    assert "owlbear-ui-design" in sdk_adapter.agent(StepKind.BUILD, ui=True)["skills"]
-    assert "owlbear-ui-design" not in sdk_adapter.agent(StepKind.BUILD)["skills"]
+    assert "owlbear-interface-design" in sdk_adapter.agent(StepKind.BUILD, ui=True)["skills"]
+    assert "owlbear-interface-design" not in sdk_adapter.agent(StepKind.BUILD)["skills"]
     placed = [rel for rel, _render in wf.skills("builder", ui=True)]
-    assert wf.skill_path("owlbear-ui-design") in placed
-    assert "owlbear-ui-design]" in wf.agent("builder", Path("/i.json"), ui=True)(None)
+    assert wf.skill_path("owlbear-interface-design") in placed
+    assert "owlbear-interface-design]" in wf.agent("builder", Path("/i.json"), ui=True)(None)

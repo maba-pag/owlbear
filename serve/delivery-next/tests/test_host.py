@@ -195,7 +195,7 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
         "  builder: claude-opus-5.5 effort medium",
         "  reviewer: gpt-6.1-sol effort xhigh",
         "  challenger: gpt-6.1-sol effort high",
-        "  designer: claude-opus-5.5 effort high",
+        "  design-judge: claude-opus-5.5 effort high",
         "  preparer: claude-haiku-5.5 effort low",
         "  shaper: claude-opus-5.5 effort medium",
         "  updater: claude-opus-5.5 effort high",
@@ -505,16 +505,16 @@ def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_ch
 def test_the_code_identity_covers_shipped_files_and_ignores_incidental_ones(tmp_path):
     pkg = tmp_path / "pkg"
     (pkg / "web").mkdir(parents=True)
-    (pkg / "skills" / "delivery").mkdir(parents=True)
+    (pkg / "skills" / "owlbear-change-shaping").mkdir(parents=True)
     (pkg / "a.py").write_text("x = 1\n")
     (pkg / "web" / "page.html").write_text("<p>")
-    (pkg / "skills" / "delivery" / "SKILL.md").write_text("# skill")
+    (pkg / "skills" / "owlbear-change-shaping" / "SKILL.md").write_text("# skill")
     first = codebase.identity(pkg)
     (pkg / "__pycache__").mkdir()
     (pkg / "__pycache__" / "a.cpython-314.pyc").write_bytes(b"pyc")
     for name in (".DS_Store", "foo.orig", "x.pyc", ".a.py.swp", "a.py~", ".#a.py", "web/page.html.orig"):
         (pkg / name).write_bytes(b"incidental")
-    (pkg / "skills" / "delivery" / "SKILL.md.bak").write_text("old")
+    (pkg / "skills" / "owlbear-change-shaping" / "SKILL.md.bak").write_text("old")
     assert codebase.identity(pkg) == first
     (pkg / "a.py").write_text("x = 2\n")
     assert codebase.identity(pkg) != first

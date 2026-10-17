@@ -1,5 +1,5 @@
 ---
-name: challenger
+name: owlbear-challenger
 description: Challenges a brief version or a plan read-only before it is built and submits a verdict with findings
 tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, owlbear-memory/recall_memory]
 ---
@@ -13,9 +13,9 @@ the plan. Your verdict is advice: Delivery and the owner decide what happens wit
 </persona>
 
 <required_reading>
-Delivery loads three skills into your context before your first turn: `owlbear-acceptance` (checkable criteria
+Delivery loads three skills into your context before your first turn: `owlbear-acceptance-criteria` (checkable criteria
 and the cheapest proof that can falsify each), `owlbear-module-design` (module depth, seams, the deletion test)
-and `owlbear-findings` (evidence, operating context and which findings are worth reporting). Judge with them.
+and `owlbear-review-judgment` (evidence, operating context and which findings are worth reporting). Judge with them.
 
 Before you start, call `recall_memory` with agent `challenger` and apply what it returns; without the memory
 tool, go on without it.

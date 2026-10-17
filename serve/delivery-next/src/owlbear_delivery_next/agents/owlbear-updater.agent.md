@@ -1,5 +1,5 @@
 ---
-name: updater
+name: owlbear-updater
 description: Brings the design pack's extracted skills in line with a new upstream release and implements the challenger's findings after judging them
 tools: [view, create, edit, glob, grep]
 ---

@@ -386,7 +386,7 @@ class FakeReview:
         self.designs, self.design = [], designed  # the design judge's sessions, and how each ends
 
     async def __call__(self, cfg):
-        if cfg.role == "designer":
+        if cfg.role == "design-judge":
             self.designs.append(cfg)
             return self.design(cfg)
         self.calls.append(cfg)
@@ -525,7 +525,7 @@ def test_both_judges_run_and_the_round_keeps_the_design_judges_blind_two_phase_v
     runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
     [cfg] = flow.review.designs
-    assert (cfg.role, cfg.first_look, cfg.submit) == ("designer", design_tools.FIRST, design_tools.FINAL)
+    assert (cfg.role, cfg.first_look, cfg.submit) == ("design-judge", design_tools.FIRST, design_tools.FINAL)
     assert [(a["displayName"], base64.b64decode(a["data"])) for a in cfg.attachments] == [
         ("home-1280-A.png", PNG + b"before"),
         ("home-1280-B.png", PNG),
@@ -754,7 +754,7 @@ def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flo
 
     async def unread(cfg):
         run = await plain(cfg)
-        if cfg.role != "designer":  # only the correctness judge's model stays unproven
+        if cfg.role != "design-judge":  # only the correctness judge's model stays unproven
             run.usage_unread = "the usage at the step's end could not be read (RuntimeError)"
         return run
 

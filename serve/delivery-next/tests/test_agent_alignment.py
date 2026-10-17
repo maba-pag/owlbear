@@ -18,7 +18,7 @@ from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.results import Gate
 from owlbear_delivery_next.session_result import Run
 
-AGENTS = ("builder", "planner", "reviewer", "challenger", "designer", "preparer", "updater")
+AGENTS = ("builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater")
 PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
 SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research P24)
@@ -92,11 +92,11 @@ def granted(role: str) -> list[str]:
 def test_every_worker_role_has_its_own_agent_file_or_is_explicitly_pending() -> None:
     folder = files("owlbear_delivery_next").joinpath("agents")
     for role in set(roles.DEFAULTS) - {CHAT}:
-        assert folder.joinpath(f"{role}.md").is_file() == (role not in PENDING), role
+        assert folder.joinpath(f"owlbear-{role}.agent.md").is_file() == (role not in PENDING), role
     assert set(AGENTS) == set(roles.DEFAULTS) - PENDING - {CHAT}
     assert {r for k, r in roles.SESSIONS.items() if "challenge" in k} == {"challenger"}
     files_ = {p.name for p in folder.iterdir()}
-    assert files_ == {f"{r}.md" for r in AGENTS}  # no agent file without a check
+    assert files_ == {f"owlbear-{r}.agent.md" for r in (*AGENTS, "shaper")}  # no agent file without a check
 
 
 @pytest.mark.parametrize("role", AGENTS)
@@ -127,7 +127,9 @@ def test_no_role_has_subagent_tools() -> None:
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        assert asks == (role not in {"challenger", "designer", "updater"}), role  # the updater's stops are the job's
+        assert asks == (role not in {"challenger", "design-judge", "updater"}), (
+            role
+        )  # the updater's stops are the job's
         assert (tools.ASK.name in wf.tools_note(role)) == asks
         assert (tools.ASK.name in prompts.reminder(role)) == asks
     for label in tools.VERDICTS:
@@ -148,7 +150,7 @@ def test_a_misaligned_agent_fails_naming_the_unexplained_grant_and_the_prose_onl
     ]
 
 
-def test_worker_skills_may_name_tools_but_never_grant_them() -> None:
+def test_skills_may_name_tools_but_never_grant_them() -> None:
     skills = sorted(p for p in preload.directory().glob("*/SKILL.md"))
     assert {p.parent.name for p in skills} >= {n for r in AGENTS for n in preload.required(r, ui=True)}
     for path in skills:
@@ -198,8 +200,11 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     (cfg,) = built
     assert sdk_adapter.role_of(cfg) == role
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
-    assert opts["agent"] == role
-    assert opts["custom_agents"][0]["skills"] == list(preload.REQUIRED[role])
+    assert opts["agent"] == f"owlbear-{role}"
+    judged = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge (TD-166)
+    expected = judged if label in {"visual-review", "brief-challenge"} else preload.REQUIRED[role]
+    assert opts["custom_agents"][0]["skills"] == list(expected)
+    assert [Path(d).name for d in opts["skill_directories"]] == list(expected)
     offered = {t.name for t in opts["tools"]}
     assert offered == {s.name for s in Gate(cfg, Run("s"), lambda **_: None, lambda: None).specs}
     asks = role == "reviewer" and label != "visual-review"  # the screenshot judgement answers with a verdict (TD-108)
@@ -215,7 +220,7 @@ def test_check_preparation_runs_as_the_preparer_in_both_runtimes(tmp_path) -> No
     cfg = _session("check", kind=StepKind.CHECK, submit=tools.RECIPE, policy=Policy(Path(), write=True))
     role = sdk_adapter.role_of(cfg)
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
-    assert (role, opts["agent"], opts["custom_agents"][0]["skills"]) == ("preparer", "preparer", [])
+    assert (role, opts["agent"], opts["custom_agents"][0]["skills"]) == ("preparer", "owlbear-preparer", [])
     assert {"create", "edit", "owlbear-memory/save_memory"} <= set(opts["custom_agents"][0]["tools"])
     assert roles.SESSIONS[StepKind.CHECK] == role  # its model is the preparer's (TD-80)
     window = wf.agent(role, INBOX, tmp_path)(None)
@@ -224,7 +229,7 @@ def test_check_preparation_runs_as_the_preparer_in_both_runtimes(tmp_path) -> No
 
 
 def shaper_file() -> tuple[dict[str, str], list[str], str]:
-    text = files("owlbear_delivery_next").joinpath("chat_agents", readiness.SHAPER).read_text(encoding="utf-8")
+    text = files("owlbear_delivery_next").joinpath("agents", readiness.SHAPER).read_text(encoding="utf-8")
     _, front, body = text.split("---", 2)
     meta = {k.strip(): v.strip() for k, v in (line.split(":", 1) for line in front.strip().splitlines())}
     return meta, [n.strip() for n in meta["tools"].strip("[]").split(",")], body
@@ -232,7 +237,7 @@ def shaper_file() -> tuple[dict[str, str], list[str], str]:
 
 def test_the_shaper_grants_the_live_verified_tools_and_explains_exactly_them() -> None:
     meta, grants, body = shaper_file()
-    assert (meta["name"], meta["skills"]) == ("owlbear-shaper", "[delivery]")
+    assert (meta["name"], meta["skills"]) == ("owlbear-shaper", "[owlbear-change-shaping]")
     assert grants == SHAPER_TOOLS
     assert audit(grants, body) == []
     assert forbidden(body) == {"bash", "edit", "create"}  # no terminal, no edit (TD-109)

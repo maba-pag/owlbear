@@ -10,7 +10,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next import data_repo, design_pack, git_files, profile, readiness, roles, text_files
+from owlbear_delivery_next import data_repo, design_pack, git_files, preload, profile, readiness, roles, text_files
 from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.store import Store, StoreError
 
@@ -40,13 +40,13 @@ def _install(text: str, path: Path, what: str) -> str:
 
 def install_skill(home: Path) -> str:
     """Install the chat skill where Copilot loads personal skills."""
-    text = files("owlbear_delivery_next").joinpath("skills", "delivery", "SKILL.md").read_text(encoding="utf-8")
-    return _install(text, home / ".copilot" / "skills" / "delivery" / "SKILL.md", "chat skill")
+    text = files("owlbear_delivery_next").joinpath("skills", preload.CHAT, "SKILL.md").read_text(encoding="utf-8")
+    return _install(text, home / ".copilot" / "skills" / preload.CHAT / "SKILL.md", "chat skill")
 
 
 def install_agent(home: Path) -> str:
     """Install the shaping chat's agent file for this user only; Delivery selects it by its URI."""
-    text = files("owlbear_delivery_next").joinpath("chat_agents", readiness.SHAPER).read_text(encoding="utf-8")
+    text = files("owlbear_delivery_next").joinpath("agents", readiness.SHAPER).read_text(encoding="utf-8")
     return _install(text, readiness.shaper_path(home), "shaper agent")
 
 
@@ -256,7 +256,7 @@ def run(  # noqa: PLR0913 - one answer per consent
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
         say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
-    path, agent = Path.home() / ".copilot" / "skills" / "delivery" / "SKILL.md", readiness.shaper_path(Path.home())
+    path, agent = Path.home() / ".copilot" / "skills" / preload.CHAT / "SKILL.md", readiness.shaper_path(Path.home())
     question = f"Install the Delivery chat skill at {path} and its shaper agent at {agent}, for you only? [y/N] "
     if not (skill == "yes" or (skill == "ask" and ask(question).strip().lower().startswith("y"))):
         say(f"chat skill and shaper agent not installed (no consent): {path}, {agent}")
@@ -264,5 +264,5 @@ def run(  # noqa: PLR0913 - one answer per consent
         return 0
     say(install_skill(Path.home()))
     say(install_agent(Path.home()))
-    say("To share it with this repository, copy that folder to .github/skills/delivery/ and commit it yourself.")
+    say(f"To share it with this repository, copy that folder to .github/skills/{preload.CHAT}/ and commit it yourself.")
     return 0

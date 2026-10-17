@@ -1,5 +1,5 @@
 ---
-name: preparer
+name: owlbear-preparer
 description: Finds how a check's environment starts and which declared test preparation it needs, and submits a launch recipe
 tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, create, edit, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 ---

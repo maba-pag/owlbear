@@ -74,21 +74,21 @@ def loaded(name: str, trigger="context-load", root: Path | None = None) -> Simpl
     return event("skill.invoked", name=name, trigger=SimpleNamespace(value=trigger), path=str(path))
 
 
-def test_each_role_has_its_skills_in_delivery_folder_apart_from_the_chat_skill() -> None:
+def test_each_role_has_its_skills_in_the_one_skills_folder_and_none_loads_the_chat_skill() -> None:
     for role in ROLES:
         assert preload.REQUIRED[role]
         assert preload.missing(role) == []
     shipped = {p.name for p in preload.directory().iterdir() if p.is_dir()}
     roles = {s for r in ROLES for s in preload.required(r, ui=True)}
-    assert shipped == roles | set(design_pack.manifest()["skills"])
-    assert preload.CHAT not in shipped
+    assert shipped == roles | set(design_pack.manifest()["skills"]) | {preload.CHAT}
+    assert not any(preload.CHAT in preload.required(r, ui=True) for r in preload.REQUIRED)
     for kind in sdk_adapter.ROLES:
         assert sdk_adapter.agent(kind)["skills"] == list(preload.REQUIRED[sdk_adapter.ROLES[kind]])
 
 
 @pytest.mark.usefixtures("gap")
 def test_a_missing_or_misnamed_skill_is_reported() -> None:
-    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance"]
+    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance-criteria"]
 
 
 def test_front_matter_is_read_as_yaml() -> None:
@@ -102,17 +102,21 @@ def test_front_matter_is_read_as_yaml() -> None:
 
 
 def test_a_skill_whose_front_matter_is_not_yaml_counts_as_missing(gap) -> None:
-    (gap / "owlbear-acceptance").mkdir()
-    (gap / "owlbear-acceptance" / "SKILL.md").write_text('---\nname: "owlbear-acceptance\n---\n')
-    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance"]
+    (gap / "owlbear-acceptance-criteria").mkdir()
+    (gap / "owlbear-acceptance-criteria" / "SKILL.md").write_text('---\nname: "owlbear-acceptance-criteria\n---\n')
+    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance-criteria"]
 
 
-def test_the_sdk_session_searches_delivery_folder_for_the_role_skills() -> None:
+def test_the_sdk_session_sees_only_its_roles_skill_folders() -> None:
     st = sdk_adapter._Step(session(), SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
     opts = st.options()
-    assert opts["skill_directories"] == [str(preload.directory())]
+    folder = preload.directory()
+    assert opts["skill_directories"] == [
+        str(folder / "owlbear-module-design"),
+        str(folder / "owlbear-acceptance-criteria"),
+    ]
     assert "disabled_skills" not in opts  # a project's own skills stay as the project has them
-    assert opts["custom_agents"][0]["skills"] == ["owlbear-module-design", "owlbear-acceptance"]
+    assert opts["custom_agents"][0]["skills"] == ["owlbear-module-design", "owlbear-acceptance-criteria"]
 
 
 @pytest.mark.usefixtures("gap")
@@ -121,7 +125,7 @@ def test_a_step_whose_skills_are_missing_never_starts_a_runtime(monkeypatch) -> 
     run = asyncio.run(sdk_adapter.run(session(kind=StepKind.PLAN)))
     assert (run.ending, run.detail) == (
         "error",
-        "Delivery's worker skills are missing: owlbear-acceptance, owlbear-module-design",
+        "Delivery's worker skills are missing: owlbear-acceptance-criteria, owlbear-module-design",
     )
     assert run.termination == Termination(confirmed=True)
 
@@ -134,16 +138,16 @@ def step(kind=StepKind.REVIEW) -> sdk_adapter._Step:
 
 def test_a_created_session_must_have_preloaded_every_role_skill_by_its_first_turn(tmp_path) -> None:
     st = step(StepKind.PLAN)
-    for e in (loaded("owlbear-acceptance"), loaded("owlbear-module-design"), event("assistant.turn_start")):
+    for e in (loaded("owlbear-acceptance-criteria"), loaded("owlbear-module-design"), event("assistant.turn_start")):
         st.on_event(e)
     assert not st.done
     short = step(StepKind.PLAN)
-    short.on_event(loaded("owlbear-acceptance"))
+    short.on_event(loaded("owlbear-acceptance-criteria"))
     short.on_event(loaded("owlbear-module-design", trigger="agent-invoked"))  # the agent's own call is no preload
     short.on_event(event("assistant.turn_start"))
     assert (short.run.ending, short.run.detail) == ("error", "skills not preloaded: owlbear-module-design")
     other = step(StepKind.PLAN)
-    other.on_event(loaded("owlbear-acceptance"))
+    other.on_event(loaded("owlbear-acceptance-criteria"))
     other.on_event(loaded("owlbear-module-design", root=tmp_path))  # a same-named skill from elsewhere
     other.on_event(event("assistant.turn_start"))
     assert other.run.detail == "skills not preloaded: owlbear-module-design"
@@ -170,7 +174,7 @@ def test_a_preload_counts_through_a_linked_install(tmp_path, monkeypatch) -> Non
 
 def test_the_window_agent_names_its_skills_and_they_are_placed_out_of_every_commit(repo) -> None:
     text = wf.agent("reviewer", Path("/i.json"))(None)
-    assert "\nskills: [owlbear-acceptance, owlbear-module-design, owlbear-findings]\n---\n" in text
+    assert "\nskills: [owlbear-acceptance-criteria, owlbear-module-design, owlbear-review-judgment]\n---\n" in text
     placed = [wf.place(repo, rel, render) for rel, render in wf.skills("reviewer")]
     for name in preload.REQUIRED["reviewer"]:
         assert (repo / wf.skill_path(name)).read_text() == preload.text(name)
@@ -187,5 +191,5 @@ def test_a_window_step_whose_skills_are_missing_ends_before_any_window(repo, tmp
     )
     run = vscode_adapter.run(session(worktree=repo), tmp_path / "steps" / "s1.json", env)
     assert run.ending == "error"
-    assert "Delivery's worker skills are missing: owlbear-module-design, owlbear-acceptance" in run.detail
+    assert "Delivery's worker skills are missing: owlbear-module-design, owlbear-acceptance-criteria" in run.detail
     assert git(repo, "status", "--porcelain", "--ignored") == ""

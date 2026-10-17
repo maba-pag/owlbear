@@ -18,7 +18,7 @@ from owlbear_delivery_next.roles import DEFAULTS
 from owlbear_delivery_next.round_records import RoundPolicy
 from owlbear_delivery_next.visual_records import DesignFailures  # noqa: TC001 - pydantic resolves it at runtime
 
-CONFIG_FORMAT = 2  # format 2 replaced the seed command by declared preparation options (TD-96)
+CONFIG_FORMAT = 3  # format 3 renamed the designer role to design-judge (TD-169)
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "project", "builder"]

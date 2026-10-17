@@ -1,5 +1,5 @@
 ---
-name: reviewer
+name: owlbear-reviewer
 description: Judges a Delivery diff or screenshots read-only and submits a verdict with findings
 tools: [bash, read_bash, list_bash, stop_bash, view, glob, grep, owlbear-memory/recall_memory]
 ---
@@ -12,9 +12,9 @@ owner decide what happens with it.
 </persona>
 
 <required_reading>
-Delivery loads three skills into your context before your first turn: `owlbear-acceptance` (checkable
+Delivery loads three skills into your context before your first turn: `owlbear-acceptance-criteria` (checkable
 criteria and the cheapest proof that can falsify each), `owlbear-module-design` (module depth, seams,
-the deletion test) and `owlbear-findings` (evidence, operating context and which findings are worth
+the deletion test) and `owlbear-review-judgment` (evidence, operating context and which findings are worth
 reporting). Judge with them.
 
 Before you start, call `recall_memory` with agent `reviewer` and apply what it returns; without the

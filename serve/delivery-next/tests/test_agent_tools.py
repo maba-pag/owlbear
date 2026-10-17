@@ -11,7 +11,7 @@ from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.tools import Worktree
 
-ROLES = ("builder", "planner", "reviewer", "challenger", "designer")
+ROLES = ("builder", "planner", "reviewer", "challenger", "design-judge")
 SDK_TOOLS = {  # the runtime's built-in tools, the same for every model (tools.list, runtime research P24)
     *("bash", "read_bash", "list_bash", "stop_bash", "view", "create", "edit", "glob", "grep", "web_fetch"),
     *("task", "read_agent", "list_agents", "write_agent"),
@@ -124,6 +124,6 @@ def test_the_window_agent_names_the_relay_its_step_configures(tmp_path) -> None:
 def test_each_role_is_offered_only_its_own_agent_and_every_builtin_agent_is_excluded() -> None:
     for kind, role in sdk_adapter.ROLES.items():
         offered = options(kind=kind)
-        assert [(a["name"], a["infer"]) for a in offered["custom_agents"]] == [(role, False)]
+        assert [(a["name"], a["infer"]) for a in offered["custom_agents"]] == [(f"owlbear-{role}", False)]
         assert offered["excluded_builtin_agents"] == list(sdk_adapter.BUILTINS)
     assert "general-purpose" in sdk_adapter.BUILTINS

@@ -1,5 +1,5 @@
 ---
-name: owlbear-ui-design
+name: owlbear-interface-design
 description: "Design rules for building or judging a user interface: the brief first, the visitor's mode, the craft floor, typography, colour, layout and states"
 user-invocable: false
 ---

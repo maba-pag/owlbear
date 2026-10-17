@@ -31,7 +31,7 @@ def session(**fields):
         "policy": Policy(Path(), write=False),
         "observe": lambda: tools.Worktree("h", "h", changed=IMAGES),
         "checks": (),
-        "role": "designer",
+        "role": "design-judge",
         "submit": design_tools.FINAL,
         "first_look": design_tools.FIRST,
         "reveal": "The detector found: side-tab on home at 1280px (new).",
@@ -52,15 +52,18 @@ def look(verdict="pass", **fields):
 def test_the_designer_is_its_own_role_with_its_skills_and_first_look_in_both_runtimes(tmp_path) -> None:
     chosen = roles.chosen(resolve(None, Layer()), "design-review")
     assert (chosen.model, chosen.effort) == ("claude-opus-5.5", "high")  # TD-27: Opus high as designer
-    agent = sdk_adapter.agent(StepKind.REVIEW, role="designer")
-    assert (agent["name"], agent["skills"]) == ("designer", ["owlbear-ui-design", "owlbear-ui-review"])
+    agent = sdk_adapter.agent(StepKind.REVIEW, role="design-judge")
+    assert (agent["name"], agent["skills"]) == (
+        "owlbear-design-judge",
+        ["owlbear-interface-design", "owlbear-design-review"],
+    )
     assert tools.FIRST_LOOK in agent["tools"]
     assert tools.FIRST_LOOK not in sdk_adapter.agent(StepKind.REVIEW)["tools"]  # the reviewer has none
-    assert preload.missing("designer") == []
-    text = window_files.agent("designer", tmp_path / "inbox.json")(None)
+    assert preload.missing("design-judge") == []
+    text = window_files.agent("design-judge", tmp_path / "inbox.json")(None)
     relay, _ = window_files.names(tmp_path / "inbox.json")
     assert f"{relay}/{tools.FIRST_LOOK}" in text
-    assert "skills: [owlbear-ui-design, owlbear-ui-review]" in text
+    assert "skills: [owlbear-interface-design, owlbear-design-review]" in text
 
 
 def test_a_first_look_comes_once_before_the_final_verdict_and_releases_the_detectors_findings() -> None:
@@ -204,7 +207,7 @@ def test_findings_keep_their_image_and_delivery_marks_what_the_change_introduced
     look = judged("fail", [problem("home-1280-A.png"), problem("home-1280-B.png"), problem("new-1280-A.png", rule="x")])
     final = design_tools.DesignResult(**look.model_dump())
     done = Run("d", ending="result", payload=final, first=look, termination=Termination(confirmed=True))
-    record = judges.design([done], list(NAMED.values()), roles.DEFAULTS["designer"], datetime.now(UTC))
+    record = judges.design([done], list(NAMED.values()), roles.DEFAULTS["design-judge"], datetime.now(UTC))
     assert [(f.image, f.introduced) for f in record.findings] == [
         ("home-1280-A.png", False),
         ("home-1280-B.png", False),  # before had it too
@@ -222,13 +225,13 @@ def test_a_judge_left_running_outranks_another_judges_unread_usage(tmp_path, cha
     pair = lambda _at: [("visual-review", session(role="")), ("design-review", session())]  # noqa: E731
 
     async def fake(cfg):
-        return unread if cfg.role != "designer" else left
+        return unread if cfg.role != "design-judge" else left
 
     monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
     ran = sessions.judges(store, Lock("c1"), change, change_repo, pair)
     assert [r.exit for r, _ in ran][1] == Exit.STOP  # returned, so the stop is applied
     disposable.settled(store.root / "changes" / "c1")  # the host's scan found none left
-    monkeypatch.setattr(sessions.sdk_adapter, "run", lambda cfg: fake(cfg) if cfg.role != "designer" else _ok(cfg))
+    monkeypatch.setattr(sessions.sdk_adapter, "run", lambda cfg: fake(cfg) if cfg.role != "design-judge" else _ok(cfg))
     with pytest.raises(sessions.UsageUnreadError):
         sessions.judges(store, Lock("c1"), change, change_repo, pair)
 
@@ -270,7 +273,7 @@ def test_every_judge_ends_before_an_error_of_another_goes_on(tmp_path, change_re
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.CHECK))
 
     async def fake(cfg):
-        if cfg.role == "designer":
+        if cfg.role == "design-judge":
             msg = "disk full"
             raise OSError(msg)
         await asyncio.sleep(0.05)

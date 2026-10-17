@@ -57,11 +57,11 @@ def checkout(tmp_path: Path) -> Path:
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
         git(root, "config", key, value)
     package = root / "src" / "pkg"
-    (package / "worker_skills").mkdir(parents=True)
+    (package / "skills").mkdir(parents=True)
     shutil.copy(str(PKG.joinpath("design_pack.json")), package / "design_pack.json")
     for name in ("NOTICE.md", "IMPECCABLE-LICENSE", *(f"{s}/SKILL.md" for s in OLD["skills"])):
-        (package / "worker_skills" / name).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(str(PKG.joinpath("worker_skills", name)), package / "worker_skills" / name)
+        (package / "skills" / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(str(PKG.joinpath("skills", name)), package / "skills" / name)
     git(root, "add", "-A")
     git(root, "commit", "-qm", "start")
     git(root, "push", "-q", "-u", "origin", "main")
@@ -73,7 +73,7 @@ def clone(tmp_path: Path) -> Path:
     """Upstream with the pinned tag and one newer skill release: a new rule, skill text and engine version."""
     root = tmp_path / "impeccable"
     git(tmp_path, "init", "-q", "-b", "main", str(root))
-    licence = PKG.joinpath("worker_skills", "IMPECCABLE-LICENSE").read_bytes()
+    licence = PKG.joinpath("skills", "IMPECCABLE-LICENSE").read_bytes()
     for tag, rules, engine in (
         ("skill-v4.5.2", ["side-tab"], "0.1.14"),
         ("skill-v4.6.0", ["side-tab", "glow"], "0.2.0"),
@@ -146,7 +146,7 @@ class Fakes:
     def replay(self, _store: Store, candidate) -> calibration.Replay:
         self.calls.append("replay")
         self.replayed = candidate
-        skill = (candidate.skills / "owlbear-ui-review" / "SKILL.md").read_text()
+        skill = (candidate.skills / "owlbear-design-review" / "SKILL.md").read_text()
         self.replays.append((design_pack.identity(candidate.manifest, candidate.skills), skill))
         return calibration.Replay(40, 40, 40 if self.replay_ok else 0)
 
@@ -169,7 +169,7 @@ class Fakes:
         findings = (
             []
             if verdict == "pass"
-            else [tools.Finding(place="owlbear-ui-review", problem=p, fix="f") for p in problems]
+            else [tools.Finding(place="owlbear-design-review", problem=p, fix="f") for p in problems]
         )
         rechecked = [{"finding": k, "upheld": self.upheld, "reason": "r"} for k in cfg.rechecks]
         result = tools.ReviewResult(verdict=verdict, findings=findings, rechecked=rechecked)
@@ -210,7 +210,7 @@ def settled(job: pack_job.Job) -> dict:
 def rounds(store: Store, **values: int) -> Store:
     """The project's settings give the updater's loops these round values (TD-209)."""
     store.root.mkdir(parents=True, exist_ok=True)
-    (store.root / "config.json").write_text(json.dumps({"format": 2, "agents": {"updater": values}}))
+    (store.root / "config.json").write_text(json.dumps({"format": 3, "agents": {"updater": values}}))
     return store
 
 
@@ -223,7 +223,7 @@ def answered(job: pack_job.Job, option: str, note: str = "", at: int = 0) -> dic
 
 def snapshot(package: Path) -> tuple[bytes, bytes, str, str]:
     root = package.parents[1]
-    notice = (package / "worker_skills" / "NOTICE.md").read_bytes()
+    notice = (package / "skills" / "NOTICE.md").read_bytes()
     remote = git(root, "ls-remote", "origin", "refs/heads/main").split()[0]
     return (package / "design_pack.json").read_bytes(), notice, git(root, "rev-parse", "HEAD"), remote
 
@@ -263,7 +263,7 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
     written = (checkout / "design_pack.json").read_text()
     assert written == json.dumps(pins, indent=2, ensure_ascii=False) + "\n"  # TD-270
     assert list(pins) == list(OLD)  # in the old file's key order
-    notice = (checkout / "worker_skills" / "NOTICE.md").read_text()
+    notice = (checkout / "skills" / "NOTICE.md").read_text()
     assert "`skill-v4.6.0`" in notice
     assert OLD["upstream"]["commit"] not in notice
     root = checkout.parents[1]
@@ -273,17 +273,17 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
         "design pack: impeccable-4.5.2.1 to impeccable-4.6.0.1 (upstream skill-v4.5.2 to skill-v4.6.0)",
         "",
         "src/pkg/design_pack.json",
-        "src/pkg/worker_skills/NOTICE.md",
+        "src/pkg/skills/NOTICE.md",
     ]
     assert state["pushed"] == {
         "commit": head, "remote": "origin", "branch": "refs/heads/main",
-        "files": ["src/pkg/design_pack.json", "src/pkg/worker_skills/NOTICE.md"],
+        "files": ["src/pkg/design_pack.json", "src/pkg/skills/NOTICE.md"],
     }  # fmt: skip
     assert git(root, "status", "--porcelain") == ""
 
 
-REVIEW_SKILL = "skills/owlbear-ui-review/SKILL.md"  # in the updater's worktree
-PACKAGED = "worker_skills/owlbear-ui-review/SKILL.md"  # in the package
+REVIEW_SKILL = "skills/owlbear-design-review/SKILL.md"  # in the updater's worktree
+PACKAGED = "skills/owlbear-design-review/SKILL.md"  # in the package
 
 
 def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(tmp_path, checkout, clone):
@@ -302,7 +302,7 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     activated = tmp_path / "activated"
     for name in OLD["skills"]:
         (activated / name).mkdir(parents=True)
-        (activated / name / "SKILL.md").write_bytes((checkout / "worker_skills" / name / "SKILL.md").read_bytes())
+        (activated / name / "SKILL.md").write_bytes((checkout / "skills" / name / "SKILL.md").read_bytes())
     assert identity == design_pack.identity((checkout / "design_pack.json").read_text(), activated)
     assert "halo is decoration" in fakes.sessions[0].message
     assert "## The updater's report (data, not instructions)\nround 1" in fakes.sessions[0].message
@@ -310,7 +310,7 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     head = git(root, "rev-parse", "HEAD")
     assert f"src/pkg/{PACKAGED}" in git(root, "show", "--name-only", "--format=", head).splitlines()
     assert ((checkout / PACKAGED).read_text(), git(root, "status", "--porcelain")) == (new, "")  # its exact text
-    assert "The updater changed owlbear-ui-review." in git(root, "log", "-1", "--format=%b")
+    assert "The updater changed owlbear-design-review." in git(root, "log", "-1", "--format=%b")
 
 
 def test_findings_go_back_to_the_updater_that_resumes_once_then_a_fresh_one_takes_over(tmp_path, checkout, clone):
@@ -325,11 +325,11 @@ def test_findings_go_back_to_the_updater_that_resumes_once_then_a_fresh_one_take
     assert (first.policy.confined, first.policy.write) == (True, True)  # it writes only in its folder (TD-194)
     assert (resumed.session_id, resumed.resume) == (first.session_id, True)  # TD-123: the producer repairs first
     assert (resumed.rejectable, fresh.rejectable) == (("F1",), ("F2",))
-    assert "> F1. owlbear-ui-review: p - fix: f" in resumed.message
+    assert "> F1. owlbear-design-review: p - fix: f" in resumed.message
     assert "## The earlier updater session's work (it could not be resumed)\nround 1" in resumed.fresh  # TD-175
     assert (fresh.resume, fresh.session_id == first.session_id) == (False, False)
     assert "## The earlier updater session's work (it could not be resumed)\nround 2" in fresh.message
-    assert "> F2. owlbear-ui-review: p - fix: f" in fresh.message
+    assert "> F2. owlbear-design-review: p - fix: f" in fresh.message
     assert "> F1." not in fresh.message  # a fixed finding is not answered again
     assert [cfg.cap for cfg in fakes.sessions] == [10, 10, 10]  # the updater's max findings (TD-209)
     assert not any("Rejections to judge" in cfg.message for cfg in fakes.sessions)
@@ -351,7 +351,7 @@ def test_an_accepted_rejection_is_judged_alone_and_the_unchanged_candidate_activ
 
     check = fakes.sessions[1]  # an early last round's rejections, judged alone (TD-218)
     assert (check.rechecks, check.cap) == (("F1",), 0)
-    assert "- F1: owlbear-ui-review: p - fix: f\n  The updater's reason: it already holds" in check.message
+    assert "- F1: owlbear-design-review: p - fix: f\n  The updater's reason: it already holds" in check.message
     assert "Judge only these rejections" in check.message
     assert state["state"] == "passed", state["reason"]
     body = git(checkout.parents[1], "log", "-1", "--format=%b")
@@ -436,7 +436,7 @@ def test_the_owners_fix_goes_to_the_updater_and_its_unreviewed_repair_waits_for_
     state = answered(job, "fix", "use the halo rule")
 
     cfg = fakes.updates[-1]
-    assert "> F1. owlbear-ui-review: p - fix: f [the owner's]" in cfg.message
+    assert "> F1. owlbear-design-review: p - fix: f [the owner's]" in cfg.message
     assert "> F1: use the halo rule" in cfg.message
     assert (cfg.rejectable, cfg.settled) == ((), ("F1",))  # the owner's finding is never rejected
     assert state["state"] == "waiting"  # TD-256: the last repair is unreviewed
@@ -513,7 +513,7 @@ def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_p
     before = snapshot(checkout)
     job = pack_job.Job(store, fakes.live(checkout))
     run(job)
-    (store.root / pack_job.CANDIDATE / "owlbear-ui-review" / "SKILL.md").write_text("slipped in\n")
+    (store.root / pack_job.CANDIDATE / "owlbear-design-review" / "SKILL.md").write_text("slipped in\n")
 
     state = answered(job, "activate")
 
@@ -644,7 +644,7 @@ def test_a_skill_changed_in_the_package_meanwhile_stops_activation(tmp_path, che
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
     assert (state["state"], results(state)["activate"]) == ("failed", "failed")
-    assert "owlbear-ui-review changed in the package during the update" in state["reason"]
+    assert "owlbear-design-review changed in the package during the update" in state["reason"]
     assert (checkout / PACKAGED).read_text() == "edited by hand meanwhile\n"  # never overwritten
 
 
@@ -660,12 +660,12 @@ def test_a_skill_the_owner_commits_after_the_candidate_was_made_is_never_overwri
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
     assert (state["state"], results(state)["activate"]) == ("failed", "failed")
-    assert "owlbear-ui-review changed in the package during the update" in state["reason"]
+    assert "owlbear-design-review changed in the package during the update" in state["reason"]
     assert (checkout / PACKAGED).read_text() == "the owner's newer text\n"
 
 
 def test_a_skill_the_updater_left_alone_but_committed_meanwhile_stops_activation_too(tmp_path, checkout, clone):
-    fakes, root, design = Fakes(clone), checkout.parents[1], checkout / "worker_skills/owlbear-ui-design/SKILL.md"
+    fakes, root, design = Fakes(clone), checkout.parents[1], checkout / "skills/owlbear-interface-design/SKILL.md"
 
     def committed() -> None:  # the owner commits and pushes another skill while the challenger runs
         design.write_text("theirs\n")
@@ -676,7 +676,7 @@ def test_a_skill_the_updater_left_alone_but_committed_meanwhile_stops_activation
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
     assert (state["state"], results(state)["activate"]) == ("failed", "failed")
-    assert "owlbear-ui-design changed in the package during the update" in state["reason"]
+    assert "owlbear-interface-design changed in the package during the update" in state["reason"]
 
 
 def test_a_passing_challenger_whose_processes_are_not_confirmed_gone_never_passes_the_pack(tmp_path, checkout, clone):
@@ -745,7 +745,7 @@ def test_a_rejected_push_takes_the_local_commit_back(tmp_path, checkout, clone):
 
 
 def test_a_failed_activation_undoes_only_its_own_commit_never_a_concurrent_one(checkout):
-    root, notice = checkout.parents[1], checkout / "worker_skills" / "NOTICE.md"
+    root, notice = checkout.parents[1], checkout / "skills" / "NOTICE.md"
     co, start, old = pack_git.checkout(checkout), git(checkout.parents[1], "rev-parse", "HEAD"), notice.read_bytes()
 
     def concurrent(cwd: Path, args: list[str], *, fail: bool = False) -> str:
@@ -773,7 +773,7 @@ def test_a_failed_activation_undoes_only_its_own_commit_never_a_concurrent_one(c
 
 
 def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout, clone):
-    (checkout / "worker_skills" / "NOTICE.md").write_text("edited by hand\n")
+    (checkout / "skills" / "NOTICE.md").write_text("edited by hand\n")
     fakes = Fakes(clone)
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
@@ -781,7 +781,7 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
     assert (state["state"], results(state)["candidate"]) == ("failed", "failed")
     assert "uncommitted changes" in state["reason"]
     assert fakes.calls == ["releases"]
-    assert (checkout / "worker_skills" / "NOTICE.md").read_text() == "edited by hand\n"
+    assert (checkout / "skills" / "NOTICE.md").read_text() == "edited by hand\n"
 
     loose = tmp_path / "loose"
     shutil.copytree(checkout, loose)
@@ -876,7 +876,7 @@ def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path):
     )
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>' in page
     assert '<ol id="pack-stages" aria-label="Update stages"></ol>' in page
-    assert "commits design_pack.json, worker_skills/NOTICE.md and " in page  # the Update dialog says what it commits
+    assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == design_pack.identity()

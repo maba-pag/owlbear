@@ -114,7 +114,7 @@ def test_every_role_runs_autopilot_and_only_delivery_can_ask_the_owner(kind):
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
     assert opts["excluded_tools"] == ["ask_user"]  # the runtime's own question tool; N10's request is ask_question
     assert "on_user_input_request" not in opts
-    assert opts["agent"] == sdk_adapter.ROLES[kind]
+    assert opts["agent"] == f"owlbear-{sdk_adapter.ROLES[kind]}"  # TD-169
     assert tools.ASK.name in {t.name for t in opts["tools"]}
     assert vscode_adapter.CONFIG["mode"] == "autopilot"
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001

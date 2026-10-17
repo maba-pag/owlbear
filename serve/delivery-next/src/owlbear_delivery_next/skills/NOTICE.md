@@ -1,6 +1,6 @@
 # Notices
 
-The skills `owlbear-ui-design` and `owlbear-ui-review` contain material adapted from **Impeccable** by Paul Bakaus,
+The skills `owlbear-interface-design` and `owlbear-design-review` contain material adapted from **Impeccable** by Paul Bakaus,
 <https://github.com/pbakaus/impeccable>, tag `skill-v4.5.2` (commit `d631a8827f99414d2b6daba4ef08b7f8701751d7`),
 licensed under the Apache License 2.0; the licence text is in `IMPECCABLE-LICENSE`.
 

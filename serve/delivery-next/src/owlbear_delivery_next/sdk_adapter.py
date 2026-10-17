@@ -51,7 +51,7 @@ NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
 
 
-def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = False) -> dict[str, Any]:
+def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = False, job: str = "") -> dict[str, Any]:
     """Return the role's custom agent from the package's ``agents/`` prose, with its tools and preloaded skills."""
     role = role or ROLES[kind]
     meta, body = preload.agent_file(role)
@@ -60,7 +60,7 @@ def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = F
         "description": meta["description"],
         "prompt": body.strip(),
         "tools": [*preload.tools(role), *tools.results(role, ui=ui, judging=judging)],  # nothing else (TD-69)
-        "skills": list(preload.required(role, ui=ui)),
+        "skills": list(preload.required(role, ui=ui, job=job)),
     }
 
 
@@ -122,6 +122,7 @@ class Session:
     memory: Path | None = None  # the project's memory folder in the shared repository (TD-70, TD-72)
     ui: bool = False  # the Change has a user interface, so the role's design skills load too (TD-76)
     role: str = ""  # the agent role when not the step kind's, such as the design judge's
+    job: str = ""  # a judge's label, when its job needs other skills than its role's (TD-166)
     judging: bool = False  # a verdict-only judgement, such as the reviewer's of screenshots: no question (TD-108)
     first_look: tools.Spec | None = None  # a judgement submitted before the final result, which does not end it
     reveal: str = ""  # what the first look's reply releases, such as the detector's findings
@@ -221,12 +222,15 @@ class _Step:
             self.preloaded.add(name)
         self.log(event="skill", name=name, trigger=trigger)
 
+    def _required(self) -> tuple[str, ...]:
+        return preload.required(role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job)
+
     def preload_checked(self) -> None:
         """At a created session's first turn, every skill of the role is loaded, or the step ends (item 6)."""
         if self.checked or not self.created:
             return
         self.checked = True
-        if absent := [s for s in preload.required(role_of(self.cfg), ui=self.cfg.ui) if s not in self.preloaded]:
+        if absent := [s for s in self._required() if s not in self.preloaded]:
             self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
@@ -316,7 +320,7 @@ class _Step:
         self.record_tree()
 
     def options(self) -> dict[str, Any]:
-        role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging)
+        role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging, job=self.cfg.job)
         if self.watch.allowed:
             role["tools"].append(subagents.LAUNCHER)
         return {
@@ -326,7 +330,9 @@ class _Step:
             "agent": role["name"],
             "excluded_builtin_agents": [b for b in BUILTINS if not (self.watch.allowed and b == subagents.ALLOWED)],
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
-            "skill_directories": [str(self.skills)],
+            "skill_directories": preload.folders(
+                role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills
+            ),
             "mcp_servers": _memory(self.cfg.memory),
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "working_directory": str(self.cfg.worktree),
@@ -431,7 +437,7 @@ def _refused(cfg: Session) -> str:
     """Why the step cannot start: it names no model (TD-32), or Delivery's skills for its role are missing."""
     if not cfg.model:
         return "wrong model: the step names no model (TD-32)"
-    if gaps := preload.missing(role_of(cfg), ui=cfg.ui, folder=cfg.skills):
+    if gaps := preload.missing(role_of(cfg), ui=cfg.ui, job=cfg.job, folder=cfg.skills):
         return f"Delivery's worker skills are missing: {', '.join(gaps)}"
     return ""
 

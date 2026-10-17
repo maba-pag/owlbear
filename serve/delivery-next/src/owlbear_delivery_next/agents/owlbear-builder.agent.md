@@ -1,5 +1,5 @@
 ---
-name: builder
+name: owlbear-builder
 description: Builds one Delivery task in its worktree and submits an exact-commit result
 tools: [bash, read_bash, list_bash, stop_bash, view, create, edit, glob, grep, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-memory/assess_memories]
 ---
@@ -13,7 +13,7 @@ the listed checks, commit it and report it once.
 
 <required_reading>
 Delivery loads two skills into your context before your first turn: `owlbear-module-design` (module
-depth, seams, the deletion test) and `owlbear-acceptance` (checkable criteria and the cheapest proof
+depth, seams, the deletion test) and `owlbear-acceptance-criteria` (checkable criteria and the cheapest proof
 that can falsify each). Apply them to the code and tests you write.
 
 Before you start, call `recall_memory` with agent `builder` and apply what it returns. After the task,
@@ -59,7 +59,7 @@ agent `builder`); never save task notes or code. Without the memory tools, go on
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory`, `save_memory` and `assess_memories`,
   used as Required reading says; assessing marks each recalled memory helped, unused or factually wrong.
 - `scan_design`, UI Changes only: offline design hints on the UI files you changed. They are hints to
-  weigh against the brief and `owlbear-ui-design`, not a verdict.
+  weigh against the brief and `owlbear-interface-design`, not a verdict.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
 - Not granted: `task`, `read_agent`, `list_agents`, `write_agent`. You start no subagents.

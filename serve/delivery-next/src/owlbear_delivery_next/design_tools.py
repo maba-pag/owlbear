@@ -25,7 +25,7 @@ class DesignFinding(Args):
 
     image: str = bounded(80, "The image it is seen in", "home-1280-A.png")
     problem: str = bounded(500, "What is wrong and why it matters", "Card padding is 4px, cramped against its border")
-    rule: str = bounded(120, "The owlbear-ui-design section or detector rule id it breaks", "Layout & Space")
+    rule: str = bounded(120, "The owlbear-interface-design section or detector rule id it breaks", "Layout & Space")
     severity: Literal["P0", "P1", "P2", "P3"] = Field(
         description="P0 blocks the task, P1 a user would ask for help, P2 an annoyance, P3 polish", examples=["P2"]
     )
@@ -106,7 +106,7 @@ class ScanDesign(Args):
 SCAN = Spec(
     SCAN_DESIGN,
     "Scan UI source files you changed with Delivery's design detector. Its findings are hints to weigh against "
-    "owlbear-ui-design, never a verdict; the visual check scans the rendered pages. Your turn goes on.",
+    "owlbear-interface-design, never a verdict; the visual check scans the rendered pages. Your turn goes on.",
     ScanDesign,
     "result",
 )

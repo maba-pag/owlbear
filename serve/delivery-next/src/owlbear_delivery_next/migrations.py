@@ -81,6 +81,14 @@ def rounds_kept(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def judge_renamed(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 2 to 3: the designer role is the design judge (TD-169); its settings keep their values."""
+    agents = data.get("agents")
+    if isinstance(agents, dict) and "designer" in agents:
+        agents["design-judge"] = agents.pop("designer")
+    return data
+
+
 CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept}
 PROFILE: Migrations = {1: roles_moved}
-CONFIG: Migrations = {1: seed_dropped}
+CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed}

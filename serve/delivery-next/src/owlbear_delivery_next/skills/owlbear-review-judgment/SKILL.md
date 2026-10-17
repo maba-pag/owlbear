@@ -1,12 +1,12 @@
 ---
-name: owlbear-findings
+name: owlbear-review-judgment
 description: "Review judgment: what counts as evidence, where defects hide, and which findings are worth reporting"
 user-invocable: false
 ---
 
 # Findings
 
-Use when you judge someone else's diff, plan or brief and report findings. `owlbear-acceptance` owns which proof
+Use when you judge someone else's diff, plan or brief and report findings. `owlbear-acceptance-criteria` owns which proof
 a criterion needs; this skill owns how you judge the evidence and what you report.
 
 ## Evidence

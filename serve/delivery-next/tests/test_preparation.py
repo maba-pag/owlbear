@@ -427,10 +427,23 @@ def test_an_old_project_layer_with_a_seed_command_loads_without_it(tmp_path):
     store = Store(tmp_path)
     store.config_path.write_text(json.dumps({"format": 1, "seed": "npm run seed", "widths": [1600]}))
     layer = store.read_config()
-    assert (layer.format, layer.widths, "seed" in layer.model_dump()) == (2, [1600], False)
+    assert (layer.format, layer.widths, "seed" in layer.model_dump()) == (3, [1600], False)
     assert "seed" not in store.settings().model_dump()
     with pytest.raises(ValidationError, match="seed"):
-        Layer.model_validate({"format": 2, "seed": "npm run seed"})
+        Layer.model_validate({"format": 3, "seed": "npm run seed"})
+
+
+def test_an_old_layers_designer_settings_become_the_design_judges(tmp_path):
+    store = Store(tmp_path)
+    store.config_path.write_text(json.dumps({"format": 2, "agents": {"designer": {"model": "g-2", "effort": "low"}}}))
+
+    layer = store.read_config()
+
+    assert (layer.format, list(layer.agents)) == (3, ["design-judge"])  # TD-169
+    assert (store.settings().agents["design-judge"].model, store.settings().sources["agents.design-judge.model"]) == (
+        "g-2",
+        "project",
+    )
 
 
 def test_the_edits_of_a_preparer_whose_runner_died_are_discarded_before_any_later_step(env):

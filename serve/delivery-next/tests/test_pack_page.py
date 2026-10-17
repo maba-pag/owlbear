@@ -33,7 +33,7 @@ class Host:
 def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
     """A run waiting for the owner; by default on two findings the challenger upheld against the updater."""
     found = [
-        RoundFinding(id=f"F{i}", text=f"owlbear-ui-review: glow {i} - fix: say so", raised=1, state="escalated",
+        RoundFinding(id=f"F{i}", text=f"owlbear-design-review: glow {i} - fix: say so", raised=1, state="escalated",
                      reason="upstream dropped it", judgement="upstream still names it")
         for i in (1, 2)
     ]  # fmt: skip
