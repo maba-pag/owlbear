@@ -194,3 +194,24 @@ def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(p
         page.get_by_role("button", name="All Changes").click()
         expect(page.locator("#board")).not_to_have_class("open")
         assert page.evaluate("location.search") == ""
+
+
+@pytest.mark.browser
+def test_an_option_the_question_no_longer_offers_is_not_sent(page_url) -> None:
+    """Sol, TD-264: a choice dropped from the question by a later poll leaves the draft too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())
+    with opened(base, "greet") as page:
+        form = page.locator("section.act", has_text="Question q1")
+        form.get_by_label("English").check()
+        changed = asking()
+        changed.questions[0].options = [m.Option(id="de", label="German"), m.Option(id="fr", label="French")]
+        store.write(Lock("greet"), changed)
+        expect(form.get_by_label("French")).to_be_visible(timeout=10_000)
+        expect(form.locator("input:checked")).to_have_count(0)
+        form.get_by_role("button", name="Answer").click()
+        expect(page.locator("#detail")).not_to_contain_text("Not done")
+    [item] = (store.root / "changes" / "greet" / "inbox").glob("*.json")
+    assert '"option":null' in item.read_text().replace(" ", "")

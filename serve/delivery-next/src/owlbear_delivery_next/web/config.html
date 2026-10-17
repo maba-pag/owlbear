@@ -82,15 +82,18 @@ const state = {
   folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
 };
 const drafts = { project: {}, global: {} };
-let polling = null;
+let polling = null, arrived = null;  // arrived: models read while a setting held the focus, applied once it leaves
 
 function show() {
   render(view(), document.getElementById("page"));
 }
 
-// Render once no setting holds the focus, so arriving choices never replace the control being used.
+// Apply arrived models once no setting holds the focus, so they never replace the control being used.
 function showIdle() {
-  if (!document.activeElement?.closest?.("main [data-key]")) return show();
+  if (!document.activeElement?.closest?.("main [data-key]")) {
+    if (arrived) [state.offered, state.modelsNote, arrived] = [arrived.offered, arrived.note, null];
+    return show();
+  }
   document.querySelector("main").addEventListener("focusout", () => setTimeout(showIdle), { once: true });
 }
 
@@ -633,11 +636,11 @@ async function readModels() {
   show();
   try {
     const answer = await call("/config/models", { timeout: 45000 });
-    state.offered = answer.models.length ? answer.models : null;
-    state.modelsNote = state.offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
-      : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
+    const offered = answer.models.length ? answer.models : null;
+    arrived = { offered, note: offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
+      : `Could not read the offered models (${answer.error || "none offered"}); type a model name.` };
   } catch (e) {
-    state.modelsNote = `Could not read the offered models (${e.message}); type a model name.`;
+    arrived = { offered: null, note: `Could not read the offered models (${e.message}); type a model name.` };
   }
   if (state.saving) return;
   showIdle();

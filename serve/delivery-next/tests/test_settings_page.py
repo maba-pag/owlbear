@@ -149,3 +149,47 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     saved = json.loads(store.config_path.read_text())
     assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)
+
+
+@pytest.mark.browser
+def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_left(store, monkeypatch) -> None:
+    """Sol, TD-264: the offered models replace the typed field only once the owner leaves it."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    def slow(_self: object) -> dict[str, Any]:
+        time.sleep(2.5)
+        return MODELS
+
+    monkeypatch.setattr(model_choices.Offered, "__call__", slow)
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/config#token=tok")
+            typed = page.locator('input[aria-label="Model for builder"]')
+            typed.click()
+            typed.press_sequentially("my-model")
+            expect(page.locator("#models-note")).to_contain_text("Reading the models")
+            time.sleep(3.5)  # the models arrived meanwhile
+            typed.press_sequentially("-2")
+            expect(typed).to_be_focused()
+            expect(typed).to_have_value("my-model-2")
+            page.get_by_label("Layer").focus()  # leaving the settings lets the models in
+            expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
+            chosen = page.locator('select[aria-label="Model for builder"]')
+            expect(chosen).to_have_value("my-model-2")
+            expect(chosen.locator("option:checked")).to_have_text("my-model-2 (not offered here)")
+            browser.close()
+    finally:
+        server.should_exit = True

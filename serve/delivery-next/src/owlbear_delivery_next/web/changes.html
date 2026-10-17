@@ -255,9 +255,11 @@ function field(key, name, label, rows = "2") {
         @input=${keep}></textarea></label>`;
 }
 
-// Radio choices bound to the draft field *name* of form *key*; re-rendering never changes the choice.
+// Radio choices bound to the draft field *name* of form *key*; re-rendering never changes the choice, and a choice
+// the data no longer offers is dropped, so nothing unseen is sent.
 function choice(key, name, label, options) {
   const d = draft(key, () => ({})), pick = (v) => { d[name] = v; show(); };
+  if (d[name] !== undefined && !options.some((o) => o.id === d[name])) delete d[name];
   if (state.pds) {
     return html`<p-radio-group name=${`${key}-${name}`} label=${label} .value=${live(d[name] ?? "")}
       @change=${(e) => pick(e.target.value)}>${options.map((o) => html`<p-radio-group-option value=${o.id}
