@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, held, loop, prompts, rebuilds, round_flow, runner
+from owlbear_delivery_next import api, held, loop, prompts, rebuilds, round_flow, runner, tools
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
     Brief,
@@ -390,8 +390,29 @@ def test_a_kept_check_runs_from_each_package_of_its_task():
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2, t3]))
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
     rebuilds.rotated(c, lp, [], profile)
-    assert t1.checks == ["npm test", "cd packages/b && npm test", "cd packages/c && uv run pytest", "make docs"]
+    assert t1.checks == [
+        "cd packages/a && npm test",  # its own too: a report from another package never stands in for it
+        "cd packages/b && npm test",
+        "cd packages/c && uv run pytest",
+        "make docs",
+    ]
     assert t1.scope == ["packages/a/x.ts", "packages/b/y.ts", "packages/c", "docs/z.md"]
+    ran = tools.BuildResult(
+        summary="b", changed_paths=[], checks=[{"command": "cd packages/b && npm test", "exit_code": 0}]
+    )
+    tree = tools.Worktree(head="b", base="a")
+    missing = [e for e in tools.check_build(ran, tree, ["npm test", "cd packages/b && npm test"]) if "missing" in e]
+    assert missing == [
+        'checks: "npm test" missing - run it on your commit and report it, e.g. {"command": "npm test", "exit_code": 0}'
+    ]
+    t4 = Task(id="t4", title="four", scope=["my app/q.ts"], checks=["npm test"])
+    spaced = Profile(entries={"check:my app": ProfileEntry(state="known", value="npm test")})
+    assert rebuilds._placed(spaced, [t4]) == ["cd 'my app' && npm test"]  # noqa: SLF001
+    t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["npm test"])
+    assert rebuilds._placed(profile, [t5]) == ["npm test"]  # noqa: SLF001 - packages/a holds nothing of packages/ab
+    both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
+    ran = tools.BuildResult(summary="b", changed_paths=[], checks=[{"command": k, "exit_code": 0} for k in both])
+    assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []
 
 
 def test_each_build_session_records_its_own_span(tmp_path, clone):

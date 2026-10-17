@@ -136,8 +136,9 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
   a final repair of both, or a task with an unrecorded span, stops with the owner's question. Undone tasks keep no
   span, so nothing is reverted twice. The head an undo starts from is recorded before anything is promoted: the undo
   is built on it and promoted only by a fast-forward, a restart finds it on the branch instead of repeating it, and a
-  branch that moved without it stops it. The last rebuilt task also runs every other plan task's checks, each from
-  its own package (`cd <package> && <check>`, so the same command in two packages runs twice), with their scopes for
+  branch that moved without it stops it. The last rebuilt task then runs its own and every other plan task's checks,
+  each from its task's own package (`cd <package> && <check>`; a report from one package never counts for another),
+  with their scopes for
   the installs: its builder must pass them, so a failure is fixed in that build and reviewed by its rounds, and CI
   stays the second net (TD-246). The final loop ends `retried` and reopens with one round once the rebuilds are
   done (TD-235). CI results and person checks are bound to heads and content, so they need no separate invalidation;
