@@ -3,7 +3,7 @@
 const hash = new URLSearchParams(location.hash.slice(1));
 if (hash.get("token")) {
   sessionStorage.setItem("token", hash.get("token"));
-  history.replaceState(null, "", location.pathname);
+  history.replaceState(null, "", location.pathname + location.search);  // the Changes page keeps ?change=
 }
 export const token = sessionStorage.getItem("token");
 

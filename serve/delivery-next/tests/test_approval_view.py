@@ -142,3 +142,55 @@ def test_the_approved_brief_lists_what_the_owner_added_since(page_url) -> None:
         expect(since).to_contain_text("You added in visual round 1")
         expect(since).to_contain_text("The caption stays readable")
         expect(page.locator(".brief").first).to_contain_text("Your approval accepted these choices.")
+
+
+def asking() -> m.Change:
+    """A Change waiting on the owner's answer to an ordinary build question."""
+    options = [m.Option(id="de", label="German"), m.Option(id="en", label="English")]
+    question = m.Question(id="q1", step=m.StepKind.BUILD, text="Which language?", options=options)
+    outcome = m.Outcome(exit=m.Exit.ASK, question="q1", reason="Which language?", who="you", at=NOW)
+    return m.Change(slug="greet", questions=[question], outcome=outcome, step=m.Step(kind=m.StepKind.BUILD))
+
+
+@pytest.mark.browser
+def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sent(page_url) -> None:
+    """TD-264: the answer's draft lives in page state; a poll with new data renders the detail again around it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())
+    with opened(base, "greet") as page:
+        form = page.locator("section.act", has_text="Question q1")
+        expect(form).to_contain_text("Which language?")
+        form.get_by_label("English").check()
+        words = form.get_by_label("Your answer in words")
+        words.fill("the site is read in Canada")
+        store.log(Lock("greet"), "greet", {"event": "brief", "version": 9, "at": NOW.isoformat()})
+        expect(page.locator(".log")).to_contain_text("Brief v9 saved", timeout=10_000)  # a poll rendered it again
+        expect(words).to_have_value("the site is read in Canada")
+        expect(form.get_by_label("English")).to_be_checked()
+        expect(page.locator("#changes .card.current")).to_contain_text("greet")
+        form.get_by_role("button", name="Answer").click()
+        expect(page.locator("#detail")).not_to_contain_text("Not done")
+    [item] = (store.root / "changes" / "greet" / "inbox").glob("*.json")
+    assert '"option":"en"' in item.read_text().replace(" ", "")
+    assert "the site is read in Canada" in item.read_text()
+
+
+@pytest.mark.browser
+def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(page_url) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())
+    with opened(base, "flip") as page:
+        expect(page.locator("#detail h2")).to_have_text("flip")
+        expect(page.locator("#changes")).to_contain_text("Needs you (")
+        page.locator("#changes a[data-slug='greet']").click()
+        expect(page.locator("#detail h2")).to_have_text("greet")
+        assert page.evaluate("location.search") == "?change=greet"
+        page.go_back()
+        expect(page.locator("#detail h2")).to_have_text("flip")
+        page.get_by_role("button", name="All Changes").click()
+        expect(page.locator("#board")).not_to_have_class("open")
+        assert page.evaluate("location.search") == ""
