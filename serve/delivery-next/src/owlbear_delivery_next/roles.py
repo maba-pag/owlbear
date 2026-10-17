@@ -37,6 +37,7 @@ SESSIONS: dict[str, Role] = {
     "plan-reconsider": "challenger",  # a plan finding the owner sent back with a note (TD-190)
     "brief-reconsider": "challenger",  # a brief finding the owner sent back with a note (TD-221)
     "pack-challenge": "challenger",  # a design pack update, before it is activated (TD-101)
+    "pack-reconsider": "challenger",  # a pack finding the owner sent back with a note (TD-220)
     "pack-update": "updater",  # the design pack update's writing session (TD-125)
 }
 

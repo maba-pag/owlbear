@@ -10,11 +10,22 @@ import subprocess
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import design_pack, pack_job, pack_update
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.store import Store
+
+
+class AnswerBody(BaseModel):
+    """The owner's answer to one open question of a waiting pack update (TD-193, TD-256)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(max_length=200)
+    option: str = Field(max_length=40)
+    note: str = Field(default="", max_length=2000)
 
 
 def pack(job: pack_job.Job) -> dict[str, Any]:
@@ -87,8 +98,30 @@ def router(store: Store, job: pack_job.Job) -> APIRouter:
         except pack_job.Busy as exc:
             raise HTTPException(409, str(exc)) from exc
 
+    _answers(routes, job)
+
     @routes.get("/maintenance")
     def maintenance() -> list[dict[str, Any]]:
         return overview(store)
 
     return routes
+
+
+def _answers(routes: APIRouter, job: pack_job.Job) -> None:
+    """The owner's answers to a waiting update (TD-193, TD-256), and its discard."""
+
+    @routes.post("/design-pack/update/answer")
+    def answer(body: AnswerBody) -> dict[str, Any]:
+        try:
+            return job.answer(body.question, body.option, body.note)
+        except pack_job.Stale as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except pack_job.Refused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @routes.post("/design-pack/update/discard")
+    def discard() -> dict[str, Any]:
+        try:
+            return job.discard()
+        except pack_job.Stale as exc:
+            raise HTTPException(409, str(exc)) from exc

@@ -87,6 +87,32 @@ def test_a_read_only_step_refuses_write_tools_but_reads_anywhere() -> None:
     assert decide(READ, Request("read", paths=("/etc/hosts",))) is None
 
 
+def test_a_confined_step_writes_only_inside_its_folder_and_runs_no_shell(tmp_path: Path) -> None:
+    confined, root = Policy(tmp_path, confined=True), tmp_path.resolve()
+    assert decide(confined, Request("write", paths=("skills/a/SKILL.md",))) is None
+    assert decide(confined, Request("write", paths=(str(tmp_path / "skills" / "b.md"),))) is None
+    for path in ("../design-pack-update.json", "/etc/hosts", "skills/../../x"):
+        said = f"{path} is outside this step's folder; write only under {root}"
+        assert decide(confined, Request("write", paths=(path,))) == said
+    assert decide(confined, Request("write")) == "a write must name its file"
+    assert decide(confined, shell("ls")) == "this step runs no shell commands"
+    assert decide(confined, Request("read", paths=("/etc/hosts",))) is None
+    assert decide(WRITE, Request("write", paths=("/etc/hosts",))) is None  # only the confined step is held
+
+
+def test_a_confined_step_judges_every_path_of_an_sdk_write_and_a_move(tmp_path: Path) -> None:
+    def side(path: str) -> SimpleNamespace:
+        return SimpleNamespace(path=path, content="x")
+
+    move = SimpleNamespace(before=side(str(tmp_path / "a.md")), after=side("/tmp/outside.md"))  # noqa: S108
+    sdk = SimpleNamespace(kind="write", resolved_path=str(tmp_path / "a.md"), file_name="a.md", file_edits=[move])
+
+    req = view(sdk)
+
+    assert req.paths == (str(tmp_path / "a.md"), "/tmp/outside.md")  # noqa: S108
+    assert "/tmp/outside.md is outside this step's folder" in decide(Policy(tmp_path, confined=True), req)  # noqa: S108
+
+
 @pytest.mark.parametrize(
     "text",
     ["git push origin main", "gh pr list", "curl https://example.com", "cat /etc/hosts", "git config user.name x"],

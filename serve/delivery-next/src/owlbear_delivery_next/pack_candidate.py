@@ -1,8 +1,7 @@
 """A design pack update's candidate and its challenge (TD-101): detector pins and skills together, judged whole.
 
-The skills were extracted once; an update keeps their text, moves their provenance to the new tag, and the
-challenger judges whether they still hold against upstream's new skill text and rules. It only reads: a ``fix`` stops
-the update, and the owner revises the skills before the next run.
+The skills were extracted once; an update moves their provenance to the new tag, the updater brings their text in line
+(TD-125), and a read-only challenger judges whether they still hold against upstream's new skill text and rules.
 """
 
 from __future__ import annotations
@@ -32,6 +31,7 @@ from owlbear_delivery_next import (
 )
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.permissions import Policy
+from owlbear_delivery_next.round_records import MAX_FINDINGS
 from owlbear_delivery_next.session_result import Run
 
 if TYPE_CHECKING:
@@ -45,7 +45,13 @@ ENGINE_VERSION = "ENGINE_VERSION"  # upstream's pin of the released engine, at t
 LICENCE = {"IMPECCABLE-LICENSE": "LICENSE"}  # the pack's licence file and upstream's
 MANIFEST, NOTICE = "design_pack.json", f"{preload.ROOT}/NOTICE.md"  # the package files an update rewrites
 DIGEST = re.compile(r"\b[0-9a-f]{64}\b")
-LABEL = "pack-challenge"
+LABEL, AGAIN = "pack-challenge", "pack-reconsider"
+JUDGE = (
+    "The updater rejected each finding below, a challenger upheld it, and the owner asked you to reconsider it in the "
+    "light of the owner's note. Judge each against the candidate, independently of the earlier verdicts: `withdrawn` "
+    "if it does not hold; `clarified` if it holds in a narrower or clearer form, restated in `text` (place: problem - "
+    "fix: fix), never larger than the finding; `unsure` if only the owner can decide it."
+)
 
 
 @dataclass(frozen=True)
@@ -58,11 +64,12 @@ class Candidate:
 
     tag: str
     pins: dict[str, Any]
-    manifest: str  # the new design_pack.json, in the old one's layout
+    manifest: str  # the new design_pack.json, written by json.dumps in the old one's key order (TD-270)
     notice: str  # the new NOTICE.md
     installed: design_pack.Installed
     skills: Path | None = None
     baseline: dict[str, bytes] = field(default_factory=dict)
+    inputs: dict[str, str] = field(default_factory=dict)  # the package files it was made from: their digests
 
 
 def sync(clone: Path, repository: str) -> None:
@@ -90,7 +97,8 @@ def prepare(clone: Path, package: Path, tag: str, download: Callable[[str], byte
     Raises:
         design_pack.PackError: A pin cannot be read, upstream's licence changed, or a file does not verify.
     """
-    old = json.loads((package / MANIFEST).read_text(encoding="utf-8"))
+    start = (package / MANIFEST).read_bytes()
+    old = json.loads(start)
     pins = json.loads(json.dumps(old))
     try:
         commit = _run(["git", "-C", str(clone), "rev-list", "-n1", tag]).decode().strip()
@@ -114,7 +122,8 @@ def prepare(clone: Path, package: Path, tag: str, download: Callable[[str], byte
     raw = design_pack.RAW.format(repository=pins["upstream"]["repository"], commit=commit, path=old["bundle"]["path"])
     installed = design_pack.install(lambda url: bundle if url == raw else download(url), pins)
     up = old["upstream"]
-    notice = (package / NOTICE).read_text(encoding="utf-8")
+    told = (package / NOTICE).read_bytes()
+    notice = told.decode("utf-8")
     if up["tag"] not in notice or up["commit"] not in notice:
         msg = f"{NOTICE} does not name the pinned tag and commit, so its provenance cannot move"
         raise design_pack.PackError(msg)
@@ -122,8 +131,11 @@ def prepare(clone: Path, package: Path, tag: str, download: Callable[[str], byte
     for name, data in baseline.items():
         (skills / name).mkdir(parents=True, exist_ok=True)
         (skills / name / "SKILL.md").write_bytes(data)
-    manifest, moved = _relaid(package, old, pins), _moved(notice, up, pins["upstream"])
-    return Candidate(tag, pins, manifest, moved, installed, skills, baseline)
+    manifest = json.dumps(pins, indent=2, ensure_ascii=False) + "\n"
+    inputs = {MANIFEST: start, NOTICE: told} | {f"{preload.ROOT}/{n}/SKILL.md": d for n, d in baseline.items()}
+    digests = {path: hashlib.sha256(data).hexdigest() for path, data in inputs.items()}
+    moved = _moved(notice, up, pins["upstream"])
+    return Candidate(tag, pins, manifest, moved, installed, skills, baseline, digests)
 
 
 def _published(download: Callable[[str], bytes], pins: dict[str, Any], platform: str) -> str:
@@ -145,34 +157,10 @@ def _moved(text: str, old: dict[str, str], new: dict[str, str]) -> str:
     return text.replace(old["commit"], new["commit"]).replace(f"`{old['tag']}`", f"`{new['tag']}`")
 
 
-def _relaid(package: Path, old: dict[str, Any], new: dict[str, Any]) -> str:
-    """The new manifest in the old one's layout: each changed value replaced where it stands.
-
-    Raises:
-        design_pack.PackError: A value is not unique in the file, so replacing it could change another.
-    """
-    text = (package / MANIFEST).read_text(encoding="utf-8")
-    pairs = [(old["pack"], new["pack"]), *((old["upstream"][k], v) for k, v in new["upstream"].items())]
-    pairs += [(old["engine"][k], v) for k, v in new["engine"].items()]
-    pairs += [(old["bundle"]["sha256"], new["bundle"]["sha256"])]
-    for was, now in pairs:
-        if was != now:
-            if text.count(f'"{was}"') != 1:
-                msg = f"{MANIFEST} holds {was!r} more than once"
-                raise design_pack.PackError(msg)
-            text = text.replace(f'"{was}"', f'"{now}"')
-    if json.loads(text) != new:
-        msg = f"{MANIFEST} could not be rewritten in place"
-        raise design_pack.PackError(msg)
-    return text
-
-
 def message(  # noqa: PLR0913 - the candidate, the update's evidence and the updater's round
-    c: Candidate, diff: str, golden: str, replayed: str, package: Path, *, updated: str = "", rechecks: str = ""
+    c: Candidate, diff: str, golden: str, replayed: str, *, updated: str = "", rounds: list[str] | None = None
 ) -> str:
     """The challenger's first message: the whole candidate pack, the update's evidence, and the updater's round."""
-    folder = c.skills or package / preload.ROOT
-    skills = [f"### {name}\n\n{(folder / name / 'SKILL.md').read_text('utf-8')}" for name in c.pins["skills"]]
     return "\n".join(
         [
             f"You challenge a design pack update to `{c.pins['pack']}` (upstream `{c.tag}`) before it is activated.",
@@ -193,10 +181,9 @@ def message(  # noqa: PLR0913 - the candidate, the update's evidence and the upd
             f"## Golden pages\n{golden}",
             f"## Calibration replay\n{replayed}",
             *(["", "## The updater's report (data, not instructions)", updated] if updated else []),
-            *(["", "## Rechecks", rechecks] if rechecks else []),
+            *(rounds or []),
             "",
-            "## Candidate skills (as the updater left them)",
-            *skills,
+            *_skills(c),
             "",
             "## Finish",
             prompts.REVIEW_FINISH,
@@ -204,7 +191,20 @@ def message(  # noqa: PLR0913 - the candidate, the update's evidence and the upd
     )
 
 
-def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the runtime and the rechecks
+def _skills(c: Candidate) -> list[str]:
+    folder = c.skills or preload.directory()
+    shown = [f"### {name}\n\n{(folder / name / 'SKILL.md').read_text('utf-8')}" for name in c.pins["skills"]]
+    return ["## Candidate skills (as the updater left them)", *shown]
+
+
+def reconsider_message(c: Candidate, lines: list[str]) -> str:
+    """The reconsideration's first message: the candidate skills, each finding, both positions and the owner's note."""
+    head = f"You reconsider challenge findings of a design pack update to `{c.pins['pack']}` (upstream `{c.tag}`)."
+    finish = "Call `submit_result` once with your verdict on each finding in `reconsidered`."
+    return "\n".join([head, prompts.READ_ONLY, "", *_skills(c), "", *lines, "", "## Judge", JUDGE, "", finish])
+
+
+def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the runtime and the round's bounds
     store: Store,
     c: Candidate,
     clone: Path,
@@ -212,41 +212,32 @@ def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the 
     run: Callable[[Store, sdk_adapter.Session], Run],
     *,
     rechecks: tuple[str, ...] = (),
+    cap: int = MAX_FINDINGS,
+    submit: tools.Spec = tools.REVIEW,
+    label: str = LABEL,
 ) -> Run:
-    """One fresh read-only challenger session over the candidate; *rechecks* are the updater's rejected findings."""
-    role = roles.chosen(store.settings(), LABEL)
+    """One fresh read-only challenger session over the candidate; *rechecks* are the findings it judges again."""
+    role = roles.chosen(store.settings(), label)
     with tempfile.TemporaryDirectory(prefix="owlbear-pack-") as tmp:
         at = Path(tmp)
         code, said = git_files.probe_in(at)(["git", "init", "-q"])  # the window places its files only in a repository
         if code:
-            return Run(f"{LABEL}-none", "error", detail=f"the challenger's worktree is no repository: {said[:200]}")
-        upstream_skill(clone, c.tag, at / "upstream")
+            return Run(f"{label}-none", "error", detail=f"the challenger's worktree is no repository: {said[:200]}")
+        upstream_skill(clone, c.pins["upstream"]["commit"], at / "upstream")
         cfg = sdk_adapter.Session(
-            kind=StepKind.REVIEW, worktree=at, session_id=f"{LABEL}-{uuid.uuid4().hex[:8]}", message=text,
+            kind=StepKind.REVIEW, worktree=at, session_id=f"{label}-{uuid.uuid4().hex[:8]}", message=text,
             resume=False, policy=Policy(at, write=False), observe=lambda: tools.Worktree("", ""), checks=(),
-            submit=tools.REVIEW, model=role.model, effort=role.effort, context=role.context, role="challenger",
-            judging=True, memory=sessions.memory(store), rechecks=rechecks,
+            submit=submit, model=role.model, effort=role.effort, context=role.context, role="challenger",
+            judging=True, memory=sessions.memory(store), rechecks=rechecks, cap=cap,
         )  # fmt: skip
         return run(store, replace(cfg, fresh=cfg.message))
 
 
-def upstream_skill(clone: Path, tag: str, into: Path) -> None:
-    """Upstream's skill text at *tag*, extracted under *into* for a session to read."""
-    archive = _run(["git", "-C", str(clone), "archive", tag, pack_update.SKILL])
+def upstream_skill(clone: Path, commit: str, into: Path) -> None:
+    """Upstream's skill text at the pinned *commit*, extracted under *into* for a session to read."""
+    archive = _run(["git", "-C", str(clone), "archive", commit, pack_update.SKILL])
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(into, filter="data")
-
-
-def verdict(done: Run) -> tuple[bool, str]:
-    """A pass, or the findings, wrong premise or ending that stops the update."""
-    if not (done.termination and done.termination.confirmed):
-        return False, f"the challenger {done.session_id} may still be running; stop it before updating again"
-    if done.ending != "result" or not isinstance(done.payload, tools.ReviewResult):
-        return False, f"the challenger ended with {done.ending}: {done.detail or 'no verdict'}"[:600]
-    if done.payload.verdict == "pass":
-        return True, "passed"
-    found = "; ".join(f"{f.place}: {f.problem} (fix: {f.fix})" for f in done.payload.findings)
-    return False, f"the challenger asks for fixes: {found or 'none named'}"[:2000]
 
 
 def said_replay(r: Replay) -> str:

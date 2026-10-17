@@ -251,6 +251,40 @@ step is built.
 - Code: `brief_rounds.py`, `steps/brief_round.py`, `brief_routes.py` (the request and the approval route);
   `mcp_server.py` gets the tool.
 
+### 3.12 The pack updater's rounds (step 7), as built (TD-256, TD-270)
+
+- Loop: subject `pack`, one attempt per run, with the updater's TD-209 values pinned when the run starts; findings keep
+  their IDs for the whole run. The run's context (candidate pins, manifest and notice, evidence, the package files'
+  start digests, the checkout, the updater repository's start files, session ids, the next action), its loop and the
+  owner's open questions are kept in the job's state file; the candidate's skills and the updater's repository live
+  under the store. A run waiting for the owner survives a host restart; a running one still reads failed.
+- Round: the challenger judges the whole candidate with at most `max findings` new findings (the session's cap); a
+  later round lists the updater's open rejections under "Rejections to judge" and the findings the owner dropped,
+  with his reasons (TD-193: raised again only as new findings); fixed findings never reach it. A wrong premise is its
+  round's finding. A failed or unconfirmed session ends the run, as before.
+- The updater: its first repair resumes the producer, later repairs a fresh updater told the earlier work (TD-123);
+  it gets the findings to answer by ID, the owner's marked with his notes, and may reject only the others, checked at
+  its result tool. It writes only in its own folder and runs no shell (`Policy.confined`); after each session every
+  allowed skill is copied into the candidate, so a skill restored to its start replaces an earlier edit. The replay
+  reruns whenever the pack identity changed.
+- After a repair, as in the other loops: not the last round → the next round; an early last round with rejections →
+  a rejections-only check (TD-218), which never reviews the fixes beside them; otherwise the run stops before
+  activating and asks the owner on the Settings page: "Activate the unreviewed repair" or "Discard the update"
+  (TD-256), with "Another round" first when the last allowed round found `ask owner at` or more (TD-208). A full round
+  with nothing left to address and no unreviewed repair activates and pushes as before.
+- Disputes: each upheld rejection is one question on the Settings page with TD-193's options (fix with a note,
+  reconsider with a required note by a fresh challenger, drop with a note); the run goes on once all are answered.
+  "Discard the update" is offered whenever the run waits; a new run is refused while one runs or waits.
+- Activation publishes only the candidate the last full round passed or the one the owner was asked about (pack
+  identity), and only while the package's manifest, notice and skills are as they were at the start; the commit
+  message names the rounds, what was not changed for, and an owner's activation without a pass.
+- TD-270: the manifest is written by `json.dumps` in the old key order (its layout changes once, at the first
+  update). Upstream's skill text is read at the pinned commit, not the tag.
+- Settings: "Design pack updates (updater)" in the "Challenge rounds" group. The pack section lists the run's findings
+  and draws the open questions.
+- Code: `pack_rounds.py` (the loop's rules, lines and questions), `pack_run.py` (the resumable run), `pack_job.py`
+  (the job, its answers and discard), `pack_routes.py` (the answer and discard routes).
+
 ## 4. Build Order, Confidence, And Limits
 
 1. Records, settings, stable IDs, migration.

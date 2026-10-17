@@ -146,8 +146,8 @@ def check(  # noqa: PLR0913 - the result, its tree and the four bounds its field
     """Field errors of a build result's rejections, a review's judgements and new findings, or a reconsideration."""
     if isinstance(args, tools.BuildResult):
         return _rejections([r.finding for r in args.rejected], tree, allowed, settled)
-    if isinstance(args, tools.PlanResult):  # a plan's rejections need no commit (TD-190)
-        return _rejections([r.finding for r in args.rejected], None, allowed, settled)
+    if (rejected := getattr(args, "rejected", None)) is not None:  # a plan's or pack update's need no commit
+        return _rejections([r.finding for r in rejected], None, allowed, settled)
     if isinstance(args, tools.ReviewResult):
         over = len(args.findings) - cap
         many = [f"findings: {len(args.findings)} given, at most {cap} - keep the most important"] if over > 0 else []

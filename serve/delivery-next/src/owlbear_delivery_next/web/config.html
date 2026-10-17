@@ -32,6 +32,8 @@
   #pack-stages { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding-inline-start: 1.5rem; }
   #pack-stages li > * { display: inline-block; vertical-align: middle; margin-inline-end: var(--p-spacing-static-xs); }
   #pack-log { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
+  .pack-question { display: grid; gap: var(--p-spacing-static-sm); margin-block: var(--p-spacing-static-md);
+    padding-block-start: var(--p-spacing-static-sm); border-block-start: 1px solid var(--p-color-contrast-low); }
 </style>
 </head>
 <body>
@@ -124,7 +126,7 @@
   <p-text id="pack-active"></p-text>
   <p-text id="pack-notice" size="xs" color="contrast-medium"></p-text>
   <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
-    only if every stage passes.</p-text>
+    only if every stage passes, or if you accept it after its challenge rounds end without a pass.</p-text>
   <div class="row">
     <p-button id="pack-update" type="button" compact="true" icon="refresh">Update design pack</p-button>
     <p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>
@@ -132,6 +134,16 @@
   <ol id="pack-stages" aria-label="Update stages"></ol>
   <p-text id="pack-reason" size="sm"></p-text>
   <p-text id="pack-pushed" size="sm"></p-text>
+  <div id="pack-ask" hidden>
+    <p-heading size="md"><h3 id="pack-ask-title">The update waits for you</h3></p-heading>
+    <div id="pack-questions"></div>
+    <p-button id="pack-discard" type="button" compact="true" variant="secondary" icon="close">Discard the
+      update</p-button>
+  </div>
+  <details id="pack-findings-box" hidden>
+    <summary>Findings of the challenge rounds</summary>
+    <ul id="pack-findings"></ul>
+  </details>
   <details>
     <summary>Log of the last run</summary>
     <pre id="pack-log"></pre>
@@ -197,7 +209,7 @@ const LAYERS = { project: "This project", global: "All projects" };
 const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
 const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
-  ["builder", "Task reviews (builder)"], ["final_review", "Final review"]];
+  ["builder", "Task reviews (builder)"], ["final_review", "Final review"], ["updater", "Design pack updates (updater)"]];
 let pds = false, loaded = null, rendered = "project", saving = false;
 let offered = null;  // the models this machine's Copilot offers, once read; null while reading or unreadable
 // Unsaved edits per layer ("role.field" -> typed value); a save applies them over the newest saved layer.
@@ -795,6 +807,8 @@ function plain() {
   document.getElementById("rename").replaceWith(el("button", "Rename folder", { id: "rename", type: "button" }));
   document.getElementById("pack-update").replaceWith(
     el("button", "Update design pack", { id: "pack-update", type: "button" }));
+  document.getElementById("pack-discard").replaceWith(
+    el("button", "Discard the update", { id: "pack-discard", type: "button" }));
   document.getElementById("error").setAttribute("role", "alert");
 }
 
@@ -816,6 +830,7 @@ async function start() {
   document.getElementById("save").addEventListener("click", save);
   document.getElementById("rename").addEventListener("click", rename);
   document.getElementById("pack-update").addEventListener("click", startUpdate);
+  document.getElementById("pack-discard").addEventListener("click", discardUpdate);
   if (await reload()) render();
   await readPack();
   await readModels();
@@ -823,12 +838,19 @@ async function start() {
 
 // TD-101: the design pack update runs in the host; the page starts it and follows its stages.
 const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
-  returned: "findings back to the updater" };
+  returned: "findings back to the updater", waiting: "waiting for you" };
 const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
-  returned: "warning" };
+  returned: "warning", waiting: "warning" };
 const ENDINGS = { idle: "Never run.", passed: "Last run passed: activated, committed and pushed.",
-  failed: "Last run failed.", "up-to-date": "Last run: already up to date." };
-let polling = null, announced = "";
+  failed: "Last run failed.", "up-to-date": "Last run: already up to date.",
+  waiting: "The update waits for your answers below.", discarded: "Last run discarded: nothing changed." };
+// TD-220: what became of each finding of the update's challenge rounds, in words.
+const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "rejected by the updater, not judged yet",
+  standing: "rejected by the updater; the challenger accepted that",
+  escalated: "rejected by the updater; the challenger upheld it", "owner-fix": "you decided: fix it",
+  "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
+let polling = null, announced = "", asked = "", shownLoop = null;
+const packNotes = new Map();  // unsent notes by question, so answering one finding keeps the others' drafts
 
 function when(iso) {
   return iso ? new Date(iso).toLocaleString() : "";
@@ -840,7 +862,7 @@ function renderUpdate(u) {
   if (u.state === "running") {
     line = at < 0 ? "Starting the update…" : `Running stage ${at + 1} of ${u.stages.length}: ${u.stages[at].label}…`;
   } else if (u.started_at) {
-    line += ` Started ${when(u.started_at)}, ended ${when(u.ended_at)}.`;
+    line += ` Started ${when(u.started_at)}` + (u.ended_at ? `, ended ${when(u.ended_at)}.` : ".");
   }
   if (line !== announced) document.getElementById("pack-state").textContent = announced = line;
   document.getElementById("pack-stages").replaceChildren(...u.stages.map((s) => {
@@ -855,8 +877,92 @@ function renderUpdate(u) {
   document.getElementById("pack-pushed").textContent = p
     ? `Pushed commit ${p.commit.slice(0, 12)} to ${p.remote} ${p.branch}: ${p.files.join(", ")}.` : "";
   document.getElementById("pack-log").textContent = u.log.length ? u.log.join("\n") : "No run yet.";
-  document.getElementById("pack-update").disabled = u.state === "running";
+  document.getElementById("pack-update").disabled = u.state === "running" || u.state === "waiting";
+  shownLoop = u.loop;
+  renderFindings(u.loop?.findings ?? []);
+  renderQuestions(u.state === "waiting" ? u.questions : []);
   if (u.state === "running") poll();
+}
+
+function renderFindings(found) {
+  document.getElementById("pack-findings-box").hidden = !found.length;
+  document.getElementById("pack-findings").replaceChildren(...found.map((f) => {
+    const why = [f.reason && `Updater: ${f.reason}`, f.judgement && `Challenger: ${f.judgement}`,
+      f.note && `Your note: ${f.note}`, f.clarified && `Reconsidered: ${f.clarified}`].filter(Boolean).join(" ");
+    return el("li", `${f.id} (round ${f.raised}), ${FOUND[f.state] ?? f.state}: ${f.text}${why ? ` ${why}` : ""}`);
+  }));
+}
+
+// A waiting run's questions: one per finding the challenger upheld against the updater (TD-193), or the end without
+// a pass (TD-256). Drawn once per set of questions, so a note being typed survives a reload of the state.
+function renderQuestions(questions) {
+  const box = document.getElementById("pack-ask"), key = questions.map((q) => q.id).join(" ");
+  box.hidden = !questions.length;
+  if (key === asked) return;
+  asked = key;
+  document.getElementById("pack-questions").replaceChildren(...questions.map(packQuestion));
+}
+
+function packQuestion(q) {
+  const box = el("div", undefined, { class: "pack-question" });
+  box.append(el(pds ? "p-text" : "p", q.text));
+  let note = () => "";
+  if (q.kind === "dispute") {
+    const label = "Your note (guides the updater; needed to ask the challenger again)";
+    const area = el("textarea", undefined, { rows: "2", maxlength: "2000" });
+    const field = pds ? el("p-textarea", undefined, { label, rows: "2", maxlength: "2000" })
+      : el("label", label, { class: "field" });
+    if (!pds) field.append(area);
+    const kept = packNotes.get(q.id) ?? "";
+    if (pds) field.setAttribute("value", kept);
+    else area.value = kept;
+    note = () => (pds ? field.value : area.value) || "";
+    field.addEventListener("input", () => packNotes.set(q.id, note()));
+    box.append(field);
+  }
+  const buttons = el("div", undefined, { class: "row" });
+  buttons.append(...q.options.map((o) => {
+    const button = pds ? el("p-button", o.label, { type: "button", compact: "true", variant: "secondary" })
+      : el("button", o.label, { type: "button" });
+    button.addEventListener("click", () => answerUpdate(q, o, note()));
+    return button;
+  }));
+  box.append(buttons);
+  return box;
+}
+
+async function answerUpdate(q, o, note) {
+  const left = ["rejected", "standing", "owner-drop"];
+  const standing = (shownLoop?.findings ?? []).filter((f) => left.includes(f.state));
+  const items = [...(shownLoop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
+    ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
+  if (o.id === "activate" && !(await ask({
+    title: "Activate the pack without a passing challenge?", yes: "Activate and push", no: "Keep it waiting",
+    now: "Delivery activates the candidate as it is now, commits design_pack.json, worker_skills/NOTICE.md and the "
+      + "skills the updater changed on the package checkout's current branch, and pushes that commit. It activates "
+      + (items.length ? "with these left as they are:" : "with no repair left unreviewed and no finding left open."),
+    items,
+    then: "The commit message records that the rounds ended without a pass and which findings were not changed for.",
+    after: "Later visual rounds use the new pack; run another update when upstream moves on.",
+    instead: "The update keeps waiting; you can still discard it.",
+  }))) return;
+  try {
+    const answered = await call("/design-pack/update/answer", "POST", { question: q.id, option: o.id, note });
+    packNotes.delete(q.id);
+    renderUpdate(answered);
+  } catch (e) {
+    notify(e.message);
+    await readPack();
+  }
+}
+
+async function discardUpdate() {
+  try {
+    renderUpdate(await call("/design-pack/update/discard", "POST"));
+  } catch (e) {
+    notify(e.message);
+    await readPack();
+  }
 }
 
 async function readPack() {
@@ -891,7 +997,9 @@ async function startUpdate() {
       + "brings the skills in line, then the rule diff, golden pages, calibration replay and a challenger check it. "
       + "The challenger's findings go back to the updater. This uses AI credits.",
     then: "Only if every stage passes, it activates the pack, commits design_pack.json, worker_skills/NOTICE.md and "
-      + "the skills the updater changed on its package checkout's current branch and pushes that commit upstream.",
+      + "the skills the updater changed on its package checkout's current branch and pushes that commit upstream. "
+      + "If the challenge rounds end without a pass, or the challenger upholds a finding the updater rejected, it "
+      + "stops before activating and asks you here.",
     after: "Later visual rounds use the new pack. If a stage fails, nothing changes and the stages below say why.",
     instead: "The current pack stays active.",
   });

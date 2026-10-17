@@ -1,17 +1,18 @@
-"""The Settings page's design pack update (TD-101): one host job at a time, its stages, and its last run on disk.
+"""The Settings page's design pack update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
 
-Stages run in order and the first that fails stops the run with its reason: notice, candidate, diff, golden pages,
-calibration replay, challenger, activate (one commit in the package's checkout) and push. Until activation nothing in
-the package changes; a candidate's files may stay installed in their own pack folder, as any pack's do. The last run
-is kept under the store, so it survives a host restart; a run the host stopped during reads as failed.
+Stages run in order and the first that fails stops the run with its reason: notice, candidate, diff, golden pages, then
+the updater's and the challenger's rounds with the calibration replay (``pack_run``), activate (one commit in the
+package's checkout) and push. Until activation nothing in the package changes. A run whose rounds need the owner waits
+for his answers on the Settings page; its state is kept under the store, so a waiting run survives a host restart,
+while a run the host stopped during reads as failed.
 """
 
 from __future__ import annotations
 
 import json
 import shutil
-import tempfile
 import threading
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -23,23 +24,24 @@ from owlbear_delivery_next import (
     pack_candidate,
     pack_git,
     pack_replay,
+    pack_rounds,
+    pack_run,
     pack_update,
-    pack_updater,
-    preload,
     sessions,
 )
+from owlbear_delivery_next.pack_run import CANDIDATE, UPDATER, Stopped
+from owlbear_delivery_next.round_records import RoundLoop
 from owlbear_delivery_next.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next import sdk_adapter
     from owlbear_delivery_next.calibration import Replay
     from owlbear_delivery_next.session_result import Run
     from owlbear_delivery_next.store import Store
 
+__all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last"]
 FILE = "design-pack-update.json"  # the last run, under the store
-CANDIDATE = "design-pack-candidate"  # the last run's candidate skills, under the store
 STAGES = (
     ("notice", "Notice: newer upstream release"),
     ("candidate", "Candidate: detector pins and skills"),
@@ -52,19 +54,19 @@ STAGES = (
     ("push", "Push the branch"),
 )
 LOG = 200  # lines kept of the last run's log
+OPEN = frozenset({"pending", "running", "waiting"})
 
 
 class Busy(Exception):  # noqa: N818 - the route's answer, not a fault
-    """An update is already running."""
+    """An update is already running, or waits for the owner."""
 
 
-class Stopped(Exception):  # noqa: N818 - how a stage ends the run
-    """A stage ended the run: up to date, or failed with a reason."""
+class Stale(Exception):  # noqa: N818 - the route's answer, not a fault
+    """The answer is to no open question of a waiting run."""
 
-    def __init__(self, reason: str, *, current: bool = False) -> None:
-        """Keep the reason; *current* ends the run as up to date rather than failed."""
-        super().__init__(reason)
-        self.reason, self.current = reason, current
+
+class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
+    """The answer cannot be carried out as given."""
 
 
 def _upstream() -> Path:
@@ -94,14 +96,14 @@ def _now() -> str:
 def _blank() -> dict[str, Any]:
     stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in STAGES]
     return {"state": "idle", "stage": "", "stages": stages, "started_at": None, "ended_at": None, "reason": "",
-            "log": [], "pushed": None}  # fmt: skip
+            "log": [], "pushed": None, "run": "", "loop": None, "questions": [], "context": None}  # fmt: skip
 
 
 class Job:
-    """The project's design pack update: start one, read its state."""
+    """The project's design pack update: start one, answer it, read its state."""
 
     def __init__(self, store: Store, live: Live | None = None) -> None:
-        """Read the last run; one the host stopped during reads as failed."""
+        """Read the last run; one the host stopped during reads as failed, one waiting for the owner still waits."""
         self.store, self.live, self.lock = store, live or Live(), threading.Lock()
         self.thread: threading.Thread | None = None
         self.state = self._read()
@@ -118,40 +120,110 @@ class Job:
             kept = json.loads(self.path.read_text(encoding="utf-8"))
         except OSError, ValueError:
             return _blank()
-        return kept if isinstance(kept, dict) and {"state", "stages", "log"} <= kept.keys() else _blank()
+        return _blank() | kept if isinstance(kept, dict) and {"state", "stages", "log"} <= kept.keys() else _blank()
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(self.path, json.dumps(self.state, indent=1) + "\n")
 
     def read(self) -> dict[str, Any]:
-        """The current or last run, as the page shows it."""
+        """The current or last run, as the page shows it: without the run's context."""
         with self.lock:
-            return json.loads(json.dumps(self.state))
+            return self._copy()
+
+    def _copy(self) -> dict[str, Any]:
+        return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
+
+    def _busy(self) -> bool:
+        return self.thread is not None and self.thread.is_alive()
 
     def start(self) -> dict[str, Any]:
         """Start a run on its own thread and return its first state.
 
         Raises:
-            Busy: A run is in progress.
+            Busy: A run is in progress, or waits for the owner's answers.
         """
         with self.lock:
-            if self.state["state"] == "running":
+            if self.state["state"] == "running" or self._busy():
                 msg = "a design pack update is already running"
                 raise Busy(msg)
-            self.state = _blank() | {"state": "running", "started_at": _now()}
+            if self.state["state"] == "waiting":
+                msg = "a design pack update waits for your answers; answer or discard it first"
+                raise Busy(msg)
+            self.state = _blank() | {"state": "running", "started_at": _now(), "run": uuid.uuid4().hex}
             self._save()
-            self.thread = threading.Thread(target=self._run, name="design-pack-update", daemon=True)
+            self.thread = threading.Thread(
+                target=self._run, args=(self._stages,), name="design-pack-update", daemon=True
+            )
         self.thread.start()
         return self.read()
+
+    def answer(self, question: str, option: str, note: str = "") -> dict[str, Any]:
+        """Carry out the owner's answer to one open question; once none is open, the run goes on.
+
+        Raises:
+            Stale: No waiting run asks this question, or the run is still settling.
+            Refused: The option is not one of the question's, or a reconsideration lacks its note.
+        """
+        with self.lock:
+            asked = self.state["questions"] if self.state["state"] == "waiting" and not self._busy() else []
+            q = next((q for q in asked if q["id"] == question), None)
+            if q is None:
+                msg = "this question is no longer open; reload the page"
+                raise Stale(msg)
+            if option not in {o["id"] for o in q["options"]}:
+                msg = f"{option!r} is no answer to this question"
+                raise Refused(msg)
+            if option == pack_rounds.RECONSIDER and not note.strip():
+                msg = "asking the challenger to reconsider needs your note"
+                raise Refused(msg)
+            self._log(
+                f"you answered {q['kind']} {q.get('finding', '')}: {pack_rounds.LABELS[option]}".replace("  ", " ")
+            )
+            if option == pack_rounds.DISCARD:
+                self._finish("discarded", "discarded by you; nothing changed")
+                return self._copy()
+            ctx = pack_run.Context.model_validate(self.state["context"])
+            lp = RoundLoop.model_validate(self.state["loop"])
+            left = _decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
+            self.state |= {"loop": lp.model_dump(mode="json"), "context": ctx.model_dump(mode="json")}
+            self.state["questions"] = left
+            if not left:
+                self.state["state"] = "running"
+                self.thread = threading.Thread(
+                    target=self._run, args=(self._resume,), name="design-pack-update", daemon=True
+                )
+            self._save()
+            resumed = self.thread if not left else None
+        if resumed is not None:
+            resumed.start()
+        return self.read()
+
+    def discard(self) -> dict[str, Any]:
+        """End a waiting run without activating anything.
+
+        Raises:
+            Stale: No run waits for the owner.
+        """
+        with self.lock:
+            if self.state["state"] != "waiting" or self._busy():
+                msg = "no design pack update waits for you"
+                raise Stale(msg)
+            self._log("you discarded the update")
+            self._finish("discarded", "discarded by you; nothing changed")
+            return self._copy()
 
     def log(self, line: str) -> None:
         """One line of the run's log, kept with its state."""
         with self.lock:
-            self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
+            self._log(line)
             self._save()
 
-    def _stage(self, name: str, result: str, detail: str = "") -> None:
+    def _log(self, line: str) -> None:
+        self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
+
+    def stage(self, name: str, result: str, detail: str = "") -> None:
+        """One stage's result, shown on the page and logged."""
         with self.lock:
             stage = next(s for s in self.state["stages"] if s["name"] == name)
             stage["result"], stage["detail"] = result, detail[:4000]
@@ -159,17 +231,45 @@ class Job:
             self._save()
         self.log(f"{name}: {result}{f': {detail.splitlines()[0][:300]}' if detail else ''}")
 
-    def _end(self, state: str, reason: str) -> None:
+    def keep(self, ctx: pack_run.Context, lp: RoundLoop) -> None:
+        """Keep the run's context and loop, so it goes on from here."""
         with self.lock:
-            for s in self.state["stages"]:
-                if s["result"] in {"pending", "running"}:
-                    s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
-            self.state |= {"state": state, "stage": "", "ended_at": _now(), "reason": reason}
+            self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
             self._save()
 
-    def _run(self) -> None:
+    def wait(self, ctx: pack_run.Context, lp: RoundLoop, questions: list[dict[str, Any]]) -> None:
+        """Stop the run for the owner's answers; it goes on when he has answered every question."""
+        with self.lock:
+            ctx.next = "wait"
+            self.state |= {"state": "waiting", "stage": "", "questions": questions}
+            self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
+            stage = next(s for s in self.state["stages"] if s["name"] == "challenger")
+            stage["result"] = "waiting"
+            self._log(f"waiting for you: {len(questions)} question(s)")
+            self._save()
+
+    def pushed(self, commit: str, co: pack_git.Checkout, changed: list[str]) -> None:
+        """Record the pushed commit."""
+        with self.lock:
+            self.state["pushed"] = {"commit": commit, "remote": co.remote, "branch": co.merge, "files": changed}
+            self._save()
+
+    def _end(self, state: str, reason: str) -> None:
+        with self.lock:
+            self._finish(state, reason)
+
+    def _finish(self, state: str, reason: str) -> None:
+        for s in self.state["stages"]:
+            if s["result"] in OPEN:
+                s["result"] = "failed" if s["result"] == "running" and state == "failed" else "skipped"
+        self.state |= {"state": state, "stage": "", "ended_at": _now(), "reason": reason, "questions": []}
+        self.state["context"] = None
+        shutil.rmtree(self.store.root / UPDATER, ignore_errors=True)
+        self._save()
+
+    def _run(self, work: Callable[[], str | None]) -> None:
         try:
-            self._stages()
+            reason = work()
         except Stopped as exc:
             self.log(exc.reason)
             self._end("up-to-date" if exc.current else "failed", exc.reason)
@@ -178,27 +278,29 @@ class Job:
             self.log(reason)
             self._end("failed", reason)
         else:
-            self._end("passed", "activated, committed and pushed")
+            if reason is not None:  # None: the run waits for the owner
+                self._end("passed", reason)
 
-    def _do[T](self, name: str, work: Callable[[], T], said: Callable[[T], str] = str) -> T:
-        self._stage(name, "running")
+    def do[T](self, name: str, work: Callable[[], T], said: Callable[[T], str] = str) -> T:
+        """Run one stage's work: its result shown, any failure ending the run with the stage named."""
+        self.stage(name, "running")
         try:
             out = work()
         except Stopped as exc:
-            self._stage(name, "passed" if exc.current else "failed", exc.reason)
+            self.stage(name, "passed" if exc.current else "failed", exc.reason)
             raise
         except Exception as exc:
             reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
-            self._stage(name, "failed", reason)
+            self.stage(name, "failed", reason)
             raise Stopped(reason) from exc
-        self._stage(name, "passed", said(out))
+        self.stage(name, "passed", said(out))
         return out
 
-    def _stages(self) -> None:
+    def _stages(self) -> str | None:
         live, store = self.live, self.store
         package = live.package.resolve()
         old = json.loads((package / pack_candidate.MANIFEST).read_text(encoding="utf-8"))
-        tag = self._do("notice", self._notice)
+        tag = self.do("notice", self._notice)
 
         def candidate() -> tuple[pack_git.Checkout, pack_candidate.Candidate]:
             co = pack_git.checkout(package, live.git)  # before any download: a checkout that cannot commit stops
@@ -207,76 +309,17 @@ class Job:
             shutil.rmtree(folder, ignore_errors=True)
             return co, pack_candidate.prepare(live.clone, package, tag, live.download, folder)
 
-        co, c = self._do("candidate", candidate, lambda out: _pack(*out))
-        diff = self._do("diff", lambda: pack_update.diff(live.clone, tag))
-        golden = self._do("golden", lambda: _golden(live.golden(c.installed)))
-        replayed = self._rounds(c, diff, golden, package)
-        edited = [n for n in c.pins["skills"] if pack_updater.skill(c, n).read_bytes() != c.baseline[n]]
+        co, c = self.do("candidate", candidate, lambda out: _pack(*out))
+        diff = self.do("diff", lambda: pack_update.diff(live.clone, tag))
+        golden = self.do("golden", lambda: _golden(live.golden(c.installed)))
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"
-        said = f"The updater changed {', '.join(edited)}." if edited else "The updater changed no skill."
-        body = f"{why}\n\nGolden pages as expected. Calibration replay: {replayed}. {said} The challenger passed."
-        changed = {package / pack_candidate.MANIFEST: c.manifest, package / pack_candidate.NOTICE: c.notice}
+        return pack_run.begin(self, c, co, diff=diff, golden=golden, why=why)
 
-        def activate() -> str:  # the edited skills join the one commit, checked against the package just before
-            changed.update(_skills(package, c, edited))
-            return pack_git.activate(co, changed, body, live.git)
-
-        commit = self._do("activate", activate)
-        self._do("push", lambda: pack_git.push(co, commit, live.git), lambda _o: f"{commit} to {co.remote} {co.merge}")
+    def _resume(self) -> str | None:
         with self.lock:
-            files_ = sorted(str(p.relative_to(co.root)) for p in changed)
-            self.state["pushed"] = {"commit": commit, "remote": co.remote, "branch": co.merge, "files": files_}
-
-    def _rounds(self, c: pack_candidate.Candidate, diff: str, golden: str, package: Path) -> str:
-        """Updater, replay and challenger until the challenger passes (TD-125); the last replay in words.
-
-        The producing updater repairs once, then a fresh one; the replay reruns only on changed skills.
-        """
-        live, store = self.live, self.store
-        with tempfile.TemporaryDirectory(prefix="owlbear-pack-update-") as tmp:
-            at = Path(tmp)
-            start = pack_updater.lay_out(at, c, live.clone)
-            sid, findings, summary, replayed, judged = pack_updater.new_id(), {}, "", "", ""
-            for n in range(pack_updater.ROUNDS):
-                sid = pack_updater.new_id() if n == pack_updater.ROUNDS - 1 else sid
-                whole = pack_updater.prompt(c, diff, findings, summary if n else "")
-                ask = pack_updater.repair(findings) if n == 1 else whole
-                cfg = pack_updater.config(store, at, sid, ask, resume=n == 1, fresh=whole, replaced=self._replaced)
-
-                def update(cfg: sdk_adapter.Session = cfg) -> pack_updater.UpdateResult:
-                    result = pack_updater.ended(live.update(store, cfg))
-                    pack_updater.taken(at, start, c)
-                    return result
-
-                result = self._do("update", update, lambda r: r.summary)
-                rejected = {r.finding: r.reason for r in result.rejected if r.finding in findings}
-                summary, now = result.summary, design_pack.identity(c.manifest, c.skills)
-                if now != judged:  # the affected check reruns after the updater's edits (TD-177)
-                    replayed, judged = self._do("replay", lambda: _replayed(live.replay(store, c))), now
-                text = pack_candidate.message(
-                    c, diff, golden, replayed, package, updated=summary,
-                    rechecks=pack_updater.rechecks(findings, rejected),
-                )  # fmt: skip
-
-                def challenge(text: str = text, rejected: dict[str, str] = rejected, findings: dict = findings) -> dict:
-                    done = pack_candidate.challenge(
-                        store, c, live.clone, text, live.challenge, rechecks=tuple(rejected)
-                    )
-                    return pack_updater.judged(done, findings, rejected)
-
-                findings = self._do("challenger", challenge, lambda f: "passed" if not f else f"{len(f)} finding(s)")
-                if not findings:
-                    return replayed
-                said = "; ".join(f"{k}: {v}" for k, v in findings.items())
-                last = n == pack_updater.ROUNDS - 1
-                self._stage("challenger", "failed" if last else "returned", said)
-        msg = f"findings remain after {pack_updater.ROUNDS} challenger rounds; the owner decides: {said}"
-        raise Stopped(msg[:2000])
-
-    def _replaced(self) -> str:
-        """The resumed updater is gone: a fresh one takes its repair, told the earlier work (TD-175)."""
-        self.log("update: the updater's session could not be resumed; a fresh one takes its repair")
-        return pack_updater.new_id()
+            ctx = pack_run.Context.model_validate(self.state["context"])
+            lp = RoundLoop.model_validate(self.state["loop"])
+        return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:
         found = pack_update.newer(self.live.releases)
@@ -287,6 +330,23 @@ class Job:
             msg = f"up to date: no skill release newer than {design_pack.manifest()['upstream']['tag']}"
             raise Stopped(msg, current=True)
         return found[-1]
+
+
+def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answer and what it changes
+    asked: list[dict[str, Any]], q: dict[str, Any], option: str, *, note: str, ctx: pack_run.Context, lp: RoundLoop
+) -> list[dict[str, Any]]:
+    """Record one answer; the questions still open. The last dispute answer sets what the run does next."""
+    if q["kind"] == "dispute":
+        pack_rounds.decided(lp, q["finding"], option, note)
+        left = [x for x in asked if x["id"] != q["id"]]
+        if not left:  # TD-193: the answers are carried out together
+            ctx.next = pack_run.NEXT[pack_rounds.after(lp)]
+        return left
+    if option == pack_rounds.ANOTHER:
+        lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
+    else:
+        lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
+    return []
 
 
 def _pack(co: pack_git.Checkout, c: pack_candidate.Candidate) -> str:
@@ -301,33 +361,6 @@ def _golden(wrong: dict[str, dict[str, list[str]]]) -> str:
         msg = f"golden pages differ: {pages}"
         raise Stopped(msg)
     return "as expected"
-
-
-def _replayed(r: Replay) -> str:
-    said = pack_candidate.said_replay(r)
-    if not r.ok:
-        msg = f"calibration replay: {said}"
-        raise Stopped(msg)
-    return said
-
-
-def _passed(out: tuple[bool, str]) -> str:
-    ok, why = out
-    if not ok:
-        msg = f"challenger: {why}"
-        raise Stopped(msg)
-    return why
-
-
-def _skills(package: Path, c: pack_candidate.Candidate, edited: list[str]) -> dict[Path, str]:
-    """The edited skills' exact text; every skill in the package must still be what the candidate started from."""
-    for name, start in c.baseline.items():
-        if (package / preload.ROOT / name / "SKILL.md").read_bytes() != start:
-            msg = f"{name} changed in the package during the update; run the update again"
-            raise Stopped(msg)
-    return {
-        package / preload.ROOT / n / "SKILL.md": pack_updater.skill(c, n).read_text(encoding="utf-8") for n in edited
-    }
 
 
 def last(store: Store) -> dict[str, Any] | None:

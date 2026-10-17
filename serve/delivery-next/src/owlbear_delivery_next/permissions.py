@@ -131,6 +131,7 @@ class Policy:
 
     root: Path
     write: bool = True
+    confined: bool = False  # writes only inside the root and no shell: an editor of third-party text (TD-194)
 
 
 @dataclass(frozen=True)
@@ -358,10 +359,30 @@ def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) 
             else f"tool {req.tool} is not allowed"
         )
     if req.kind in {"read", "write"}:
-        return "writes are not allowed in this step" if req.kind == "write" and not policy.write else None
+        return _file(policy, req)
     if req.kind == "url":
         return None
-    return _shell(policy, req) if req.kind == "shell" else f"{req.kind} requests are not allowed in this step"
+    if req.kind == "shell":
+        return "this step runs no shell commands" if policy.confined else _shell(policy, req)
+    return f"{req.kind} requests are not allowed in this step"
+
+
+def _file(policy: Policy, req: Request) -> str | None:
+    if req.kind == "read":
+        return None
+    if not policy.write:
+        return "writes are not allowed in this step"
+    return _outside(policy, req) if policy.confined else None
+
+
+def _outside(policy: Policy, req: Request) -> str | None:
+    root = policy.root.resolve()
+    if not req.paths:
+        return "a write must name its file"
+    for path in req.paths:
+        if not (root / path).resolve().is_relative_to(root):
+            return f"{path} is outside this step's folder; write only under {root}"
+    return None
 
 
 def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission request classes
@@ -372,5 +393,7 @@ def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission reque
         return Request(kind, tuple(texts or [r.full_command_text]), tuple(r.possible_paths or ()))
     if kind in {"read", "write"}:
         path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
-        return Request(kind, paths=(path,) if path else ())
+        edits = getattr(r, "file_edits", None) or ()  # a move names a before and an after path
+        moved = [side.path for e in edits for side in (e.before, e.after) if side is not None and side.path]
+        return Request(kind, paths=tuple(dict.fromkeys([*([path] if path else []), *moved])))
     return Request(kind, tool=getattr(r, "tool_name", ""), server=getattr(r, "server_name", ""))

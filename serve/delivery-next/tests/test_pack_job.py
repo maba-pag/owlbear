@@ -15,10 +15,23 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, calibration, design_pack, pack_git, pack_job, pack_update, pack_updater, tools
+from owlbear_delivery_next import (
+    api,
+    calibration,
+    design_pack,
+    dispute_tools,
+    disputes,
+    pack_git,
+    pack_job,
+    pack_rounds,
+    pack_update,
+    pack_updater,
+    tools,
+)
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.processes import Termination
+from owlbear_delivery_next.round_records import RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.store import Store
 
@@ -99,8 +112,10 @@ class Fakes:
         self.edits: list[dict[str, str]] = []  # per updater round: worktree path -> new text
         self.rejects: list[list[str]] = []  # per updater round: finding keys it rejects
         self.upheld, self.premise, self.confirmed = False, False, True
+        self.found, self.reconsider = 1, "withdrawn"  # findings per fix verdict; a reconsideration's verdict
         self.replays: list[tuple[str, str]] = []  # what each replay judged: the pack identity and the edited skill
         self.during = lambda: None  # something else that happens while the challenger runs
+        self.at_golden = lambda: None  # something else that happens while the golden pages run
         self.hold: threading.Event | None = None
         self.waiting = threading.Event()
         self.tags = ["skill-v4.5.2", "skill-v4.6.0"]
@@ -125,6 +140,7 @@ class Fakes:
     def golden(self, installed: design_pack.Installed) -> dict:
         self.calls.append("golden")
         assert installed.bundle == "bundle skill-v4.6.0"  # the candidate's detector, not the active one
+        self.at_golden()
         return self.wrong
 
     def replay(self, _store: Store, candidate) -> calibration.Replay:
@@ -141,11 +157,23 @@ class Fakes:
         if self.hold:
             self.waiting.set()
             self.hold.wait(10)
+        done = Termination(confirmed=self.confirmed)
+        if cfg.submit is dispute_tools.SUBMIT:
+            said = [{"finding": k, "verdict": self.reconsider, "text": "narrower - fix: g", "reason": "r"}
+                    for k in cfg.rechecks]  # fmt: skip
+            return Run(
+                cfg.session_id, "result", payload=dispute_tools.ReconsiderResult(reconsidered=said), termination=done
+            )
         verdict = self.verdicts.pop(0) if self.verdicts else self.verdict
-        findings = [] if verdict == "pass" else [tools.Finding(place="owlbear-ui-review", problem="p", fix="f")]
+        problems = ["p", *(f"p{i}" for i in range(2, self.found + 1))]
+        findings = (
+            []
+            if verdict == "pass"
+            else [tools.Finding(place="owlbear-ui-review", problem=p, fix="f") for p in problems]
+        )
         rechecked = [{"finding": k, "upheld": self.upheld, "reason": "r"} for k in cfg.rechecks]
         result = tools.ReviewResult(verdict=verdict, findings=findings, rechecked=rechecked)
-        return Run(cfg.session_id, "result", payload=result, termination=Termination(confirmed=self.confirmed))
+        return Run(cfg.session_id, "result", payload=result, termination=done)
 
     def update(self, _store: Store, cfg) -> Run:
         """The writing updater: each planned edit lands in its worktree, then it submits (or reports a premise)."""
@@ -170,9 +198,27 @@ class Fakes:
 
 def run(job: pack_job.Job) -> dict:
     job.start()
+    return settled(job)
+
+
+def settled(job: pack_job.Job) -> dict:
     assert job.thread is not None
     job.thread.join(30)
     return job.read()
+
+
+def rounds(store: Store, **values: int) -> Store:
+    """The project's settings give the updater's loops these round values (TD-209)."""
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / "config.json").write_text(json.dumps({"format": 2, "agents": {"updater": values}}))
+    return store
+
+
+def answered(job: pack_job.Job, option: str, note: str = "", at: int = 0) -> dict:
+    """Answer the waiting run's *at*-th question; when that resumes it, wait for it to settle again."""
+    q = job.read()["questions"][at]
+    state = job.answer(q["id"], option, note)
+    return settled(job) if state["state"] == "running" else state
 
 
 def snapshot(package: Path) -> tuple[bytes, bytes, str, str]:
@@ -214,7 +260,9 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
     assert pins["engine"]["linux-x64"] == hashlib.sha256(engine("linux-x64")).hexdigest()
     assert pins["bundle"]["sha256"] == hashlib.sha256(b"bundle skill-v4.6.0").hexdigest()
     assert (pins["skills"], pins["licence"]) == (OLD["skills"], OLD["licence"])
-    assert '"skills": ["owlbear-ui-design", "owlbear-ui-review"],' in (checkout / "design_pack.json").read_text()
+    written = (checkout / "design_pack.json").read_text()
+    assert written == json.dumps(pins, indent=2, ensure_ascii=False) + "\n"  # TD-270
+    assert list(pins) == list(OLD)  # in the old file's key order
     notice = (checkout / "worker_skills" / "NOTICE.md").read_text()
     assert "`skill-v4.6.0`" in notice
     assert OLD["upstream"]["commit"] not in notice
@@ -268,39 +316,301 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
 def test_findings_go_back_to_the_updater_that_resumes_once_then_a_fresh_one_takes_over(tmp_path, checkout, clone):
     fakes = Fakes(clone)
     fakes.verdicts, fakes.edits = ["fix", "fix", "pass"], [{}, {REVIEW_SKILL: "repaired\n"}, {}]
+    store = rounds(Store(tmp_path / "store"), last_round_at=0, ask_owner_at=1)  # one finding never ends the loop
 
-    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    state = run(pack_job.Job(store, fakes.live(checkout)))
 
     assert state["state"] == "passed", state["reason"]
     first, resumed, fresh = fakes.updates
+    assert (first.policy.confined, first.policy.write) == (True, True)  # it writes only in its folder (TD-194)
     assert (resumed.session_id, resumed.resume) == (first.session_id, True)  # TD-123: the producer repairs first
-    assert "- F1: owlbear-ui-review: p (fix: f)" in resumed.message
+    assert (resumed.rejectable, fresh.rejectable) == (("F1",), ("F2",))
+    assert "> F1. owlbear-ui-review: p - fix: f" in resumed.message
     assert "## The earlier updater session's work (it could not be resumed)\nround 1" in resumed.fresh  # TD-175
     assert (fresh.resume, fresh.session_id == first.session_id) == (False, False)
     assert "## The earlier updater session's work (it could not be resumed)\nround 2" in fresh.message
+    assert "> F2. owlbear-ui-review: p - fix: f" in fresh.message
+    assert "> F1." not in fresh.message  # a fixed finding is not answered again
+    assert [cfg.cap for cfg in fakes.sessions] == [10, 10, 10]  # the updater's max findings (TD-209)
+    assert not any("Rejections to judge" in cfg.message for cfg in fakes.sessions)
     assert fakes.calls.count("challenger") == 3
     assert [judged for _, judged in fakes.replays][1:] == ["repaired\n"]  # the second replay judges the repair
     assert len(fakes.replays) == 2  # the replay reruns only when the skills changed (TD-177)
     assert sum("challenger: returned" in line for line in state["log"]) == 2
+    assert [(f["id"], f["state"], f["repair"]) for f in state["loop"]["findings"]] == [
+        ("F1", "fixed", "r1"), ("F2", "fixed", "r2")
+    ]  # fmt: skip
+    assert "Challenge rounds: 3." in git(checkout.parents[1], "log", "-1", "--format=%b")
 
 
-@pytest.mark.parametrize("upheld", [True, False])
-def test_a_rejected_finding_is_rechecked_and_an_upheld_one_stops_for_the_owner(tmp_path, checkout, clone, upheld):
+def test_an_accepted_rejection_is_judged_alone_and_the_unchanged_candidate_activates(tmp_path, checkout, clone):
     fakes = Fakes(clone)
-    fakes.verdicts, fakes.rejects, fakes.upheld = ["fix"], [[], ["F1"]], upheld
+    fakes.verdicts, fakes.rejects = ["fix"], [[], ["F1"]]
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    check = fakes.sessions[1]  # an early last round's rejections, judged alone (TD-218)
+    assert (check.rechecks, check.cap) == (("F1",), 0)
+    assert "- F1: owlbear-ui-review: p - fix: f\n  The updater's reason: it already holds" in check.message
+    assert "Judge only these rejections" in check.message
+    assert state["state"] == "passed", state["reason"]
+    body = git(checkout.parents[1], "log", "-1", "--format=%b")
+    assert "F1 rejected; the challenger accepted that (updater: it already holds)" in body
+    assert "The challenger passed." in body
+
+
+def test_a_fix_beside_an_accepted_rejection_still_waits_for_the_owner(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.found, fakes.rejects = ["fix"], 2, [[], ["F2"]]
+    fakes.edits = [{}, {REVIEW_SKILL: "fixed F1\n"}]
     before = snapshot(checkout)
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert fakes.sessions[1].rechecks == ("F1",)
-    assert "F1: owlbear-ui-review: p (fix: f)\n  The updater's reason: it already holds" in fakes.sessions[1].message
-    if upheld:
-        assert (state["state"], results(state)["challenger"]) == ("failed", "failed")
-        assert "upholds a finding the updater rejected; the owner decides" in state["reason"]
-        assert "updater: it already holds - challenger: r" in state["reason"]
-        assert snapshot(checkout) == before
-    else:
-        assert state["state"] == "passed", state["reason"]
+    assert fakes.sessions[1].rechecks == ("F2",)  # the check judged the rejection, never the fix beside it
+    assert state["state"] == "waiting"
+    assert "The updater's last repair (r1) was not reviewed by a challenger." in state["questions"][0]["text"]
+    assert snapshot(checkout) == before
+
+
+def test_an_unchanged_resubmission_is_no_repair_but_still_ends_without_a_pass(tmp_path, checkout, clone):
+    fakes = Fakes(clone, verdict="fix")
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert state["state"] == "waiting"
+    assert "The candidate is what the last round judged." in state["questions"][0]["text"]
+    assert state["loop"]["unreviewed"] == []
+
+
+def test_a_waiting_run_whose_candidate_is_no_longer_installed_stops(tmp_path, checkout, clone):
+    fakes = Fakes(clone, verdict="fix")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    before = snapshot(checkout)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    run(job)
+    shutil.rmtree(design_pack.folder({"pack": "impeccable-4.6.0.1"}))
+
+    state = answered(job, "activate")
+
+    assert state["state"] == "failed"
+    assert "impeccable-4.6.0.1 is no longer installed on this machine" in state["reason"]
+    assert snapshot(checkout) == before
+
+
+def upheld(tmp_path: Path, checkout: Path, clone: Path) -> tuple[pack_job.Job, Fakes, dict]:
+    """A run waiting for the owner: the updater rejected F1 and the rejections-only check upheld it."""
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.rejects, fakes.upheld = ["fix"], [[], ["F1"]], True
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    return job, fakes, run(job)
+
+
+def test_a_rejection_the_challenger_upholds_waits_for_the_owner_who_drops_it(tmp_path, checkout, clone):
+    before = snapshot(checkout)
+    job, fakes, state = upheld(tmp_path, checkout, clone)
+
+    assert (state["state"], results(state)["challenger"]) == ("waiting", "waiting")
+    (q,) = state["questions"]
+    assert (q["kind"], q["finding"], [o["id"] for o in q["options"]]) == (
+        "dispute",
+        "F1",
+        ["fix", "reconsider", "drop"],
+    )
+    assert "Updater: it already holds Challenger: r" in q["text"]
+    assert "context" not in state  # the page never gets the run's context
+    assert snapshot(checkout) == before
+
+    state = answered(job, "drop", "upstream says so")
+
+    assert state["state"] == "passed", state["reason"]
+    assert len(fakes.updates) == 2  # nothing left to fix: no updater session
+    assert "F1 you dropped it" in git(checkout.parents[1], "log", "-1", "--format=%b")
+
+
+def test_the_owners_fix_goes_to_the_updater_and_its_unreviewed_repair_waits_for_activation(tmp_path, checkout, clone):
+    job, fakes, _ = upheld(tmp_path, checkout, clone)
+    fakes.edits = [{REVIEW_SKILL: "fixed as you said\n"}]
+    before = snapshot(checkout)
+
+    state = answered(job, "fix", "use the halo rule")
+
+    cfg = fakes.updates[-1]
+    assert "> F1. owlbear-ui-review: p - fix: f [the owner's]" in cfg.message
+    assert "> F1: use the halo rule" in cfg.message
+    assert (cfg.rejectable, cfg.settled) == ((), ("F1",))  # the owner's finding is never rejected
+    assert state["state"] == "waiting"  # TD-256: the last repair is unreviewed
+    (q,) = state["questions"]
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("end", ["activate", "discard"])
+    assert "The updater's last repair (r2) was not reviewed by a challenger." in q["text"]
+    assert snapshot(checkout) == before
+
+    state = answered(job, "activate")
+
+    assert (state["state"], state["reason"]) == (
+        "passed",
+        "activated by you after rounds without a pass, committed and pushed",
+    )
+    assert (checkout / PACKAGED).read_text() == "fixed as you said\n"
+    body = git(checkout.parents[1], "log", "-1", "--format=%b")
+    assert "the owner activated it; its last repair (r2) was not reviewed (TD-256)" in body
+    assert "The challenger passed." not in body
+
+
+@pytest.mark.parametrize(
+    ("verdict", "ends"), [("withdrawn", "passed"), ("unsure", "waiting"), ("clarified", "waiting")]
+)
+def test_a_reconsideration_needs_the_owners_note_and_a_fresh_challenger_settles_it(
+    tmp_path, checkout, clone, verdict, ends
+):
+    job, fakes, state = upheld(tmp_path, checkout, clone)
+    fakes.reconsider = verdict
+    with pytest.raises(pack_job.Refused, match="needs your note"):
+        job.answer(state["questions"][0]["id"], "reconsider", " ")
+
+    state = answered(job, "reconsider", "the halo is upstream's own example")
+
+    cfg = fakes.sessions[-1]
+    assert (cfg.submit, cfg.rechecks, cfg.session_id.startswith("pack-reconsider-")) == (
+        dispute_tools.SUBMIT, ("F1",), True
+    )  # fmt: skip
+    assert "The owner's note: the halo is upstream's own example" in cfg.message
+    assert "Earlier recheck: r" in cfg.message
+    assert state["state"] == ends, state["reason"]
+    if verdict == "unsure":  # asked again, without a second reconsideration (TD-193: once per finding)
+        assert [o["id"] for o in state["questions"][0]["options"]] == ["fix", "drop"]
+    if verdict == "clarified":  # the narrower finding is the owner's for the updater
+        assert "> F1. narrower - fix: g [the owner's]" in fakes.updates[-1].message
+        assert state["questions"][0]["kind"] == "end"
+
+
+def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_path, checkout, clone):
+    fakes, store = Fakes(clone, verdict="fix"), Store(tmp_path / "store")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    before = snapshot(checkout)
+    job = pack_job.Job(store, fakes.live(checkout))
+
+    state = run(job)
+
+    assert (state["state"], fakes.calls.count("challenger")) == ("waiting", 1)  # 1 finding: the last round (TD-208)
+    assert results(state)["challenger"] == "waiting"
+    assert [o["id"] for o in state["questions"][0]["options"]] == ["activate", "discard"]
+    assert (store.root / "design-pack-updater").is_dir()
+    with pytest.raises(pack_job.Busy, match="waits for your answers"):
+        job.start()
+
+    state = answered(job, "discard")
+
+    assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
+    assert (state["questions"], snapshot(checkout)) == ([], before)
+    assert not (store.root / "design-pack-updater").exists()
+    assert results(state)["activate"] == "skipped"
+
+
+def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_path, checkout, clone):
+    fakes, store = Fakes(clone, verdict="fix"), Store(tmp_path / "store")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    before = snapshot(checkout)
+    job = pack_job.Job(store, fakes.live(checkout))
+    run(job)
+    (store.root / pack_job.CANDIDATE / "owlbear-ui-review" / "SKILL.md").write_text("slipped in\n")
+
+    state = answered(job, "activate")
+
+    assert (state["state"], results(state)["activate"]) == ("failed", "skipped")
+    assert "is not what the challenger passed or you accepted" in state["reason"]
+    assert snapshot(checkout) == before
+
+
+def test_many_findings_in_the_last_allowed_round_offer_another_round(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.verdicts, fakes.edits = ["fix", "pass"], [{}, {REVIEW_SKILL: "repaired\n"}]
+    store = rounds(Store(tmp_path / "store"), max_rounds=1, last_round_at=0, ask_owner_at=1)
+    job = pack_job.Job(store, fakes.live(checkout))
+
+    state = run(job)
+
+    assert [o["id"] for o in state["questions"][0]["options"]] == ["another", "activate", "discard"]
+    state = answered(job, "another")
+
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls.count("challenger") == 2  # the extra round reviewed the repair: no question at its end
+    assert "The challenger passed." in git(checkout.parents[1], "log", "-1", "--format=%b")
+
+
+def test_few_findings_in_the_last_allowed_round_offer_no_other_round(tmp_path, checkout, clone):
+    fakes = Fakes(clone, verdict="fix")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    store = rounds(Store(tmp_path / "store"), max_rounds=1)  # 1 finding, below `ask owner at` 7
+
+    state = run(pack_job.Job(store, fakes.live(checkout)))
+
+    assert [o["id"] for o in state["questions"][0]["options"]] == ["activate", "discard"]
+
+
+def test_the_owners_fix_is_fixed_even_if_the_updater_lists_it_as_rejected():
+    found = [
+        RoundFinding(id="F1", text="a", raised=1, state="owner-fix"),
+        RoundFinding(id="F2", text="b", raised=1),
+    ]
+    lp = RoundLoop(subject="pack", policy=RoundPolicy(), round=1, found=2, last=False, findings=found)
+
+    assert pack_rounds.revised(lp, {"F1": "no", "F2": "no"}, "x") == "challenge"
+    assert [(f.id, f.state) for f in lp.findings] == [("F1", "fixed"), ("F2", "rejected")]
+
+
+def test_a_waiting_run_survives_a_host_restart_and_goes_on_from_its_answer(tmp_path, checkout, clone):
+    store = Store(tmp_path / "store")
+    fakes = Fakes(clone, verdict="fix")
+    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
+    waiting = run(pack_job.Job(store, fakes.live(checkout)))
+
+    again = pack_job.Job(store, fakes.live(checkout))
+
+    assert again.read() == waiting
+    assert answered(again, "activate")["state"] == "passed"
+    assert (checkout / PACKAGED).read_text() == "repaired\n"
+
+
+def test_a_skill_restored_to_its_start_replaces_the_earlier_edit_in_the_candidate(tmp_path, checkout, clone):
+    fakes, original = Fakes(clone), (checkout / PACKAGED).read_text()
+    fakes.verdicts, fakes.edits = ["fix", "pass"], [{REVIEW_SKILL: "an edit\n"}, {REVIEW_SKILL: original}]
+    store = rounds(Store(tmp_path / "store"), last_round_at=0, ask_owner_at=1)
+
+    state = run(pack_job.Job(store, fakes.live(checkout)))
+
+    assert state["state"] == "passed", state["reason"]
+    assert (checkout / PACKAGED).read_text() == original
+    assert "The updater changed no skill." in git(checkout.parents[1], "log", "-1", "--format=%b")
+
+
+def test_a_challenger_judges_open_rejections_and_sees_what_the_owner_dropped():
+    found = [
+        RoundFinding(id="F1", text="a: b - fix: c", raised=1, state="rejected", reason="it holds"),
+        RoundFinding(id="F2", text="d: e - fix: f", raised=1, state="owner-drop", note="upstream's choice"),
+        RoundFinding(id="F3", text="g: h - fix: i", raised=1, state="fixed", repair="r1"),
+    ]
+    lp = RoundLoop(subject="pack", policy=RoundPolicy(), round=1, findings=found)
+
+    full, check = pack_rounds.challenge_lines(lp, recheck=False), pack_rounds.challenge_lines(lp, recheck=True)
+
+    assert full[:4] == ["", "## Rejections to judge", pack_rounds.RECHECK, "- F1: a: b - fix: c"]
+    assert "  The updater's reason: it holds" in full
+    assert pack_rounds.ONLY in check
+    assert pack_rounds.ONLY not in full
+    assert "- F2: d: e - fix: f The owner's reason: upstream's choice" in full  # TD-193: raised again only anew
+    assert not any("F3" in line for line in full)  # a fixed finding never reaches the challenger
+
+
+def test_the_updaters_rejections_are_checked_at_its_result_tool():
+    def errors(rejected: list[str], allowed: tuple[str, ...], settled: tuple[str, ...] = ()) -> list[str]:
+        said = pack_updater.UpdateResult(summary="s", rejected=[{"finding": k, "reason": "r"} for k in rejected])
+        return disputes.check(said, tools.Worktree("", ""), allowed, (), settled=settled)
+
+    assert errors(["F1"], ("F1", "F2")) == []
+    assert errors(["F9"], ("F1",)) == ["rejected: F9 is no finding key of this task - use F1"]
+    assert errors(["F1", "F1"], ("F1",)) == ["rejected: F1 listed twice - one entry per finding"]
+    assert "is the owner's decision" in errors(["F2"], ("F1",), ("F2",))[0]
 
 
 @pytest.mark.parametrize(
@@ -336,6 +646,22 @@ def test_a_skill_changed_in_the_package_meanwhile_stops_activation(tmp_path, che
     assert (state["state"], results(state)["activate"]) == ("failed", "failed")
     assert "owlbear-ui-review changed in the package during the update" in state["reason"]
     assert (checkout / PACKAGED).read_text() == "edited by hand meanwhile\n"  # never overwritten
+
+
+def test_a_skill_the_owner_commits_after_the_candidate_was_made_is_never_overwritten(tmp_path, checkout, clone):
+    fakes, root = Fakes(clone), checkout.parents[1]
+
+    def committed() -> None:  # the candidate copied the skills already; the owner commits a newer one meanwhile
+        (checkout / PACKAGED).write_text("the owner's newer text\n")
+        git(root, "commit", "-qam", "mine")
+        git(root, "push", "-q")
+
+    fakes.at_golden = committed
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    assert (state["state"], results(state)["activate"]) == ("failed", "failed")
+    assert "owlbear-ui-review changed in the package during the update" in state["reason"]
+    assert (checkout / PACKAGED).read_text() == "the owner's newer text\n"
 
 
 def test_a_skill_the_updater_left_alone_but_committed_meanwhile_stops_activation_too(tmp_path, checkout, clone):
@@ -384,7 +710,6 @@ def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(
     [
         ({"wrong": {"bad.html (source)": {"missing": ["glow"], "unexpected": []}}}, "golden", "missing glow"),
         ({"replay_ok": False}, "replay", "below the margin"),
-        ({"verdict": "fix"}, "challenger", "owlbear-ui-review: p (fix: f)"),
     ],
 )
 def test_a_failing_stage_stops_before_activation_and_changes_nothing(  # noqa: PLR0913, PLR0917 - one case per stage
@@ -491,6 +816,27 @@ def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clon
     job.thread.join(30)
     assert c.get("/api/next/design-pack", headers=AUTH).json()["update"]["state"] == "passed"
     assert fakes.calls.count("challenger") == 1
+
+
+def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkout, clone):
+    job, _, state = upheld(tmp_path, checkout, clone)
+    c = TestClient(api.create_app(job.store, "t", Host(), pack=job), base_url="http://127.0.0.1", headers=AUTH)
+    qid, url = state["questions"][0]["id"], "/api/next/design-pack/update/answer"
+
+    stale = c.post(url, json={"question": "old:dispute:F1", "option": "drop"})
+    assert (stale.status_code, stale.json()["detail"]) == (409, "this question is no longer open; reload the page")
+    wrong = c.post(url, json={"question": qid, "option": "activate"})
+    assert (wrong.status_code, wrong.json()["detail"]) == (422, "'activate' is no answer to this question")
+    bare = c.post(url, json={"question": qid, "option": "reconsider", "note": "  "})
+    assert (bare.status_code, bare.json()["detail"]) == (422, "asking the challenger to reconsider needs your note")
+    assert c.post(url, json={"question": qid, "option": "drop", "extra": 1}).status_code == 422
+    bare_client = TestClient(c.app, base_url="http://127.0.0.1")
+    assert bare_client.post("/api/next/design-pack/update/discard").status_code == 401  # guarded like every route
+    assert c.get("/api/next/design-pack/update").json()["state"] == "waiting"  # nothing above changed it
+
+    assert c.post("/api/next/design-pack/update/discard").json()["state"] == "discarded"
+    gone = c.post("/api/next/design-pack/update/discard")
+    assert (gone.status_code, gone.json()["detail"]) == (409, "no design pack update waits for you")
 
 
 def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(tmp_path, checkout, clone):

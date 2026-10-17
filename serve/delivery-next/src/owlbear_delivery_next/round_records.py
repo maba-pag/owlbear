@@ -18,6 +18,7 @@ MAX_FINDINGS = 20  # a review result's own cap
 FINAL = "final"  # the final review's subject
 PLAN = "plan"  # the plan challenge's subject (TD-190)
 BRIEF = "brief"  # the brief challenge's subject (TD-221)
+PACK = "pack"  # a design pack update's challenge (TD-220)
 RECHECK = "rejections"  # a review step that judges only an early last round's rejections (TD-218)
 KEYED = re.compile(r"- (F\d+): (.*)")
 
