@@ -864,11 +864,9 @@ def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path):
 
     assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
     assert '<h2 id="pack-title">Design pack</h2>' in page
-    assert (
-        '<p-button id="pack-update" type="button" compact="true" icon="refresh">Update design pack</p-button>' in page
-    )
-    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>' in page
-    assert '<ol id="pack-stages" aria-label="Update stages"></ol>' in page
+    assert 'button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh"' in page  # lit-html
+    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>' in page
+    assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
