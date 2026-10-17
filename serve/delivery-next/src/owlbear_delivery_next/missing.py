@@ -54,7 +54,7 @@ def slug(tool: str) -> str:
 def _without(enclosing: StepKind, tool: str) -> list[Option]:
     """Go on without the tool: the plan or the brief changes, whichever the step's work comes from.
 
-    A brief challenge offers none: the brief it challenges changes only in chat (its step back is its findings).
+    A brief challenge offers none: the brief it challenges changes only in chat (its step back is its finding).
     """
     if enclosing == StepKind.SHAPE:
         return []
@@ -108,7 +108,7 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
 def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepResult:
     """No runtime here has it: the work that asked for it changes (TD-36).
 
-    A brief challenge's step back becomes its findings question (``loop.brief_challenge``); the brief changes in chat.
+    A brief challenge's step back becomes its round's finding (``steps.brief_round``); the brief changes in chat.
     """
     reason = f"needs {said}, which no runtime here provides"[:1500]
     back = {

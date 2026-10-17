@@ -43,6 +43,7 @@ from owlbear_delivery_next.sessions import UsageUnreadError
 from owlbear_delivery_next.steps import (
     amend,
     before,
+    brief_round,
     check,
     cleanup,
     conversation,
@@ -311,30 +312,6 @@ def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
 
 
-def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> None:
-    """J2: the challenger tests the approved brief version (TD-73); pass plans, findings go back to the owner."""
-    path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
-    change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
-    store.write(lock, change)
-
-    def made(at: Path) -> sdk_adapter.Session:
-        return sdk_adapter.Session(
-            kind=StepKind.REVIEW,
-            worktree=at,
-            session_id="",
-            message=prompts.brief_challenge(change, at),
-            resume=False,
-            policy=permissions.Policy(at, write=False),
-            observe=lambda: worktree.observe(at, change.names.target),
-            checks=(),
-            journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
-            memory=sessions.memory(store),
-        )
-
-    change, result = loop.brief_challenge(change, sessions.reviewer(store, lock, change, path, made, "brief-challenge"))
-    store.write(lock, loop.apply(change, result, datetime.now(UTC)))
-
-
 def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
@@ -437,8 +414,8 @@ def _step(  # noqa: C901 - one branch per phase
                 agent or review.completed(store, lock, change, repo) or plan_round.continued(store, lock, change, repo)
             )
             agent or _agent(store, lock, change, repo)
-        elif step.kind == StepKind.SHAPE and loop.brief_due(change):
-            _brief_challenge(store, lock, change, repo)
+        elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
+            brief_round.run(store, lock, change, repo)
         else:
             _engine(store, lock, change, repo)
     except UsageUnreadError as exc:

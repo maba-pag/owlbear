@@ -92,7 +92,8 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
     store = Store(tmp_path)
     c = client(store)
     saved = c.post("/api/next/briefs", json=BRIEF).json()
-    assert (saved["change"], saved["next"].endswith("page: http://127.0.0.1:9/#token=tok")) == ("c1", True)
+    assert (saved["change"], saved["next"].endswith("after: http://127.0.0.1:9/#token=tok")) == ("c1", True)
+    assert "challenge_brief (change c1, version 1)" in saved["next"]
     assert api.link(Host.record.model_copy(update={"token": ""})) is None  # a starting host has no link yet
     slug = store.slugs()[0]
     assert loop.next_step(store.read(slug), NOW) is None
@@ -100,13 +101,19 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
     assert c.post("/api/next/briefs", json=revised).json()["version"] == 2
     assert store.read(slug).brief.criteria[0].version == 2
     assert c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1}).status_code == 409
+    unchallenged = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 2})
+    assert (unchallenged.status_code, "has not been challenged" in unchallenged.json()["detail"]) == (409, True)
+    with store.lock(slug) as lock:
+        change = store.read(slug)
+        change.brief.challenged = 2  # its challenge loop ended on v2 (TD-249)
+        store.write(lock, change)
     assert c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 2}).json() == {
         "accepted": "brief-approval"
     }
     with store.lock(slug) as lock:
         change, step = store.fold(lock, slug, NOW)
-        assert (change.brief.approved_version, step.kind, loop.brief_due(change)) == (2, StepKind.SHAPE, True)
-        store.write(lock, loop.apply(*loop.brief_challenge(change, loop.StepResult(exit=Exit.DONE)), NOW))
+        assert (change.brief.approved_version, step.kind) == (2, StepKind.PLAN)
+        store.write(lock, change)
     assert c.post("/api/next/briefs", json=revised).status_code == 409
 
 
@@ -185,6 +192,10 @@ def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approv
     steps = [{"state": "dark", "do": "click", "target": "Dark mode"}]
     assert c.post("/api/next/briefs", json={**BRIEF, "ui": True, "visual": states, "steps": steps}).status_code == 200
     slug = store.slugs()[0]
+    with store.lock(slug) as lock:
+        change = store.read(slug)
+        change.brief.challenged = 1
+        store.write(lock, change)
     refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
     assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)
     option = Preparation(id="fixtures", kind="data-only", seed="npm run seed", cleanup="npm run drop")

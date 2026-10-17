@@ -15,7 +15,7 @@ from owlbear_delivery_next.evidence import cover
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Outcome, Question, Step, StepKind
 from owlbear_delivery_next.moves import ask
-from owlbear_delivery_next.round_records import FINAL, PLAN, RECHECK, RoundLoop
+from owlbear_delivery_next.round_records import BRIEF, FINAL, PLAN, RECHECK, RoundLoop
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -315,7 +315,7 @@ def accepted(c: Change, now: datetime) -> None:
     if lp is None:
         return
     lp.ended = lp.ended or ("count" if lp.unreviewed else "clean")
-    lp.history += [c.loops.pop(k) for k in [k for k in c.loops if k not in {FINAL, PLAN}]]
+    lp.history += [c.loops.pop(k) for k in [k for k in c.loops if k not in {FINAL, PLAN, BRIEF}]]
     retire(c, now)
 
 

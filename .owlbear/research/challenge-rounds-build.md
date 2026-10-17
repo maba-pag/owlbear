@@ -212,6 +212,45 @@ step is built.
 - Code: `plan_rounds.py` (records, lines, marks, verdicts, questions, answers) and `steps/plan_round.py` (the
   challenge, the rejections-only check and the reconsideration, moved out of `runner.py`).
 
+### 3.11 The shaper's brief challenge (step 8), as built (TD-254)
+
+- Loop: subject `brief` on the Change, with the shaper's TD-209 values, pinned at the first request; it stays with the
+  Change through planning. Each verdict records the version it judged.
+- Request: the chat tool `challenge_brief(change, version, rejected)`; the shaper calls it once the draft is ready
+  (TD-249) and for each later round, naming the saved version and its rejections of findings it did not take (the
+  owner's are never rejected; listed keys only). The host checks it under the Change's lock (a shaping Change, the
+  current version, not challenged already, no challenge running, no owner decision pending) and records it; the open
+  findings the shaper did not reject count as revised for in that version (`v<version>`). Asking again for a judged
+  version needs every finding rejected, else a revision first. The tool reads the Change until the verdict is
+  recorded (ten minutes at most) and returns the findings by ID; `show_status` shows the same under the brief's
+  `challenge`.
+- Host: the SHAPE step runs the challenger for a requested version; nothing runs after approval any more
+  (`brief_due`, `_brief_challenge`, `loop.brief_challenge` removed). Round 1 judges the brief; later rounds judge the
+  shaper's rejections and look for new findings within the cap; a challenger's wrong premise or a tool no runtime
+  provides is its round's finding. A failed session counts none and runs again. Saves are refused while a
+  challenge runs or the owner decides.
+- After a request, as in the other loops: not the last round → a challenge; an early last round with rejections →
+  a rejections-only challenge (TD-218); the last allowed round with `ask owner at` or more new findings → the owner on
+  the Changes page: "Another round" or "Shape the brief again" (a new attempt; the shaper is told why); otherwise no
+  session: the requested version is the loop's outcome, unreviewed (`count`/`max`). A verdict with nothing left to
+  address, or the owner's decisions leaving none, makes the judged version the outcome (`clean`). An upheld
+  rejection asks the owner first, with TD-193's options; a reconsideration runs in the SHAPE step; an upheld
+  rejection whose question a stop replaced is asked again.
+- Approval: the approve button (with the reason when it is off) and the approve route require `Brief.challenged ==
+  version`, `challenged` now meaning the version its loop ended on; the fold ignores any other approval. **Pending
+  the owner's decision:** a version the shaper revised after the last round counts as challenged (unreviewed, listed
+  as such) - the reconciliation of TD-208 with TD-249 Sol could not settle. A later save needs one added round on
+  the changes (TD-215, TD-235). The approval view shows the brief challenge's markers and details; after approval
+  the "Review rounds" section does.
+- A Change the old flow approved before its challenge gets it on its next step and plans once its loop ends there;
+  an old question "Plan from this brief as it is" still works by its options.
+- Shaper: its agent grants `challenge_brief`; the skill's steps 8-9 say to ask for the challenge, judge each
+  finding, revise with the owner where the choice is his, reject with evidence, ask again, and send the owner to
+  approve naming the standing rejections and an unreviewed last revision. Settings: the "Challenge rounds" group
+  has the shaper's row.
+- Code: `brief_rounds.py`, `steps/brief_round.py`, `brief_routes.py` (the request and the approval route);
+  `mcp_server.py` gets the tool.
+
 ## 4. Build Order, Confidence, And Limits
 
 1. Records, settings, stable IDs, migration.

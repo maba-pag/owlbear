@@ -135,7 +135,8 @@ class Brief(Record):
     version: int = 0
     approved_version: int | None = None
     approved_at: datetime | None = None
-    challenged: int | None = None  # the version the brief challenge judged (J2, TD-73)
+    challenged: int | None = None  # the version its challenge loop ended on: approvable (TD-249, TD-208)
+    requested: int | None = None  # the version the shaper asked to be challenged (TD-249)
     title: str = ""
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)

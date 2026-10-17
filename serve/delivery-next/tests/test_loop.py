@@ -115,11 +115,9 @@ def test_a_task_whose_findings_were_fixed_is_not_built_again():
 def test_walk_from_brief_approval_to_done():
     checks = [PersonCheck(id="p1", criteria=["AC-1"], paths=["ui"])]
     c = change(K.SHAPE, None, checks=checks).model_copy(update={"plan": None})
-    c.brief.approved_version = None
+    c.brief.approved_version, c.brief.challenged = None, 1  # its challenge loop ended on v1 (TD-249)
     c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
-    assert (step.kind, c.brief.approved[0].version, c.brief.approved[0].criteria) == (K.SHAPE, 1, c.brief.criteria)
-    c = loop.apply(*loop.brief_challenge(c, StepResult(exit=Exit.DONE, reason="challenge passed")), NOW)
-    assert (c.step.kind, c.brief.challenged) == (K.PLAN, 1)
+    assert (step.kind, c.brief.approved[0].version, c.brief.approved[0].criteria) == (K.PLAN, 1, c.brief.criteria)
     review = Review(commit="abc", inputs=Inputs(criteria={"AC-1": 1}), verdict="pass")
     walk = [
         (StepResult(exit=Exit.DONE, plan=change().plan), (K.BUILD, "t1", None)),
@@ -148,25 +146,11 @@ def test_walk_from_brief_approval_to_done():
     assert loop.next_step(c, LATER) is None
 
 
-def test_brief_challenge_binds_the_version_and_findings_return_to_the_owner():
+def test_an_approval_of_a_version_its_challenge_loop_did_not_end_on_records_nothing():
     c = change(K.SHAPE, None).model_copy(update={"plan": None})
     c.brief.approved_version = None
-    c, _ = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
-    assert (c.step.kind, loop.brief_due(c)) == (K.SHAPE, True)
-    failed = StepResult(exit=Exit.RETRY, cause=failures.cause_key(ErrorKind.TOOLING, K.REVIEW, "sdk"))
-    assert loop.brief_challenge(c, failed) == (c, failed)  # a failed session judged nothing
-    c, asked = loop.brief_challenge(c, StepResult(exit=Exit.RETRY, reason="AC-1: cannot be checked"))
-    c = loop.apply(c, asked, NOW)
-    q = loop.open_question(c)
-    assert (c.brief.challenged, c.step.kind, [o.id for o in q.options]) == (1, K.SHAPE, ["change", "split", "approve"])
-    assert (loop.ordinary(q), "AC-1: cannot be checked" in q.text) == (True, True)
-    revised, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="change")], NOW)
-    assert (step.kind, loop.brief_due(revised)) == (K.SHAPE, False)  # the runner waits for the chat
-    revised.brief.version = 2
-    revised, _ = loop.schedule(revised, [BriefApproval(at=NOW, version=2)], NOW)
-    assert (revised.step.kind, loop.brief_due(revised)) == (K.SHAPE, True)
-    _, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="approve")], NOW)
-    assert step.kind == K.PLAN
+    c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
+    assert (c.brief.approved_version, step.kind) == (None, K.SHAPE)  # TD-249
 
 
 def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():

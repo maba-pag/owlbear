@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
@@ -14,7 +15,7 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from owlbear_delivery_next import api, brief_tools, host, loop, tools
+from owlbear_delivery_next import api, brief_rounds, brief_routes, brief_tools, host, loop, tools
 from owlbear_delivery_next.store import Store, StoreError
 
 NOT_RUNNING = (
@@ -24,6 +25,7 @@ NOT_RUNNING = (
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 _STATE: dict[str, Chat] = {}
 OK = 200
+WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
 
 
 class Chat:
@@ -90,7 +92,29 @@ class Chat:
         out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
         proposed = [i.model_dump(include={"criterion", "old", "new", "why"}) | {"verdict": a.verdict or "not judged"}
                     for a in change.amendments for i in a.items]  # fmt: skip
+        out |= {"challenge": brief_rounds.status(change)}  # TD-221: the brief challenge's findings by ID
         return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}
+
+    def challenge_brief(self, change: str, version: int, rejected: list[dict[str, str]]) -> dict[str, Any]:
+        """Ask for the version's challenge, then wait a while for its verdict and return the findings by ID."""
+        code, out = self.call("POST", "/briefs/challenge", {"change": change, "version": version, "rejected": rejected})
+        if code != OK:
+            return {"requested": False, **out}
+        slug = brief_routes.slug_of(self.store, change) or ""
+        deadline = time.monotonic() + WAIT
+        while time.monotonic() < deadline:
+            try:
+                c = self.store.read(slug)
+            except StoreError:
+                break
+            if not brief_rounds.running(c, version):
+                return {"requested": True, **brief_rounds.status(c)}
+            time.sleep(POLL)
+        return {
+            "requested": True,
+            "running": True,
+            "next": "the challenge still runs; call show_status with the handle",
+        }
 
     def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:
         """Answer one worker question; recovery decisions are refused with the Changes page (T6)."""
@@ -156,6 +180,23 @@ def save_visual_check(
     """Set a Change's UI flag, the page states Delivery screenshots, and the clicks or typing before each."""
     body = {"change": change, "ui": ui, "states": [s.model_dump() for s in states or []]}
     return _STATE["chat"].save_brief(body | {"steps": [s.model_dump() for s in steps or []]}, "/briefs/visual")
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def challenge_brief(
+    change: Annotated[str, Field(description="Handle of the Change", examples=["c1"])],
+    version: Annotated[int, Field(description="The brief version you saved and ask to be challenged", examples=[2])],
+    rejected: Annotated[
+        list[tools.Rejection] | None,
+        Field(
+            description="Findings of the previous round you do not take, by ID, with your evidence; the next "
+            "challenger judges each"
+        ),
+    ] = None,
+) -> dict[str, Any]:
+    """Ask for the brief version's challenge once the draft is ready; waits for its verdict, gives findings by ID."""
+    found = [r.model_dump() for r in rejected or []]
+    return _STATE["chat"].challenge_brief(change, version, found)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

@@ -20,6 +20,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next import (
     answers,
     backlog_routes,
+    brief_rounds,
+    brief_routes,
     config_routes,
     evidence,
     held,
@@ -36,7 +38,6 @@ from owlbear_delivery_next import (
 from owlbear_delivery_next.briefs import save_brief, save_visual
 from owlbear_delivery_next.inbox import (
     AnswerItem,
-    BriefApproval,
     CheckResult,
     ConsentItem,
     IntentItem,
@@ -106,12 +107,6 @@ class CheckBody(Body):
     passed: bool
     note: str = Field(default="", max_length=2000)
     inputs: str = Field(pattern=r"^[0-9a-f]{64}$")  # the snapshot of the check the page showed
-
-
-class ApproveBody(Body):
-    """Approve one brief version."""
-
-    version: int = Field(ge=1)
 
 
 class ConsentBody(Body):
@@ -253,7 +248,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     ) -> tuple[int, dict[str, Any]]:
         code, out = write(store, body)
         if code == 200:  # noqa: PLR2004 - HTTP OK
-            out["next"] = f"Approve brief v{out['version']} of {out['change']} in the Changes page: {link(host.record)}"
+            out["next"] = (
+                f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
+                f"version {out['version']}); the owner approves it in the Changes page after: {link(host.record)}"
+            )
         return code, out
 
     @app.get("/assets/pds/{name}")
@@ -344,6 +342,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     "approved_at": c.brief.approved_at.isoformat() if c.brief.approved_at else None,
                     "ui": c.brief.ui,
                     "visual": [s.model_dump() for s in c.brief.visual],
+                    "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
                 },
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
@@ -445,20 +444,6 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         item = CheckResult(at=datetime.now(UTC), check=person.id, passed=body.passed, note=body.note, inputs=inputs)
         return put(slug, item)
 
-    @router.post("/changes/{slug}/approve-brief")
-    def approve(slug: str, body: ApproveBody) -> dict[str, str]:
-        brief = read(slug).brief
-        if body.version != brief.version:
-            raise HTTPException(409, f"brief version {body.version} is not the current draft")
-        if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
-            raise HTTPException(
-                409,
-                f"The visual states {', '.join(stepped)} have clicks or typing, which run only on a prepared test copy "
-                "(TD-96); declare the project's preparation options in its settings first, or revise the brief "
-                "without those steps",
-            )
-        return put(slug, BriefApproval(at=datetime.now(UTC), version=body.version))
-
     @router.post("/changes/{slug}/merge-consent")
     def consent(slug: str, body: ConsentBody) -> dict[str, str]:
         merge = offer(read(slug), store.events(slug))
@@ -486,6 +471,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return put(slug, RestartItem(at=datetime.now(UTC)))
 
     router.include_router(config_routes.router(store, host))
+    router.include_router(brief_routes.router(store, read, put, lambda: host.wake.set()))  # noqa: PLW0108 - read late
     router.include_router(backlog_routes.router(store, start_chat))
     router.include_router(memory_routes.router(store))
     router.include_router(pack_routes.router(store, pack or pack_job.Job(store)))

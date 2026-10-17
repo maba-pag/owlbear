@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next import budgets, disputes, evidence, plan_rounds, rebuilds, round_flow
+from owlbear_delivery_next import brief_rounds, budgets, disputes, evidence, plan_rounds, rebuilds, round_flow
 from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, VISUAL_MODEL, kind_of
 from owlbear_delivery_next.inbox import (
     AnswerItem,
@@ -144,34 +144,9 @@ def owner_gated(c: Change) -> bool:
 
 
 def brief_ready(c: Change) -> bool:
-    """Planning starts only from the approved current brief version its challenge judged (J2)."""
+    """Planning starts only from the approved current brief version its challenge loop ended on (TD-249)."""
     b = c.brief
     return b.approved_version == b.version == b.challenged
-
-
-def brief_due(c: Change) -> bool:
-    """The approved current brief version still waits for its challenge."""
-    b = c.brief
-    return b.approved_version == b.version and b.challenged != b.version
-
-
-def brief_challenge(change: Change, verdict: StepResult) -> tuple[Change, StepResult]:
-    """Bind the challenge's verdict to the brief version: pass plans; findings ask the owner to revise or approve."""
-    c = change.model_copy(deep=True)
-    findings = verdict.exit == Exit.BACK or (verdict.exit == Exit.RETRY and verdict.cause is None)
-    if verdict.exit != Exit.DONE and not findings:
-        return c, verdict  # the session failed or asked: counted or answered, then challenged again
-    c.brief.challenged = c.brief.version
-    if not findings:
-        return c, verdict
-    text = f"Brief v{c.brief.version} challenge: {verdict.reason}"
-    options = [
-        Option(id="change", label="Revise the brief in chat", next=StepKind.SHAPE),
-        Option(id="split", label="Split it into smaller Changes in chat", next=StepKind.SHAPE),
-        Option(id="approve", label="Plan from this brief as it is", next="done"),
-    ]
-    question = Question(step=StepKind.SHAPE, text=text, options=options)
-    return c, StepResult(exit=Exit.ASK, reason=text, question=question)
 
 
 def next_step(c: Change, now: datetime) -> Step | None:
@@ -226,7 +201,7 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
     c = change.model_copy(deep=True)
     for item in items:
         match item:
-            case BriefApproval(version=version) if version == c.brief.version:
+            case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
                 c.brief.approved_version, c.brief.approved_at = version, item.at
                 if all(b.version != version for b in c.brief.approved):
                     c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
@@ -296,7 +271,7 @@ def _target(q: Question, option: str | None) -> str | None:
 def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
     gate = bool(q and c.outcome and c.outcome.question == q.id)
-    if q is None or ((q.repair or plan_rounds.owned(q)) and not gate):
+    if q is None or ((q.repair or plan_rounds.owned(q) or brief_rounds.owned(q)) and not gate):
         return  # a round gate or plan question the Change has moved past records nothing, so no session receives it
     if rebuilds.refused(c, q, item.option, item.tasks, (item.attempt, item.head)):
         return  # a final retry's selection the page no longer showed, or tasks where none belong (TD-217)
@@ -354,6 +329,8 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
         round_flow.decided(c, q, target)
     elif plan_rounds.owned(q):  # TD-190: the plan loop's disputes and its last round
         plan_rounds.decided(c, q, target, item.text, item.at)
+    elif brief_rounds.owned(q):  # TD-221: the brief loop's disputes and its last round
+        brief_rounds.decided(c, q, target, item.text, item.at)
     elif (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
         kept = c.visual_rounds[-1] if c.visual_rounds else None
         if kept and kept.outcome == "model":

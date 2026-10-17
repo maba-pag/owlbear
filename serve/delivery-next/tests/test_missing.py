@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next import (
+    brief_rounds,
     budgets,
     loop,
     missing,
@@ -21,13 +22,24 @@ from owlbear_delivery_next import (
 )
 from owlbear_delivery_next.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import Brief, Change, Criterion, Exit, ItemRef, Plan, Step, StepKind, Task
+from owlbear_delivery_next.models import (
+    Brief,
+    Change,
+    Criterion,
+    Exit,
+    ItemRef,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+    Waiting,
+)
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.round_records import RoundPolicy
+from owlbear_delivery_next.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.steps import conversation, plan_round, worktree
+from owlbear_delivery_next.steps import brief_round, conversation, plan_round, worktree
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -177,13 +189,15 @@ def test_a_tool_no_runtime_has_changes_the_work_that_asked_for_it(enclosing, exi
     loop.apply(change(enclosing), r, NOW)  # every case is an exit its step defines
 
 
-def test_a_brief_challenge_without_the_tool_asks_for_a_revised_brief_once() -> None:
+def test_a_brief_challenge_without_the_tool_makes_it_the_rounds_finding_for_the_shaper() -> None:
     r = to_result(run(report("matlab", "matlab: license server unknown")), K.REVIEW, NOW, K.SHAPE)
-    due = change(K.SHAPE).model_copy(update={"brief": Brief(version=1, approved_version=1)})
-    c, asked = loop.brief_challenge(due, r)
-    assert (asked.exit, c.brief.challenged, loop.brief_due(c)) == (Exit.ASK, 1, False)
-    assert "needs matlab" in asked.question.text
-    assert [o.id for o in asked.question.options] == ["change", "split", "approve"]
+    due = change(K.SHAPE).model_copy(update={"brief": Brief(version=1, requested=1)})
+    due.step.mode = brief_rounds.CHALLENGE
+    due.loops["brief"] = RoundLoop(subject="brief", policy=RoundPolicy())
+    assert brief_round.judged(due, r, r.model_copy(), NOW) is None
+    assert (due.loops["brief"].findings[0].text.startswith("the brief needs matlab"), due.outcome.waiting) == (
+        True, Waiting.CHAT
+    )  # fmt: skip
 
 
 def test_the_quota_never_overrides_a_report() -> None:

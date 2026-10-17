@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next import brief_tools, evidence, profile, tool_schema
+from owlbear_delivery_next import brief_rounds, brief_tools, evidence, profile, tool_schema
 from owlbear_delivery_next.models import (
     BriefDecision,
     Change,
@@ -63,8 +63,9 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
         fields = {"id": p.name, "criteria": ids, "steps": p.steps, "expect": p.expect, "visual": p.visual}
         c.checks.append(PersonCheck(**fields, paths=paths, procedure=procedure))
     c.outcome = Outcome(
-        exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"approve brief v{v}", at=datetime.now(UTC)
-    )
+        exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"challenge brief v{v}, then approve it",
+        at=datetime.now(UTC),
+    )  # fmt: skip
     return c
 
 
@@ -127,6 +128,8 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
             old = store.read(slug) if draft.change else None
             if old and (old.step.kind != StepKind.SHAPE or old.finished_at):
                 return 409, {"errors": [f"change: {draft.change} is approved; ask for changes in the Changes page"]}
+            if old and (why := brief_rounds.saving(old)):
+                return 409, {"errors": [f"change: {why}"]}
             if old is None:
                 store.issue(number)  # reserved before the Change file holds it
             c = drafted(old, draft, slug, f"c{number}", store.read_profile() or Profile())

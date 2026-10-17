@@ -12,7 +12,7 @@ from owlbear_delivery_next.evidence import criteria
 from owlbear_delivery_next.failures import cause_key
 from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.moves import ask, go, loop_of, open_task, resolved, subject_of
-from owlbear_delivery_next.round_records import FINAL, PLAN, RECHECK, Completion, RoundLoop
+from owlbear_delivery_next.round_records import BRIEF, FINAL, PLAN, RECHECK, Completion, RoundLoop
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -187,9 +187,9 @@ def replan(c: Change, lp: RoundLoop, reason: str, now: datetime) -> None:
     The new plan's tasks replace the old ones once it is accepted; a merge consent no longer counts.
     """
     old = lp.model_copy(update={"history": [], "ended": "replanned", "rebuild": [], "undo": ""})
-    tasks = [x for k, x in c.loops.items() if k not in {FINAL, PLAN}]
+    tasks = [x for k, x in c.loops.items() if k not in {FINAL, PLAN, BRIEF}]
     history = [*lp.history, old, *tasks]
-    kept = {PLAN: c.loops[PLAN]} if PLAN in c.loops else {}  # the planner's loop counts its own attempts (TD-190)
+    kept = {k: c.loops[k] for k in (PLAN, BRIEF) if k in c.loops}  # the planner's and the brief's own loops
     c.loops = {FINAL: RoundLoop(subject=FINAL, attempt=lp.attempt + 1, policy=lp.policy, history=history), **kept}
     c.consent = None
     go(c, StepKind.PLAN)

@@ -44,10 +44,18 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    (`c3`) to revise. For a UI change then call
    `save_visual_check` with that handle, `ui`, the states and their steps. If either returns
    errors, each names a field: fix those and call again. Never invent a handle.
-8. Tell the owner the returned `next` step: approve the brief version in the Changes page, using the
-   link exactly as given (it carries the page's access token). Nothing starts before that approval.
-9. After approval a reviewer challenges the brief. Its findings come back as a question: revise the
-   brief with the owner (call `save_brief` again with its handle), or answer it to plan as it is.
+8. Once the draft is ready, call `challenge_brief` with the handle and the saved version. A challenger
+   judges that version; the tool waits for its verdict and returns the findings by ID (if it says the
+   challenge still runs, call `show_status` with the handle later: its brief's `challenge` shows them).
+   Judge each finding critically: take the ones that hold and revise the brief with the owner where the
+   choice is his (`save_brief`, Read-Back for changed choices); a finding you judge wrong you reject, by
+   its ID, with your evidence, in the next `challenge_brief` call. A finding marked as the owner's is never
+   rejected. Then ask for the next round the same way. The next challenger judges your rejections; one it
+   does not accept goes to the owner in the Changes page, and nothing can be saved until he decides.
+9. When the challenge says the brief is approvable, tell the owner to approve that version in the Changes
+   page, using the link exactly as given (it carries the page's access token), and name the rejections
+   that stand and a last revision no round reviewed. Nothing starts before that approval; a later save
+   needs one more challenge round.
 
 ## Read-Back
 

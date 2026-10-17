@@ -124,13 +124,13 @@ def challenged(c: Change, task: Task | None) -> bool:
     return c.step.kind == StepKind.REVIEW and loop_of(c, task) is not None
 
 
-def hidden(q: Question, *, challenged: bool, plan: bool = False) -> bool:
+def hidden(q: Question, *, challenged: bool, own: str = "") -> bool:
     """Whether a challenged review leaves out this answer: the owner's decision about review findings.
 
-    A plan challenge leaves out the owner's decisions about plan findings (TD-190).
+    A plan or brief challenge leaves out the owner's decisions about its own loop's findings (*own*, TD-190, TD-221).
     """
     cause = q.cause or ""
-    return (challenged and cause.startswith(FOUND)) or (plan and cause.startswith(PLAN_FOUND))
+    return (challenged and cause.startswith(FOUND)) or (bool(own) and cause.startswith(own))
 
 
 def check(  # noqa: PLR0913 - the result, its tree and the four bounds its fields are checked against

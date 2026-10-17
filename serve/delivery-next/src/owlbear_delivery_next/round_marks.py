@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.round_records import FINAL, PLAN
+from owlbear_delivery_next.round_records import BRIEF, FINAL, PLAN
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change
@@ -88,11 +88,12 @@ def shown(c: Change) -> dict[str, object]:
         for t in plan
     }
     titles = {t.id: t.title for t in c.plan.tasks} if c.plan else {}
-    plan_loop = c.loops.get(PLAN)
+    plan_loop, brief_loop = c.loops.get(PLAN), c.loops.get(BRIEF)
     titles |= (
         {i: f"the plan as revised after challenge round {i[1:]}" for i in plan_loop.unreviewed} if plan_loop else {}
     )
-    loops = [lp for k, lp in c.loops.items() if k in {FINAL, PLAN} or k in tasks]
+    titles |= {i: f"brief {i}, revised after its last challenge" for i in brief_loop.unreviewed} if brief_loop else {}
+    loops = [lp for k, lp in c.loops.items() if k in {FINAL, PLAN, BRIEF} or k in tasks]
     unreviewed = [{"id": i, "title": titles.get(i, ""), "loop": lp.subject} for lp in loops for i in lp.unreviewed]
     standing = [
         {"loop": lp.subject} | _finding(f, kind(lp, f))
@@ -105,6 +106,7 @@ def shown(c: Change) -> dict[str, object]:
         "final": rounds(final, final.findings) if final else [],
         "attempt": final.attempt if final else 0,
         "plan": rounds(plan_loop, plan_loop.findings) if plan_loop else [],  # the plan challenge's (TD-190)
+        "brief": rounds(brief_loop, brief_loop.findings) if brief_loop else [],  # the brief challenge's (TD-221)
         "unreviewed": unreviewed,
         "standing": standing,
     }

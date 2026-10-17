@@ -41,7 +41,7 @@ def change() -> m.Change:
         m.BriefDecision(question="Animation length", answer="250 ms ease-out", origin="autonomous"),
     ]
     brief = m.Brief(
-        version=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.",
+        version=2, challenged=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.",
         criteria=[m.Criterion(id="AC-1", text=MINE), m.Criterion(id="AC-2", text=LEFT_TO_SHAPER)],
         visual=[m.VisualState(name="flipped", path="/", expect="The hero faces left")], ui=True,
         decisions=decisions, non_goals=["Saving the direction"], specified=["AC-1"],

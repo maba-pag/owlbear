@@ -26,14 +26,15 @@ SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research 
     *("task", "read_agent", "list_agents", "write_agent"),
 }
 MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
-CHAT_TOOLS = {"save_brief", "save_visual_check", "show_status", "answer_question"}  # the owner chat's server
+CHAT_TOOLS = {"save_brief", "save_visual_check", "challenge_brief", "show_status", "answer_question"}  # owner chat
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
 VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN}
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
     *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
-    *(f"{setup.SERVER}/{name}" for name in ("save_brief", "save_visual_check", "show_status", "answer_question")),
+    *(f"{setup.SERVER}/{name}" for name in ("save_brief", "save_visual_check", "challenge_brief", "show_status")),
+    f"{setup.SERVER}/answer_question",
 ]
 VERBS = "submit|report|ask|recall|save|assess|scan|read|list|write|stop"
 LOOKALIKE = re.compile(rf"(?:{VERBS})_[a-z_]+|[a-z_]+_(?:bash|agents?|memory|memories)")  # unknown: a tool typo
