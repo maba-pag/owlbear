@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import itertools
 import json
@@ -81,7 +82,13 @@ class Connection:
         threading.Thread(target=self._read, daemon=True).start()
 
     def close(self) -> None:
-        """Close the socket; the reader thread ends with a ``closed`` event."""
+        """Close the socket; the reader thread ends with a ``closed`` event.
+
+        Shut down first: on Linux a bare close leaves the reader's blocked recv holding the socket open, so the host
+        would not see the close until that read timed out.
+        """
+        with contextlib.suppress(OSError):
+            self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
 
     def reopen(self, github_token: str) -> Connection:

@@ -41,6 +41,8 @@ _MCP_SERVER_MODULES: dict[str, tuple[str, str]] = {
     "owlbear-memory": ("owlbear_memory_mcp.server", "mcp"),
 }
 _EXTERNAL_MCP_SERVERS = frozenset({"markitdown"})
+# TD-183 Q3: no workspace registers the old Delivery server; its agents' grants stay checked until TD-199 deletes them.
+_UNREGISTERED_MCP_SERVERS = frozenset({"owlbear-delivery"})
 _DEFAULT_MCP_SERVERS: frozenset[str] = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
 
 # Canonical VS Code built-in toolset prefixes.
@@ -175,9 +177,9 @@ def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]:
     if active_path.is_file():
         active, active_errors = _read_mcp_config(active_path)
         errors.extend(active_errors)
-        if not active_errors and active != canonical:
+        if not active_errors and (active - canonical or canonical - active - _EXTERNAL_MCP_SERVERS):
             errors.append(
-                f"{active_path}: MCP server names differ from {_CANONICAL_MCP_CONFIG}: "
+                f"{active_path}: MCP server names differ from {_CANONICAL_MCP_CONFIG} beyond external servers: "
                 f"expected={sorted(canonical)}, actual={sorted(active)}"
             )
     return canonical, errors
@@ -187,7 +189,7 @@ def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]:
     """Validate MCP configuration keys against enumerable and external servers."""
     configured, errors = _configured_mcp_servers()
     if configured:
-        expected = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
+        expected = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS}) - _UNREGISTERED_MCP_SERVERS
         missing = sorted(expected - configured)
         unexpected = sorted(configured - expected)
         if missing:
@@ -474,6 +476,7 @@ def _check_tool_search_queries() -> list[str]:
 def _check_mcp_surface(agent_files: list[Path]) -> tuple[frozenset[str], list[str]]:
     """Validate configuration, live grants, and explicit MCP bootstrap queries."""
     configured_servers, errors = _validate_mcp_configuration()
+    configured_servers |= _UNREGISTERED_MCP_SERVERS
     errors.extend(_check_tool_search_queries())
     try:
         registries = _load_live_mcp_tool_registries()

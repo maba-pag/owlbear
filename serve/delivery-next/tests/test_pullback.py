@@ -756,7 +756,7 @@ def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, m
 )
 def test_local_attribute_files_over_changed_paths_keep_the_target_behind(repos, attrs, staged, behind):
     repo, other = repos
-    if attrs == ".GITATTRIBUTES" and git(repo, "config", "--bool", "core.ignorecase") != "true":
+    if attrs == ".GITATTRIBUTES" and git(repo, "config", "--bool", "--default", "false", "core.ignorecase") != "true":
         pytest.skip("the file system is case-sensitive")
     (repo / attrs).parent.mkdir(exist_ok=True)
     (repo / attrs).write_text("*.txt eol=crlf\n")

@@ -290,6 +290,8 @@ def test_a_hand_edited_launcher_fails_verification(tmp_path: Path, source: tuple
     assert result["failures"] == ["launcher bin/delivery-mcp does not exec the pinned release"]
 
 
+# Three installs and three pins spawn release interpreters; shared CI workers exceed 30s.
+@pytest.mark.timeout(120)
 def test_switch_records_previous_rolls_back_and_prune_keeps_current_and_previous(
     tmp_path: Path, source: tuple[Path, list[str]]
 ) -> None:

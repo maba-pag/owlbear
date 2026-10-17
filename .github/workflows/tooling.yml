@@ -159,7 +159,7 @@ jobs:
 
       - name: Validate GitHub Actions workflows
         if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.workflows == 'true'
-        run: uv run pre-commit run actionlint --all-files
+        run: uv run pre-commit run actionlint --hook-stage manual --all-files
 
       - name: Setup Node.js
         if: >-
