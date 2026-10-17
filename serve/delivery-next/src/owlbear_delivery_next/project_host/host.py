@@ -19,23 +19,23 @@ from typing import TYPE_CHECKING
 import psutil
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import failures, tools
+from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     ErrorKind,
     Exit,
-    Recipe,
     Record,
     StepKind,
     Stop,
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system import codebase, data_repo, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.project_host import environment
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
@@ -292,9 +292,9 @@ class Host:
             c = self._folded(lock, slug, rec, now, paused=paused)
             if paused:
                 return self._ended(lock, c, rec, now)
-            act = self._env_action(c)
+            act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
-                if (left := self._clear(c, c.env)) is None or left:
+                if (left := self.clear(c, c.env)) is None or left:
                     return self._blocked(lock, c, left, now)
                 c = check.settle(c, now, check.declared(c)) if act == "settle" else c
                 c.env = None
@@ -305,7 +305,7 @@ class Host:
                     return False
                 step = loop.next_step(c, now)
             if c.env:
-                c = self._environment(lock, c, now)
+                c = environment.launch(self, lock, c, now)
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
@@ -351,14 +351,15 @@ class Host:
         self.say(f"{c.slug}: pull-back {c.pullback.state} {c.pullback.reason}".rstrip())
         return c
 
-    def _mark(self, c: Change, found: Found | None, now: datetime) -> None:
+    def mark(self, c: Change, found: Found | None, now: datetime) -> None:
+        """Record why no writer starts: processes of the last step remain, or could not be looked for."""
         stop = _block(found, now)
         if not (c.blocked and c.blocked.reason == stop.reason):
             c.blocked = stop
             self.say(f"{c.slug}: no writer starts: {stop.reason}")
 
     def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool:
-        self._mark(c, found, now)
+        self.mark(c, found, now)
         self.store.write(lock, c)
         return False
 
@@ -383,13 +384,14 @@ class Host:
             return None
         return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
-    def _env_action(self, c: Change) -> check.Action | None:
+    def env_action(self, c: Change) -> check.Action | None:
+        """What the check environment needs now: launch, dispose or settle; None to leave it."""
         e = c.env
         person = next((p for p in c.checks if e and p.id == e.check), None)
         live = bool(e and e.pids) and all(self.alive(p, t) is not False for p, t in e.pids.items())
         return check.action(c, live=live, paths=check.fingerprints(c, person) if person else {})
 
-    def _clear(self, c: Change, e: Environment) -> Found | None:
+    def clear(self, c: Change, e: Environment) -> Found | None:
         """Dispose of all the environment may have started; an uncertain launch is found by the worktree scan."""
         if e.launched_at and e.pgid is None and c.names.worktree:
             try:
@@ -398,48 +400,6 @@ class Host:
                 return None
             e = e.model_copy(update={"pids": e.pids | {p: check.created(p) for p in found}})
         return check.dispose(e)
-
-    def _environment(self, lock: Lock, c: Change, now: datetime) -> Change:
-        """Launch the check environment after the preparing Builder is gone; pending once it answers."""
-        e = c.env
-        if e is None or self._env_action(c) != "launch" or before.due(c) or prepare.due(self.store, c):
-            return c  # the runner renders the "before" states, then prepares the test copy (TD-24, TD-96)
-        if (left := self._clear(c, e)) is None or left:
-            self._mark(c, left, now)  # never a second group beside one that may still run
-            return c
-        root = Path(c.names.worktree)
-        recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
-        errors = tools.check_recipe(recipe, tools.Worktree("", ""), root)
-        if (env := prepare.environ(self.store, c)) is None:  # the test copy's explicit environment (TD-96)
-            errors.append("the check has no test preparation; nothing launches without one")
-        if errors:
-            c.env = c.recipe = None
-            self.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
-            return loop.apply(c, check.failed("; ".join(errors)), now)
-        c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
-        self.store.write(lock, c)
-        log = self.store.root / "changes" / c.slug / "env.log"
-        if proc := check.start(e, root, log, env):
-            c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
-            self.store.write(lock, c)
-        pids = check.ready(e, proc) if proc else None
-        if pids is None:
-            if (left := self._clear(c, e)) is None or left:
-                self._mark(c, left, now)
-                return c
-            c.env = c.recipe = None
-            self.say(f"{c.slug}: check environment failed: no answer at {e.ready_url}")
-            return loop.apply(c, check.failed(f"no answer at {e.ready_url}"), now)
-        c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})
-        c.recipe = Recipe(
-            check=e.check,
-            command=e.command,
-            directory=e.directory,
-            ready_url=e.ready_url,
-            inputs=worktree.launch_inputs(root, e.directory),
-        )
-        self.say(f"{c.slug}: check environment ready at {e.ready_url}, group {e.pgid}, PIDs {sorted(pids)}")
-        return loop.apply(c, check.pending(c, c.env), now)
 
     def _stale(self) -> bool:
         """Whether the package differs from what this host loaded, or cannot be read; checked again on every launch."""
