@@ -2,11 +2,16 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next import budgets, evidence, failures, loop, session_result
-from owlbear_delivery_next.github import merge_offer
-from owlbear_delivery_next.inbox import AnswerItem, BriefApproval, CheckResult, ConsentItem, IntentItem, Recovery
-from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import evidence, failures
+from owlbear_delivery_next.change_contracts.inbox import (
+    AnswerItem,
+    BriefApproval,
+    CheckResult,
+    ConsentItem,
+    IntentItem,
+    Recovery,
+)
+from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
     Budget,
@@ -27,7 +32,11 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.session_result import Run
+from owlbear_delivery_next.change_flow import budgets, loop
+from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.github import merge_offer
+from owlbear_delivery_next.runtimes import session_result
+from owlbear_delivery_next.runtimes.session_result import Run
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 LATER = NOW + timedelta(hours=1)

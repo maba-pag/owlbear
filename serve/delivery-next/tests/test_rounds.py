@@ -8,14 +8,16 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from owlbear_delivery_next import api, disputes, rounds
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.config import Agent, FinalReview, GlobalLayer, Layer, resolve
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.models import Brief, Change, Task
-from owlbear_delivery_next.round_records import RoundLoop, RoundPolicy, parse
-from owlbear_delivery_next.steps import review
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Task
+from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy, parse
+from owlbear_delivery_next.change_flow import disputes
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.settings import rounds
+from owlbear_delivery_next.settings.config import Agent, FinalReview, GlobalLayer, Layer, resolve
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import review
 
 AUTH = {"authorization": "Bearer t"}
 

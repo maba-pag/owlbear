@@ -7,29 +7,33 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import (
-    api,
-    brief_rounds,
-    brief_tools,
-    briefs,
-    loop,
-    mcp_server,
-    plan_rounds,
-    prompts,
-    runner,
-    tools,
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
+    Answer,
+    Brief,
+    Change,
+    Exit,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+    Waiting,
 )
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.dispute_tools import ReconsiderResult
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import Answer, Brief, Change, Exit, Plan, Step, StepKind, Task, Waiting
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.round_records import BRIEF, RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import mcp_server, runner
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 18, 4, tzinfo=UTC)
 K = StepKind
@@ -336,4 +340,4 @@ def test_the_brief_challenger_never_sees_the_owners_brief_decisions():
     q = brief_rounds.question(lp, f).model_copy(update={"id": "q1"})
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
-    assert "secret finding" not in prompts.brief_challenge(c, Path("/w"))
+    assert "secret finding" not in step_input.brief_challenge(c, Path("/w"))

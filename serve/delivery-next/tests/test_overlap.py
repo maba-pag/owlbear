@@ -3,12 +3,23 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next import loop, overlap
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import Brief, Change, Exit, Overlap, Plan, Question, Step, StepKind, Task
-from owlbear_delivery_next.status import Activity, card
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Exit,
+    Overlap,
+    Plan,
+    Question,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.change_flow.status import Activity, card
+from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import overlap
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind

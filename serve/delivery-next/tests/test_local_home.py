@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_delivery_next import cli, data_repo, design_pack, local_home, pack_update
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.design_packs import design_pack, pack_update
+from owlbear_delivery_next.local_system import data_repo, local_home
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -58,7 +60,7 @@ def test_an_offline_check_records_its_notice_there(machine) -> None:
 
 def test_a_process_a_test_starts_never_reaches_the_machines_folder(machine_home) -> None:
     """A test once let child processes claim folders in the owner's real shared data repository and push them."""
-    code = "from owlbear_delivery_next import local_home; print(local_home.root())"
+    code = "from owlbear_delivery_next.local_system import local_home; print(local_home.root())"
     child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
     assert child.stdout.strip() == str(local_home.root())
     assert not child.stdout.startswith(str(machine_home))

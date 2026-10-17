@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, budgets, dispute_tools, disputes, loop, runner, sdk_adapter, tools
-from owlbear_delivery_next.failures import cause_key
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import dispute_tools, tools
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Dispute,
@@ -24,14 +24,18 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.moves import ask
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.results import ACCEPTED, Gate
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import reconsider, review
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_flow import budgets, disputes, loop
+from owlbear_delivery_next.change_flow.moves import ask
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import reconsider, review
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)

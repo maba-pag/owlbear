@@ -6,13 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import config, sdk_adapter, session_result, sessions
-from owlbear_delivery_next.models import Brief, Change, ErrorKind, Exit, StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.tools import Worktree
+from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKind, Exit, StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import sessions
 
 PLANNER, HELPER = "claude-opus-5.5", "claude-haiku-5.5"
 

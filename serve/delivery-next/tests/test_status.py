@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts.models import (
     Change,
     ErrorKind,
     Exit,
@@ -17,8 +17,8 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.spend import ModelSpend, Spend
-from owlbear_delivery_next.status import Activity, Status, card, status
+from owlbear_delivery_next.change_contracts.spend import ModelSpend, Spend
+from owlbear_delivery_next.change_flow.status import Activity, Status, card, status
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PLAN = Plan(tasks=[Task(id="t1", title="parser"), Task(id="t2", title="rate limiter")])

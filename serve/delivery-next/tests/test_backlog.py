@@ -6,12 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import backlog as backlog_module
-from owlbear_delivery_next import backlog_migrate, cli, local_home
-from owlbear_delivery_next.backlog import Backlog, BacklogError
-from owlbear_delivery_next.backlog_issues import Issues
-from owlbear_delivery_next.data_repo import DataRepo
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.state_store import backlog as backlog_module
+from owlbear_delivery_next.state_store import backlog_migrate
+from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
+from owlbear_delivery_next.state_store.backlog_issues import Issues
+from owlbear_delivery_next.state_store.store import Store
 
 T0 = datetime(2026, 10, 14, 8, tzinfo=UTC)
 

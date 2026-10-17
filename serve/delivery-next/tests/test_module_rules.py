@@ -8,8 +8,9 @@ from typing import Any
 
 import pytest
 
-from owlbear_delivery_next import mcp_server, tools
-from owlbear_delivery_next.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next.commands import mcp_server
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
 LIMIT = 500

@@ -14,27 +14,20 @@ import psutil
 import pytest
 from mcp import Client, StdioServerParameters
 
-from owlbear_delivery_next import (
-    ahp,
-    cli,
-    leftovers,
-    profile_record,
-    sdk_adapter,
-    sessions,
-    step_mcp,
-    tools,
-    vscode_adapter,
-)
-from owlbear_delivery_next import window_files as wf
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.process_probe import WorktreeProcessScanError
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.results import ACCEPTED_WINDOW, Gate
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.step_inbox import Inbox
-from owlbear_delivery_next.store import Store
-from owlbear_delivery_next.tools import Worktree
+from owlbear_delivery_next.change_contracts import profile_record, tools
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.commands import cli, step_mcp
+from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScanError
+from owlbear_delivery_next.runtimes import ahp, leftovers, sdk_adapter, vscode_adapter
+from owlbear_delivery_next.runtimes import window_files as wf
+from owlbear_delivery_next.runtimes.results import ACCEPTED_WINDOW, Gate
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.runtimes.step_inbox import Inbox
+from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import sessions
 
 HEAD, BASE = "a" * 40, "b" * 40
 GOOD = {"summary": "Added greet().", "changed_paths": ["src/greet.ts"], "checks": []}
@@ -195,7 +188,9 @@ def test_the_inbox_serves_only_with_its_token_and_vanishes_with_the_step(tmp_pat
 def test_the_harness_reaches_the_step_through_the_stdio_relay(tmp_path: Path) -> None:
     g, path = gate(), tmp_path / "steps" / "two.json"
     params = StdioServerParameters(
-        command=sys.executable, args=["-m", "owlbear_delivery_next.step_mcp", "--inbox", str(path)], cwd=str(tmp_path)
+        command=sys.executable,
+        args=["-m", "owlbear_delivery_next", "step-mcp", "--inbox", str(path)],
+        cwd=str(tmp_path),
     )
 
     async def talk() -> tuple[list[str], object, object]:
@@ -215,7 +210,7 @@ def test_the_harness_reaches_the_step_through_the_stdio_relay(tmp_path: Path) ->
 
 def test_a_relay_without_a_step_offers_nothing(tmp_path: Path) -> None:
     params = StdioServerParameters(
-        command=sys.executable, args=["-m", "owlbear_delivery_next.step_mcp", "--inbox", str(tmp_path / "gone.json")]
+        command=sys.executable, args=["-m", "owlbear_delivery_next", "step-mcp", "--inbox", str(tmp_path / "gone.json")]
     )
 
     async def talk() -> tuple[list, object]:

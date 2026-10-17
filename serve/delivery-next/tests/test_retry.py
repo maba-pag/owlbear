@@ -1,10 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
-from owlbear_delivery_next import budgets, failures, loop, session_result
-from owlbear_delivery_next.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import failures
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Criterion,
@@ -17,9 +15,13 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.spend import Spend
-from owlbear_delivery_next.status import Activity, card, status
+from owlbear_delivery_next.change_contracts.spend import Spend
+from owlbear_delivery_next.change_flow import budgets, loop
+from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
+from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.change_flow.status import Activity, card, status
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import session_result
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind

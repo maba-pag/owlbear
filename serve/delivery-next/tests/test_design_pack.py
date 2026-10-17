@@ -9,9 +9,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import design_pack, detector, local_home, preload, sdk_adapter
-from owlbear_delivery_next import window_files as wf
-from owlbear_delivery_next.models import StepKind
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.design_packs import design_pack, detector
+from owlbear_delivery_next.local_system import local_home, preload
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import window_files as wf
 
 ENGINE_JSON = [
     {"antipattern": "side-tab", "category": "slop", "severity": "warning", "name": "Side-tab", "file": "a.html",

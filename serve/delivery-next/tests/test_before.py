@@ -10,8 +10,7 @@ import psutil
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, runner
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
     Change,
@@ -23,12 +22,14 @@ from owlbear_delivery_next.models import (
     Task,
     VisualState,
 )
-from owlbear_delivery_next.preparation import Preparation
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import before, check, prepare, visual
-from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.visual_records import PageError
+from owlbear_delivery_next.change_contracts.preparation import Preparation
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.visual_records import PageError
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import before, check, prepare, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")

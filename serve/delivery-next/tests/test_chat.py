@@ -11,17 +11,22 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, briefs, loop, prompts, readiness, setup, tool_schema, tools
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.config import Agent, Layer, resolve
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.mcp_server import NOT_RUNNING, Chat
-from owlbear_delivery_next.models import Change, Exit, Option, Outcome, Question, StepKind
-from owlbear_delivery_next.preparation import Preparation
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.store import Store
-from owlbear_delivery_next.vscode_contract import Outcome as Outcome_
+from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts.models import Change, Exit, Option, Outcome, Question, StepKind
+from owlbear_delivery_next.change_contracts.preparation import Preparation
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import setup
+from owlbear_delivery_next.commands.mcp_server import NOT_RUNNING, Chat
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import readiness, step_input
+from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
+from owlbear_delivery_next.settings.config import Agent, Layer, resolve
+from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 BRIEF = {
@@ -134,8 +139,8 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     brief = change.brief
     assert (brief.version, brief.non_goals) == (2, ["No translations"])
     assert [d.model_dump() for d in brief.decisions] == DECIDED
-    shown = [prompts.plan(change, Profile(), Path("/w"), {}), prompts.brief_challenge(change, Path("/w"))]
-    for text in [*shown, "\n".join(prompts.brief(change))]:  # planner, challenger, reviewers
+    shown = [step_input.plan(change, Profile(), Path("/w"), {}), step_input.brief_challenge(change, Path("/w"))]
+    for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
         assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
     read_back = Chat(repo).show_status("c1")["brief"]
@@ -153,7 +158,7 @@ def test_a_saved_decision_reaches_the_workers_whole(repo):
     assert client(store).post("/api/next/briefs", json={**BRIEF, "decisions": decided}).status_code == 200
     change = store.read(store.slugs()[0])
 
-    for text in (prompts.plan(change, Profile(), Path("/w"), {}), "\n".join(prompts.brief(change))):
+    for text in (step_input.plan(change, Profile(), Path("/w"), {}), "\n".join(step_input.brief(change))):
         assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
 
 

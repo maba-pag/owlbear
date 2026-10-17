@@ -7,16 +7,20 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import design_tools, preload, roles, sdk_adapter, sessions, tools, window_files
-from owlbear_delivery_next.config import Layer, resolve
-from owlbear_delivery_next.models import Brief, Change, Exit, Step, StepKind, VisualState
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.results import ACCEPTED, Gate
-from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.steps import disposable, judges
-from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Step, StepKind, VisualState
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan
+from owlbear_delivery_next.design_packs import design_tools
+from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter, window_files
+from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
+from owlbear_delivery_next.runtimes.session_result import Run, to_result
+from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings.config import Layer, resolve
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import disposable, judges, sessions
 
 IMAGES = ("home-1280-A.png", "home-1280-B.png", "about-1280-A.png")
 

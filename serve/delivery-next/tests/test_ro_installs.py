@@ -5,14 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import sdk_adapter, sessions, tools
-from owlbear_delivery_next.models import Brief, Change, Step, StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import ro_installs
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import ro_installs, sessions
 
 INSTALL = "sh -c 'mkdir -p node_modules && echo x >> node_modules/count'"
 

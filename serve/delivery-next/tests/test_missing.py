@@ -6,23 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import (
-    brief_rounds,
-    budgets,
-    loop,
-    missing,
-    permissions,
-    plan_rounds,
-    profile_record,
-    prompts,
-    runner,
-    sdk_adapter,
-    tools,
-    window_files,
-)
-from owlbear_delivery_next.inbox import AnswerItem, IntentItem
-from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import permissions, profile_record, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
+from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Criterion,
@@ -34,12 +20,16 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.round_records import RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.steps import brief_round, conversation, plan_round, worktree
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input, window_files
+from owlbear_delivery_next.runtimes.session_result import Run, to_result
+from owlbear_delivery_next.workflow_steps import brief_round, conversation, plan_round
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -222,7 +212,7 @@ def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premi
 def test_the_planner_reads_why_the_change_is_planned_again() -> None:
     c = loop.apply(change(), to_result(run(report("matlab", "license server unknown")), K.BUILD, NOW), NOW)
     assert c.step.kind == K.PLAN
-    text = prompts.plan(c, Profile(), Path("/w"), {})
+    text = step_input.plan(c, Profile(), Path("/w"), {})
     assert "## Why the Change is planned again" in text
     assert "needs matlab for run the integration tests" in text
 
@@ -343,7 +333,7 @@ def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> Non
 
 
 def test_prompts_and_window_note_name_the_report() -> None:
-    assert "report_missing_tool" in prompts.FINISH
-    assert "report_missing_tool" in prompts.reminder("builder")
+    assert "report_missing_tool" in step_input.FINISH
+    assert "report_missing_tool" in step_input.reminder("builder")
     assert "report_missing_tool" in window_files.tools_note("builder")
-    assert "something you need is missing" not in prompts.FINISH
+    assert "something you need is missing" not in step_input.FINISH

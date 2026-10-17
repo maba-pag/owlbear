@@ -5,13 +5,14 @@ import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from owlbear_delivery_next import sdk_adapter, sdk_usage, sessions, subagents, vscode_adapter
-from owlbear_delivery_next.models import Exit, StepKind
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.results import Gate
-from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.spend import ModelSpend, Spend
-from owlbear_delivery_next.vscode_contract import Outcome
+from owlbear_delivery_next.change_contracts.models import Exit, StepKind
+from owlbear_delivery_next.change_contracts.spend import ModelSpend, Spend
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter, sdk_usage, subagents, vscode_adapter
+from owlbear_delivery_next.runtimes.results import Gate
+from owlbear_delivery_next.runtimes.session_result import Run, to_result
+from owlbear_delivery_next.runtimes.vscode_contract import Outcome
+from owlbear_delivery_next.workflow_steps import sessions
 
 NOW = datetime(2026, 10, 15, 2, tzinfo=UTC)
 MODEL = "gpt-6-luna"

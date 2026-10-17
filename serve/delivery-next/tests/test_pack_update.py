@@ -11,24 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import (
-    calibration,
-    cli,
-    config_routes,
-    design_pack,
-    design_tools,
-    detector,
-    local_home,
-    pack_candidate,
-    pack_replay,
-    pack_update,
-    preload,
-    readiness,
-)
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.store import Store
-from owlbear_delivery_next.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
+from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
+from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.design_packs import calibration, design_pack, design_tools, detector, pack_update
+from owlbear_delivery_next.local_system import local_home, preload
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.pack_runs import pack_candidate, pack_replay
+from owlbear_delivery_next.project_host import config_routes
+from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
 

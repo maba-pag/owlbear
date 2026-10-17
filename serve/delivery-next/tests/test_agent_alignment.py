@@ -10,13 +10,18 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import mcp_server, preload, prompts, readiness, roles, sdk_adapter, sessions, setup, tools
-from owlbear_delivery_next import window_files as wf
-from owlbear_delivery_next.config import Layer, resolve
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.results import Gate
-from owlbear_delivery_next.session_result import Run
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.commands import mcp_server, setup
+from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.runtimes import readiness, sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import window_files as wf
+from owlbear_delivery_next.runtimes.results import Gate
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings.config import Layer, resolve
+from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = ("builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater")
 PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
@@ -131,12 +136,12 @@ def test_judges_are_never_offered_or_told_of_a_question() -> None:
             role
         )  # the updater's stops are the job's
         assert (tools.ASK.name in wf.tools_note(role)) == asks
-        assert (tools.ASK.name in prompts.reminder(role)) == asks
+        assert (tools.ASK.name in step_input.reminder(role)) == asks
     for label in tools.VERDICTS:
         role = roles.SESSIONS[label]
         assert tools.ASK.name not in tools.results(role, judging=True), label
         assert tools.ASK.name not in wf.tools_note(role, judging=True)
-        assert tools.ASK.name not in prompts.reminder(role, judging=True)
+        assert tools.ASK.name not in step_input.reminder(role, judging=True)
 
 
 def test_a_misaligned_agent_fails_naming_the_unexplained_grant_and_the_prose_only_tool() -> None:
@@ -211,7 +216,7 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
     assert (tools.ASK.name in offered) == (tools.ASK.name in opts["custom_agents"][0]["tools"]) == asks
     window = wf.agent(role, INBOX, tmp_path, judging=cfg.judging)(None)
     granted_there, note = window.split("tools: [", 1)[1].split("]", 1)[0], window.rsplit("\n\n", 1)[1]
-    reminder = prompts.reminder(role, judging=cfg.judging)
+    reminder = step_input.reminder(role, judging=cfg.judging)
     assert (tools.ASK.name in granted_there) == (tools.ASK.name in note) == (tools.ASK.name in reminder) == asks
     assert wf.agent_path(sdk_adapter.role_of(cfg)) == f".github/agents/owlbear-{role}.agent.md"
 

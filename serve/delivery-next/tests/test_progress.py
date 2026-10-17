@@ -5,10 +5,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, budgets
-from owlbear_delivery_next.failures import cause_key
-from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
     Change,
@@ -21,11 +19,14 @@ from owlbear_delivery_next.models import (
     Task,
     VisualState,
 )
-from owlbear_delivery_next.progress import progress
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import decision
-from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.visual_records import VisualRound
+from owlbear_delivery_next.change_contracts.visual_records import VisualRound
+from owlbear_delivery_next.change_flow import budgets
+from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.change_flow.progress import progress
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import decision
 
 NOW = datetime(2026, 10, 15, 12, tzinfo=UTC)
 FOUR = [Task(id=f"t{i}", title=f"part {i}", scope=[f"src/{i}"], done=i == 1) for i in range(1, 5)]

@@ -14,12 +14,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import lint, sdk_adapter, tools
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.results import ACCEPTED, ENDED, Gate
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.local_system import lint
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
+from owlbear_delivery_next.runtimes.session_result import Run
 
 RUFF = '[tool.ruff]\nline-length = 100\n\n[tool.ruff.lint]\nselect = ["F"]\n'
 

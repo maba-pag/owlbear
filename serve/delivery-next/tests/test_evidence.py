@@ -3,11 +3,23 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import evidence, sdk_adapter, tools
-from owlbear_delivery_next.mask import redact
-from owlbear_delivery_next.models import Brief, Change, Criterion, Inputs, Names, PersonCheck, Review, Step, StepKind
-from owlbear_delivery_next.sdk_adapter import NOW_LIMIT, Journal, summary
-from owlbear_delivery_next.steps import check, publish, worktree
+from owlbear_delivery_next.change_contracts import evidence, tools
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Criterion,
+    Inputs,
+    Names,
+    PersonCheck,
+    Review,
+    Step,
+    StepKind,
+)
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.local_system.mask import redact
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.sdk_adapter import NOW_LIMIT, Journal, summary
+from owlbear_delivery_next.workflow_steps import check, publish
 
 
 def git(cwd, *args):

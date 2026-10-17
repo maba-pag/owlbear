@@ -11,12 +11,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import brief_tools, briefs, loop
-from owlbear_delivery_next.inbox import BriefApproval
-from owlbear_delivery_next.models import Change, Exit, StepKind, VisualState, VisualStep
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.steps import before, browse, prepare, visual
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.change_contracts.inbox import BriefApproval
+from owlbear_delivery_next.change_contracts.models import Change, Exit, StepKind, VisualState, VisualStep
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_flow import brief_tools, loop
+from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import before, browse, prepare, visual
 
 NOW = datetime(2026, 10, 13, 6, tzinfo=UTC)
 SEARCH = {"name": "search", "path": "/", "expect": "The results list shows Ada"}

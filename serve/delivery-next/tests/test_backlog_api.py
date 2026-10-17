@@ -7,13 +7,13 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, backlog_routes
-from owlbear_delivery_next.backlog import Backlog
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.data_repo import DataRepo
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.models import Change
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.change_contracts.models import Change
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.project_host import api, backlog_routes
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store.backlog import Backlog
+from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
 

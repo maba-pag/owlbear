@@ -5,12 +5,13 @@ import threading
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import profile_share, roles
-from owlbear_delivery_next import store as store_mod
-from owlbear_delivery_next.config import Agent, GlobalLayer, Layer, resolve
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.profile_record import RoleModel
-from owlbear_delivery_next.store import Store, StoreError, read_layer, update_layer
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
+from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store import store as store_mod
+from owlbear_delivery_next.state_store.store import Store, StoreError, read_layer, update_layer
 
 
 @pytest.fixture

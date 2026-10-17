@@ -14,16 +14,17 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import ahp, readiness, sdk_adapter, session_result, step_mcp, vscode_adapter
-from owlbear_delivery_next.ahp import HostError
-from owlbear_delivery_next.config import Layer, resolve
-from owlbear_delivery_next.models import Exit, StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.tools import Worktree
-from owlbear_delivery_next.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall
-from owlbear_delivery_next.vscode_step import ACK, Step
-from owlbear_delivery_next.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
+from owlbear_delivery_next.change_contracts.models import Exit, StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.commands import step_mcp
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import ahp, readiness, sdk_adapter, session_result, vscode_adapter
+from owlbear_delivery_next.runtimes.ahp import HostError
+from owlbear_delivery_next.runtimes.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall
+from owlbear_delivery_next.runtimes.vscode_step import ACK, Step
+from owlbear_delivery_next.runtimes.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
+from owlbear_delivery_next.settings.config import Layer, resolve
 
 MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agent.md"
 

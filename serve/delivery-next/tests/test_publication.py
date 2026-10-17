@@ -6,26 +6,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, budgets, evidence, failures, loop, processes, profile, runner, tool_schema, tools
-from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
-from owlbear_delivery_next.github import merge_offer
-from owlbear_delivery_next.github.gh import GhProvider
-from owlbear_delivery_next.github.provider import (
-    Check,
-    ConversationItem,
-    FailureCode,
-    MergeResult,
-    MergeStatus,
-    ProviderError,
-    PullRequest,
-    Refusal,
-    Rules,
-    ThreadComment,
-    classify_checks,
-    merge_request_body,
-)
-from owlbear_delivery_next.inbox import AnswerItem, ConsentItem
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import evidence, failures, tool_schema, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem
+from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
     Change,
@@ -46,11 +29,34 @@ from owlbear_delivery_next.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.readiness import Check as SetupCheck
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import (
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import budgets, loop, worktree
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
+from owlbear_delivery_next.github import merge_offer
+from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.github.provider import (
+    Check,
+    ConversationItem,
+    FailureCode,
+    MergeResult,
+    MergeStatus,
+    ProviderError,
+    PullRequest,
+    Refusal,
+    Rules,
+    ThreadComment,
+    classify_checks,
+    merge_request_body,
+)
+from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.state_store.store import Lock, SharedError, Store
+from owlbear_delivery_next.workflow_steps import (
     check,
     cleanup,
     conversation,
@@ -60,9 +66,7 @@ from owlbear_delivery_next.steps import (
     merge,
     publish,
     review,
-    worktree,
 )
-from owlbear_delivery_next.store import Lock, SharedError, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 A, B = "681d75b8f76e8c9a53053a9054812a449926e2aa", "b" * 40  # A: the clone fixture's base commit (fixed dates)

@@ -8,15 +8,29 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import briefs, cli, loop, profile_record, runner, sdk_adapter, sessions, tools
-from owlbear_delivery_next.git_files import git_common_dir
-from owlbear_delivery_next.models import Brief, Change, ErrorKind, Exit, Names, Plan, Step, StepKind, Task
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import disposable, worktree
-from owlbear_delivery_next.store import Lock, Store, StoreError
+from owlbear_delivery_next.change_contracts import profile_record, tools
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    ErrorKind,
+    Exit,
+    Names,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.commands import cli, runner
+from owlbear_delivery_next.local_system.git_files import git_common_dir
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
+from owlbear_delivery_next.workflow_steps import disposable, sessions
 
 K = StepKind
 VOIDED = "policy:review:read-only-write"

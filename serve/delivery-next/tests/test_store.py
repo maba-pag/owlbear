@@ -7,11 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import loop, migrations, status
-from owlbear_delivery_next import store as store_mod
-from owlbear_delivery_next.inbox import AnswerItem, BriefApproval
-from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval
+from owlbear_delivery_next.change_contracts.models import (
     FORMAT,
     Brief,
     Change,
@@ -24,14 +21,18 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
-from owlbear_delivery_next.store import FormatTooNewError, LockHeldError, Store, StoreError
+from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import loop, status
+from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.settings import migrations
+from owlbear_delivery_next.state_store import store as store_mod
+from owlbear_delivery_next.state_store.store import FormatTooNewError, LockHeldError, Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOLD = """\
 import sys
 from pathlib import Path
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.state_store.store import Store
 with Store.open(Path(sys.argv[1])).lock("c1"):
     print("held", flush=True)
     sys.stdin.read()

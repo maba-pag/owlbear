@@ -1,8 +1,8 @@
 import argparse
 
-from owlbear_delivery_next import cli
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.state_store.store import Store
 
 
 def test_seeding_replaces_only_its_own_profile_entries(tmp_path) -> None:

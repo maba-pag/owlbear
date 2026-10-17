@@ -8,12 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next import design_pack, preload, sdk_adapter, vscode_adapter
-from owlbear_delivery_next import window_files as wf
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.tools import Worktree
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter, vscode_adapter
+from owlbear_delivery_next.runtimes import window_files as wf
 
 ROLES = ("builder", "planner", "reviewer")
 

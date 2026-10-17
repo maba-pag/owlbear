@@ -5,11 +5,13 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from owlbear_delivery_next import preload, sdk_adapter, tools
-from owlbear_delivery_next import window_files as wf
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.tools import Worktree
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import window_files as wf
 
 ROLES = ("builder", "planner", "reviewer", "challenger", "design-judge")
 SDK_TOOLS = {  # the runtime's built-in tools, the same for every model (tools.list, runtime research P24)

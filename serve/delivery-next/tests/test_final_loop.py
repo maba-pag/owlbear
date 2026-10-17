@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, dispute_tools, loop, round_flow, runner, sdk_adapter, tools
-from owlbear_delivery_next.inbox import AnswerItem, ConsentItem, RestartItem
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import dispute_tools, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, RestartItem
+from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Criterion,
@@ -25,16 +25,20 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.moves import ask
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.progress import progress
-from owlbear_delivery_next.results import ACCEPTED, Gate
-from owlbear_delivery_next.round_records import FINAL, RECHECK, RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import publish, reconsider, review
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.round_records import FINAL, RECHECK, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import loop, round_flow
+from owlbear_delivery_next.change_flow.moves import ask
+from owlbear_delivery_next.change_flow.progress import progress
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import publish, reconsider, review
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)

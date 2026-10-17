@@ -13,24 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from owlbear_delivery_next import (
-    api,
-    brief_tools,
-    briefs,
-    design_pack,
-    design_tools,
-    detector,
-    held,
-    host,
-    loop,
-    processes,
-    prompts,
-    runner,
-    sdk_adapter,
-    tools,
-)
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
     Change,
@@ -47,13 +32,9 @@ from owlbear_delivery_next.models import (
     Task,
     VisualState,
 )
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import check, decision, judges, merge, visual
-from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.visual_records import (
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.visual_records import (
     DetectorFinding,
     DetectorScan,
     JudgeFinding,
@@ -62,6 +43,17 @@ from owlbear_delivery_next.visual_records import (
     VisualResult,
     VisualRound,
 )
+from owlbear_delivery_next.change_flow import brief_tools, loop
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.design_packs import design_pack, design_tools, detector
+from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.project_host import api, host
+from owlbear_delivery_next.runtimes import sdk_adapter, step_input
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import check, decision, held, judges, merge, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -685,7 +677,7 @@ def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criteri
     assert ("cramped card" in fix.detail, "owner: More air" in fix.detail) == (True, True)
     [criterion] = back.owner_criteria
     assert (criterion.id, criterion.text, criterion.round) == ("owner-1", "More air", kept.number)
-    assert "owner-1: More air" in prompts.visual(
+    assert "owner-1: More air" in step_input.visual(
         back, [("home", 1280, "home-1280.png")]
     )  # every later review checks it
     client = TestClient(
@@ -694,7 +686,7 @@ def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criteri
     assert client.post("/api/next/changes/c1/criteria/owner-1/withdraw").status_code == 200
     withdrawn, _ = flow.store.fold(Lock("c1"), "c1", NOW)
     assert withdrawn.owner_criteria[0].withdrawn_at is not None
-    assert "owner-1" not in prompts.visual(withdrawn, [("home", 1280, "home-1280.png")])
+    assert "owner-1" not in step_input.visual(withdrawn, [("home", 1280, "home-1280.png")])
     assert client.post("/api/next/changes/c1/criteria/owner-9/withdraw").status_code == 404
 
 

@@ -1,0 +1,95 @@
+"""Step moves: where a Change goes next, the questions it asks and the tasks it opens (D3 §3.3)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from owlbear_delivery_next.change_contracts.evidence import cover
+from owlbear_delivery_next.change_contracts.models import Exit, Outcome, Step, StepKind
+from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN
+from owlbear_delivery_next.change_flow import repairs
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from owlbear_delivery_next.change_contracts.models import Change, Question, Task
+    from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+    from owlbear_delivery_next.change_flow.loop import StepResult
+
+
+def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = None) -> None:
+    """Make *kind* the Change's current step; leaving planning ends its challenge attempt (TD-190)."""
+    if c.step.kind == StepKind.PLAN != kind and (lp := c.loops.get(PLAN)) is not None and not lp.ended:
+        lp.ended = "replanned"  # an accepted plan ended it already; any other way out makes the next plan anew
+    c.step = Step(kind=kind, task=task, mode=mode)
+
+
+def enter(c: Change, kind: StepKind, task: str | None = None) -> None:
+    """Move to *kind*, keeping the task and the integrate caller the step needs."""
+    s = c.step
+    again = kind == s.kind == StepKind.CHECK  # an answer during a check returns to that same check
+    keep = task or (s.task if kind in {StepKind.BUILD, StepKind.INTEGRATE} or again else None)
+    caller = s.mode if s.kind == StepKind.INTEGRATE else str(s.kind)
+    final = "final" if kind == StepKind.REVIEW and keep is None else None  # a review without a task is final
+    go(c, kind, keep, caller if kind == StepKind.INTEGRATE else final)
+
+
+def subject_of(c: Change, task: Task) -> str:
+    """The task a review repair descends from, or ``final`` for a final-review repair (TD-208).
+
+    Other repairs of no task, the visual check's and the pre-push hook's, are their own subjects: no loop has them.
+    """
+    tasks = {t.id: t for t in c.plan.tasks} if c.plan else {}
+    seen = {task.id}
+    while task.fixes in tasks and task.fixes not in seen:
+        task = tasks[task.fixes]
+        seen.add(task.id)
+    return FINAL if task.fixes == FINAL else task.id
+
+
+def loop_of(c: Change, task: Task | None) -> RoundLoop | None:
+    """The challenge loop a task's work counts in; for no task, the final review's."""
+    return c.loops.get(subject_of(c, task) if task else FINAL)
+
+
+def open_task(c: Change) -> Task | None:
+    """The first unfinished plan task, or its first unfinished repair part, which runs before any later task."""
+    tasks = c.plan.tasks if c.plan else []
+    task = next((t for t in tasks if not t.done), None)
+    while task and (part := next((t for t in tasks if t.fixes == task.id and not t.done), None)):
+        task = part
+    return task
+
+
+def ask(c: Change, question: Question, now: datetime) -> None:
+    """Record *question* from the current step and wait for the owner."""
+    q = question.model_copy(update={"id": f"q{len(c.questions) + 1}", "step": c.step.kind})
+    c.questions.append(q)
+    c.outcome = Outcome(exit=Exit.ASK, cause=q.cause, reason=q.text, who="you", question=q.id, at=now)
+
+
+def resolved(c: Change, task_id: str | None) -> set[str]:
+    """The passed task and, transitively, each task whose review findings it fixed once all its repair parts pass."""
+    tasks = {t.id: t for t in c.plan.tasks} if c.plan else {}
+    found: set[str] = set()
+    while task_id and task_id not in found:
+        found.add(task_id)
+        task_id = tasks[task_id].fixes if task_id in tasks else None
+        if any(t.fixes == task_id and not t.done and t.id not in found for t in tasks.values()):
+            break  # another part of the same repair is still open
+    return found
+
+
+def fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None:
+    """Add the result's repair task, and the parts of a repair too long for it, to the plan once; return its id.
+
+    A review repair resumes the session that produced the reviewed work, once per session (TD-123).
+    """
+    if r.fix_task is None or c.plan is None:
+        return None
+    if any(t.id == r.fix_task.id for t in c.plan.tasks):
+        return r.fix_task.id  # an unfinished task already in the plan is resumed, not duplicated
+    lineage = repairs.lineage(c, fixes, r.fix_task.origin)
+    c.plan.tasks += [t.model_copy(update=lineage) for t in [r.fix_task, *r.more_fixes]]
+    cover(c)
+    return r.fix_task.id

@@ -7,8 +7,11 @@ from urllib.parse import parse_qsl
 
 import pytest
 
-from owlbear_delivery_next import backlog, backlog_issues, design_pack, local_home, model_choices, sdk_adapter
-from owlbear_delivery_next.steps import worktree
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.design_packs import design_pack
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.runtimes import model_choices, sdk_adapter
+from owlbear_delivery_next.state_store import backlog, backlog_issues
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
 

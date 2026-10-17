@@ -7,15 +7,19 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, cli, profile, roles, sdk_adapter, tools, vscode_adapter
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.config import Agent, Layer, resolve
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.models import StepKind
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry, RoleModel
-from owlbear_delivery_next.store import Store, StoreError
-from owlbear_delivery_next.tools import Worktree
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, RoleModel
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import sdk_adapter, vscode_adapter
+from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.settings.config import Agent, Layer, resolve
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 

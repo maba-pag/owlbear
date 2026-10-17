@@ -9,10 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine
 
-from owlbear_delivery_next import api, data_repo, local_home
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
 

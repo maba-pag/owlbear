@@ -5,18 +5,32 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import disputes, loop, plan_rounds, prompts, round_flow, round_marks, runner, tools
-from owlbear_delivery_next.dispute_tools import SUBMIT as RECONSIDER
-from owlbear_delivery_next.dispute_tools import ReconsiderResult
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.loop import StepResult
-from owlbear_delivery_next.models import Answer, Brief, Change, Exit, Names, Plan, Question, Step, StepKind, Task
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.round_records import FINAL, PLAN, RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.store import Lock, Store
-from owlbear_delivery_next.tools import Worktree
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.dispute_tools import SUBMIT as RECONSIDER
+from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
+    Answer,
+    Brief,
+    Change,
+    Exit,
+    Names,
+    Plan,
+    Question,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks
+from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 18, 3, tzinfo=UTC)
 K = StepKind
@@ -350,8 +364,8 @@ def test_the_plan_challenger_never_sees_the_owners_plan_decisions_but_the_planne
     q = plan_rounds.question(lp, f).model_copy(update={"id": "q1"})
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
-    assert "secret finding" not in prompts.plan_challenge(c, c.plan, Profile(), Path("/w"), {})
-    assert "secret finding" in prompts.plan(c, Profile(), Path("/w"), {})
+    assert "secret finding" not in step_input.plan_challenge(c, c.plan, Profile(), Path("/w"), {})
+    assert "secret finding" in step_input.plan(c, Profile(), Path("/w"), {})
 
 
 def test_the_planner_rejects_only_the_listed_findings_never_the_owners_and_needs_no_commit():

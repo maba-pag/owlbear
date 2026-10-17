@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, held, loop, prompts, rebuilds, round_flow, runner, tools
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Exit,
@@ -23,14 +23,18 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.moves import ask
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.round_records import FINAL, Completion, RoundFinding, RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.steps import retry, review
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.round_records import FINAL, Completion, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow
+from owlbear_delivery_next.change_flow.moves import ask
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import held, retry, review
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 K = StepKind
@@ -362,7 +366,7 @@ def test_a_clean_plan_undoes_all_the_changes_work_and_plans_again(tmp_path, clon
     assert c.outcome.reason.startswith("The owner rejected the work after final review round 1 and asked for a new ")
     assert "from a clean state" in c.outcome.reason
     assert "F3: y.txt:2: p - fix: f" in c.outcome.reason
-    message = prompts.plan(c, Profile(), clone, {})
+    message = step_input.plan(c, Profile(), clone, {})
     assert "## Why the Change is planned again" in message
     assert "from a clean state" in message
 

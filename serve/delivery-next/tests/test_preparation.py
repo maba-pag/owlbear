@@ -8,12 +8,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import loop, preparation, tools
-from owlbear_delivery_next.config import Layer, resolve
-from owlbear_delivery_next.models import Change, Environment, Exit, Step, StepKind, Waiting
-from owlbear_delivery_next.preparation import DataPermissions, Preparation, Preparing
-from owlbear_delivery_next.steps import prepare, worktree
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.change_contracts import preparation, tools
+from owlbear_delivery_next.change_contracts.models import Change, Environment, Exit, Step, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.preparation import DataPermissions, Preparation, Preparing
+from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.settings.config import Layer, resolve
+from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import prepare
 
 TOOL = """import os, pathlib, sys
 act, snap, db = sys.argv[1], os.environ.get("OWLBEAR_SNAPSHOT", ""), os.environ.get("TEST_DB", "")

@@ -6,15 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import disputes, loop, runner, sdk_adapter, tool_schema, tools
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.results import ACCEPTED, Gate
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import review
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_flow import disputes, loop
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import review
 
 NOW = datetime(2026, 10, 16, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)

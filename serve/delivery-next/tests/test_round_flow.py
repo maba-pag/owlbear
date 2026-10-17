@@ -6,14 +6,28 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import budgets, disputes, loop, prompts, round_flow, runner, tools
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import Answer, Brief, Change, Exit, Names, Plan, Question, Step, StepKind, Task
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.round_records import RECHECK, RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import retry, review
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import (
+    Answer,
+    Brief,
+    Change,
+    Exit,
+    Names,
+    Plan,
+    Question,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.round_records import RECHECK, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import budgets, disputes, loop, round_flow
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import retry, review
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)
@@ -310,8 +324,8 @@ def test_a_challenged_review_leaves_out_the_owners_answers_on_findings():
         Question(step=K.REVIEW, text="finding F1", cause=f"{disputes.PREFIX}t3 F1", answer=said),
         Question(step=K.BUILD, text="which port", answer=Answer(text="8080", at=NOW)),
     ]
-    assert sum("use Hallo" in line for line in prompts._brief(c)) == 1  # noqa: SLF001
-    assert [line for line in prompts._brief(c, challenged=True) if "use Hallo" in line or "8080" in line] == [  # noqa: SLF001
+    assert sum("use Hallo" in line for line in step_input._brief(c)) == 1  # noqa: SLF001
+    assert [line for line in step_input._brief(c, challenged=True) if "use Hallo" in line or "8080" in line] == [  # noqa: SLF001
         "- which port: 8080"
     ]
 

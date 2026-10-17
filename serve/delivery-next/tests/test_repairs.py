@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import loop, plan_rounds, repairs, runner, session_choice, session_result, tools
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
     Change,
@@ -20,11 +20,14 @@ from owlbear_delivery_next.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.round_records import RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import plan_round
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
+from owlbear_delivery_next.change_flow import loop, plan_rounds, repairs
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import session_result
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import plan_round, session_choice
 
 NOW = datetime(2026, 10, 16, 3, tzinfo=UTC)
 K = StepKind

@@ -14,13 +14,16 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next import design_pack, design_tools, detector, local_home, sdk_adapter, tools, window_files
-from owlbear_delivery_next.models import Change, Names, StepKind, VisualState, VisualStep
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.results import Gate
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.steps import design, visual
-from owlbear_delivery_next.visual_records import DetectorFinding, DetectorScan, VisualResult
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind, VisualState, VisualStep
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan, VisualResult
+from owlbear_delivery_next.design_packs import design_pack, design_tools, detector
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.runtimes import sdk_adapter, window_files
+from owlbear_delivery_next.runtimes.results import Gate
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.workflow_steps import design, visual
 
 NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
 PACK = design_pack.Installed(Path("/nowhere/impeccable"), "0" * 64, "")

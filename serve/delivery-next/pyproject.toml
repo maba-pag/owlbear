@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-owlbear-next = "owlbear_delivery_next.cli:main"
+owlbear-next = "owlbear_delivery_next.commands.dispatch:main"
 
 [tool.uv.sources]
 owlbear-memory = { workspace = true }

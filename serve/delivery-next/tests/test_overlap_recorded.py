@@ -2,11 +2,22 @@
 
 import pytest
 
-from owlbear_delivery_next import runner, tools
-from owlbear_delivery_next.models import Brief, Change, Exit, Names, Overlap, Plan, Step, StepKind, Task
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Exit,
+    Names,
+    Overlap,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 SHARED = [Overlap(other="c2", paths=["src/app.ts"])]
 

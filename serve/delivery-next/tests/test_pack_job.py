@@ -15,25 +15,17 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import (
-    api,
-    calibration,
-    design_pack,
-    dispute_tools,
-    disputes,
-    pack_git,
-    pack_job,
-    pack_rounds,
-    pack_update,
-    pack_updater,
-    tools,
-)
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.round_records import RoundFinding, RoundLoop, RoundPolicy
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.change_contracts import dispute_tools, tools
+from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import disputes
+from owlbear_delivery_next.design_packs import calibration, design_pack, pack_git, pack_update
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.pack_runs import pack_job, pack_rounds, pack_updater
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
 PKG = files("owlbear_delivery_next")

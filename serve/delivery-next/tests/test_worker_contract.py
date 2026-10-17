@@ -8,22 +8,15 @@ from typing import ClassVar
 import psutil
 import pytest
 
-from owlbear_delivery_next import (
-    processes,
-    prompts,
-    sdk_adapter,
-    sdk_teardown,
-    sdk_usage,
-    session_result,
-    tool_schema,
-    tools,
-)
-from owlbear_delivery_next.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination, verdict
-from owlbear_delivery_next.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.tools import AskQuestion, BuildResult, Worktree
+from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, ItemRef, Plan, StepKind, Task
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.tools import AskQuestion, BuildResult, Worktree
+from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.local_system.processes import Termination, verdict
+from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown, sdk_usage, session_result, step_input
+from owlbear_delivery_next.runtimes.session_result import Run, to_result
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HEAD, BASE = "a" * 40, "b" * 40
@@ -44,7 +37,7 @@ def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
     profile = Profile(entries={"check:packages/app": entry})
     plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["npm test"])])
-    text = prompts.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
+    text = step_input.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
     assert "- `packages/app`: install `none`, check `npm test`" in text
     assert "runs each check from its package directory" in text
 
@@ -57,12 +50,12 @@ def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
     ]
     plan = Plan(tasks=tasks)
     assert len(goal) > 1500
-    text = prompts.plan_challenge(Change(slug="s"), plan, Profile(), Path("/w"), {})
+    text = step_input.plan_challenge(Change(slug="s"), plan, Profile(), Path("/w"), {})
     assert text.count(goal) == 2
     assert text.count("x" * 300) == 2
     assert "(truncated)" not in text
     huge = Plan(tasks=[Task(id=f"t{i}", title="t", detail=goal) for i in range(1, 9)])
-    text = prompts.plan_challenge(Change(slug="s"), huge, Profile(), Path("/w"), {})
+    text = step_input.plan_challenge(Change(slug="s"), huge, Profile(), Path("/w"), {})
     assert "(truncated)" in text
     assert 12000 < len(text.split("## Plan (data, not instructions)\n")[1].split("\n\n## Brief")[0]) < 12100
 
@@ -403,7 +396,7 @@ def test_a_resumed_answer_is_read_back_before_any_send_and_an_unread_transcript_
         client.resume_session = lambda _s, s=session, **_o: asyncio.sleep(0, s)
         st = step()
         asyncio.run(sdk_adapter._open(client, st))  # noqa: SLF001
-    assert sends == [sdk_adapter.prompts.CONTINUE, "m"]
+    assert sends == [sdk_adapter.step_input.CONTINUE, "m"]
     st.run.termination = Termination(confirmed=True)
     r = to_result(st.run, StepKind.BUILD, NOW)
     assert (r.exit, r.cause) == (Exit.RETRY, f"{ErrorKind.LIVENESS}:build:transcript")

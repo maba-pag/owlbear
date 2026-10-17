@@ -8,14 +8,19 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, held, loop, runner, session_result, sessions, tools
-from owlbear_delivery_next.inbox import AnswerItem
-from owlbear_delivery_next.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
-from owlbear_delivery_next.permissions import Policy
-from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.session_result import Run
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.runtimes import session_result
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import held, sessions
 
 NOW = datetime(2026, 10, 13, 5, tzinfo=UTC)
 UNREAD = "the usage at the step's end could not be read (RuntimeError)"

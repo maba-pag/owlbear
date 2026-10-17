@@ -3,8 +3,8 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.state_store.store import Store
 
 TABS = [
     ("/", "Changes"),

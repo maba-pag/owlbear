@@ -4,11 +4,12 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, round_marks
-from owlbear_delivery_next.models import Brief, Change, Plan, Task
-from owlbear_delivery_next.round_records import FINAL, RoundFinding, RoundLoop, RoundPolicy
-from owlbear_delivery_next.status import Activity
-from owlbear_delivery_next.store import Lock, Store
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Task
+from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import round_marks
+from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 17, 6, tzinfo=UTC)
 

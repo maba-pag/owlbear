@@ -7,12 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import cli, codebase, host, runner
-from owlbear_delivery_next.evidence import check_inputs, next_check
-from owlbear_delivery_next.host import Host, RunnerRecord
-from owlbear_delivery_next.inbox import AnswerItem, CheckResult, IntentItem
-from owlbear_delivery_next.loop import StepResult, apply
-from owlbear_delivery_next.models import (
+from owlbear_delivery_next.change_contracts.evidence import check_inputs, next_check
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, CheckResult, IntentItem
+from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Answer,
     Brief,
@@ -31,23 +28,29 @@ from owlbear_delivery_next.models import (
     Task,
     VisualState,
 )
-from owlbear_delivery_next.preparation import BASE, Preparation
-from owlbear_delivery_next.process_probe import WorktreeProcessScanError
-from owlbear_delivery_next.profile_record import Profile
-from owlbear_delivery_next.status import Activity, status
-from owlbear_delivery_next.steps import check, disposable, prepare, worktree
-from owlbear_delivery_next.storage_io import open_lock
-from owlbear_delivery_next.store import Store
-from owlbear_delivery_next.visual_records import VisualResult
+from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.visual_records import VisualResult
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.change_flow.status import Activity, status
+from owlbear_delivery_next.commands import cli, runner, serve
+from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScanError
+from owlbear_delivery_next.local_system.storage_io import open_lock
+from owlbear_delivery_next.project_host import host
+from owlbear_delivery_next.project_host.host import Host, RunnerRecord
+from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import check, disposable, prepare
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOLD = """\
 import os, sys
 from pathlib import Path
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.storage_io import open_lock
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.local_system.storage_io import open_lock
+from owlbear_delivery_next.state_store.store import Store
 root = Store.open(Path(sys.argv[1])).root
 fd = open_lock(os.open(root, os.O_RDONLY), blocking=False, name="host.lock")
 record = HostRecord(
@@ -178,7 +181,7 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
     )
     try:
         assert child.stdout.readline().strip() == "held"
-        assert host.serve(tmp_path) == 0
+        assert serve.serve(tmp_path) == 0
         assert "already running: http://127.0.0.1:9/#token=t\n" in capsys.readouterr().out
         assert host.running(store).pid == child.pid
         assert "Delivery is not running" not in cli.show_status(store, NOW)
@@ -539,16 +542,17 @@ def test_every_file_the_package_tracks_is_in_its_code_identity():
 def test_an_unreadable_shipped_file_is_the_identity_and_does_not_fail_import(tmp_path):
     pkg = tmp_path / "pkg"
     (pkg / "agents").mkdir(parents=True)
-    (pkg / "codebase.py").write_text(Path(codebase.__file__).read_text())
-    (pkg / "agents" / "builder.md").write_text("# builder")
-    (pkg / "agents" / "builder.md").chmod(0)
+    (pkg / "local_system").mkdir()
+    (pkg / "local_system" / "codebase.py").write_text(Path(codebase.__file__).read_text())
+    (pkg / "agents" / "owlbear-builder.agent.md").write_text("# builder")
+    (pkg / "agents" / "owlbear-builder.agent.md").chmod(0)
     try:
-        spec = importlib.util.spec_from_file_location("copied_codebase", pkg / "codebase.py")
+        spec = importlib.util.spec_from_file_location("copied_codebase", pkg / "local_system" / "codebase.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        assert module.CURRENT == codebase.identity(pkg) == "unreadable: agents/builder.md"
+        assert module.CURRENT == codebase.identity(pkg) == "unreadable: agents/owlbear-builder.agent.md"
     finally:
-        (pkg / "agents" / "builder.md").chmod(0o644)
+        (pkg / "agents" / "owlbear-builder.agent.md").chmod(0o644)
 
 
 def test_a_host_starts_no_runner_while_its_code_differs_and_again_once_it_returns(store, tmp_path, capsys):

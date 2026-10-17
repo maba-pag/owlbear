@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.permissions import Policy, Request, decide, view
+from owlbear_delivery_next.change_contracts.permissions import Policy, Request, decide, view
 
 ROOT = Path("/w")
 READ, WRITE = Policy(ROOT, write=False), Policy(ROOT)

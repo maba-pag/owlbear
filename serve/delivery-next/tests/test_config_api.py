@@ -6,10 +6,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, data_repo, model_choices
-from owlbear_delivery_next.codebase import CURRENT
-from owlbear_delivery_next.host import HostRecord
-from owlbear_delivery_next.store import Store
+from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
 
@@ -254,7 +256,7 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     def full(*_a: object, **_k: object) -> None:
         raise OSError(28, "No space left on device")
 
-    monkeypatch.setattr("owlbear_delivery_next.store.update_layer", full)
+    monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", full)
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
     r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 3}})
