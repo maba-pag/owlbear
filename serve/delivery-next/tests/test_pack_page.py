@@ -29,6 +29,7 @@ NOW = datetime(2026, 10, 17, 2, tzinfo=UTC)
 class Host:
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
+    paused = staticmethod(lambda: False)
 
 
 def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:

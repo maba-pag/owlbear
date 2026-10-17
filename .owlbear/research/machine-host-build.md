@@ -104,7 +104,10 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   item waits only until that read confirms the removal (TD-226), so a merge never lands behind an applied
   Abandon. (Revision 3.2: the build kept the one barrier instead of a paused barrier that never withholds.)
   Chat tools that need a step (the brief challenge) record the request and answer "paused: press Resume" at
-  once. The UI shows Resume with the number of Changes
+  once. The pause holds Delivery's own work, not the owner's explicit actions: New Change opens its shaping
+  chat, and Settings, Memory and folder-rename writes are applied and published at once (TD-283); a design
+  pack update neither starts nor goes on from an answer until Resume, since its sessions are Delivery's work.
+  The UI shows Resume with the number of Changes
   that would continue; Resume (UI only) unpauses the machine and is recorded in `machine.json`.
 - A step whose runner outlived a stop or restart keeps running until it ends (TD-282); its result is
   recorded, its Change shows "finishing (started before the restart)", and nothing else starts for it until

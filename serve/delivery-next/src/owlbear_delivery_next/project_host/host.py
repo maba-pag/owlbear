@@ -238,7 +238,9 @@ class Host:
     def interval(self) -> float:
         """Seconds until the next pass: soon while a runner runs, by the next probe while a Change waits offline."""
         wait = FAST if any(self.runner(s) for s in self.store.slugs()) else TICK
-        return max(0.0, min(wait, self.probe_at - self.clock())) if self.offline else wait
+        if not self.offline or self.paused():  # no probe runs while paused, so its deadline never comes
+            return wait
+        return max(0.0, min(wait, self.probe_at - self.clock()))
 
     def _probe(self, now: datetime) -> None:
         """Probe the network while a Change waits on it, every ``PROBE`` from the last probe's start."""
@@ -299,13 +301,8 @@ class Host:
                 self.say(f"{slug}: check environment disposed")
             step = loop.next_step(c, now)
             if rec or c.blocked or _unverified(c) or (step and not c.env):
-                if (found := self._survivors(c, rec)) is None or found:
-                    return self._blocked(lock, c, found, now)
-                if _unverified(c):
-                    c.stop = c.outcome = None
-                c.blocked = None
-                self._path(slug).unlink(missing_ok=True)
-                disposable.settled(self.store.root / "changes" / slug)
+                if not self._gone(lock, c, rec, now):
+                    return False
                 step = loop.next_step(c, now)
             if c.env:
                 c = self._environment(lock, c, now)
@@ -328,14 +325,22 @@ class Host:
         return c
 
     def _ended(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
-        """While paused: forget an ended runner once nothing of its step remains; nothing starts."""
-        if rec:
-            if (found := self._survivors(c, rec)) is None or found:
-                return self._blocked(lock, c, found, now)
-            self._path(c.slug).unlink(missing_ok=True)
-            disposable.settled(self.store.root / "changes" / c.slug)
+        """While paused: confirm an ended runner and its processes gone; nothing starts."""
+        if (rec or c.blocked or _unverified(c)) and not self._gone(lock, c, rec, now):
+            return False
         self.store.write(lock, c)
         return False
+
+    def _gone(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
+        """Whether nothing of the last step remains; then its runner is forgotten and its liveness stop cleared."""
+        if (found := self._survivors(c, rec)) is None or found:
+            return self._blocked(lock, c, found, now)
+        if _unverified(c):
+            c.stop = c.outcome = None
+        c.blocked = None
+        self._path(c.slug).unlink(missing_ok=True)
+        disposable.settled(self.store.root / "changes" / c.slug)
+        return True
 
     def _pull(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Run pull-back again when the owner asked to Pull, and record its result."""

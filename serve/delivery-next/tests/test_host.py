@@ -747,3 +747,26 @@ def test_while_paused_no_check_environment_launches_or_is_disposed(store, tmp_pa
     calls = environment(store, fake, monkeypatch)
     assert (fake.host.tick(NOW), calls["start"], calls["dispose"]) == ([], [], [])
     assert store.read("c1").env.pgid is None
+
+
+def test_a_liveness_stop_found_while_paused_clears_once_its_processes_are_gone(store, tmp_path):
+    fake, flag = Fake(store, tmp_path), [False]
+    paused(fake, flag)
+    fake.host.observe_pr = lambda _slug: (None, False)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    assert fake.host.tick(NOW) == ["c1"]
+    flag[0] = True
+    fake.live.clear()
+    fake.found = {4242: "sleep"}
+    assert fake.host.tick(NOW) == []
+    assert (store.read("c1").blocked.action, fake.host.runner("c1").pid) == ("End processes 4242", 101)
+    fake.found = {}
+    assert fake.host.tick(NOW) == []
+    assert (store.read("c1").blocked, fake.host.runner("c1"), fake.pid) == (None, None, 101)
+
+
+def test_a_network_wait_while_paused_never_spins_the_scheduler(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    fake.host.offline = {"c1"}  # its probe deadline passed long ago; no probe runs while paused
+    assert fake.host.interval() == host.TICK
