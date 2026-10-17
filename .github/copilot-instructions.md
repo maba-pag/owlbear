@@ -10,7 +10,9 @@ OwlBear is a laptop-resident AI development system built around VS Code and GitH
 | --- | --- | --- |
 | `main` | The only long-lived branch and GitHub's default | Full workspace: `share/`, `serve/`, `seed/`, `setup/`, `.owlbear/`, `store/`, `tests/`, `pyproject.toml` |
 
-Uncoordinated repository maintenance targets `main`. Target delivery uses the branch, worktree, and
+Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI`
+check must pass on a branch that is up to date with `main`, and it merges with a merge commit
+(TD-278). Target delivery uses the branch, worktree, and
 integration target in its per-change coordination record; never substitute `main` by convention.
 Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
 generated consumer branch and no sync workflow (TD-203).
