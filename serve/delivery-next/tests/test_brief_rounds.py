@@ -63,7 +63,10 @@ class Shaping:
 
     async def run(self, cfg):
         self.told.append(cfg)
-        return Run(cfg.session_id, "result", self.verdicts.pop(0), termination=Termination(confirmed=True))
+        payload = self.verdicts.pop(0)
+        if isinstance(payload, Termination):  # a session whose processes are not confirmed gone
+            return Run(cfg.session_id, "result", None, termination=payload)
+        return Run(cfg.session_id, "result", payload, termination=Termination(confirmed=True))
 
     @property
     def slug(self) -> str:
@@ -272,6 +275,18 @@ def test_a_return_to_shaping_after_approval_waits_for_the_revision_and_never_pla
         shaping.store.write(lock, c)
     c = shaping.step()
     assert (c.step.kind, c.outcome.waiting, shaping.told) == (K.SHAPE, Waiting.CHAT, [])
+
+
+def test_a_reconsideration_that_cannot_confirm_its_end_stops_the_change_for_the_owner(shaping):
+    shaping.save()
+    shaping.ask_challenge(1)
+    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True}), Termination(confirmed=False)]
+    shaping.step()
+    shaping.ask_challenge(1, {"F1": "no"})
+    shaping.step()
+    shaping.answer("reconsider", "narrow it")
+    c = shaping.step()
+    assert (c.outcome.exit, c.step.mode, loop.next_step(c, NOW)) == (Exit.STOP, "reconsider", None)
 
 
 def test_a_wait_for_a_verdict_ends_when_its_request_was_retired():

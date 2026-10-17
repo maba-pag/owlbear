@@ -145,8 +145,9 @@ def _reconsider(store: Store, lock: Lock, change: Change, path: Path) -> None:
         said = dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))  # the owner decides each, as for unsure
     elif verdict.exit == Exit.DONE and isinstance(p, dispute_tools.ReconsiderResult):
         said = {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
-    else:  # failed: the mode stays and it runs again
-        store.write(lock, loop.apply(change, verdict.model_copy(update={"exit": Exit.RETRY}), now))
+    else:  # failed: a stop or question stands; anything else runs again with the mode kept
+        failed = verdict.model_copy(update={"exit": Exit.RETRY}) if verdict.exit == Exit.BACK else verdict
+        store.write(lock, loop.apply(change, failed, now))
         return
     brief_rounds.reconsidered(change, said)
     brief_rounds.proceed(change, now)
