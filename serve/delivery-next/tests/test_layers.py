@@ -21,7 +21,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
         "preparation", "permissions", "amendment_records", "dispute_tools", "round_records",
     ),
     "change_flow": ("loop", "moves", "budgets", "status", "progress", "brief_tools", "steps.worktree", "repairs",
-                    "disputes", "round_flow"),
+                    "disputes", "round_flow", "rebuilds"),
     "design_packs": ("design_pack", "detector", "pack_update", "calibration", "pack_git", "design_tools"),
     "settings": ("config", "roles", "migrations", "profile", "rounds"),
     "state_store": (
@@ -34,8 +34,8 @@ LAYERS: dict[str, tuple[str, ...]] = {
     ),
     "workflow_steps": ("steps", "steps.*", "held", "overlap", "sessions", "session_choice"),
     "pack_runs": ("pack_candidate", "pack_job", "pack_replay", "visual_settled", "pack_updater"),
-    "project_host": ("host", "api", "config_routes", "memory_routes", "backlog_routes", "pack_routes", "pages",
-                     "launches"),
+    "project_host": ("host", "api", "answers", "config_routes", "memory_routes", "backlog_routes", "pack_routes",
+                     "pages", "launches"),
     "commands": ("__init__", "__main__", "cli", "mcp_server", "step_mcp", "runner", "setup"),
 }  # fmt: skip
 ORDER = list(LAYERS)

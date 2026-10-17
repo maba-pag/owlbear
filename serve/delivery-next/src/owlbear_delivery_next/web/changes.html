@@ -349,6 +349,79 @@ function questionForm(q, d) {
   return box;
 }
 
+// The owner's choice after the final review's last round (TD-217): the plan tasks to rebuild, those with an open
+// finding ticked for him; with none ticked the work is accepted as done. A kept task that shares changed files with a
+// ticked one may depend on it: said beside it, above the button and in the confirmation.
+function retryForm(q, r, d) {
+  const box = panel(`Question ${q.id}`, text(q.text, { weight: "semibold" }),
+    heading(4, "Plan tasks to rebuild", "sm"));
+  const picks = r.tasks.map((t) => {
+    const [node, on] = tick(`${t.id}: ${t.title}`, t.ticked), note = text("", { size: "xs" });
+    box.append(node, note);
+    return { t, on, note };
+  });
+  const ticked = () => picks.filter((p) => p.on()).map((p) => p.t.id);
+  const risks = () => {
+    const on = new Set(ticked());
+    return picks.filter((p) => !on.has(p.t.id)).map((p) => [p, p.t.shares.filter((s) => on.has(s))])
+      .filter(([, hit]) => hit.length).map(([p, hit]) => `${p.t.id} may depend on ${hit.join(", ")}: they share `
+        + "changed files");
+  };
+  const warnings = el("div"), main = button("", () => decide(), { icon: "check", aria: DIALOG });
+  const update = () => {
+    const n = ticked().length, said = risks();
+    main.textContent = n ? `Rebuild ${n} task${n > 1 ? "s" : ""}` : "Accept as done";
+    for (const p of picks) p.note.textContent = said.find((s) => s.startsWith(`${p.t.id} `)) ?? "";
+    warnings.replaceChildren(...said.map((s) => text(s, { size: "xs", weight: "semibold" })));
+  };
+  box.addEventListener("change", update);
+  const decide = async () => {
+    const origin = shown, picked = ticked(), said = risks();
+    const titled = picked.map((id) => `${id}: ${r.tasks.find((t) => t.id === id).title}`);
+    const sure = await ask(picked.length ? {
+      title: `Rebuild ${picked.length} task${picked.length > 1 ? "s" : ""}?`, yes: "Rebuild", no: "Back to the tasks",
+      now: "Delivery undoes the work of these tasks and their repairs in one commit on the branch; the rejected head "
+        + "stays archived on a branch:", items: [...titled, ...said.map((s) => `Kept: ${s}`)],
+      then: "Fresh builders build them again in plan order, each reviewed in its own rounds; the last one also runs "
+        + "every other task's checks. The final review then looks at the result once more. This uses AI credits.",
+      after: "An approval to merge no longer counts.",
+      instead: "The question stays open.",
+    } : {
+      title: "Accept as done?", yes: "Accept as done", no: "Back to the tasks",
+      now: "The final review completes; its remaining findings are recorded as accepted by you.",
+      then: `Delivery publishes the Change. ${merging(d)}.`,
+      instead: "The question stays open.",
+    });
+    if (sure) {
+      const body = picked.length ? { option: "rebuild", tasks: picked, attempt: r.attempt, head: r.head }
+        : { option: "accept" };
+      send("/answers", { question: q.id, ...body }, origin);
+    }
+  };
+  const [start, from] = choice("Plan again from the brief, starting from", [
+    { id: "replan", label: "the existing code" },
+    { id: "clean", label: "a clean state: the Change's work undone" },
+  ]);
+  const replan = async () => {
+    const origin = shown, option = from();
+    if (!option) return notify("Choose where planning starts from: the existing code or a clean state.");
+    if (await ask({
+      title: "Plan again from the brief?", yes: "Plan again", no: "Back to the options",
+      now: option === "clean" ? "Delivery undoes the Change's work in one commit, so the branch holds the target's "
+        + "code again; the rejected head stays archived on a branch." : "The code stays as it is.",
+      then: "The planner makes a new plan from the brief and the challenger checks it; the new plan's tasks replace "
+        + "the old ones, and the final review counts its rounds anew. This uses AI credits.",
+      after: "An approval to merge no longer counts.",
+      instead: "The question stays open.",
+    })) send("/answers", { question: q.id, option }, origin);
+  };
+  update();
+  box.append(warnings, row(main,
+    button("Another round", () => send("/answers", { question: q.id, option: "another" }), { variant: "secondary" })),
+  start, button("Plan again from the brief", replan, { variant: "secondary", aria: DIALOG }));
+  return box;
+}
+
 // What an answer sets off when it is more than going on: ending the Change, passing over a finding, going back.
 function consequence(o, d) {
   const choices = { yes: o.label, no: "Back to the options", instead: "Choose another option." };
@@ -1156,7 +1229,10 @@ async function showDetail() {
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
   const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
     : d.before ? beforeSection(d.slug, d.before) : null;
-  if (d.question) parts.push(deciding ? decisionForm(d.question, r, pictures, d) : questionForm(d.question, d));
+  if (d.question) {
+    parts.push(deciding ? decisionForm(d.question, r, pictures, d)
+      : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d));
+  }
   if (d.merge) parts.push(mergeForm(d.merge, d));
   for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check, d));
   const approving = d.step === "shape" && d.brief.approved !== d.brief.version;
@@ -1175,7 +1251,7 @@ async function showDetail() {
   const asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
   const forms = JSON.stringify([d.slug, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head,
     asked, d.brief.version, d.brief.approved, d.pullback?.state, d.paused, r?.number, r?.outcome,
-    d.owner_criteria.map((k) => k.id)]);
+    d.owner_criteria.map((k) => k.id), d.retry?.attempt, d.retry?.head]);
   if (refused?.forms === forms) parts.splice(2, 0, refusal(refused.text));
   else refused = null;
   const focused = document.activeElement, name = target.querySelector("h2");

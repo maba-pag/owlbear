@@ -31,6 +31,7 @@ class AnswerItem(_Item):
     text: str = ""
     round: int | None = None  # the visual round a decision is about (TD-79)
     findings: list[str] = Field(default_factory=list)  # the findings the owner ticked in it
+    tasks: list[str] = Field(default_factory=list)  # the plan tasks a final retry rebuilds (TD-217)
 
 
 class WithdrawItem(_Item):

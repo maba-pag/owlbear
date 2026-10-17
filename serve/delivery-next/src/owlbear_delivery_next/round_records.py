@@ -87,6 +87,7 @@ class RoundLoop(_Record):
     head: str = ""  # the commit the latest verdict reviewed
     reentry: bool = False  # new work after the loop ended: this round focuses on it (TD-215)
     completion: Completion | None = None  # set when the final loop's last repair is built
+    rebuild: list[str] = Field(default_factory=list)  # the plan tasks the owner ticked, until their undo is done
     history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry or restart replaced
 
     def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]:

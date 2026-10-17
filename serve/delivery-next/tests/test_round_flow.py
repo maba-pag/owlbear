@@ -194,6 +194,7 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
         None,
         (K.BUILD, "t1", None),
     )
+    assert [(t.base, t.head) for t in c.plan.tasks[2:]] == [(None, None)] * 2  # undone: no later undo takes them
     built(store, clone, monkeypatch, "e\n")
     assert store.read("c1").plan.tasks[0].base == git(clone, "rev-parse", "HEAD^")  # the fresh build's own base
     reviewed(store, clone, monkeypatch)

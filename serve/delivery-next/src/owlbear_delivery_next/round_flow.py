@@ -1,7 +1,7 @@
 """After a looped repair build (TD-208, TD-218): the next round, a rejections-only check, the owner or the end.
 
-The final review's loop also reaches its reviewer's prompt (the plan tasks to name, the focus of a re-entry) and
-restarts on the owner's request (TD-215, TD-216).
+The final review's loop also reaches its reviewer's prompt (the plan tasks to name, the focus of a re-entry),
+restarts on the owner's request (TD-215, TD-216) and starts a new attempt when the owner has it planned again (TD-210).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.evidence import criteria
 from owlbear_delivery_next.failures import cause_key
-from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Question, StepKind
+from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.moves import ask, go, loop_of, open_task, resolved, subject_of
 from owlbear_delivery_next.round_records import FINAL, RECHECK, Completion, RoundLoop
 
@@ -23,13 +23,17 @@ if TYPE_CHECKING:
 
 PREFIX = cause_key(ErrorKind.REVIEW, StepKind.REVIEW, "round ")
 RETRY = "rebuild"  # a build step's mode while its rejected attempt is undone before a fresh build (TD-210)
+CLEAN = "clean"  # the final review step's mode while the Change's work is undone for a plan from a clean state
 OPTIONS = [
     Option(id="another", label="Another round", next="another"),
     Option(id="retry", label="Reject the work and retry it", next=RETRY),
 ]
-FINAL_OPTIONS = [
-    Option(id="another", label="Another round", next="another"),
+FINAL_OPTIONS = [  # TD-217: every retry of the final review is a rebuild of tasks or a new plan (TD-210)
+    Option(id="rebuild", label="Rebuild the ticked tasks", next=RETRY),
     Option(id="accept", label="Accept as done", next="accept"),
+    Option(id="another", label="Another round", next="another"),
+    Option(id="replan", label="Plan again from the brief on the existing code", next=RETRY),
+    Option(id=CLEAN, label="Plan again from the brief from a clean state", next=RETRY),
 ]
 HOW = {"fixed": "fixed, not re-reviewed", "owner-fix": "you decided to fix it", "owner-drop": "you dropped it"}
 TASKS = (
@@ -51,7 +55,7 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
     reviewed work gets no review of its own: the next round of the loop it joined reviews it (TD-215).
     """
     s = c.step
-    task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
+    task = _accepted(c, r)
     root = next((t for t in c.plan.tasks if t.id == subject_of(c, task)), None) if task and c.plan else None
     if root is not None and (root.origin in ADDED or (root.origin == "review" and root.fixes is None)):
         if any(d.upheld is None for d in task.disputes):
@@ -83,6 +87,14 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
         ask(c, question(lp, task), now)
     else:
         end(c, lp, task)
+
+
+def _accepted(c: Change, r: StepResult | None) -> Task | None:
+    """The built task, its accepted head recorded: the end of its own commits, which a retry of it undoes."""
+    task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
+    if task is not None and r is not None and r.head:
+        task.head = r.head
+    return task
 
 
 def passed(c: Change) -> None:
@@ -118,8 +130,10 @@ def question(lp: RoundLoop, task: Task) -> Question:
     if lp.subject == FINAL:
         what, options = f"Final review round {lp.round}", FINAL_OPTIONS
         then = (
-            "Another round reviews the whole Change again; Accept as done publishes it as it is, with these findings "
-            "recorded as accepted by you."
+            "Rebuild undoes the ticked plan tasks' work and has fresh builders build them again, the rejected work "
+            "archived on a branch; with none ticked, Accept as done publishes the Change as it is, with these findings "
+            "recorded as accepted by you. Another round reviews the whole Change again; Plan again from the brief "
+            "makes a new plan, on the existing code or from a clean state."
         )
     else:
         what, options = f"Review round {lp.round} of task {lp.subject}", OPTIONS
@@ -137,18 +151,61 @@ def _said(f: RoundFinding) -> str:
 
 
 def decided(c: Change, q: Question, target: str) -> None:
-    """The owner's choice: one more round, a rebuild of the subject task (TD-210), or the final loop accepted."""
+    """The owner's choice: one more round, a retry (TD-210), or the final loop accepted.
+
+    A task's retry rebuilds it from its plan entry. The final review's rebuilds the ticked plan tasks once their work is
+    undone (TD-217), or plans again from the brief on the existing code or from a clean state.
+    """
     subject, _, task_id = (q.cause or "").removeprefix(PREFIX).partition(" ")
     if (lp := c.loops.get(subject)) is None:
         return
-    if target == RETRY:
+    said = q.answer
+    if target == RETRY and subject != FINAL:
         go(c, StepKind.BUILD, subject, RETRY)
+    elif target == RETRY and said and said.option == "replan":
+        replan(c, lp, why(lp, "on the existing code"), said.at)
+    elif target == RETRY and said:
+        lp.rebuild = [] if said.option == CLEAN else picked(c, said.tasks)
+        go(c, StepKind.REVIEW, None, CLEAN if said.option == CLEAN else RETRY)  # the work is undone first
     elif target == "accept":
         if task := next((t for t in c.plan.tasks if t.id == task_id), None) if c.plan else None:
             end(c, lp, task, "accepted")
     else:
-        lp.extra, lp.completion = lp.extra + 1, None
+        lp.extra, lp.completion, lp.rebuild = lp.extra + 1, None, []
         go(c, StepKind.REVIEW, None if subject == FINAL else task_id, "final" if subject == FINAL else None)
+
+
+def picked(c: Change, tasks: list[str]) -> list[str]:
+    """The named plan tasks, in plan order: what a final retry rebuilds."""
+    return [t.id for t in c.plan.tasks if t.origin == "plan" and t.id in tasks] if c.plan else []
+
+
+def unpicked(c: Change, q: Question, option: str | None, tasks: list[str]) -> bool:
+    """A final retry's Rebuild that names no plan task settles nothing (TD-217)."""
+    return (q.cause or "").startswith(f"{PREFIX}{FINAL} ") and option == "rebuild" and not picked(c, tasks)
+
+
+def why(lp: RoundLoop, how: str) -> str:
+    """What the planner is told when the owner asks for a new plan after the final review's last round."""
+    said = "; ".join(f"{f.id}: {f.text}" for f in lp.findings if f.raised == lp.round)
+    return (
+        f"The owner rejected the work after final review round {lp.round} and asked for a new plan from the brief, "
+        f"{how}. That round's findings: {said}"
+    )
+
+
+def replan(c: Change, lp: RoundLoop, reason: str, now: datetime) -> None:
+    """Plan again from the brief (TD-210): a new attempt of the final loop, the old plan's loops in its history.
+
+    The new plan's tasks replace the old ones once it is accepted; a merge consent no longer counts.
+    """
+    old = lp.model_copy(update={"history": [], "ended": "retried", "rebuild": []})
+    tasks = [x for k, x in c.loops.items() if k != FINAL]
+    history = [*lp.history, old, *tasks]
+    c.loops = {FINAL: RoundLoop(subject=FINAL, attempt=lp.attempt + 1, policy=lp.policy, history=history)}
+    c.consent = None
+    go(c, StepKind.PLAN)
+    c.outcome = Outcome(exit=Exit.BACK, reason=reason, at=now)  # the planner sees why it plans again
 
 
 def review_lines(c: Change, task: Task | None) -> list[str]:

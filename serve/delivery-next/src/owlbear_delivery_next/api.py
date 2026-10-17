@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next import (
+    answers,
     backlog_routes,
     config_routes,
     evidence,
@@ -28,6 +29,7 @@ from owlbear_delivery_next import (
     pack_routes,
     pages,
     profile,
+    rebuilds,
     round_flow,
 )
 from owlbear_delivery_next.briefs import save_brief, save_visual
@@ -79,7 +81,10 @@ class Body(BaseModel):
 
 
 class AnswerBody(Body):
-    """Answer one open question; a visual decision names the round, capture and pack the page showed (TD-79)."""
+    """Answer one open question; a visual decision names the round, capture and pack the page showed (TD-79).
+
+    A final retry names the plan tasks to rebuild and the loop attempt and head the page showed (TD-217).
+    """
 
     question: str = Field(max_length=16)
     option: str | None = Field(default=None, max_length=64)
@@ -89,19 +94,8 @@ class AnswerBody(Body):
     head: str = Field(default="", max_length=40)
     pack: str = Field(default="", max_length=200)
     findings: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=60)
-
-
-def decision_refused(c: Change, body: AnswerBody) -> tuple[int, str] | None:
-    """Why a Pass or Fail is refused: its round, capture or pack changed since the page showed them, or it is empty."""
-    kept = c.visual_rounds[-1] if c.visual_rounds else None
-    shown = (body.round, body.head, body.pack)
-    if kept is None or kept.outcome != "ask" or kept.decision or shown != (kept.number, kept.head, kept.pack):
-        return 409, "the capture or the design pack changed since the page was shown; reload"
-    if unknown := sorted(set(body.findings) - {f.id for v in kept.verdicts for f in v.findings}):
-        return 422, f"findings {unknown} are not in round {kept.number}"
-    if body.option == "fail" and not body.findings and not body.text.strip():
-        return 422, "a Fail ticks a finding or says what is wrong"
-    return None
+    tasks: list[Annotated[str, Field(max_length=16)]] = Field(default_factory=list, max_length=200)
+    attempt: int | None = Field(default=None, ge=1)
 
 
 class CheckBody(Body):
@@ -357,6 +351,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     for h in c.handled
                 ],
                 "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
+                "retry": rebuilds.shown(c, q),  # TD-217: the plan tasks beside the final review's retry question
                 "checks": checks,
                 "pr": c.names.pr,
                 "target": c.names.target,
@@ -420,11 +415,11 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")
         if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():
             raise HTTPException(422, "a reconsideration needs your note: what the reviewer should weigh")
-        if q.cause == decision.CAUSE and body.option in {"pass", "fail"} and (why := decision_refused(c, body)):
+        if why := answers.refused(c, q, body):
             raise HTTPException(*why)
         item = AnswerItem(
             at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text,
-            round=body.round, findings=body.findings,
+            round=body.round, findings=body.findings, tasks=body.tasks,
         )  # fmt: skip
         return put(slug, item)
 

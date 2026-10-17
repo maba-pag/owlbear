@@ -111,6 +111,11 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
   tasks' checks run again; a failure comes back as a finding.
 - The answer carries the task ids, bound to the question, plan version, attempt and head shown; a stale or
   unknown selection is refused (409/422).
+- As built (TD-245): five options, Rebuild the ticked tasks, Accept as done, Another round and Plan again from the
+  brief on the existing code or from a clean state; the answer binds to the question, the loop attempt and the head
+  (the plan version is always 1 today; a re-plan or a restart retires the question). A task starts ticked when a
+  final-loop finding naming it, or a finding of its own loop, is open, escalated or decided by the owner to fix. Its
+  files are those its reviews covered, its repairs' included. Markers and the details toggle stay in step 5.
 
 ### 3.7 Retry mechanics (TD-210, TD-214)
 
@@ -122,6 +127,17 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
 - Then fresh builder sessions rebuild the selected tasks in plan order (new task-loop attempts), then the
   final loop continues. A retry invalidates the final-review completion, merge consent, CI results and
   affected checks; answered PR requests whose fixes were undone are reconciled, not blindly re-posted.
+- As built (TD-245): every accepted build records its head, so a task's commits are `base..head`. A rebuild undoes
+  the ticked tasks, their task-loop repairs and each final repair whose fixed findings name only ticked tasks (a
+  finding of no task counts as kept work); a final repair of both, a task without a recorded head, or a build never
+  accepted inside an undone range stops with the owner's question. Undone tasks keep no range, so nothing is reverted
+  twice. The last rebuilt task also runs every other plan task's checks: its builder must pass them, so a failure is
+  fixed in that build and reviewed by its loop (a reviewer runs only commands that write nothing). The final loop
+  ends `retried` and reopens with one round once the rebuilds are done (TD-235). CI results and person checks are
+  bound to heads and content, so they need no separate invalidation; fixes of PR requests are kept work and never
+  undone (a revert that conflicts with them stops). A clean plan is one commit setting the tree to the target's at
+  the merge base. Planning again starts a new final-loop attempt with the old plan's loops in its history; the planner
+  gets the owner's reason and the last round's findings.
 
 ### 3.8 Removed
 

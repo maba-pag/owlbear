@@ -298,9 +298,9 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     gate = bool(q and c.outcome and c.outcome.question == q.id)
     if q is None or (q.repair and not gate):
         return  # a round gate the Change has moved past records nothing, so no session ever receives it
-    q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
+    q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks)
     target = _target(q, item.option)
-    if _refused(q, target, item.text):
+    if _refused(q, target, item.text) or round_flow.unpicked(c, q, item.option, item.tasks):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
     if gate:

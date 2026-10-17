@@ -294,7 +294,7 @@ def test_the_owner_is_asked_after_the_last_final_round_and_may_accept_it_as_done
     reviewed(store, clone, monkeypatch, range(1, 9))
     built(store, clone, monkeypatch, "c\n", "F8")
     q = loop.open_question(store.read("c1"))
-    assert [o.label for o in q.options] == ["Another round", "Accept as done"]
+    assert [o.id for o in q.options] == ["rebuild", "accept", "another", "replan", "clean"]
     assert q.text.startswith("Final review round 1 found 8 new findings, and it was the last allowed round: F1 fixed")
     c = answer(store, "another")
     assert (c.loops[FINAL].extra, c.loops[FINAL].completion, at(c)) == (1, None, FINAL_STEP)
