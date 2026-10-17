@@ -9,6 +9,7 @@ found many: then the owner chooses another round or a new plan from the brief (T
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.evidence import cover
@@ -167,9 +168,16 @@ def revised(c: Change, rejected: Mapping[str, str]) -> Next:
         return "recheck"
     if lp.round >= limit and lp.found >= lp.policy.ask_owner_at:
         return "ask"
-    lp.unreviewed.append(f"r{lp.round}")
+    if identity(c.plan) != lp.head:  # a plan resubmitted unchanged is no revision
+        lp.unreviewed.append(f"r{lp.round}")
     lp.ended = "count" if lp.found <= lp.policy.last_round_at else "max"
     return "done"
+
+
+def identity(plan: Plan | None) -> str:
+    """The plan's content identity: what a verdict judged, so an unchanged resubmission is no revision."""
+    fields = {"tasks": {"__all__": {"id", "title", "scope", "checks", "detail"}}}
+    return hashlib.sha256(plan.model_dump_json(include=fields).encode()).hexdigest()[:16] if plan else ""
 
 
 def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]]) -> Next:
@@ -177,10 +185,11 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     lp = c.loops[PLAN]
     recheck = c.step.mode == RECHECK
     if recheck:
-        lp.unreviewed.append(f"r{lp.round}")  # the check judged the revision's rejections, never the revision
+        if identity(c.plan) != lp.head:  # a revision the check judged the rejections of, never its changes
+            lp.unreviewed.append(f"r{lp.round}")
     else:
         lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round += 1
+    lp.round, lp.head = lp.round + 1, identity(c.plan)
     for f in pending(lp):
         if (j := judged.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
