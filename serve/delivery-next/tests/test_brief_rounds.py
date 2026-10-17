@@ -47,6 +47,7 @@ DRAFT = {
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
+    paused = staticmethod(lambda: False)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 
     def activity(self, _slug):
@@ -58,7 +59,8 @@ class Shaping:
 
     def __init__(self, tmp_path: Path, repo: Path, monkeypatch) -> None:
         self.store, self.repo = Store(tmp_path / "store"), repo
-        self.http = TestClient(api.create_app(self.store, "t", Host()), base_url="http://127.0.0.1",
+        self.host = Host()
+        self.http = TestClient(api.create_app(self.store, "t", self.host), base_url="http://127.0.0.1",
                                headers={"authorization": "Bearer t"})  # fmt: skip
         self.verdicts: list[tools.ReviewResult] = []
         self.told: list[object] = []
@@ -208,6 +210,20 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
     out = chat.challenge_brief("c1", 1, [])
     assert (out["requested"], [f["id"] for f in out["findings"]], out["approvable"]) == (True, ["F1"], False)
     assert chat.challenge_brief("c1", 2, [])["requested"] is False  # no such version
+
+
+def test_a_challenge_asked_while_delivery_is_paused_is_recorded_and_the_chat_returns_at_once(shaping, monkeypatch):
+    shaping.save()
+    shaping.host.paused = lambda: True
+    chat = mcp_server.Chat.__new__(mcp_server.Chat)
+    chat.store = shaping.store
+    chat.call = lambda method, path, body=None: (
+        200,
+        shaping.http.request(method, f"/api/next{path}", json=body).json(),
+    )
+    monkeypatch.setattr(mcp_server, "_pause", lambda _s: pytest.fail("a paused challenge is not waited for"))
+    assert chat.challenge_brief("c1", 1, []) == {"requested": True, "running": False, "next": mcp_server.PAUSED}
+    assert shaping.change().step.mode == "challenge"  # TD-283: the request is in; the challenger starts after Resume
 
 
 def test_an_upheld_rejection_whose_question_a_stop_replaced_is_asked_again(shaping):

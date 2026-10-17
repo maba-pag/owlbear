@@ -108,15 +108,14 @@ def offline(c: Change, now: datetime) -> bool:
     return failures.kind_of(o.cause) == ErrorKind.NETWORK and o.wake_at is not None and o.wake_at > now
 
 
-def activity(store: Store, slug: str, host: HostRecord | None) -> Activity:
+def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool = False) -> Activity:
     """Observed liveness for the status line: the Change lock's holder, unless it is the host itself."""
     holder = store.holder(slug)
     runner = holder is not None and (host is None or holder.pid != host.pid)
     last = next((e["at"] for e in reversed(store.events(slug)) if "at" in e), None)
     at = datetime.fromisoformat(last) if last else None
-    return Activity(
-        host_up=host is not None, runner_alive=runner, holder_pid=holder.pid if runner else None, last_event_at=at
-    )
+    pid = holder.pid if runner and holder else None
+    return Activity(host_up=host is not None, runner_alive=runner, holder_pid=pid, last_event_at=at, paused=paused)
 
 
 def _scan(path: Path, since: datetime) -> Found:
@@ -154,7 +153,12 @@ def gone(kind: StepKind) -> loop.StepResult:
 
 
 class Host:
-    """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change."""
+    """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change.
+
+    While ``paused`` says so (every machine start until Resume, TD-259) it applies the owner's input at once
+    (TD-283) and records ended runners, but reads no PR, runs no Pull and launches no runner or environment;
+    the fold's queue barrier still takes a queued PR out when a Change leaves its merge step (TD-284).
+    """
 
     def __init__(  # noqa: PLR0913 - process seams the tests replace
         self,
@@ -167,9 +171,10 @@ class Host:
         alive: Callable[[int, float | None], bool | None] = processes.alive,
         code: Callable[[], str] = codebase.identity,
         reach: Callable[[str], str | None] = lambda name: readiness.reach(name, timeout=PROBE_TIMEOUT),
+        paused: Callable[[], bool] = lambda: False,
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
-        self.spawn, self.code, self.reach = spawn or self._spawn, code, reach
+        self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
@@ -198,7 +203,7 @@ class Host:
 
     def activity(self, slug: str) -> Activity:
         """Liveness of one Change as this host sees it."""
-        return activity(self.store, slug, self.record)
+        return activity(self.store, slug, self.record, paused=self.paused())
 
     def observe_pr(self, slug: str) -> Seen:
         """The PR's terminal state and consent-wait news, observed before a waiting Change is skipped; once per poll."""
@@ -215,7 +220,8 @@ class Host:
         if self.store.shared:  # a rename on another machine arrives with a pull (TD-98)
             with self.launching:
                 self.store.name = data_repo.folder(self.store.shared, self.repo)
-        self._probe(now or datetime.now(UTC))
+        if not self.paused():
+            self._probe(now or datetime.now(UTC))
         slugs = self.store.slugs()
         self.offline &= set(slugs)
         self.back = {s: t for s, t in self.back.items() if s in slugs}
@@ -279,16 +285,11 @@ class Host:
         rec = self.runner(slug)
         if rec and self.alive(rec.pid, rec.created) is not False:
             return False  # A live runner finishes on its own; the host never kills it.
+        paused = self.paused()
         with self.store.lock(slug) as lock:
-            prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
-            state, moved = self.observe_pr(slug)
-            c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
-            if moved:
-                self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
-            c = self._woken(self._pull(lock, c, now), now)
-            if rec and disappeared(prior, rec, now) and c.step == prior.step:
-                c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
-                self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
+            c = self._folded(lock, slug, rec, now, paused=paused)
+            if paused:
+                return self._ended(lock, c, rec, now)
             act = self._env_action(c)
             if c.env and act in {"dispose", "settle"}:
                 if (left := self._clear(c, c.env)) is None or left:
@@ -312,6 +313,29 @@ class Host:
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
+
+    def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change:
+        """Fold the inbox with the PR's state (none while paused), run an asked Pull, charge a runner gone."""
+        prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
+        state, moved = (None, False) if paused else self.observe_pr(slug)
+        c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
+        if moved:
+            self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
+        c = self._woken(c if paused else self._pull(lock, c, now), now)
+        if rec and disappeared(prior, rec, now) and c.step == prior.step:
+            c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
+            self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
+        return c
+
+    def _ended(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
+        """While paused: forget an ended runner once nothing of its step remains; nothing starts."""
+        if rec:
+            if (found := self._survivors(c, rec)) is None or found:
+                return self._blocked(lock, c, found, now)
+            self._path(c.slug).unlink(missing_ok=True)
+            disposable.settled(self.store.root / "changes" / c.slug)
+        self.store.write(lock, c)
+        return False
 
     def _pull(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Run pull-back again when the owner asked to Pull, and record its result."""

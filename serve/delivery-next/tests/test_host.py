@@ -685,3 +685,65 @@ def test_network_probes_keep_a_ten_second_schedule_from_each_probe_start(store, 
     clock[0] = 10.0
     fake.host.tick(at(10))
     assert probes == [0.0, 10.0]
+
+
+def paused(fake, flag):
+    fake.host.paused = lambda: flag[0]
+    fake.host.observe_pr = lambda _slug: pytest.fail("no PR is read while Delivery is paused")
+
+
+def test_while_paused_input_is_applied_and_nothing_is_read_pulled_or_started(store, tmp_path, monkeypatch):
+    fake, flag = Fake(store, tmp_path), [True]
+    paused(fake, flag)
+    save(store, asking(fake).model_copy(update={"pull_requested": NOW}))
+    store.put_inbox("c1", AnswerItem(at=NOW, question="q1", text="German"))
+    monkeypatch.setattr(host.pullback, "run", lambda *_a: pytest.fail("no Pull runs while Delivery is paused"))
+    assert fake.host.tick(NOW) == []
+    c = store.read("c1")
+    assert (c.outcome, c.pull_requested, fake.host.runner("c1")) == (None, NOW, None)  # TD-283: applied at once
+    said = status(c, fake.host.activity("c1"), NOW)
+    assert (said.line, said.action, said.actor) == ("Build 1/1 · Delivery is paused: continues after Resume",
+                                                     "Resume Delivery", "you")  # fmt: skip
+    flag[0] = False
+    fake.host.observe_pr = lambda _slug: (None, False)
+    monkeypatch.undo()
+    assert fake.host.tick(NOW) == ["c1"]
+
+
+def test_a_paused_fold_still_takes_a_queued_pr_out_through_the_barrier(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    seen = []
+
+    def barrier(_store, _repo):
+        return lambda before, after: seen.append((before.intent.paused_at, after.intent.paused_at)) or after
+
+    monkeypatch.setattr(host.queue, "barrier", barrier)
+    save(store, asking(fake))
+    store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
+    assert (fake.host.tick(NOW), seen) == ([], [(None, NOW)])  # TD-284: the dequeue goes out at once
+
+
+def test_a_runner_gone_while_paused_is_charged_and_forgotten_and_nothing_starts(store, tmp_path):
+    fake, flag = Fake(store, tmp_path), [False]
+    paused(fake, flag)
+    fake.host.observe_pr = lambda _slug: (None, False)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    assert fake.host.tick(NOW) == ["c1"]
+    flag[0] = True
+    assert fake.host.tick(NOW) == []  # alive: it finishes on its own (TD-282)
+    finishing = status(store.read("c1"), Activity(host_up=True, runner_alive=True, paused=True), NOW)
+    assert finishing.line == "Build 1/1 · finishing build (started before the restart)"
+    fake.live.clear()
+    fake.host.observe_pr = lambda _slug: pytest.fail("no PR is read while Delivery is paused")
+    assert fake.host.tick(NOW) == []
+    c = store.read("c1")
+    assert (c.outcome.exit, fake.host.runner("c1"), fake.pid) == (Exit.RETRY, None, 101)
+
+
+def test_while_paused_no_check_environment_launches_or_is_disposed(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    calls = environment(store, fake, monkeypatch)
+    assert (fake.host.tick(NOW), calls["start"], calls["dispose"]) == ([], [], [])
+    assert store.read("c1").env.pgid is None

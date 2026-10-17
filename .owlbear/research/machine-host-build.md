@@ -56,7 +56,7 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
 ## 4. Step 1: lit-html Pages (TD-264)
 
 - `web/vendor/lit-html/` holds the unmodified ES modules of one lit-html release (`lit-html.js` and the
-  directives the pages use), its license and `VERSION`, served under `/assets/vendor/` with fixed types.
+  directives the pages use), its license and `VERSION`, served under `/assets/lit-html/<release>/` with fixed types.
 - A test pins the release: `VERSION` matches each file's header and a committed SHA-256 list matches the files.
 - Each page becomes `render(view(state), root)` on every poll, with page-local UI state (open sections,
   drafts) bound through `live()`. Fingerprints, focus checks and reopen code go. Shared helpers (token fetch,
@@ -97,12 +97,14 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   owner's environment sets no `GIT_SSH_COMMAND` (that variable wins in Git). `owlbear doctor` and each
   project's readiness check report a push or `gh` login that fails from the host's environment, with the fix.
 - Every start is paused (TD-259). While paused a project's scheduler applies the owner's input at once
-  (TD-283): it folds inboxes with no PR observation and a paused barrier that never withholds an item, and it
-  records runner exits and confirmed-gone runners. It launches no runner, disposes or launches no check
-  environment and runs no Pull. The one GitHub call is TD-284's: a Pause or Abandon of a Change with a queue
-  claim records a dequeue request, which the host sends once at once; the claim stays until the queue's
-  evidence releases it, read after Resume with the rest of merge reconciliation. Chat tools that need a step
-  (the brief challenge) answer "paused: press Resume" at once. The UI shows Resume with the number of Changes
+  (TD-283): it folds inboxes with no PR observation, and it records runner exits and confirmed-gone runners.
+  It launches no runner, disposes or launches no check environment and runs no Pull. The one GitHub call is
+  TD-284's, through the same queue barrier as when running: when a Change with a queued PR leaves its merge
+  step (a Pause, an Abandon or an answer), the barrier takes the PR out at once and reads the queue back; the
+  item waits only until that read confirms the removal (TD-226), so a merge never lands behind an applied
+  Abandon. (Revision 3.2: the build kept the one barrier instead of a paused barrier that never withholds.)
+  Chat tools that need a step (the brief challenge) record the request and answer "paused: press Resume" at
+  once. The UI shows Resume with the number of Changes
   that would continue; Resume (UI only) unpauses the machine and is recorded in `machine.json`.
 - A step whose runner outlived a stop or restart keeps running until it ends (TD-282); its result is
   recorded, its Change shows "finishing (started before the restart)", and nothing else starts for it until
