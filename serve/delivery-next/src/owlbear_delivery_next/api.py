@@ -31,6 +31,7 @@ from owlbear_delivery_next import (
     profile,
     rebuilds,
     round_flow,
+    round_marks,
 )
 from owlbear_delivery_next.briefs import save_brief, save_visual
 from owlbear_delivery_next.inbox import (
@@ -352,6 +353,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 ],
                 "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
                 "retry": rebuilds.shown(c, q),  # TD-217: the plan tasks beside the final review's retry question
+                "rounds": round_marks.shown(c),  # TD-217: each loop's round markers, details and what is left
                 "checks": checks,
                 "pr": c.names.pr,
                 "target": c.names.target,

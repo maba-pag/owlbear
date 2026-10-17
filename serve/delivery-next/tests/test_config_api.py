@@ -53,7 +53,9 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "data_classes": [], "unmasked": [], "keys": False, "isolation": [], "retention": "delete"
     }  # fmt: skip
     assert got["applied"] == [
-        "agents.*.context", "agents.*.effort", "agents.*.model", "widths", "preparations", "data", "design_failures"
+        "agents.*.context", "agents.*.effort", "agents.*.model", "widths", "preparations", "data", "design_failures",
+        "agents.builder.max_rounds", "agents.builder.max_findings", "agents.builder.last_round_at",
+        "agents.builder.ask_owner_at", "final_review",
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 
@@ -85,6 +87,24 @@ def test_a_project_save_needs_the_revision_it_was_based_on(store):
     assert stale.status_code == 409
     assert store.read_config().agents["builder"].effort == "low"
     assert saved.json()["inherited"]["project"]["agents"]["builder"]["effort"] == "medium"
+
+
+def test_the_challenge_round_values_are_saved_per_loop(store):
+    c = client(store, headers=AUTH)
+    first = c.get("/api/next/config").json()
+    rounds = {"max_rounds": 4, "last_round_at": 2}
+    layer = first["project"] | {"agents": {"builder": rounds}, "final_review": {"ask_owner_at": 5}}
+    saved = c.put("/api/next/config/project", json={"rev": first["project_rev"], "layer": layer}).json()
+    final, sources = saved["settings"]["final_review"], saved["settings"]["sources"]
+    assert (final, sources["final_review.max_rounds"], sources["final_review.ask_owner_at"]) == (
+        {"max_rounds": 4, "max_findings": 10, "last_round_at": 2, "ask_owner_at": 5},
+        "builder",
+        "project",
+    )
+    wrong = layer | {"final_review": {"last_round_at": 5, "ask_owner_at": 5}}
+    assert c.put("/api/next/config/project", json={"rev": saved["project_rev"], "layer": wrong}).status_code == 422
+    typed = layer | {"agents": {"builder": {"max_rounds": "three"}}}  # the page sends a non-number as typed
+    assert c.put("/api/next/config/project", json={"rev": saved["project_rev"], "layer": typed}).status_code == 422
 
 
 @pytest.mark.parametrize(

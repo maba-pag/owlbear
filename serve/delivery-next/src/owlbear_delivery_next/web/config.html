@@ -77,6 +77,24 @@
   </p-table>
   <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite"></p-text>
 </section>
+<section class="panel" aria-labelledby="rounds-title">
+  <p-heading size="lg"><h2 id="rounds-title">Challenge rounds</h2></p-heading>
+  <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after the
+    last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
+  <p-table caption="Challenge rounds: they apply to loops that start after a save">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Loop</p-table-head-cell>
+      <p-table-head-cell>Rounds at most</p-table-head-cell>
+      <p-table-head-cell>New findings per round at most</p-table-head-cell>
+      <p-table-head-cell>Last round at or below</p-table-head-cell>
+      <p-table-head-cell>Ask you at or above</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="rounds"></p-table-body>
+  </p-table>
+  <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower than
+    "ask you at or above", which may not exceed the findings per round. The final review inherits the builder's
+    values.</p-text>
+</section>
 <section class="panel" aria-labelledby="general-title">
   <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
   <p-table caption="Visual check settings: they apply to the next visual check">
@@ -173,8 +191,12 @@ if (hash.get("token")) {
 const token = sessionStorage.getItem("token");
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const INHERIT = "inherit";  // the effort option that clears the layer's own value
-const SOURCES = { default: "built-in default", global: "global", project: "this project" };
+const SOURCES = { default: "built-in default", global: "global", project: "this project",
+  builder: "the builder's value" };
 const LAYERS = { project: "This project", global: "All projects" };
+const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
+  ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
+const LOOPS = [["builder", "Task reviews (builder)"], ["final_review", "Final review"]];
 let pds = false, loaded = null, rendered = "project", saving = false;
 let offered = null;  // the models this machine's Copilot offers, once read; null while reading or unreadable
 // Unsaved edits per layer ("role.field" -> typed value); a save applies them over the newest saved layer.
@@ -305,7 +327,20 @@ function saved(layer, key) {
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
   if (key === "design_failures") return loaded[layer]?.[key] ?? "";
   const [role, field] = key.split(".");
-  return loaded[layer]?.agents?.[role]?.[field] ?? "";
+  const value = role === "final_review" ? loaded[layer]?.final_review?.[field] : loaded[layer]?.agents?.[role]?.[field];
+  return value === null || value === undefined ? "" : String(value);
+}
+
+// TD-209: one loop's round value; blank inherits (the final review inherits the builder's).
+function roundCell(owner, field, label) {
+  const key = `${owner}.${field}`, final = owner === "final_review", below = final
+    ? loaded.inherited[rendered].final_review[field] : loaded.inherited[rendered].agents[owner][field];
+  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
+  const input = typed(`${label}, ${owner.replace("_", " ")}`, value,
+    { placeholder: `inherit (${below})`, inputmode: "numeric" });
+  input.dataset.key = key;
+  const inUse = final ? loaded.settings.final_review[field] : loaded.settings.agents[owner][field];
+  return cell(input, source(final ? key : `agents.${key}`, inUse));
 }
 
 // TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
@@ -574,6 +609,8 @@ function render() {
     cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"), contextCell(role), ratesCell(role),
   ));
   document.getElementById("agents").replaceChildren(...agents);
+  document.getElementById("rounds").replaceChildren(...LOOPS.map(([owner, said]) => row(
+    cell(el("p-text", said)), ...ROUNDS.map(([field, label]) => roundCell(owner, field, label)))));
   const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
   document.getElementById("agents-later").replaceChildren(...Object.entries(loaded.settings.agents).map(
     ([role, eff]) => row(cell(el("p-text", role)),
@@ -625,8 +662,15 @@ function edited(layer) {
       continue;
     }
     const [role, field] = key.split(".");
+    const round = ROUNDS.some(([f]) => f === field);  // a number; anything else is sent as typed and refused
+    const number = !round || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
+    if (role === "final_review") {
+      const own = { ...(next.final_review ?? {}), [field]: number };
+      next.final_review = Object.values(own).some((v) => v !== null) ? own : null;
+      continue;
+    }
     const agent = next.agents[role] ?? {};
-    agent[field] = value || null;
+    agent[field] = number ?? (value || null);
     if (Object.values(agent).some((v) => v !== null)) next.agents[role] = agent;
     else delete next.agents[role];
   }
@@ -751,7 +795,7 @@ async function start() {
     plain();
   }
   for (const type of ["input", "change"]) {
-    for (const id of ["agents", "general"]) document.getElementById(id).addEventListener(type, edit);
+    for (const id of ["agents", "rounds", "general"]) document.getElementById(id).addEventListener(type, edit);
   }
   document.getElementById("agents").addEventListener("click", inherit);
   document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });

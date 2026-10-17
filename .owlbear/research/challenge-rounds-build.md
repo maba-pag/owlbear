@@ -106,6 +106,14 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
   variants (`error`, `warning`, `secondary`) with icons; no hover-only content. A "Finding details" toggle
   gives per round e.g. "Round 3 (latest): 1 fix reported, not re-reviewed; 1 rejection not reviewed",
   then each finding with its reasons.
+- As built (TD-252): a marker reads `R<round> · <count> <kind>`, the count being that round's findings of its most
+  urgent kind; a fix counts as verified once a later round reviewed its repair (its repair is no unreviewed repair
+  and a later round exists). Markers show beside each plan task in the Plan section and beside the retry question's
+  task list, task review and final review apart; only each loop's current attempt is shown. The "Finding details"
+  toggle names each line's loop, since task and final rounds and their IDs are counted apart. A "Review rounds"
+  section shows the final review's own markers, the repairs no round reviewed and the rejections that stand (not
+  judged, or accepted by the reviewer). The settings page's "Challenge rounds" group has the builder's task reviews
+  and the final review, each value with its source (the final review's may come from the builder's).
 - Dependency warning: a rebuilt task that a kept task shares changed files with shows "may depend on" beside
   the kept task, above the button and in the confirmation popup; never blocking. After the rebuild the kept
   tasks' checks run again; a failure comes back as a finding.

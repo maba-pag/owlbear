@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.moves import go, open_task, subject_of
 from owlbear_delivery_next.round_flow import PREFIX
+from owlbear_delivery_next.round_marks import kind
 from owlbear_delivery_next.round_records import FINAL, RoundLoop
 from owlbear_delivery_next.steps import worktree
 
@@ -23,8 +24,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.models import Change, Question, Task
     from owlbear_delivery_next.profile_record import Profile
-
-RED = frozenset({"open", "escalated", "owner-fix"})  # a fix agreed, not made; a rejection the reviewer did not accept
 
 
 def asking(c: Change, q: Question | None) -> RoundLoop | None:
@@ -78,8 +77,8 @@ def refused(
 
 def _red(c: Change, lp: RoundLoop) -> set[str]:
     """Plan tasks with an open finding: one the final loop names, or one of the task's own loop."""
-    named = {t for f in lp.findings if f.state in RED for t in f.tasks}
-    own = {k for k, x in c.loops.items() if k != FINAL and any(f.state in RED for f in x.findings)}
+    named = {t for f in lp.findings if kind(lp, f) == "open" for t in f.tasks}
+    own = {k for k, x in c.loops.items() if k != FINAL and any(kind(x, f) == "open" for f in x.findings)}
     return named | own
 
 

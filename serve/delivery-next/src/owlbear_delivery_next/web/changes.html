@@ -70,7 +70,9 @@
   .brief details > :not(summary) { margin-block-start: var(--p-spacing-static-xs); }
   .brief summary .count { display: block; font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
   .plan, .log { display: grid; gap: var(--p-spacing-static-xs); padding: 0; list-style: none; }
-  .plan li { display: flex; align-items: baseline; gap: var(--p-spacing-static-sm); }
+  .plan li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-sm); }
+  .plan li > details, .rounds details { flex-basis: 100%; font-size: var(--p-typescale-xs); }
+  .marks { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-xs); }
   .log li { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--p-spacing-static-sm); }
   .log time { font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
   .shots {
@@ -357,7 +359,7 @@ function retryForm(q, r, d) {
     heading(4, "Plan tasks to rebuild", "sm"));
   const picks = r.tasks.map((t) => {
     const [node, on] = tick(`${t.id}: ${t.title}`, t.ticked), note = text("", { size: "xs" });
-    box.append(node, note);
+    box.append(node, ...taskRounds(t.id, d), note);
     return { t, on, note };
   });
   const ticked = () => picks.filter((p) => p.on()).map((p) => p.t.id);
@@ -977,9 +979,68 @@ function planList(d) {
     const [label, variant] = t.done ? ["done", "success"] : t === now ? ["now", "info"] : ["to do", "secondary"];
     const item = el("li"), said = el("span", t.title);
     if (t.origin && t.origin !== "plan") said.append(" ", plain("span", `from ${t.origin}`, "meta"));
-    item.append(el("p-tag", label, { variant, compact: "true" }), said);
+    item.append(el("p-tag", label, { variant, compact: "true" }), said, ...taskRounds(t.id, d));
     node.append(item);
   }
+  return node;
+}
+
+// TD-217: a round's marker is its most urgent finding's kind, in words with a count; the loop's latest round is bold.
+const KIND = { open: ["error", "exclamation", "open"], unverified: ["warning", "warning", "unverified"],
+  settled: ["secondary", "check", "settled"] };
+
+function marker(m) {
+  const [variant, icon, word] = KIND[m.kind], said = `R${m.round} \u00b7 ${m.count} ${word}`;
+  const node = el("p-tag", undefined, { variant, icon, compact: "true" });
+  node.append(m.last ? el("strong", said) : said);
+  return node;
+}
+
+function marks(label, rounds) {
+  const node = el("span", undefined, { class: "marks" });
+  node.append(plain("span", label, "meta"), ...rounds.map(marker));
+  return node;
+}
+
+// Per loop and round its summary, then each finding with what became of it and why; a toggle, never hover-only.
+function findingDetails(summary, loops) {
+  const said = (f) => [`${f.id} (${f.state}): ${f.text}`, f.reason && `Builder: ${f.reason}`,
+    f.judgement && `Reviewer: ${f.judgement}`, f.note && `Your note: ${f.note}`].filter(Boolean).join(" \u00b7 ");
+  return disclosure(summary, ...loops.flatMap(([label, rounds]) => rounds.flatMap((m) => [
+    text(`${label}, ${m.said.charAt(0).toLowerCase()}${m.said.slice(1)}`, { size: "xs", weight: "semibold" }),
+    list(m.findings.map(said))])));
+}
+
+// A plan task's markers, task review and final review apart, with their finding details; nothing without rounds.
+function taskRounds(id, d) {
+  const r = d.rounds?.tasks[id];
+  if (!r || !(r.task.length || r.final.length)) return [];
+  const shown = [["Task review", r.task], ["Final review", r.final]].filter(([, rounds]) => rounds.length);
+  return [...shown.map(([label, rounds]) => marks(label, rounds)),
+    findingDetails(`Finding details of ${id}`, shown)];
+}
+
+// The final review's own rounds, the repairs no round reviewed, and the rejections that stand.
+function roundsInfo(r) {
+  const parts = [];
+  if (r.final.length) {
+    const attempt = r.attempt > 1 ? ` (attempt ${r.attempt})` : "";
+    parts.push(marks(`Final review${attempt}`, r.final),
+      findingDetails("Finding details of the final review", [["Final review", r.final]]));
+  }
+  if (r.unreviewed.length) {
+    parts.push(text("Repairs no round reviewed", { size: "sm", weight: "semibold" }),
+      list(r.unreviewed.map((u) => `${u.id}: ${u.title} (${u.loop === "final" ? "final review" : `task ${u.loop}`})`)));
+  }
+  if (r.standing.length) {
+    parts.push(text("Rejections that stand", { size: "sm", weight: "semibold" }), list(r.standing.map((f) =>
+      [`${f.id} (${f.loop === "final" ? "final review" : `task ${f.loop}`}, ${f.state}): ${f.text}`,
+        f.reason && `Builder: ${f.reason}`, f.judgement && `Reviewer: ${f.judgement}`].filter(Boolean)
+        .join(" \u00b7 "))));
+  }
+  if (!parts.length) return null;
+  const node = info("Review rounds", ...parts);
+  node.classList.add("rounds");
   return node;
 }
 
@@ -1245,6 +1306,8 @@ async function showDetail() {
   if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
   if (d.progress) parts.push(info("Progress", stepper(d.progress), ...(d.restartable ? [restartButton()] : [])));
   if (d.plan.length) parts.push(info("Plan", planList(d)));
+  const rounds = d.rounds && roundsInfo(d.rounds);
+  if (rounds) parts.push(rounds);
   if (!approving && (d.brief.outcome || d.criteria.length)) parts.push(briefInfo(d));
   if (d.pullback && !behind) parts.push(pullbackNote(d.pullback, d));
   parts.push(info("Recent activity", activityLog(d.activity)), spendLines(d.spend));
