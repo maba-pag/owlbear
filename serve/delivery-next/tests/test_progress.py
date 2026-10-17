@@ -191,9 +191,9 @@ def test_the_change_list_and_detail_carry_the_progress(tmp_path):
 def test_the_changes_page_shows_the_stages_as_an_ordered_list_marking_the_current_step(tmp_path):
     page = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1").get("/").text
 
-    assert 'el("ol", undefined, { class: "stepper" })' in page
-    assert 'item.setAttribute("aria-current", "step")' in page
-    assert "rounds`" in page  # the loop badge's words, beside its multiplication sign
+    assert '<ol class="stepper">' in page  # a lit-html template (TD-264)
+    assert 'aria-current=${s.state === "current" ? "step" : nothing}' in page
+    assert 'class="sr">${s.rounds} rounds</span>' in page  # the loop badge's words, beside its multiplication sign
 
 
 def test_the_shown_round_never_drops_and_a_passed_review_keeps_its_badge():
