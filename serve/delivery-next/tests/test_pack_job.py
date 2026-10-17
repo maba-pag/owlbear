@@ -864,11 +864,9 @@ def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path):
 
     assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
     assert '<h2 id="pack-title">Design pack</h2>' in page
-    assert (
-        '<p-button id="pack-update" type="button" compact="true" icon="refresh">Update design pack</p-button>' in page
-    )
-    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>' in page
-    assert '<ol id="pack-stages" aria-label="Update stages"></ol>' in page
+    assert 'button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh"' in page  # lit-html
+    assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>' in page
+    assert '<ol id="pack-stages" aria-label="Update stages">' in page
     assert "commits design_pack.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     got = c.get("/api/next/design-pack").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
@@ -885,8 +883,8 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     page = c.get("/maintenance")
     assert page.status_code == 200
     assert "<h1>Maintenance</h1>" in page.text
-    assert '<ul id="actions" class="actions"></ul>' in page.text
-    assert '<p-text id="status" role="status" aria-live="polite"></p-text>' in page.text
+    assert '<div id="page"></div>' in page.text  # lit-html renders the actions from the API (TD-264)
+    assert 'from "/assets/lit-html/3.3.3/lit-html.js"' in page.text
 
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
     assert list(got) == [

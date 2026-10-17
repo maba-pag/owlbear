@@ -10,7 +10,6 @@ import shutil
 import time
 from dataclasses import asdict
 from datetime import UTC, datetime
-from importlib.resources import files
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
@@ -66,7 +65,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
-PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
@@ -261,13 +259,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             )
         return code, out
 
-    @app.get("/assets/pds/{name}")
-    def pds(name: str) -> Response:
-        if name not in PDS:
-            raise HTTPException(404, "no such asset")
-        body = files("owlbear_delivery_next").joinpath("web", "pds", name).read_bytes()
-        return Response(body, media_type=PDS[name], headers={"Cache-Control": "max-age=3600"})
-
+    pages.assets(app)
     for path, html in pages.pages().items():
         app.add_api_route(path, fixed_page(html), methods=["GET"], response_class=HTMLResponse)
 

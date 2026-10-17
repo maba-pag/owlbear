@@ -11,7 +11,7 @@
 </script>
 <!-- base -->
 <style>
-  main > p-text:empty { display: none !important; }
+  #page > p-text:empty { display: none !important; }
   .row { align-items: end; }
   #add > * { flex: 1 1 14rem; }
   #add > :nth-child(2) { flex-grow: 2; }
@@ -43,172 +43,82 @@
 <header>
   <p-heading size="2xl"><h1>Backlog</h1></p-heading>
 </header>
-<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
-  uses plain controls. Reload to try again.</p>
-<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
-<p-text id="started" aria-live="polite"></p-text>
-<p-text id="status" role="status" aria-live="polite"></p-text>
-<p-text id="where" size="xs" color="contrast-medium"></p-text>
-<div id="filters" class="row" role="group" aria-label="Show only"></div>
-<section class="panel" aria-labelledby="add-title">
-  <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
-  <div id="add" class="row"></div>
-</section>
-<section aria-labelledby="inbox-title">
-  <div>
-    <p-heading size="xl"><h2 id="inbox-title">Inbox</h2></p-heading>
-    <p-text>Choose a kind to move an entry to Open, or drop it.</p-text>
-  </div>
-  <ul id="inbox" class="entries"></ul>
-</section>
-<section aria-labelledby="open-title">
-  <div>
-    <p-heading size="xl"><h2 id="open-title">Open</h2></p-heading>
-    <p-text>Tick entries to shape a Change from them.</p-text>
-  </div>
-  <ul id="open" class="entries"></ul>
-</section>
-<details class="later quiet">
-  <summary id="later-title">In a Change, done or dropped</summary>
-  <ul id="later" class="entries" aria-labelledby="later-title"></ul>
-</details>
-<div id="selection" class="bar" role="region" aria-label="Selected entries" hidden>
-  <p-text id="chosen" weight="semibold"></p-text>
-  <div id="actions" class="row"></div>
-</div>
+<div id="page"></div>
 </main>
 <!-- ask -->
-<script>
-"use strict";
-const hash = new URLSearchParams(location.hash.slice(1));
-if (hash.get("token")) {
-  sessionStorage.setItem("token", hash.get("token"));
-  history.replaceState(null, "", location.pathname);
-}
-const token = sessionStorage.getItem("token");
+<script type="module">
+import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
+import { call, designSystem } from "/assets/ui.mjs";
+
 const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
 const SCOPES = ["unassigned", "project", "cross-project", "global"];
 const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review", run: "a run" };
 const TAGS = { untriaged: "secondary", defect: "error", improvement: "info", idea: "success", question: "warning" };
 const DIALOG = "{ 'aria-haspopup': 'dialog' }";
-let pds = false, loaded = { entries: [], changes: [] }, creating = null;
+const GET = 15000, WRITE = 60000;  // reads and writes go to GitHub's issues, a network round trip or several
+// Everything the page shows comes from here, so a re-render never loses what the person typed, ticked or opened.
+const state = {
+  pds: true, loaded: null, error: "", status: "", started: null, creating: false, adding: false,
+  idea: { title: "", text: "" },  // the Add an idea form
+  notes: new Map(),  // entry id -> notes typed and not saved yet
+  linkTo: new Map(),  // entry id -> the entry chosen in its "Link to another entry" list
+  selected: new Set(), opened: new Set(),
+};
 const filter = { scope: "all", project: "all", kind: "all" };
-let filtersFor = null;  // the projects the filter row was built for
-const selected = new Set(), opened = new Set();
-const built = new Map();  // entry id -> its card and a reader of the notes typed into it
 
-function el(tag, text, attrs = {}) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-  return node;
-}
-
-function text(value, attrs = {}) {
-  return el("p-text", value, attrs);
-}
-
-function heading(level, title, size) {
-  const node = el("p-heading", undefined, { size });
-  node.append(el(`h${level}`, title));
-  return node;
-}
-
-function row(...children) {
-  const node = el("div", undefined, { class: "row" });
-  node.append(...children);
-  return node;
-}
-
-function say(message) {
-  document.getElementById("status").textContent = message;
+function show() {
+  const focused = document.activeElement;
+  render(view(), document.getElementById("page"));
+  if (focused?.isConnected && document.activeElement !== focused) focused.focus();
 }
 
 function notify(message = "") {
-  const error = document.getElementById("error");
-  error.textContent = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
-  error.hidden = !message;
+  state.error = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
+  show();
 }
 
-async function call(path, method = "GET", body = undefined) {
-  if (!token) throw new Error("Open the URL the host printed, including #token=…");
-  // reads and writes go to GitHub's issues, a network round trip or several
-  const init = { method, headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(method === "GET" ? 15000 : 60000) };
-  if (body) {
-    init.body = JSON.stringify(body);
-    init.headers["Content-Type"] = "application/json";
-  }
-  let response;
-  try {
-    response = await fetch(`/api/next${path}`, init);
-  } catch {
-    throw new Error("Delivery is not running. Start it, then reload this page.");
-  }
-  if (response.status === 401) {
-    throw new Error("Delivery restarted at a new address. Open the link from chat or owlbear-next status.");
-  }
-  const data = await response.json().catch(() => null);
-  if (!response.ok || data === null) {
-    const detail = data?.detail;
-    const said = Array.isArray(detail) ? detail.map((e) => `${(e.loc ?? []).slice(1).join(".")}: ${e.msg}`).join("; ")
-      : detail;
-    throw new Error(said || `Delivery answered ${response.status} ${response.statusText}`);
-  }
-  return data;
+function button(label, onclick, { variant, icon, aria, busy = false, disabled = false } = {}) {
+  return state.pds
+    ? html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
+        aria=${aria ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`
+    : html`<button type="button" .disabled=${busy || disabled} @click=${onclick}>${label}</button>`;
 }
 
-function button(label, onclick, attrs = {}) {
-  const node = pds
-    ? el("p-button", label, { type: "button", compact: "true", ...attrs })
-    : el("button", label, { type: "button", ...(attrs.disabled ? { disabled: "" } : {}) });
-  node.onclick = onclick;
-  return node;
-}
-
-function waiting(node, on) {
-  if (pds) node.loading = on;
-  else node.disabled = on;
-}
-
-function tick(label, checked) {
-  if (pds) {
-    const node = el("p-checkbox", undefined, { label, "hide-label": "true", ...(checked ? { checked: "true" } : {}) });
-    return [node, () => node.checked === true];
+// A choice list showing *value* as the data has it; *chosen* gets the person's pick.
+function select(label, options, value, chosen, { compact = false, hideLabel = false } = {}) {
+  const changed = (e) => chosen(e.target.value);
+  if (state.pds) {
+    return html`<p-select label=${label} compact=${compact ? "true" : nothing}
+        hide-label=${hideLabel ? "true" : nothing} .value=${live(value)} @change=${changed}>
+      ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
   }
-  const node = el("input", undefined, { type: "checkbox", "aria-label": label });
-  node.checked = checked;
-  return [node, () => node.checked];
+  return html`<label class="field">${label}<select .value=${live(value)} @change=${changed}>
+    ${options.map(([v, said]) => html`<option value=${v} ?selected=${v === value}>${said}</option>`)}
+    </select></label>`;
 }
 
-function entry(label, value = "", multiline = false, rows = "3") {
-  const max = multiline ? "4000" : "200";
-  if (pds) {
-    const node = el(multiline ? "p-textarea" : "p-input-text", undefined,
-      { label, "max-length": max, ...(multiline ? { rows } : {}) });
-    node.value = value;
-    return [node, () => (node.value || "").trim(), () => { node.value = ""; }];
+// A text field bound to a draft: *typed* keeps each keystroke, so a re-render shows the draft again.
+function field(label, value, typed, { multiline = false, rows = "3" } = {}) {
+  const max = multiline ? "4000" : "200", keep = (e) => typed(e.target.value ?? "");
+  if (state.pds) {
+    return multiline
+      ? html`<p-textarea label=${label} max-length=${max} rows=${rows} .value=${live(value)} @input=${keep}
+          @change=${keep}></p-textarea>`
+      : html`<p-input-text label=${label} max-length=${max} .value=${live(value)} @input=${keep}
+          @change=${keep}></p-input-text>`;
   }
-  const node = el("label", label, { class: "field" });
-  const box = el(multiline ? "textarea" : "input", undefined,
-    { maxlength: max, ...(multiline ? { rows } : { type: "text" }) });
-  box.value = value;
-  node.append(box);
-  return [node, () => box.value.trim(), () => { box.value = ""; }];
+  return html`<label class="field">${label}${multiline
+    ? html`<textarea maxlength=${max} rows=${rows} .value=${live(value)} @input=${keep}></textarea>`
+    : html`<input type="text" maxlength=${max} .value=${live(value)} @input=${keep}>`}</label>`;
 }
 
-function select(label, options, value, attrs = {}) {
-  if (pds) {
-    const node = el("p-select", undefined, { label, ...attrs });
-    for (const [v, said] of options) node.append(el("p-select-option", said, { value: v }));
-    node.value = value;
-    return [node, () => node.value];
-  }
-  const node = el("label", label, { class: "field" }), box = el("select");
-  for (const [v, said] of options) box.append(el("option", said, { value: v }));
-  box.value = value;
-  node.append(box);
-  return [node, () => box.value];
+function tick(label, checked, flipped) {
+  const flip = (e) => flipped(e.target.checked === true);
+  return state.pds
+    ? html`<p-checkbox label=${label} hide-label="true" .checked=${live(checked)} @change=${flip}></p-checkbox>`
+    : html`<input type="checkbox" aria-label=${label} .checked=${live(checked)} @change=${flip}>`;
 }
 
 function age(iso) {
@@ -220,63 +130,38 @@ function age(iso) {
 
 function reference(ref) {
   try {
-    if (["http:", "https:"].includes(new URL(ref).protocol)) return el("a", ref, { href: ref, rel: "noopener" });
+    if (["http:", "https:"].includes(new URL(ref).protocol)) return html`<a href=${ref} rel="noopener">${ref}</a>`;
   } catch {
     // not a URL: a Change, step, session or path
   }
-  return document.createTextNode(ref);
+  return ref;
 }
 
 async function patch(e, fields, said = `Saved "${e.title}".`) {
   try {
-    const r = await call(`/backlog/${encodeURIComponent(e.id)}`, "PATCH", fields);
-    notify();
-    say(`${said}${r.notice ? ` ${r.notice}` : ""}`);
-    await refresh(e.id);
+    const r = await call(`/backlog/${encodeURIComponent(e.id)}`, { method: "PATCH", body: fields, timeout: WRITE });
+    if ("notes" in fields) state.notes.delete(e.id);
+    state.error = "";
+    state.status = `${said}${r.notice ? ` ${r.notice}` : ""}`;
+    await refresh();
   } catch (error) {
     notify(error.message);
   }
 }
 
-function latest(e) {  // a card kept across a refresh still acts on the entry as last loaded
-  return loaded.entries.find((x) => x.id === e.id) ?? e;
-}
-
 function linkPart(e, byId) {
-  const box = el("div", undefined, { class: "more" });
-  const linked = el("ul", undefined, { class: "plain" });
-  for (const id of e.links) {
-    const other = byId.get(id);
-    const item = el("li", other ? other.title : id);
-    item.append(" ", button("Unlink", () => patch(e, { links: latest(e).links.filter((x) => x !== id) }),
-      { variant: "secondary" }));
-    linked.append(item);
-  }
-  if (e.links.length) box.append(text("Linked entries", { size: "xs", weight: "semibold" }), linked);
-  const others = loaded.entries.filter((o) => o.id !== e.id && !e.links.includes(o.id));
-  if (others.length) {
-    const [choose, chosen] = select("Link to another entry", others.map((o) => [o.id, o.title]), others[0].id);
-    box.append(row(choose, button("Link", () => patch(e, { links: [...latest(e).links, chosen()] }),
-      { variant: "secondary" })));
-  }
-  return box;
-}
-
-function statusPart(e, drop = true) {
-  if (e.status === "inbox" || e.status === "open") {
-    const done = button("Mark done", () => patch(e, { status: "done" }), { variant: "secondary", icon: "check" });
-    return drop ? row(done, dropButton(e)) : row(done);
-  }
-  const reopen = button("Reopen", () => patch(e, { status: e.kind === "untriaged" ? "inbox" : "open" }),
-    { variant: "secondary", icon: "refresh" });
-  if (e.status !== "in-change") return row(reopen);
-  const options = [["-", "not named yet"], ...loaded.changes.map((s) => [s, s])];
-  const [which, chosen] = select("The Change it went into", options, e.change || "-");
-  which.addEventListener("change", () => {
-    const slug = chosen() === "-" ? "" : chosen();
-    if (slug !== e.change) patch(e, { change: slug });
-  });
-  return row(which, reopen);
+  const others = state.loaded.entries.filter((o) => o.id !== e.id && !e.links.includes(o.id));
+  // the pick as of the click, not as of the last render: choosing in the list does not render again
+  const target = () => (others.some((o) => o.id === state.linkTo.get(e.id)) ? state.linkTo.get(e.id) : others[0]?.id);
+  return html`<div class="more">
+    ${e.links.length ? html`<p-text size="xs" weight="semibold">Linked entries</p-text><ul class="plain">
+      ${e.links.map((id) => html`<li>${byId.get(id)?.title ?? id} ${button("Unlink",
+        () => patch(e, { links: e.links.filter((x) => x !== id) }), { variant: "secondary" })}</li>`)}</ul>`
+      : nothing}
+    ${others.length ? html`<div class="row">${select("Link to another entry", others.map((o) => [o.id, o.title]),
+      target(), (v) => state.linkTo.set(e.id, v))}${button("Link", () => patch(e, { links: [...e.links, target()] }),
+      { variant: "secondary" })}</div>` : nothing}
+  </div>`;
 }
 
 function dropButton(e) {
@@ -284,194 +169,215 @@ function dropButton(e) {
   return button("Drop", drop, { variant: "secondary", icon: "close" });
 }
 
+function statusPart(e, drop = true) {
+  if (e.status === "inbox" || e.status === "open") {
+    const done = button("Mark done", () => patch(e, { status: "done" }), { variant: "secondary", icon: "check" });
+    return html`<div class="row">${done}${drop ? dropButton(e) : nothing}</div>`;
+  }
+  const reopen = button("Reopen", () => patch(e, { status: e.kind === "untriaged" ? "inbox" : "open" }),
+    { variant: "secondary", icon: "refresh" });
+  if (e.status !== "in-change") return html`<div class="row">${reopen}</div>`;
+  const options = [["-", "not named yet"], ...state.loaded.changes.map((c) => [c, c])];
+  const named = (v) => {
+    const slug = v === "-" ? "" : v;
+    if (slug !== e.change) patch(e, { change: slug });
+  };
+  return html`<div class="row">${select("The Change it went into", options, e.change || "-", named)}${reopen}</div>`;
+}
+
 function kindPicker(e, inline = false) {
   const options = KINDS.map((k) => [k, inline && k === "untriaged" ? "Choose a kind" : k]);
-  const [kind, kindOf] = select("Kind", options, e.kind, inline ? { compact: "true", "hide-label": "true" } : {});
-  kind.addEventListener("change", () => { if (kindOf() !== e.kind) patch(e, { kind: kindOf() }); });
-  return kind;
+  const chosen = (v) => { if (v !== e.kind) patch(e, { kind: v }); };
+  return select("Kind", options, e.kind, chosen, { compact: inline, hideLabel: inline });
 }
 
 function scopePicker(e) {
-  const [scope, scopeOf] = select("Scope", SCOPES.map((s) => [s, s]), e.scope);
-  scope.addEventListener("change", () => { if (scopeOf() !== e.scope) patch(e, { scope: scopeOf() }); });
-  return scope;
+  return select("Scope", SCOPES.map((s) => [s, s]), e.scope, (v) => { if (v !== e.scope) patch(e, { scope: v }); });
 }
 
 function details(e, byId) {
-  const more = el("details");
-  more.open = opened.has(e.id);
-  more.addEventListener("toggle", () => (more.open ? opened.add(e.id) : opened.delete(e.id)));
-  const box = el("div", undefined, { class: "more" }), inbox = e.status === "inbox";
-  if (e.text) box.append(text(e.text, { class: "said" }));
-  if (e.evidence.length) {
-    const refs = el("ul", undefined, { class: "plain" });
-    for (const ref of e.evidence) {
-      const item = el("li");
-      item.append(reference(ref));
-      refs.append(item);
-    }
-    box.append(text("Evidence", { size: "xs", weight: "semibold" }), refs);
-  }
-  const [notes, notesOf] = entry("Your notes: context for whoever shapes the Change", e.notes, true);
-  // an inbox card shows its kind outside, to triage it at a glance
-  box.append(row(...(inbox ? [] : [kindPicker(e)]), scopePicker(e)));
-  box.append(notes, row(button("Save notes", () => patch(e, { notes: notesOf() }),
-    { variant: "secondary" })), linkPart(e, byId), statusPart(e, !inbox));
-  more.append(el("summary", "Details, notes and links"), box);
-  return [more, notesOf];
+  const inbox = e.status === "inbox", notes = state.notes.get(e.id) ?? e.notes;
+  const toggled = (ev) => (ev.target.open ? state.opened.add(e.id) : state.opened.delete(e.id));
+  return html`<details .open=${state.opened.has(e.id)} @toggle=${toggled}>
+    <summary>Details, notes and links</summary>
+    <div class="more">
+      ${e.text ? html`<p-text class="said">${e.text}</p-text>` : nothing}
+      ${e.evidence.length ? html`<p-text size="xs" weight="semibold">Evidence</p-text>
+        <ul class="plain">${e.evidence.map((ref) => html`<li>${reference(ref)}</li>`)}</ul>` : nothing}
+      <div class="row">${inbox ? nothing : kindPicker(e)}${scopePicker(e)}</div>
+      ${field("Your notes: context for whoever shapes the Change", notes, (v) => state.notes.set(e.id, v),
+        { multiline: true })}
+      <div class="row">${button("Save notes", () => patch(e, { notes: (state.notes.get(e.id) ?? e.notes).trim() }),
+        { variant: "secondary" })}
+      </div>
+      ${linkPart(e, byId)}
+      ${statusPart(e, !inbox)}
+    </div>
+  </details>`;
 }
 
 function card(e, byId) {
   const choosable = (e.status === "inbox" || e.status === "open") && !e.opening;
-  const node = el("li", undefined, { class: choosable ? "entry" : "entry unselectable" });
-  let box = null;
-  if (choosable) {
-    let on;
-    [box, on] = tick(`Select ${e.title}`, selected.has(e.id));
-    box.addEventListener("change", () => {
-      if (on()) selected.add(e.id);
-      else selected.delete(e.id);
-      showActions();
-    });
-    node.append(box);
-  }
-  const body = el("div", undefined, { class: "body" }), title = el("div", undefined, { class: "title" });
-  title.append(text(e.title, { weight: "semibold" }), el("p-tag", e.kind, { variant: TAGS[e.kind], compact: "true" }));
-  if (e.status !== "inbox" && e.status !== "open") title.append(el("p-tag", e.status, { compact: "true" }));
-  if (e.opening) title.append(el("p-tag", "chat opening", { variant: "info", compact: "true" }));
   const seen = e.count > 1 ? `seen ${e.count} times, last ${age(e.last_seen)}` : `seen ${age(e.last_seen)}`;
   const where = e.change ? ` · in Change ${e.change}` : "";
   const scope = ` · ${e.scope}${e.scope === "project" && e.project ? ` ${e.project}` : ""}`;
-  const [more, notesOf] = details(e, byId);
-  const meta = text(`From ${SOURCES[e.source] ?? e.source} · ${seen}${where}${scope} · `,
-    { size: "xs", color: "contrast-medium" });
-  meta.append(e.url ? el("a", `#${e.id}`, { href: e.url, rel: "noopener" }) : `#${e.id}`);
-  body.append(title, meta);
-  if (e.status === "inbox" && !e.opening) {
-    const triage = row(kindPicker(e, true), dropButton(e));
-    triage.classList.add("triage");
-    body.append(triage);
-  }
-  body.append(more);
-  node.append(body);
-  built.set(e.id, { node, notes: notesOf, box });
-  return node;
-}
-
-// The card already shown while the person works in it (focus inside or notes not saved); null to build it anew.
-function kept(e, rebuild) {
-  const was = built.get(e.id);
-  if (!was || e.id === rebuild) return null;
-  return was.node.contains(document.activeElement) || was.notes() !== e.notes.trim() ? was.node : null;
-}
-
-// Put the nodes in order, moving only those out of place, so a kept card keeps its focus.
-function place(list, nodes) {
-  nodes.forEach((node, i) => { if (list.children[i] !== node) list.insertBefore(node, list.children[i] ?? null); });
-  while (list.children.length > nodes.length) list.lastElementChild.remove();
-}
-
-function empty(message) {
-  const node = el("li");
-  node.append(text(message, { size: "sm", color: "contrast-medium" }));
-  return node;
-}
-
-// The selection bar: shown while entries are ticked, so Create Change stays in reach wherever they are.
-function showActions() {
-  const chosen = [...selected].filter((id) => loaded.entries.some((e) => e.id === id && !e.opening
-    && ["inbox", "open"].includes(e.status)));
-  const node = button(`Create Change from ${chosen.length}`, createChange, { icon: "add", aria: DIALOG });
-  if (creating) waiting(node, true);
-  const clear = button("Clear selection", () => { selected.clear(); refresh(); }, { variant: "secondary" });
-  document.getElementById("actions").replaceChildren(node, clear);
-  document.getElementById("chosen").textContent = `${chosen.length} selected`;
-  document.getElementById("selection").hidden = !chosen.length && !creating;
+  const choose = (on) => {
+    if (on) state.selected.add(e.id);
+    else state.selected.delete(e.id);
+    show();
+  };
+  return html`<li class=${choosable ? "entry" : "entry unselectable"}>
+    ${choosable ? tick(`Select ${e.title}`, state.selected.has(e.id), choose) : nothing}
+    <div class="body">
+      <div class="title"><p-text weight="semibold">${e.title}</p-text>
+        <p-tag variant=${TAGS[e.kind]} compact="true">${e.kind}</p-tag>
+        ${e.status !== "inbox" && e.status !== "open" ? html`<p-tag compact="true">${e.status}</p-tag>` : nothing}
+        ${e.opening ? html`<p-tag variant="info" compact="true">chat opening</p-tag>` : nothing}</div>
+      <p-text size="xs" color="contrast-medium">From ${SOURCES[e.source] ?? e.source} · ${seen}${where}${scope} ·
+        ${e.url ? html`<a href=${e.url} rel="noopener">#${e.id}</a>` : `#${e.id}`}</p-text>
+      ${e.status === "inbox" && !e.opening ? html`<div class="row triage">${kindPicker(e, true)}${dropButton(e)}</div>`
+        : nothing}
+      ${details(e, byId)}
+    </div>
+  </li>`;
 }
 
 function shows(e) {
   return ["scope", "project", "kind"].every((k) => filter[k] === "all" || e[k] === filter[k]);
 }
 
-// The filter row: scope, project and class; the state is the page's sections.
-function showFilters() {
-  const projects = [...new Set(loaded.entries.map((e) => e.project).filter(Boolean))].sort();
-  if (JSON.stringify(projects) === filtersFor) return;
-  filtersFor = JSON.stringify(projects);
-  if (filter.project !== "all" && !projects.includes(filter.project)) filter.project = "all";
-  const pick = (label, k, values) => {
-    const [node, value] = select(label, [["all", "all"], ...values.map((v) => [v, v])], filter[k]);
-    node.addEventListener("change", () => { filter[k] = value(); refresh(); });
-    return node;
-  };
-  document.getElementById("filters").replaceChildren(pick("Scope", "scope", SCOPES),
-    pick("Project", "project", projects), pick("Class", "kind", KINDS));
+// The selectable entries still ticked; an entry that moved on or is opening a chat drops out.
+function chosen() {
+  return state.loaded.entries.filter((e) => state.selected.has(e.id) && !e.opening
+    && ["inbox", "open"].includes(e.status));
 }
 
-async function refresh(rebuild = null) {
+// The filter row: scope, project and class; the state is the page's sections. A vanished project falls back to all.
+function filters() {
+  const projects = [...new Set(state.loaded.entries.map((e) => e.project).filter(Boolean))].sort();
+  if (filter.project !== "all" && !projects.includes(filter.project)) filter.project = "all";
+  const pick = (label, k, values) => select(label, [["all", "all"], ...values.map((v) => [v, v])], filter[k],
+    (v) => { filter[k] = v; show(); });
+  return html`<div id="filters" class="row" role="group" aria-label="Show only">
+    ${pick("Scope", "scope", SCOPES)}${pick("Project", "project", projects)}${pick("Class", "kind", KINDS)}</div>`;
+}
+
+function list(id, entries, byId, empty) {
+  const items = entries.length ? repeat(entries, (e) => e.id, (e) => card(e, byId))
+    : html`<li><p-text size="sm" color="contrast-medium">${empty}</p-text></li>`;
+  return html`<ul id=${id} class="entries" aria-labelledby=${id === "later" ? "later-title" : nothing}>${items}</ul>`;
+}
+
+function addForm() {
+  const add = () => addIdea();
+  return html`<section class="panel" aria-labelledby="add-title">
+    <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
+    <div id="add" class="row">
+      ${field("Title", state.idea.title, (v) => { state.idea.title = v; })}
+      ${field("What you noticed (optional)", state.idea.text, (v) => { state.idea.text = v; },
+        { multiline: true, rows: "1" })}
+      ${button("Add idea", add, { icon: "add", busy: state.adding })}
+    </div>
+  </section>`;
+}
+
+function started() {
+  const s = state.started;
+  if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
+  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Run this
+    command instead:<pre><code>${s.command}</code></pre>`}</p-text>`;
+}
+
+function view() {
+  const loaded = state.loaded;
+  const body = [];
+  if (loaded) {
+    for (const id of [...state.selected]) if (!chosen().some((e) => e.id === id)) state.selected.delete(id);
+    const byId = new Map(loaded.entries.map((e) => [e.id, e]));
+    const head = filters();
+    const lists = { inbox: [], open: [], later: [] };
+    for (const e of loaded.entries.filter(shows)) lists[e.status in lists ? e.status : "later"].push(e);
+    const notes = [`The backlog is the issues of ${loaded.repository} (this project: ${loaded.project || "none"}).`,
+      loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : ""];
+    const ticked = chosen().length;
+    body.push(html`<p-text id="where" size="xs" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
+      ${head}
+      ${addForm()}
+      <section aria-labelledby="inbox-title">
+        <div><p-heading size="xl"><h2 id="inbox-title">Inbox (${lists.inbox.length})</h2></p-heading>
+          <p-text>Choose a kind to move an entry to Open, or drop it.</p-text></div>
+        ${list("inbox", lists.inbox, byId, "Nothing new to triage.")}
+      </section>
+      <section aria-labelledby="open-title">
+        <div><p-heading size="xl"><h2 id="open-title">Open (${lists.open.length})</h2></p-heading>
+          <p-text>Tick entries to shape a Change from them.</p-text></div>
+        ${list("open", lists.open, byId, "No open entries.")}
+      </section>
+      <details class="later quiet">
+        <summary id="later-title">In a Change, done or dropped (${lists.later.length})</summary>
+        ${list("later", lists.later, byId, "Nothing here yet.")}
+      </details>
+      <div id="selection" class="bar" role="region" aria-label="Selected entries" ?hidden=${!ticked && !state.creating}>
+        <p-text id="chosen" weight="semibold">${ticked} selected</p-text>
+        <div id="actions" class="row">
+          ${button(`Create Change from ${ticked}`, createChange, { icon: "add", aria: DIALOG, busy: state.creating })}
+          ${button("Clear selection", () => { state.selected.clear(); show(); }, { variant: "secondary" })}
+        </div>
+      </div>`);
+  }
+  return html`
+    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
+      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
+    </p-inline-notification>
+    ${started()}
+    <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
+    ${body}`;
+}
+
+async function refresh() {
   try {
-    loaded = await call("/backlog");
+    state.loaded = await call("/backlog", { timeout: GET });
   } catch (e) {
     return notify(e.message);
   }
-  showFilters();
-  const byId = new Map(loaded.entries.map((e) => [e.id, e]));
-  for (const id of [...selected]) {
-    const e = byId.get(id);
-    if (!e || e.opening || !["inbox", "open"].includes(e.status)) selected.delete(id);
-  }
-  for (const id of [...built.keys()]) if (!byId.has(id)) built.delete(id);
-  const focused = document.activeElement;
-  const lists = { inbox: [], open: [], later: [] };
-  for (const e of loaded.entries.filter(shows)) {
-    lists[e.status in lists ? e.status : "later"].push(kept(e, rebuild) ?? card(e, byId));
-  }
-  const none = { inbox: "Nothing new to triage.", open: "No open entries.", later: "Nothing here yet." };
-  const titles = { inbox: "Inbox", open: "Open", later: "In a Change, done or dropped" };
-  for (const [id, cards] of Object.entries(lists)) {
-    place(document.getElementById(id), cards.length ? cards : [empty(none[id])]);
-    document.getElementById(`${id}-title`).textContent = `${titles[id]} (${cards.length})`;
-  }
-  for (const [id, b] of built) if (b.box) b.box.checked = selected.has(id);  // a kept card follows Clear
-  if (focused?.isConnected && document.activeElement !== focused) focused.focus();
-  const notes = [`The backlog is the issues of ${loaded.repository} (this project: ${loaded.project || "none"}).`,
-    loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : ""];
-  document.getElementById("where").textContent = notes.filter(Boolean).join(" ");
-  showActions();
+  show();
 }
 
-async function addIdea(trigger, title, said, clear) {
-  if (!title()) return notify("Give the idea a title.");
-  waiting(trigger, true);
+async function addIdea() {
+  const title = state.idea.title.trim(), text = state.idea.text.trim();
+  if (!title) return notify("Give the idea a title.");
+  state.adding = true;
+  show();
   try {
-    const r = await call("/backlog", "POST", { title: title(), text: said() });
-    clear();
-    notify();
+    const r = await call("/backlog", { method: "POST", body: { title, text }, timeout: WRITE });
+    state.idea = { title: "", text: "" };
+    state.error = "";
     const what = r.new ? `Added "${r.entry.title}" to the inbox.` : `"${r.entry.title}" was already there; `
       + `seen ${r.entry.count} times now.`;
-    say(`${what}${r.notice ? ` ${r.notice}` : ""}`);
+    state.status = `${what}${r.notice ? ` ${r.notice}` : ""}`;
+    state.adding = false;
     await refresh();
   } catch (e) {
+    state.adding = false;
     notify(e.message);
-  } finally {
-    waiting(trigger, false);
   }
 }
 
 async function launched(id) {  // the host opens the chat in the background; VS Code may first have to start
   for (;;) {
-    const s = await call(`/new-change/${encodeURIComponent(id)}`);
+    const s = await call(`/new-change/${encodeURIComponent(id)}`, { timeout: GET });
     if (s.state !== "opening") return s;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 
 async function createChange() {
-  const chosen = loaded.entries.filter((e) => selected.has(e.id));
-  if (!chosen.length) return notify("Select one or more entries first.");
-  const titles = chosen.map((e) => e.title), many = chosen.length > 1;
+  const picked = chosen();
+  if (!picked.length) return notify("Select one or more entries first.");
+  const titles = picked.map((e) => e.title), many = picked.length > 1;
   const wanted = await ask({
-    title: `Shape a Change from ${many ? `these ${chosen.length} entries` : "this entry"}?`, yes: "Open the chat",
+    title: `Shape a Change from ${many ? `these ${picked.length} entries` : "this entry"}?`, yes: "Open the chat",
     no: "Keep selected",
     now: "A chat opens in VS Code where the shaper turns them, with their notes, evidence and links, into a brief; "
       + "the chat uses AI credits. Once it opens, they are marked as in a Change.",
@@ -481,50 +387,31 @@ async function createChange() {
     instead: "The entries stay selected and unchanged.",
   });
   if (!wanted) return;
-  const result = document.getElementById("started");
-  creating = true;
-  showActions();
-  result.textContent = "Opening the shaping chat…";
+  state.creating = true;
+  state.started = { text: "Opening the shaping chat…" };
+  show();
   try {
-    const r = await call("/backlog/change", "POST", { ids: chosen.map((e) => e.id) });
+    const r = await call("/backlog/change", { body: { ids: picked.map((e) => e.id) }, timeout: WRITE });
     const s = r.started ? await launched(r.launch) : { state: "failed", ...r };
-    if (r.started) selected.clear();
-    notify();
-    if (s.state === "open") {
-      result.textContent = `A chat opened in VS Code to shape a Change from ${chosen.length} entries.`
-        + (s.warning ? ` Note: ${s.warning}.` : "");
-    } else {
-      const command = el("pre");
-      command.append(el("code", s.command));
-      result.replaceChildren(`Could not open the chat: ${s.reason}. Run this command instead:`, command);
-    }
+    if (r.started) state.selected.clear();
+    state.error = "";
+    state.started = s.state === "open"
+      ? { text: `A chat opened in VS Code to shape a Change from ${picked.length} entries.`
+        + (s.warning ? ` Note: ${s.warning}.` : "") }
+      : { reason: s.reason, command: s.command };
   } catch (e) {
-    result.textContent = "";
-    notify(e.message);
+    state.started = null;
+    state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
   } finally {
-    creating = null;
+    state.creating = false;
     await refresh();
   }
 }
 
-async function start() {
-  // The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
-  const ready = customElements.whenDefined("p-button").then(() => true);
-  pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
-  if (!pds) {
-    document.documentElement.classList.add("no-pds");
-    document.getElementById("offline").hidden = false;
-  }
-  const [title, titleOf, clearTitle] = entry("Title");
-  const [said, saidOf, clearSaid] = entry("What you noticed (optional)", "", true, "1");
-  const add = button("Add idea", () => addIdea(add, titleOf, saidOf, () => { clearTitle(); clearSaid(); }),
-    { icon: "add" });
-  document.getElementById("add").append(title, said, add);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && !creating) refresh(); });
-  refresh();
-}
-
-start();
+// The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
+state.pds = await designSystem();
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !state.creating) refresh(); });
+refresh();
 </script>
 </body>
 </html>

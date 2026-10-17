@@ -1,8 +1,14 @@
-"""The host's pages, their tab bar and the base stylesheet they share (TD-85, TD-113): Changes to Maintenance."""
+"""The host's pages, their tab bar, the base stylesheet and the scripts they share (TD-85, TD-113, TD-264)."""
 
 from __future__ import annotations
 
 from importlib.resources import files
+from typing import TYPE_CHECKING
+
+from fastapi import HTTPException, Response
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 TABS = (
     ("/", "Changes", "changes.html"),
@@ -14,6 +20,44 @@ TABS = (
 MARK = "<!-- tabs -->"  # where each page takes the tab bar
 BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before its own
 ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
+PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
+LIT = "vendor/lit-html"  # the vendored lit-html release; its SHA256SUMS names every file it serves (TD-264)
+
+
+def lit_files() -> dict[str, str]:
+    """Each vendored lit-html file with its recorded SHA-256, from ``SHA256SUMS``."""
+    sums = files("owlbear_delivery_next").joinpath("web", LIT, "SHA256SUMS").read_text(encoding="utf-8")
+    return {name: digest for digest, name in (line.split("  ", 1) for line in sums.splitlines() if line)}
+
+
+def lit_version() -> str:
+    """The vendored release, as its URLs name it, so a browser never mixes files of two releases."""
+    first = files("owlbear_delivery_next").joinpath("web", LIT, "VERSION").read_text(encoding="utf-8")
+    return first.splitlines()[0].removeprefix("lit-html ")
+
+
+def assets(app: FastAPI) -> None:
+    """Serve the design system, lit-html and the pages' shared module: fixed names only, never a path from the URL."""
+    web, lit, release = files("owlbear_delivery_next").joinpath("web"), lit_files(), lit_version()
+
+    @app.get("/assets/pds/{name}")
+    def pds(name: str) -> Response:
+        if name not in PDS:
+            raise HTTPException(404, "no such asset")
+        body = web.joinpath("pds", name).read_bytes()
+        return Response(body, media_type=PDS[name], headers={"Cache-Control": "max-age=3600"})
+
+    @app.get("/assets/lit-html/{version}/{name:path}")
+    def lit_html(version: str, name: str) -> Response:
+        if version != release or name not in lit:
+            raise HTTPException(404, "no such asset")
+        body = web.joinpath(LIT, *name.split("/")).read_bytes()
+        return Response(body, media_type="text/javascript", headers={"Cache-Control": "max-age=3600"})
+
+    @app.get("/assets/ui.mjs")
+    def ui() -> Response:
+        body = web.joinpath("ui.mjs").read_bytes()  # changes with Delivery's code, so always revalidated
+        return Response(body, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 
 def nav(current: int) -> str:

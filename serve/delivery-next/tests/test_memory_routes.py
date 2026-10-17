@@ -1,9 +1,12 @@
+import contextlib
 import json
 import subprocess
 import threading
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -193,3 +196,105 @@ def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:
     except Exception as exc:  # noqa: BLE001 - the test reports what the agent met
         return type(exc)
     return None
+
+
+@contextlib.contextmanager
+def memory_page(store: Store) -> Iterator[Any]:
+    """The Memory page in a real browser, offline: only the test host answers, so the plain controls show."""
+    import socket  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    import uvicorn  # noqa: PLC0415
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/memory#token=tok")
+            yield page
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+def refreshed(page: Any) -> None:
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+
+
+@pytest.mark.browser
+def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(shared):
+    """TD-264: the draft lives in page state, so a filter that removes the cards above it keeps what was typed."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    engine = MemoryEngine(folder)
+    above = seed(folder, "Name the release", agent="shaper")
+    engine.edit(above.id, {"categories": [MemoryCategory.PROCESS]}, expected_revision=above.revision)
+    seed(folder, "Ask before merging", agent="shaper")  # newer, so listed above it in the same group
+    with memory_page(store) as page:
+        expect(page.locator("#shown")).to_have_text("2 of 2 shown")
+        waiting = page.locator("section", has_text="Waiting for the curator").locator(".entry")
+        expect(waiting).to_have_count(2)
+        expect(waiting.first).to_contain_text("Ask before merging")
+        page.locator(".entry", has_text="Name the release").get_by_role("button", name="Edit").click()
+        page.get_by_label("Title").fill("Name the release after its tag")
+        page.get_by_label("Category").select_option("process")  # the card above it leaves the page
+        expect(page.locator("#shown")).to_have_text("1 of 2 shown")
+        expect(page.get_by_label("Title")).to_have_value("Name the release after its tag")
+        page.get_by_role("button", name="Save").click()
+        expect(page.locator("#status")).to_have_text('Saved "Name the release after its tag".')
+    assert {e.id: e.title for e in MemoryEngine(folder).get_entries()}[above.id] == "Name the release after its tag"
+
+
+@pytest.mark.browser
+def test_approving_one_memory_leaves_the_next_ones_button_ready(shared):
+    """Sol, TD-264: a finished action's busy state never moves to the card that takes its place."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    seed(folder, "Run ruff first", curated=True)
+    seed(folder, "Pin the runtime", curated=True)
+    with memory_page(store) as page:
+        review = page.locator("section", has_text="Needs your review")
+        expect(review.locator(".entry")).to_have_count(2)
+        review.locator(".entry").first.get_by_role("button", name="Approve").click()
+        expect(review.locator(".entry")).to_have_count(1)
+        expect(review.get_by_role("button", name="Approve")).to_be_enabled()
+
+
+@pytest.mark.browser
+def test_a_filter_whose_choice_vanished_shows_everything_again(shared):
+    """Sol, TD-264: the filter falls back to Any before the list is computed, so the count and list agree."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    builder = seed(folder, "Run ruff first", curated=True)
+    seed(folder, "Ask before merging", agent="shaper")
+    with memory_page(store) as page:
+        page.get_by_label("Agent").select_option("builder")
+        expect(page.locator("#shown")).to_have_text("1 of 2 shown")
+        engine = MemoryEngine(folder)
+        now = next(e for e in engine.get_entries() if e.id == builder.id)
+        engine.edit(builder.id, {"scope_agents": ["reviewer"]}, expected_revision=now.revision)
+        refreshed(page)
+        expect(page.get_by_label("Agent")).to_have_value("any")
+        expect(page.locator("#shown")).to_have_text("2 of 2 shown")
+        expect(page.locator(".entry")).to_have_count(2)

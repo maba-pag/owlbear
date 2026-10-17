@@ -19,6 +19,9 @@ SHIPPED = (
     "web/**/*.css",
     "web/**/*.js",
     "web/**/*.mjs",
+    "web/vendor/*/LICENSE",  # a vendored release's license, version and pinned sums (TD-264)
+    "web/vendor/*/VERSION",
+    "web/vendor/*/SHA256SUMS",
 )
 
 

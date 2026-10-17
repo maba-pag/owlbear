@@ -11,7 +11,7 @@
 </script>
 <!-- base -->
 <style>
-  main > p-text:empty { display: none !important; }
+  #page > p-text:empty { display: none !important; }
   main { max-width: 90rem; }
   #board { display: grid; gap: var(--p-spacing-fluid-md); align-items: start; }
   #list, #detail { display: grid; gap: var(--p-spacing-fluid-sm); align-content: start; min-width: 0; }
@@ -123,143 +123,114 @@
 <!-- tabs -->
 <header>
   <p-heading size="2xl"><h1>Changes</h1></p-heading>
+  <span id="header-actions"></span>
 </header>
-<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
-  uses plain controls. Reload to try again.</p>
-<p-text id="started" aria-live="polite"></p-text>
-<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
-<p-text id="seen" color="contrast-medium" size="xs"></p-text>
-<section id="notes" class="panel" aria-label="Repository settings" hidden></section>
-<div id="board">
-  <section id="list" aria-label="Changes">
-    <div id="changes"></div>
-  </section>
-  <section id="detail" aria-label="Selected Change"></section>
-</div>
+<div id="page"></div>
 </main>
 <!-- ask -->
-<script>
-"use strict";
-const hash = new URLSearchParams(location.hash.slice(1));
-if (hash.get("token")) {
-  sessionStorage.setItem("token", hash.get("token"));
-  history.replaceState(null, "", location.pathname + location.search);
-}
-const token = sessionStorage.getItem("token");
+<script type="module">
+import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
+import { call as host, designSystem, HostDown, Restarted, token } from "/assets/ui.mjs";
+
 const TITLE = document.title;
-let selected = new URLSearchParams(location.search).get("change"), lastSeen = null, busy = false, again = false;
-let pds = false, arrived = Boolean(selected), doneOpen = false;  // arrived: focus the detail once it shows
-let shown = { slug: null, forms: "" }, draft = false;  // the rendered detail, and whether it holds unsent input
-let refused = null;  // why the host refused the owner's last action; shown until the detail's forms change
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const DIALOG = "{ 'aria-haspopup': 'dialog' }";  // PDS's aria property, for a button that opens a dialog
+const REVERT = "Reversing the merge needs a revert you make yourself.";
+// Everything the page shows comes from here (TD-264): the list and the detail as last read, the owner's unsent input
+// per form (drafts: form key -> its fields), which toggles are open (by their summary), and the notes above.
+const state = {
+  pds: true, changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
+  stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, creating: false,
+};
+let busy = false, again = false, lastSeen = null, arrived = false;
 
-class HostDown extends Error {}
-class Restarted extends Error {}
-
-async function call(path, body) {
-  const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
-  if (body) {
-    init.method = "POST";
-    init.body = JSON.stringify(body);
-    init.headers["Content-Type"] = "application/json";
+function show() {
+  const focused = document.activeElement;
+  render(view(), document.getElementById("page"));
+  render(button("New Change", newChange, { icon: "add", aria: DIALOG, busy: state.creating }),
+    document.getElementById("header-actions"));
+  if (focused?.isConnected && document.activeElement !== focused && !document.querySelector("dialog[open]")) {
+    focused.focus({ preventScroll: true });
   }
-  let response;
-  try {
-    response = await fetch(`/api/next${path}`, init);
-  } catch {
-    throw new HostDown();
-  }
-  if (response.status === 401 && token) throw new Restarted();
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
-  }
-  return data;
+  document.title = youCount() ? `(${youCount()}) ${TITLE}` : TITLE;
 }
 
-function el(tag, text, attrs = {}) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-  return node;
+function call(path, body) {
+  return host(path, body === undefined ? {} : { body });
 }
 
-function refusal(said) {
-  const node = notice("error", "Not done", said);
-  node.classList.add("refused");
-  return node;
+function draft(key, fresh) {
+  if (!state.drafts.has(key)) state.drafts.set(key, fresh());
+  return state.drafts.get(key);
 }
 
-// The refusal goes beside the form that was used, so it is seen where the owner is looking; the poll keeps it.
-function send(path, body, origin = shown) {  // origin: the rendered detail whose form the person used; true if taken
-  const from = document.activeElement?.closest?.("#detail .act");
-  return call(`/changes/${origin.slug}${path}`, body).then(() => {
-    refused = null;
-    if (shown === origin) {  // a later detail keeps its own draft
-      draft = false;
-      document.activeElement.blur();
-    }
-    return refresh().then(() => true);
-  }, (e) => {
-    if (e instanceof HostDown || e instanceof Restarted || shown !== origin) return failed(e) && false;
-    refused = { forms: origin.forms, text: e.message };
-    for (const old of document.querySelectorAll("#detail .refused")) old.remove();
-    const node = refusal(e.message);
-    if (from?.isConnected) from.append(node);
-    else document.querySelector("#detail .detail-head")?.after(node);
-    node.scrollIntoView({ block: "nearest" });
-  });
+// A toggle whose open state survives every render, kept under *key*: its summary, unless that changes as it runs.
+function toggle(key, summary, ...children) {
+  const toggled = (e) => (e.target.open ? state.opened.add(key) : state.opened.delete(key));
+  return html`<details .open=${state.opened.has(key)} @toggle=${toggled}><summary>${summary}</summary>
+    ${children}</details>`;
 }
 
-function notify(...nodes) {
-  const error = document.getElementById("error");
-  error.replaceChildren(...nodes);
-  error.hidden = !nodes.length;
+function disclosure(summary, ...children) {
+  return toggle(summary, summary, ...children);
 }
 
 function unreachable(e) {
-  if (e instanceof Restarted) {
-    notify("Delivery restarted at a new address — open the link from chat or ",
-      el("code", "owlbear-next status"), ".");
-  } else {
-    notify("Delivery is not running. Start it with the VS Code task \"OwlBear Delivery host\" or ",
-      el("code", "owlbear-next host"), " in the project, then reload this page.");
-  }
-  for (const id of ["list", "detail"]) document.getElementById(id).classList.add("stale");
-  if (lastSeen) document.getElementById("seen").textContent = `last seen ${lastSeen.toLocaleTimeString()}`;
+  state.error = e instanceof Restarted
+    ? html`Delivery restarted at a new address — open the link from chat or <code>owlbear-next status</code>.`
+    : html`Delivery is not running. Start it with the VS Code task "OwlBear Delivery host" or
+      <code>owlbear-next host</code> in the project, then reload this page.`;
+  state.stale = true;
+  if (lastSeen) state.seen = `last seen ${lastSeen.toLocaleTimeString()}`;
 }
 
 function failed(e) {
-  if (e instanceof HostDown || e instanceof Restarted) return unreachable(e);
-  notify(token ? e.message : "Open the URL the host printed, including #token=…");
+  if (e instanceof HostDown || e instanceof Restarted) unreachable(e);
+  else state.error = token ? e.message : "Open the URL the host printed, including #token=…";
+  show();
 }
 
-function text(value, attrs = {}) {
-  return el("p-text", value, attrs);
+function notify(message) {
+  state.error = message;
+  show();
 }
 
-function list(items, tag = "ul") {
-  const node = el(tag);
-  for (const item of items) node.append(el("li", item));
-  return node;
+// The forms the detail shows, as a key: a refusal stays beside them until they change.
+function formsOf(d) {
+  const r = d.visual_round, asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
+  return JSON.stringify([d.slug, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head, asked,
+    d.brief.version, d.brief.approved, d.pullback?.state, d.paused, r?.number, r?.outcome,
+    d.owner_criteria.map((k) => k.id), d.retry?.attempt, d.retry?.head]);
 }
 
-function heading(level, title, size) {
-  const node = el("p-heading", undefined, { size });
-  node.append(el(`h${level}`, title));
-  return node;
+// One action of the owner on the shown Change. A refusal goes beside the form that was used (*form*), so it is seen
+// where he is looking; the poll keeps it until the forms change. True once the host took it.
+async function send(path, body, d, form = "") {
+  try {
+    await call(`/changes/${d.slug}${path}`, body);
+  } catch (e) {
+    if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.slug) return failed(e) && false;
+    state.refused = { forms: formsOf(d), form, text: e.message };
+    show();
+    document.querySelector("#detail .refused")?.scrollIntoView({ block: "nearest" });
+    return false;
+  }
+  state.refused = null;
+  if (form) state.drafts.delete(form);
+  document.activeElement?.blur?.();
+  await refresh();
+  return true;
 }
 
-function button(label, onclick, attrs = {}) {
-  const node = pds
-    ? el("p-button", label, { type: "button", compact: "true", ...attrs })
-    : el("button", label, { type: "button" });
-  node.onclick = onclick;
-  return node;
-}
-
-function waiting(node, on) {
-  if (pds) node.loading = on;
-  else node.disabled = on;
+function button(label, onclick, { icon, variant, aria, busy = false, disabled = false, title, keys, cls } = {}) {
+  return state.pds
+    ? html`<p-button type="button" compact="true" icon=${icon ?? nothing} variant=${variant ?? nothing}
+        aria=${aria ?? nothing} title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing} class=${cls ?? nothing}
+        .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`
+    : html`<button type="button" title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing}
+        class=${cls ?? nothing} .disabled=${busy || disabled} @click=${onclick}>${label}</button>`;
 }
 
 function external(label, href) {
@@ -269,121 +240,127 @@ function external(label, href) {
   } catch {
     web = false;
   }
-  if (!web) return text(label);
-  const link = el("a", label, { href, target: "_blank", rel: "noopener" });
-  if (!pds) return link;
-  const pure = el("p-link-pure", undefined, { icon: "external" });
-  pure.append(link);
-  return pure;
+  if (!web) return html`<p-text>${label}</p-text>`;
+  const link = html`<a href=${href} target="_blank" rel="noopener">${label}</a>`;
+  return state.pds ? html`<p-link-pure icon="external">${link}</p-link-pure>` : link;
 }
 
-function field(label, rows = "2") {
-  if (pds) {
-    const node = el("p-textarea", undefined, { label, rows });
-    return [node, () => node.value || ""];
-  }
-  const node = el("label", label, { class: "field" }), input = el("textarea", undefined, { rows });
-  node.append(input);
-  return [node, () => input.value];
+// A text field bound to the draft field *name* of form *key*.
+function field(key, name, label, rows = "2") {
+  const d = draft(key, () => ({})), keep = (e) => { d[name] = e.target.value ?? ""; };
+  return state.pds
+    ? html`<p-textarea label=${label} rows=${rows} .value=${live(d[name] ?? "")} @input=${keep}
+        @change=${keep}></p-textarea>`
+    : html`<label class="field">${label}<textarea rows=${rows} .value=${live(d[name] ?? "")}
+        @input=${keep}></textarea></label>`;
 }
 
-function choice(label, options) {
-  if (pds) {
-    const node = el("p-radio-group", undefined, { name: "option", label });
-    for (const o of options) node.append(el("p-radio-group-option", undefined, { value: o.id, label: o.label }));
-    return [node, () => node.value || null];
+// Radio choices bound to the draft field *name* of form *key*; re-rendering never changes the choice, and a choice
+// the data no longer offers is dropped, so nothing unseen is sent.
+function choice(key, name, label, options) {
+  const d = draft(key, () => ({})), pick = (v) => { d[name] = v; show(); };
+  if (d[name] !== undefined && !options.some((o) => o.id === d[name])) delete d[name];
+  if (state.pds) {
+    return html`<p-radio-group name=${`${key}-${name}`} label=${label} .value=${live(d[name] ?? "")}
+      @change=${(e) => pick(e.target.value)}>${options.map((o) => html`<p-radio-group-option value=${o.id}
+      label=${o.label}></p-radio-group-option>`)}</p-radio-group>`;
   }
-  const node = el("fieldset");
-  node.append(el("legend", label));
-  for (const o of options) {
-    const item = el("label");
-    item.append(el("input", undefined, { type: "radio", name: "option", value: o.id }), ` ${o.label}`);
-    node.append(item);
-  }
-  return [node, () => node.querySelector(":checked")?.value ?? null];
+  return html`<fieldset><legend>${label}</legend>${options.map((o) => html`<label><input type="radio"
+    name=${`${key}-${name}`} value=${o.id} .checked=${live(d[name] === o.id)} @change=${() => pick(o.id)}>
+    ${o.label}</label>`)}</fieldset>`;
+}
+
+function tick(label, checked, flipped) {
+  const flip = (e) => flipped(e.target.checked === true);
+  return state.pds
+    ? html`<p-checkbox label=${label} .checked=${live(checked)} @change=${flip}></p-checkbox>`
+    : html`<label><input type="checkbox" .checked=${live(checked)} @change=${flip}> ${label}</label>`;
+}
+
+function hd(level, title, size, { tabindex } = {}) {
+  const t = { 2: html`<h2 tabindex=${tabindex ?? nothing}>${title}</h2>`, 3: html`<h3>${title}</h3>`,
+    4: html`<h4>${title}</h4>`, 5: html`<h5>${title}</h5>` }[level];
+  return html`<p-heading size=${size}>${t}</p-heading>`;
+}
+
+function text(value, { size, weight, color, tag } = {}) {
+  return html`<p-text size=${size ?? nothing} weight=${weight ?? nothing} color=${color ?? nothing}
+    tag=${tag ?? nothing}>${value}</p-text>`;
+}
+
+function list(items, ordered = false) {
+  const lis = items.map((i) => html`<li>${i}</li>`);
+  return ordered ? html`<ol>${lis}</ol>` : html`<ul>${lis}</ul>`;
+}
+
+function row(...children) {
+  return html`<div class="row">${children}</div>`;
 }
 
 // Something the owner acts on: a framed panel; the status line above already says it is his turn.
-function panel(title, ...children) {
-  const box = el("section", undefined, { class: "panel act" });
-  box.append(heading(3, title, "md"), ...children);
-  return box;
+function panel(title, form, ...children) {
+  const refused = state.refused?.form === form && form ? refusal(state.refused.text) : nothing;
+  return html`<section class="panel act">${hd(3, title, "md")}${children}${refused}</section>`;
 }
 
 // What Delivery knows about the Change: a plain section under a rule.
 function info(title, ...children) {
-  const box = el("section", undefined, { class: "info" });
-  box.append(heading(3, title, "md"), ...children);
-  return box;
+  return html`<section class="info">${hd(3, title, "md")}${children}</section>`;
 }
 
-function notice(state, title, ...lines) {
-  if (!pds) {
-    const box = el("section", undefined, { class: "panel act" });
-    box.append(heading(3, title, "md"), ...lines.map((l) => text(l)));
-    return box;
-  }
-  return el("p-inline-notification", undefined, { state, heading: title, "heading-tag": "h3",
-    description: lines.join(" "), "dismiss-button": "false" });
+function notice(kind, title, ...lines) {
+  if (!state.pds) return html`<section class="panel act">${hd(3, title, "md")}${lines.map((l) => text(l))}</section>`;
+  return html`<p-inline-notification state=${kind} heading=${title} heading-tag="h3" description=${lines.join(" ")}
+    dismiss-button="false"></p-inline-notification>`;
 }
 
-function plain(tag, value, cls) {
-  return el(tag, value, { class: cls });
+function refusal(said) {
+  return html`<div class="refused">${notice("error", "Not done", said)}</div>`;
 }
 
-function row(...children) {
-  const node = el("div", undefined, { class: "row" });
-  node.append(...children);
-  return node;
+function meta(value, cls = "meta") {
+  return html`<span class=${cls}>${value}</span>`;
 }
 
 function questionForm(q, d) {
-  const [options, option] = choice("Choose an option", q.options), [words, said] = field("Your answer in words");
+  const key = `${d.slug}:question:${q.id}`, mine = draft(key, () => ({}));
+  if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
   const answer = async () => {
-    const origin = shown, picked = option(), words = said();
+    const picked = q.options.some((o) => o.id === mine.option) ? mine.option : null, words = mine.text ?? "";
     const chosen = q.options.find((o) => o.id === picked), told = chosen && consequence(chosen, d);
     if (told && !(await ask(told))) return;
-    send("/answers", { question: q.id, option: picked, text: words }, origin);
+    send("/answers", { question: q.id, option: picked, text: words }, d, key);
   };
-  const box = panel(`Question ${q.id}`, text(q.text, { weight: "semibold" }));
-  if (q.options.length) box.append(options);
-  box.append(words, button("Answer", answer));
-  return box;
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }),
+    q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
+    field(key, "text", "Your answer in words"), button("Answer", answer));
 }
 
 // The owner's choice after the final review's last round (TD-217): the plan tasks to rebuild, those with an open
 // finding ticked for him; with none ticked the work is accepted as done. A kept task that shares changed files with a
 // ticked one may depend on it: said beside it, above the button and in the confirmation.
 function retryForm(q, r, d) {
-  const box = panel(`Question ${q.id}`, text(q.text, { weight: "semibold" }),
-    heading(4, "Plan tasks to rebuild", "sm"));
-  const picks = r.tasks.map((t) => {
-    const [node, on] = tick(`${t.id}: ${t.title}`, t.ticked), note = text("", { size: "xs" });
-    box.append(node, ...taskRounds(t.id, d, " (rebuild list)"), note);
-    return { t, on, note };
-  });
-  const ticked = () => picks.filter((p) => p.on()).map((p) => p.t.id);
+  const key = `${d.slug}:retry:${q.id}:${r.attempt}:${r.head}`;
+  const mine = draft(key, () => ({ ticked: r.tasks.filter((t) => t.ticked).map((t) => t.id) }));
+  const ticked = () => r.tasks.filter((t) => mine.ticked.includes(t.id)).map((t) => t.id);
   const risks = () => {
     const on = new Set(ticked());
-    return picks.filter((p) => !on.has(p.t.id)).map((p) => [p, p.t.shares.filter((s) => on.has(s))])
-      .filter(([, hit]) => hit.length).map(([p, hit]) => `${p.t.id} may depend on ${hit.join(", ")}: they share `
+    return r.tasks.filter((t) => !on.has(t.id)).map((t) => [t, t.shares.filter((x) => on.has(x))])
+      .filter(([, hit]) => hit.length).map(([t, hit]) => `${t.id} may depend on ${hit.join(", ")}: they share `
         + "changed files");
   };
-  const warnings = el("div"), main = button("", () => decide(), { icon: "check", aria: DIALOG });
-  const update = () => {
-    const n = ticked().length, said = risks();
-    main.textContent = n ? `Rebuild ${n} task${n > 1 ? "s" : ""}` : "Accept as done";
-    for (const p of picks) p.note.textContent = said.find((s) => s.startsWith(`${p.t.id} `)) ?? "";
-    warnings.replaceChildren(...said.map((s) => text(s, { size: "xs", weight: "semibold" })));
+  const said = risks(), n = ticked().length;
+  const flip = (id) => (on) => {
+    mine.ticked = on ? [...new Set([...mine.ticked, id])] : mine.ticked.filter((x) => x !== id);
+    show();
   };
-  box.addEventListener("change", update);
   const decide = async () => {
-    const origin = shown, picked = ticked(), said = risks();
+    const picked = ticked(), why = risks();
     const titled = picked.map((id) => `${id}: ${r.tasks.find((t) => t.id === id).title}`);
     const sure = await ask(picked.length ? {
       title: `Rebuild ${picked.length} task${picked.length > 1 ? "s" : ""}?`, yes: "Rebuild", no: "Back to the tasks",
       now: "Delivery undoes the work of these tasks and their repairs in one commit on the branch; the rejected head "
-        + "stays archived on a branch:", items: [...titled, ...said.map((s) => `Kept: ${s}`)],
+        + "stays archived on a branch:", items: [...titled, ...why.map((s) => `Kept: ${s}`)],
       then: "Fresh builders build them again in plan order, each reviewed in its own rounds; the last one also runs "
         + "every other task's checks. The final review then looks at the result once more. This uses AI credits.",
       after: "An approval to merge no longer counts.",
@@ -397,15 +374,11 @@ function retryForm(q, r, d) {
     if (sure) {
       const body = picked.length ? { option: "rebuild", tasks: picked, attempt: r.attempt, head: r.head }
         : { option: "accept" };
-      send("/answers", { question: q.id, ...body }, origin);
+      send("/answers", { question: q.id, ...body }, d, key);
     }
   };
-  const [start, from] = choice("Plan again from the brief, starting from", [
-    { id: "replan", label: "the existing code" },
-    { id: "clean", label: "a clean state: the Change's work undone" },
-  ]);
   const replan = async () => {
-    const origin = shown, option = from();
+    const option = mine.from;
     if (!option) return notify("Choose where planning starts from: the existing code or a clean state.");
     if (await ask({
       title: "Plan again from the brief?", yes: "Plan again", no: "Back to the options",
@@ -415,13 +388,21 @@ function retryForm(q, r, d) {
         + "the old ones, and the final review counts its rounds anew. This uses AI credits.",
       after: "An approval to merge no longer counts.",
       instead: "The question stays open.",
-    })) send("/answers", { question: q.id, option }, origin);
+    })) send("/answers", { question: q.id, option }, d, key);
   };
-  update();
-  box.append(warnings, row(main,
-    button("Another round", () => send("/answers", { question: q.id, option: "another" }), { variant: "secondary" })),
-  start, button("Plan again from the brief", replan, { variant: "secondary", aria: DIALOG }));
-  return box;
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), hd(4, "Plan tasks to rebuild", "sm"),
+    r.tasks.map((t) => html`${tick(`${t.id}: ${t.title}`, mine.ticked.includes(t.id), flip(t.id))}
+      ${taskRounds(t.id, d, " (rebuild list)")}
+      ${text(said.find((s) => s.startsWith(`${t.id} `)) ?? "", { size: "xs" })}`),
+    html`<div>${said.map((s) => text(s, { size: "xs", weight: "semibold" }))}</div>`,
+    row(button(n ? `Rebuild ${n} task${n > 1 ? "s" : ""}` : "Accept as done", decide, { icon: "check", aria: DIALOG }),
+      button("Another round", () => send("/answers", { question: q.id, option: "another" }, d, key),
+        { variant: "secondary" })),
+    choice(key, "from", "Plan again from the brief, starting from", [
+      { id: "replan", label: "the existing code" },
+      { id: "clean", label: "a clean state: the Change's work undone" },
+    ]),
+    button("Plan again from the brief", replan, { variant: "secondary", aria: DIALOG }));
 }
 
 // What an answer sets off when it is more than going on: ending the Change, passing over a finding, going back.
@@ -479,27 +460,7 @@ function finale(d) {
     + `updates your local ${d.target} if that is safe.`;
 }
 
-const REVERT = "Reversing the merge needs a revert you make yourself.";
-
-function tick(label, checked = false) {
-  if (pds) {
-    const node = el("p-checkbox", undefined, checked ? { label, checked: "true" } : { label });
-    return [node, () => node.checked === true];
-  }
-  const node = el("label"), input = el("input", undefined, { type: "checkbox" });
-  input.checked = checked;
-  node.append(input, ` ${label}`);
-  return [node, () => input.checked];
-}
-
-function disclosure(summary, ...children) {
-  const node = el("details");
-  node.append(el("summary", summary), ...children);
-  return node;
-}
-
 const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
-const DIALOG = "{ 'aria-haspopup': 'dialog' }";  // PDS's aria property, for a button that opens a dialog
 const SEVERITY = { P0: ["Blocks the task", "error"], P1: ["Serious", "error"], P2: ["Annoying", "warning"],
   P3: ["Polish", "secondary"] };
 
@@ -507,8 +468,8 @@ function widthsOf(items) {
   return [...new Set(items.map((f) => f.width).filter(Boolean))].sort((a, b) => a - b);
 }
 
-function where(state, widths) {
-  return widths.length ? `${state} at ${widths.join(", ")} px` : state;
+function where(at, widths) {
+  return widths.length ? `${at} at ${widths.join(", ")} px` : at;
 }
 
 // One problem per entry: the same judge, state, rule, severity and origin at other widths; two at one width stay two.
@@ -520,35 +481,35 @@ function problems(r) {
       let n = 0;
       while (groups.get(`${base}#${n}`)?.items.some((seen) => seen.width === f.width)) n += 1;
       const key = `${base}#${n}`;
-      if (!groups.has(key)) groups.set(key, { lens: v.lens, first: f, items: [] });
+      if (!groups.has(key)) groups.set(key, { key, lens: v.lens, first: f, items: [] });
       groups.get(key).items.push(f);
     }
   }
   return [...groups.values()];
 }
 
-function problemRow(p, proposed) {
-  const ids = p.items.map((f) => f.id), widths = widthsOf(p.items), [label, variant] = SEVERITY[p.first.severity] ?? [];
-  const [box, on] = tick(p.first.text, ids.some((id) => proposed.includes(id)));
-  const meta = [JUDGE[p.lens], where(p.first.state, widths), p.first.rule].filter(Boolean).join(" \u00b7 ");
-  const node = el("div", undefined, { class: "finding" });
-  node.append(box, row(...(label ? [el("p-tag", label, { variant, compact: "true" })] : []),
-    text(meta, { size: "xs", color: "contrast-medium" })));
-  if (new Set(p.items.map((f) => f.text)).size > 1) {
-    node.append(disclosure("What the judge wrote at each width",
-      list(p.items.map((f) => `${f.width ? `${f.width} px: ` : ""}${f.text}`))));
-  }
-  return [node, () => (on() ? ids : [])];
+function problemRow(p, mine) {
+  const [label, variant] = SEVERITY[p.first.severity] ?? [];
+  const on = mine.picked.includes(p.key);
+  const flip = (checked) => {
+    mine.picked = checked ? [...new Set([...mine.picked, p.key])] : mine.picked.filter((k) => k !== p.key);
+    show();
+  };
+  const said = [JUDGE[p.lens], where(p.first.state, widthsOf(p.items)), p.first.rule].filter(Boolean)
+    .join(" \u00b7 ");
+  return html`<div class="finding">${tick(p.first.text, on, flip)}
+    ${row(label ? html`<p-tag variant=${variant} compact="true">${label}</p-tag>` : nothing,
+      text(said, { size: "xs", color: "contrast-medium" }))}
+    ${new Set(p.items.map((f) => f.text)).size > 1 ? disclosure("What the judge wrote at each width",
+      list(p.items.map((f) => `${f.width ? `${f.width} px: ` : ""}${f.text}`))) : nothing}</div>`;
 }
 
 function verdictLine(v) {
   const said = v.verdict ?? "no verified verdict";
   const first = v.unanchored && v.unanchored !== v.verdict
     ? `, ${v.unanchored} before it saw the detector's findings` : "";
-  const node = el("div");
-  node.append(text(`${JUDGE[v.lens]}: ${said}${first}`, { weight: "semibold" }));
-  if (v.reason) node.append(text(v.reason));
-  return node;
+  return html`<div>${text(`${JUDGE[v.lens]}: ${said}${first}`, { weight: "semibold" })}
+    ${v.reason ? text(v.reason) : nothing}</div>`;
 }
 
 // The design judge's blind preferences, mapped back to before and after.
@@ -556,14 +517,14 @@ function comparison(r) {
   const sides = new Map();
   for (const v of r.verdicts) {
     for (const [pair, side] of Object.entries(v.preferences || {})) {
-      const cut = pair.lastIndexOf("-"), state = pair.slice(0, cut);
+      const cut = pair.lastIndexOf("-"), at = pair.slice(0, cut);
       if (!sides.has(side)) sides.set(side, new Map());
-      if (!sides.get(side).has(state)) sides.get(side).set(state, []);
-      sides.get(side).get(state).push(Number(pair.slice(cut + 1)));
+      if (!sides.get(side).has(at)) sides.get(side).set(at, []);
+      sides.get(side).get(at).push(Number(pair.slice(cut + 1)));
     }
   }
-  const said = [...sides].flatMap(([side, states]) => [...states].map(([state, widths]) =>
-    `${side === "equal" ? "no difference" : `${side} better`} for ${where(state, widths.sort((a, b) => a - b))}`));
+  const said = [...sides].flatMap(([side, states]) => [...states].map(([at, widths]) =>
+    `${side === "equal" ? "no difference" : `${side} better`} for ${where(at, widths.sort((a, b) => a - b))}`));
   return said.length ? `Without knowing which was which, the design judge found ${said.join("; ")}.` : "";
 }
 
@@ -577,45 +538,27 @@ function detectorLines(r) {
     }
   }
   return [...seen].map(([key, widths]) => {
-    const [rule, state] = key.split("|");
-    return `${rule} on ${where(state, [...new Set(widths)].sort((a, b) => a - b))}`;
+    const [rule, at] = key.split("|");
+    return `${rule} on ${where(at, [...new Set(widths)].sort((a, b) => a - b))}`;
   });
 }
 
 // The owner's decision on one visual round (TD-79): the screenshots, both verdicts, the problems he sends back,
 // a comment, Pass or Fail.
 function decisionForm(q, r, pictures, d) {
-  const box = panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, ...pictures);
-  box.append(heading(4, "Verdicts", "sm"), ...r.verdicts.map(verdictLine));
-  const all = problems(r), picks = [];
+  const all = problems(r), key = `${d.slug}:visual:${r.number}:${r.head}`;
+  const proposed = r.proposed || [];
+  const mine = draft(key, () => ({ picked: all.filter((p) => p.items.some((f) => proposed.includes(f.id)))
+    .map((p) => p.key) }));
   const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
-  if (made.length) {
-    box.append(heading(4, "Problems this Change introduced", "sm"), text("Blocking, serious and annoying problems "
-      + "and any missed criterion of yours are ticked for you; a Fail sends the ticked ones to the builder."));
-    for (const p of made) {
-      const [node, ids] = problemRow(p, r.proposed || []);
-      picks.push([p, ids]);
-      box.append(node);
-    }
-  }
-  if (old.length) {
-    box.append(disclosure(`Already there before the Change: ${old.length} (never sent to the build)`,
-      list(old.map((p) => `${where(p.first.state, widthsOf(p.items))}: ${p.first.text}`))));
-  }
   const preferred = comparison(r), evidence = detectorLines(r);
-  if (preferred) box.append(text(preferred, { size: "xs" }));
-  if (evidence.length) {
-    box.append(disclosure("What the design detector found (evidence for the judges)", list(evidence)));
-  }
-  const [words, said] = field("Comment: on Fail it becomes a criterion every later round checks until you withdraw "
-    + "it; on Pass it is only a note");
   const decide = async (option) => {
-    const origin = shown, comment = said().trim(), chosen = picks.filter(([, ids]) => ids().length);
-    const findings = chosen.flatMap(([, ids]) => ids());
+    const comment = (mine.text ?? "").trim(), chosen = made.filter((p) => mine.picked.includes(p.key));
+    const findings = chosen.flatMap((p) => p.items.map((f) => f.id));
     if (option === "fail" && !findings.length && !comment) {
       return notify("To fail the round, tick a problem or write a comment.");
     }
-    const instructions = chosen.flatMap(([p]) => (new Set(p.items.map((f) => f.text)).size > 1
+    const instructions = chosen.flatMap((p) => (new Set(p.items.map((f) => f.text)).size > 1
       ? p.items.map((f) => `${where(f.state, widthsOf([f]))}: ${f.text}`) : [p.first.text]));
     const checks = d.checks.filter((c) => c.passed !== true).length;  // the open person checks come after the round
     const ok = await ask(option === "fail" ? {
@@ -639,45 +582,47 @@ function decisionForm(q, r, pictures, d) {
     });
     if (ok) {
       const round = { round: r.number, head: r.head, pack: r.pack };
-      send("/answers", { question: q.id, option, text: comment, ...round, findings }, origin);
+      send("/answers", { question: q.id, option, text: comment, ...round, findings }, d, key);
     }
   };
-  box.append(words, row(
-    button("Pass", () => decide("pass"), { icon: "check", aria: DIALOG }),
-    button("Fail", () => decide("fail"), { variant: "secondary", icon: "close", aria: DIALOG }),
-  ));
-  return box;
+  return panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, key, pictures,
+    hd(4, "Verdicts", "sm"), r.verdicts.map(verdictLine),
+    made.length ? html`${hd(4, "Problems this Change introduced", "sm")}${text("Blocking, serious and annoying "
+      + "problems and any missed criterion of yours are ticked for you; a Fail sends the ticked ones to the "
+      + "builder.")}${made.map((p) => problemRow(p, mine))}` : nothing,
+    old.length ? disclosure(`Already there before the Change: ${old.length} (never sent to the build)`,
+      list(old.map((p) => `${where(p.first.state, widthsOf(p.items))}: ${p.first.text}`))) : nothing,
+    preferred ? text(preferred, { size: "xs" }) : nothing,
+    evidence.length ? disclosure("What the design detector found (evidence for the judges)", list(evidence))
+      : nothing,
+    field(key, "text", "Comment: on Fail it becomes a criterion every later round checks until you withdraw it; on "
+      + "Pass it is only a note"),
+    row(button("Pass", () => decide("pass"), { icon: "check", aria: DIALOG }),
+      button("Fail", () => decide("fail"), { variant: "secondary", icon: "close", aria: DIALOG })));
 }
 
-function criteriaPanel(criteria) {
-  const box = info("Your visual criteria", text("Every later visual round checks these until you withdraw them."));
-  for (const k of criteria) {
-    const withdraw = async () => {
-      const origin = shown, stop = await ask({
-        title: `Stop checking ${k.id}?`, yes: "Stop checking", no: "Keep it",
-        now: `“${k.text}” is no longer checked in later visual rounds; it stays in this Change's history.`,
-        after: "There is no restore. A comment on a later Fail adds a new criterion.",
-        instead: "Every later visual round keeps checking it.",
-      });
-      if (stop) send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {}, origin);
-    };
-    box.append(row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary", aria: DIALOG })));
-  }
-  return box;
+function criteriaPanel(d) {
+  return info("Your visual criteria", text("Every later visual round checks these until you withdraw them."),
+    d.owner_criteria.map((k) => {
+      const withdraw = async () => {
+        const stop = await ask({
+          title: `Stop checking ${k.id}?`, yes: "Stop checking", no: "Keep it",
+          now: `“${k.text}” is no longer checked in later visual rounds; it stays in this Change's history.`,
+          after: "There is no restore. A comment on a later Fail adds a new criterion.",
+          instead: "Every later visual round keeps checking it.",
+        });
+        if (stop) send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {}, d);
+      };
+      return row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary", aria: DIALOG }));
+    }));
 }
 
 function checkForm(check, d) {
-  const [note, noted] = field("What failed (needed for Failed; the builder gets it as the fix task)");
-  const box = panel(`Your check ${check.id}`, list(check.steps, "ol"));
-  if (check.expect) box.append(text(`Expected: ${check.expect}`, { weight: "semibold" }));
-  if (check.url) {
-    box.append(row(external("Open the preview", check.url),
-      text(check.url, { size: "xs", color: "contrast-medium", tag: "span" })));
-  }
-  const result = (passed) => ({ check: check.id, passed, note: noted(), inputs: check.inputs });
+  const key = `${d.slug}:check:${check.id}:${JSON.stringify(check.inputs)}`, mine = draft(key, () => ({}));
+  const result = (passed) => ({ check: check.id, passed, note: mine.note ?? "", inputs: check.inputs });
   const last = !d.asks_merge && d.checks.every((c) => c.id === check.id || c.passed === true);
   const passed = async () => {
-    const origin = shown, body = result(true);
+    const body = result(true);
     if (last && !(await ask({
       title: `Pass ${check.id}, the last step before merging?`, yes: "Pass and merge", no: "Not yet",
       now: `${check.id} is recorded as passed.`,
@@ -685,10 +630,10 @@ function checkForm(check, d) {
       after: REVERT,
       instead: "Nothing merges; the check stays open.",
     }))) return;
-    send("/check-results", body, origin);
+    send("/check-results", body, d, key);
   };
-  const failed = async () => {
-    const origin = shown, why = noted().trim(), body = result(false);
+  const failedCheck = async () => {
+    const why = (mine.note ?? "").trim(), body = result(false);
     if (!why) return notify("Say what failed: the builder gets it as the fix task.");
     if (await ask({
       title: `Report ${check.id} as failed?`, yes: "Send to the builder", no: "Keep checking",
@@ -696,27 +641,23 @@ function checkForm(check, d) {
       then: "Delivery fixes it, reviews the fix and prepares the check again; this uses AI credits. Then it asks you "
         + "to check again.",
       instead: "The check stays open; you can still mark it passed.",
-    })) send("/check-results", body, origin);
+    })) send("/check-results", body, d, key);
   };
-  box.append(note, row(
-    button("Passed", passed, { icon: "check", ...(last ? { aria: DIALOG } : {}) }),
-    button("Failed", failed, { variant: "secondary", icon: "close", aria: DIALOG }),
-  ));
-  return box;
+  return panel(`Your check ${check.id}`, key, list(check.steps, true),
+    check.expect ? text(`Expected: ${check.expect}`, { weight: "semibold" }) : nothing,
+    check.url ? row(external("Open the preview", check.url),
+      text(check.url, { size: "xs", color: "contrast-medium", tag: "span" })) : nothing,
+    field(key, "note", "What failed (needed for Failed; the builder gets it as the fix task)"),
+    row(button("Passed", passed, { icon: "check", aria: last ? DIALOG : undefined }),
+      button("Failed", failedCheck, { variant: "secondary", icon: "close", aria: DIALOG })));
 }
 
 const CHECKED = { passed: "success", success: "success", failed: "error", failure: "error", error: "error" };
 
 function mergeForm(m, d) {
-  const links = row(external(`PR #${m.pr}`, m.url), external("Diff summary", m.diff));
-  const box = panel(`Merge PR #${m.pr}`,
-    text(`Delivery merges this exact head (${m.method}) once you approve it; a new head needs a fresh approval.`),
-    links);
-  if (m.void) box.append(text(`Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { color: "error" }));
-  const checks = m.checks.map((c) => el("p-tag", `${c.name}: ${c.state}`,
-    { variant: CHECKED[c.state] ?? "secondary", compact: "true" }));
-  const head = m.head.slice(0, 7), approve = async () => {
-    const origin = shown, sure = await ask({
+  const head = m.head.slice(0, 7), key = `${d.slug}:merge:${m.head}`;
+  const approve = async () => {
+    const sure = await ask({
       title: `Merge pull request #${m.pr} at ${head}?`, yes: "Merge", no: "Not now",
       now: `Delivery merges exactly ${head} into ${d.target} (${m.method}). If the pull request gets a new head `
         + "first, this approval no longer counts.",
@@ -725,18 +666,23 @@ function mergeForm(m, d) {
       after: `The change is on ${d.target}; reversing it needs a revert you make yourself.`,
       instead: "Nothing merges. The pull request stays open; comments on it come back to Delivery as work.",
     });
-    if (sure) send("/merge-consent", { head: m.head }, origin);
+    if (sure) send("/merge-consent", { head: m.head }, d, key);
   };
-  box.append(text("Checks at this head", { size: "xs", weight: "semibold" }),
-    checks.length ? row(...checks) : text("No checks reported", { size: "xs", color: "contrast-medium" }),
+  return panel(`Merge PR #${m.pr}`, key,
+    text(`Delivery merges this exact head (${m.method}) once you approve it; a new head needs a fresh approval.`),
+    row(external(`PR #${m.pr}`, m.url), external("Diff summary", m.diff)),
+    m.void ? text(`Changed since ${m.void.slice(0, 7)}: ${m.delta}`, { color: "error" }) : nothing,
+    text("Checks at this head", { size: "xs", weight: "semibold" }),
+    m.checks.length ? row(m.checks.map((c) => html`<p-tag variant=${CHECKED[c.state] ?? "secondary"}
+      compact="true">${c.name}: ${c.state}</p-tag>`)) : text("No checks reported", { size: "xs",
+      color: "contrast-medium" }),
     text(`Head ${m.head}`, { size: "xs", color: "contrast-medium" }),
     button(`Approve merging ${head}`, approve, { icon: "check", aria: DIALOG }));
-  return box;
 }
 
-function restartButton() {
+function restartButton(d) {
   const restart = async () => {
-    const origin = shown, sure = await ask({
+    const sure = await ask({
       title: "Restart the final review loop?", yes: "Restart", no: "Keep it",
       now: "A fresh final review starts at round 1 and reviews the whole Change; this uses AI credits.",
       then: "Its findings go to a builder as before, under the same round rules.",
@@ -744,7 +690,7 @@ function restartButton() {
         + "to merge no longer counts.",
       instead: "The review loop goes on as it is.",
     });
-    if (sure) send("/restart-review", {}, origin);
+    if (sure) send("/restart-review", {}, d);
   };
   return button("Restart review loop", restart, { variant: "secondary", icon: "refresh", aria: DIALOG });
 }
@@ -752,40 +698,36 @@ function restartButton() {
 function pullbackNote(p, d) {
   const behind = p.state === "behind", title = `Pull-back: ${p.state}`;
   const pull = async () => {
-    const origin = shown, sure = await ask({
+    const sure = await ask({
       title: `Update your local ${d.target}?`, yes: "Update", no: "Leave it",
       now: `Delivery moves your local ${d.target} to the merged one, replaying any local commits on top; their `
         + "commit IDs change.",
       after: "If local changes touch the same files, the update stops and says why.",
       instead: `Your local ${d.target} stays behind; Pull stays here.`,
     });
-    if (sure) send("/pull", {}, origin);
+    if (sure) send("/pull", {}, d);
   };
-  if (!pds) {
-    const box = behind ? panel(title, text(p.reason || "")) : info(title, text(p.reason || ""));
-    if (behind) box.append(button("Pull", pull));
-    return box;
+  if (!state.pds) {
+    return behind ? panel(title, "", text(p.reason || ""), button("Pull", pull)) : info(title, text(p.reason || ""));
   }
-  const note = el("p-inline-notification", p.reason || "", {
-    state: behind ? "warning" : "success", heading: title, "heading-tag": "h3", "dismiss-button": "false",
-  });
-  if (behind) {
-    note.setAttribute("action-label", "Pull");
-    note.setAttribute("action-icon", "refresh");
-    note.addEventListener("action", pull);
-  }
-  return note;
+  return html`<p-inline-notification state=${behind ? "warning" : "success"} heading=${title} heading-tag="h3"
+    dismiss-button="false" action-label=${behind ? "Pull" : nothing} action-icon=${behind ? "refresh" : nothing}
+    @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
 }
 
+// Screenshots load with the token once each; a loaded one renders from its object URL.
 const shots = new Map();
 
 function shot(slug, kind, name, at) {
   const key = `${slug}/${kind}/${name}/${at}`;
   if (!shots.has(key)) {
+    const entry = { url: null, failed: false };
+    shots.set(key, entry);
     const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
-    shots.set(key, fetch(`/api/next/changes/${slug}/${kind}/${encodeURIComponent(name)}`, init)
+    entry.loading = fetch(`/api/next/changes/${slug}/${kind}/${encodeURIComponent(name)}`, init)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
-      .then((b) => URL.createObjectURL(b)));
+      .then((b) => { entry.url = URL.createObjectURL(b); }, () => { entry.failed = true; })
+      .then(() => show());
   }
   return shots.get(key);
 }
@@ -794,43 +736,41 @@ function shot(slug, kind, name, at) {
 function zoomable(entry, gallery) {
   const index = gallery.push(entry) - 1, side = entry.side === "before" ? "before the Change" : "with the Change";
   entry.alt = `${entry.state} at ${entry.width}px ${side}, at ${entry.commit}`;
-  const trigger = el("button", undefined, { type: "button", class: "zoom", "aria-haspopup": "dialog" });
-  const img = el("img", undefined, { alt: `Enlarge: ${entry.alt}`, loading: "lazy" });
-  trigger.append(img);
-  trigger.onclick = () => lightbox(gallery, index);
-  shot(entry.slug, entry.kind, entry.name, entry.at).then((url) => { img.src = url; },
-    () => { img.alt += " (not available)"; });
-  return trigger;
+  const s = shot(entry.slug, entry.kind, entry.name, entry.at);
+  return html`<button type="button" class="zoom" aria-haspopup="dialog" @click=${() => lightbox(gallery, index)}>
+    <img alt=${`Enlarge: ${entry.alt}${s.failed ? " (not available)" : ""}`} loading="lazy"
+      src=${s.url ?? nothing}></button>`;
 }
 
-// The enlarged screenshots: arrow keys or buttons step through them, Escape or Close ends.
+// The enlarged screenshots: arrow keys or buttons step through them, Escape or Close ends. Built apart from the
+// page's render, so a poll never touches it.
 function lightbox(gallery, start) {
-  const dialog = el("dialog", undefined, { class: "lightbox", "aria-label": "Screenshots" });
-  const img = el("img", undefined, { alt: "" }), frame = el("div", undefined, { class: "frame" });
-  const caption = el("p", undefined, { class: "caption", "aria-live": "polite" });
-  let at = start;
-  const show = () => {
-    const e = gallery[at];
-    caption.replaceChildren(el("strong", e.side === "before" ? "Before" : "After"),
-      ` at ${e.commit} \u00b7 ${e.state} \u00b7 ${e.width} px wide \u00b7 ${at + 1} of ${gallery.length}`);
-    img.alt = e.alt;
-    img.removeAttribute("src");
-    shot(e.slug, e.kind, e.name, e.at).then((url) => { if (gallery[at] === e) img.src = url; },
-      () => caption.append(" \u00b7 not available"));
+  const dialog = document.createElement("dialog");
+  dialog.className = "lightbox";
+  dialog.setAttribute("aria-label", "Screenshots");
+  let at = start, size = "";
+  const draw = () => {
+    const e = gallery[at], s = shot(e.slug, e.kind, e.name, e.at);
+    render(html`${row(
+      button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary", keys: "ArrowLeft",
+        title: "Previous screenshot (left arrow)" }),
+      html`<p class="caption" aria-live="polite"><strong>${e.side === "before" ? "Before" : "After"}</strong> at
+        ${e.commit} \u00b7 ${e.state} \u00b7 ${e.width} px wide \u00b7 ${at + 1} of ${gallery.length}${s.failed
+        ? " \u00b7 not available" : ""}${size}</p>`,
+      button("Next", () => go(1), { icon: "arrow-right", variant: "secondary", keys: "ArrowRight",
+        title: "Next screenshot (right arrow)" }),
+      button("Close", () => dialog.close(), { icon: "close", variant: "secondary" }),
+    )}<div class="frame"><img alt=${e.alt} src=${s.url ?? nothing} @load=${(ev) => {
+      size = ` \u00b7 ${ev.target.naturalWidth} \u00d7 ${ev.target.naturalHeight} px`;
+      draw();
+    }}></div>`, dialog);
+    if (!s.url && !s.failed) s.loading.then(() => { if (gallery[at] === e) draw(); });
   };
-  img.onload = () => caption.append(` \u00b7 ${img.naturalWidth} \u00d7 ${img.naturalHeight} px`);
   const go = (step) => {
     at = (at + step + gallery.length) % gallery.length;
-    show();
+    size = "";
+    draw();
   };
-  frame.append(img);
-  dialog.append(row(
-    button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary", "aria-keyshortcuts": "ArrowLeft",
-      title: "Previous screenshot (left arrow)" }), caption,
-    button("Next", () => go(1), { icon: "arrow-right", variant: "secondary", "aria-keyshortcuts": "ArrowRight",
-      title: "Next screenshot (right arrow)" }),
-    button("Close", () => dialog.close(), { icon: "close", variant: "secondary" }),
-  ), frame);
   dialog.addEventListener("keydown", (k) => {
     if (k.key !== "ArrowLeft" && k.key !== "ArrowRight") return;
     k.preventDefault();
@@ -839,68 +779,51 @@ function lightbox(gallery, start) {
   dialog.addEventListener("click", (k) => { if (k.target === dialog) dialog.close(); });
   dialog.addEventListener("close", () => dialog.remove());
   document.body.append(dialog);
+  draw();
   dialog.showModal();
-  show();
 }
 
 function side(label, child) {
-  const node = el("div", undefined, { class: "side" });
-  node.append(el("span", label), child);
-  return node;
+  return html`<div class="side"><span>${label}</span>${child}</div>`;
 }
 
-// The screenshots of a visual check and what was found, as nodes for the decision or the "Before and after" section.
+// The screenshots of a visual check and what was found: its lines, and the gallery with its count.
 function visualSection(slug, v, b, existing, deciding) {
   const open = deciding || v.doubts.length;
-  const state = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
-  const verdict = el("p-tag", state[0], { variant: state[1], compact: "true" });
-  const nodes = [row(text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" }), verdict)];
-  if (v.findings.length) nodes.push(list(v.findings));
-  if (v.doubts.length) {
-    nodes.push(text("The judges could not decide:", { size: "xs" }), list(v.doubts));
-  }
-  if (existing.length) {
-    nodes.push(text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" }));
-  }
-  if (b && b.findings.length) {
-    nodes.push(text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" }));
-  }
-  const grid = el("div", undefined, { class: "shots" }), gallery = [];
-  for (const name of v.files) {
-    const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
+  const [said, variant] = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
+  const gallery = [], pairs = v.files.map((name) => {
+    const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);
     const kept = b && b.files.includes(name);
-    const comparable = kept && b.states[state] === v.states[state];  // a revised state's old shot is no baseline
-    const one = (kind, side, at, head) => zoomable(
-      { slug, kind, name, at, side, state, width, commit: head.slice(0, 7) }, gallery);
-    const before = comparable
-      ? one("before", "before", b.at, b.head)
-      : el("span", kept ? "Not comparable: the state changed since" : "Not available", { class: "missing" });
-    const fig = el("figure", undefined, { class: "pair" });
-    fig.append(el("figcaption", `${state} \u00b7 ${width} px`), side("Before", before),
-      side("After", one("visual", "after", v.at, v.head)));
-    grid.append(fig);
-  }
-  const shots = el("div", undefined, { class: "gallery" });
-  shots.append(grid);
-  nodes.push(shots);
-  return nodes;
+    const comparable = kept && b.states[at] === v.states[at];  // a revised state's old shot is no baseline
+    const one = (kind, s, when, head) => zoomable(
+      { slug, kind, name, at: when, side: s, state: at, width, commit: head.slice(0, 7) }, gallery);
+    const before = comparable ? one("before", "before", b.at, b.head)
+      : html`<span class="missing">${kept ? "Not comparable: the state changed since" : "Not available"}</span>`;
+    return html`<figure class="pair"><figcaption>${at} \u00b7 ${width} px</figcaption>${side("Before", before)}
+      ${side("After", one("visual", "after", v.at, v.head))}</figure>`;
+  });
+  const lines = html`${row(text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" }),
+    html`<p-tag variant=${variant} compact="true">${said}</p-tag>`)}
+    ${v.findings.length ? list(v.findings) : nothing}
+    ${v.doubts.length ? html`${text("The judges could not decide:", { size: "xs" })}${list(v.doubts)}` : nothing}
+    ${existing.length ? text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" })
+      : nothing}
+    ${b && b.findings.length ? text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" })
+      : nothing}`;
+  return { lines, shots: html`<div class="gallery"><div class="shots">${pairs}</div></div>`, count: gallery.length };
 }
 
 function beforeSection(slug, b) {
-  const nodes = [text(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`, { weight: "semibold" })];
-  if (b.findings.length) nodes.push(text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }));
-  if (b.errors.length) {
-    const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
-    nodes.push(text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }));
-  }
-  const grid = el("div", undefined, { class: "shots" }), gallery = [];
-  for (const name of b.files) {
-    const [, state, width] = name.match(/^(.*)-(\d+)\.png$/);
-    grid.append(side(`${state} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at,
-      side: "before", state, width, commit: (b.head || "").slice(0, 7) }, gallery)));
-  }
-  nodes.push(grid);
-  return nodes;
+  const gallery = [], cells = b.files.map((name) => {
+    const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);
+    return side(`${at} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at, side: "before",
+      state: at, width, commit: (b.head || "").slice(0, 7) }, gallery));
+  });
+  const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
+  const lines = html`${text(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`, { weight: "semibold" })}
+    ${b.findings.length ? text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }) : nothing}
+    ${b.errors.length ? text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }) : nothing}`;
+  return { lines, shots: html`<div class="shots">${cells}</div>`, count: gallery.length };
 }
 
 function count(n) {
@@ -909,8 +832,7 @@ function count(n) {
 
 // The total, then a line per model; input includes cache reads and writes, so "in" is the uncached rest.
 function spendLines(spend) {
-  const lines = [];
-  for (const [model, u] of Object.entries(spend.models)) {
+  const lines = Object.entries(spend.models).map(([model, u]) => {
     const fresh = Math.max(0, u.input - u.cache_read - u.cache_write);
     const split = u.tokens && u.input + u.output === u.tokens  // sessions recorded before the split leave it partial
       ? ` (${count(fresh)} in \u00b7 ${count(u.output)} out \u00b7 ${count(u.cache_read)} cache read \u00b7 `
@@ -918,10 +840,9 @@ function spendLines(spend) {
       : "";
     const credits = u.credits_unread ? (u.credits ? `${u.credits.toFixed(2)}+ credits` : "credits unknown")
       : `${u.credits.toFixed(2)} credits`;
-    const line = `${model}: ${credits}, ${count(u.tokens)} tokens${split}`;
-    lines.push(text(line, { size: "xs", color: "contrast-medium" }));
-  }
-  return disclosure(`Spent ${spentText(spend.credits, (spend.unread || []).length)}`, ...lines);
+    return text(`${model}: ${credits}, ${count(u.tokens)} tokens${split}`, { size: "xs", color: "contrast-medium" });
+  });
+  return toggle("spend", `Spent ${spentText(spend.credits, (spend.unread || []).length)}`, lines);
 }
 
 // Credits a session did not report make the total a lower bound, never a false zero (TD-94).
@@ -961,28 +882,19 @@ const SAID = {
 function activityLog(events) {
   const kept = events.filter((e) => e.event && !BOOKKEEPING.has(e.event)).slice(-12).reverse();
   if (!kept.length) return text("Nothing yet.", { size: "xs", color: "contrast-medium" });
-  const log = el("ol", undefined, { class: "log" });
-  for (const e of kept) {
-    const when = e.at ? el("time", ago(e.at), { datetime: e.at, title: new Date(e.at).toLocaleString() }) : el("span");
-    const item = el("li");
-    item.append(when, el("span", (SAID[e.event] ?? ((x) => x.event))(e)));
-    log.append(item);
-  }
-  return log;
+  return html`<ol class="log">${kept.map((e) => html`<li>${e.at ? html`<time datetime=${e.at}
+    title=${new Date(e.at).toLocaleString()}>${ago(e.at)}</time>` : html`<span></span>`}
+    <span>${(SAID[e.event] ?? ((x) => x.event))(e)}</span></li>`)}</ol>`;
 }
 
 function planList(d) {
   const working = ["build", "review", "integrate"].includes(d.step) && !d.line.startsWith("Done");
   const now = working ? d.plan.find((t) => !t.done) : null;
-  const node = el("ol", undefined, { class: "plan" });
-  for (const t of d.plan) {
+  return html`<ol class="plan">${d.plan.map((t) => {
     const [label, variant] = t.done ? ["done", "success"] : t === now ? ["now", "info"] : ["to do", "secondary"];
-    const item = el("li"), said = el("span", t.title);
-    if (t.origin && t.origin !== "plan") said.append(" ", plain("span", `from ${t.origin}`, "meta"));
-    item.append(el("p-tag", label, { variant, compact: "true" }), said, ...taskRounds(t.id, d));
-    node.append(item);
-  }
-  return node;
+    return html`<li><p-tag variant=${variant} compact="true">${label}</p-tag><span>${t.title}${t.origin
+      && t.origin !== "plan" ? html` ${meta(`from ${t.origin}`)}` : nothing}</span>${taskRounds(t.id, d)}</li>`;
+  })}</ol>`;
 }
 
 // TD-217: a round's marker is its most urgent finding's kind, in words with a count; the loop's latest round is bold.
@@ -991,15 +903,12 @@ const KIND = { open: ["error", "exclamation", "open"], unverified: ["warning", "
 
 function marker(m) {
   const [variant, icon, word] = KIND[m.kind], said = `R${m.round} \u00b7 ${m.count} ${word}`;
-  const node = el("p-tag", undefined, { variant, icon, compact: "true" });
-  node.append(m.last ? el("strong", said) : said);
-  return node;
+  return html`<p-tag variant=${variant} icon=${icon} compact="true">${m.last ? html`<strong>${said}</strong>`
+    : said}</p-tag>`;
 }
 
 function marks(label, rounds) {
-  const node = el("span", undefined, { class: "marks" });
-  node.append(plain("span", label, "meta"), ...rounds.map(marker));
-  return node;
+  return html`<span class="marks">${meta(label)}${rounds.map(marker)}</span>`;
 }
 
 // Per loop and round its summary, then each finding with what became of it and why; a toggle, never hover-only.
@@ -1007,22 +916,22 @@ function marks(label, rounds) {
 function findingDetails(summary, loops) {
   const said = (f, [worker, judge]) => [`${f.id} (${f.state}): ${f.text}`, f.reason && `${worker}: ${f.reason}`,
     f.judgement && `${judge}: ${f.judgement}`, f.note && `Your note: ${f.note}`].filter(Boolean).join(" \u00b7 ");
-  return disclosure(summary, ...loops.flatMap(([label, rounds, who = WORKERS.task]) => rounds.flatMap((m) => [
-    text(`${label}, ${m.said.charAt(0).toLowerCase()}${m.said.slice(1)}`, { size: "xs", weight: "semibold" }),
-    list(m.findings.map((f) => said(f, who)))])));
+  return disclosure(summary, loops.flatMap(([label, rounds, who = WORKERS.task]) => rounds.map((m) => html`
+    ${text(`${label}, ${m.said.charAt(0).toLowerCase()}${m.said.slice(1)}`, { size: "xs", weight: "semibold" })}
+    ${list(m.findings.map((f) => said(f, who)))}`)));
 }
 const WORKERS = { task: ["Builder", "Reviewer"], plan: ["Planner", "Challenger"], brief: ["Shaper", "Challenger"] };
 const LOOPS = (loop) => ({ final: "final review", plan: "plan challenge", brief: "brief challenge" })[loop]
   ?? `task ${loop}`;
 
 // A plan task's markers, task review and final review apart, with their finding details; nothing without rounds.
-// *where* keeps each toggle's summary unique on the page: an open toggle is restored by its summary.
+// *where* keeps each toggle's summary unique on the page: an open toggle is kept by its summary.
 function taskRounds(id, d, where = "") {
   const r = d.rounds?.tasks[id];
-  if (!r || !(r.task.length || r.final.length)) return [];
+  if (!r || !(r.task.length || r.final.length)) return nothing;
   const shown = [["Task review", r.task], ["Final review", r.final]].filter(([, rounds]) => rounds.length);
-  return [...shown.map(([label, rounds]) => marks(label, rounds)),
-    findingDetails(`Finding details of ${id}${where}`, shown)];
+  return html`${shown.map(([label, rounds]) => marks(label, rounds))}${findingDetails(
+    `Finding details of ${id}${where}`, shown)}`;
 }
 
 // The plan challenge's and the final review's own rounds, the work no round reviewed, and the rejections that stand.
@@ -1052,10 +961,8 @@ function roundsInfo(r, d) {
         f.judgement && `${judge}: ${f.judgement}`].filter(Boolean).join(" \u00b7 ");
     })));
   }
-  if (!parts.length) return null;
-  const node = info("Review rounds", ...parts);
-  node.classList.add("rounds");
-  return node;
+  if (!parts.length) return nothing;
+  return html`<section class="info rounds">${hd(3, "Review rounds", "md")}${parts}</section>`;
 }
 
 const STEP = { done: ["done", "success"], current: ["now", "info"], upcoming: ["to do", "secondary"],
@@ -1063,23 +970,15 @@ const STEP = { done: ["done", "success"], current: ["now", "info"], upcoming: ["
 
 // The stages in order; the state is a word, never colour alone, and a loop badge says its rounds.
 function stepper(p) {
-  const node = el("ol", undefined, { class: "stepper" });
-  for (const s of p.stages) {
-    const [label, variant] = STEP[s.state], item = el("li", undefined, { class: s.state });
-    if (s.state === "current") item.setAttribute("aria-current", "step");
-    const line = el("span");
-    line.append(el("span", s.label), el("p-tag", label, { variant, compact: "true" }));
-    const where = [p.task ? `Task ${p.task} of ${p.tasks}` : "", p.sub || ""].filter(Boolean).join(" \u00b7 ");
-    if (s.state === "current" && where) line.append(plain("span", where, "meta"));
-    if (s.rounds > 1) {
-      const loops = plain("span", undefined, "loops"), said = `${s.rounds} rounds`;
-      loops.append(el("span", `\u00d7${s.rounds}`, { "aria-hidden": "true" }), plain("span", said, "sr"));
-      line.append(loops);
-    }
-    item.append(line);
-    node.append(item);
-  }
-  return node;
+  const at = [p.task ? `Task ${p.task} of ${p.tasks}` : "", p.sub || ""].filter(Boolean).join(" \u00b7 ");
+  return html`<ol class="stepper">${p.stages.map((s) => {
+    const [label, variant] = STEP[s.state];
+    return html`<li class=${s.state} aria-current=${s.state === "current" ? "step" : nothing}><span>
+      <span>${s.label}</span><p-tag variant=${variant} compact="true">${label}</p-tag>
+      ${s.state === "current" && at ? meta(at) : nothing}
+      ${s.rounds > 1 ? html`<span class="loops"><span aria-hidden="true">\u00d7${s.rounds}</span><span
+        class="sr">${s.rounds} rounds</span></span>` : nothing}</span></li>`;
+  })}</ol>`;
 }
 
 function screen(s) {
@@ -1095,19 +994,12 @@ function yours(d, key) {
 
 // Each entry: what was asked (or what kind of item it is) as a small label, then the answer.
 function saidList(items) {
-  const node = el("ul", undefined, { class: "said" });
-  for (const [label, answer] of items) {
-    const item = el("li");
-    item.append(plain("span", label, "label"), plain("span", answer));
-    node.append(item);
-  }
-  return node;
+  return html`<ul class="said">${items.map(([label, answer]) => html`<li><span class="label">${label}</span>
+    <span>${answer}</span></li>`)}</ul>`;
 }
 
 function part(title, ...children) {
-  const node = el("section");
-  node.append(heading(4, title, "sm"), ...children);
-  return node;
+  return html`<section>${hd(4, title, "sm")}${children}</section>`;
 }
 
 // The agreement the owner approves (TD-122, TD-179 rule 2): his decisions, what he specified among the technical
@@ -1156,15 +1048,14 @@ function detailCount(d) {
 function technical(d) {
   const scope = d.brief.scope || [], mark = (key) => (yours(d, key) ? " (you specified)" : ""), inside = [];
   if (d.criteria.length) {
-    const said = d.criteria.map((k) => `${k.id}: ${k.text}${mark(k.id)}`);
-    inside.push(heading(5, "Acceptance criteria", "sm"), list(said));
+    inside.push(hd(5, "Acceptance criteria", "sm"), list(d.criteria.map((k) => `${k.id}: ${k.text}${mark(k.id)}`)));
   }
   if (d.brief.visual.length) {
-    inside.push(heading(5, "Screens the visual check captures", "sm"),
+    inside.push(hd(5, "Screens the visual check captures", "sm"),
       list(d.brief.visual.map((s) => `${screen(s)}${mark(`screen:${s.name}`)}`)));
   }
   if (d.checks.length) {
-    inside.push(heading(5, "Checks you do yourself", "sm"),
+    inside.push(hd(5, "Checks you do yourself", "sm"),
       list(d.checks.map((c) => `${c.id}: ${checkSaid(c)}${mark(`check:${c.id}`)}`)));
   }
   if (d.brief.ui) {
@@ -1172,39 +1063,38 @@ function technical(d) {
       : "This Change has a user interface: you judge it in your own check."));
   }
   if (scope.length) inside.push(text(`Scope: ${scope.join(", ")}`));
-  if (!inside.length) return [];
-  const node = el("details"), head = el("summary", "Technical details"), count = detailCount(d);
-  if (count) head.append(plain("span", count, "count"));
-  node.append(head, ...inside);
-  return [node];
+  if (!inside.length) return nothing;
+  const said = detailCount(d), summary = "Technical details";
+  const toggled = (e) => (e.target.open ? state.opened.add(summary) : state.opened.delete(summary));
+  return html`<details .open=${state.opened.has(summary)} @toggle=${toggled}><summary>${summary}${said
+    ? html`<span class="count">${said}</span>` : nothing}</summary>${inside}</details>`;
 }
 
 function approval(d) {
-  const version = d.brief.version, box = el("div", undefined, { class: "brief" });
-  if (d.brief.outcome) box.append(text(d.brief.outcome, { size: "md" }));
-  box.append(...agreement(d), ...technical(d));
+  const version = d.brief.version, key = `${d.slug}:approve:${version}`;
   const start = async () => {
-    const origin = shown;
-    if (await ask(approving(d))) send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, origin);
+    if (await ask(approving(d))) {
+      send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, d, key);
+    }
   };
-  const approve = button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG });
   const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
-  if (why) approve.setAttribute("disabled", "true");
-  const challenge = d.rounds?.brief?.length ? [marks("Brief challenge", d.rounds.brief),
-    findingDetails("Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])]
-    : [];
-  return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, box, ...challenge,
+  return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
+    html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
+      ${technical(d)}</div>`,
+    d.rounds?.brief?.length ? html`${marks("Brief challenge", d.rounds.brief)}${findingDetails(
+      "Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])}` : nothing,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + "product commitments. To change the brief before approving, return to the shaping chat."),
-    ...(why ? [text(`Not yet: ${why}.`, { weight: "semibold" })] : []), approve);
+    why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
+    button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG, disabled: Boolean(why) }));
 }
 
 // What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,
 // building and review, the visual round and the merge; the owner's own parts come afterwards.
 function approving(d) {
   const v = d.brief.version, screens = d.brief.visual.length, checks = d.checks.length, you = [];
-  const count = detailCount(d), then = ["Delivery plans the work, builds and reviews each task, and opens a pull "
+  const said = detailCount(d), then = ["Delivery plans the work, builds and reviews each task, and opens a pull "
     + "request."];
   if (screens) then.push(`It captures ${screens} screen${screens > 1 ? "s" : ""} for the visual check.`);
   then.push(`${merging(d)}. It takes on no new product commitment without you. AI credits are used `
@@ -1215,7 +1105,7 @@ function approving(d) {
   return {
     title: `Approve brief v${v} and start the work?`, yes: d.paused ? "Approve; stay paused" : "Approve and start",
     no: "Keep it waiting",
-    now: `Brief v${v}${count ? `, including its technical details (${count})` : ""}, becomes the approved version `
+    now: `Brief v${v}${said ? `, including its technical details (${said})` : ""}, becomes the approved version `
       + `every step follows${d.paused ? "; the Change stays paused until you resume" : ""}.`,
     then: then.join(" "),
     after: ["Answer questions here as they come up.", ...you, "Pause at any time; a pause takes effect after the "
@@ -1231,16 +1121,13 @@ function approving(d) {
 // The same agreement after approval (Sol, TD-179 rule 8): what was approved, and what changed since.
 function briefInfo(d) {
   const at = d.brief.approved_at ? new Date(d.brief.approved_at).toLocaleString() : "";
-  const v = d.brief.approved || d.brief.version, box = info(`Brief v${v}${at ? `, approved ${at}` : ""}`);
-  const body = el("div", undefined, { class: "brief" });
-  if (d.brief.outcome) body.append(text(d.brief.outcome));
+  const v = d.brief.approved || d.brief.version;
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
-  body.append(...agreement(d, true), ...technical(d), part("Changes since you approved", added.length
-    ? saidList(added)
-    : text("None. A change to an approved brief comes back to you as a new version to approve.")));
-  if ((d.amendments || []).length) body.append(proposedWording(d.amendments));
-  box.append(body);
-  return box;
+  return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${technical(d)}
+    ${part("Changes since you approved", added.length ? saidList(added)
+      : text("None. A change to an approved brief comes back to you as a new version to approve."))}
+    ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>`);
 }
 
 // TD-179: new wording a worker proposed for a generated criterion, with the challenger's verdict. Nothing is
@@ -1257,101 +1144,26 @@ function proposedWording(amendments) {
 }
 
 function detailHead(d) {
-  const head = el("div", undefined, { class: "detail-head" }), title = el("div");
-  const back = pds ? el("p-button-pure", "All Changes", { type: "button", icon: "arrow-left", class: "back" })
-    : el("button", "All Changes", { type: "button", class: "back" });
-  back.onclick = () => choose(null);
-  const name = heading(2, d.slug, "xl");
-  name.firstChild.tabIndex = -1;
-  title.append(name);
-  if (d.brief.title) title.append(text(d.brief.title, { color: "contrast-medium" }));
-  head.append(back, title);
+  const back = state.pds
+    ? html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
+      Changes</p-button-pure>`
+    : html`<button type="button" class="back" @click=${() => choose(null)}>All Changes</button>`;
+  let intent = nothing;
   if (!/^(Done|Abandoned) /.test(d.line)) {  // a finished Change has nothing left to pause
-    const intent = { intent: d.paused ? "resume" : "pause" }, said = d.paused
+    const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
       ? "Resumed: Delivery goes on once no question, check or stop holds the Change."
       : "Pause requested: the running step finishes first, then nothing new starts until you resume.";
-    head.append(button(d.paused ? "Resume" : "Pause", async () => {
-      const origin = shown, note = document.getElementById("started");
-      if (await send("/intent", intent, origin) && selected === origin.slug) note.textContent = said;
-    }, d.paused ? { icon: "play" } : { variant: "secondary", icon: "pause" }));
+    const go = async () => {
+      if (await send("/intent", body, d) && state.selected === d.slug) {
+        state.started = { text: said };
+        show();
+      }
+    };
+    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play" }
+      : { variant: "secondary", icon: "pause" });
   }
-  return head;
-}
-
-function reveal(target) {
-  if (matchMedia("(max-width: 63.99rem)").matches) return window.scrollTo(0, 0);
-  const top = target.getBoundingClientRect().top;
-  if (top < 0 || top > innerHeight / 2) target.scrollIntoView({ block: "start" });
-}
-
-// The heading takes focus only once its PDS wrapper has rendered; a hidden element cannot be focused.
-function focusHeading(target) {
-  const wrapper = target.querySelector("p-heading"), name = target.querySelector("h2");
-  Promise.resolve(wrapper?.componentOnReady?.()).then(() => {
-    if (name.isConnected) name.focus({ preventScroll: true });
-  });
-}
-
-async function showDetail() {
-  const target = document.getElementById("detail");
-  if (!selected) {
-    shown = { slug: null, forms: "" };
-    return target.replaceChildren();
-  }
-  const d = await call(`/changes/${encodeURIComponent(selected)}`);
-  if (d.slug !== selected) return;  // the person chose another Change while this one loaded
-  const data = JSON.stringify(d);
-  if (d.slug === shown.slug && data === shown.data) return;  // unchanged: no rebuild, nothing moves
-  const [variant, label] = badge(d);
-  const parts = [detailHead(d), row(el("p-tag", label, { variant, compact: "true" }), text(d.line))];
-  if (label === "Stopped") {
-    parts.push(notice("error", "Stopped", `${d.line.replace(/^.*?stopped: /, "")}.`,
-      d.action ? `What to do: ${d.action}.` : ""));
-  }
-  const behind = d.pullback?.state === "behind";
-  if (behind) parts.push(pullbackNote(d.pullback, d));
-  const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
-  const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
-    : d.before ? beforeSection(d.slug, d.before) : null;
-  if (d.question) {
-    parts.push(deciding ? decisionForm(d.question, r, pictures, d)
-      : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d));
-  }
-  if (d.merge) parts.push(mergeForm(d.merge, d));
-  for (const check of d.checks.filter((c) => c.waiting)) parts.push(checkForm(check, d));
-  const approving = d.step === "shape" && d.brief.approved !== d.brief.version;
-  if (approving) parts.push(approval(d));
-  if (pictures && !deciding) {  // decided: the verdict shows, the screenshots open on request
-    const shots = pictures.pop();
-    parts.push(info("Before and after", ...pictures,
-      disclosure(`Screenshots (${shots.querySelectorAll("button.zoom").length})`, shots)));
-  }
-  if (d.owner_criteria.length) parts.push(criteriaPanel(d.owner_criteria));
-  if (d.progress) parts.push(info("Progress", stepper(d.progress), ...(d.restartable ? [restartButton()] : [])));
-  if (d.plan.length) parts.push(info("Plan", planList(d)));
-  const rounds = d.rounds && roundsInfo(d.rounds, d);
-  if (rounds) parts.push(rounds);
-  if (!approving && (d.brief.outcome || d.criteria.length)) parts.push(briefInfo(d));
-  if (d.pullback && !behind) parts.push(pullbackNote(d.pullback, d));
-  parts.push(info("Recent activity", activityLog(d.activity)), spendLines(d.spend));
-  const asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
-  const forms = JSON.stringify([d.slug, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head,
-    asked, d.brief.version, d.brief.approved, d.pullback?.state, d.paused, r?.number, r?.outcome,
-    d.owner_criteria.map((k) => k.id), d.retry?.attempt, d.retry?.head]);
-  if (refused?.forms === forms) parts.splice(2, 0, refusal(refused.text));
-  else refused = null;
-  const focused = document.activeElement, name = target.querySelector("h2");
-  const using = target.contains(focused) && focused !== name;  // a control in use keeps its place until it is left
-  const overlay = document.querySelector("dialog.lightbox, p-modal");  // its launcher and focus return stay
-  if ((using || draft || overlay) && forms === shown.forms) return;  // keep unsent input while the same forms show
-  const opened = new Set([...target.querySelectorAll("details[open] > summary")].map((s) => s.textContent));
-  target.replaceChildren(...parts);
-  for (const s of target.querySelectorAll("details > summary")) if (opened.has(s.textContent)) s.parentNode.open = true;
-  if (arrived || (name && focused === name)) focusHeading(target);
-  if (arrived) reveal(target);
-  arrived = false;
-  shown = { slug: d.slug, forms, data };
-  draft = false;
+  return html`<div class="detail-head">${back}<div>${hd(2, d.slug, "xl", { tabindex: "-1" })}${d.brief.title
+    ? text(d.brief.title, { color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
 }
 
 const PAUSED = /· paused by you/;
@@ -1364,6 +1176,42 @@ function badge(c) {
   if (c.line.startsWith("Done")) return ["success", "Done"];
   if (c.line.startsWith("Abandoned")) return ["secondary", "Abandoned"];
   return c.actor === "github" ? ["secondary", "GitHub"] : ["info", "Delivery"];
+}
+
+function detailView(d) {
+  const [variant, label] = badge(d), forms = formsOf(d);
+  if (state.refused && state.refused.forms !== forms) state.refused = null;
+  const refusedTop = state.refused && !state.refused.form ? refusal(state.refused.text) : nothing;
+  const behind = d.pullback?.state === "behind";
+  const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
+  const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
+    : d.before ? beforeSection(d.slug, d.before) : null;
+  const approvingNow = d.step === "shape" && d.brief.approved !== d.brief.version;
+  let question = nothing;
+  if (d.question) {
+    question = deciding ? decisionForm(d.question, r, html`${pictures.lines}${pictures.shots}`, d)
+      : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d);
+  }
+  return html`${detailHead(d)}
+    ${row(html`<p-tag variant=${variant} compact="true">${label}</p-tag>`, text(d.line))}
+    ${refusedTop}
+    ${label === "Stopped" ? notice("error", "Stopped", `${d.line.replace(/^.*?stopped: /, "")}.`,
+      d.action ? `What to do: ${d.action}.` : "") : nothing}
+    ${behind ? pullbackNote(d.pullback, d) : nothing}
+    ${question}
+    ${d.merge ? mergeForm(d.merge, d) : nothing}
+    ${d.checks.filter((c) => c.waiting).map((c) => checkForm(c, d))}
+    ${approvingNow ? approval(d) : nothing}
+    ${pictures && !deciding ? info("Before and after", pictures.lines,
+      toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots)) : nothing}
+    ${d.owner_criteria.length ? criteriaPanel(d) : nothing}
+    ${d.progress ? info("Progress", stepper(d.progress), d.restartable ? restartButton(d) : nothing) : nothing}
+    ${d.plan.length ? info("Plan", planList(d)) : nothing}
+    ${d.rounds ? roundsInfo(d.rounds, d) : nothing}
+    ${!approvingNow && (d.brief.outcome || d.criteria.length) ? briefInfo(d) : nothing}
+    ${d.pullback && !behind ? pullbackNote(d.pullback, d) : nothing}
+    ${info("Recent activity", activityLog(d.activity))}
+    ${spendLines(d.spend)}`;
 }
 
 const GROUPS = { you: "Needs you", working: "Delivery is working", paused: "Paused", done: "Done" };
@@ -1379,86 +1227,118 @@ function split(line) {  // the stage, then what is happening in it
   return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
 }
 
-function card(c, label, variant) {
-  const node = el("li", undefined, { class: c.slug === selected ? "card current" : "card" });
-  const open = el("a", c.slug, { href: `?change=${encodeURIComponent(c.slug)}`, class: "open", "data-slug": c.slug });
-  if (c.slug === selected) open.setAttribute("aria-current", "true");
-  open.onclick = (event) => {
+function card([c, label, variant]) {
+  const current = c.slug === state.selected, [stage, rest] = split(c.line), step = c.progress?.line;
+  const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     choose(c.slug);
   };
-  const top = el("div", undefined, { class: "top" }), [stage, rest] = split(c.line);
-  top.append(open, el("p-tag", label, { variant, compact: "true" }));
-  node.append(top);
-  const step = c.progress?.line;  // the named step and its round, in place of the status line's short stage
-  if (step) node.append(plain("p", step, "says stage"));
-  const says = plain("p", undefined, "says");
-  if (stage && !step) says.append(plain("span", stage, "stage"), " \u00b7 ");
-  says.append(rest);
-  node.append(says);
-  if (c.action && groupOf(label) !== "working") node.append(plain("p", `Next: ${c.action}`, "next"));
   const bits = [];
   if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(c.now)[1]);
   if (c.step_time) bits.push(`step ${c.step_time}`);
   if (c.credits?.change || c.credits?.unknown) {
-    const step = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
-    bits.push(`${spentText(c.credits.change, c.credits.unknown || 0)}${step}`);
+    const now = c.credits.step ? ` (this step ${c.credits.step.toFixed(2)})` : "";
+    bits.push(`${spentText(c.credits.change, c.credits.unknown || 0)}${now}`);
   }
   if (c.quiet) bits.push("quiet");
-  if (bits.length) node.append(plain("p", bits.join(" \u00b7 "), "meta"));
-  for (const o of c.overlaps || []) node.append(plain("p", o, "meta"));
-  return node;
+  return html`<li class=${current ? "card current" : "card"}>
+    <div class="top"><a href=${`?change=${encodeURIComponent(c.slug)}`} class="open" data-slug=${c.slug}
+      aria-current=${current ? "true" : nothing} @click=${open}>${c.slug}</a>
+      <p-tag variant=${variant} compact="true">${label}</p-tag></div>
+    ${step ? html`<p class="says stage">${step}</p>` : nothing}
+    <p class="says">${stage && !step ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
+    ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
+    ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
+    ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}
+  </li>`;
 }
 
-function showList(changes) {
+function grouped() {
   const groups = { you: [], working: [], paused: [], done: [] };
-  for (const c of changes) {
+  for (const c of state.changes ?? []) {
     const [variant, label] = badge(c);
     groups[groupOf(label)].push([c, label, variant]);
   }
   groups.you.sort((a, b) => (b[1] === "Stopped") - (a[1] === "Stopped"));
-  const nodes = [];
-  if (!changes.length) {
-    nodes.push(plain("p", "No Changes yet. New Change opens a chat in VS Code where you shape the first one.",
-      "empty meta"));
-  } else if (!groups.you.length) {
-    nodes.push(plain("p", "Nothing needs you right now.", "meta"));
-  }
-  for (const [key, title] of Object.entries(GROUPS)) {
-    if (!groups[key].length) continue;
-    const cards = el("ul", undefined, { class: "cards" }), said = `${title} (${groups[key].length})`;
-    cards.append(...groups[key].map((g) => card(...g)));
-    const box = el(key === "done" ? "details" : "section", undefined, { class: "group" });
-    if (key === "done") {
-      box.open = doneOpen || groups.done.some(([c]) => c.slug === selected);
-      box.addEventListener("toggle", () => { doneOpen = box.open; });
-      box.append(el("summary", said), cards);
-    } else {
-      box.append(heading(2, said, "md"), cards);
-    }
-    nodes.push(box);
-  }
-  const focused = document.activeElement?.closest?.("#changes a[data-slug]")?.dataset.slug;
-  const onDone = Boolean(document.activeElement?.matches?.("#changes details.group > summary"));
-  document.getElementById("changes").replaceChildren(...nodes);
-  if (focused) document.querySelector(`#changes a[data-slug="${CSS.escape(focused)}"]`)?.focus();
-  if (onDone) document.querySelector("#changes details.group > summary")?.focus();
-  document.title = groups.you.length ? `(${groups.you.length}) ${TITLE}` : TITLE;
+  return groups;
 }
 
-const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+function youCount() {
+  return state.changes ? grouped().you.length : 0;
+}
+
+function listView() {
+  const changes = state.changes, groups = grouped();
+  if (!changes) return nothing;
+  const head = !changes.length
+    ? html`<p class="empty meta">No Changes yet. New Change opens a chat in VS Code where you shape the first one.</p>`
+    : !groups.you.length ? html`<p class="meta">Nothing needs you right now.</p>` : nothing;
+  const toggled = (e) => { state.doneOpen = e.target.open; };
+  return html`${head}${Object.entries(GROUPS).map(([key, title]) => {
+    if (!groups[key].length) return nothing;
+    const said = `${title} (${groups[key].length})`;
+    const cards = html`<ul class="cards">${repeat(groups[key], ([c]) => c.slug, card)}</ul>`;
+    if (key !== "done") return html`<section class="group">${hd(2, said, "md")}${cards}</section>`;
+    const open = state.doneOpen || groups.done.some(([c]) => c.slug === state.selected);
+    return html`<details class="group" .open=${open} @toggle=${toggled}><summary>${said}</summary>${cards}</details>`;
+  })}`;
+}
+
+function startedView() {
+  const s = state.started;
+  if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
+  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Copy
+    this command: <code>${s.command}</code>`}</p-text>`;
+}
+
+function view() {
+  const d = state.detail && state.detail.slug === state.selected ? state.detail : null;
+  return html`
+    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
+      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
+    ${startedView()}
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
+      ?? ""}</p-inline-notification>
+    <p-text id="seen" color="contrast-medium" size="xs">${state.seen}</p-text>
+    <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
+      ${state.notes.map((n) => text(n, { size: "xs" }))}</section>
+    <div id="board" class=${state.selected ? "open" : ""}>
+      <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""}>
+        <div id="changes">${listView()}</div>
+      </section>
+      <section id="detail" aria-label="Selected Change" class=${state.stale ? "stale" : ""}>${d ? detailView(d)
+        : nothing}</section>
+    </div>`;
+}
+
+function reveal(target) {
+  if (matchMedia("(max-width: 63.99rem)").matches) return window.scrollTo(0, 0);
+  const top = target.getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight / 2) target.scrollIntoView({ block: "start" });
+}
+
+// The heading takes focus only once its PDS wrapper has rendered; a hidden element cannot be focused.
+function focusHeading() {
+  const target = document.getElementById("detail");
+  const wrapper = target.querySelector("p-heading"), name = target.querySelector("h2");
+  if (!name) return;
+  Promise.resolve(wrapper?.componentOnReady?.()).then(() => {
+    if (name.isConnected) name.focus({ preventScroll: true });
+  });
+  reveal(target);
+}
 
 function choose(slug, push = true) {
-  const was = selected;
-  selected = slug && SLUG.test(slug) ? slug : null;
-  arrived = Boolean(selected);
-  if (selected !== was) document.getElementById("started").textContent = "";  // a note belongs to its Change
-  if (push && selected !== was) {
-    history.pushState(null, "", selected ? `?change=${encodeURIComponent(selected)}` : location.pathname);
+  const was = state.selected;
+  state.selected = slug && SLUG.test(slug) ? slug : null;
+  arrived = Boolean(state.selected);
+  if (state.selected !== was) state.started = null;  // a note belongs to its Change
+  if (push && state.selected !== was) {
+    history.pushState(null, "", state.selected ? `?change=${encodeURIComponent(state.selected)}` : location.pathname);
   }
-  document.getElementById("board").classList.toggle("open", Boolean(selected));
-  if (!selected && was) document.querySelector(`#changes a[data-slug="${CSS.escape(was)}"]`)?.focus();
+  show();
+  if (!state.selected && was) document.querySelector(`#changes a[data-slug="${CSS.escape(was)}"]`)?.focus();
   refresh();
 }
 
@@ -1469,21 +1349,28 @@ async function refresh() {
   }
   busy = true;
   try {
-    const changes = await call("/changes");
-    if (selected && !changes.some((c) => c.slug === selected)) {  // gone, or a stale link
-      selected = null;
+    state.changes = await call("/changes");
+    if (state.selected && !state.changes.some((c) => c.slug === state.selected)) {  // gone, or a stale link
+      state.selected = null;
       history.replaceState(null, "", location.pathname);
-      document.getElementById("board").classList.remove("open");
     }
-    showList(changes);
-    const notes = (await call("/project")).notes;
-    document.getElementById("notes").replaceChildren(...notes.map((n) => text(n, { size: "xs" })));
-    document.getElementById("notes").hidden = !notes.length;
+    state.notes = (await call("/project")).notes;
     lastSeen = new Date();
-    notify();
-    document.getElementById("seen").textContent = "";
-    for (const id of ["list", "detail"]) document.getElementById(id).classList.remove("stale");
-    await showDetail();
+    state.error = null;
+    state.seen = "";
+    state.stale = false;
+    const wanted = state.selected;
+    if (wanted) {
+      const d = await call(`/changes/${encodeURIComponent(wanted)}`);
+      if (d.slug === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
+    } else {
+      state.detail = null;
+    }
+    show();
+    if (arrived && state.detail?.slug === state.selected) {
+      arrived = false;
+      focusHeading();
+    }
   } catch (e) {
     failed(e);
   } finally {
@@ -1503,8 +1390,7 @@ async function launched(id) {  // the host opens the chat in the background; VS 
   }
 }
 
-async function newChange(event) {
-  const trigger = event.currentTarget, result = document.getElementById("started");
+async function newChange() {
   const wanted = await ask({
     title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
     now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
@@ -1514,45 +1400,33 @@ async function newChange(event) {
     instead: "Nothing opens.",
   });
   if (!wanted) return;
-  waiting(trigger, true);
-  result.textContent = "Opening the shaping chat…";
+  state.creating = true;
+  state.started = { text: "Opening the shaping chat…" };
+  show();
   try {
     const r = await call("/new-change", {});
     const s = r.started ? await launched(r.launch) : { state: "failed", ...r };
-    if (s.state === "open") {
-      const note = s.warning ? ` Note: ${s.warning}.` : "";
-      result.textContent = `A chat opened in VS Code to shape the new Change.${note}`;
-    } else {
-      result.replaceChildren(`Could not open the chat: ${s.reason}. Copy this command: `, el("code", s.command));
-    }
+    state.started = s.state === "open"
+      ? { text: `A chat opened in VS Code to shape the new Change.${s.warning ? ` Note: ${s.warning}.` : ""}` }
+      : { reason: s.reason, command: s.command };
   } catch (e) {
-    result.textContent = "";
+    state.started = null;
     failed(e);
   } finally {
-    waiting(trigger, false);
+    state.creating = false;
+    show();
   }
 }
 
-async function start() {
-  // The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
-  const loaded = customElements.whenDefined("p-button").then(() => true);
-  pds = await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
-  if (!pds) {
-    document.documentElement.classList.add("no-pds");
-    document.getElementById("offline").hidden = false;
-  }
-  document.querySelector("header").append(button("New Change", newChange, { icon: "add", aria: DIALOG }));
-  for (const type of ["input", "change"]) {
-    document.getElementById("detail").addEventListener(type, () => { draft = true; });
-  }
-  addEventListener("popstate", () => choose(new URLSearchParams(location.search).get("change"), false));
-  if (selected && !SLUG.test(selected)) selected = null;
-  document.getElementById("board").classList.toggle("open", Boolean(selected));
-  refresh();
-  setInterval(refresh, 3000);
-}
-
-start();
+// The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
+const asked = new URLSearchParams(location.search).get("change");
+state.selected = asked && SLUG.test(asked) ? asked : null;
+arrived = Boolean(state.selected);
+state.pds = await designSystem(["p-button"]);
+show();
+addEventListener("popstate", () => choose(new URLSearchParams(location.search).get("change"), false));
+refresh();
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>

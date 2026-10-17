@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.commands.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness, step_input
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
@@ -569,7 +569,7 @@ def test_two_concurrent_new_change_calls_launch_once(tmp_path, monkeypatch):
 def test_the_page_loads_the_vendored_design_system_without_the_token(tmp_path):
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1")
     page = c.get("/").text
-    assert all(f"/assets/pds/{n}" in page for n in api.PDS)
+    assert all(f"/assets/pds/{n}" in page for n in pages.PDS)
     css, js = c.get("/assets/pds/index.css"), c.get("/assets/pds/load.mjs")
     assert (css.headers["content-type"].split(";")[0], js.headers["content-type"].split(";")[0]) == (
         "text/css",

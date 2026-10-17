@@ -54,6 +54,10 @@ trim_trailing_whitespace = false
 [serve/delivery-next/src/owlbear_delivery_next/web/pds/**]
 max_line_length = unset
 
+# Vendored lit-html for the delivery-next pages (TD-264) — unmodified minified npm output
+[serve/delivery-next/src/owlbear_delivery_next/web/vendor/**]
+max_line_length = unset
+
 [uv.lock]
 max_line_length = unset
 
