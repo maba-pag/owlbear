@@ -193,3 +193,57 @@ def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:
     except Exception as exc:  # noqa: BLE001 - the test reports what the agent met
         return type(exc)
     return None
+
+
+@pytest.mark.browser
+def test_the_memory_page_keeps_an_edit_while_it_refreshes_and_saves_it(shared):
+    """TD-264: the page renders with lit-html; typing in the editor survives a refresh, and Save sends it."""
+    import socket  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    import uvicorn  # noqa: PLC0415
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    curated = seed(folder, "Run ruff first", curated=True)
+    seed(folder, "Ask before merging", agent="shaper")
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/memory#token=tok")
+            expect(page.locator("#shown")).to_have_text("2 of 2 shown")
+            review = page.locator("section", has_text="Needs your review")
+            expect(review.locator(".entry")).to_have_count(1)
+            page.get_by_label("State").select_option("pending")
+            expect(page.locator("#shown")).to_have_text("1 of 2 shown")
+            page.get_by_label("State").select_option("active")
+            card = page.locator(".entry", has_text="Run ruff first")
+            card.get_by_role("button", name="Edit").click()
+            title = page.locator("#edit-title")
+            title.fill("Run ruff before the tests")
+            page.get_by_label("Category").select_option("pitfall")  # the page renders again while editing
+            other = page.locator(".entry", has_text="Ask before merging").get_by_role("button", name="Edit")
+            expect(other).to_be_visible()
+            expect(title).to_have_value("Run ruff before the tests")
+            page.get_by_role("button", name="Save").click()
+            expect(page.locator("#status")).to_have_text('Saved "Run ruff before the tests".')
+            expect(page.locator(".entry", has_text="Run ruff before the tests")).to_be_visible()
+            browser.close()
+    finally:
+        server.should_exit = True
+    saved = {e.id: e.title for e in MemoryEngine(folder).get_entries()}
+    assert saved[curated.id] == "Run ruff before the tests"
