@@ -26,6 +26,9 @@ RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
 UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
 RUFF_TOOLCHAIN_SCRIPT = ROOT / ".github/scripts/check_ruff_toolchain.py"
+_SCOPE_SPEC = importlib.util.spec_from_file_location("ci_scope_dependency_test", ROOT / ".github/scripts/ci_scope.py")
+ci_scope = importlib.util.module_from_spec(_SCOPE_SPEC)
+_SCOPE_SPEC.loader.exec_module(ci_scope)
 COPILOT_UV_SYNC = (
     "skipped=()\n"
     'for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done\n'
@@ -242,11 +245,9 @@ def _run_uv_version_check(executable: Path) -> subprocess.CompletedProcess[str]:
 
 def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     workflow = _workflow(VERIFY_PATH)
-    pull_request = workflow["on"]["pull_request"]
 
-    assert pull_request["branches"] == ["main"]
-    assert pull_request["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
-    assert set(pull_request["paths"]) == {
+    assert set(workflow["on"]) == {"workflow_call", "workflow_dispatch"}
+    assert set(ci_scope.SUITES["tooling"]) == {
         ".github/renovate.json",
         ".github/scripts/**",
         ".github/workflows/**",
@@ -270,12 +271,10 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "uv.lock",
     }
     assert set(workflow["jobs"]) == {"verify"}
-    assert "workflow_dispatch" in workflow["on"]
 
 
 def test_agent_workflow_delegates_python_workspace_paths() -> None:
-    workflow = _workflow(AGENT_WORKFLOW_PATH)
-    paths = set(workflow["on"]["pull_request"]["paths"])
+    paths = set(ci_scope.SUITES["agent-ecosystem"])
 
     assert (
         not {

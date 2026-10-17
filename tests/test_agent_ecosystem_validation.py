@@ -26,6 +26,9 @@ _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
 _PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
 _AGENT_WORKFLOW_PATH = _REPO_ROOT / ".github/workflows/agent-ecosystem.yml"
+_SCOPE_SPEC = importlib.util.spec_from_file_location("ci_scope_agent_test", _REPO_ROOT / ".github/scripts/ci_scope.py")
+_CI_SCOPE = importlib.util.module_from_spec(_SCOPE_SPEC)
+_SCOPE_SPEC.loader.exec_module(_CI_SCOPE)
 
 
 def test_recovery_workflows_require_host_exclusion_not_caller_confirmation() -> None:
@@ -235,20 +238,19 @@ def _frontmatter(path: Path) -> dict[str, object]:
 def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> None:
     document = yaml.safe_load(_AGENT_WORKFLOW_PATH.read_text(encoding="utf-8"))
     trigger = document.get("on", document.get(True))
-    pull_request = trigger["pull_request"]
+    paths = _CI_SCOPE.SUITES["agent-ecosystem"]
     job = document["jobs"]["validate-agent-ecosystem"]
     pytest_run = next(str(step["run"]) for step in job["steps"] if "pytest" in str(step.get("run", "")))
 
-    assert set(trigger) == {"pull_request"}
-    assert pull_request["branches"] == ["main"]
-    assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
+    assert set(trigger) == {"workflow_call", "workflow_dispatch"}
+    assert len(paths) == len(set(paths))
     assert {
         ".owlbear/instructions/**",
         "serve/*-mcp/**",
         "seed/.vscode/mcp.json",
         ".vscode/mcp.json",
         "share/instructions/**",
-    } <= set(pull_request["paths"])
+    } <= set(paths)
     assert not {
         ".github/workflows/tooling.yml",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
@@ -257,9 +259,9 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         "share/prompts/kb-ingest.prompt.md",
         "share/skills/h-knowledge-ops/SKILL.md",
         "tests/test_dependency_verification_workflow.py",
-    } & set(pull_request["paths"])
+    } & set(paths)
     assert job["timeout-minutes"] == 5
-    assert job["if"] == ("github.event_name != 'pull_request' || github.event.pull_request.draft == false")
+    assert "if" not in job
     assert all(
         path in pytest_run
         for path in (

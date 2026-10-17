@@ -2,48 +2,17 @@
 name: Agent ecosystem validation
 
 "on":
-  pull_request:
-    branches: [main]
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    paths:
-      - .github/workflows/agent-ecosystem.yml
-      - .owlbear/hooks/**
-      - .owlbear/agents/**
-      - .owlbear/instructions/**
-      - .owlbear/prompts/**
-      - .owlbear/scripts/validate_agents.py
-      - .owlbear/scripts/validate_prompts.py
-      - .owlbear/scripts/validate_skills.py
-      - .owlbear/skills/**
-      - .github/scripts/check_uv_version.py
-      - .pre-commit-config.yaml
-      - .vscode/mcp.json
-      - seed/.vscode/mcp.json
-      - serve/*-mcp/**
-      - share/agents/**
-      - share/instructions/**
-      - share/prompts/**
-      - share/skills/**
-      - tests/test_agent_ecosystem_validation.py
-      - tests/test_write_guard_hooks.py
-      - serve/knowledge/**
-      - tests/test_knowledge_ops_contract.py
+  workflow_call:
+  workflow_dispatch:
 
 concurrency:
-  group: agent-ecosystem-${{ github.event.pull_request.number }}
+  group: agent-ecosystem-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions: {}
 
 jobs:
   validate-agent-ecosystem:
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

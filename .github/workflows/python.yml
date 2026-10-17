@@ -2,26 +2,7 @@
 name: Python
 
 "on":
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    paths:
-      - .github/workflows/python.yml
-      - .python-version
-      - conftest.py
-      - pyproject.toml
-      - uv.lock
-      - serve/*/pyproject.toml
-      - serve/*/src/**
-      - serve/*/tests/**
-      - tests/**
-      - setup/**
-      - seed/**
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -45,9 +26,6 @@ env:
 jobs:
   tests:
     name: Python tests ${{ matrix.shard }}/4
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
