@@ -38,7 +38,9 @@
 </main>
 <!-- ask -->
 <script type="module">
-import { html, nothing, render } from "/assets/lit-html/lit-html.js";
+import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { call, designSystem } from "/assets/ui.mjs";
 
 const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved", "deleted"];  // needs you first
@@ -53,7 +55,9 @@ const TAGS = { contested: "error", disputed: "error", stale: "warning", curated:
   approved: "success", deleted: "secondary" };
 const ACTIVE = "active", ANY = "any";
 const DIALOG = "{ 'aria-haspopup': 'dialog' }";
-const state = { pds: true, loaded: null, editing: null, error: "", status: "" };
+// editing: the entry being edited and its draft, so what is typed lives in state, not in an element (TD-264);
+// pending: the entry and action whose request is under way.
+const state = { pds: true, loaded: null, editing: null, pending: null, error: "", status: "" };
 const filter = { state: ACTIVE, category: ANY, agent: ANY };
 
 function show() {
@@ -65,17 +69,12 @@ function notify(message = "") {
   show();
 }
 
-// A button: the design system's when it loaded, else a plain one. The handler gets the button that was pressed.
-function button(label, onclick, { variant, icon, aria } = {}) {
+// A button: the design system's when it loaded, else a plain one; busy while its request is under way.
+function button(label, onclick, { variant, icon, aria, busy = false } = {}) {
   return state.pds
     ? html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
-        aria=${aria ?? nothing} @click=${(e) => onclick(e.currentTarget)}>${label}</p-button>`
-    : html`<button type="button" @click=${(e) => onclick(e.currentTarget)}>${label}</button>`;
-}
-
-function waiting(node, on) {
-  if (state.pds) node.loading = on;
-  else node.disabled = on;
+        aria=${aria ?? nothing} .loading=${busy} @click=${onclick}>${label}</p-button>`
+    : html`<button type="button" .disabled=${busy} @click=${onclick}>${label}</button>`;
 }
 
 function select(key, label, options) {
@@ -89,27 +88,31 @@ function select(key, label, options) {
     </select></label>`;
 }
 
-// An edit field; its value is read when Save is pressed, so a re-render never drops what was typed.
-function field(id, label, value, multiline, max) {
+// An edit field bound to the draft: typing updates the draft, and a re-render shows the draft again.
+function field(key, label, multiline, max) {
+  const draft = state.editing.draft, typed = (e) => { draft[key] = e.target.value ?? ""; };
   if (state.pds) {
     return multiline
-      ? html`<p-textarea id=${id} label=${label} max-length=${max} rows="5" counter="true"
-          .value=${value}></p-textarea>`
-      : html`<p-input-text id=${id} label=${label} max-length=${max} .value=${value}></p-input-text>`;
+      ? html`<p-textarea label=${label} max-length=${max} rows="5" counter="true" .value=${live(draft[key])}
+          @input=${typed} @change=${typed}></p-textarea>`
+      : html`<p-input-text label=${label} max-length=${max} .value=${live(draft[key])} @input=${typed}
+          @change=${typed}></p-input-text>`;
   }
   return html`<label class="field">${label}${multiline
-    ? html`<textarea id=${id} maxlength=${max} rows="5" .value=${value}></textarea>`
-    : html`<input id=${id} maxlength=${max} .value=${value}>`}</label>`;
+    ? html`<textarea maxlength=${max} rows="5" .value=${live(draft[key])} @input=${typed}></textarea>`
+    : html`<input maxlength=${max} .value=${live(draft[key])} @input=${typed}>`}</label>`;
 }
 
-function tick(id, label, checked) {
+function tick(c) {
+  const chosen = state.editing.draft.categories, on = chosen.includes(c);
+  const flip = (e) => {
+    const checked = e.target.checked === true;
+    state.editing.draft.categories = checked ? [...new Set([...chosen, c])] : chosen.filter((x) => x !== c);
+    show();
+  };
   return state.pds
-    ? html`<p-checkbox id=${id} label=${label} .checked=${checked}></p-checkbox>`
-    : html`<label><input id=${id} type="checkbox" .checked=${checked}> ${label}</label>`;
-}
-
-function valueOf(id) {
-  return (document.getElementById(id).value || "").trim();
+    ? html`<p-checkbox label=${c} .checked=${live(on)} @change=${flip}></p-checkbox>`
+    : html`<label><input type="checkbox" .checked=${live(on)} @change=${flip}> ${c}</label>`;
 }
 
 function age(iso) {
@@ -119,8 +122,13 @@ function age(iso) {
   return `${Math.round(minutes / 1440)} d ago`;
 }
 
-async function act(trigger, m, action, body = {}) {
-  waiting(trigger, true);
+function busy(m, action) {
+  return state.pending === `${m.id}:${action}`;
+}
+
+async function act(m, action, body = {}) {
+  state.pending = `${m.id}:${action}`;
+  show();
   try {
     const r = await call(`/memory/${encodeURIComponent(m.id)}/${action}`,
       { body: { updated_at: m.updated_at, ...body }, timeout: 60000 });  // a push can take a network round trip
@@ -134,14 +142,15 @@ async function act(trigger, m, action, body = {}) {
       delete: `Deleted ${title}.`,
     }[action];
     state.status = `${done}${r.notice ? ` ${r.notice}` : ""}`;
+    state.pending = null;
     await refresh();
   } catch (e) {
+    state.pending = null;
     notify(e.message);
-    waiting(trigger, false);
   }
 }
 
-async function remove(trigger, m) {
+async function remove(m) {
   const sure = await ask({
     title: `Delete “${m.title}”?`, yes: "Delete", no: "Keep it",
     now: m.state === "pending" ? "It was never reviewed, so its file is removed."
@@ -149,10 +158,10 @@ async function remove(trigger, m) {
     after: "There is no restore here.",
     instead: "It stays as it is.",
   });
-  if (sure) act(trigger, m, "delete");
+  if (sure) act(m, "delete");
 }
 
-async function resolve(trigger, m) {
+async function resolve(m) {
   const sure = await ask({
     title: `Approve “${m.title}” as it reads now?`, yes: "Approve as it reads", no: "Keep it under review",
     now: `It leaves the ${m.state} state: its challenges are cleared and it counts as approved.`,
@@ -160,46 +169,50 @@ async function resolve(trigger, m) {
     after: "Edit or delete it at any time; an edit needs your approval again.",
     instead: "It stays under review; edit it first if the text is wrong.",
   });
-  if (sure) act(trigger, m, "resolve");
+  if (sure) act(m, "resolve");
 }
 
-function picked(m) {
-  return state.loaded.categories.filter((c, i) => document.getElementById(`edit-category-${i}`).checked === true);
+function edit(m) {
+  state.editing = { id: m.id, draft: { title: m.title, content: m.content, categories: [...m.categories] } };
+  show();
 }
 
 function editor(m) {
-  const save = (trigger) => {
-    const categories = picked(m);
-    if (!valueOf("edit-title")) return notify("Give the memory a title.");
+  const draft = state.editing.draft;
+  const save = () => {
+    const title = draft.title.trim(), content = draft.content.trim();
+    const categories = state.loaded.categories.filter((c) => draft.categories.includes(c));
+    if (!title) return notify("Give the memory a title.");
     if (!categories.length) return notify("Choose at least one category.");
-    act(trigger, m, "edit", { title: valueOf("edit-title"), content: valueOf("edit-content"), categories });
+    act(m, "edit", { title, content, categories });
   };
-  const changed = () => valueOf("edit-title") !== m.title || valueOf("edit-content") !== m.content
-    || state.loaded.categories.some((c) => picked(m).includes(c) !== m.categories.includes(c));
+  const changed = () => draft.title.trim() !== m.title || draft.content.trim() !== m.content
+    || state.loaded.categories.some((c) => draft.categories.includes(c) !== m.categories.includes(c));
   const cancel = async () => {
     if (changed() && !(await ask({ title: "Discard your edits?", yes: "Discard", no: "Keep editing",
       now: "Your changes to this memory are lost.", instead: "You go on editing." }))) return;
     state.editing = null;
     show();
   };
-  return html`${field("edit-title", "Title", m.title, false, 200)}
-    ${field("edit-content", "Content", m.content, true, 1024)}
-    <fieldset><legend>Categories</legend><div class="row">
-      ${state.loaded.categories.map((c, i) => tick(`edit-category-${i}`, c, m.categories.includes(c)))}
-    </div></fieldset>
-    <div class="row">${button("Save", save, { icon: "check" })}${button("Cancel", cancel, { variant: "secondary" })}
-    </div>`;
+  return html`${field("title", "Title", false, 200)}
+    ${field("content", "Content", true, 1024)}
+    <fieldset><legend>Categories</legend><div class="row">${state.loaded.categories.map(tick)}</div></fieldset>
+    <div class="row">${button("Save", save, { icon: "check", busy: busy(m, "edit") })}
+      ${button("Cancel", cancel, { variant: "secondary" })}</div>`;
 }
 
 function actions(m) {
   const parts = [];
-  if (m.state === "curated") parts.push(button("Approve", (t) => act(t, m, "approve"), { icon: "check" }));
+  if (m.state === "curated") {
+    parts.push(button("Approve", () => act(m, "approve"), { icon: "check", busy: busy(m, "approve") }));
+  }
   if (["contested", "disputed", "stale"].includes(m.state)) {
-    parts.push(button("Resolve", (t) => resolve(t, m), { icon: "check", aria: DIALOG }));
+    parts.push(button("Resolve", () => resolve(m), { icon: "check", aria: DIALOG, busy: busy(m, "resolve") }));
   }
   if (m.state !== "deleted") {
-    parts.push(button("Edit", () => { state.editing = m.id; show(); }, { variant: "secondary", icon: "edit" }),
-      button("Delete", (t) => remove(t, m), { variant: "secondary", icon: "delete", aria: DIALOG }));
+    parts.push(button("Edit", () => edit(m), { variant: "secondary", icon: "edit" }),
+      button("Delete", () => remove(m), { variant: "secondary", icon: "delete", aria: DIALOG,
+        busy: busy(m, "delete") }));
   }
   return parts.length ? html`<div class="row">${parts}</div>` : nothing;
 }
@@ -213,7 +226,7 @@ function card(m) {
       <p-tag variant=${TAGS[m.state]} compact="true">${m.state}</p-tag>
       ${m.categories.map((c) => html`<p-tag compact="true">${c}</p-tag>`)}</div>
     <p-text size="xs" color="contrast-medium">${meta}</p-text>
-    ${state.editing === m.id ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
+    ${state.editing?.id === m.id ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
   </li>`;
 }
 
@@ -224,7 +237,8 @@ function matches(m) {
   return own && category && agent;
 }
 
-function filters() {
+// The filter choices the loaded entries offer; a choice no longer offered falls back to Any before anything is shown.
+function choices() {
   const loaded = state.loaded;
   const agents = [...new Set(loaded.entries.flatMap((m) => m.scope_agents).filter((a) => a !== "*"))].sort();
   const parts = [
@@ -233,31 +247,29 @@ function filters() {
     ["agent", "Agent", [[ANY, "Any"], ...agents.map((a) => [a, a])]],
   ];
   for (const [key, , options] of parts) if (!options.some(([v]) => v === filter[key])) filter[key] = ANY;
-  return html`<section id="filters" class="row" aria-label="Filters">
-    ${parts.map(([key, label, options]) => select(key, label, options))}</section>`;
+  return parts;
 }
 
-function entries() {
-  const all = state.loaded.entries;
-  const shown = all.filter(matches).sort((a, b) => ORDER.indexOf(a.state) - ORDER.indexOf(b.state)
-    || b.updated_at.localeCompare(a.updated_at));
+function entries(shown) {
   const sections = GROUPS.map(([title, hint, states]) => {
     const mine = shown.filter((m) => states.includes(m.state));
     if (!mine.length) return nothing;
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
         : nothing}</div>
-      <ul class="entries">${mine.map(card)}</ul></section>`;
+      <ul class="entries">${repeat(mine, (m) => m.id, card)}</ul></section>`;
   });
-  const empty = all.length ? "No memory matches these filters." : "Agents have not remembered anything yet.";
-  const list = shown.length ? sections : html`<p-text color="contrast-medium" class="empty">${empty}</p-text>`;
-  return [html`<div id="entries">${list}</div>`, `${shown.length} of ${all.length} shown`];
+  const empty = state.loaded.entries.length ? "No memory matches these filters."
+    : "Agents have not remembered anything yet.";
+  return shown.length ? sections : html`<p-text color="contrast-medium" class="empty">${empty}</p-text>`;
 }
 
 function view() {
   const loaded = state.loaded, available = loaded?.available;
-  const [list, count] = available ? entries() : [nothing, ""];
-  document.getElementById("shown").textContent = count;
+  const parts = available ? choices() : [];
+  const shown = available ? loaded.entries.filter(matches).sort((a, b) => ORDER.indexOf(a.state)
+    - ORDER.indexOf(b.state) || b.updated_at.localeCompare(a.updated_at)) : [];
+  document.getElementById("shown").textContent = available ? `${shown.length} of ${loaded.entries.length} shown` : "";
   const errors = loaded?.parse_errors ? ` ${loaded.parse_errors} file(s) could not be read.` : "";
   return html`
     <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
@@ -268,8 +280,9 @@ function view() {
       dismiss-button="false" ?hidden=${!loaded || available}>${loaded && !available ? `${loaded.reason}.` : ""}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${available ? filters() : nothing}
-    ${list}
+    ${available ? html`<section id="filters" class="row" aria-label="Filters">
+      ${parts.map(([key, label, options]) => select(key, label, options))}</section>` : nothing}
+    ${available ? html`<div id="entries">${entries(shown)}</div>` : nothing}
     ${available ? html`<p-text id="where" size="xs" color="contrast-medium" title=${loaded.folder}>Kept in
       ${loaded.folder.split("/").slice(-2).join("/")} of the shared repository.${errors}</p-text>` : nothing}`;
 }
