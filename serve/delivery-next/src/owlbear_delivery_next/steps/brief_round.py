@@ -48,7 +48,7 @@ def due(c: Change) -> bool:
     if c.step.kind != StepKind.SHAPE or c.finished_at:
         return False
     lost = brief_rounds.first(c) is not None and not brief_rounds.owned_open(c)
-    return c.step.mode in brief_rounds.MODES or _legacy(c) or lost or loop.brief_ready(c)
+    return c.step.mode in {*brief_rounds.MODES, brief_rounds.PLANNED} or _legacy(c) or lost
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -58,7 +58,7 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         ask(change, q, now)  # an upheld rejection is the owner's before anything else, even after a stop (TD-193)
         store.write(lock, change)
         return
-    if loop.brief_ready(change) and change.step.mode not in brief_rounds.MODES:  # approved under the old flow
+    if change.step.mode == brief_rounds.PLANNED:  # its loop ended on the version the old flow approved
         store.write(lock, loop.apply(change, loop.StepResult(exit=Exit.DONE, reason="brief challenged"), now))
         return
     if _legacy(change):
@@ -116,7 +116,7 @@ def judged(change: Change, verdict: loop.StepResult, payload: object, now: datet
         return verdict  # failed: the mode stays and it runs again
     brief_rounds.counted(change, found, upheld, now)
     b = change.brief
-    planned = b.approved_version == b.challenged == b.version
+    planned = change.step.mode == brief_rounds.PLANNED
     return loop.StepResult(exit=Exit.DONE, reason=f"brief v{b.version} challenged") if planned else None
 
 

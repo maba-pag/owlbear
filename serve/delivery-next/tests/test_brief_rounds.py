@@ -45,13 +45,15 @@ class Shaping:
         self.http = TestClient(api.create_app(self.store, "t", Host()), base_url="http://127.0.0.1",
                                headers={"authorization": "Bearer t"})  # fmt: skip
         self.verdicts: list[tools.ReviewResult] = []
+        self.last: object = None
         self.told: list[object] = []
         monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
         monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
 
     async def run(self, cfg):
         self.told.append(cfg)
-        return Run(cfg.session_id, "result", self.verdicts.pop(0), termination=Termination(confirmed=True))
+        self.last = self.verdicts.pop(0) if self.verdicts else self.last  # a session the host ran again judges alike
+        return Run(cfg.session_id, "result", self.last, termination=Termination(confirmed=True))
 
     @property
     def slug(self) -> str:
@@ -242,6 +244,17 @@ def test_a_clarified_reconsideration_hands_the_finding_to_the_shaper_who_may_sav
     c = shaping.step()
     assert (c.step.mode, c.outcome.waiting, c.loops[BRIEF].findings[0].state) == (None, Waiting.CHAT, "owner-fix")
     assert shaping.save(title="Add a farewell")["version"] == 2
+
+
+def test_a_return_to_shaping_after_approval_waits_for_the_revision_and_never_plans_by_itself(shaping):
+    shaping.save()
+    with shaping.store.lock(shaping.slug) as lock:
+        c = shaping.store.read(shaping.slug)
+        c.brief.approved_version = c.brief.challenged = 1  # approved, then a premise or the owner's intent came back
+        c.outcome = None
+        shaping.store.write(lock, c)
+    c = shaping.step()
+    assert (c.step.kind, c.outcome.waiting, shaping.told) == (K.SHAPE, Waiting.CHAT, [])
 
 
 def test_a_wait_for_a_verdict_ends_when_its_request_was_retired():

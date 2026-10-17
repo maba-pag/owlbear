@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.round_records import Ended, RoundFinding, RoundPolicy
 
 CHALLENGE, RECONSIDER = "challenge", "reconsider"  # SHAPE modes that run a challenger session
+PLANNED = "planned"  # SHAPE mode once the loop ended on a version the old flow approved: planning follows
 MODES = frozenset({CHALLENGE, RECHECK, RECONSIDER})
 FOUND = cause_key(ErrorKind.REVIEW, StepKind.SHAPE)  # every question about the brief challenge's findings
 DISPUTE = cause_key(ErrorKind.REVIEW, StepKind.SHAPE, "dispute ")
@@ -203,7 +204,8 @@ def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None:
     lp.ended, c.brief.challenged = ended, version
     _mode(c, None)
     if c.brief.approved_version == version:
-        c.outcome = None  # runnable: the SHAPE step goes on to planning
+        _mode(c, PLANNED)  # runnable: the SHAPE step goes on to planning
+        c.outcome = None
     else:
         _wait(c, f"approve brief v{version}", now)
 
