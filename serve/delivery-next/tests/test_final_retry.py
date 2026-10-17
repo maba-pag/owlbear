@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, loop, prompts, rebuilds, round_flow, runner
+from owlbear_delivery_next import api, held, loop, prompts, rebuilds, round_flow, runner
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import (
     Brief,
@@ -25,7 +25,7 @@ from owlbear_delivery_next.models import (
 )
 from owlbear_delivery_next.moves import ask
 from owlbear_delivery_next.processes import Termination
-from owlbear_delivery_next.profile_record import Profile
+from owlbear_delivery_next.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.round_records import FINAL, Completion, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
@@ -381,6 +381,19 @@ def test_a_plan_on_the_existing_code_keeps_the_branch_as_it_is(tmp_path, clone):
     assert "on the existing code" in c.outcome.reason
 
 
+def test_a_kept_check_runs_from_each_package_of_its_task():
+    entries = {f"check:{p}": ProfileEntry(state="known", value="npm test") for p in ("packages/a", "packages/b", ".")}
+    profile = Profile(entries=entries | {"check:packages/c": ProfileEntry(state="known", value="uv run pytest")})
+    t1 = Task(id="t1", title="one", scope=["packages/a/x.ts"], checks=["npm test"])
+    t2 = Task(id="t2", title="two", scope=["packages/b/y.ts", "packages/c"], checks=["npm test", "uv run pytest"])
+    t3 = Task(id="t3", title="three", scope=["docs/z.md"], checks=["make docs"])
+    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2, t3]))
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
+    rebuilds.rotated(c, lp, [], profile)
+    assert t1.checks == ["npm test", "cd packages/b && npm test", "cd packages/c && uv run pytest", "make docs"]
+    assert t1.scope == ["packages/a/x.ts", "packages/b/y.ts", "packages/c", "docs/z.md"]
+
+
 def test_each_build_session_records_its_own_span(tmp_path, clone):
     task = Task(id="t1", title="one")
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[task]), step=Step(kind=K.BUILD, task="t1"))
@@ -391,6 +404,22 @@ def test_each_build_session_records_its_own_span(tmp_path, clone):
     review.recorded(c, task, run, clone, loop.StepResult(exit=Exit.RETRY, cause="x"))  # a failed session's own
     owner = commit(clone, "o.txt", "the owner's\n")
     review.started(c, task, clone, settings)
-    crashed = commit(clone, "x.txt", "2\n")  # its session ends without a record
+    crashed = commit(clone, "x.txt", "2\n")  # its session ends without a record: its end stays unknown
     review.started(c, task, clone, settings)
-    assert (task.base, task.spans) == (base, [f"{base}..{built}", f"{owner}..{crashed}", f"{crashed}.."])
+    asked = commit(clone, "x.txt", "3\n")
+    review.recorded(
+        c,
+        task,
+        Run("s2", "ask", None, termination=Termination(confirmed=True)),
+        clone,
+        loop.StepResult(exit=Exit.RETRY, cause="x"),
+    )
+    assert (task.base, task.spans) == (base, [f"{base}..{built}", f"{owner}..", f"{crashed}..{asked}"])
+    assert retry._commits(clone, [task], asked)[1] == "the commits of task t1 are not recorded"  # noqa: SLF001
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
+    assert rebuilds.undoing(c, lp) == ([], "the commits of task t1 are not recorded")
+    review.started(c, task, clone, settings)
+    store = Store(tmp_path / "store")
+    store.write(Lock("c1"), c)
+    held.keep(store, Lock("c1"), c, run, asked)  # a session whose usage stayed unread ends at its held head
+    assert store.read("c1").plan.tasks[0].spans[-1] == f"{asked}..{asked}"

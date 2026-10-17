@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -27,16 +28,14 @@ if TYPE_CHECKING:
 def started(c: Change, task: Task | None, path: Path, settings: Settings) -> None:
     """Before a session: a build opens its span, a task's first build records its base, a plan task's starts its loop.
 
-    A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end. A span
-    left open by a session that ended without its record closes here: what that session left is its own.
+    A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end. A span a
+    session left open stays open: its end is unknown, so no undo takes that task's work.
     """
     if c.step.kind == StepKind.REVIEW and task is None:
         _final(c, settings)
     if c.step.kind != StepKind.BUILD or task is None:
         return
     head = worktree.head(path)
-    if task.spans and task.spans[-1].endswith(".."):
-        task.spans[-1] += head
     task.spans.append(f"{head}..")
     if task.base is not None:
         return
@@ -102,8 +101,8 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     review only with identical covered content.
     """
     p = run.payload
-    if change.step.kind == StepKind.BUILD and task and run.head and task.spans and task.spans[-1].endswith(".."):
-        task.spans[-1] += run.head  # the session's own commits end here
+    if change.step.kind == StepKind.BUILD and task and task.spans and task.spans[-1].endswith(".."):
+        task.spans[-1] += run.head or _head(path)  # the session's own commits end here, whatever its exit
     if change.step.kind == StepKind.BUILD and result.exit == Exit.DONE and run.head:
         return result.model_copy(update={"head": run.head})  # what a final loop's completion binds (TD-208)
     if not (isinstance(p, tools.ReviewResult) and run.head):
@@ -122,6 +121,14 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     fixes = repair(change, task, found)
     update = {"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "ungated": lp is not None}
     return result.model_copy(update=update | {"score": score(found, change.step.kind)})
+
+
+def _head(path: Path) -> str:
+    """The worktree's HEAD when a session ended without reporting one, or "" (its span stays open)."""
+    try:
+        return worktree.head(path)
+    except OSError, subprocess.SubprocessError:
+        return ""
 
 
 def _counted(c: Change, lp: RoundLoop, p: tools.ReviewResult, task: Task | None, head: str) -> list[str]:

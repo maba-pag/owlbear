@@ -22,6 +22,7 @@ from owlbear_delivery_next import rebuilds, round_flow
 from owlbear_delivery_next.git_files import git_common_dir
 from owlbear_delivery_next.models import Option, Question, StepKind
 from owlbear_delivery_next.moves import ask, go, open_task, subject_of
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.round_flow import CLEAN, PREFIX, RETRY
 from owlbear_delivery_next.round_records import FINAL
 from owlbear_delivery_next.steps import worktree
@@ -124,7 +125,7 @@ def _undo(path: Path, c: Change, task: Task, lp: RoundLoop, start: str) -> str:
 
 def _commits(path: Path, tasks: list[Task], head: str) -> tuple[list[str], str]:
     """The tasks' own commits, newest first: what their build sessions made, never what came between them."""
-    if unknown := [t.id for t in tasks if not t.spans or t.spans[-1].endswith("..")]:
+    if unknown := [t.id for t in tasks if not t.spans or any(s.endswith("..") for s in t.spans)]:
         return [], f"the commits of task {unknown[0]} are not recorded"
     spans = [span.split("..") for t in tasks for span in t.spans]
     own = {x for start, end in spans for x in _range(path, start, end)}
@@ -221,7 +222,7 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         how = "from a clean state: Delivery undid the Change's earlier work, which stays archived on a branch"
         round_flow.replan(change, lp, round_flow.why(lp, how), now)
     else:
-        rebuilds.rotated(change, lp, undo)
+        rebuilds.rotated(change, lp, undo, store.read_profile() or Profile())
     store.write(lock, change)
     return True
 

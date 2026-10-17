@@ -127,16 +127,19 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
 - Then fresh builder sessions rebuild the selected tasks in plan order (new task-loop attempts), then the
   final loop continues. A retry invalidates the final-review completion, merge consent, CI results and
   affected checks; answered PR requests whose fixes were undone are reconciled, not blindly re-posted.
-- As built (TD-245): every build session records its own span `start..end` on its task, so a task's commits are what
-  its sessions made and never what came between them (an owner's commit while it was paused, another task's build).
+- As built (TD-245): every build session records its own span `start..end` on its task (the end is the session's
+  reported head, else the worktree's when it ends, else the held head when its usage stayed unread), so a task's
+  commits are what its sessions made and never what came between them (an owner's commit while it was paused,
+  another task's build). A span whose end is unknown stays open, and an open span stops any undo of that task.
   A rebuild undoes the ticked tasks, their task-loop repairs and each final repair whose fixed findings name only
   ticked tasks of the current plan (a finding of no task counts as kept work; history before a re-plan never counts);
   a final repair of both, or a task with an unrecorded span, stops with the owner's question. Undone tasks keep no
   span, so nothing is reverted twice. The head an undo starts from is recorded before anything is promoted: the undo
   is built on it and promoted only by a fast-forward, a restart finds it on the branch instead of repeating it, and a
-  branch that moved without it stops it. The last rebuilt task also runs every other plan task's checks, with their
-  scopes: its builder must pass them, so a failure is fixed in that build and reviewed by its loop (a reviewer runs
-  only commands that write nothing). The final loop ends `retried` and reopens with one round once the rebuilds are
+  branch that moved without it stops it. The last rebuilt task also runs every other plan task's checks, each from
+  its own package (`cd <package> && <check>`, so the same command in two packages runs twice), with their scopes for
+  the installs: its builder must pass them, so a failure is fixed in that build and reviewed by its rounds, and CI
+  stays the second net (TD-246). The final loop ends `retried` and reopens with one round once the rebuilds are
   done (TD-235). CI results and person checks are bound to heads and content, so they need no separate invalidation;
   fixes of PR requests are kept work and never undone (a revert that conflicts with them stops). A clean plan is one
   commit setting the tree to the target's at the merge base. Planning again starts a new final-loop attempt, the old

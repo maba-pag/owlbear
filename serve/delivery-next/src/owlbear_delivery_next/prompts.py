@@ -24,6 +24,7 @@ PLAN_LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mi
 DETAIL = 4000  # a task's details: review findings, CI log tail or review thread
 DECISION = (300, 500)  # a shaping decision's question and answer, whole: brief_tools.DecisionDraft bounds them
 READ_ONLY = "Read files and run any read-only command; nothing you run may write files or change Git state."
+CD = "; one that starts with `cd` runs from the repository root, as written"  # a kept task's check (TD-246)
 FINISH = """\
 1. Implement the task in the worktree, run every check, then `git add` and `git commit` your work.
 2. Call `submit_result` once with the summary, changed_paths and checks; Delivery reads your commit from the
@@ -164,7 +165,7 @@ def build(change: Change, task: Task, worktree: Path, installs: Sequence[tuple[s
         *_prepare(worktree, installs),
         "",
         "## Checks",
-        f"Run each from the package directory ({', '.join(packages) or 'repository root'}) on your final commit:",
+        f"Run each from the package directory ({', '.join(packages) or 'repository root'}) on your final commit{CD}:",
         *(f"- `{c}`" for c in task.checks),
         "",
         *([RESPOND.format(kind=task.item.kind, no_action=NO_ACTION if task.item.notice else "")] if task.item else []),

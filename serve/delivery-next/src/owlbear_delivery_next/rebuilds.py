@@ -15,9 +15,13 @@ from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.moves import go, open_task, subject_of
 from owlbear_delivery_next.round_flow import PREFIX
 from owlbear_delivery_next.round_records import FINAL, RoundLoop
+from owlbear_delivery_next.steps import worktree
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from owlbear_delivery_next.models import Change, Question, Task
+    from owlbear_delivery_next.profile_record import Profile
 
 RED = frozenset({"open", "escalated", "owner-fix"})  # a fix agreed, not made; a rejection the reviewer did not accept
 
@@ -100,7 +104,7 @@ def undoing(c: Change, lp: RoundLoop) -> tuple[list[Task], str]:
             return [], f"final repair {t.id} fixed findings of both rebuilt and kept work: its commits cannot be split"
         if not names & picked:
             continue
-        if not t.spans or t.spans[-1].endswith(".."):
+        if not t.spans or any(s.endswith("..") for s in t.spans):
             return [], f"the commits of task {t.id} are not recorded"
         out.append(t)
     return out, ""
@@ -132,12 +136,12 @@ def fresh(c: Change, task: Task) -> None:
     task.done, task.base, task.spans, task.built_by, task.earlier = False, None, [], "", ""
 
 
-def rotated(c: Change, lp: RoundLoop, undone: list[Task]) -> None:
+def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> None:
     """After the undo the ticked tasks are built again in plan order, then the final loop goes on (TD-235).
 
-    The last rebuilt task also runs every other plan task's checks on the rebuilt code, from their scopes too; its
-    builder fixes what they find before its result is accepted. The final loop's completion and any merge consent no
-    longer count.
+    The last rebuilt task also runs every other plan task's checks on the rebuilt code, each from its own package, and
+    gets their scopes for the installs; its builder fixes what they find before its result is accepted, and that
+    task's rounds review the fix (TD-246). The final loop's completion and any merge consent no longer count.
     """
     tasks = c.plan.tasks if c.plan else []
     picked = [t for t in tasks if t.id in lp.rebuild]
@@ -147,10 +151,28 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task]) -> None:
         fresh(c, t)
     if picked:
         last, others = picked[-1], [t for t in tasks if t.origin == "plan" and t is not picked[-1] and t.checks]
-        last.checks = list(dict.fromkeys([*last.checks, *(k for t in others for k in t.checks)]))
+        last.checks = list(dict.fromkeys([*last.checks, *_placed(profile, others)]))
         last.scope = list(dict.fromkeys([*last.scope, *(p for t in others for p in t.scope)]))
     lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)
     else:
         go(c, StepKind.REVIEW, mode="final")
+
+
+def _placed(profile: Profile, tasks: Sequence[Task]) -> list[str]:
+    """Each task's checks as `cd <package> && <check>` for every package of its scope the profile runs it in.
+
+    A check the profile runs at the repository root, or in no package of the scope, stays as it is.
+    """
+    known, out = worktree.checks(profile), []
+    for t in tasks:
+        for check in t.checks:
+            homes = sorted(p for p, k in known if k == check and _holds(p, t.scope))
+            out += [f"cd {p.strip('/')} && {check}" for p in homes] or [check]
+    return out
+
+
+def _holds(package: str, scope: Sequence[str]) -> bool:
+    root = package.strip("/")
+    return any(p.strip("/") == root or p.startswith(f"{root}/") for p in scope)

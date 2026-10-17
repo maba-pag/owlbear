@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next import tools
 from owlbear_delivery_next.failures import UNREAD, VISUAL_MODEL
+from owlbear_delivery_next.models import StepKind
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.steps import decision, worktree
@@ -107,9 +108,16 @@ def _load(data: HeldRun) -> Run:
 
 
 def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None:
-    """Hold an agent step's unread result for the gate question just asked, with what it depends on."""
+    """Hold an agent step's unread result for the gate question just asked, with what it depends on.
+
+    A held build's session ends at *head*: its span closes there, as a recorded session's does (TD-210).
+    """
     lock.check(change.slug)
     s, asked = change.step, change.outcome.question if change.outcome else None
+    task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    if s.kind == StepKind.BUILD and task and task.spans and task.spans[-1].endswith(".."):
+        task.spans[-1] += head
+        store.write(lock, change)
     held = Held(
         question=asked or "",
         kind=s.kind,
