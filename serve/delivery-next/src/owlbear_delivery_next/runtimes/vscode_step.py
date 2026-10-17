@@ -100,6 +100,7 @@ class Step:
         self.reconnect = hooks.reconnect
         self.opened: list[Transport] = []  # connections this step opened; it closes them when it ends
         self.schema: Json | None = None  # the model's config properties as the host lists them
+        self.agent_uri = ""  # the agent file as the session lists it; the turns name it so
 
     def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome:
         """Pin, launch, bind, let the bootstrap end, sign in again, check the model, configure, run."""
@@ -107,7 +108,7 @@ class Step:
             out, bound = self._open(control, bind_limit)
             if bound is None or not self._ready(out, bound, control):
                 return out
-            agent = {"uri": self.spec.agent_uri}
+            agent = {"uri": self.agent_uri}
             deadline = self.clock() + limit
             self._turn(out, agent, control, deadline, self.spec.prompt, attachments=self.spec.attachments)
             if out.end == "complete" and self.spec.reminder and not (control.stop.is_set() or control.settled.is_set()):
@@ -122,7 +123,7 @@ class Step:
             out, bound = self._open(control, bind_limit, exclusive=False)
             if bound is None or not self._ready(out, bound, control):
                 return out
-            self._start(out, {"uri": self.spec.agent_uri} if self.spec.agent else None, self.spec.prompt)
+            self._start(out, {"uri": self.agent_uri} if self.spec.agent else None, self.spec.prompt)
             out.end, out.detail = ("started", "") if self._began(bound.chat, out.turns[-1]) else _UNBEGUN
             return out
         finally:
@@ -174,7 +175,7 @@ class Step:
             out.end, out.detail = "config-refused", f"host did not apply {self.spec.config}"
             return False
         if not self._listed(bound.session):
-            out.end, out.detail = "no-agent", f"the session does not list {self.spec.agent_uri}"
+            out.end, out.detail = "no-agent", f"the session does not list {self.spec.agent_uris[0]}"
             return False
         if control.stop.is_set():
             out.end = "stopped"
@@ -237,13 +238,13 @@ class Step:
         """Wait, at most ``LISTED`` seconds, until the session's customizations list the step's agent file."""
         if self.spec.agent is None:
             return True
+        uris = {unquote(u) for u in self.spec.agent_uris}
         deadline = self.clock() + LISTED
         while True:
             state = self.conn.request("subscribe", {"channel": session})["snapshot"]["state"]
             kids = (k for c in state.get("customizations") or [] for k in c.get("children") or [])
-            if any(
-                k.get("type") == "agent" and unquote(k.get("uri", "")) == unquote(self.spec.agent_uri) for k in kids
-            ):
+            if found := next((k for k in kids if k.get("type") == "agent" and unquote(k.get("uri", "")) in uris), None):
+                self.agent_uri = found["uri"]
                 return True
             if self.clock() >= deadline:
                 return False

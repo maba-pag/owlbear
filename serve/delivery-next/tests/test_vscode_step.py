@@ -1085,6 +1085,23 @@ def test_the_installed_shaper_agent_is_selected_by_its_uri_on_the_first_turn(wt:
     assert not (wt / ".github").exists()  # no project agent file
 
 
+def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(wt: Path, tmp_path: Path) -> None:
+    target = tmp_path / "runtime" / "owlbear-shaper.agent.md"
+    target.parent.mkdir()
+    target.write_text("---\nname: owlbear-shaper\n---\n")
+    agent = readiness.shaper_path(tmp_path)
+    agent.parent.mkdir(parents=True)
+    agent.symlink_to(target)  # TD-165: ~/.copilot/agents links into the runtime checkout
+    host = shaping_host(wt)
+    host.listed = [agent.as_uri()]  # the host lists the link, not its target
+
+    out, warning = shape(wt, shaping_env(host, shaper=agent))
+
+    assert (out.end, warning) == ("started", "")
+    ((_, started),) = host.actions("chat/turnStarted")
+    assert started["message"]["agent"] == {"uri": agent.as_uri()}
+
+
 def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_path: Path) -> None:
     agent = readiness.shaper_path(tmp_path)
     agent.parent.mkdir(parents=True)

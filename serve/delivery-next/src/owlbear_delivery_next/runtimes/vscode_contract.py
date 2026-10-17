@@ -73,9 +73,11 @@ class StepSpec:
         return f"!echo {self.marker}"
 
     @property
-    def agent_uri(self) -> str:
-        """The agent file as the host names it in a session's customizations."""
-        return self.agent.resolve().as_uri() if self.agent else ""
+    def agent_uris(self) -> tuple[str, ...]:
+        """The agent file as a session may list it: by its own path (a symlink stays one), then by its target."""
+        if not self.agent:
+            return ()
+        return tuple(dict.fromkeys((self.agent.absolute().as_uri(), self.agent.resolve().as_uri())))
 
 
 @dataclass(frozen=True)
