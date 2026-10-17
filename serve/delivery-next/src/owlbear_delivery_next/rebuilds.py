@@ -140,9 +140,10 @@ def fresh(c: Change, task: Task) -> None:
 def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> None:
     """After the undo the ticked tasks are built again in plan order, then the final loop goes on (TD-235).
 
-    The last rebuilt task then runs its own and every other plan task's checks on the rebuilt code, each from its own
-    package, and gets their scopes for the installs; its builder fixes what they find before its result is accepted,
-    and that task's rounds review the fix (TD-246). The final loop's completion and any merge consent no longer count.
+    The last rebuilt task then runs its own and every other plan task's checks on the rebuilt code, each placed in its
+    own task's package by that task's planned scope, which no rebuild widens, so a later retry places them the same
+    way; its builder fixes what they find before its result is accepted, and that task's rounds review the fix
+    (TD-246). The final loop's completion and any merge consent no longer count.
     """
     tasks = c.plan.tasks if c.plan else []
     picked = [t for t in tasks if t.id in lp.rebuild]
@@ -153,7 +154,6 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> N
     if picked:
         last, others = picked[-1], [t for t in tasks if t.origin == "plan" and t is not picked[-1] and t.checks]
         last.checks = list(dict.fromkeys([*_placed(profile, [last]), *_placed(profile, others)]))
-        last.scope = list(dict.fromkeys([*last.scope, *(p for t in others for p in t.scope)]))
     lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)

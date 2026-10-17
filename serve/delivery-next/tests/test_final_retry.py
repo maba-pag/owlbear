@@ -206,7 +206,7 @@ def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_pa
     assert [(t.done, t.base, t.spans) for t in (t1, t3, t4)] == [(False, None, [])] + [(True, None, [])] * 2
     assert (end(t2), end(t5)) == (git(clone, "rev-parse", "HEAD~3"), archived)  # kept work keeps its spans
     assert t1.checks == ["check one", "check two"]  # the last rebuilt task runs every other plan task's checks
-    assert t1.scope == ["x.txt", "y.txt"]  # from the kept task's scope too
+    assert t1.scope == ["x.txt"]  # its planned scope stays
     lp = c.loops[FINAL]
     assert (lp.ended, lp.rebuild, lp.completion, lp.undo, c.consent) == ("retried", [], None, "", None)
     assert (c.loops["t1"].attempt, c.loops["t1"].since, [h.ended for h in c.loops["t1"].history]) == (2, 5, ["retried"])
@@ -396,7 +396,13 @@ def test_a_kept_check_runs_from_each_package_of_its_task():
         "cd packages/c && uv run pytest",
         "make docs",
     ]
-    assert t1.scope == ["packages/a/x.ts", "packages/b/y.ts", "packages/c", "docs/z.md"]
+    assert t1.scope == ["packages/a/x.ts"]
+    root = Profile(entries=entries)  # npm test also runs at the repository root
+    a = Task(id="t1", title="one", scope=["src/a.ts"], checks=["npm test"])
+    twice = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[a, Task(**t2.model_dump())]))
+    for _ in range(2):  # a second retry places the checks as the first did
+        rebuilds.rotated(twice, RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]), [], root)
+        assert a.checks == ["npm test", "cd packages/b && npm test", "uv run pytest"]
     ran = tools.BuildResult(
         summary="b", changed_paths=[], checks=[{"command": "cd packages/b && npm test", "exit_code": 0}]
     )
