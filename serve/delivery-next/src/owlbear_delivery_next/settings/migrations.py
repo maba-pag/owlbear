@@ -89,6 +89,11 @@ def judge_renamed(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def minutes_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 3 to 4: an agent may set its session time limit (TD-286); older runtimes refuse format 4."""
+    return data
+
+
 CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept}
 PROFILE: Migrations = {1: roles_moved}
-CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed}
+CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed, 3: minutes_added}

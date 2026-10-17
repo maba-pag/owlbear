@@ -202,7 +202,7 @@ def settled(job: pack_job.Job) -> dict:
 def rounds(store: Store, **values: int) -> Store:
     """The project's settings give the updater's loops these round values (TD-209)."""
     store.root.mkdir(parents=True, exist_ok=True)
-    (store.root / "config.json").write_text(json.dumps({"format": 3, "agents": {"updater": values}}))
+    (store.root / "config.json").write_text(json.dumps({"format": 4, "agents": {"updater": values}}))
     return store
 
 

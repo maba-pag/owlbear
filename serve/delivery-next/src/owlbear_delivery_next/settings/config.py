@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.settings.roles import DEFAULTS
 from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 3  # format 3 renamed the designer role to design-judge (TD-169)
+CONFIG_FORMAT = 4  # format 3 renamed the designer role to design-judge (TD-169); 4 added session minutes (TD-286)
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "project", "builder"]
