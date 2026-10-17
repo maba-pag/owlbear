@@ -23,8 +23,8 @@ K = StepKind
 FEW = RoundPolicy(max_rounds=3, max_findings=5, last_round_at=0, ask_owner_at=1)  # every finding goes on
 
 
-def task(n: int) -> dict:
-    return {"title": f"step {n}", "goal": "AC-1", "scope": ["src"], "checks": ["true"]}
+def task(n: int, scope: str = "src") -> dict:
+    return {"title": f"step {n}", "goal": "AC-1", "scope": [scope], "checks": ["true"]}
 
 
 def finding(where: str) -> dict:
@@ -39,6 +39,8 @@ def store(tmp_path, change_repo, monkeypatch) -> Store:
     c = Change(slug="c1", brief=Brief(version=1, approved_version=1, challenged=1), step=Step(kind=K.PLAN), names=names)
     c.loops[PLAN] = RoundLoop(subject=PLAN, policy=FEW)
     store.write(Lock("c1"), c)
+    other = Plan(tasks=[Task(id="t1", title="other", scope=["src"])])
+    store.write(Lock("c2"), Change(slug="c2", brief=Brief(version=1), plan=other, step=Step(kind=K.BUILD)))
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: change_repo)
     return store
 
@@ -60,6 +62,8 @@ class Sessions:
         elif cfg.submit is RECONSIDER:
             self.told.append(("reconsider", cfg))
             payload = self.reconsiders.pop(0)
+            if isinstance(payload, tools.WrongPremise):
+                return Run(cfg.session_id, "premise", payload, termination=Termination(confirmed=True))
         else:
             self.told.append(("challenge", cfg))
             if (payload := self.reviews.pop(0)) is None:
@@ -85,9 +89,9 @@ def answer(store: Store, option: str, text: str = "") -> Change:
     return store.fold(Lock("c1"), "c1", datetime.now(UTC))[0]
 
 
-def plan(n: int, rejected: dict[str, str] | None = None) -> tools.PlanResult:
+def plan(n: int, rejected: dict[str, str] | None = None, scope: str = "src") -> tools.PlanResult:
     found = [{"finding": k, "reason": r} for k, r in (rejected or {}).items()]
-    return tools.PlanResult(tasks=[task(i) for i in range(1, n + 1)], rejected=found)
+    return tools.PlanResult(tasks=[task(i, scope) for i in range(1, n + 1)], rejected=found)
 
 
 def review(*places: str, upheld: dict[str, bool] | None = None) -> tools.ReviewResult:
@@ -228,7 +232,7 @@ def test_plan_again_from_the_brief_is_a_new_attempt_told_why_without_the_old_pla
 
 
 def test_a_reconsideration_clarifies_or_returns_unsure_once_and_a_drop_settles_the_plan(store, change_repo, mp):
-    mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
+    mp.plans += [plan(1, scope="lib"), plan(1, {"F1": "no"}), plan(2)]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     mp.reconsiders += [
         ReconsiderResult(reconsidered=[{"finding": "F1", "verdict": "unsure", "reason": "only the owner knows"}])
@@ -248,6 +252,34 @@ def test_a_reconsideration_clarifies_or_returns_unsure_once_and_a_drop_settles_t
     c = step(store, change_repo)
     assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "reconsider"]
     assert (c.step.kind, len(c.plan.tasks)) == (K.BUILD, 1)
+    assert [o.other for o in c.overlaps] == ["c2"]  # recorded with the plan, before its challenge asked
+
+
+def test_a_premise_the_reconsidering_challenger_reports_goes_to_the_owner_as_unsure(store, change_repo, mp):
+    mp.plans += [plan(1), plan(1, {"F1": "no"})]
+    mp.reviews += [review("t1"), review(upheld={"F1": True})]
+    mp.reconsiders += [tools.WrongPremise(stage="brief", reason="AC-1 contradicts AC-2", evidence=["brief"])]
+    step(store, change_repo)
+    step(store, change_repo)
+    answer(store, "reconsider", "look again")
+    c = step(store, change_repo)
+    q = next(q for q in c.questions if q.answer is None)
+    assert ([o.id for o in q.options], c.loops[PLAN].findings[0].clarified) == (
+        ["fix", "drop"], "premise: AC-1 contradicts AC-2"
+    )  # fmt: skip
+
+
+def test_the_planner_whose_rejection_the_owner_overrules_revises_with_its_own_repair_chance(store, change_repo, mp):
+    mp.plans += [plan(1), plan(1), plan(1, {"F2": "no"}), plan(2)]
+    mp.reviews += [review("t1"), review("t2"), review(upheld={"F2": True})]
+    for _ in range(3):
+        step(store, change_repo)
+    answer(store, "fix")
+    c = step(store, change_repo)
+    planners = [cfg for k, cfg in mp.told if k == "plan"]
+    assert [cfg.resume for cfg in planners] == [False, True, False, True]  # each producer once (TD-123)
+    assert planners[3].session_id == planners[2].session_id
+    assert c.step.kind == K.BUILD
 
 
 def test_a_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):

@@ -70,6 +70,7 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
     if result.exit != Exit.DONE or result.plan is None:
         return result
     change.plan = result.plan
+    overlap.record(change, result, others, path)  # the plan kept now, whatever its challenge ends with
     rejected = {r.finding: r.reason for r in payload.rejected} if isinstance(payload, tools.PlanResult) else {}
     then = plan_rounds.revised(change, rejected)
     if then in {"challenge", "recheck"}:
@@ -179,10 +180,13 @@ def _reconsider(store: Store, lock: Lock, change: Change, path: Path) -> bool:
 
     verdict, done = sessions.review_run(store, lock, change, path, made, AGAIN, submit=dispute_tools.SUBMIT)
     now = datetime.now(UTC)
-    if verdict.exit != Exit.DONE or not isinstance(p := done.payload, dispute_tools.ReconsiderResult):
+    if isinstance(p := done.payload, tools.WrongPremise) and verdict.exit == Exit.BACK and not verdict.operational:
+        said = dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))  # the owner decides each, as for unsure
+    elif verdict.exit == Exit.DONE and isinstance(p, dispute_tools.ReconsiderResult):
+        said = {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
+    else:
         store.write(lock, loop.apply(change, verdict, now))  # failed: the mode stays and it runs again
         return True
-    said = {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
     plan_rounds.reconsidered(change, said)
     plan_rounds.proceed(change, now)
     store.write(lock, change)

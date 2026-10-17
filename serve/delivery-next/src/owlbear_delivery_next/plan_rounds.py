@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.evidence import cover
 from owlbear_delivery_next.failures import cause_key
-from owlbear_delivery_next.models import Answer, ErrorKind, Option, Question, Step, StepKind
+from owlbear_delivery_next.models import Answer, ErrorKind, Exit, Option, Outcome, Question, Step, StepKind
 from owlbear_delivery_next.moves import ask
 from owlbear_delivery_next.round_records import FINAL, PLAN, RECHECK, RoundLoop
 
@@ -276,7 +276,8 @@ def proceed(c: Change, now: datetime) -> None:
     elif any(f.reconsider == "due" for f in lp.findings):
         _mode(c, RECONSIDER)
     elif addressing(c):
-        _mode(c, None)  # the planner revises; its session keeps its one repair chance (TD-123)
+        _mode(c, None)  # the planner revises, as after a challenge: its producer's one repair chance holds (TD-123)
+        c.outcome = Outcome(exit=Exit.RETRY, reason="the owner decided the disputed findings", challenged=True, at=now)
         c.budgets.loops[PLAN] = c.budgets.loops.get(PLAN, 0) + 1  # the planning round the owner sees
     else:
         _mode(c, SETTLED)
