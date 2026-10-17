@@ -473,9 +473,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return put(slug, RestartItem(at=datetime.now(UTC)))
 
     router.include_router(config_routes.router(store, host))
-    router.include_router(brief_routes.router(store, read, put, lambda: host.wake.set()))  # noqa: PLW0108 - read late
+    wake, paused = lambda: host.wake.set(), lambda: host.paused()  # noqa: PLW0108 - read late
+    router.include_router(brief_routes.router(store, read, put, wake, paused))
     router.include_router(backlog_routes.router(store, start_chat))
     router.include_router(memory_routes.router(store))
-    router.include_router(pack_routes.router(store, pack or pack_job.Job(store)))
+    router.include_router(pack_routes.router(store, pack or pack_job.Job(store), paused))
     app.include_router(router)
     return app

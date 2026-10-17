@@ -46,6 +46,7 @@ _WHO = {
     Waiting.GITHUB: "GitHub",
 }
 _ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: "Approve brief"}
+RESUME = "Resume Delivery"
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
     StepKind.PLAN: ("Plan", "planning", "planner"),
@@ -69,6 +70,7 @@ class Activity:
     holder_pid: int | None = None
     last_event_at: datetime | None = None
     start_failure: Stop | None = None
+    paused: bool = False  # Delivery itself waits for Resume (TD-259)
 
 
 @dataclass(frozen=True)
@@ -153,7 +155,19 @@ def card(
     }
 
 
-def status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
+def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status:
+    """Derive the status; while Delivery is paused, a step that would start waits for Resume instead (TD-282)."""
+    line = _status(c, activity, now, tool)
+    if not (activity.paused and activity.host_up) or c.finished_at:
+        return line
+    if activity.runner_alive:
+        return Status(f"{stage(c)} · finishing {c.step.kind} (started before the restart)", None, "delivery")
+    if line.actor in {"delivery", "github"}:  # nothing is observed or started until Resume
+        return Status(f"{stage(c)} · Delivery is paused: continues after Resume", RESUME, "you")
+    return line
+
+
+def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None
 ) -> Status:
     """Derive the status by the first matching rule; host-down overlays every unfinished Change."""

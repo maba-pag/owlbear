@@ -29,6 +29,7 @@ _STATE: dict[str, Chat] = {}
 OK = 200
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
 PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every Change: 16 rows were 77 KB with them
+PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 _pause = time.sleep  # the poll's own pause
 
 
@@ -106,6 +107,8 @@ class Chat:
         code, out = self.call("POST", "/briefs/challenge", {"change": change, "version": version, "rejected": rejected})
         if code != OK:
             return {"requested": False, **out}
+        if out.get("paused"):  # TD-283: recorded now, judged once the owner resumes Delivery
+            return {"requested": True, "running": False, "next": PAUSED}
         slug, attempt = brief_routes.slug_of(self.store, change) or "", out.get("attempt", 0)
         deadline = time.monotonic() + WAIT
         while time.monotonic() < deadline:

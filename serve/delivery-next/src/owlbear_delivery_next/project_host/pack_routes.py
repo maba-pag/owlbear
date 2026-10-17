@@ -16,7 +16,11 @@ from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.pack_runs import pack_job
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.state_store.store import Store
+
+PAUSED = "Delivery is paused: press Resume on the Changes page, then continue the update"
 
 
 class AnswerBody(BaseModel):
@@ -80,9 +84,13 @@ def overview(store: Store) -> list[dict[str, Any]]:
     ]  # fmt: skip
 
 
-def router(store: Store, job: pack_job.Job) -> APIRouter:
-    """The design pack and maintenance routes; the caller adds the token check."""
+def router(store: Store, job: pack_job.Job, paused: Callable[[], bool] = lambda: False) -> APIRouter:
+    """The design pack and maintenance routes; the caller adds the token check. An update waits for Resume."""
     routes = APIRouter()
+
+    def held() -> None:
+        if paused():
+            raise HTTPException(409, PAUSED)
 
     @routes.get("/design-pack")
     def read() -> dict[str, Any]:
@@ -94,12 +102,13 @@ def router(store: Store, job: pack_job.Job) -> APIRouter:
 
     @routes.post("/design-pack/update")
     def update() -> dict[str, Any]:
+        held()
         try:
             return job.start()
         except pack_job.Busy as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    _answers(routes, job)
+    _answers(routes, job, held)
 
     @routes.get("/maintenance")
     def maintenance() -> list[dict[str, Any]]:
@@ -108,11 +117,12 @@ def router(store: Store, job: pack_job.Job) -> APIRouter:
     return routes
 
 
-def _answers(routes: APIRouter, job: pack_job.Job) -> None:
+def _answers(routes: APIRouter, job: pack_job.Job, held: Callable[[], None]) -> None:
     """The owner's answers to a waiting update (TD-193, TD-256), and its discard."""
 
     @routes.post("/design-pack/update/answer")
     def answer(body: AnswerBody) -> dict[str, Any]:
+        held()  # an answer continues the update's sessions
         try:
             return job.answer(body.question, body.option, body.note)
         except pack_job.Stale as exc:

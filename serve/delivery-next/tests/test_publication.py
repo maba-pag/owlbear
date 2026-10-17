@@ -64,6 +64,7 @@ from owlbear_delivery_next.github.provider import (
 )
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import host as scheduler
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
@@ -1886,6 +1887,23 @@ def test_a_failed_dequeue_keeps_the_pause_waiting_and_unacknowledged(tmp_path, m
     assert list((store.root / "changes" / "c1" / "inbox").glob("*.json"))
     gh.dequeue_fails = False
     assert (fold_pause(store, tmp_path).intent.paused_at, gh.dequeued) == (NOW, [7])
+
+
+def test_a_paused_host_takes_the_queued_pr_out_before_the_pause_applies(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
+    gh.dequeue_fails = True
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW, settled=True)
+    store = fold_store(tmp_path, monkeypatch, gh, c)
+    paused = scheduler.Host(store, tmp_path, paused=lambda: True)
+    paused.observe_pr = lambda _slug: pytest.fail("no PR state is read while Delivery is paused")
+    assert paused.tick(NOW) == []
+    assert (store.read("c1").intent.paused_at, store.read("c1").queue is not None) == (None, True)  # waits (TD-226)
+    gh.dequeue_fails = False
+    assert paused.tick(NOW) == []
+    after = store.read("c1")
+    assert (after.intent.paused_at, after.queue, gh.dequeued) == (NOW, None, [7])  # TD-284
 
 
 @pytest.mark.parametrize("settled", [False, True])

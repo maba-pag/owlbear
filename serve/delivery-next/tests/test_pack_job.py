@@ -22,7 +22,7 @@ from owlbear_delivery_next.design_packs import calibration, design_pack, pack_gi
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.pack_runs import pack_job, pack_rounds, pack_updater
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
@@ -786,6 +786,19 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
 class Host:
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
+    paused = staticmethod(lambda: False)
+
+
+def test_while_delivery_is_paused_no_update_starts_or_goes_on(tmp_path, checkout, clone):
+    job, _, state = upheld(tmp_path, checkout, clone)
+    stopped = Host()
+    stopped.paused = lambda: True
+    c = TestClient(api.create_app(job.store, "t", stopped, pack=job), base_url="http://127.0.0.1", headers=AUTH)
+    answer = {"question": state["questions"][0]["id"], "option": "drop"}
+    for path, body in (("/api/next/design-pack/update", None), ("/api/next/design-pack/update/answer", answer)):
+        refused = c.post(path, json=body)
+        assert (refused.status_code, refused.json()["detail"]) == (409, pack_routes.PAUSED)
+    assert c.get("/api/next/design-pack/update").json()["state"] == "waiting"
 
 
 def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clone):

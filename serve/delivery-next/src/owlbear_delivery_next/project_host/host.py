@@ -19,23 +19,23 @@ from typing import TYPE_CHECKING
 import psutil
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import failures, tools
+from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     ErrorKind,
     Exit,
-    Recipe,
     Record,
     StepKind,
     Stop,
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system import codebase, data_repo, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.project_host import environment
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
@@ -108,15 +108,14 @@ def offline(c: Change, now: datetime) -> bool:
     return failures.kind_of(o.cause) == ErrorKind.NETWORK and o.wake_at is not None and o.wake_at > now
 
 
-def activity(store: Store, slug: str, host: HostRecord | None) -> Activity:
+def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool = False) -> Activity:
     """Observed liveness for the status line: the Change lock's holder, unless it is the host itself."""
     holder = store.holder(slug)
     runner = holder is not None and (host is None or holder.pid != host.pid)
     last = next((e["at"] for e in reversed(store.events(slug)) if "at" in e), None)
     at = datetime.fromisoformat(last) if last else None
-    return Activity(
-        host_up=host is not None, runner_alive=runner, holder_pid=holder.pid if runner else None, last_event_at=at
-    )
+    pid = holder.pid if runner and holder else None
+    return Activity(host_up=host is not None, runner_alive=runner, holder_pid=pid, last_event_at=at, paused=paused)
 
 
 def _scan(path: Path, since: datetime) -> Found:
@@ -154,7 +153,12 @@ def gone(kind: StepKind) -> loop.StepResult:
 
 
 class Host:
-    """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change."""
+    """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change.
+
+    While ``paused`` says so (every machine start until Resume, TD-259) it applies the owner's input at once
+    (TD-283) and records ended runners, but reads no PR, runs no Pull and launches no runner or environment;
+    the fold's queue barrier still takes a queued PR out when a Change leaves its merge step (TD-284).
+    """
 
     def __init__(  # noqa: PLR0913 - process seams the tests replace
         self,
@@ -167,9 +171,10 @@ class Host:
         alive: Callable[[int, float | None], bool | None] = processes.alive,
         code: Callable[[], str] = codebase.identity,
         reach: Callable[[str], str | None] = lambda name: readiness.reach(name, timeout=PROBE_TIMEOUT),
+        paused: Callable[[], bool] = lambda: False,
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
-        self.spawn, self.code, self.reach = spawn or self._spawn, code, reach
+        self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
@@ -198,7 +203,7 @@ class Host:
 
     def activity(self, slug: str) -> Activity:
         """Liveness of one Change as this host sees it."""
-        return activity(self.store, slug, self.record)
+        return activity(self.store, slug, self.record, paused=self.paused())
 
     def observe_pr(self, slug: str) -> Seen:
         """The PR's terminal state and consent-wait news, observed before a waiting Change is skipped; once per poll."""
@@ -215,7 +220,8 @@ class Host:
         if self.store.shared:  # a rename on another machine arrives with a pull (TD-98)
             with self.launching:
                 self.store.name = data_repo.folder(self.store.shared, self.repo)
-        self._probe(now or datetime.now(UTC))
+        if not self.paused():
+            self._probe(now or datetime.now(UTC))
         slugs = self.store.slugs()
         self.offline &= set(slugs)
         self.back = {s: t for s, t in self.back.items() if s in slugs}
@@ -232,7 +238,9 @@ class Host:
     def interval(self) -> float:
         """Seconds until the next pass: soon while a runner runs, by the next probe while a Change waits offline."""
         wait = FAST if any(self.runner(s) for s in self.store.slugs()) else TICK
-        return max(0.0, min(wait, self.probe_at - self.clock())) if self.offline else wait
+        if not self.offline or self.paused():  # no probe runs while paused, so its deadline never comes
+            return wait
+        return max(0.0, min(wait, self.probe_at - self.clock()))
 
     def _probe(self, now: datetime) -> None:
         """Probe the network while a Change waits on it, every ``PROBE`` from the last probe's start."""
@@ -279,39 +287,60 @@ class Host:
         rec = self.runner(slug)
         if rec and self.alive(rec.pid, rec.created) is not False:
             return False  # A live runner finishes on its own; the host never kills it.
+        paused = self.paused()
         with self.store.lock(slug) as lock:
-            prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
-            state, moved = self.observe_pr(slug)
-            c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
-            if moved:
-                self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
-            c = self._woken(self._pull(lock, c, now), now)
-            if rec and disappeared(prior, rec, now) and c.step == prior.step:
-                c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
-                self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
-            act = self._env_action(c)
+            c = self._folded(lock, slug, rec, now, paused=paused)
+            if paused:
+                return self._ended(lock, c, rec, now)
+            act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
-                if (left := self._clear(c, c.env)) is None or left:
+                if (left := self.clear(c, c.env)) is None or left:
                     return self._blocked(lock, c, left, now)
                 c = check.settle(c, now, check.declared(c)) if act == "settle" else c
                 c.env = None
                 self.say(f"{slug}: check environment disposed")
             step = loop.next_step(c, now)
             if rec or c.blocked or _unverified(c) or (step and not c.env):
-                if (found := self._survivors(c, rec)) is None or found:
-                    return self._blocked(lock, c, found, now)
-                if _unverified(c):
-                    c.stop = c.outcome = None
-                c.blocked = None
-                self._path(slug).unlink(missing_ok=True)
-                disposable.settled(self.store.root / "changes" / slug)
+                if not self._gone(lock, c, rec, now):
+                    return False
                 step = loop.next_step(c, now)
             if c.env:
-                c = self._environment(lock, c, now)
+                c = environment.launch(self, lock, c, now)
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
+
+    def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change:
+        """Fold the inbox with the PR's state (none while paused), run an asked Pull, charge a runner gone."""
+        prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
+        state, moved = (None, False) if paused else self.observe_pr(slug)
+        c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
+        if moved:
+            self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
+        c = self._woken(c if paused else self._pull(lock, c, now), now)
+        if rec and disappeared(prior, rec, now) and c.step == prior.step:
+            c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
+            self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
+        return c
+
+    def _ended(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
+        """While paused: confirm an ended runner and its processes gone; nothing starts."""
+        if (rec or c.blocked or _unverified(c)) and not self._gone(lock, c, rec, now):
+            return False
+        self.store.write(lock, c)
+        return False
+
+    def _gone(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
+        """Whether nothing of the last step remains; then its runner is forgotten and its liveness stop cleared."""
+        if (found := self._survivors(c, rec)) is None or found:
+            return self._blocked(lock, c, found, now)
+        if _unverified(c):
+            c.stop = c.outcome = None
+        c.blocked = None
+        self._path(c.slug).unlink(missing_ok=True)
+        disposable.settled(self.store.root / "changes" / c.slug)
+        return True
 
     def _pull(self, lock: Lock, c: Change, now: datetime) -> Change:
         """Run pull-back again when the owner asked to Pull, and record its result."""
@@ -322,14 +351,15 @@ class Host:
         self.say(f"{c.slug}: pull-back {c.pullback.state} {c.pullback.reason}".rstrip())
         return c
 
-    def _mark(self, c: Change, found: Found | None, now: datetime) -> None:
+    def mark(self, c: Change, found: Found | None, now: datetime) -> None:
+        """Record why no writer starts: processes of the last step remain, or could not be looked for."""
         stop = _block(found, now)
         if not (c.blocked and c.blocked.reason == stop.reason):
             c.blocked = stop
             self.say(f"{c.slug}: no writer starts: {stop.reason}")
 
     def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool:
-        self._mark(c, found, now)
+        self.mark(c, found, now)
         self.store.write(lock, c)
         return False
 
@@ -354,13 +384,14 @@ class Host:
             return None
         return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
-    def _env_action(self, c: Change) -> check.Action | None:
+    def env_action(self, c: Change) -> check.Action | None:
+        """What the check environment needs now: launch, dispose or settle; None to leave it."""
         e = c.env
         person = next((p for p in c.checks if e and p.id == e.check), None)
         live = bool(e and e.pids) and all(self.alive(p, t) is not False for p, t in e.pids.items())
         return check.action(c, live=live, paths=check.fingerprints(c, person) if person else {})
 
-    def _clear(self, c: Change, e: Environment) -> Found | None:
+    def clear(self, c: Change, e: Environment) -> Found | None:
         """Dispose of all the environment may have started; an uncertain launch is found by the worktree scan."""
         if e.launched_at and e.pgid is None and c.names.worktree:
             try:
@@ -369,48 +400,6 @@ class Host:
                 return None
             e = e.model_copy(update={"pids": e.pids | {p: check.created(p) for p in found}})
         return check.dispose(e)
-
-    def _environment(self, lock: Lock, c: Change, now: datetime) -> Change:
-        """Launch the check environment after the preparing Builder is gone; pending once it answers."""
-        e = c.env
-        if e is None or self._env_action(c) != "launch" or before.due(c) or prepare.due(self.store, c):
-            return c  # the runner renders the "before" states, then prepares the test copy (TD-24, TD-96)
-        if (left := self._clear(c, e)) is None or left:
-            self._mark(c, left, now)  # never a second group beside one that may still run
-            return c
-        root = Path(c.names.worktree)
-        recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
-        errors = tools.check_recipe(recipe, tools.Worktree("", ""), root)
-        if (env := prepare.environ(self.store, c)) is None:  # the test copy's explicit environment (TD-96)
-            errors.append("the check has no test preparation; nothing launches without one")
-        if errors:
-            c.env = c.recipe = None
-            self.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
-            return loop.apply(c, check.failed("; ".join(errors)), now)
-        c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
-        self.store.write(lock, c)
-        log = self.store.root / "changes" / c.slug / "env.log"
-        if proc := check.start(e, root, log, env):
-            c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
-            self.store.write(lock, c)
-        pids = check.ready(e, proc) if proc else None
-        if pids is None:
-            if (left := self._clear(c, e)) is None or left:
-                self._mark(c, left, now)
-                return c
-            c.env = c.recipe = None
-            self.say(f"{c.slug}: check environment failed: no answer at {e.ready_url}")
-            return loop.apply(c, check.failed(f"no answer at {e.ready_url}"), now)
-        c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})
-        c.recipe = Recipe(
-            check=e.check,
-            command=e.command,
-            directory=e.directory,
-            ready_url=e.ready_url,
-            inputs=worktree.launch_inputs(root, e.directory),
-        )
-        self.say(f"{c.slug}: check environment ready at {e.ready_url}, group {e.pgid}, PIDs {sorted(pids)}")
-        return loop.apply(c, check.pending(c, c.env), now)
 
     def _stale(self) -> bool:
         """Whether the package differs from what this host loaded, or cannot be read; checked again on every launch."""
