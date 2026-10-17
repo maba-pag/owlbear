@@ -227,6 +227,7 @@ class EnqueueResult(_Model):
     """Result of one enqueue guarded by the expected head; UNKNOWN is settled only by later reads."""
 
     status: EnqueueStatus
+    queued_at: datetime | None = None  # the new entry's enqueuedAt
     message: str | None = Field(default=None, max_length=_MAX_MESSAGE)
 
 

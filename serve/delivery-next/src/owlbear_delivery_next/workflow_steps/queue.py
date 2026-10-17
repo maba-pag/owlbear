@@ -49,9 +49,9 @@ AGAIN = Option(id="again", label="Enqueue it again", next=M)
 PAUSE = Option(id="pause", label="Pause", next="pause")
 
 
-def _seen(c: Change, q: QueueState, before: datetime | None = None) -> None:
-    """Count the removals GitHub shows now (or those strictly before *before*) as handled: an attempt starts here."""
-    if q.removed and (before is None or q.removed.at < before):
+def _seen(c: Change, q: QueueState) -> None:
+    """Count every removal GitHub shows now as handled: a confirmed exit or a new attempt starts from here."""
+    if q.removed:
         c.queue_seen = q.removed.id
 
 
@@ -138,14 +138,14 @@ def hold(ctx: Ctx, c: Change, held: StepResult) -> tuple[Change, StepResult]:
 
 def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
     """Write the claim, then send once; only a definite answer settles it (``expectedHeadOid`` guards the head)."""
-    c.queue = QueueClaim(head=pr.head_sha, at=ctx.now, after=q.added.id if q.added else "")
+    c.queue = QueueClaim(head=pr.head_sha, at=ctx.now)
     _seen(c, q)
     ctx.store.write(ctx.lock, c)  # the claim outlives a crash between the send and the step's own write
     result = ctx.gh.enqueue(pr, pr.head_sha)
     ctx.log(c.slug, "merge-enqueue", pr=pr.number, head=pr.head_sha, status=result.status, message=result.message)
     message = result.message or ""
     if result.status == EnqueueStatus.ENQUEUED or "already in the queue" in message:
-        c.queue.settled = True
+        c.queue.settled, c.queue.queued_at = True, result.queued_at  # a refusal's entry binds on the next read
         return engine.pending(Waiting.GITHUB, f"PR #{pr.number} added to the merge queue", ctx.poll())
     if result.status == EnqueueStatus.UNKNOWN:
         return engine.pending(Waiting.GITHUB, f"waiting for GitHub to show PR #{pr.number} queued", ctx.poll())
@@ -158,11 +158,13 @@ def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
 
 
 def _relevant(c: Change, q: QueueState) -> QueueEvent | None:
-    """A removal of this attempt not handled yet: after this attempt's own added event, in GitHub's timeline order."""
+    """A removal of this attempt not handled yet: after the added event GitHub timed as this attempt's entry."""
     r, a, claim = q.removed, q.added, c.queue
-    if claim is None or r is None or a is None or r.id == c.queue_seen or r.reason == "merged":
+    if claim is None or claim.queued_at is None or r is None or a is None:
+        return None  # an attempt not bound to its entry yet has no removal of its own
+    if r.id == c.queue_seen or r.reason == "merged" or a.at != claim.queued_at:
         return None
-    return r if a.id != claim.after and q.removed_last else None  # otherwise an older entry's, or not yet visible
+    return r if q.removed_last else None
 
 
 def _queued(  # noqa: PLR0913, PLR0917 - the merge step's own inputs and this pass's read
@@ -171,10 +173,11 @@ def _queued(  # noqa: PLR0913, PLR0917 - the merge step's own inputs and this pa
     """The PR is queued: adopt a person's entry, keep gating, and take it out when a gate fails (design §3.3)."""
     e = q.entry
     if c.queue is None:  # a person enqueued it: Delivery follows it under the same gate
-        c.queue = QueueClaim(head=pr.head_sha, at=e.enqueued_at if e else ctx.now, settled=True, adopted=True)
-        _seen(c, q, e.enqueued_at if e else None)  # a removal after this entry stays to be handled
+        c.queue = QueueClaim(head=pr.head_sha, at=ctx.now, settled=True, adopted=True)
         ctx.log(c.slug, "queue-adopted", pr=pr.number, head=pr.head_sha)
     c.queue.settled, c.queue.quiet = True, 0
+    if c.queue.queued_at is None and e is not None:
+        c.queue.queued_at = e.enqueued_at  # the PR's one entry binds the attempt
     c, held = gate(ctx, c, pr, rules)
     if held is not None:
         return _leave(ctx, c, pr, held)

@@ -1695,6 +1695,7 @@ class QueueGh(FakeGh):
         self.enqueued.append(head)
         if self.answer.status == EnqueueStatus.ENQUEUED:
             self.state = self.state.model_copy(update={"entry": entry(), "added": ADDED})
+            return self.answer.model_copy(update={"queued_at": NOW})
         return self.answer
 
     def dequeue(self, pull):
@@ -1722,7 +1723,7 @@ def queue_step(tmp_path, gh, c):
 
 def queued_change(clone, **fields):
     c = change(worktree=str(clone), **fields)
-    c.queue = QueueClaim(head=A, at=NOW, settled=True)
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
     return c
 
 
@@ -1950,12 +1951,15 @@ def test_a_removal_older_than_the_attempt_is_not_its_own(tmp_path, clone):
     assert (result.exit, result.reason) == (Exit.PENDING, "PR #7 in the merge queue: position 1, queued")
 
 
-def test_a_removal_is_this_attempts_only_after_its_own_added_event_whatever_the_clocks(tmp_path, clone):
+def test_a_removal_is_this_attempts_only_after_the_added_event_of_its_own_entry(tmp_path, clone):
     gh = QueueGh(pr(head=A))
     gh.ordered = True  # an earlier attempt's added and removed events; this attempt's added is not visible yet
     gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks"), "removed_last": True})
     c = change(worktree=str(clone))
-    c.queue = QueueClaim(head=A, at=NOW, settled=True, after=ADDED.id)
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW + timedelta(minutes=5), settled=True)
+    c, result = queue_step(tmp_path, gh, c)
+    assert (result.exit, c.queue is not None) == (Exit.PENDING, True)
+    c.queue = QueueClaim(head=A, at=NOW, settled=False)  # an unknown send is bound to no entry: nothing is its own
     c, result = queue_step(tmp_path, gh, c)
     assert (result.exit, c.queue is not None) == (Exit.PENDING, True)
 

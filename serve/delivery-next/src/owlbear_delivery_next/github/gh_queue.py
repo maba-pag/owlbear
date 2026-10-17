@@ -34,7 +34,7 @@ _QUEUE = """query Queue($owner: String!, $name: String!, $number: Int!) {
       } } } }
 }"""
 _ENQUEUE = """mutation Enqueue($id: ID!, $head: GitObjectID!) {
-  enqueuePullRequest(input: {pullRequestId: $id, expectedHeadOid: $head}) { mergeQueueEntry { state } }
+  enqueuePullRequest(input: {pullRequestId: $id, expectedHeadOid: $head}) { mergeQueueEntry { state enqueuedAt } }
 }"""
 _DEQUEUE = """mutation Dequeue($id: ID!) {
   dequeuePullRequest(input: {id: $id}) { mergeQueueEntry { state } }
@@ -101,7 +101,8 @@ class Queue(Checks):
             return EnqueueResult(status=EnqueueStatus.REFUSED, message=bounded(text))
         entry = ((payload.get("data") or {}).get("enqueuePullRequest") or {}).get("mergeQueueEntry")
         if done.returncode == 0 and entry:
-            return EnqueueResult(status=EnqueueStatus.ENQUEUED, message=bounded(entry.get("state")))
+            state, at = bounded(entry.get("state")), entry.get("enqueuedAt")
+            return EnqueueResult(status=EnqueueStatus.ENQUEUED, queued_at=at, message=state)
         return EnqueueResult(status=EnqueueStatus.UNKNOWN, message=bounded(done.stderr.decode(errors="replace")))
 
     def dequeue(self, pr: PullRequest) -> None:

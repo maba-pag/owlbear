@@ -31,7 +31,7 @@ class QueueClaim(_Record):
 
     head: str
     at: datetime
-    after: str = ""  # the latest added-to-queue event before this attempt; a later one is this attempt's
+    queued_at: datetime | None = None  # GitHub's enqueuedAt of this attempt's entry; its added event has this time
     settled: bool = False
     adopted: bool = False  # a person enqueued it and Delivery followed
     quiet: int = 0
