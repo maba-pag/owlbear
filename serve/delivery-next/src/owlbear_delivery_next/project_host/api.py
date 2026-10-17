@@ -45,6 +45,7 @@ from owlbear_delivery_next.project_host import (
 from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
+from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
@@ -73,6 +74,7 @@ PICKER_NOTE = (  # the owner's typed messages run on the picker, not on the role
     '\n\nBegin your first message or question to the owner with this line: "Messages you type here run on this '
     "chat's model picker: set it to {model} at {effort} effort.\""
 )
+SHAPER_MODE = readiness.SHAPER.removesuffix(".agent.md")  # `code chat -m` keeps the shaper for typed messages
 LAUNCH_GAP = 5.0  # seconds after a new-Change launch ends before the next may start
 
 
@@ -194,13 +196,16 @@ def new_chat(
     start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat,
 ) -> dict[str, str]:
     """Open the shaping chat in *repo*'s window on the shaper role (TD-83): its launch's ending state."""
-    out, warning = start(repo, shaper, prompt + PICKER_NOTE.format(model=shaper.model, effort=shaper.effort))
+    out, warning = start(repo, shaper, prompt)
     if out.end == "started":
         ending = {"state": "open"}
     else:
         why = f"the Copilot chat did not start ({out.end}: {out.detail})"
         if out.end == "unbound":  # the window opened a Local chat: it reads the harness key only when it starts
-            why += "; if a Local chat opened, reload the window (Developer: Reload Window) and try again"
+            why += (
+                f"; if a Local chat opened, set {HARNESS} to true in .vscode/settings.json (`owlbear-next setup` "
+                "offers it), reload the window (Developer: Reload Window) and try again"
+            )
         ending = {"state": "failed", "reason": f"{why}; run this in {repo}"}
     return ending | ({"warning": warning} if warning else {})
 
@@ -268,13 +273,15 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
-        command = shlex.join(["code", "chat", "-m", readiness.SHAPER.removesuffix(".agent.md"), prompt])
-        if not which("code"):
-            return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
         try:
             shaper = store.settings().agents["shaper"]
         except StoreError as exc:
+            command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
             return {"started": False, "command": command, "reason": f"the settings are unreadable ({exc})"}
+        prompt += PICKER_NOTE.format(model=shaper.model, effort=shaper.effort)
+        command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
+        if not which("code"):
+            return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
         try:
             return {"started": True, "launch": launches.start(lambda: launch(host.repo, shaper, prompt), command, done)}
         except Refused as exc:

@@ -1,5 +1,6 @@
 import contextlib
 import json
+import shlex
 import subprocess
 import threading
 import time
@@ -413,7 +414,12 @@ def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
     assert path.read_text() == "{}\n"
 
 
-COMMAND = f"code chat -m owlbear-shaper '{api.START_PROMPT}'"
+def command(prompt: str) -> str:
+    return shlex.join(["code", "chat", "-m", "owlbear-shaper", prompt])
+
+
+PROMPT = api.START_PROMPT + api.PICKER_NOTE.format(model="claude-opus-5.5", effort="medium")
+COMMAND = command(PROMPT)
 SHAPER = resolve(None, Layer()).agents["shaper"]
 
 
@@ -428,10 +434,7 @@ SHAPER = resolve(None, Layer()).agents["shaper"]
 def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_went(tmp_path, ending, warning, state):
     asked = []
     out = api.new_chat(tmp_path, SHAPER, start=lambda *a: asked.append(a) or (ending, warning))
-    [(repo, role, prompt)] = asked
-    assert (repo, role, prompt.startswith(api.START_PROMPT)) == (tmp_path, SHAPER, True)
-    assert "Begin your first message or question to the owner with this line" in prompt
-    assert "model picker: set it to claude-opus-5.5 at medium effort." in prompt
+    assert asked == [(tmp_path, SHAPER, api.START_PROMPT)]
     assert "owlbear-change-shaping skill" in api.START_PROMPT
     assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "medium", "default")
     assert {k: v for k, v in out.items() if k != "reason"} == state
@@ -444,7 +447,8 @@ def test_a_chat_that_opened_local_tells_the_owner_to_reload_the_window(tmp_path)
     unbound = Outcome_("unbound", "no single session matched nonce and folder")
     out = api.new_chat(tmp_path, SHAPER, start=lambda *_a: (unbound, ""))
     assert out["state"] == "failed"
-    assert "if a Local chat opened, reload the window (Developer: Reload Window) and try again" in out["reason"]
+    hint = "set chat.defaultToCopilotHarness to true in .vscode/settings.json (`owlbear-next setup` offers it), "
+    assert f"if a Local chat opened, {hint}reload the window (Developer: Reload Window) and try again" in out["reason"]
 
 
 class Opening:
@@ -454,8 +458,7 @@ class Opening:
         self.release, self.calls, self.ending = threading.Event(), [], ending or {"state": "open"}
 
     def __call__(self, repo, role, prompt):
-        assert prompt == api.START_PROMPT
-        self.calls.append((repo, role))
+        self.calls.append((repo, role, prompt))
         assert self.release.wait(5)
         if isinstance(self.ending, Exception):
             raise self.ending
@@ -482,12 +485,15 @@ def test_new_change_returns_at_once_and_the_page_polls_the_launch_on_the_project
     opening = Opening({"state": "open", "warning": "could not remove it"})
     c = launcher(store, opening)
     started = c.post("/api/next/new-change").json()
+    luna = command(api.START_PROMPT + api.PICKER_NOTE.format(model="gpt-6-luna", effort="max"))
     assert (started["started"], set(started)) == (True, {"started", "launch"})
-    assert c.get(f"/api/next/new-change/{started['launch']}").json() == {"state": "opening", "command": COMMAND}
+    assert c.get(f"/api/next/new-change/{started['launch']}").json() == {"state": "opening", "command": luna}
     opening.release.set()
-    assert settled(c, started["launch"]) == {"state": "open", "warning": "could not remove it", "command": COMMAND}
-    [(repo, role)] = opening.calls
+    assert settled(c, started["launch"]) == {"state": "open", "warning": "could not remove it", "command": luna}
+    [(repo, role, prompt)] = opening.calls
     assert (repo, role.model, role.effort) == (store.root, "gpt-6-luna", "max")
+    assert luna == command(prompt)  # the command by hand carries the same note as the launch (TD-277)
+    assert prompt.endswith('model picker: set it to gpt-6-luna at max effort."')
 
 
 @pytest.mark.parametrize(
@@ -536,7 +542,7 @@ def test_new_change_needs_the_token_and_without_code_or_settings_returns_the_com
     store.config_path.write_text("{")
     c = launcher(store, opening)
     out = c.post("/api/next/new-change").json()
-    assert (out["started"], out["command"], "settings" in out["reason"]) == (False, COMMAND, True)
+    assert (out["started"], out["command"], "settings" in out["reason"]) == (False, command(api.START_PROMPT), True)
     assert (c.get("/api/next/new-change/nope").status_code, opening.calls) == (404, [])
 
 
