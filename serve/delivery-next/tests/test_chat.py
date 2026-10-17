@@ -253,6 +253,9 @@ def test_chat_refuses_recovery_decisions(repo):
     assert not list((store.root / "changes" / "greet" / "inbox").glob("*.json"))
     status = chat.show_status("c1")
     assert (status["running"], status["changes"][0]["question"]["answer_in"]) == (False, "changes-page")
+    assert {"progress", "spend"} <= set(status["changes"][0])
+    [listed] = chat.show_status()["changes"]  # every Change: the page's details stay out
+    assert (listed["question"]["id"], {"progress", "spend", "pullback"} & set(listed)) == ("c1.q2", set())
     c = client(store)
     body = {"question": "q2", "option": "abandon", "channel": "chat"}
     assert c.post("/api/next/changes/greet/answers", json=body).status_code == 403

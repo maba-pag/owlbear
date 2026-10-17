@@ -28,6 +28,7 @@ _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopbac
 _STATE: dict[str, Chat] = {}
 OK = 200
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
+PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every Change: 16 rows were 77 KB with them
 _pause = time.sleep  # the poll's own pause
 
 
@@ -75,6 +76,8 @@ class Chat:
             rows = [api.summary(self.store, s, host.activity(self.store, s, None), now) for s in self.store.slugs()]
             out["message"] = NOT_RUNNING.format(repo=self.repo)
         out["changes"] = [r for r in rows if not change or r.get("handle") == change]
+        if not change:
+            out["changes"] = [{k: v for k, v in r.items() if k not in PAGE_ONLY} for r in out["changes"]]
         if change and not out["changes"]:
             out["error"] = f"change: {change} is not a Change here - leave it empty to list all"
         elif change and (brief := self.brief(out["changes"][0].get("slug", ""))):
