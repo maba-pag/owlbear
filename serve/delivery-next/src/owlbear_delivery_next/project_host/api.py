@@ -43,6 +43,7 @@ from owlbear_delivery_next.project_host import (
     pages,
 )
 from owlbear_delivery_next.project_host.launches import Launches, Refused
+from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
@@ -67,7 +68,11 @@ SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 T6 = "This is a recovery decision; make it in the Changes page"
-START_PROMPT = "Start a new Delivery Change: use the delivery skill to shape a brief with me."
+START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
+PICKER_NOTE = (
+    "\n\nYour turns from Delivery run on {model} at {effort} effort; messages the owner types run on the chat's "
+    "model picker. In your first answer, tell the owner once to set the picker to {model} at {effort} effort."
+)
 LAUNCH_GAP = 5.0  # seconds after a new-Change launch ends before the next may start
 
 
@@ -189,11 +194,13 @@ def new_chat(
     start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat,
 ) -> dict[str, str]:
     """Open the shaping chat in *repo*'s window on the shaper role (TD-83): its launch's ending state."""
-    out, warning = start(repo, shaper, prompt)
+    out, warning = start(repo, shaper, prompt + PICKER_NOTE.format(model=shaper.model, effort=shaper.effort))
     if out.end == "started":
         ending = {"state": "open"}
     else:
         why = f"the Copilot chat did not start ({out.end}: {out.detail})"
+        if out.end == "unbound":  # the window opened a Local chat: it reads the harness key only when it starts
+            why += "; if a Local chat opened, reload the window (Developer: Reload Window) and try again"
         ending = {"state": "failed", "reason": f"{why}; run this in {repo}"}
     return ending | ({"warning": warning} if warning else {})
 
@@ -261,7 +268,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
-        command = shlex.join(["code", "chat", "-m", "agent", prompt])
+        command = shlex.join(["code", "chat", "-m", readiness.SHAPER.removesuffix(".agent.md"), prompt])
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
         try:

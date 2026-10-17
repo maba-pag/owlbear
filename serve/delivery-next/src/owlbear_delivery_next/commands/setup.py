@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import data_repo, git_files, preload, text_files
-from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -241,24 +241,8 @@ def run(  # noqa: PLR0913 - one answer per consent
         return 1
     store.write_profile(prof)
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
-    start = f"`{python} -m owlbear_delivery_next --repo {repo} host`"
-    question = f"Write the folder-open task '{TASK}' into .vscode/tasks.json (kept out of git)?"
     given, local_ask = local_files == "yes", ask if local_files == "ask" else lambda _q: ""
-    tasks = consent(
-        repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, local_ask, yes=given
-    )
-    say(tasks)
-    if tasks.startswith("written"):
-        say(f"VS Code starts it in a trusted workspace when automatic tasks are allowed ({automatic_tasks()});")
-        say(f"otherwise run the task '{TASK}' yourself.")
-    else:
-        say(f"Start Delivery yourself each time you open the project: {start}. Nothing advances until it runs.")
-    question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
-    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, local_ask, yes=given)
-    say(server)
-    if not server.startswith("written"):
-        snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
-        say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+    write_project_files(repo, python, local_ask, say, given=given)
     path, agent = Path.home() / ".copilot" / "skills" / preload.CHAT / "SKILL.md", readiness.shaper_path(Path.home())
     question = f"Install the Delivery chat skill at {path} and its shaper agent at {agent}, for you only? [y/N] "
     if not (skill == "yes" or (skill == "ask" and ask(question).strip().lower().startswith("y"))):
@@ -269,3 +253,25 @@ def run(  # noqa: PLR0913 - one answer per consent
     say(install_agent(Path.home()))
     say(f"To share it with this repository, copy that folder to .github/skills/{preload.CHAT}/ and commit it yourself.")
     return 0
+
+
+def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
+    """The host task, the chat server and the harness key, each written only with its own consent."""
+    start = f"`{python} -m owlbear_delivery_next --repo {repo} host`"
+    question = f"Write the folder-open task '{TASK}' into .vscode/tasks.json (kept out of git)?"
+    tasks = consent(repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, ask, yes=given)
+    say(tasks)
+    if tasks.startswith("written"):
+        say(f"VS Code starts it in a trusted workspace when automatic tasks are allowed ({automatic_tasks()});")
+        say(f"otherwise run the task '{TASK}' yourself.")
+    else:
+        say(f"Start Delivery yourself each time you open the project: {start}. Nothing advances until it runs.")
+    question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
+    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=given)
+    say(server)
+    if not server.startswith("written"):
+        snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
+        say(f'Add this under "servers" in your user-level MCP configuration (MCP: Open User Configuration): {snippet}')
+    question = f"Set {window_files.HARNESS} in .vscode/settings.json for New Change's Copilot chat (kept out of git)?"
+    settings = repo / window_files.SETTINGS  # the window reads the key only when it starts (TD-275)
+    say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, ask, yes=given))

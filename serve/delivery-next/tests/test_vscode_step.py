@@ -1100,6 +1100,7 @@ def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(wt: P
     assert (out.end, warning) == ("started", "")
     ((_, started),) = host.actions("chat/turnStarted")
     assert started["message"]["agent"] == {"uri": agent.as_uri()}
+    assert host.launched[0][:4] == ["code", "chat", "-m", "owlbear-shaper"]  # typed messages keep the shaper
 
 
 def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_path: Path) -> None:

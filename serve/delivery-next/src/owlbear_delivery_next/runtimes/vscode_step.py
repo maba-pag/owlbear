@@ -156,7 +156,7 @@ class Step:
         before = self._sessions()
         if exclusive and (busy := self._busy(before)):
             return Outcome("folder-busy", f"session {busy} still runs a turn in this folder"), None
-        self.launch(["code", "chat", "-m", "agent", self.spec.bootstrap], self.spec.folder)
+        self.launch(["code", "chat", "-m", self.spec.picker, self.spec.bootstrap], self.spec.folder)
         bound = self._bind(before, self.clock() + bind_limit)
         if bound is None:
             return Outcome("unbound", "no single session matched nonce and folder"), None

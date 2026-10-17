@@ -413,7 +413,7 @@ def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
     assert path.read_text() == "{}\n"
 
 
-COMMAND = f"code chat -m agent '{api.START_PROMPT}'"
+COMMAND = f"code chat -m owlbear-shaper '{api.START_PROMPT}'"
 SHAPER = resolve(None, Layer()).agents["shaper"]
 
 
@@ -428,12 +428,22 @@ SHAPER = resolve(None, Layer()).agents["shaper"]
 def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_went(tmp_path, ending, warning, state):
     asked = []
     out = api.new_chat(tmp_path, SHAPER, start=lambda *a: asked.append(a) or (ending, warning))
-    assert asked == [(tmp_path, SHAPER, api.START_PROMPT)]
+    [(repo, role, prompt)] = asked
+    assert (repo, role, prompt.startswith(api.START_PROMPT)) == (tmp_path, SHAPER, True)
+    assert "tell the owner once to set the picker to claude-opus-5.5 at medium effort" in prompt
+    assert "owlbear-change-shaping skill" in api.START_PROMPT
     assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "medium", "default")
     assert {k: v for k, v in out.items() if k != "reason"} == state
     if state["state"] == "failed":
         why = f"the Copilot chat did not start (model-unavailable: {ending.detail})"
         assert out["reason"] == f"{why}; run this in {tmp_path}"
+
+
+def test_a_chat_that_opened_local_tells_the_owner_to_reload_the_window(tmp_path):
+    unbound = Outcome_("unbound", "no single session matched nonce and folder")
+    out = api.new_chat(tmp_path, SHAPER, start=lambda *_a: (unbound, ""))
+    assert out["state"] == "failed"
+    assert "if a Local chat opened, reload the window (Developer: Reload Window) and try again" in out["reason"]
 
 
 class Opening:
@@ -581,19 +591,22 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
     written = [
         repo / ".vscode" / "tasks.json",
         repo / ".mcp.json",
+        repo / ".vscode" / "settings.json",
         home / ".copilot" / "skills" / "owlbear-change-shaping",
     ]
     written.append(readiness.shaper_path(home))
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
-    assert [p.exists() for p in written] == [False, False, False, False]
-    assert len(asked) == 3  # both local files and the skill were asked, never assumed
-    assert "Install the Delivery chat skill" in asked[2]
+    assert [p.exists() for p in written] == [False] * 5
+    assert len(asked) == 4  # the three local files and the skill were asked, never assumed
+    assert "chat.defaultToCopilotHarness" in asked[2]
+    assert "Install the Delivery chat skill" in asked[3]
     asked.clear()
     assert setup.run(repo, [], yes=True, local_files="no", skill="no", ask=lambda q: asked.append(q) or "y") == 0
-    assert (asked, [p.exists() for p in written]) == ([], [False, False, False, False])
+    assert (asked, [p.exists() for p in written]) == ([], [False] * 5)
     assert setup.run(repo, [], yes=True, local_files="yes", skill="yes", ask=pytest.fail) == 0
-    assert [p.exists() for p in written] == [True, True, True, True]
+    assert [p.exists() for p in written] == [True] * 5
+    assert json.loads(written[2].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
 
 
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):

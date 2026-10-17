@@ -249,7 +249,7 @@ def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None
         return Outcome("no-agent", f"the shaper agent is not installed at {agent}; run `owlbear-next setup`"), ""
     spec = StepSpec(
         folder=folder, agent=agent, model=role.model, effort=role.effort, prompt=prompt, config=SHAPING,
-        context=role.context,
+        context=role.context, picker=agent.name.removesuffix(".agent.md") if agent else "agent",
     )  # fmt: skip
 
     def harness(where: Path, _model: str) -> None:

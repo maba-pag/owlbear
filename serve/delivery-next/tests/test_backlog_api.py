@@ -137,7 +137,7 @@ def test_create_change_opens_the_shaping_chat_with_the_entries_as_starting_mater
                  "seen 1 times"):  # fmt: skip
         assert said in prompt
     state = settled(c, started["launch"])
-    assert (state["state"], shlex.split(state["command"])) == ("open", ["code", "chat", "-m", "agent", prompt])
+    assert (state["state"], shlex.split(state["command"])) == ("open", ["code", "chat", "-m", "owlbear-shaper", prompt])
     entries = {e["id"]: e for e in c.get("/api/next/backlog").json()["entries"]}
     assert {(e["status"], e["launch"]) for e in entries.values()} == {("in-change", started["launch"])}
 

@@ -60,6 +60,7 @@ class StepSpec:
     context: str = "default"  # the context tier; "long" picks the model's largest size
     nonce: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     reminder: str = ""  # sent once as a new turn when the real turn completes before Delivery stops it
+    picker: str = "agent"  # the mode ``code chat -m`` opens; the shaping chat keeps its agent for typed messages
     attachments: tuple[Json, ...] = ()  # sent with the prompt's turn only, e.g. screenshots (C7)
 
     @property
