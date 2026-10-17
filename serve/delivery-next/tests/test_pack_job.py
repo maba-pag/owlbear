@@ -732,6 +732,7 @@ def test_a_rejected_push_takes_the_local_commit_back(tmp_path, checkout, clone):
 
     assert (state["state"], results(state)["push"]) == ("failed", "failed")
     assert "the local commit was undone" in state["reason"]
+    assert "is protected, the update must reach it through a pull request" in state["reason"]
     assert snapshot(checkout) == before
     assert state["pushed"] is None
 

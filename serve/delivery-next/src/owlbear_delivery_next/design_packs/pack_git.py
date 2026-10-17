@@ -145,7 +145,8 @@ def push(co: Checkout, commit: str, run: Git = git) -> str:
     except design_pack.PackError as exc:
         undone = run(co.root, ["rev-parse", "HEAD"]) == commit and _undo(co, commit, run)
         tail = "the local commit was undone" if undone else f"the local commit {commit[:12]} is still there"
-        msg = f"{exc}; {tail}"
+        branch = co.merge.removeprefix("refs/heads/")
+        msg = f"{exc}; {tail}. If {branch} is protected, the update must reach it through a pull request"
         raise design_pack.PackError(msg) from exc
 
 
