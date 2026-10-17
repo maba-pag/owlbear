@@ -1,10 +1,15 @@
+import contextlib
 import shlex
+import socket
 import threading
 import time
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import Change
@@ -227,3 +232,77 @@ def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(sto
     assert "did not confirm the save" in patched.json()["detail"]
     assert [i["title"] for i in github.issues.values()] == ["Wider status line"]
     assert "lost" not in github.issues[1]["body"]
+
+
+@contextlib.contextmanager
+def backlog_page(store: Store) -> Iterator[Any]:
+    """The Backlog page in a real browser, offline: only the test host answers, so the plain controls show."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    app = api.create_app(store, "tok", Host(), launch=Launch(), which=lambda _n: "/bin/code")
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/backlog#token=tok")
+            yield page
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+def test_the_owner_adds_an_idea_and_triages_it_on_the_backlog_page(store):
+    """TD-264: the page renders with lit-html; adding clears the form, and choosing a kind moves it to Open."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with backlog_page(store) as page:
+        expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
+        page.get_by_label("Title").fill("Show the build date")
+        page.get_by_role("button", name="Add idea").click()
+        expect(page.locator("#status")).to_have_text('Added "Show the build date" to the inbox.')
+        expect(page.get_by_label("Title")).to_have_value("")
+        inbox = page.locator("#inbox > li.entry")
+        expect(inbox).to_have_count(1)
+        inbox.first.locator(".triage").get_by_label("Kind").select_option("idea")
+        expect(page.locator("#open > li.entry")).to_have_count(1)
+        expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
+    assert [e.kind for e in Backlog.of(store).read()[0].values()] == ["idea"]
+
+
+@pytest.mark.browser
+def test_notes_being_typed_and_an_open_card_survive_a_refresh_with_new_entries(store):
+    """TD-264: drafts and open details live in page state, so a refresh that adds cards above keeps both."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    entry = Backlog.of(store).add("Wider status line")[0]
+    with backlog_page(store) as page:
+        card = page.locator("li.entry").filter(has=page.locator(".title", has_text="Wider status line"))
+        card.locator("summary").click()
+        notes = card.get_by_label("Your notes: context for whoever shapes the Change")
+        notes.fill("only on the Changes page")
+        card.get_by_label("Select Wider status line").check()
+        expect(page.locator("#chosen")).to_have_text("1 selected")
+        Backlog.of(store).add("Faster first paint")  # a newer entry, listed above it
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(page.locator("#inbox > li.entry")).to_have_count(2)
+        expect(page.locator("#inbox > li.entry").first).to_contain_text("Faster first paint")
+        expect(notes).to_be_visible()
+        expect(notes).to_have_value("only on the Changes page")
+        expect(page.locator("#chosen")).to_have_text("1 selected")
+        card.get_by_role("button", name="Save notes").click()
+        expect(page.locator("#status")).to_have_text('Saved "Wider status line".')
+        page.get_by_role("button", name="Clear selection").click()
+        expect(page.locator("#selection")).to_be_hidden()
+    assert Backlog.of(store).read()[0][entry.id].notes == "only on the Changes page"
