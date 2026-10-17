@@ -359,7 +359,7 @@ function retryForm(q, r, d) {
     heading(4, "Plan tasks to rebuild", "sm"));
   const picks = r.tasks.map((t) => {
     const [node, on] = tick(`${t.id}: ${t.title}`, t.ticked), note = text("", { size: "xs" });
-    box.append(node, ...taskRounds(t.id, d), note);
+    box.append(node, ...taskRounds(t.id, d, " (rebuild list)"), note);
     return { t, on, note };
   });
   const ticked = () => picks.filter((p) => p.on()).map((p) => p.t.id);
@@ -1012,12 +1012,13 @@ function findingDetails(summary, loops) {
 }
 
 // A plan task's markers, task review and final review apart, with their finding details; nothing without rounds.
-function taskRounds(id, d) {
+// *where* keeps each toggle's summary unique on the page: an open toggle is restored by its summary.
+function taskRounds(id, d, where = "") {
   const r = d.rounds?.tasks[id];
   if (!r || !(r.task.length || r.final.length)) return [];
   const shown = [["Task review", r.task], ["Final review", r.final]].filter(([, rounds]) => rounds.length);
   return [...shown.map(([label, rounds]) => marks(label, rounds)),
-    findingDetails(`Finding details of ${id}`, shown)];
+    findingDetails(`Finding details of ${id}${where}`, shown)];
 }
 
 // The final review's own rounds, the repairs no round reviewed, and the rejections that stand.

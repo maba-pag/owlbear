@@ -83,6 +83,7 @@ class RoundLoop(_Record):
     last: bool = False  # the latest verdict made its round the last
     ended: Ended = ""
     unreviewed: list[str] = Field(default_factory=list)  # repair tasks no round reviewed
+    reviewed: list[str] = Field(default_factory=list)  # repairs a full round reviewed after they reported their fixes
     batch: list[str] = Field(default_factory=list)  # the final loop's built repair, whose rejections it judges next
     head: str = ""  # the commit the latest verdict reviewed
     reentry: bool = False  # new work after the loop ended: this round focuses on it (TD-215)

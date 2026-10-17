@@ -18,14 +18,14 @@ def found(n: int, raised: int, state: str = "open", **kw: object) -> RoundFindin
 
 
 def test_a_finding_is_open_unverified_or_settled():
-    lp = RoundLoop(subject="t1", policy=RoundPolicy(), round=2, unreviewed=["t4"])
+    lp = RoundLoop(subject="t1", policy=RoundPolicy(), round=2, unreviewed=["t4"], reviewed=["t3"])
     kinds = {
         "open": found(1, 1),
         "owner-fix": found(2, 1, "owner-fix"),
         "escalated": found(3, 1, "escalated"),
         "fixed in a later round's review": found(4, 1, "fixed", repair="t3"),
         "fixed, its repair unreviewed": found(5, 1, "fixed", repair="t4"),
-        "fixed in the latest round": found(6, 2, "fixed", repair="t5"),
+        "fixed after the latest round": found(6, 1, "fixed", repair="t5"),  # the owner's Fix after a verdict
         "rejected": found(7, 1, "rejected"),
         "standing": found(8, 1, "standing"),
         "owner-drop": found(9, 1, "owner-drop"),
@@ -37,7 +37,7 @@ def test_a_finding_is_open_unverified_or_settled():
         "escalated": "open",
         "fixed in a later round's review": "settled",
         "fixed, its repair unreviewed": "unverified",
-        "fixed in the latest round": "unverified",
+        "fixed after the latest round": "unverified",
         "rejected": "unverified",
         "standing": "settled",
         "owner-drop": "settled",
@@ -46,7 +46,7 @@ def test_a_finding_is_open_unverified_or_settled():
 
 
 def test_a_rounds_marker_takes_its_most_urgent_kind_with_a_count_and_the_latest_is_marked():
-    lp = RoundLoop(subject="t1", policy=RoundPolicy(), round=3, unreviewed=["t6"])
+    lp = RoundLoop(subject="t1", policy=RoundPolicy(), round=3, unreviewed=["t6"], reviewed=["t3"])
     lp.findings = [
         found(1, 1, "fixed", repair="t3"),
         found(2, 1, "standing", reason="r", judgement="j"),

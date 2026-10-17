@@ -30,10 +30,10 @@ SAID = {  # per finding state and kind: one and many
 
 
 def kind(lp: RoundLoop, f: RoundFinding) -> str:
-    """Open, unverified or settled: a fix counts as verified once a later round reviewed its repair."""
+    """Open, unverified or settled: a fix counts as verified once a full round ran after its repair reported it."""
     if f.state in {"open", "owner-fix", "escalated"}:
         return "open"
-    if f.state == "rejected" or (f.state == "fixed" and (f.repair in lp.unreviewed or lp.round <= f.raised)):
+    if f.state == "rejected" or (f.state == "fixed" and f.repair not in lp.reviewed):
         return "unverified"
     return "settled"
 

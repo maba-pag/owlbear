@@ -107,8 +107,8 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
   gives per round e.g. "Round 3 (latest): 1 fix reported, not re-reviewed; 1 rejection not reviewed",
   then each finding with its reasons.
 - As built (TD-252): a marker reads `R<round> · <count> <kind>`, the count being that round's findings of its most
-  urgent kind; a fix counts as verified once a later round reviewed its repair (its repair is no unreviewed repair
-  and a later round exists). Markers show beside each plan task in the Plan section and beside the retry question's
+  urgent kind; a fix counts as verified once a full round ran after its repair reported it (a rejections-only check
+  is no full round). Markers show beside each plan task in the Plan section and beside the retry question's
   task list, task review and final review apart; only each loop's current attempt is shown. The "Finding details"
   toggle names each line's loop, since task and final rounds and their IDs are counted apart. A "Review rounds"
   section shows the final review's own markers, the repairs no round reviewed and the rejections that stand (not

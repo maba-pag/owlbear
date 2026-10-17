@@ -134,6 +134,7 @@ def test_a_task_loop_judges_rejections_counts_rounds_and_ends_early_with_a_rejec
     c = store.read("c1")
     lp = c.loops["t1"]
     assert (lp.round, lp.found, lp.last, c.outcome.question, at(c)) == (2, 2, True, None, (K.BUILD, "t4", None))
+    assert lp.reviewed == ["t3"]  # the full round reviewed the repair that reported its fixes
     assert [(f.id, f.state) for f in lp.findings if f.raised == 2] == [("F6", "open"), ("F7", "open")]
     assert lp.findings[1].state == "standing"
     built(store, clone, monkeypatch, "d\n", "F7")
@@ -144,6 +145,7 @@ def test_a_task_loop_judges_rejections_counts_rounds_and_ends_early_with_a_rejec
     c = store.read("c1")
     lp = c.loops["t1"]
     assert (lp.round, lp.ended, lp.unreviewed, at(c)) == (3, "count", ["t4"], (K.BUILD, "t2", None))
+    assert lp.reviewed == ["t3"]  # a rejections-only check reviews no repair
     assert [t.done for t in c.plan.tasks] == [True, False, True, True]
 
 

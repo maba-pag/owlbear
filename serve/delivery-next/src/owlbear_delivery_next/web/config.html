@@ -333,14 +333,23 @@ function saved(layer, key) {
 
 // TD-209: one loop's round value; blank inherits (the final review inherits the builder's).
 function roundCell(owner, field, label) {
-  const key = `${owner}.${field}`, final = owner === "final_review", below = final
-    ? loaded.inherited[rendered].final_review[field] : loaded.inherited[rendered].agents[owner][field];
+  const key = `${owner}.${field}`, final = owner === "final_review";
+  const below = final ? finalBelow(field) : loaded.inherited[rendered].agents[owner][field];
   const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
   const input = typed(`${label}, ${owner.replace("_", " ")}`, value,
     { placeholder: `inherit (${below})`, inputmode: "numeric" });
   input.dataset.key = key;
   const inUse = final ? loaded.settings.final_review[field] : loaded.settings.agents[owner][field];
   return cell(input, source(final ? key : `agents.${key}`, inUse));
+}
+
+// What a blank final-review value takes: the global one when editing this project, else the builder's as edited.
+function finalBelow(field) {
+  const above = rendered === "project" ? loaded.global?.final_review?.[field] : null;
+  if (above !== null && above !== undefined) return above;
+  const own = `builder.${field}`;
+  return (own in drafts[rendered] ? drafts[rendered][own] : saved(rendered, own))
+    || loaded.inherited[rendered].agents.builder[field];
 }
 
 // TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
@@ -547,10 +556,14 @@ function inactive(label, value, key) {
 function edit(event) {
   const input = event.target.closest("[data-key]");
   if (!input) return;
-  const key = input.dataset.key, value = input.value === INHERIT ? "" : (input.value ?? "").trim();
+  const key = input.dataset.key, [role, field] = key.split("."), round = ROUNDS.some(([f]) => f === field);
+  const value = !round && input.value === INHERIT ? "" : (input.value ?? "").trim();
   if (value === saved(rendered, key)) delete drafts[rendered][key];
   else drafts[rendered][key] = value;
-  const [role, field] = key.split(".");
+  if (round && role === "builder") {  // a blank final-review value follows the builder's
+    const below = document.querySelector(`[data-key="final_review.${field}"]`);
+    below?.setAttribute("placeholder", `inherit (${finalBelow(field)})`);
+  }
   if (offered && field === "model") {  // the effort, context and rates follow the model
     refreshRow(role, ["effort", "context", "rates"]);
   } else if (offered && field === "effort") {
