@@ -88,13 +88,14 @@ function show() {
   render(view(), document.getElementById("page"));
 }
 
-// Apply arrived models once no setting holds the focus, so they never replace the control being used.
+// Render, applying arrived models only once no setting holds the focus, so they never replace the control in use.
 function showIdle() {
-  if (!document.activeElement?.closest?.("main [data-key]")) {
-    if (arrived) [state.offered, state.modelsNote, arrived] = [arrived.offered, arrived.note, null];
-    return show();
+  const using = document.activeElement?.closest?.("main [data-key]");
+  if (!using && arrived) [state.offered, state.modelsNote, arrived] = [arrived.offered, arrived.note, null];
+  show();
+  if (using && arrived) {
+    document.querySelector("main").addEventListener("focusout", () => setTimeout(showIdle), { once: true });
   }
-  document.querySelector("main").addEventListener("focusout", () => setTimeout(showIdle), { once: true });
 }
 
 function notify(message) {
@@ -466,7 +467,7 @@ async function save() {
     }
   } finally {
     state.saving = false;
-    show();
+    showIdle();  // models that arrived during it apply now
   }
 }
 
@@ -495,7 +496,7 @@ async function rename() {
     state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
   } finally {
     state.saving = false;
-    show();
+    showIdle();  // models that arrived during it apply now
   }
 }
 
@@ -642,7 +643,6 @@ async function readModels() {
   } catch (e) {
     arrived = { offered: null, note: `Could not read the offered models (${e.message}); type a model name.` };
   }
-  if (state.saving) return;
   showIdle();
 }
 

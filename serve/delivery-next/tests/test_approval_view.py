@@ -196,9 +196,10 @@ def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(p
         assert page.evaluate("location.search") == ""
 
 
+@pytest.mark.parametrize("left", [["de", "fr"], []])
 @pytest.mark.browser
-def test_an_option_the_question_no_longer_offers_is_not_sent(page_url) -> None:
-    """Sol, TD-264: a choice dropped from the question by a later poll leaves the draft too."""
+def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left) -> None:
+    """Sol, TD-264: a choice dropped from the question by a later poll leaves the draft too, even with none left."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
@@ -207,9 +208,10 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url) -> None:
         form = page.locator("section.act", has_text="Question q1")
         form.get_by_label("English").check()
         changed = asking()
-        changed.questions[0].options = [m.Option(id="de", label="German"), m.Option(id="fr", label="French")]
+        labels = {"de": "German", "fr": "French"}
+        changed.questions[0].options = [m.Option(id=o, label=labels[o]) for o in left]
         store.write(Lock("greet"), changed)
-        expect(form.get_by_label("French")).to_be_visible(timeout=10_000)
+        expect(form.locator("input[type=radio]")).to_have_count(len(left), timeout=10_000)
         expect(form.locator("input:checked")).to_have_count(0)
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")

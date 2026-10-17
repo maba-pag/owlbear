@@ -324,8 +324,9 @@ function meta(value, cls = "meta") {
 
 function questionForm(q, d) {
   const key = `${d.slug}:question:${q.id}`, mine = draft(key, () => ({}));
+  if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
   const answer = async () => {
-    const picked = mine.option ?? null, words = mine.text ?? "";
+    const picked = q.options.some((o) => o.id === mine.option) ? mine.option : null, words = mine.text ?? "";
     const chosen = q.options.find((o) => o.id === picked), told = chosen && consequence(chosen, d);
     if (told && !(await ask(told))) return;
     send("/answers", { question: q.id, option: picked, text: words }, d, key);

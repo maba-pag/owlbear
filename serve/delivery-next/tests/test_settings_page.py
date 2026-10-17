@@ -16,7 +16,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.state_store.store import Store
@@ -193,3 +193,53 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             browser.close()
     finally:
         server.should_exit = True
+
+
+@pytest.mark.browser
+def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch) -> None:
+    """Sol, TD-264: a save under way when the models arrive leaves them for its end, never for good."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    arrive, saved = threading.Event(), threading.Event()
+
+    def slow(_self: object) -> dict[str, Any]:
+        arrive.wait(10)
+        return MODELS
+
+    monkeypatch.setattr(model_choices.Offered, "__call__", slow)
+    real = config_routes._save  # noqa: SLF001 - the save the route runs
+
+    def save(*args: Any) -> str:
+        arrive.set()  # the models answer while this save runs
+        time.sleep(1.0)
+        saved.set()
+        return real(*args)
+
+    monkeypatch.setattr(config_routes, "_save", save)
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/config#token=tok")
+            page.get_by_label("Minutes per session, builder").fill("50")
+            page.get_by_role("button", name="Save project settings").click()
+            expect(page.locator("#status")).to_have_text(
+                "Saved this project's settings. They apply to the next session.", timeout=10_000
+            )
+            expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
+            expect(page.locator('select[aria-label="Model for builder"]')).to_be_visible()
+            browser.close()
+    finally:
+        server.should_exit = True
+    assert saved.is_set()
