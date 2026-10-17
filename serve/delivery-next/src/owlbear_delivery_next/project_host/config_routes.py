@@ -53,6 +53,9 @@ APPLIED = [
     "agents.shaper.last_round_at",
     "agents.shaper.ask_owner_at",
     "final_review",
+    *(f"agents.{role}.minutes" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
+    "agents.preparer.minutes",
+    "agents.updater.minutes",
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end
 

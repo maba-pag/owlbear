@@ -23,6 +23,16 @@ DEFAULTS: dict[Role, RoleModel] = {
     "updater": RoleModel(model="claude-opus-5.5", effort="high"),  # writes the design pack's skills (TD-125)
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
+MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the shaper's chat has none (TD-285)
+    "planner": 30,
+    "builder": 40,
+    "reviewer": 20,
+    "challenger": 20,
+    "design-judge": 20,
+    "preparer": 30,
+    "shaper": 40,
+    "updater": 40,
+}
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",
     StepKind.BUILD: "builder",
@@ -46,6 +56,11 @@ def chosen(settings: Settings, session: str) -> RoleModel:
     """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings."""
     agent = settings.agents[SESSIONS[session]]
     return RoleModel(model=agent.model, effort=agent.effort, context=agent.context)
+
+
+def limit(settings: Settings, session: str) -> float:
+    """Seconds one session of this kind or reviewer label may run in total, from the resolved settings (TD-286)."""
+    return settings.agents[SESSIONS[session]].minutes * 60.0
 
 
 def parse(text: str) -> tuple[Role, RoleModel]:

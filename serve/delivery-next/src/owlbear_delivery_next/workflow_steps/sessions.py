@@ -161,6 +161,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
                 dataclasses.replace(
                     cfg, role=cfg.role or roles.SESSIONS[label], kind=StepKind.REVIEW, session_id=session_id,
                     resume=False, checks=(), model=model, effort=effort, context=role.context, fresh=cfg.message,
+                    limit=roles.limit(settings, label),
                     previous={}, journal=journal, worktree=at, policy=Policy(at, write=False),
                     judging=label in tools.VERDICTS, job=label,
                 )
