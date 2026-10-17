@@ -55,7 +55,7 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
     reviewed work gets no review of its own: the next round of the loop it joined reviews it (TD-215).
     """
     s = c.step
-    task = _accepted(c, r)
+    task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
     root = next((t for t in c.plan.tasks if t.id == subject_of(c, task)), None) if task and c.plan else None
     if root is not None and (root.origin in ADDED or (root.origin == "review" and root.fixes is None)):
         if any(d.upheld is None for d in task.disputes):
@@ -87,14 +87,6 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
         ask(c, question(lp, task), now)
     else:
         end(c, lp, task)
-
-
-def _accepted(c: Change, r: StepResult | None) -> Task | None:
-    """The built task, its accepted head recorded: the end of its own commits, which a retry of it undoes."""
-    task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
-    if task is not None and r is not None and r.head:
-        task.head = r.head
-    return task
 
 
 def passed(c: Change) -> None:
@@ -180,11 +172,6 @@ def picked(c: Change, tasks: list[str]) -> list[str]:
     return [t.id for t in c.plan.tasks if t.origin == "plan" and t.id in tasks] if c.plan else []
 
 
-def unpicked(c: Change, q: Question, option: str | None, tasks: list[str]) -> bool:
-    """A final retry's Rebuild that names no plan task settles nothing (TD-217)."""
-    return (q.cause or "").startswith(f"{PREFIX}{FINAL} ") and option == "rebuild" and not picked(c, tasks)
-
-
 def why(lp: RoundLoop, how: str) -> str:
     """What the planner is told when the owner asks for a new plan after the final review's last round."""
     said = "; ".join(f"{f.id}: {f.text}" for f in lp.findings if f.raised == lp.round)
@@ -199,7 +186,7 @@ def replan(c: Change, lp: RoundLoop, reason: str, now: datetime) -> None:
 
     The new plan's tasks replace the old ones once it is accepted; a merge consent no longer counts.
     """
-    old = lp.model_copy(update={"history": [], "ended": "retried", "rebuild": []})
+    old = lp.model_copy(update={"history": [], "ended": "replanned", "rebuild": [], "undo": ""})
     tasks = [x for k, x in c.loops.items() if k != FINAL]
     history = [*lp.history, old, *tasks]
     c.loops = {FINAL: RoundLoop(subject=FINAL, attempt=lp.attempt + 1, policy=lp.policy, history=history)}

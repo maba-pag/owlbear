@@ -292,7 +292,7 @@ class Task(Record):
     done: bool = False
     fixes: str | None = None  # the task whose review findings this fix task resolves
     base: str | None = None  # HEAD when the task's build first started; its changes are measured from here
-    head: str | None = None  # HEAD when its build was accepted: base..head are its own commits (TD-210)
+    spans: list[str] = Field(default_factory=list)  # each build session's `start..end`: its own commits (TD-210)
     item: ItemRef | None = None  # the conversation item a pr-feedback task answers
     response: Response | None = None  # the Builder's handling of that item
     built_by: str = ""  # the session whose build Delivery accepted last (TD-123)

@@ -194,7 +194,7 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
         None,
         (K.BUILD, "t1", None),
     )
-    assert [(t.base, t.head) for t in c.plan.tasks[2:]] == [(None, None)] * 2  # undone: no later undo takes them
+    assert [(t.base, t.spans) for t in c.plan.tasks[2:]] == [(None, [])] * 2  # undone: no later undo takes them
     built(store, clone, monkeypatch, "e\n")
     assert store.read("c1").plan.tasks[0].base == git(clone, "rev-parse", "HEAD^")  # the fresh build's own base
     reviewed(store, clone, monkeypatch)
@@ -206,6 +206,7 @@ def test_an_undo_that_conflicts_asks_the_owner_and_leaves_the_branch_as_it_was(t
     base = git(clone, "rev-parse", "HEAD")
     (clone / "a.txt").write_text("b\n")
     git(clone, "commit", "-qam", "build b")
+    built = git(clone, "rev-parse", "HEAD")
     git(clone, "switch", "-qc", "side")
     (clone / "a.txt").write_text("c\n")
     git(clone, "commit", "-qam", "target change")
@@ -214,7 +215,7 @@ def test_an_undo_that_conflicts_asks_the_owner_and_leaves_the_branch_as_it_was(t
     head = git(clone, "rev-parse", "HEAD")
     store = stored(tmp_path, RoundLoop(subject="t1", policy=RoundPolicy()))
     c = store.read("c1")
-    c.plan.tasks[0].base = base
+    c.plan.tasks[0].base, c.plan.tasks[0].spans = base, [f"{base}..{built}"]
     c.plan.tasks.append(Task(id="t3", title="fix", scope=["a.txt"], origin="review", fixes="t1", detail="- F1: x"))
     c.step = Step(kind=K.BUILD, task="t1", mode=round_flow.RETRY)
     store.write(Lock("c1"), c)
@@ -225,6 +226,7 @@ def test_an_undo_that_conflicts_asks_the_owner_and_leaves_the_branch_as_it_was(t
         f"{round_flow.PREFIX}t1 t3",
     )
     assert (git(clone, "rev-parse", "HEAD"), (clone / "a.txt").read_text(), c.loops["t1"].attempt) == (head, "c\n", 1)
+    assert c.loops["t1"].undo == ""  # a failed undo starts afresh next time
     assert git(clone, "worktree", "list").count("\n") == 0  # the scratch worktree is gone
     c = answer(store, "another")
     assert (c.loops["t1"].extra, at(c)) == (1, (K.REVIEW, "t3", None))
@@ -237,6 +239,10 @@ def undoing(clone: Path, *tasks: Task) -> tuple[Change, Task, RoundLoop]:
     return c, task, RoundLoop(subject="t1", since=1, policy=RoundPolicy())
 
 
+def head(clone: Path) -> str:
+    return git(clone, "rev-parse", "HEAD")
+
+
 def test_a_promoted_undo_is_found_again_and_each_retried_head_keeps_its_own_archive(clone):
     c, task, lp = undoing(clone)
     (clone / "a.txt").write_text("b\n")
@@ -245,13 +251,15 @@ def test_a_promoted_undo_is_found_again_and_each_retried_head_keeps_its_own_arch
     git(clone, "update-ref", retry.archive("c1", "t1", 1, first), first)  # an undo that failed after archiving
     (clone / "a.txt").write_text("c\n")
     git(clone, "commit", "-qam", "another round's repair")
+    task.spans = [f"{task.base}..{head(clone)}"]
     (clone / "left.txt").write_text("an edit")
-    assert retry._undo(clone, c, task, lp) == "the worktree has uncommitted edits"  # noqa: SLF001
+    assert retry._undo(clone, c, task, lp, head(clone)) == "the worktree has uncommitted edits"  # noqa: SLF001
     (clone / "left.txt").unlink()
-    assert retry._undo(clone, c, task, lp) == ""  # noqa: SLF001
+    start = head(clone)
+    assert retry._undo(clone, c, task, lp, start) == ""  # noqa: SLF001
     undone = git(clone, "rev-parse", "HEAD")
     assert git(clone, "rev-parse", retry.archive("c1", "t1", 1, git(clone, "rev-parse", "HEAD^"))) != first
-    assert retry._undo(clone, c, task, lp) == ""  # noqa: SLF001 - a restart before the record was written
+    assert retry._undo(clone, c, task, lp, start) == ""  # noqa: SLF001 - a restart before the record was written
     assert (git(clone, "rev-parse", "HEAD"), (clone / "a.txt").read_text()) == (undone, "a\n")
     assert git(clone, "rev-parse", retry.archive("c1", "t1", 1, first)) == first  # never deleted
     assert len(git(clone, "for-each-ref", "refs/heads/owlbear/archive").splitlines()) == 2  # none of the undo
@@ -261,13 +269,14 @@ def test_an_undo_keeps_the_target_merges_in_its_range(clone):
     c, task, lp = undoing(clone)
     (clone / "a.txt").write_text("b\n")
     git(clone, "commit", "-qam", "build b")
+    task.spans = [f"{task.base}..{head(clone)}"]
     git(clone, "switch", "-qc", "side", "main")
     (clone / "t.txt").write_text("target\n")
     git(clone, "add", "t.txt")
     git(clone, "commit", "-qm", "target change")
     git(clone, "switch", "-q", "owlbear/c1")
     git(clone, "merge", "-q", "--no-ff", "-m", "merge the target", "side")
-    assert retry._undo(clone, c, task, lp) == ""  # noqa: SLF001
+    assert retry._undo(clone, c, task, lp, head(clone)) == ""  # noqa: SLF001
     assert ((clone / "a.txt").read_text(), (clone / "t.txt").read_text()) == ("a\n", "target\n")
 
 
@@ -280,7 +289,7 @@ def test_an_attempt_with_another_tasks_build_inside_it_is_not_undone(clone):
     git(clone, "commit", "-qm", "target change")
     git(clone, "switch", "-q", "owlbear/c1")
     git(clone, "merge", "-q", "--ff-only", "main")  # the integration's fast-forward: no merge commit marks it
-    assert retry._undo(clone, c, task, lp).startswith("task t2 was built during this attempt")  # noqa: SLF001
+    assert retry._undo(clone, c, task, lp, head(clone)).startswith("task t2 was built during this attempt")  # noqa: SLF001
     assert ((clone / "t.txt").read_text(), git(clone, "for-each-ref", "refs/heads/owlbear/archive")) == ("target\n", "")
 
 

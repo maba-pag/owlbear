@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next import budgets, disputes, evidence, round_flow
+from owlbear_delivery_next import budgets, disputes, evidence, rebuilds, round_flow
 from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, VISUAL_MODEL, kind_of
 from owlbear_delivery_next.inbox import (
     AnswerItem,
@@ -298,9 +298,11 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     gate = bool(q and c.outcome and c.outcome.question == q.id)
     if q is None or (q.repair and not gate):
         return  # a round gate the Change has moved past records nothing, so no session ever receives it
+    if rebuilds.refused(c, q, item.option, item.tasks, (item.attempt, item.head)):
+        return  # a final retry's selection the page no longer showed, or tasks where none belong (TD-217)
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks)
     target = _target(q, item.option)
-    if _refused(q, target, item.text) or round_flow.unpicked(c, q, item.option, item.tasks):
+    if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
     if gate:

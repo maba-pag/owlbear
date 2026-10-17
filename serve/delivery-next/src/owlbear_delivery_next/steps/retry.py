@@ -1,14 +1,13 @@
 """A rejected task attempt before its fresh build (TD-210, TD-214): archived on a branch, then undone forward.
 
-The attempt's own commits since the task's base are reverted in one commit, made in a scratch worktree and promoted
-by a fast-forward; target merges stay. An attempt whose range also holds another task's build (an integration) is
-not undone: its commits cannot be told apart. Each retried head keeps its own archive, so a retry after another round
-archives again; a restart finds a promoted undo by its message and archive. Any failure asks the owner: another
-round on the kept work, or a pause.
+The attempt's own commits, what its build sessions made, are reverted in one commit, made in a scratch worktree and
+promoted by a fast-forward; target merges and commits made between sessions stay. An attempt with another task's
+build inside it (an integration) is not undone. The head an undo starts from is recorded before anything is promoted:
+a restart finds the undo on the branch and never repeats it, and a branch that moved without it stops the undo. Each
+retried head keeps its own archive. Any failure asks the owner: another round on the kept work, or a pause.
 
-The final review's retry (TD-217) undoes the ticked plan tasks' commits the same way (the task ranges `rebuilds` picks,
-without any other task's build inside them), or, for a plan from a clean state, sets the tree back to the target's at
-the merge base in one commit.
+The final review's retry (TD-217) undoes the ticked plan tasks' commits the same way (the tasks `rebuilds` picks), or,
+for a plan from a clean state, sets the tree back to the target's at the merge base in one commit.
 """
 
 from __future__ import annotations
@@ -60,9 +59,10 @@ def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         return False
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     try:
-        why = _undo(path, change, task, lp)
+        why = _undo(path, change, task, lp, _start(store, lock, change, lp, path))
     except (OSError, subprocess.SubprocessError) as exc:
         why = _failure(exc)
+    lp.undo = ""
     now = datetime.now(UTC)
     event = {"event": "undo", "at": now.isoformat(timespec="seconds"), "task": task.id, "attempt": lp.attempt}
     store.log(lock, change.slug, event | ({"error": why} if why else {}))
@@ -79,31 +79,57 @@ def _failure(exc: OSError | subprocess.SubprocessError) -> str:
     return " ".join(str(getattr(exc, "stderr", "") or exc).split())[:300]
 
 
-def _undo(path: Path, c: Change, task: Task, lp: RoundLoop) -> str:
-    """Archive the head, then promote one commit reverting the attempt's commits; why not, else ""."""
-    head, message = worktree.head(path), UNDO.format(attempt=lp.attempt, task=task.id)
-    if _promoted(path, archive(c.slug, task.id, lp.attempt, ""), message):
-        return ""  # promoted by an earlier run that stopped before its record was written
-    if worktree.git(path, "status", "--porcelain").strip():
-        return "the worktree has uncommitted edits"
-    if task.base is None:
-        return "the commit the task's first build started from is unknown"
+def _start(store: Store, lock: Lock, change: Change, lp: RoundLoop, path: Path) -> str:
+    """The head the undo starts from, recorded before anything is promoted, so that a restart never repeats it."""
+    if not lp.undo:
+        lp.undo = worktree.head(path)
+        store.write(lock, change)
+    return lp.undo
+
+
+def _landed(path: Path, start: str, message: str) -> bool | None:
+    """Whether the undo from *start* is on the branch: False while HEAD is still *start*, None if it moved without."""
+    if worktree.head(path) == start:
+        return False
+    lines = worktree.git(path, "rev-list", "--first-parent", "--parents", f"{start}..HEAD").splitlines()
+    first = next((line.split()[0] for line in lines if line.split()[1:2] == [start]), None)
+    return True if first and worktree.git(path, "log", "-1", "--format=%s", first).strip() == message else None
+
+
+def _ready(path: Path, start: str, message: str) -> str | None:
+    """Why the undo cannot run now, "" when it already landed, or None when it runs now."""
+    landed = _landed(path, start, message)
+    if landed is not False:
+        return "" if landed else "the branch moved since the undo started, without it"
+    return "the worktree has uncommitted edits" if worktree.git(path, "status", "--porcelain").strip() else None
+
+
+def _undo(path: Path, c: Change, task: Task, lp: RoundLoop, start: str) -> str:
+    """Archive *start*, then promote one commit reverting the attempt's own commits; why not, else ""."""
+    message = UNDO.format(attempt=lp.attempt, task=task.id)
+    if (why := _ready(path, start, message)) is not None:
+        return why
     inside = [t.id for t in (c.plan.tasks if c.plan else [])[lp.since :] if t.base and subject_of(c, t) != task.id]
     if inside:
         return f"task {', '.join(inside)} was built during this attempt, so the attempt's own commits are unclear"
-    _archived(path, archive(c.slug, task.id, lp.attempt, head), head, message)
-    commits = _range(path, task.base, head)
+    tasks = [t for t in (c.plan.tasks if c.plan else []) if (t.base or t.spans) and subject_of(c, t) == task.id]
+    commits, why = _commits(path, tasks, start)
+    if why:
+        return why
+    _archived(path, archive(c.slug, task.id, lp.attempt, start), start, message)
     if commits:
-        worktree.git(path, "merge", "--ff-only", "--quiet", _reverted(path, head, commits, message))
+        worktree.git(path, "merge", "--ff-only", "--quiet", _reverted(path, start, commits, message))
     return ""
 
 
-def _promoted(path: Path, prefix: str, message: str) -> bool:
-    """Whether HEAD is this undo, promoted onto the head archived under *prefix*."""
-    if worktree.git(path, "log", "-1", "--format=%s").strip() != message:
-        return False
-    parent = _rev(path, "HEAD^")
-    return bool(parent) and _rev(path, prefix + parent[:12]) == parent
+def _commits(path: Path, tasks: list[Task], head: str) -> tuple[list[str], str]:
+    """The tasks' own commits, newest first: what their build sessions made, never what came between them."""
+    if unknown := [t.id for t in tasks if not t.spans or t.spans[-1].endswith("..")]:
+        return [], f"the commits of task {unknown[0]} are not recorded"
+    spans = [span.split("..") for t in tasks for span in t.spans]
+    own = {x for start, end in spans for x in _range(path, start, end)}
+    line = max((_range(path, start, head) for start, _ in spans), key=len, default=[])
+    return [x for x in line if x in own], ""
 
 
 def _archived(path: Path, ref: str, head: str, message: str) -> None:
@@ -175,9 +201,12 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     undo, why = ([], "") if clean else rebuilds.undoing(change, lp)
     try:
-        why = why or (_cleaned(path, change, lp) if clean else _taken(path, change, lp, undo))
+        if not why:
+            start = _start(store, lock, change, lp, path)
+            why = _cleaned(path, change, lp, start) if clean else _taken(path, change, lp, undo, start)
     except (OSError, subprocess.SubprocessError) as exc:
         why = _failure(exc)
+    lp.undo = ""
     now = datetime.now(UTC)
     event = {"event": "undo", "at": now.isoformat(timespec="seconds"), "task": FINAL, "attempt": lp.attempt}
     store.log(lock, change.slug, event | {"tasks": lp.rebuild, "clean": clean} | ({"error": why} if why else {}))
@@ -197,45 +226,27 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     return True
 
 
-def _taken(path: Path, c: Change, lp: RoundLoop, undo: list[Task]) -> str:
-    """Archive the head, then promote one commit reverting the undone tasks' own commits; why not, else ""."""
-    head, message = worktree.head(path), REBUILD.format(tasks=", ".join(lp.rebuild), attempt=lp.attempt)
-    if _promoted(path, archive(c.slug, FINAL, lp.attempt, ""), message):
-        return ""
-    if worktree.git(path, "status", "--porcelain").strip():
-        return "the worktree has uncommitted edits"
-    commits, why = _commits(path, c, undo, head)
+def _taken(path: Path, c: Change, lp: RoundLoop, undo: list[Task], start: str) -> str:
+    """Archive *start*, then promote one commit reverting the undone tasks' own commits; why not, else ""."""
+    message = REBUILD.format(tasks=", ".join(lp.rebuild), attempt=lp.attempt)
+    if (why := _ready(path, start, message)) is not None:
+        return why
+    commits, why = _commits(path, undo, start)
     if why:
         return why
-    _archived(path, archive(c.slug, FINAL, lp.attempt, head), head, message)
+    _archived(path, archive(c.slug, FINAL, lp.attempt, start), start, message)
     if commits:
-        worktree.git(path, "merge", "--ff-only", "--quiet", _reverted(path, head, commits, message))
+        worktree.git(path, "merge", "--ff-only", "--quiet", _reverted(path, start, commits, message))
     return ""
 
 
-def _commits(path: Path, c: Change, undo: list[Task], head: str) -> tuple[list[str], str]:
-    """The undone tasks' own commits, newest first: their ranges less every other task's build inside them."""
-    tasks, ids = c.plan.tasks if c.plan else [], {t.id for t in undo}
-    ranges = {t.id: _range(path, t.base, t.head) for t in tasks if t.base and t.head}
-    spans = {t.id: worktree.git(path, "rev-list", "--first-parent", f"{t.base}..{t.head}").split() for t in undo}
-    for t in tasks:  # a build that started inside an undone range and was never accepted has no known end
-        if t.base and not t.head and t.id not in ids and any(t.base in spans[u.id] and t.base != u.head for u in undo):
-            return [], f"task {t.id} was built inside the undone work and its commits are not recorded"
-    mine = {x for t in undo for x in ranges[t.id]}
-    take = mine - {x for k, r in ranges.items() if k not in ids for x in r}
-    line = max((_range(path, t.base, head) for t in undo if t.base), key=len, default=[])
-    return [x for x in line if x in take], ""
-
-
-def _cleaned(path: Path, c: Change, lp: RoundLoop) -> str:
-    """Archive the head, then promote one commit setting the tree back to the target's at the merge base."""
-    head, message = worktree.head(path), CLEAN_UNDO.format(n=lp.attempt)
-    if _promoted(path, archive(c.slug, FINAL, lp.attempt, ""), message):
-        return ""
-    if worktree.git(path, "status", "--porcelain").strip():
-        return "the worktree has uncommitted edits"
+def _cleaned(path: Path, c: Change, lp: RoundLoop, start: str) -> str:
+    """Archive *start*, then promote one commit setting the tree back to the target's at the merge base."""
+    message = CLEAN_UNDO.format(n=lp.attempt)
+    if (why := _ready(path, start, message)) is not None:
+        return why
     base = worktree.git(path, "merge-base", "HEAD", worktree.tracking(path, c.names.target)).strip()
-    _archived(path, archive(c.slug, FINAL, lp.attempt, head), head, message)
-    reset = _scratch(path, head, message, lambda scratch: worktree.git(scratch, "read-tree", "-u", "--reset", base))
+    _archived(path, archive(c.slug, FINAL, lp.attempt, start), start, message)
+    reset = _scratch(path, start, message, lambda scratch: worktree.git(scratch, "read-tree", "-u", "--reset", base))
     worktree.git(path, "merge", "--ff-only", "--quiet", reset)
     return ""

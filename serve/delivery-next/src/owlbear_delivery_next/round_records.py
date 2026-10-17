@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 type FindingState = Literal[
     "open", "fixed", "rejected", "standing", "escalated", "owner-fix", "owner-drop", "withdrawn"
 ]
-type Ended = Literal["", "clean", "count", "max", "accepted", "retried", "restarted"]
+type Ended = Literal["", "clean", "count", "max", "accepted", "retried", "restarted", "replanned"]
 MAX_FINDINGS = 20  # a review result's own cap
 FINAL = "final"  # the final review's subject
 RECHECK = "rejections"  # a review step that judges only an early last round's rejections (TD-218)
@@ -88,6 +88,7 @@ class RoundLoop(_Record):
     reentry: bool = False  # new work after the loop ended: this round focuses on it (TD-215)
     completion: Completion | None = None  # set when the final loop's last repair is built
     rebuild: list[str] = Field(default_factory=list)  # the plan tasks the owner ticked, until their undo is done
+    undo: str = ""  # the head an undo of this loop's work started from, recorded before anything is promoted
     history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry or restart replaced
 
     def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]:

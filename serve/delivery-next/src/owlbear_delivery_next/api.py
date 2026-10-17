@@ -419,7 +419,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             raise HTTPException(*why)
         item = AnswerItem(
             at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text,
-            round=body.round, findings=body.findings, tasks=body.tasks,
+            round=body.round, findings=body.findings, tasks=body.tasks, attempt=body.attempt, head=body.head,
         )  # fmt: skip
         return put(slug, item)
 

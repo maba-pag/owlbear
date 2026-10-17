@@ -25,15 +25,22 @@ if TYPE_CHECKING:
 
 
 def started(c: Change, task: Task | None, path: Path, settings: Settings) -> None:
-    """Before a session: a task's first build records its base, and a plan task's starts its loop (TD-208).
+    """Before a session: a build opens its span, a task's first build records its base, a plan task's starts its loop.
 
-    A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end.
+    A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end. A span
+    left open by a session that ended without its record closes here: what that session left is its own.
     """
     if c.step.kind == StepKind.REVIEW and task is None:
         _final(c, settings)
-    if c.step.kind != StepKind.BUILD or task is None or task.base is not None:
+    if c.step.kind != StepKind.BUILD or task is None:
         return
-    task.base = worktree.head(path)
+    head = worktree.head(path)
+    if task.spans and task.spans[-1].endswith(".."):
+        task.spans[-1] += head
+    task.spans.append(f"{head}..")
+    if task.base is not None:
+        return
+    task.base = head
     if _subject(c, task) == task.id and task.id not in c.loops:
         rounds.loop(c, task.id, settings).since = len(c.plan.tasks) if c.plan else 0
 
@@ -95,6 +102,8 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     review only with identical covered content.
     """
     p = run.payload
+    if change.step.kind == StepKind.BUILD and task and run.head and task.spans and task.spans[-1].endswith(".."):
+        task.spans[-1] += run.head  # the session's own commits end here
     if change.step.kind == StepKind.BUILD and result.exit == Exit.DONE and run.head:
         return result.model_copy(update={"head": run.head})  # what a final loop's completion binds (TD-208)
     if not (isinstance(p, tools.ReviewResult) and run.head):

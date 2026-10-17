@@ -2,9 +2,9 @@
 
 After the final review's last round the owner ticks plan tasks to rebuild: a task with an open finding starts
 ticked, and a kept task that shares changed files with a ticked one may depend on it. The undo takes the ticked tasks'
-own commits, their task-loop repairs' and those of each final repair whose fixed findings name only ticked tasks;
-another task's build inside those ranges keeps its commits. Undone work belongs to no task afterwards, so no later
-undo reverts it twice.
+own commits (what their build sessions made), their task-loop repairs' and those of each final repair whose fixed
+findings name only ticked tasks of the current plan. Undone work belongs to no task afterwards, so no later undo
+reverts it twice.
 """
 
 from __future__ import annotations
@@ -54,7 +54,10 @@ def shown(c: Change, q: Question | None) -> dict[str, object] | None:
 def refused(
     c: Change, q: Question, option: str | None, tasks: list[str], at: tuple[int | None, str]
 ) -> tuple[int, str] | None:
-    """Why a final retry's answer is refused: a stale page, no ticked task, or a task the plan does not have."""
+    """Why a final retry's answer is refused: a stale page, no ticked task, or a task the plan does not have.
+
+    The host checks it before accepting the answer, and the fold again, so a stale or crafted one settles nothing.
+    """
     lp = asking(c, q)
     if option != "rebuild" or lp is None:
         return (422, "only Rebuild names tasks; untick them to accept as done") if tasks else None
@@ -97,16 +100,18 @@ def undoing(c: Change, lp: RoundLoop) -> tuple[list[Task], str]:
             return [], f"final repair {t.id} fixed findings of both rebuilt and kept work: its commits cannot be split"
         if not names & picked:
             continue
-        if t.head is None:
+        if not t.spans or t.spans[-1].endswith(".."):
             return [], f"the commits of task {t.id} are not recorded"
         out.append(t)
     return out, ""
 
 
 def _named(lp: RoundLoop) -> dict[str, set[str]]:
-    """Per final repair, the plan tasks its fixed findings name; "" for a finding that names none."""
+    """Per final repair of the current plan, the plan tasks its fixed findings name; "" for one that names none."""
     out: dict[str, set[str]] = {}
-    for x in (lp, *lp.history):
+    for x in (lp, *reversed(lp.history)):
+        if x.subject == FINAL and x.ended == "replanned":
+            break  # an earlier plan's repairs: their task ids may be the current plan's
         for f in x.findings if x.subject == FINAL else []:
             if f.repair:
                 out.setdefault(f.repair, set()).update(f.tasks or [""])
@@ -117,31 +122,33 @@ def fresh(c: Change, task: Task) -> None:
     """A rejected task starts a new attempt of its loop; its repairs retire, and their commits are no one's now."""
     tasks = c.plan.tasks if c.plan else []
     if (lp := c.loops.get(task.id)) is not None:
-        old = lp.model_copy(update={"history": [], "ended": "retried"})
+        old = lp.model_copy(update={"history": [], "ended": "retried", "undo": ""})
         c.loops[task.id] = RoundLoop(
             subject=task.id, attempt=lp.attempt + 1, since=len(tasks), policy=lp.policy, history=[*lp.history, old]
         )
     for t in tasks:
         if t.fixes and subject_of(c, t) == task.id:
-            t.done, t.base, t.head = True, None, None
-    task.done, task.base, task.head, task.built_by, task.earlier = False, None, None, "", ""
+            t.done, t.base, t.spans = True, None, []
+    task.done, task.base, task.spans, task.built_by, task.earlier = False, None, [], "", ""
 
 
 def rotated(c: Change, lp: RoundLoop, undone: list[Task]) -> None:
     """After the undo the ticked tasks are built again in plan order, then the final loop goes on (TD-235).
 
-    The last rebuilt task also runs every other plan task's checks on the rebuilt code. The final loop's completion and
-    any merge consent no longer count.
+    The last rebuilt task also runs every other plan task's checks on the rebuilt code, from their scopes too; its
+    builder fixes what they find before its result is accepted. The final loop's completion and any merge consent no
+    longer count.
     """
     tasks = c.plan.tasks if c.plan else []
     picked = [t for t in tasks if t.id in lp.rebuild]
     for t in undone:
-        t.base = t.head = None
+        t.base, t.spans = None, []
     for t in picked:
         fresh(c, t)
     if picked:
-        others = (k for t in tasks if t.origin == "plan" and t is not picked[-1] for k in t.checks)
-        picked[-1].checks = list(dict.fromkeys([*picked[-1].checks, *others]))
+        last, others = picked[-1], [t for t in tasks if t.origin == "plan" and t is not picked[-1] and t.checks]
+        last.checks = list(dict.fromkeys([*last.checks, *(k for t in others for k in t.checks)]))
+        last.scope = list(dict.fromkeys([*last.scope, *(p for t in others for p in t.scope)]))
     lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)
