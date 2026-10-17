@@ -26,6 +26,7 @@ _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopbac
 _STATE: dict[str, Chat] = {}
 OK = 200
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
+_pause = time.sleep  # the poll's own pause
 
 
 class Chat:
@@ -109,7 +110,7 @@ class Chat:
                 break
             if not brief_rounds.running(c, version, attempt):
                 return {"requested": True, **brief_rounds.status(c)}
-            time.sleep(POLL)
+            _pause(POLL)
         return {
             "requested": True,
             "running": True,

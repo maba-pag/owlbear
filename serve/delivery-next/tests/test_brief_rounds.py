@@ -7,13 +7,25 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, brief_rounds, loop, mcp_server, plan_rounds, prompts, runner, tools
+from owlbear_delivery_next import (
+    api,
+    brief_rounds,
+    brief_tools,
+    briefs,
+    loop,
+    mcp_server,
+    plan_rounds,
+    prompts,
+    runner,
+    tools,
+)
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.dispute_tools import ReconsiderResult
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import Answer, Brief, Change, Exit, Plan, Step, StepKind, Task, Waiting
 from owlbear_delivery_next.processes import Termination
+from owlbear_delivery_next.profile_record import Profile
 from owlbear_delivery_next.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.session_result import Run
 from owlbear_delivery_next.status import Activity
@@ -45,15 +57,13 @@ class Shaping:
         self.http = TestClient(api.create_app(self.store, "t", Host()), base_url="http://127.0.0.1",
                                headers={"authorization": "Bearer t"})  # fmt: skip
         self.verdicts: list[tools.ReviewResult] = []
-        self.last: object = None
         self.told: list[object] = []
         monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
         monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
 
     async def run(self, cfg):
         self.told.append(cfg)
-        self.last = self.verdicts.pop(0) if self.verdicts else self.last  # a session the host ran again judges alike
-        return Run(cfg.session_id, "result", self.last, termination=Termination(confirmed=True))
+        return Run(cfg.session_id, "result", self.verdicts.pop(0), termination=Termination(confirmed=True))
 
     @property
     def slug(self) -> str:
@@ -185,7 +195,7 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
 
     chat.call = call
     monkeypatch.setattr(mcp_server, "POLL", 0)
-    monkeypatch.setattr(mcp_server.time, "sleep", lambda _s: shaping.step())  # the host runs meanwhile
+    monkeypatch.setattr(mcp_server, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
     out = chat.challenge_brief("c1", 1, [])
     assert (out["requested"], [f["id"] for f in out["findings"]], out["approvable"]) == (True, ["F1"], False)
     assert chat.challenge_brief("c1", 2, [])["requested"] is False  # no such version
@@ -229,6 +239,13 @@ def test_an_old_approval_whose_disputed_finding_the_owner_drops_goes_on_to_plann
     shaping.step()
     c = shaping.answer("drop", "fine as is")
     assert loop.next_step(c, NOW).kind == K.SHAPE  # runnable, not waiting for an approval it has
+    with shaping.store.lock(shaping.slug) as lock:  # a save before the step ran: the new version waits for its own
+        kept = shaping.store.read(shaping.slug)
+        shaping.store.write(lock, briefs.drafted(kept, brief_tools.BriefDraft(**DRAFT, change="c1"), kept.slug, "c1",
+                                                Profile()))  # fmt: skip
+    assert shaping.change().step.mode is None
+    with shaping.store.lock(shaping.slug) as lock:
+        shaping.store.write(lock, c)
     assert shaping.step().step.kind == K.PLAN
 
 

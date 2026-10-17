@@ -54,6 +54,8 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals, "specified": list(dict.fromkeys(owner))}
     fields["decisions"] = [BriefDecision(**x.model_dump()) for x in d.decisions]
     c.brief = c.brief.model_copy(update=fields)
+    if c.step.mode == brief_rounds.PLANNED:  # a new version waits for its own challenge and approval
+        c.step = c.step.model_copy(update={"mode": None})
     ids, paths, shown = [k.id for k in criteria], evidence.coverage(c), {p.id: p for p in c.checks}
     c.checks = []
     for p in d.person_checks:
