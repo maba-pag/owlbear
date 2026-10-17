@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 DISPUTED = "disputed"  # a review step's mode once the owner decided each finding left standing
 PREFIX = cause_key(ErrorKind.REVIEW, StepKind.REVIEW, "dispute ")
 FOUND = cause_key(ErrorKind.REVIEW, StepKind.REVIEW)  # every question about a review's findings
+PLAN_FOUND = cause_key(ErrorKind.REVIEW, StepKind.PLAN)  # every question about a plan challenge's findings
 FIX, DROP = Option(id="fix", label="Fix it", next="repair"), Option(id="drop", label="Drop it", next="accept")
 OPTIONS = [FIX, Option(id="reconsider", label="Ask the reviewer to reconsider", next="reconsider"), DROP]
 OWNER = {"repair": "fix", "accept": "drop", "reconsider": "reconsider"}
@@ -123,9 +124,13 @@ def challenged(c: Change, task: Task | None) -> bool:
     return c.step.kind == StepKind.REVIEW and loop_of(c, task) is not None
 
 
-def hidden(q: Question, *, challenged: bool) -> bool:
-    """Whether a challenged review leaves out this answer: the owner's decision about review findings."""
-    return challenged and (q.cause or "").startswith(FOUND)
+def hidden(q: Question, *, challenged: bool, plan: bool = False) -> bool:
+    """Whether a challenged review leaves out this answer: the owner's decision about review findings.
+
+    A plan challenge leaves out the owner's decisions about plan findings (TD-190).
+    """
+    cause = q.cause or ""
+    return (challenged and cause.startswith(FOUND)) or (plan and cause.startswith(PLAN_FOUND))
 
 
 def check(  # noqa: PLR0913 - the result, its tree and the four bounds its fields are checked against
@@ -141,6 +146,8 @@ def check(  # noqa: PLR0913 - the result, its tree and the four bounds its field
     """Field errors of a build result's rejections, a review's judgements and new findings, or a reconsideration."""
     if isinstance(args, tools.BuildResult):
         return _rejections([r.finding for r in args.rejected], tree, allowed, settled)
+    if isinstance(args, tools.PlanResult):  # a plan's rejections need no commit (TD-190)
+        return _rejections([r.finding for r in args.rejected], None, allowed, settled)
     if isinstance(args, tools.ReviewResult):
         over = len(args.findings) - cap
         many = [f"findings: {len(args.findings)} given, at most {cap} - keep the most important"] if over > 0 else []
@@ -165,7 +172,9 @@ def _listed(field: str, keys: list[str], wanted: tuple[str, ...], section: str) 
     return errors
 
 
-def _rejections(keys: list[str], tree: tools.Worktree, allowed: tuple[str, ...], settled: tuple[str, ...]) -> list[str]:
+def _rejections(
+    keys: list[str], tree: tools.Worktree | None, allowed: tuple[str, ...], settled: tuple[str, ...]
+) -> list[str]:
     if keys and not allowed:
         why = "the owner decided every finding - fix each" if settled else "this task offers no rejection - fix it"
         return [f"rejected: {why}, or ask_question if a note contradicts the brief"]
@@ -174,6 +183,8 @@ def _rejections(keys: list[str], tree: tools.Worktree, allowed: tuple[str, ...],
         errors.append(f"rejected: {', '.join(decided)} is the owner's decision - fix it as the note guides")
     if unknown := sorted(set(keys) - set(allowed) - set(settled)):
         errors.append(f"rejected: {', '.join(unknown)} is no finding key of this task - use {', '.join(allowed)}")
+    if tree is None:
+        return errors
     if tree.head == tree.base and (keys or settled) and (left := [k for k in (*allowed, *settled) if k not in keys]):
         errors.append(f"changes: no commit - fix and commit {', '.join(left)}" + ("" if settled else ", or reject"))
     return errors

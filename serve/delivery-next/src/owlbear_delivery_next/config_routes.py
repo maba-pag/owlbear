@@ -42,6 +42,10 @@ APPLIED = [
     "agents.builder.max_findings",
     "agents.builder.last_round_at",
     "agents.builder.ask_owner_at",
+    "agents.planner.max_rounds",
+    "agents.planner.max_findings",
+    "agents.planner.last_round_at",
+    "agents.planner.ask_owner_at",
     "final_review",
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end

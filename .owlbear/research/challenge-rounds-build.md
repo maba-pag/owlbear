@@ -158,8 +158,8 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
 ### 3.8 Removed
 
 TD-189's `Dispute.direct`, `repeat_of`, `disputes.earlier/repeats/REPEAT`, `Session.repeats`, `Task.found_in`;
-the REVIEW round gate and `StepResult.authorised`; `_progress` resets for review loops. The PLAN gate and its
-`Question.repair` fencing go when the planner adopts TD-208 (§3.9). Removed fields get an explicit store migration.
+the REVIEW round gate and `StepResult.authorised`; `_progress` resets for review loops. The PLAN gate went with step 6
+(§3.10); `Question.repair` stays for reviews outside a loop. Removed fields get an explicit store migration.
 
 ### 3.9 The other challenged roles (TD-220, TD-221)
 
@@ -174,6 +174,43 @@ step is built.
 - Shaper (TD-221): the brief challenge runs in the shaping chat before the approve button; the shaper revises
   on findings it accepts and may reject others with reasons; the owner approves the challenged draft seeing
   its standing rejections; the challenge after approval (`brief_due`, `_brief_challenge`) goes away.
+
+### 3.10 The planner's rounds (step 6), as built (TD-253)
+
+- Loop: subject `plan`, with the planner's TD-209 values, started by the first plan challenge. The plan's acceptance
+  (building starts) ends the attempt, and so does any other move off planning; a later plan starts a new attempt with
+  the same values, the old one in its history. An accepted plan moves the replaced plan's task loops into that
+  history, so a new plan's `t1` never inherits the old `t1`'s rounds. The final loop's Plan again keeps the plan loop.
+- Round: each complete challenger verdict counts one; a failed session counts none. A challenger's wrong premise is
+  its round's finding. Round 1 judges the plan with at most `max findings` new findings. Later rounds list the
+  planner's rejections under "Rejections to judge" (ID, finding, the planner's reason), judged in `rechecked`, and may
+  raise new findings; findings the planner revised for never reach them, and the owner's decisions about plan
+  findings are left out of the challenger's brief.
+- Revision: the planner gets its previous plan and the findings to answer by ID (the latest verdict's and those the
+  owner kept, marked as the owner's with the note) and may reject any but the owner's in `PlanResult.rejected`
+  (listed keys only, once each; no commit). Its plan is stored with the revision's marks (fixed as `r<round>`,
+  rejected with the reason) and the step's mode `challenge` before its challenge starts: a failed or interrupted
+  challenge challenges the same plan again, never plans again. Nothing in the planner's message comes from the
+  outcome's text any more; the outcome keeps its typed `challenged` flag (TD-188) for the repair chance (TD-123).
+- After a revision, as in the task loop: not the last round → challenged again; the last by count before
+  `max rounds + extra` with rejections → a rejections-only challenge (`rejections` mode, no new findings, TD-218); the
+  last at the limit with `ask owner at` or more new findings → the owner: "Another round" (one more challenge of the
+  revision, no planner session) or "Plan again from the brief" (a new attempt; the planner is told the owner rejected
+  the plan and that round's findings, without the old plan). Otherwise the revision is accepted unreviewed: the loop
+  ends `count` or `max` and lists it (`r<round>`) as no round reviewed it.
+- Escalation: a rejection the challenger upholds goes to the owner before the revision, one question per finding,
+  TD-193's options: "Revise the plan for it" or "Drop it" (optional note), or "Ask the challenger to reconsider" (note
+  required; a fresh challenger withdraws it, clarifies it for the planner as the owner's, or returns it unsure, asked
+  again with the first two options only). Then the planner revises for the verdict's new findings and the owner's (no
+  round is counted), or, with none, the plan is accepted (mode `settled`, no session). Plan questions settle only
+  while open; an upheld rejection whose question a stop replaced is asked again before any planning; questions of an
+  attempt that ended are retired.
+- Removed: the 2-round PLAN gate (a plan retry is ungated) and the quoted findings text. An old gate question still
+  open works by its own options. `Question.repair` stays for reviews outside a loop.
+- Page and settings: the "Review rounds" section shows the plan challenge's markers and details (Planner and
+  Challenger named), its unreviewed revision and standing rejections; the "Challenge rounds" group has a planner row.
+- Code: `plan_rounds.py` (records, lines, marks, verdicts, questions, answers) and `steps/plan_round.py` (the
+  challenge, the rejections-only check and the reconsideration, moved out of `runner.py`).
 
 ## 4. Build Order, Confidence, And Limits
 

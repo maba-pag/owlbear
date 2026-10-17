@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.round_records import FINAL
+from owlbear_delivery_next.round_records import FINAL, PLAN
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.models import Change
@@ -88,7 +88,11 @@ def shown(c: Change) -> dict[str, object]:
         for t in plan
     }
     titles = {t.id: t.title for t in c.plan.tasks} if c.plan else {}
-    loops = [lp for k, lp in c.loops.items() if k == FINAL or k in tasks]
+    plan_loop = c.loops.get(PLAN)
+    titles |= (
+        {i: f"the plan as revised after challenge round {i[1:]}" for i in plan_loop.unreviewed} if plan_loop else {}
+    )
+    loops = [lp for k, lp in c.loops.items() if k in {FINAL, PLAN} or k in tasks]
     unreviewed = [{"id": i, "title": titles.get(i, ""), "loop": lp.subject} for lp in loops for i in lp.unreviewed]
     standing = [
         {"loop": lp.subject} | _finding(f, kind(lp, f))
@@ -100,6 +104,7 @@ def shown(c: Change) -> dict[str, object]:
         "tasks": tasks,
         "final": rounds(final, final.findings) if final else [],
         "attempt": final.attempt if final else 0,
+        "plan": rounds(plan_loop, plan_loop.findings) if plan_loop else [],  # the plan challenge's (TD-190)
         "unreviewed": unreviewed,
         "standing": standing,
     }

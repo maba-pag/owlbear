@@ -11,6 +11,7 @@ from owlbear_delivery_next import (
     loop,
     missing,
     permissions,
+    plan_rounds,
     profile_record,
     prompts,
     runner,
@@ -24,8 +25,9 @@ from owlbear_delivery_next.models import Brief, Change, Criterion, Exit, ItemRef
 from owlbear_delivery_next.permissions import Policy
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.profile_record import Profile
+from owlbear_delivery_next.round_records import RoundPolicy
 from owlbear_delivery_next.session_result import Run, to_result
-from owlbear_delivery_next.steps import conversation, worktree
+from owlbear_delivery_next.steps import conversation, plan_round, worktree
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -189,15 +191,18 @@ def test_the_quota_never_overrides_a_report() -> None:
     assert (r.exit, r.back_to) == (Exit.BACK, K.PLAN)
 
 
-def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premise_its_own(monkeypatch) -> None:
-    planned = StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
+def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premise_its_own() -> None:
+    c = change(K.PLAN)
+    plan_rounds.loop(c, RoundPolicy(), NOW)
+    c.step.mode = plan_rounds.CHALLENGE
     nowhere = to_result(run(report("matlab", "license server unknown")), K.REVIEW, NOW, K.PLAN)
-    monkeypatch.setattr(runner.sessions, "reviewer", lambda *_: nowhere)
-    assert runner._challenge(None, None, change(K.PLAN), None, planned) is nowhere  # noqa: SLF001
+    assert plan_round.judged(c, nowhere, nowhere) is nowhere  # counted no round: the same plan is challenged again
+    assert (c.loops["plan"].round, c.step.mode) == (0, plan_rounds.CHALLENGE)
+    said = tools.WrongPremise(stage="brief", reason="AC-1 cannot hold", evidence=["a.txt:1"])
     premise = nowhere.model_copy(update={"operational": False})
-    monkeypatch.setattr(runner.sessions, "reviewer", lambda *_: premise)
-    kept = runner._challenge(None, None, change(K.PLAN), None, planned)  # noqa: SLF001
-    assert (kept.exit, kept.plan) == (Exit.RETRY, planned.plan)
+    kept = plan_round.judged(c, premise, said)
+    assert (kept.exit, kept.plan, kept.challenged) == (Exit.RETRY, c.plan, True)
+    assert [f.text for f in c.loops["plan"].findings] == ["premise: AC-1 cannot hold (a.txt:1)"]
 
 
 def test_the_planner_reads_why_the_change_is_planned_again() -> None:
@@ -299,7 +304,7 @@ def repo(tmp_path, monkeypatch) -> Path:
 def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypatch) -> None:
     events: list[dict] = []
     store = SimpleNamespace(log=lambda _lock, _slug, e: events.append(e))
-    monkeypatch.setattr(runner, "_others", lambda *_: {"c2": ["b"]})
+    monkeypatch.setattr(runner.plan_round, "scopes", lambda *_: {"c2": ["b"]})
     assert runner._planning(store, None, "c1", repo) == {"c2": ["b"]}  # noqa: SLF001 - a clean tree keeps nothing
     assert (events, worktree.git(repo, "stash", "list")) == ([], "")
     (repo / "a.txt").write_text("edited\n")

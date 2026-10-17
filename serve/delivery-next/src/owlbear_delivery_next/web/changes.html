@@ -444,7 +444,7 @@ function consequence(o, d) {
   if (o.id === "drop") {
     return { ...choices, title: "Drop this finding?",
       now: "The finding is not fixed. Your note in words tells later reviewers why.",
-      then: "Delivery asks about the next disputed finding, or completes the review." };
+      then: "Delivery asks about the next disputed finding, or goes on without this one." };
   }
   if (o.next === "accept") {
     return { ...choices, title: `${o.label}?`,
@@ -1003,13 +1003,16 @@ function marks(label, rounds) {
 }
 
 // Per loop and round its summary, then each finding with what became of it and why; a toggle, never hover-only.
+// A loop may name its worker and its judge: the planner and the challenger for the plan (TD-190).
 function findingDetails(summary, loops) {
-  const said = (f) => [`${f.id} (${f.state}): ${f.text}`, f.reason && `Builder: ${f.reason}`,
-    f.judgement && `Reviewer: ${f.judgement}`, f.note && `Your note: ${f.note}`].filter(Boolean).join(" \u00b7 ");
-  return disclosure(summary, ...loops.flatMap(([label, rounds]) => rounds.flatMap((m) => [
+  const said = (f, [worker, judge]) => [`${f.id} (${f.state}): ${f.text}`, f.reason && `${worker}: ${f.reason}`,
+    f.judgement && `${judge}: ${f.judgement}`, f.note && `Your note: ${f.note}`].filter(Boolean).join(" \u00b7 ");
+  return disclosure(summary, ...loops.flatMap(([label, rounds, who = WORKERS.task]) => rounds.flatMap((m) => [
     text(`${label}, ${m.said.charAt(0).toLowerCase()}${m.said.slice(1)}`, { size: "xs", weight: "semibold" }),
-    list(m.findings.map(said))])));
+    list(m.findings.map((f) => said(f, who)))])));
 }
+const WORKERS = { task: ["Builder", "Reviewer"], plan: ["Planner", "Challenger"] };
+const LOOPS = (loop) => loop === "final" ? "final review" : loop === "plan" ? "plan challenge" : `task ${loop}`;
 
 // A plan task's markers, task review and final review apart, with their finding details; nothing without rounds.
 // *where* keeps each toggle's summary unique on the page: an open toggle is restored by its summary.
@@ -1021,9 +1024,13 @@ function taskRounds(id, d, where = "") {
     findingDetails(`Finding details of ${id}${where}`, shown)];
 }
 
-// The final review's own rounds, the repairs no round reviewed, and the rejections that stand.
+// The plan challenge's and the final review's own rounds, the work no round reviewed, and the rejections that stand.
 function roundsInfo(r) {
   const parts = [];
+  if (r.plan?.length) {
+    parts.push(marks("Plan challenge", r.plan),
+      findingDetails("Finding details of the plan challenge", [["Plan challenge", r.plan, WORKERS.plan]]));
+  }
   if (r.final.length) {
     const attempt = r.attempt > 1 ? ` (attempt ${r.attempt})` : "";
     parts.push(marks(`Final review${attempt}`, r.final),
@@ -1031,13 +1038,14 @@ function roundsInfo(r) {
   }
   if (r.unreviewed.length) {
     parts.push(text("Repairs no round reviewed", { size: "sm", weight: "semibold" }),
-      list(r.unreviewed.map((u) => `${u.id}: ${u.title} (${u.loop === "final" ? "final review" : `task ${u.loop}`})`)));
+      list(r.unreviewed.map((u) => `${u.id}: ${u.title} (${LOOPS(u.loop)})`)));
   }
   if (r.standing.length) {
-    parts.push(text("Rejections that stand", { size: "sm", weight: "semibold" }), list(r.standing.map((f) =>
-      [`${f.id} (${f.loop === "final" ? "final review" : `task ${f.loop}`}, ${f.state}): ${f.text}`,
-        f.reason && `Builder: ${f.reason}`, f.judgement && `Reviewer: ${f.judgement}`].filter(Boolean)
-        .join(" \u00b7 "))));
+    parts.push(text("Rejections that stand", { size: "sm", weight: "semibold" }), list(r.standing.map((f) => {
+      const [worker, judge] = f.loop === "plan" ? WORKERS.plan : WORKERS.task;
+      return [`${f.id} (${LOOPS(f.loop)}, ${f.state}): ${f.text}`, f.reason && `${worker}: ${f.reason}`,
+        f.judgement && `${judge}: ${f.judgement}`].filter(Boolean).join(" \u00b7 ");
+    })));
   }
   if (!parts.length) return null;
   const node = info("Review rounds", ...parts);

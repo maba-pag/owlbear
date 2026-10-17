@@ -245,6 +245,13 @@ class PlanResult(Args):
         "Ordered tasks, each small enough for one Builder session",
         [{"title": "Add farewell", "goal": "AC-1", "scope": ["packages/app"], "checks": ["npm test"]}],
     )
+    rejected: list[Rejection] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Only when your message lists challenger findings: those you judge wrong; the next challenger "
+        "judges each",
+        examples=[[{"finding": "F2", "reason": "t1's check npm test already covers AC-2: greet.test.ts:12"}]],
+    )
 
 
 def relative(path: str) -> bool:

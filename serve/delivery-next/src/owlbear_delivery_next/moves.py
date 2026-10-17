@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next import repairs
 from owlbear_delivery_next.evidence import cover
 from owlbear_delivery_next.models import Exit, Outcome, Step, StepKind
-from owlbear_delivery_next.round_records import FINAL
+from owlbear_delivery_next.round_records import FINAL, PLAN
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 
 
 def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = None) -> None:
-    """Make *kind* the Change's current step."""
+    """Make *kind* the Change's current step; leaving planning ends its challenge attempt (TD-190)."""
+    if c.step.kind == StepKind.PLAN != kind and (lp := c.loops.get(PLAN)) is not None and not lp.ended:
+        lp.ended = "replanned"  # an accepted plan ended it already; any other way out makes the next plan anew
     c.step = Step(kind=kind, task=task, mode=mode)
 
 

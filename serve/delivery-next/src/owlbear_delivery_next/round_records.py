@@ -16,6 +16,7 @@ type FindingState = Literal[
 type Ended = Literal["", "clean", "count", "max", "accepted", "retried", "restarted", "replanned"]
 MAX_FINDINGS = 20  # a review result's own cap
 FINAL = "final"  # the final review's subject
+PLAN = "plan"  # the plan challenge's subject (TD-190)
 RECHECK = "rejections"  # a review step that judges only an early last round's rejections (TD-218)
 KEYED = re.compile(r"- (F\d+): (.*)")
 
@@ -54,7 +55,9 @@ class RoundFinding(_Record):
     reason: str = ""  # the worker's rejection reason
     judgement: str = ""  # the challenger's judgement of that rejection
     note: str = ""  # the owner's note
-    repair: str = ""  # the repair task that reported it fixed
+    repair: str = ""  # the repair task that reported it fixed; for the plan, its revision (`r<round>`)
+    reconsider: Literal["", "due", "unsure"] = ""  # a plan finding the owner sent back to a challenger (TD-193)
+    clarified: str = ""  # that challenger's narrower restatement, or why it could not settle it
 
     @property
     def line(self) -> str:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next import loop, repairs, runner, session_choice, session_result, tools
+from owlbear_delivery_next import loop, plan_rounds, repairs, runner, session_choice, session_result, tools
 from owlbear_delivery_next.models import (
     Answer,
     Brief,
@@ -21,7 +21,9 @@ from owlbear_delivery_next.models import (
     Task,
 )
 from owlbear_delivery_next.processes import Termination
+from owlbear_delivery_next.round_records import RoundPolicy
 from owlbear_delivery_next.session_result import Run
+from owlbear_delivery_next.steps import plan_round
 from owlbear_delivery_next.store import Lock, Store
 
 NOW = datetime(2026, 10, 16, 3, tzinfo=UTC)
@@ -132,12 +134,18 @@ def test_only_the_typed_flag_marks_a_challenged_plan_never_its_reason_text():
     assert loop.apply(c, result, NOW).outcome.challenged is True  # the loop keeps the runner's flag
 
 
-def test_a_challenged_plan_comes_back_with_the_flag_and_a_display_reason(monkeypatch):
+def test_a_challenged_plan_comes_back_with_the_flag_and_a_display_reason():
+    c = change()
+    c.step = Step(kind=K.PLAN, mode=plan_rounds.CHALLENGE)
+    plan_rounds.loop(c, RoundPolicy(), NOW)
     found = loop.StepResult(exit=Exit.RETRY, reason="t2 has no check")
-    monkeypatch.setattr(runner.sessions, "reviewer", lambda *_: found)
-    planned = loop.StepResult(exit=Exit.DONE, plan=Plan(tasks=[Task(id="t1", title="one")]))
-    back = runner._challenge(None, None, change(), None, planned)  # noqa: SLF001
-    assert (back.exit, back.challenged, back.reason) == (Exit.RETRY, True, "plan challenge: t2 has no check")
+    review = tools.ReviewResult(verdict="fix", findings=[{"place": "t2", "problem": "AC-1", "fix": "add a check"}])
+    back = plan_round.judged(c, found, review)
+    assert (back.exit, back.challenged, back.reason) == (
+        Exit.RETRY,
+        True,
+        "plan challenge: t2: AC-1 - fix: add a check",
+    )
 
 
 def built_run(cfg, head: str) -> Run:

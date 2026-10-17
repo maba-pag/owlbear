@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import json
 import sys
 from datetime import UTC, datetime
@@ -22,6 +21,7 @@ from owlbear_delivery_next import (
     loop,
     overlap,
     permissions,
+    plan_rounds,
     profile,
     prompts,
     readiness,
@@ -51,6 +51,7 @@ from owlbear_delivery_next.steps import (
     follow,
     judges,
     merge,
+    plan_round,
     prepare,
     publish,
     review,
@@ -93,11 +94,6 @@ def _previous(store: Store, slug: str, session: str | None) -> dict[int, float |
     """PIDs earlier runners persisted for *session*; they remain in the activity log when a runner is killed."""
     pids = [e.get("pids", {}) for e in store.events(slug) if e.get("event") == "pids" and e.get("session") == session]
     return {int(p): c for found in pids for p, c in found.items()}
-
-
-def _others(store: Store, slug: str) -> dict[str, list[str]]:
-    """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
-    return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
 
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -150,8 +146,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
                 lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
             ),
             item=task.item if task and task.item and s.kind == StepKind.BUILD else None,
-            rejectable=disputes.rejectable(task) if s.kind == StepKind.BUILD else (),
-            settled=disputes.settled(task) if s.kind == StepKind.BUILD else (),
+            rejectable=disputes.rejectable(task) if s.kind == StepKind.BUILD else plan_rounds.rejectable(change),
+            settled=disputes.settled(task) if s.kind == StepKind.BUILD else plan_rounds.settled(change),
             rechecks=disputes.pending(disputes.target(change, task)) if s.kind == StepKind.REVIEW else (),
             cap=disputes.cap(change),
             plan_tasks=disputes.planned(change),
@@ -178,16 +174,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     sessions.logged(
         store, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
     )
-    if s.kind == StepKind.PLAN and (plan := result.plan):
-        result = _challenge(
-            store,
-            lock,
-            change,
-            lambda at: dataclasses.replace(
-                config(at), message=prompts.plan_challenge(change, plan, profile, at, others)
-            ),
-            result,
-        )
+    if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
+        result = plan_round.planned(store, lock, change, path, run.payload, result, profile, others)
         overlap.record(change, result, others, path)
         end = datetime.now(UTC)
     result = overlap.integrated(store, change, path, (start, run.ending), result)
@@ -231,7 +219,7 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
     if worktree.shelve(path, message):
         store.log(lock, slug, {"event": "shelved", "at": datetime.now(UTC).isoformat(timespec="seconds")})
         _out(f"{slug}: uncommitted edits kept in `git stash list` as '{message}'")
-    return _others(store, slug)
+    return plan_round.scopes(store, slug)
 
 
 def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -321,27 +309,6 @@ def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     )
     store.write(lock, change)
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
-
-
-def _challenge(
-    store: Store, lock: Lock, change: Change, made: Callable[[Path], sdk_adapter.Session], planned: Result
-) -> Result:
-    """The plan's independent read-only challenge: pass keeps it; findings send it back for one more round."""
-    if planned.exit != Exit.DONE or planned.plan is None:
-        return planned
-    verdict = sessions.reviewer(store, lock, change, Path(change.names.worktree), made, "plan-challenge")
-    if verdict.exit == Exit.DONE:
-        return planned
-    if verdict.exit in {Exit.ASK, Exit.STOP} or (verdict.operational and verdict.exit == Exit.BACK):
-        return verdict
-    return verdict.model_copy(
-        update={
-            "exit": Exit.RETRY,
-            "plan": planned.plan,
-            "reason": f"plan challenge: {verdict.reason}",
-            "challenged": True,
-        }
-    )
 
 
 def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -466,7 +433,10 @@ def _step(  # noqa: C901 - one branch per phase
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind in AGENT:
             agent = _reused(store, lock, change) or prepare.refused(store, lock, change)
-            agent or review.completed(store, lock, change, repo) or _agent(store, lock, change, repo)
+            agent = (
+                agent or review.completed(store, lock, change, repo) or plan_round.continued(store, lock, change, repo)
+            )
+            agent or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and loop.brief_due(change):
             _brief_challenge(store, lock, change, repo)
         else:

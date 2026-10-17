@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next import budgets, disputes, evidence, rebuilds, round_flow
+from owlbear_delivery_next import budgets, disputes, evidence, plan_rounds, rebuilds, round_flow
 from owlbear_delivery_next.failures import DEFECT, ENVIRONMENT, UNREAD, VISUAL_MODEL, kind_of
 from owlbear_delivery_next.inbox import (
     AnswerItem,
@@ -296,8 +296,8 @@ def _target(q: Question, option: str | None) -> str | None:
 def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
     gate = bool(q and c.outcome and c.outcome.question == q.id)
-    if q is None or (q.repair and not gate):
-        return  # a round gate the Change has moved past records nothing, so no session ever receives it
+    if q is None or ((q.repair or plan_rounds.owned(q)) and not gate):
+        return  # a round gate or plan question the Change has moved past records nothing, so no session receives it
     if rebuilds.refused(c, q, item.option, item.tasks, (item.attempt, item.head)):
         return  # a final retry's selection the page no longer showed, or tasks where none belong (TD-217)
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks)
@@ -352,6 +352,8 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
         disputes.decided(c, q, target, item.at, item.text)
     elif (q.cause or "").startswith(round_flow.PREFIX):  # TD-208: another round, or a retry of the work
         round_flow.decided(c, q, target)
+    elif plan_rounds.owned(q):  # TD-190: the plan loop's disputes and its last round
+        plan_rounds.decided(c, q, target, item.text, item.at)
     elif (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
         kept = c.visual_rounds[-1] if c.visual_rounds else None
         if kept and kept.outcome == "model":
@@ -430,7 +432,7 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
             if s.kind == StepKind.PLAN and r and r.plan:
                 c.plan = r.plan
             if s.kind == StepKind.PLAN:
-                evidence.cover(c)
+                plan_rounds.accepted(c, now)  # its loop ends, the replaced plan's loops join it, criteria are covered
             task = open_task(c) if s.kind == StepKind.PLAN else None
             go(c, StepKind.BUILD if s.kind == StepKind.PLAN else StepKind.PLAN, task.id if task else None)
         case StepKind.BUILD:

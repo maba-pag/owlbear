@@ -55,7 +55,8 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     assert got["applied"] == [
         "agents.*.context", "agents.*.effort", "agents.*.model", "widths", "preparations", "data", "design_failures",
         "agents.builder.max_rounds", "agents.builder.max_findings", "agents.builder.last_round_at",
-        "agents.builder.ask_owner_at", "final_review",
+        "agents.builder.ask_owner_at", "agents.planner.max_rounds", "agents.planner.max_findings",
+        "agents.planner.last_round_at", "agents.planner.ask_owner_at", "final_review",
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 

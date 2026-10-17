@@ -1,12 +1,8 @@
-"""Paths a kept plan shares with other open Changes are recorded, whether its challenge passed or the owner chose it."""
-
-from datetime import UTC, datetime
+"""Paths a kept plan shares with other open Changes are recorded, whether its challenge passed or sent it back."""
 
 import pytest
 
 from owlbear_delivery_next import runner, tools
-from owlbear_delivery_next.budgets import ROUND_LIMIT
-from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import Brief, Change, Exit, Names, Overlap, Plan, Step, StepKind, Task
 from owlbear_delivery_next.processes import Termination
 from owlbear_delivery_next.session_result import Run
@@ -54,14 +50,7 @@ def test_a_plan_whose_challenge_passes_records_its_overlaps(store, change_repo, 
     assert (c.outcome.exit, c.step.kind, c.overlaps) == (Exit.DONE, StepKind.BUILD, SHARED)
 
 
-def test_a_plan_the_owner_accepts_after_its_challenge_asked_records_its_overlaps(store, change_repo, monkeypatch):
-    c = store.read("c1")
-    c.budgets.rounds[str(StepKind.PLAN)] = ROUND_LIMIT  # the challenge's next findings ask the owner
-    store.write(Lock("c1"), c)
+def test_a_plan_its_challenge_sends_back_keeps_its_overlaps_recorded(store, change_repo, monkeypatch):
     c = planned(store, change_repo, monkeypatch, "fix")
-    question = next(q for q in c.questions if q.answer is None)
-    assert [o.id for o in question.options] == ["fix", "accept"]
-    now = datetime.now(UTC)
-    store.put_inbox("c1", AnswerItem(at=now, question=question.id, option="accept"))
-    c, _ = store.fold(Lock("c1"), "c1", now)
-    assert (c.step.kind, [t.scope for t in c.plan.tasks], c.overlaps) == (StepKind.BUILD, [["src/app.ts"]], SHARED)
+    assert (c.outcome.exit, c.step.kind, c.overlaps) == (Exit.RETRY, StepKind.PLAN, SHARED)
+    assert [f.id for f in c.loops["plan"].findings] == ["F1"]  # the planner answers it by its ID (TD-190)
