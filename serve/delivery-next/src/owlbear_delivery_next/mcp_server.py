@@ -100,14 +100,14 @@ class Chat:
         code, out = self.call("POST", "/briefs/challenge", {"change": change, "version": version, "rejected": rejected})
         if code != OK:
             return {"requested": False, **out}
-        slug = brief_routes.slug_of(self.store, change) or ""
+        slug, attempt = brief_routes.slug_of(self.store, change) or "", out.get("attempt", 0)
         deadline = time.monotonic() + WAIT
         while time.monotonic() < deadline:
             try:
                 c = self.store.read(slug)
             except StoreError:
                 break
-            if not brief_rounds.running(c, version):
+            if not brief_rounds.running(c, version, attempt):
                 return {"requested": True, **brief_rounds.status(c)}
             time.sleep(POLL)
         return {

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next import api, brief_rounds, loop, mcp_server, plan_rounds, prompts, runner, tools
 from owlbear_delivery_next.codebase import CURRENT
+from owlbear_delivery_next.dispute_tools import ReconsiderResult
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.inbox import AnswerItem
 from owlbear_delivery_next.models import Answer, Brief, Change, Exit, Plan, Step, StepKind, Task, Waiting
@@ -212,6 +213,44 @@ def test_an_old_approval_without_its_challenge_is_challenged_then_planned(shapin
     shaping.verdicts += [verdict()]
     c = shaping.step()
     assert (c.step.kind, c.brief.challenged) == (K.PLAN, 1)
+
+
+def test_an_old_approval_whose_disputed_finding_the_owner_drops_goes_on_to_planning(shaping):
+    shaping.save()
+    with shaping.store.lock(shaping.slug) as lock:
+        c = shaping.store.read(shaping.slug)
+        c.brief.approved_version, c.outcome = 1, None
+        shaping.store.write(lock, c)
+    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True})]
+    shaping.step()
+    assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200
+    shaping.step()
+    c = shaping.answer("drop", "fine as is")
+    assert loop.next_step(c, NOW).kind == K.SHAPE  # runnable, not waiting for an approval it has
+    assert shaping.step().step.kind == K.PLAN
+
+
+def test_a_clarified_reconsideration_hands_the_finding_to_the_shaper_who_may_save_again(shaping):
+    shaping.save()
+    shaping.ask_challenge(1)
+    clarified = [{"finding": "F1", "verdict": "clarified", "text": "AC-1: name the exact text", "reason": "r"}]
+    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True}), ReconsiderResult(reconsidered=clarified)]
+    shaping.step()
+    shaping.ask_challenge(1, {"F1": "no"})
+    shaping.step()
+    assert shaping.answer("reconsider", "narrow it").step.mode == "reconsider"
+    c = shaping.step()
+    assert (c.step.mode, c.outcome.waiting, c.loops[BRIEF].findings[0].state) == (None, Waiting.CHAT, "owner-fix")
+    assert shaping.save(title="Add a farewell")["version"] == 2
+
+
+def test_a_wait_for_a_verdict_ends_when_its_request_was_retired():
+    c = Change(slug="c1", brief=Brief(version=1, requested=1), step=Step(kind=K.SHAPE, mode="challenge"))
+    c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=RoundPolicy())
+    assert brief_rounds.running(c, 1, 1) is True
+    assert brief_rounds.running(c, 1, 2) is False  # the owner had the brief shaped again
+    c.brief.requested = None
+    assert brief_rounds.running(c, 1, 1) is False
 
 
 def test_the_brief_challenger_never_sees_the_owners_brief_decisions():

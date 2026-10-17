@@ -44,11 +44,11 @@ def _legacy(c: Change) -> bool:
 
 
 def due(c: Change) -> bool:
-    """Whether the SHAPE step has work for the host: a session to run, or an owner question a stop replaced."""
+    """Whether the SHAPE step has work for the host: a session, an owner question a stop replaced, or planning."""
     if c.step.kind != StepKind.SHAPE or c.finished_at:
         return False
     lost = brief_rounds.first(c) is not None and not brief_rounds.owned_open(c)
-    return c.step.mode in brief_rounds.MODES or _legacy(c) or lost
+    return c.step.mode in brief_rounds.MODES or _legacy(c) or lost or loop.brief_ready(c)
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -57,6 +57,9 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if (q := brief_rounds.first(change)) is not None and not brief_rounds.owned_open(change):
         ask(change, q, now)  # an upheld rejection is the owner's before anything else, even after a stop (TD-193)
         store.write(lock, change)
+        return
+    if loop.brief_ready(change) and change.step.mode not in brief_rounds.MODES:  # approved under the old flow
+        store.write(lock, loop.apply(change, loop.StepResult(exit=Exit.DONE, reason="brief challenged"), now))
         return
     if _legacy(change):
         brief_rounds.request(change, change.brief.version, {}, rounds.policy(store.settings(), BRIEF, "shaper"), now)

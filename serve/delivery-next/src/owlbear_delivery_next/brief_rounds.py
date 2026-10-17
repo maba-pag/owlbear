@@ -202,7 +202,10 @@ def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None:
     lp = c.loops[BRIEF]
     lp.ended, c.brief.challenged = ended, version
     _mode(c, None)
-    _wait(c, f"approve brief v{version}", now)
+    if c.brief.approved_version == version:
+        c.outcome = None  # runnable: the SHAPE step goes on to planning
+    else:
+        _wait(c, f"approve brief v{version}", now)
 
 
 def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]], now: datetime) -> None:
@@ -229,6 +232,7 @@ def proceed(c: Change, now: datetime) -> None:
     lp = current(c)
     if lp is None:
         return
+    _mode(c, None)
     if (q := first(c)) is not None:
         ask(c, q, now)
     elif due(c):
@@ -326,12 +330,12 @@ def challenge_lines(c: Change) -> list[str]:
     return out
 
 
-def running(c: Change, version: int) -> bool:
-    """Whether the requested version's challenge still runs: no verdict on it yet and nothing for the owner."""
+def running(c: Change, version: int, attempt: int) -> bool:
+    """Whether the request still waits for its verdict: its attempt and version current, nothing for the owner."""
     lp = c.loops.get(BRIEF)
-    if c.brief.challenged == version or owned_open(c) or lp is None:
+    if lp is None or lp.attempt != attempt or c.brief.requested != version or c.brief.challenged == version:
         return False
-    return c.step.mode in MODES or lp.head != str(version)
+    return not owned_open(c) and (c.step.mode in MODES or lp.head != str(version))
 
 
 def status(c: Change) -> dict[str, object]:
