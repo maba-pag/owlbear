@@ -1910,14 +1910,33 @@ def test_a_merged_pr_keeps_a_restart_waiting_until_the_fold_sees_the_merge(tmp_p
 
 
 def test_a_rules_question_takes_a_queued_pr_out_first(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
+    gh = QueueGh(pr(head=A))  # the target now requires a queue; the profile still says it does not
     gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
     p = profile.confirm(prof(**profile.rule_entries(Rules(state="known", evidence="before"))), profile.RULES, "x", NOW)
-    p.entries[profile.QUEUE] = ProfileEntry(state="known", value="yes")
     cx = ctx(tmp_path, gh, p)
     cx.store.root.mkdir()
-    c, result = merge.run(cx, queued_change(clone))
+    c, result = merge.run(cx, change(worktree=str(clone)))
     assert (result.exit, gh.dequeued, c.queue) == (Exit.ASK, [7], None)
+
+
+def test_a_restart_never_counts_as_the_owners_answer_about_an_untraced_attempt(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.PAUSE])
+    c = change(questions=[asked], loops={"final": RoundLoop(subject="final", policy=RoundPolicy())})
+    c.queue = QueueClaim(head=A, at=NOW, quiet=queue.QUIET)
+    store = fold_store(tmp_path, monkeypatch, gh, c)
+    store.put_inbox("c1", RestartItem(at=NOW))
+    with store.lock("c1") as lock:
+        folded, _ = store.fold(lock, "c1", NOW, leave=queue.barrier(store, tmp_path))
+    assert (folded.step.kind, folded.queue is not None) == (StepKind.MERGE, True)
+
+
+def test_a_removal_at_the_adopted_entrys_own_time_stays_to_be_handled(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    same = removal("failed_checks").model_copy(update={"at": NOW})
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED, "removed": same})
+    c, _ = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (c.queue.adopted, c.queue_seen) == (True, "")
 
 
 def test_a_removal_older_than_the_attempt_is_not_its_own(tmp_path, clone):

@@ -50,9 +50,9 @@ AGAIN = Option(id="again", label="Enqueue it again", next=M)
 PAUSE = Option(id="pause", label="Pause", next="pause")
 
 
-def _seen(c: Change, q: QueueState, until: datetime | None = None) -> None:
-    """Count the removals GitHub shows now (or those up to *until*) as handled: an attempt starts from here."""
-    if q.removed and (until is None or q.removed.at <= until):
+def _seen(c: Change, q: QueueState, before: datetime | None = None) -> None:
+    """Count the removals GitHub shows now (or those strictly before *before*) as handled: an attempt starts here."""
+    if q.removed and (before is None or q.removed.at < before):
         c.queue_seen = q.removed.id
 
 
@@ -159,9 +159,11 @@ def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
 
 
 def _relevant(c: Change, q: QueueState) -> QueueEvent | None:
-    """A removal of this attempt not handled yet; earlier removals, and any without an attempt, are not its own."""
-    r, claim = q.removed, c.queue
-    if claim is None or r is None or r.id == c.queue_seen or r.reason == "merged" or r.at < claim.at - SKEW:
+    """A removal of this attempt not handled yet: one after GitHub's own record of this attempt's enqueue."""
+    r, a, claim = q.removed, q.added, c.queue
+    if claim is None or r is None or r.id == c.queue_seen or r.reason == "merged":
+        return None
+    if a is None or a.at < claim.at - SKEW or r.at < a.at:  # no enqueue of this attempt yet, or an older entry's
         return None
     return r
 
@@ -244,9 +246,10 @@ def leaving(before: Change, after: Change) -> bool:
 
 
 def _resolved(before: Change, after: Change) -> bool:
-    """The owner answered, in this fold, the question about an attempt GitHub showed no trace of."""
+    """The owner chose, in this fold, how an untraced attempt goes on; a restart's retirement is no choice."""
     open_ids = {q.id for q in before.questions if q.cause == UNSEEN and q.answer is None}
-    return any(q.id in open_ids and q.answer is not None for q in after.questions)
+    chosen = {AGAIN.id, PAUSE.id}
+    return any(q.id in open_ids and q.answer is not None and q.answer.option in chosen for q in after.questions)
 
 
 def barrier(store: Store, repo: Path) -> Leave:

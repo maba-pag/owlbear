@@ -201,7 +201,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - ea
     """Gate the head, then hold the target's merge lock, re-read everything, gate again and merge that head."""
     asked, rules = engine.rules_changed(ctx, c)
     if asked is not None:
-        if c.queue is not None or profile.value(ctx.profile, profile.QUEUE) == "yes":
+        queued = c.queue is not None or rules.queue_required or profile.value(ctx.profile, profile.QUEUE) == "yes"
+        if queued:
             return queue.hold(ctx, c, asked)  # a queued PR is taken out before the owner confirms the rules
         return c, asked
     number, target = c.names.pr or 0, c.names.target
