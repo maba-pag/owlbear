@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next import api, model_choices
+from owlbear_delivery_next import api, data_repo, model_choices
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
 from owlbear_delivery_next.store import Store
@@ -215,6 +215,23 @@ def test_global_round_values_are_valid_on_their_own_whatever_this_project_overri
     hidden = {"format": 2, "agents": {"builder": {"last_round_at": 8}}}  # above the default ask-owner value 7
     r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": hidden})
     assert (r.status_code, path.exists(), c.get("/api/next/config").status_code) == (422, False, 200)
+
+
+def test_a_global_save_must_suit_every_project_sharing_it(tmp_path):
+    root = tmp_path / "data"
+    for name, last in (("a", None), ("b", 6)):
+        (root / name).mkdir(parents=True)
+        (root / name / "config.json").write_text(
+            json.dumps({"format": 2, "agents": {"builder": {"last_round_at": last}}})
+        )
+    (root / "broken").mkdir()
+    (root / "broken" / "config.json").write_text("{")  # another project's problem, never this save's
+    store = Store(tmp_path / "store", data_repo.DataRepo(root), "a")
+    c = client(store, root / "config.json", headers=AUTH)
+    rev = c.get("/api/next/config").json()["global_rev"]
+    for layer in ({"agents": {"builder": {"ask_owner_at": 6}}}, {"final_review": {"ask_owner_at": 6}}):
+        r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 2, **layer}})
+        assert (r.status_code, (root / "config.json").exists()) == (422, False)  # b's last round at 6 needs more
 
 
 def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):

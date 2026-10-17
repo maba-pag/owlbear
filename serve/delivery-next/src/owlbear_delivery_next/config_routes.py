@@ -8,6 +8,7 @@ project's folder there can be renamed (TD-98) while none of its runners runs.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
 from typing import TYPE_CHECKING, Any
@@ -101,13 +102,23 @@ def _agreement(store: Store) -> list[dict[str, Any]]:
         return []
 
 
+def _others(store: Store) -> list[Layer]:
+    """The other projects' layers in the shared repository; one that does not read is that project's to fix."""
+    layers = []
+    for path in sorted(store.shared.root.glob(f"*/{data_repo.CONFIG}")) if store.shared else []:
+        if path != store.config_path:
+            with contextlib.suppress(StoreError):
+                layers.append(read_layer_bytes(path, Layer)[0])
+    return layers
+
+
 def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: str) -> str:
     """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice."""
     try:
         new = model.model_validate(body.layer)
         if isinstance(new, GlobalLayer):
-            resolve(new, store.read_config())  # the combination this project would run with (TD-209)
-            resolve(new, Layer())  # and a project that sets nothing of its own
+            for layer in [store.read_config(), *_others(store), Layer()]:  # every project it applies to (TD-209)
+                resolve(new, layer)
         else:
             resolve(read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None, new)
     except ValidationError as exc:
