@@ -1,0 +1,151 @@
+"""The Settings page rendered by lit-html in a real browser (TD-264): drafts per layer, models and conflicts."""
+
+from __future__ import annotations
+
+import contextlib
+import json
+import socket
+import threading
+import time
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
+
+import pytest
+import uvicorn
+from fastapi.testclient import TestClient
+
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.state_store.store import Store
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+MODELS = {
+    "models": [
+        {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "medium", "high"], "default_effort": "medium",
+         "context": 200_000, "rates": None, "long": None},
+        {"id": "gpt-6.1-sol", "name": "Sol", "efforts": ["low", "medium", "high", "xhigh"], "default_effort": "low",
+         "context": 272_000, "rates": None, "long": None},
+        {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
+         "long": None},
+    ],
+    "error": "",
+}  # fmt: skip
+
+
+class Host:
+    wake = SimpleNamespace(set=lambda: None)
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
+    repo = None
+
+
+@pytest.fixture
+def store(tmp_path: Path, monkeypatch) -> Store:
+    monkeypatch.setattr(model_choices.Offered, "__call__", lambda _self: MODELS)
+    s = Store(tmp_path / "store")
+    s.global_path = tmp_path / "global" / "config.json"
+    return s
+
+
+@contextlib.contextmanager
+def settings_page(store: Store) -> Iterator[Any]:
+    """The Settings page in a real browser, offline: only the test host answers, so the plain controls show."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/config#token=tok")
+            page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+            yield page
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_save(store) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store) as page:
+        page.get_by_label("Model for builder").select_option("tiny")
+        expect(page.locator("#agents")).to_contain_text("tiny takes no effort setting")
+        page.get_by_label("Model for reviewer").select_option("claude-opus-5.5")
+        message = page.locator('[id="reviewer.effort-message"]')
+        expect(message).to_have_text("claude-opus-5.5 does not offer effort xhigh (inherited); choose one it offers")
+        page.get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_contain_text("Not saved: claude-opus-5.5 does not offer effort xhigh")
+        page.get_by_label("Effort for reviewer").select_option("high")
+        expect(message).to_have_text("")
+        page.get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+    agents = store.read_config().agents
+    assert (agents["builder"].model, agents["reviewer"].model, agents["reviewer"].effort) == (
+        "tiny", "claude-opus-5.5", "high"
+    )  # fmt: skip
+
+
+@pytest.mark.browser
+def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store) as page:
+        rounds = page.get_by_label("Rounds at most, builder")
+        rounds.fill("4")
+        page.get_by_label("Layer").select_option("global")
+        expect(page.locator("#pending")).to_have_text("No unsaved edits. This project: 1 more unsaved.")
+        expect(rounds).to_have_value("")
+        page.get_by_label("Minutes per session, builder").fill("60")
+        page.get_by_label("Layer").select_option("project")
+        expect(rounds).to_have_value("4")
+        expect(page.locator("#pending")).to_have_text(
+            "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
+        )
+        page.get_by_label("When the design judge fails a change").select_option("back")  # renders the page again
+        expect(rounds).to_have_value("4")
+        page.get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        page.get_by_label("Layer").select_option("global")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
+    project = store.read_config()
+    assert (project.agents["builder"].max_rounds, project.design_failures, project.agents["builder"].minutes) == (
+        4, "back", None
+    )  # fmt: skip
+    assert not store.global_path.exists()
+
+
+@pytest.mark.browser
+def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(store) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store) as page:
+        c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1",
+                       headers={"authorization": "Bearer t"})  # fmt: skip
+        got = c.get("/api/next/config").json()
+        newer = got["project"] | {"widths": [1600]}
+        assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
+        page.get_by_label("Minutes per session, reviewer").fill("25")
+        page.get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
+        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
+        page.get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+    saved = json.loads(store.config_path.read_text())
+    assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)

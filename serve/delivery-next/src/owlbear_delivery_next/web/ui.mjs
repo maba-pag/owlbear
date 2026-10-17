@@ -56,8 +56,8 @@ export async function call(path, { method, body, timeout = 5000 } = {}) {
 }
 
 // Whether the design system's components arrived within three seconds; without them the page shows plain controls.
-export async function designSystem() {
-  const ready = customElements.whenDefined("p-heading").then(() => true);
+export async function designSystem(tags = ["p-heading"]) {
+  const ready = Promise.all(tags.map((t) => customElements.whenDefined(t))).then(() => true);
   const pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
   if (!pds) document.documentElement.classList.add("no-pds");
   return pds;

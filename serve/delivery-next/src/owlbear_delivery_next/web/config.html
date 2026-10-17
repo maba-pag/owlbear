@@ -42,180 +42,16 @@
 <header>
   <p-heading size="2xl"><h1>Settings</h1></p-heading>
 </header>
-<p id="offline" role="status" hidden>The Porsche Design System did not load from cdn.ui.porsche.com, so the page
-  uses plain controls. Reload to try again.</p>
-<p-inline-notification id="error" state="error" dismiss-button="false" hidden></p-inline-notification>
-<p-text id="status" role="status" aria-live="polite"></p-text>
-<section class="panel" aria-labelledby="scope-title">
-  <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
-  <div class="row">
-    <p-select id="scope" label="Layer" value="project">
-      <p-select-option value="project">This project</p-select-option>
-      <p-select-option value="global">All projects (global)</p-select-option>
-    </p-select>
-    <p-text id="scope-note" size="xs" color="contrast-medium"></p-text>
-  </div>
-  <p-text>A blank project value uses the global one; a blank global value uses the built-in default.</p-text>
-</section>
-<section class="panel" aria-labelledby="folder-title">
-  <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
-  <div class="row">
-    <p-input-text id="folder" label="Folder in the shared settings repository"></p-input-text>
-    <p-button id="rename" type="button" compact="true" icon="edit">Rename folder</p-button>
-  </div>
-  <p-text id="folder-note"></p-text>
-</section>
-<section class="panel" aria-labelledby="agents-title">
-  <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
-  <p-table caption="Agents: model, effort and context apply to the next session">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Agent</p-table-head-cell>
-      <p-table-head-cell>Model</p-table-head-cell>
-      <p-table-head-cell>Effort</p-table-head-cell>
-      <p-table-head-cell>Context</p-table-head-cell>
-      <p-table-head-cell>AI credits per 1M tokens</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="agents"></p-table-body>
-  </p-table>
-  <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite"></p-text>
-</section>
-<section class="panel" aria-labelledby="rounds-title">
-  <p-heading size="lg"><h2 id="rounds-title">Challenge rounds</h2></p-heading>
-  <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after the
-    last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
-  <p-table caption="Challenge rounds: they apply to loops that start after a save">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Loop</p-table-head-cell>
-      <p-table-head-cell>Rounds at most</p-table-head-cell>
-      <p-table-head-cell>New findings per round at most</p-table-head-cell>
-      <p-table-head-cell>Last round at or below</p-table-head-cell>
-      <p-table-head-cell>Ask you at or above</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="rounds"></p-table-body>
-  </p-table>
-  <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower than
-    "ask you at or above", which may not exceed the findings per round. The final review inherits the builder's
-    values.</p-text>
-</section>
-<section class="panel" aria-labelledby="limits-title">
-  <p-heading size="lg"><h2 id="limits-title">Session time limits</h2></p-heading>
-  <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and runs
-    again. The shaper's chat has no limit.</p-text>
-  <p-table caption="Session time limits: they apply to the next session">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Agent</p-table-head-cell>
-      <p-table-head-cell>Minutes per session</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="limits"></p-table-body>
-  </p-table>
-  <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
-</section>
-<section class="panel" aria-labelledby="general-title">
-  <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
-  <p-table caption="Visual check settings: they apply to the next visual check">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Setting</p-table-head-cell>
-      <p-table-head-cell>Value</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="general"></p-table-body>
-  </p-table>
-  <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
-  <p-text id="design-pack" size="xs"></p-text>
-  <p-text id="agreement-note" size="xs" color="contrast-medium"></p-text>
-  <p-table id="agreement-table" caption="How often each judge's verdict matched your Pass or Fail, per model">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Judge</p-table-head-cell>
-      <p-table-head-cell>Model</p-table-head-cell>
-      <p-table-head-cell>Decided</p-table-head-cell>
-      <p-table-head-cell>Agreed</p-table-head-cell>
-      <p-table-head-cell>Disagreed</p-table-head-cell>
-      <p-table-head-cell>Unsure</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="agreement"></p-table-body>
-  </p-table>
-</section>
-<section id="pack" class="panel" aria-labelledby="pack-title">
-  <p-heading size="lg"><h2 id="pack-title">Design pack</h2></p-heading>
-  <p-text id="pack-active"></p-text>
-  <p-text id="pack-notice" size="xs" color="contrast-medium"></p-text>
-  <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
-    only if every stage passes, or if you accept it after its challenge rounds end without a pass.</p-text>
-  <div class="row">
-    <p-button id="pack-update" type="button" compact="true" icon="refresh">Update design pack</p-button>
-    <p-text id="pack-state" size="sm" role="status" aria-live="polite"></p-text>
-  </div>
-  <ol id="pack-stages" aria-label="Update stages"></ol>
-  <p-text id="pack-reason" size="sm"></p-text>
-  <p-text id="pack-pushed" size="sm"></p-text>
-  <div id="pack-ask" hidden>
-    <p-heading size="md"><h3 id="pack-ask-title">The update waits for you</h3></p-heading>
-    <div id="pack-questions"></div>
-    <p-button id="pack-discard" type="button" compact="true" variant="secondary" icon="close">Discard the
-      update</p-button>
-  </div>
-  <details id="pack-findings-box" hidden>
-    <summary>Findings of the challenge rounds</summary>
-    <ul id="pack-findings"></ul>
-  </details>
-  <details>
-    <summary>Log of the last run</summary>
-    <pre id="pack-log"></pre>
-  </details>
-</section>
-<details class="panel">
-  <summary>Not applied yet: runtimes, visibility and tool categories</summary>
-  <p-table caption="Per agent; not applied yet">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Agent</p-table-head-cell>
-      <p-table-head-cell>Runtime</p-table-head-cell>
-      <p-table-head-cell>Needs visibility</p-table-head-cell>
-      <p-table-head-cell>Categories</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="agents-later"></p-table-body>
-  </p-table>
-  <p-table caption="Switches; not applied yet">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Setting</p-table-head-cell>
-      <p-table-head-cell>Value</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="general-later"></p-table-body>
-  </p-table>
-  <p-text id="baseline" size="xs" color="contrast-medium"></p-text>
-  <p-table caption="What each runtime adds; not used for routing yet">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Runtime</p-table-head-cell>
-      <p-table-head-cell>Adds over the baseline</p-table-head-cell>
-      <p-table-head-cell>MCP servers</p-table-head-cell>
-      <p-table-head-cell>Live view</p-table-head-cell>
-      <p-table-head-cell>Writes outside the work folder stopped by</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="runtimes"></p-table-body>
-  </p-table>
-  <p-table caption="Tool categories an agent can ask for; not applied yet">
-    <p-table-head><p-table-head-row>
-      <p-table-head-cell>Category</p-table-head-cell>
-      <p-table-head-cell>Runtime</p-table-head-cell>
-      <p-table-head-cell>Tools</p-table-head-cell>
-    </p-table-head-row></p-table-head>
-    <p-table-body id="categories"></p-table-body>
-  </p-table>
-</details>
-<div class="bar" role="region" aria-label="Save settings">
-  <p-button id="save" type="button" compact="true" icon="check">Save</p-button>
-  <p-text id="pending" size="sm" aria-live="polite"></p-text>
-</div>
+<div id="page"></div>
 </main>
 <!-- ask -->
-<script>
-"use strict";
-const hash = new URLSearchParams(location.hash.slice(1));
-if (hash.get("token")) {
-  sessionStorage.setItem("token", hash.get("token"));
-  history.replaceState(null, "", location.pathname);
-}
-const token = sessionStorage.getItem("token");
+<script type="module">
+import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { call, designSystem } from "/assets/ui.mjs";
+
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
-const INHERIT = "inherit";  // the effort option that clears the layer's own value
+const INHERIT = "inherit";  // the option that clears the layer's own value
 const SOURCES = { default: "built-in default", global: "global", project: "this project",
   builder: "the builder's value" };
 const LAYERS = { project: "This project", global: "All projects" };
@@ -223,636 +59,9 @@ const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
 const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes"];  // fields typed as whole numbers (TD-286: minutes)
 const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
-  ["builder", "Task reviews (builder)"], ["final_review", "Final review"], ["updater", "Design pack updates (updater)"]];
-let pds = false, loaded = null, rendered = "project", saving = false;
-let offered = null;  // the models this machine's Copilot offers, once read; null while reading or unreadable
-// Unsaved edits per layer ("role.field" -> typed value); a save applies them over the newest saved layer.
-const drafts = { project: {}, global: {} };
-
-function el(tag, text, attrs = {}) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-  return node;
-}
-
-function say(message) {
-  document.getElementById("status").textContent = message;
-}
-
-function notify(message) {
-  const error = document.getElementById("error");
-  error.textContent = message.charAt(0).toUpperCase() + message.slice(1);
-  error.hidden = !message;
-}
-
-function problem(response, data, body) {
-  const detail = data?.detail;
-  if (Array.isArray(detail)) {
-    return detail.map((e) => {
-      const at = (e.loc ?? []).filter((p, i) => !(i === 0 && p === "body")).join(".");
-      return at ? `${at}: ${e.msg}` : e.msg;
-    }).join("; ");
-  }
-  if (typeof detail === "string") return detail;
-  return `Delivery answered ${response.status} ${response.statusText} ${body.slice(0, 200)}`.trim();
-}
-
-async function call(path, method = "GET", body = undefined, wait = undefined) {
-  if (!token) throw new Error("Open the URL the host printed, including #token=…");
-  // a save commits and pushes the shared settings repository (TD-64), which can take a network round trip
-  const timeout = AbortSignal.timeout(wait ?? (method === "GET" ? 5000 : 60000));
-  const init = { method, headers: { Authorization: `Bearer ${token}` }, signal: timeout };
-  if (body) {
-    init.body = JSON.stringify(body);
-    init.headers["Content-Type"] = "application/json";
-  }
-  let response, text;
-  try {
-    response = await fetch(`/api/next${path}`, init);
-    text = await response.text();
-  } catch {
-    throw new Error("Delivery is not running. Start it, then reload this page.");
-  }
-  if (response.status === 401) {
-    throw new Error("Delivery restarted at a new address. Open the link from chat or owlbear-next status.");
-  }
-  let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = null;  // a proxy or a crash page; the status line says what happened
-  }
-  if (!response.ok || data === null) {
-    const error = new Error(problem(response, data, text));
-    error.status = response.status;
-    throw error;
-  }
-  return data;
-}
-
-function shown(value) {
-  if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
-  if (typeof value === "boolean") return value ? "yes" : "no";
-  return String(value);
-}
-
-function source(key, inUse) {
-  const from = SOURCES[loaded.settings.sources[key]];
-  const line = inUse === undefined ? `from ${from}` : `in use: ${shown(inUse)}, from ${from}`;
-  return el("p-text", line, { size: "xs", color: "contrast-medium" });
-}
-
-function cell(...nodes) {
-  const node = pds ? el("p-table-cell", undefined, { multiline: "true" }) : el("td");
-  node.append(...nodes);
-  return node;
-}
-
-function row(...cells) {
-  const node = el(pds ? "p-table-row" : "tr");
-  node.append(...cells);
-  return node;
-}
-
-// A table cell's control: its column says what it is, so the label is for assistive technology only.
-function choose(label, options, value, attrs = {}) {
-  const node = pds ? el("p-select", undefined, { label, "hide-label": "true", ...attrs })
-    : el("select", undefined, { "aria-label": label, ...(attrs.disabled ? { disabled: "" } : {}) });
-  for (const [v, said] of options) node.append(el(pds ? "p-select-option" : "option", said, { value: v }));
-  node.value = value;
-  return node;
-}
-
-function typed(label, value, attrs = {}) {
-  const { disabled, ...rest } = attrs;
-  const node = pds ? el("p-input-text", undefined, { label, "hide-label": "true", ...attrs })
-    : el("input", undefined, { type: "text", "aria-label": label, ...rest, ...(disabled ? { disabled: "" } : {}) });
-  node.value = value;
-  return node;
-}
-
-function tick(label, checked, hideLabel = true) {
-  if (pds) {
-    const on = checked ? { checked: "true" } : {};
-    return el("p-checkbox", undefined, { label, "hide-label": `${hideLabel}`, disabled: "true", ...on });
-  }
-  const box = el("input", undefined, { type: "checkbox", disabled: "", ...(hideLabel ? { "aria-label": label } : {}) });
-  box.checked = checked;
-  if (hideLabel) return box;
-  const node = el("label");
-  node.append(box, ` ${label}`);
-  return node;
-}
-
-function pure(label, attrs) {
-  return el(pds ? "p-button-pure" : "button", label, pds ? { type: "button", size: "x-small", icon: "reset", ...attrs }
-    : { type: "button", ...attrs });
-}
-
-function saved(layer, key) {
-  if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (key === "design_failures") return loaded[layer]?.[key] ?? "";
-  const [role, field] = key.split(".");
-  const value = role === "final_review" ? loaded[layer]?.final_review?.[field] : loaded[layer]?.agents?.[role]?.[field];
-  return value === null || value === undefined ? "" : String(value);
-}
-
-// TD-209: one loop's round value; blank inherits (the final review inherits the builder's).
-function roundCell(owner, field, label) {
-  const key = `${owner}.${field}`, final = owner === "final_review";
-  const below = final ? finalBelow(field) : loaded.inherited[rendered].agents[owner][field];
-  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-  const input = typed(`${label}, ${owner.replace("_", " ")}`, value,
-    { placeholder: `inherit (${below})`, inputmode: "numeric" });
-  input.dataset.key = key;
-  const inUse = final ? loaded.settings.final_review[field] : loaded.settings.agents[owner][field];
-  return cell(input, source(final ? key : `agents.${key}`, inUse));
-}
-
-// What a blank final-review value takes: the global one when editing this project, else the builder's as edited.
-function finalBelow(field) {
-  const above = rendered === "project" ? loaded.global?.final_review?.[field] : null;
-  if (above !== null && above !== undefined) return above;
-  const own = `builder.${field}`;
-  return (own in drafts[rendered] ? drafts[rendered][own] : saved(rendered, own))
-    || loaded.inherited[rendered].agents.builder[field];
-}
-
-// TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
-function designFailures() {
-  const key = "design_failures", below = loaded.inherited[rendered][key];
-  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-  const input = choose("When the design judge fails a change", [[INHERIT, `inherit (${below})`],
-    ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], value || INHERIT);
-  input.dataset.key = key;
-  return cell(input, source(key, loaded.settings.design_failures));
-}
-
-function widths() {
-  const value = "widths" in drafts[rendered] ? drafts[rendered].widths : saved(rendered, "widths");
-  const below = loaded.inherited[rendered].widths.join(", ");
-  const label = "Screenshot widths in px, comma-separated (1280 to 2400)";
-  const input = typed(label, value, { placeholder: `inherit (${below})` });
-  input.dataset.key = "widths";
-  return cell(input, source("widths", loaded.settings.widths));
-}
-
-function tokens(n) {
-  return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
-}
-
-// The model a role runs with in the edited layer: its own draft or saved value, else what it inherits.
-function modelOf(role) {
-  const key = `${role}.model`;
-  const own = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-  return own || loaded.inherited[rendered].agents[role].model;
-}
-
-// Why the role's effort, its own or inherited, cannot run with its model; empty when it can or nothing is known.
-function mismatch(role) {
-  const key = `${role}.effort`, model = offered?.find((m) => m.id === modelOf(role));
-  const own = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-  const effort = own || loaded.inherited[rendered].agents[role].effort;
-  if (!model || !model.efforts.length || model.efforts.includes(effort)) return "";
-  return `${model.id} does not offer effort ${effort}${own ? "" : " (inherited)"}; choose one it offers`;
-}
-
-function ownTier(role) {
-  const key = `${role}.context`;
-  return key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-}
-
-function tierOf(role) {
-  return ownTier(role) || loaded.inherited[rendered].agents[role].context;
-}
-
-// Why the role's context tier cannot run with its model; empty when it can or nothing is known.
-function tierMismatch(role) {
-  const model = offered?.find((m) => m.id === modelOf(role));
-  if (!model || model.long || tierOf(role) !== "long") return "";
-  return `${model.id} has no long context${ownTier(role) ? "" : " (inherited)"}; choose its default`;
-}
-
-// The long tier costs more per token: higher input or output rates than the default tier.
-function dearer(model) {
-  const [base, long] = [model.rates, model.long?.rates];
-  return Boolean(base && long && (long.input > base.input || long.output > base.output));
-}
-
-function contextCell(role) {
-  const key = `${role}.context`, own = ownTier(role), model = offered?.find((m) => m.id === modelOf(role));
-  const parts = [];
-  if (model?.long) {
-    const up = dearer(model), more = up ? "higher rates per token" : "same rates per token";
-    const label = `Context for ${role}`;
-    let input;
-    if (pds) {
-      input = el("p-segmented-control", undefined,
-        { label, "hide-label": "true", compact: "true", columns: "2" });
-      input.append(
-        el("p-segmented-control-item", tokens(model.context),
-          { value: "default", aria: `{ 'aria-label': '${tokens(model.context)}, default context' }` }),
-        el("p-segmented-control-item", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
-          { value: "long", aria: `{ 'aria-label': '${tokens(model.long.context)}, long context, ${more}' }` }),
-      );
-      input.value = tierOf(role);
-    } else {
-      input = choose(label, [["default", `${tokens(model.context)}, default context`],
-        ["long", `${tokens(model.long.context)}, long context, ${more}`]], tierOf(role));
-    }
-    input.dataset.key = key;
-    parts.push(input);
-  } else if (model) {
-    const node = el("p-text", `${tokens(model.context)} \u00b7 only tier`, { size: "sm" });
-    const wrong = tierMismatch(role);
-    parts.push(node, ...(wrong ? [el("p-text", wrong, { size: "xs", color: "error" }),
-      pure("Use the default tier", { "data-tier": role })] : []));
-  } else {
-    const below = loaded.inherited[rendered].agents[role].context;
-    const input = choose(`Context for ${role}`,
-      [[INHERIT, `inherit (${below})`], ["default", "default"], ["long", "long"]], own || INHERIT);
-    input.dataset.key = key;
-    parts.push(input);
-  }
-  if (model) {
-    const node = pure("Use inherited", { "data-inherit": role });
-    node.hidden = !own;
-    parts.push(node);
-  }
-  const node = cell(...parts, source(`agents.${key}`, loaded.settings.agents[role].context));
-  node.dataset.cell = key;
-  return node;
-}
-
-function amount(n) {
-  return n.toLocaleString("en", { maximumFractionDigits: 2 });
-}
-
-function ratesCell(role) {
-  const model = offered?.find((m) => m.id === modelOf(role)), long = tierOf(role) === "long" && model?.long;
-  const rates = long ? model.long.rates : model?.rates;
-  const node = cell();
-  node.dataset.cell = `${role}.rates`;
-  if (!rates) {
-    node.append(el("p-text", "\u2014"), el("p-text", "not known", { size: "xs", color: "contrast-medium" }));
-    return node;
-  }
-  const write = rates.cache_write ? ` \u00b7 cache write ${amount(rates.cache_write)}` : "";
-  const flow = `in ${amount(rates.input)} \u00b7 out ${amount(rates.output)}`;
-  const line = `${flow} \u00b7 cache ${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
-  node.append(el("p-text", line),
-    el("p-text", `${model.id}, ${long ? "long" : "default"} context`, { size: "xs", color: "contrast-medium" }));
-  return node;
-}
-
-function refreshRow(role, fields) {
-  const make = {
-    effort: () => editable(role, "effort"), context: () => contextCell(role), rates: () => ratesCell(role),
-  };
-  for (const field of fields) document.querySelector(`[data-cell="${role}.${field}"]`)?.replaceWith(make[field]());
-}
-
-function flag(input, wrong) {
-  if (pds) {
-    input.setAttribute("state", wrong ? "error" : "none");
-    input.setAttribute("message", wrong);
-    return;
-  }
-  let said = input.nextElementSibling;
-  if (!said?.classList.contains("message")) {
-    said = el("p-text", "", { size: "xs", color: "error", class: "message", id: `${input.dataset.key}-message` });
-    input.after(said);
-  }
-  said.textContent = wrong;
-  input.setAttribute("aria-invalid", wrong ? "true" : "false");
-  input.setAttribute("aria-describedby", said.id);
-}
-
-function editable(role, field) {
-  const key = `${role}.${field}`, below = loaded.inherited[rendered].agents[role][field];
-  const value = key in drafts[rendered] ? drafts[rendered][key] : saved(rendered, key);
-  const label = `${field === "model" ? "Model" : "Effort"} for ${role}`;
-  const model = offered?.find((m) => m.id === modelOf(role));
-  let input;
-  if (field === "effort") {
-    const efforts = model ? model.efforts : EFFORTS;
-    const options = [[INHERIT, `inherit (${below})`],
-      ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
-    if (value && !efforts.includes(value)) {
-      options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
-    }
-    input = choose(label, options, value || INHERIT);
-  } else if (offered?.length) {
-    const options = [[INHERIT, `inherit (${below})`], ...offered.map((m) => {
-      const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
-      const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
-      return [m.id, `${m.name} (${m.id})${sizes}`];
-    })];
-    if (value && !offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
-    input = choose(label, options, value || INHERIT, { filter: "true" });
-  } else {
-    input = typed(label, value, { placeholder: `inherit (${below})` });
-  }
-  input.dataset.key = key;
-  const efforts = field === "effort" && model && !model.efforts.length
-    ? [el("p-text", `${model.id} takes no effort setting`, { size: "xs", color: "contrast-medium" })] : [];
-  const node = cell(input, ...efforts, source(`agents.${key}`, loaded.settings.agents[role][field]));
-  node.dataset.cell = key;
-  if (field === "effort") flag(input, mismatch(role));  // after cell(): the plain message goes beside the input
-  return node;
-}
-
-// A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
-function inactive(label, value, key) {
-  let control;
-  if (typeof value === "boolean") {
-    control = tick(label, value);
-  } else if (key.endsWith(".runtime")) {
-    control = choose(label, loaded.catalogue.runtimes.map((r) => [r.runtime, r.runtime]), value, { disabled: "true" });
-  } else if (key.endsWith(".categories")) {
-    control = el("div", undefined, pds ? {} : { role: "group", "aria-label": label });
-    const names = Object.keys(loaded.catalogue.categories);
-    for (const name of names) control.append(tick(name, value.includes(name), false));
-  } else {
-    control = typed(label, shown(value), { disabled: "true" });
-  }
-  return cell(control, source(key));
-}
-
-function edit(event) {
-  const input = event.target.closest("[data-key]");
-  if (!input) return;
-  const key = input.dataset.key, [role, field] = key.split("."), round = NUMBERS.includes(field);
-  const value = !round && input.value === INHERIT ? "" : (input.value ?? "").trim();
-  if (value === saved(rendered, key)) delete drafts[rendered][key];
-  else drafts[rendered][key] = value;
-  if (round && role === "builder") {  // a blank final-review value follows the builder's
-    const below = document.querySelector(`[data-key="final_review.${field}"]`);
-    below?.setAttribute("placeholder", `inherit (${finalBelow(field)})`);
-  }
-  if (offered && field === "model") {  // the effort, context and rates follow the model
-    refreshRow(role, ["effort", "context", "rates"]);
-  } else if (offered && field === "effort") {
-    flag(input, mismatch(role));
-  } else if (field === "context") {
-    refreshRow(role, ["rates"]);
-    const reset = document.querySelector(`[data-inherit="${role}"]`);
-    if (reset) reset.hidden = !ownTier(role);
-  }
-  pending();
-}
-
-function inherit(event) {
-  const found = event.target.closest("[data-inherit], [data-tier]");
-  if (!found) return;
-  const role = found.dataset.inherit ?? found.dataset.tier, key = `${role}.context`;
-  const value = found.dataset.tier ? "default" : "";  // the default tier overrides an inherited long one
-  if (saved(rendered, key) === value) delete drafts[rendered][key];
-  else drafts[rendered][key] = value;
-  refreshRow(role, ["context", "rates"]);
-  pending();
-}
-
-// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.
-function changes(layer) {
-  const shown = (v) => (v === "" || v === null || v === undefined ? "inherited" : v);
-  return Object.entries(drafts[layer]).map(([key, value]) =>
-    `${key.replace(".", " ").replaceAll("_", " ")}: ${shown(saved(layer, key))} → ${shown(value)}`);
-}
-
-function pending() {
-  const other = rendered === "global" ? "project" : "global", count = Object.keys(drafts[other]).length;
-  const mine = changes(rendered), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
-  if (count) parts.push(`${LAYERS[other]}: ${count} more unsaved.`);
-  document.getElementById("pending").textContent = parts.join(" ");
-  const save = document.getElementById("save");
-  if (save) save.textContent = rendered === "global" ? "Save global defaults" : "Save project settings";
-}
-
-function render() {
-  const scope = document.getElementById("scope");
-  scope.querySelector('[value="global"]').toggleAttribute("disabled", !loaded.global_location);
-  if (!loaded.global_location && scope.value === "global") scope.value = "project";
-  rendered = scope.value;
-  document.getElementById("scope-note").textContent = loaded.global_location
-    ? "" : "No shared settings location is set up (run owlbear-next data PATH), so only this project's settings "
-      + "can be saved, in this clone.";
-  const folder = document.getElementById("folder");
-  if (document.activeElement !== folder) folder.value = loaded.folder ?? "";
-  folder.disabled = document.getElementById("rename").disabled = !loaded.folder || saving;
-  document.getElementById("folder-note").textContent = loaded.folder
-    ? "Named after the repository unless renamed. Renaming moves the folder with its settings, memory and visual "
-      + "decisions, then commits and pushes the move; it is refused while a step of this project runs."
-    : "No shared settings location is set up, so this project has no folder there.";
-  const agents = Object.entries(loaded.settings.agents).map(([role]) => row(
-    cell(el("p-text", role)), editable(role, "model"), editable(role, "effort"), contextCell(role), ratesCell(role),
-  ));
-  document.getElementById("agents").replaceChildren(...agents);
-  document.getElementById("rounds").replaceChildren(...LOOPS.map(([owner, said]) => row(
-    cell(el("p-text", said)), ...ROUNDS.map(([field, label]) => roundCell(owner, field, label)))));
-  document.getElementById("limits").replaceChildren(...Object.keys(loaded.settings.agents)
-    .filter((role) => role !== "shaper")
-    .map((role) => row(cell(el("p-text", role)), roundCell(role, "minutes", "Minutes per session"))));
-  const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
-  document.getElementById("agents-later").replaceChildren(...Object.entries(loaded.settings.agents).map(
-    ([role, eff]) => row(cell(el("p-text", role)),
-      ...later.map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`))),
-  ));
-  const { baseline, runtimes, categories } = loaded.catalogue;
-  document.getElementById("baseline").textContent = `Every runtime has the baseline: ${baseline}.`;
-  document.getElementById("runtimes").replaceChildren(...runtimes.map((r) => row(
-    ...[r.runtime, r.adds, r.mcp, r.live_view, r.outside_writes].map((v) => cell(el("p-text", v))))));
-  document.getElementById("categories").replaceChildren(...Object.entries(categories).map(([name, c]) => row(
-    ...[name, c.runtime, c.tools.join(", ")].map((v) => cell(el("p-text", v))))));
-  const general = [["Always visible (global switch)", loaded.settings.visible, "visible"],
-    ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
-  document.getElementById("general").replaceChildren(
-    row(cell(el("p-text", "Screenshot widths")), widths()),
-    row(cell(el("p-text", "Design failures")), designFailures()),
-  );
-  document.getElementById("general-later").replaceChildren(...general.map(([label, value, key]) => row(
-    cell(el("p-text", label)), inactive(label, value, key))));
-  const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
-  document.getElementById("agreement").replaceChildren(...loaded.agreement.map((a) => row(
-    ...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided), share(a.disagreed, a.decided),
-      share(a.unsure, a.decided)].map((v) => cell(el("p-text", v))))));
-  document.getElementById("agreement-table").hidden = !loaded.agreement.length;
-  document.getElementById("agreement-note").textContent = loaded.agreement.length
-    ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
-    : "No decided visual rounds yet, or no shared repository is set up.";
-  document.getElementById("design-pack").textContent = loaded.design_pack;
-  pending();
-}
-
-function lock(on) {
-  saving = on;
-  const button = document.getElementById("save");
-  if (pds) button.loading = on;
-  else button.disabled = on;
-  for (const input of document.querySelectorAll("#scope, #folder, #rename, main [data-key]")) input.disabled = on;
-}
-
-function edited(layer) {
-  const next = structuredClone(loaded[layer]);
-  for (const [key, value] of Object.entries(drafts[layer])) {
-    if (key === "widths") {
-      next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
-      continue;
-    }
-    if (key === "design_failures") {
-      next[key] = value || null;
-      continue;
-    }
-    const [role, field] = key.split(".");
-    const round = NUMBERS.includes(field);  // a number; anything else is sent as typed and refused
-    const number = !round || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
-    if (role === "final_review") {
-      const own = { ...(next.final_review ?? {}), [field]: number };
-      next.final_review = Object.values(own).some((v) => v !== null) ? own : null;
-      continue;
-    }
-    const agent = next.agents[role] ?? {};
-    agent[field] = number ?? (value || null);
-    if (Object.values(agent).some((v) => v !== null)) next.agents[role] = agent;
-    else delete next.agents[role];
-  }
-  return next;
-}
-
-async function reload() {
-  try {
-    loaded = await call("/config");
-    notify(loaded.notice || "");
-    return true;
-  } catch (e) {
-    notify(e.message);
-    return false;
-  }
-}
-
-async function save() {
-  if (saving || !loaded) return;
-  const wrong = Object.keys(loaded.settings.agents).flatMap((r) => [mismatch(r), tierMismatch(r)]).filter(Boolean);
-  if (wrong.length) {
-    notify(`Not saved: ${wrong.join("; ")}.`);
-    return;
-  }
-  const layer = rendered, sent = { ...drafts[layer] };
-  if (layer === "global" && !(await ask({
-    title: "Change the defaults for all projects?", yes: "Save global defaults", no: "Keep editing",
-    now: "These become the defaults for every project:", items: changes(layer),
-    then: "Each project's next session uses them, unless the project sets its own value; sessions running now keep "
-      + "theirs.",
-    after: "Change them back here at any time.",
-    instead: "Your edits stay unsaved on this page.",
-  }))) return;
-  lock(true);
-  say("Saving…");
-  try {
-    loaded = await call(`/config/${layer}`, "PUT", { rev: loaded[`${layer}_rev`], layer: edited(layer) });
-    for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
-    notify(loaded.notice || "");
-    say(`Saved ${layer === "global" ? "the global" : "this project's"} settings. They apply to the next session.`);
-  } catch (e) {
-    say("");
-    if (e.status === 409 && await reload()) {
-      notify(`${e.message}. The page loaded the current settings and kept your unsaved edits; `
-        + "check them and save again.");
-    } else {
-      notify(e.message);
-    }
-  } finally {
-    lock(false);
-    if (loaded) render();
-  }
-}
-
-async function rename() {
-  const name = document.getElementById("folder").value.trim();
-  if (saving || !loaded?.folder || !name || name === loaded.folder) return;
-  const sure = await ask({
-    title: `Rename the folder ${loaded.folder} to ${name}?`, yes: "Rename", no: "Keep the name",
-    now: "Delivery moves the folder with this project's settings, memory and visual decisions in the shared "
-      + "settings repository, then commits and pushes the move. It refuses while a step of this project runs.",
-    then: "Other clones of this project use the new name the next time they start.",
-    after: "Rename it again here at any time; your source checkout keeps its name.",
-    instead: "The folder keeps its name.",
-  });
-  if (!sure) return;
-  lock(true);
-  say("Renaming…");
-  try {
-    loaded = await call("/config/folder", "PUT", { name });
-    notify(loaded.notice || "");
-    say(`This project's folder is now ${loaded.folder}.`);
-  } catch (e) {
-    say("");
-    notify(e.message);
-  } finally {
-    lock(false);
-    if (loaded) render();
-  }
-}
-
-// Without the design system: native tables, layer switch and Save button in place of the page's p-* ones.
-function plain() {
-  for (const old of document.querySelectorAll("p-table")) {
-    const caption = old.getAttribute("caption");  // the box scrolls on a narrow screen, so it takes the keyboard
-    const box = el("div", undefined, { class: "scroll", role: "region", tabindex: "0", "aria-label": caption });
-    const table = el("table"), head = el("tr"), thead = el("thead");
-    for (const h of old.querySelectorAll("p-table-head-cell")) head.append(el("th", h.textContent, { scope: "col" }));
-    thead.append(head);
-    table.append(el("caption", caption), thead,
-      el("tbody", undefined, { id: old.querySelector("p-table-body").id }));
-    if (old.id) box.id = old.id;
-    box.append(table);
-    old.replaceWith(box);
-  }
-  const scope = document.getElementById("scope"), field = el("label", scope.getAttribute("label"), { class: "field" });
-  const layer = el("select", undefined, { id: "scope" });
-  for (const o of scope.querySelectorAll("p-select-option")) {
-    layer.append(el("option", o.textContent, { value: o.getAttribute("value") }));
-  }
-  layer.value = scope.getAttribute("value");
-  field.append(layer);
-  scope.replaceWith(field);
-  document.getElementById("save").replaceWith(el("button", "Save", { id: "save", type: "button" }));
-  const folder = el("label", document.getElementById("folder").getAttribute("label"), { class: "field" });
-  folder.append(el("input", undefined, { id: "folder", type: "text" }));
-  document.getElementById("folder").replaceWith(folder);
-  document.getElementById("rename").replaceWith(el("button", "Rename folder", { id: "rename", type: "button" }));
-  document.getElementById("pack-update").replaceWith(
-    el("button", "Update design pack", { id: "pack-update", type: "button" }));
-  document.getElementById("pack-discard").replaceWith(
-    el("button", "Discard the update", { id: "pack-discard", type: "button" }));
-  document.getElementById("error").setAttribute("role", "alert");
-}
-
-async function start() {
-  // PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
-  const used = ["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"];
-  const ready = Promise.all(used.map((t) => customElements.whenDefined(t))).then(() => true);
-  pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
-  if (!pds) {
-    document.documentElement.classList.add("no-pds");
-    document.getElementById("offline").hidden = false;
-    plain();
-  }
-  for (const type of ["input", "change"]) {
-    for (const id of ["agents", "rounds", "limits", "general"]) document.getElementById(id).addEventListener(type, edit);
-  }
-  document.getElementById("agents").addEventListener("click", inherit);
-  document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });
-  document.getElementById("save").addEventListener("click", save);
-  document.getElementById("rename").addEventListener("click", rename);
-  document.getElementById("pack-update").addEventListener("click", startUpdate);
-  document.getElementById("pack-discard").addEventListener("click", discardUpdate);
-  if (await reload()) render();
-  await readPack();
-  await readModels();
-}
-
+  ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
+  ["updater", "Design pack updates (updater)"]];
+const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
 // TD-101: the design pack update runs in the host; the page starts it and follows its stages.
 const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
   returned: "findings back to the updater", waiting: "waiting for you" };
@@ -866,14 +75,434 @@ const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "reject
   standing: "rejected by the updater; the challenger accepted that",
   escalated: "rejected by the updater; the challenger upheld it", "owner-fix": "you decided: fix it",
   "owner-drop": "you dropped it", withdrawn: "withdrawn by the challenger" };
-let polling = null, announced = "", asked = "", shownLoop = null;
-const packNotes = new Map();  // unsent notes by question, so answering one finding keeps the others' drafts
+// Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed,
+// the offered models once read, and the design pack's update with the notes typed for its questions.
+const state = {
+  pds: true, loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
+  folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
+};
+const drafts = { project: {}, global: {} };
+let polling = null;
+
+function show() {
+  render(view(), document.getElementById("page"));
+}
+
+// Render once no setting holds the focus, so arriving choices never replace the control being used.
+function showIdle() {
+  if (!document.activeElement?.closest?.("main [data-key]")) return show();
+  document.querySelector("main").addEventListener("focusout", () => setTimeout(showIdle), { once: true });
+}
+
+function notify(message) {
+  state.error = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
+  show();
+}
+
+function shown(value) {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  return String(value);
+}
+
+function source(key, inUse) {
+  const from = SOURCES[state.loaded.settings.sources[key]];
+  const line = inUse === undefined ? `from ${from}` : `in use: ${shown(inUse)}, from ${from}`;
+  return html`<p-text size="xs" color="contrast-medium">${line}</p-text>`;
+}
+
+function cell(...parts) {
+  return state.pds ? html`<p-table-cell multiline="true">${parts}</p-table-cell>` : html`<td>${parts}</td>`;
+}
+
+function row(...cells) {
+  return state.pds ? html`<p-table-row>${cells}</p-table-row>` : html`<tr>${cells}</tr>`;
+}
+
+// A table: the design system's, else a native one in a box that scrolls on a narrow screen and takes the keyboard.
+function table(caption, heads, body, rows, { id, hidden = false } = {}) {
+  if (state.pds) {
+    return html`<p-table id=${id ?? nothing} caption=${caption} ?hidden=${hidden}><p-table-head><p-table-head-row>
+      ${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
+      <p-table-body id=${body}>${rows}</p-table-body></p-table>`;
+  }
+  return html`<div id=${id ?? nothing} class="scroll" role="region" tabindex="0" aria-label=${caption}
+    ?hidden=${hidden}><table><caption>${caption}</caption>
+    <thead><tr>${heads.map((h) => html`<th scope="col">${h}</th>`)}</tr></thead>
+    <tbody id=${body}>${rows}</tbody></table></div>`;
+}
+
+// A table cell's choice: its column says what it is, so the label is for assistive technology only.
+// *wrong* says why the choice cannot run, for a choice that is checked (an effort); undefined for the others.
+function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
+  const changed = (e) => chosen(e.target.value);
+  const items = options.map(([v, said]) => (state.pds ? html`<p-select-option value=${v}>${said}</p-select-option>`
+    : html`<option value=${v} ?selected=${v === value}>${said}</option>`));
+  if (state.pds) {
+    const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
+    return html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
+      filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
+      .value=${live(value)} @change=${changed}>${items}</p-select>`;
+  }
+  const said = wrong === undefined ? undefined : `${key}-message`;
+  return html`<select aria-label=${label} data-key=${key ?? nothing} ?disabled=${disabled} .value=${live(value)}
+    aria-invalid=${said ? (wrong ? "true" : "false") : nothing} aria-describedby=${said ?? nothing}
+    @change=${changed}>${items}</select>${said ? html`<p-text size="xs" color="error" class="message"
+    id=${said}>${wrong}</p-text>` : nothing}`;
+}
+
+function typed(label, value, onInput, { key, placeholder, inputmode, disabled = false } = {}) {
+  const keep = (e) => onInput(e.target.value ?? "");
+  return state.pds
+    ? html`<p-input-text label=${label} hide-label="true" data-key=${key ?? nothing}
+        placeholder=${placeholder ?? nothing} inputmode=${inputmode ?? nothing} ?disabled=${disabled}
+        .value=${live(value)} @input=${keep} @change=${keep}></p-input-text>`
+    : html`<input type="text" aria-label=${label} data-key=${key ?? nothing} placeholder=${placeholder ?? nothing}
+        inputmode=${inputmode ?? nothing} ?disabled=${disabled} .value=${live(value)} @input=${keep}>`;
+}
+
+function tick(label, checked, hideLabel = true) {
+  if (state.pds) {
+    return html`<p-checkbox label=${label} hide-label=${hideLabel ? "true" : "false"} disabled="true"
+      .checked=${checked}></p-checkbox>`;
+  }
+  const box = html`<input type="checkbox" disabled aria-label=${hideLabel ? label : nothing} .checked=${checked}>`;
+  return hideLabel ? box : html`<label>${box} ${label}</label>`;
+}
+
+function pure(label, onclick) {
+  return state.pds
+    ? html`<p-button-pure type="button" size="x-small" icon="reset" @click=${onclick}>${label}</p-button-pure>`
+    : html`<button type="button" @click=${onclick}>${label}</button>`;
+}
+
+function button(label, onclick, { id, icon, variant, busy = false, disabled = false } = {}) {
+  return state.pds
+    ? html`<p-button id=${id ?? nothing} type="button" compact="true" icon=${icon ?? nothing}
+        variant=${variant ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`
+    : html`<button id=${id ?? nothing} type="button" .disabled=${busy || disabled} @click=${onclick}>${label}</button>`;
+}
+
+function saved(layer, key) {
+  const loaded = state.loaded;
+  if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
+  if (key === "design_failures") return loaded[layer]?.[key] ?? "";
+  const [role, field] = key.split(".");
+  const value = role === "final_review" ? loaded[layer]?.final_review?.[field] : loaded[layer]?.agents?.[role]?.[field];
+  return value === null || value === undefined ? "" : String(value);
+}
+
+// The edited layer's value of *key*: the draft as typed, else the saved value.
+function own(key) {
+  return key in drafts[state.layer] ? drafts[state.layer][key] : saved(state.layer, key);
+}
+
+function inherited() {
+  return state.loaded.inherited[state.layer];
+}
+
+// One edit of the edited layer; a value equal to the saved one is no edit, an inherit choice clears the value.
+function edit(key, raw) {
+  const field = key.split(".")[1] ?? key, value = !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
+  if (value.trim() === saved(state.layer, key)) delete drafts[state.layer][key];
+  else drafts[state.layer][key] = value;
+  show();
+}
+
+// TD-209: one loop's round value, or a role's minutes (TD-286); blank inherits (the final review, the builder's).
+function numberCell(owner, field, label) {
+  const key = `${owner}.${field}`, final = owner === "final_review";
+  const below = final ? finalBelow(field) : inherited().agents[owner][field];
+  const inUse = final ? state.loaded.settings.final_review[field] : state.loaded.settings.agents[owner][field];
+  return cell(typed(`${label}, ${owner.replace("_", " ")}`, own(key), (v) => edit(key, v),
+    { key, placeholder: `inherit (${below})`, inputmode: "numeric", disabled: state.saving }),
+  source(final ? key : `agents.${key}`, inUse));
+}
+
+// What a blank final-review value takes: the global one when editing this project, else the builder's as edited.
+function finalBelow(field) {
+  const above = state.layer === "project" ? state.loaded.global?.final_review?.[field] : null;
+  if (above !== null && above !== undefined) return above;
+  return own(`builder.${field}`).trim() || inherited().agents.builder[field];
+}
+
+// TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
+function designFailures() {
+  const key = "design_failures", below = inherited()[key];
+  return cell(choose("When the design judge fails a change", [[INHERIT, `inherit (${below})`],
+    ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], own(key) || INHERIT,
+  (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings.design_failures));
+}
+
+function widths() {
+  const below = inherited().widths.join(", ");
+  return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
+    (v) => edit("widths", v), { key: "widths", placeholder: `inherit (${below})`, disabled: state.saving }),
+  source("widths", state.loaded.settings.widths));
+}
+
+function tokens(n) {
+  return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
+}
+
+// The model a role runs with in the edited layer: its own draft or saved value, else what it inherits.
+function modelOf(role) {
+  return own(`${role}.model`).trim() || inherited().agents[role].model;
+}
+
+function offeredModel(role) {
+  return state.offered?.find((m) => m.id === modelOf(role));
+}
+
+// Why the role's effort, its own or inherited, cannot run with its model; empty when it can or nothing is known.
+function mismatch(role) {
+  const model = offeredModel(role), mine = own(`${role}.effort`);
+  const effort = mine || inherited().agents[role].effort;
+  if (!model || !model.efforts.length || model.efforts.includes(effort)) return "";
+  return `${model.id} does not offer effort ${effort}${mine ? "" : " (inherited)"}; choose one it offers`;
+}
+
+function tierOf(role) {
+  return own(`${role}.context`) || inherited().agents[role].context;
+}
+
+// Why the role's context tier cannot run with its model; empty when it can or nothing is known.
+function tierMismatch(role) {
+  const model = offeredModel(role);
+  if (!model || model.long || tierOf(role) !== "long") return "";
+  return `${model.id} has no long context${own(`${role}.context`) ? "" : " (inherited)"}; choose its default`;
+}
+
+// The long tier costs more per token: higher input or output rates than the default tier.
+function dearer(model) {
+  const [base, long] = [model.rates, model.long?.rates];
+  return Boolean(base && long && (long.input > base.input || long.output > base.output));
+}
+
+function contextCell(role) {
+  const key = `${role}.context`, mine = own(key), model = offeredModel(role), label = `Context for ${role}`;
+  let control;
+  if (model?.long) {
+    const up = dearer(model), more = up ? "higher rates per token" : "same rates per token";
+    const items = [["default", tokens(model.context), `${tokens(model.context)}, default context`],
+      ["long", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
+        `${tokens(model.long.context)}, long context, ${more}`]];
+    control = state.pds
+      ? html`<p-segmented-control label=${label} hide-label="true" compact="true" columns="2" data-key=${key}
+          ?disabled=${state.saving} .value=${live(tierOf(role))} @change=${(e) => edit(key, e.target.value)}>
+          ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
+            aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`
+      : choose(label, items.map(([v, , aria]) => [v, aria]), tierOf(role), (v) => edit(key, v),
+        { key, disabled: state.saving });
+  } else if (model) {
+    const wrong = tierMismatch(role);
+    control = html`<p-text size="sm">${tokens(model.context)} \u00b7 only tier</p-text>${wrong ? html`
+      <p-text size="xs" color="error">${wrong}</p-text>${pure("Use the default tier", () => edit(key, "default"))}`
+      : nothing}`;  // the default tier overrides an inherited long one
+  } else {
+    const below = inherited().agents[role].context;
+    control = choose(label, [[INHERIT, `inherit (${below})`], ["default", "default"], ["long", "long"]],
+      mine || INHERIT, (v) => edit(key, v), { key, disabled: state.saving });
+  }
+  const reset = model && mine ? pure("Use inherited", () => edit(key, "")) : nothing;
+  return cell(control, reset, source(`agents.${key}`, state.loaded.settings.agents[role].context));
+}
+
+function amount(n) {
+  return n.toLocaleString("en", { maximumFractionDigits: 2 });
+}
+
+function ratesCell(role) {
+  const model = offeredModel(role), long = tierOf(role) === "long" && model?.long;
+  const rates = long ? model.long.rates : model?.rates;
+  if (!rates) return cell(html`<p-text>\u2014</p-text><p-text size="xs" color="contrast-medium">not known</p-text>`);
+  const write = rates.cache_write ? ` \u00b7 cache write ${amount(rates.cache_write)}` : "";
+  const flow = `in ${amount(rates.input)} \u00b7 out ${amount(rates.output)}`;
+  const line = `${flow} \u00b7 cache ${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
+  return cell(html`<p-text>${line}</p-text><p-text size="xs" color="contrast-medium">${model.id}, ${long ? "long"
+    : "default"} context</p-text>`);
+}
+
+function editable(role, field) {
+  const key = `${role}.${field}`, below = inherited().agents[role][field], value = own(key);
+  const label = `${field === "model" ? "Model" : "Effort"} for ${role}`, model = offeredModel(role);
+  const set = (v) => edit(key, v), common = { key, disabled: state.saving };
+  let control, note = nothing;
+  if (field === "effort") {
+    const efforts = model ? model.efforts : EFFORTS;
+    const options = [[INHERIT, `inherit (${below})`],
+      ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
+    if (value && !efforts.includes(value)) {
+      options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
+    }
+    control = choose(label, options, value || INHERIT, set, { ...common, wrong: mismatch(role) });
+    if (model && !model.efforts.length) {
+      note = html`<p-text size="xs" color="contrast-medium">${model.id} takes no effort setting</p-text>`;
+    }
+  } else if (state.offered?.length) {
+    const options = [[INHERIT, `inherit (${below})`], ...state.offered.map((m) => {
+      const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
+      const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
+      return [m.id, `${m.name} (${m.id})${sizes}`];
+    })];
+    if (value && !state.offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
+    control = choose(label, options, value || INHERIT, set, { ...common, filter: true });
+  } else {
+    control = typed(label, value, set, { ...common, placeholder: `inherit (${below})` });
+  }
+  return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]));
+}
+
+// A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
+function inactive(label, value, key) {
+  let control;
+  if (typeof value === "boolean") {
+    control = tick(label, value);
+  } else if (key.endsWith(".runtime")) {
+    control = choose(label, state.loaded.catalogue.runtimes.map((r) => [r.runtime, r.runtime]), value, () => {},
+      { disabled: true });
+  } else if (key.endsWith(".categories")) {
+    const names = Object.keys(state.loaded.catalogue.categories);
+    control = html`<div role=${state.pds ? nothing : "group"} aria-label=${state.pds ? nothing : label}>
+      ${names.map((name) => tick(name, value.includes(name), false))}</div>`;
+  } else {
+    control = typed(label, shown(value), () => {}, { disabled: true });
+  }
+  return cell(control, source(key));
+}
+
+// The edited layer's drafts that differ from what is saved, trimmed as they will be sent.
+function dirty(layer) {
+  return Object.entries(drafts[layer]).filter(([key, value]) => value.trim() !== saved(layer, key));
+}
+
+// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.
+function changes(layer) {
+  const said = (v) => (v === "" || v === null || v === undefined ? "inherited" : v);
+  return dirty(layer).map(([key, value]) =>
+    `${key.replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${said(value.trim())}`);
+}
+
+function pendingLine() {
+  const other = state.layer === "global" ? "project" : "global", count = dirty(other).length;
+  const mine = changes(state.layer), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
+  if (count) parts.push(`${LAYERS[other]}: ${count} more unsaved.`);
+  return parts.join(" ");
+}
+
+function edited(layer) {
+  const next = structuredClone(state.loaded[layer]);
+  for (const [key, raw] of dirty(layer)) {
+    const value = raw.trim();
+    if (key === "widths") {
+      next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
+      continue;
+    }
+    if (key === "design_failures") {
+      next[key] = value || null;
+      continue;
+    }
+    const [role, field] = key.split(".");
+    const number = !NUMBERS.includes(field) || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
+    if (role === "final_review") {
+      const mine = { ...(next.final_review ?? {}), [field]: number };
+      next.final_review = Object.values(mine).some((v) => v !== null) ? mine : null;
+      continue;
+    }
+    const agent = next.agents[role] ?? {};
+    agent[field] = number ?? (value || null);
+    if (Object.values(agent).some((v) => v !== null)) next.agents[role] = agent;
+    else delete next.agents[role];
+  }
+  return next;
+}
+
+async function reload() {
+  try {
+    state.loaded = await call("/config");
+    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    return true;
+  } catch (e) {
+    notify(e.message);
+    return false;
+  }
+}
+
+async function save() {
+  if (state.saving || !state.loaded) return;
+  const roles = Object.keys(state.loaded.settings.agents);
+  const wrong = roles.flatMap((r) => [mismatch(r), tierMismatch(r)]).filter(Boolean);
+  if (wrong.length) return notify(`Not saved: ${wrong.join("; ")}.`);
+  const layer = state.layer, sent = { ...drafts[layer] };
+  if (layer === "global" && !(await ask({
+    title: "Change the defaults for all projects?", yes: "Save global defaults", no: "Keep editing",
+    now: "These become the defaults for every project:", items: changes(layer),
+    then: "Each project's next session uses them, unless the project sets its own value; sessions running now keep "
+      + "theirs.",
+    after: "Change them back here at any time.",
+    instead: "Your edits stay unsaved on this page.",
+  }))) return;
+  state.saving = true;
+  state.status = "Saving…";
+  show();
+  try {
+    state.loaded = await call(`/config/${layer}`,
+      { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer) }, timeout: WRITE });
+    for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
+    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    state.status = `Saved ${layer === "global" ? "the global" : "this project's"} settings. They apply to the next `
+      + "session.";
+  } catch (e) {
+    state.status = "";
+    if (e.status === 409 && await reload()) {
+      state.error = `${e.message}. The page loaded the current settings and kept your unsaved edits; `
+        + "check them and save again.";
+      state.error = state.error.charAt(0).toUpperCase() + state.error.slice(1);
+    } else {
+      state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
+    }
+  } finally {
+    state.saving = false;
+    show();
+  }
+}
+
+async function rename() {
+  const loaded = state.loaded, name = (state.folder ?? loaded?.folder ?? "").trim();
+  if (state.saving || !loaded?.folder || !name || name === loaded.folder) return;
+  const sure = await ask({
+    title: `Rename the folder ${loaded.folder} to ${name}?`, yes: "Rename", no: "Keep the name",
+    now: "Delivery moves the folder with this project's settings, memory and visual decisions in the shared "
+      + "settings repository, then commits and pushes the move. It refuses while a step of this project runs.",
+    then: "Other clones of this project use the new name the next time they start.",
+    after: "Rename it again here at any time; your source checkout keeps its name.",
+    instead: "The folder keeps its name.",
+  });
+  if (!sure) return;
+  state.saving = true;
+  state.status = "Renaming…";
+  show();
+  try {
+    state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
+    state.folder = null;
+    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    state.status = `This project's folder is now ${state.loaded.folder}.`;
+  } catch (e) {
+    state.status = "";
+    state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
+  } finally {
+    state.saving = false;
+    show();
+  }
+}
 
 function when(iso) {
   return iso ? new Date(iso).toLocaleString() : "";
 }
 
-function renderUpdate(u) {
+function packLine(u) {
+  if (state.packProblem) return state.packProblem;
+  if (!u) return "";
   const at = u.stages.findIndex((s) => s.name === u.stage);
   let line = ENDINGS[u.state] ?? u.state;
   if (u.state === "running") {
@@ -881,77 +510,47 @@ function renderUpdate(u) {
   } else if (u.started_at) {
     line += ` Started ${when(u.started_at)}` + (u.ended_at ? `, ended ${when(u.ended_at)}.` : ".");
   }
-  if (line !== announced) document.getElementById("pack-state").textContent = announced = line;
-  document.getElementById("pack-stages").replaceChildren(...u.stages.map((s) => {
-    const item = el("li"), result = RESULTS[s.result] ?? s.result;
-    item.append(el("p-text", `${s.label}: `, { size: "sm" }),
-      el("p-tag", result, { variant: TAGS[s.result], compact: "true" }));
-    if (s.detail) item.append(el("p-text", ` ${s.detail}`, { size: "xs", color: "contrast-medium" }));
-    return item;
-  }));
-  document.getElementById("pack-reason").textContent = u.state === "running" ? "" : u.reason;
-  const p = u.pushed;
-  document.getElementById("pack-pushed").textContent = p
-    ? `Pushed commit ${p.commit.slice(0, 12)} to ${p.remote} ${p.branch}: ${p.files.join(", ")}.` : "";
-  document.getElementById("pack-log").textContent = u.log.length ? u.log.join("\n") : "No run yet.";
-  document.getElementById("pack-update").disabled = u.state === "running" || u.state === "waiting";
-  shownLoop = u.loop;
-  renderFindings(u.loop?.findings ?? []);
-  renderQuestions(u.state === "waiting" ? u.questions : []);
+  return line;
+}
+
+function updated(u) {
+  state.update = u;
+  state.packProblem = "";
+  show();
   if (u.state === "running") poll();
 }
 
-function renderFindings(found) {
-  document.getElementById("pack-findings-box").hidden = !found.length;
-  document.getElementById("pack-findings").replaceChildren(...found.map((f) => {
+function findings(found) {
+  return found.map((f) => {
     const why = [f.reason && `Updater: ${f.reason}`, f.judgement && `Challenger: ${f.judgement}`,
       f.note && `Your note: ${f.note}`, f.clarified && `Reconsidered: ${f.clarified}`].filter(Boolean).join(" ");
-    return el("li", `${f.id} (round ${f.raised}), ${FOUND[f.state] ?? f.state}: ${f.text}${why ? ` ${why}` : ""}`);
-  }));
+    return html`<li>${f.id} (round ${f.raised}), ${FOUND[f.state] ?? f.state}: ${f.text}${why ? ` ${why}` : ""}</li>`;
+  });
 }
 
-// A waiting run's questions: one per finding the challenger upheld against the updater (TD-193), or the end without
-// a pass (TD-256). Drawn once per set of questions, so a note being typed survives a reload of the state.
-function renderQuestions(questions) {
-  const box = document.getElementById("pack-ask"), key = questions.map((q) => q.id).join(" ");
-  box.hidden = !questions.length;
-  if (key === asked) return;
-  asked = key;
-  document.getElementById("pack-questions").replaceChildren(...questions.map(packQuestion));
-}
-
+// A waiting run's question: one per finding the challenger upheld against the updater (TD-193), or the end without
+// a pass (TD-256). A note being typed lives in state, so it survives every reload of the update's state.
 function packQuestion(q) {
-  const box = el("div", undefined, { class: "pack-question" });
-  box.append(el(pds ? "p-text" : "p", q.text));
-  let note = () => "";
+  let field = nothing;
   if (q.kind === "dispute") {
     const label = "Your note (guides the updater; needed to ask the challenger again)";
-    const area = el("textarea", undefined, { rows: "2", maxlength: "2000" });
-    const field = pds ? el("p-textarea", undefined, { label, rows: "2", maxlength: "2000" })
-      : el("label", label, { class: "field" });
-    if (!pds) field.append(area);
-    const kept = packNotes.get(q.id) ?? "";
-    if (pds) field.setAttribute("value", kept);
-    else area.value = kept;
-    note = () => (pds ? field.value : area.value) || "";
-    field.addEventListener("input", () => packNotes.set(q.id, note()));
-    box.append(field);
+    const note = state.packNotes.get(q.id) ?? "", keep = (e) => state.packNotes.set(q.id, e.target.value ?? "");
+    field = state.pds
+      ? html`<p-textarea label=${label} rows="2" max-length="2000" .value=${live(note)} @input=${keep}
+          @change=${keep}></p-textarea>`
+      : html`<label class="field">${label}<textarea rows="2" maxlength="2000" .value=${live(note)}
+          @input=${keep}></textarea></label>`;
   }
-  const buttons = el("div", undefined, { class: "row" });
-  buttons.append(...q.options.map((o) => {
-    const button = pds ? el("p-button", o.label, { type: "button", compact: "true", variant: "secondary" })
-      : el("button", o.label, { type: "button" });
-    button.addEventListener("click", () => answerUpdate(q, o, note()));
-    return button;
-  }));
-  box.append(buttons);
-  return box;
+  return html`<div class="pack-question">${state.pds ? html`<p-text>${q.text}</p-text>` : html`<p>${q.text}</p>`}
+    ${field}
+    <div class="row">${q.options.map((o) => button(o.label, () => answerUpdate(q, o, state.packNotes.get(q.id) ?? ""),
+      { variant: "secondary" }))}</div></div>`;
 }
 
 async function answerUpdate(q, o, note) {
-  const left = ["rejected", "standing", "owner-drop"];
-  const standing = (shownLoop?.findings ?? []).filter((f) => left.includes(f.state));
-  const items = [...(shownLoop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
+  const left = ["rejected", "standing", "owner-drop"], loop = state.update?.loop;
+  const standing = (loop?.findings ?? []).filter((f) => left.includes(f.state));
+  const items = [...(loop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
     ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
   if (o.id === "activate" && !(await ask({
     title: "Activate the pack without a passing challenge?", yes: "Activate and push", no: "Keep it waiting",
@@ -964,9 +563,10 @@ async function answerUpdate(q, o, note) {
     instead: "The update keeps waiting; you can still discard it.",
   }))) return;
   try {
-    const answered = await call("/design-pack/update/answer", "POST", { question: q.id, option: o.id, note });
-    packNotes.delete(q.id);
-    renderUpdate(answered);
+    const answered = await call("/design-pack/update/answer",
+      { body: { question: q.id, option: o.id, note }, timeout: WRITE });
+    state.packNotes.delete(q.id);
+    updated(answered);
   } catch (e) {
     notify(e.message);
     await readPack();
@@ -975,7 +575,7 @@ async function answerUpdate(q, o, note) {
 
 async function discardUpdate() {
   try {
-    renderUpdate(await call("/design-pack/update/discard", "POST"));
+    updated(await call("/design-pack/update/discard", { method: "POST", timeout: WRITE }));
   } catch (e) {
     notify(e.message);
     await readPack();
@@ -984,14 +584,11 @@ async function discardUpdate() {
 
 async function readPack() {
   try {
-    const pack = await call("/design-pack");
-    const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
-    document.getElementById("pack-active").textContent = `Active: ${pack.pack} from upstream ${pack.upstream}, `
-      + `identity ${pack.identity}. ${plain(pack.status)}.`;
-    document.getElementById("pack-notice").textContent = `Last notice: ${pack.notice}.`;
-    renderUpdate(pack.update);
+    state.pack = await call("/design-pack");
+    updated(state.pack.update);
   } catch (e) {
-    document.getElementById("pack-state").textContent = `Could not read the design pack: ${e.message}`;
+    state.packProblem = `Could not read the design pack: ${e.message}`;
+    show();
   }
 }
 
@@ -999,9 +596,10 @@ function poll() {
   clearTimeout(polling);
   polling = setTimeout(async () => {
     try {
-      renderUpdate(await call("/design-pack/update"));
+      updated(await call("/design-pack/update"));
     } catch (e) {
-      document.getElementById("pack-state").textContent = `Could not read the update: ${e.message}`;
+      state.packProblem = `Could not read the update: ${e.message}`;
+      show();
       poll();
     }
   }, 2000);
@@ -1022,7 +620,7 @@ async function startUpdate() {
   });
   if (!sure) return;
   try {
-    renderUpdate(await call("/design-pack/update", "POST", undefined, 10000));
+    updated(await call("/design-pack/update", { method: "POST", timeout: 10000 }));
   } catch (e) {
     notify(e.message);
     await readPack();
@@ -1031,27 +629,192 @@ async function startUpdate() {
 
 // The offered models replace typing once read; the runtime starts for it, so this can take a while.
 async function readModels() {
-  const note = document.getElementById("models-note");
-  note.textContent = "Reading the models this machine's Copilot offers…";
+  state.modelsNote = "Reading the models this machine's Copilot offers…";
+  show();
   try {
-    const answer = await call("/config/models", "GET", undefined, 45000);
-    offered = answer.models.length ? answer.models : null;
-    note.textContent = offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
+    const answer = await call("/config/models", { timeout: 45000 });
+    state.offered = answer.models.length ? answer.models : null;
+    state.modelsNote = state.offered ? "Models, efforts and context sizes as this machine's Copilot offers them."
       : `Could not read the offered models (${answer.error || "none offered"}); type a model name.`;
   } catch (e) {
-    note.textContent = `Could not read the offered models (${e.message}); type a model name.`;
+    state.modelsNote = `Could not read the offered models (${e.message}); type a model name.`;
   }
-  if (!loaded || !offered || saving) return;
-  renderIdle();
+  if (state.saving) return;
+  showIdle();
 }
 
-// Render once no setting holds the focus, so arriving choices never replace the control being used.
-function renderIdle() {
-  if (!document.activeElement?.closest?.("main [data-key]")) return render();
-  document.querySelector("main").addEventListener("focusout", () => setTimeout(renderIdle), { once: true });
+function packSection() {
+  const u = state.update, pack = state.pack;
+  const plain = (t) => String(t).replaceAll(String.fromCharCode(96), "");  // the status is CLI text with code marks
+  const active = pack ? `Active: ${pack.pack} from upstream ${pack.upstream}, identity ${pack.identity}. `
+    + `${plain(pack.status)}.` : "";
+  const questions = u?.state === "waiting" ? u.questions : [], found = u?.loop?.findings ?? [];
+  const p = u?.pushed, busy = u?.state === "running" || u?.state === "waiting";
+  return html`<section id="pack" class="panel" aria-labelledby="pack-title">
+    <p-heading size="lg"><h2 id="pack-title">Design pack</h2></p-heading>
+    <p-text id="pack-active">${active}</p-text>
+    <p-text id="pack-notice" size="xs" color="contrast-medium">${pack ? `Last notice: ${pack.notice}.` : ""}</p-text>
+    <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
+      only if every stage passes, or if you accept it after its challenge rounds end without a pass.</p-text>
+    <div class="row">
+      ${button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh", disabled: busy })}
+      <p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>
+    </div>
+    <ol id="pack-stages" aria-label="Update stages">${(u?.stages ?? []).map((s) => html`<li>
+      <p-text size="sm">${s.label}: </p-text><p-tag variant=${TAGS[s.result]} compact="true">${RESULTS[s.result]
+        ?? s.result}</p-tag>${s.detail ? html`<p-text size="xs" color="contrast-medium"> ${s.detail}</p-text>`
+        : nothing}</li>`)}</ol>
+    <p-text id="pack-reason" size="sm">${u && u.state !== "running" ? u.reason : ""}</p-text>
+    <p-text id="pack-pushed" size="sm">${p ? `Pushed commit ${p.commit.slice(0, 12)} to ${p.remote} ${p.branch}: `
+      + `${p.files.join(", ")}.` : ""}</p-text>
+    <div id="pack-ask" ?hidden=${!questions.length}>
+      <p-heading size="md"><h3 id="pack-ask-title">The update waits for you</h3></p-heading>
+      <div id="pack-questions">${questions.map(packQuestion)}</div>
+      ${button("Discard the update", discardUpdate, { id: "pack-discard", variant: "secondary", icon: "close" })}
+    </div>
+    <details id="pack-findings-box" ?hidden=${!found.length}>
+      <summary>Findings of the challenge rounds</summary>
+      <ul id="pack-findings">${findings(found)}</ul>
+    </details>
+    <details>
+      <summary>Log of the last run</summary>
+      <pre id="pack-log">${u?.log.length ? u.log.join("\n") : "No run yet."}</pre>
+    </details>
+  </section>`;
 }
 
-start();
+function scopeSection() {
+  const loaded = state.loaded, options = [["project", "This project"], ["global", "All projects (global)"]];
+  const pick = (v) => { state.layer = v; show(); };
+  const control = state.pds
+    ? html`<p-select id="scope" label="Layer" ?disabled=${state.saving} .value=${live(state.layer)}
+        @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<p-select-option value=${v}
+        ?disabled=${v === "global" && !loaded.global_location}>${said}</p-select-option>`)}</p-select>`
+    : html`<label class="field">Layer<select id="scope" ?disabled=${state.saving} .value=${live(state.layer)}
+        @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<option value=${v}
+        ?selected=${v === state.layer} ?disabled=${v === "global" && !loaded.global_location}>${said}</option>`)}
+        </select></label>`;
+  return html`<section class="panel" aria-labelledby="scope-title">
+    <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
+    <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
+      : "No shared settings location is set up (run owlbear-next data PATH), so only this project's settings can be "
+        + "saved, in this clone."}</p-text></div>
+    <p-text>A blank project value uses the global one; a blank global value uses the built-in default.</p-text>
+  </section>`;
+}
+
+function folderSection() {
+  const loaded = state.loaded, off = !loaded.folder || state.saving, value = state.folder ?? loaded.folder ?? "";
+  const keep = (e) => { state.folder = e.target.value ?? ""; };
+  const label = "Folder in the shared settings repository";
+  const input = state.pds
+    ? html`<p-input-text id="folder" label=${label} ?disabled=${off} .value=${live(value)} @input=${keep}
+        @change=${keep}></p-input-text>`
+    : html`<label class="field">${label}<input id="folder" type="text" ?disabled=${off} .value=${live(value)}
+        @input=${keep}></label>`;
+  return html`<section class="panel" aria-labelledby="folder-title">
+    <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
+    <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit", disabled: off })}</div>
+    <p-text id="folder-note">${loaded.folder ? "Named after the repository unless renamed. Renaming moves the folder "
+      + "with its settings, memory and visual decisions, then commits and pushes the move; it is refused while a "
+      + "step of this project runs." : "No shared settings location is set up, so this project has no folder there."}
+    </p-text>
+  </section>`;
+}
+
+function settingsSections() {
+  const loaded = state.loaded, roles = Object.keys(loaded.settings.agents);
+  const share = (n, of) => `${n} (${Math.round((100 * n) / of)}%)`;
+  const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
+  const general = [["Always visible (global switch)", loaded.settings.visible, "visible"],
+    ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
+  const { baseline, runtimes, categories } = loaded.catalogue;
+  const text = (v) => cell(html`<p-text>${v}</p-text>`);
+  return html`
+    <section class="panel" aria-labelledby="agents-title">
+      <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
+      ${table("Agents: model, effort and context apply to the next session",
+        ["Agent", "Model", "Effort", "Context", "AI credits per 1M tokens"], "agents",
+        roles.map((role) => row(text(role), editable(role, "model"), editable(role, "effort"), contextCell(role),
+          ratesCell(role))))}
+      <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite">${state.modelsNote}</p-text>
+    </section>
+    <section class="panel" aria-labelledby="rounds-title">
+      <p-heading size="lg"><h2 id="rounds-title">Challenge rounds</h2></p-heading>
+      <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after
+        the last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
+      ${table("Challenge rounds: they apply to loops that start after a save", ["Loop", ...ROUNDS.map(([, l]) => l)],
+        "rounds", LOOPS.map(([owner, said]) => row(text(said),
+          ...ROUNDS.map(([field, label]) => numberCell(owner, field, label)))))}
+      <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower
+        than "ask you at or above", which may not exceed the findings per round. The final review inherits the
+        builder's values.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="limits-title">
+      <p-heading size="lg"><h2 id="limits-title">Session time limits</h2></p-heading>
+      <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and
+        runs again. The shaper's chat has no limit.</p-text>
+      ${table("Session time limits: they apply to the next session", ["Agent", "Minutes per session"], "limits",
+        roles.filter((role) => role !== "shaper").map((role) => row(text(role),
+          numberCell(role, "minutes", "Minutes per session"))))}
+      <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="general-title">
+      <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
+      ${table("Visual check settings: they apply to the next visual check", ["Setting", "Value"], "general",
+        [row(text("Screenshot widths"), widths()), row(text("Design failures"), designFailures())])}
+      <p-heading size="md"><h3 id="agreement-title">Agreement with your visual decisions</h3></p-heading>
+      <p-text id="design-pack" size="xs">${loaded.design_pack}</p-text>
+      <p-text id="agreement-note" size="xs" color="contrast-medium">${loaded.agreement.length
+        ? "From the decided rounds kept in the shared repository; below 20 rounds the numbers only inform."
+        : "No decided visual rounds yet, or no shared repository is set up."}</p-text>
+      ${table("How often each judge's verdict matched your Pass or Fail, per model",
+        ["Judge", "Model", "Decided", "Agreed", "Disagreed", "Unsure"], "agreement",
+        loaded.agreement.map((a) => row(...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided),
+          share(a.disagreed, a.decided), share(a.unsure, a.decided)].map(text))),
+        { id: "agreement-table", hidden: !loaded.agreement.length })}
+    </section>
+    ${packSection()}
+    <details class="panel">
+      <summary>Not applied yet: runtimes, visibility and tool categories</summary>
+      ${table("Per agent; not applied yet", ["Agent", "Runtime", "Needs visibility", "Categories"], "agents-later",
+        Object.entries(loaded.settings.agents).map(([role, eff]) => row(text(role),
+          ...later.map(([f, label]) => inactive(`${label} for ${role}`, eff[f], `agents.${role}.${f}`)))))}
+      ${table("Switches; not applied yet", ["Setting", "Value"], "general-later",
+        general.map(([label, value, key]) => row(text(label), inactive(label, value, key))))}
+      <p-text id="baseline" size="xs" color="contrast-medium">Every runtime has the baseline: ${baseline}.</p-text>
+      ${table("What each runtime adds; not used for routing yet", ["Runtime", "Adds over the baseline", "MCP servers",
+        "Live view", "Writes outside the work folder stopped by"], "runtimes", runtimes.map((r) => row(
+        ...[r.runtime, r.adds, r.mcp, r.live_view, r.outside_writes].map(text))))}
+      ${table("Tool categories an agent can ask for; not applied yet", ["Category", "Runtime", "Tools"], "categories",
+        Object.entries(categories).map(([name, c]) => row(...[name, c.runtime, c.tools.join(", ")].map(text))))}
+    </details>
+    <div class="bar" role="region" aria-label="Save settings">
+      ${button(state.layer === "global" ? "Save global defaults" : "Save project settings", save,
+        { id: "save", icon: "check", busy: state.saving })}
+      <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
+    </div>`;
+}
+
+function view() {
+  const loaded = state.loaded;
+  if (loaded && !loaded.global_location && state.layer === "global") state.layer = "project";
+  return html`
+    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
+      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
+    <p-inline-notification id="error" state="error" dismiss-button="false" role=${state.pds ? nothing : "alert"}
+      ?hidden=${!state.error}>${state.error}</p-inline-notification>
+    <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
+    ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}` : packSection()}`;
+}
+
+// PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
+state.pds = await designSystem(["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"]);
+show();
+await reload();
+show();
+await readPack();
+await readModels();
 </script>
 </body>
 </html>
