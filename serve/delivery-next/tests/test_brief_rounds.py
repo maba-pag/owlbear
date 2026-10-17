@@ -291,6 +291,33 @@ def test_a_reconsideration_that_cannot_confirm_its_end_stops_the_change_for_the_
     assert (c.outcome.exit, c.step.mode, loop.next_step(c, NOW)) == (Exit.STOP, "reconsider", None)
 
 
+def test_an_unchanged_version_whose_rejections_the_check_accepted_needs_no_tick(shaping):
+    shaping.save()
+    shaping.ask_challenge(1)
+    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": False})]
+    shaping.step()
+    assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200  # no revision: rejected whole
+    c = shaping.step()
+    assert (c.brief.challenged, c.loops[BRIEF].unreviewed) == (1, [])
+    assert shaping.approve(1).json() == {"accepted": "brief-approval"}
+
+
+def test_an_unchanged_version_at_the_round_limit_needs_no_tick(shaping):
+    shaping.save()
+    with shaping.store.lock(shaping.slug) as lock:
+        c = shaping.store.read(shaping.slug)
+        one = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=2)
+        c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=one)
+        shaping.store.write(lock, c)
+    shaping.ask_challenge(1)
+    shaping.verdicts += [verdict("AC-1")]
+    shaping.step()
+    assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200  # the last round: no session
+    c = shaping.change()
+    assert (c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (1, "max", [])
+    assert shaping.approve(1).json() == {"accepted": "brief-approval"}
+
+
 def test_a_wait_for_a_verdict_ends_when_its_request_was_retired():
     c = Change(slug="c1", brief=Brief(version=1, requested=1), step=Step(kind=K.SHAPE, mode="challenge"))
     c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=RoundPolicy())

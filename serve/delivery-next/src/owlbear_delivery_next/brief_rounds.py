@@ -157,7 +157,8 @@ def request(c: Change, version: int, rejected: Mapping[str, str], policy: RoundP
     elif then == "ask":
         ask(c, last(lp), now)
     else:
-        lp.unreviewed.append(f"v{version}")
+        if str(version) != lp.head:  # a revision after the last round; an unchanged version was judged whole
+            lp.unreviewed.append(f"v{version}")
         _ended(c, version, "count" if lp.found <= lp.policy.last_round_at else "max", now)
     return ""
 
@@ -221,7 +222,8 @@ def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]],
     lp, version = c.loops[BRIEF], c.brief.requested or c.brief.version
     recheck = c.step.mode == RECHECK
     if recheck:
-        lp.unreviewed.append(f"v{version}")  # the check judged its rejections, never the revision
+        if str(version) != lp.head:  # a revision the check judged the rejections of, never its fixes
+            lp.unreviewed.append(f"v{version}")
     else:
         lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
     lp.round += 1
