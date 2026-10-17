@@ -206,6 +206,17 @@ def test_a_stale_or_invalid_global_save_changes_nothing(store, tmp_path):
     assert path.read_bytes() == before
 
 
+def test_global_round_values_are_valid_on_their_own_whatever_this_project_overrides(store, tmp_path):
+    path = tmp_path / "global" / "config.json"
+    c = client(store, path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    mine = {"format": 2, "agents": {"builder": {"last_round_at": 1}}}
+    assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": mine}).status_code == 200
+    hidden = {"format": 2, "agents": {"builder": {"last_round_at": 8}}}  # above the default ask-owner value 7
+    r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": hidden})
+    assert (r.status_code, path.exists(), c.get("/api/next/config").status_code) == (422, False, 200)
+
+
 def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     def full(*_a: object, **_k: object) -> None:
         raise OSError(28, "No space left on device")

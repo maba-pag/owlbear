@@ -107,6 +107,7 @@ def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: 
         new = model.model_validate(body.layer)
         if isinstance(new, GlobalLayer):
             resolve(new, store.read_config())  # the combination this project would run with (TD-209)
+            resolve(new, Layer())  # and a project that sets nothing of its own
         else:
             resolve(read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None, new)
     except ValidationError as exc:
