@@ -212,6 +212,7 @@ class QueueState(_Model):
     entry: QueueEntry | None = None
     added: QueueEvent | None = None
     removed: QueueEvent | None = None
+    removed_last: bool = False  # the latest removal follows the latest addition in the timeline's own order
 
 
 class EnqueueStatus(StrEnum):

@@ -56,10 +56,17 @@ def _state(pr: Json) -> QueueState:
         group = (e.get("headCommit") or {}).get("oid")
         entry = QueueEntry(state=e["state"], position=e["position"], group_sha=group, enqueued_at=e["enqueuedAt"])
     events = [_event(n) for n in pr["timelineItems"]["nodes"]]
-    last = {k: next((v for v in reversed(events) if v.kind == k), None) for k in ("added", "removed")}
+    at = {k: max((i for i, v in enumerate(events) if v.kind == k), default=-1) for k in ("added", "removed")}
+    last = {k: events[i] if i >= 0 else None for k, i in at.items()}
     is_open, head = pr["state"] == "OPEN", pr["headRefOid"]
     return QueueState(
-        merged=pr["merged"], open=is_open, head_sha=head, entry=entry, added=last["added"], removed=last["removed"]
+        merged=pr["merged"],
+        open=is_open,
+        head_sha=head,
+        entry=entry,
+        added=last["added"],
+        removed=last["removed"],
+        removed_last=at["removed"] > at["added"] >= 0,
     )
 
 

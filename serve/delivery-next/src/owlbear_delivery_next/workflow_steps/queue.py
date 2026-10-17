@@ -9,10 +9,10 @@ as "already in the queue" and a stale expected head is refused.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import (
     ErrorKind,
     Exit,
@@ -42,8 +42,7 @@ if TYPE_CHECKING:
 
 M = StepKind.MERGE
 QUIET = 3  # passes without evidence of an enqueue before the owner is asked
-SKEW = timedelta(minutes=2)  # GitHub's clock against the host's, for a claim timed by the host
-UNSEEN = cause_key(ErrorKind.GATE, M, "queue-unseen")
+UNSEEN = QUEUE_UNSEEN
 TIMED_OUT = cause_key(ErrorKind.GATE, M, "queue-timed-out")
 REMOVED = cause_key(ErrorKind.GATE, M, "queue-removed")
 AGAIN = Option(id="again", label="Enqueue it again", next=M)
@@ -139,7 +138,7 @@ def hold(ctx: Ctx, c: Change, held: StepResult) -> tuple[Change, StepResult]:
 
 def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
     """Write the claim, then send once; only a definite answer settles it (``expectedHeadOid`` guards the head)."""
-    c.queue = QueueClaim(head=pr.head_sha, at=ctx.now)
+    c.queue = QueueClaim(head=pr.head_sha, at=ctx.now, after=q.added.id if q.added else "")
     _seen(c, q)
     ctx.store.write(ctx.lock, c)  # the claim outlives a crash between the send and the step's own write
     result = ctx.gh.enqueue(pr, pr.head_sha)
@@ -159,13 +158,11 @@ def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult:
 
 
 def _relevant(c: Change, q: QueueState) -> QueueEvent | None:
-    """A removal of this attempt not handled yet: one after GitHub's own record of this attempt's enqueue."""
+    """A removal of this attempt not handled yet: after this attempt's own added event, in GitHub's timeline order."""
     r, a, claim = q.removed, q.added, c.queue
-    if claim is None or r is None or r.id == c.queue_seen or r.reason == "merged":
+    if claim is None or r is None or a is None or r.id == c.queue_seen or r.reason == "merged":
         return None
-    if a is None or a.at < claim.at - SKEW or r.at < a.at:  # no enqueue of this attempt yet, or an older entry's
-        return None
-    return r
+    return r if a.id != claim.after and q.removed_last else None  # otherwise an older entry's, or not yet visible
 
 
 def _queued(  # noqa: PLR0913, PLR0917 - the merge step's own inputs and this pass's read
@@ -218,14 +215,14 @@ def _locked(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> t
 
 def run(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple[Change, StepResult]:  # noqa: PLR0911
     """One pass of the merge step on a queue-required target (design §3.4)."""
-    _owner_cleared(c, ctx.now)
     q = ctx.gh.read_queue(ctx.repository, pr.number)
     if q.merged:
         return c, _merged(ctx, c, pr)
-    if (r := _relevant(c, q)) is not None:
+    if (r := _relevant(c, q)) is not None:  # before the owner's "again": a removal's repair comes first
         if q.entry is not None:  # removed after this attempt, yet queued: GitHub's reads disagree for now
             return c, engine.pending(Waiting.GITHUB, f"reading PR #{pr.number}'s merge queue again", ctx.poll())
         return c, _removed(ctx, c, pr, r)
+    _owner_cleared(c, ctx.now)
     if q.entry is not None:
         return _queued(ctx, c, pr, rules, gate, q)
     if c.queue is not None:

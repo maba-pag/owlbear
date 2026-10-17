@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.evidence import criteria
 from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, Completion, RoundLoop
 from owlbear_delivery_next.change_flow.moves import ask, go, loop_of, open_task, resolved, subject_of
@@ -217,6 +218,8 @@ def restartable(c: Change) -> str:
         return "the Change has ended"
     if c.stop or c.env is not None:
         return "the Change is stopped or runs your check's environment; settle that first"
+    if any(q.cause == QUEUE_UNSEEN and q.answer is None for q in c.questions):
+        return "answer the merge-queue question first"  # a restart would retire it while an enqueue may land
     if (
         s.kind == StepKind.MERGE
         and c.consent is not None

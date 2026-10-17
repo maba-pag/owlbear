@@ -1680,13 +1680,16 @@ class QueueGh(FakeGh):
         super().__init__(current)
         self.state = QueueState(merged=False, open=True, head_sha=current.head_sha)
         self.enqueued, self.dequeued, self.answer = [], [], EnqueueResult(status=EnqueueStatus.ENQUEUED)
-        self.runs, self.dequeue_fails = (), False
+        self.runs, self.dequeue_fails, self.ordered = (), False, False
 
     def read_rules(self, _repo, _branch):
         return QUEUED
 
     def read_queue(self, _repo, _number):
-        return self.state
+        s = self.state
+        if self.ordered or not (s.added and s.removed):
+            return s
+        return s.model_copy(update={"removed_last": s.removed.at >= s.added.at})  # timeline order follows time here
 
     def enqueue(self, _pull, head):
         self.enqueued.append(head)
@@ -1947,6 +1950,38 @@ def test_a_removal_older_than_the_attempt_is_not_its_own(tmp_path, clone):
     assert (result.exit, result.reason) == (Exit.PENDING, "PR #7 in the merge queue: position 1, queued")
 
 
+def test_a_removal_is_this_attempts_only_after_its_own_added_event_whatever_the_clocks(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.ordered = True  # an earlier attempt's added and removed events; this attempt's added is not visible yet
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks"), "removed_last": True})
+    c = change(worktree=str(clone))
+    c.queue = QueueClaim(head=A, at=NOW, settled=True, after=ADDED.id)
+    c, result = queue_step(tmp_path, gh, c)
+    assert (result.exit, c.queue is not None) == (Exit.PENDING, True)
+
+
+def test_a_visible_removal_is_repaired_before_the_owners_again(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
+    asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.AGAIN])
+    asked.answer = Answer(option="again", at=NOW)
+    _, result = queue_step(tmp_path, gh, queued_change(clone, questions=[asked]))
+    assert (result.back_to, gh.enqueued) == (StepKind.BUILD, [])
+
+
+def test_a_restart_waits_for_the_owners_answer_about_an_untraced_attempt(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.PAUSE])
+    c = change(questions=[asked], loops={"final": RoundLoop(subject="final", policy=RoundPolicy())})
+    c.queue = QueueClaim(head=A, at=NOW, quiet=queue.QUIET)
+    assert round_flow.restartable(c) == "answer the merge-queue question first"
+    store = fold_store(tmp_path, monkeypatch, gh, c)
+    store.put_inbox("c1", RestartItem(at=NOW))
+    store.put_inbox("c1", AnswerItem(at=NOW, question="q1", option="pause"))
+    folded = fold_pause(store, tmp_path)
+    assert (folded.intent.paused_at is not None, folded.queue, folded.step.kind) == (True, None, StepKind.MERGE)
+
+
 def test_an_entry_seen_under_the_merge_lock_is_followed_not_sent_again(tmp_path, clone):
     gh = QueueGh(pr(head=A))
     reads = iter([gh.state, gh.state.model_copy(update={"entry": entry(), "added": ADDED})])
@@ -2016,5 +2051,7 @@ def test_the_queue_read_takes_the_group_commit_and_the_latest_events():
     }
     q = gh_queue._state(pull)  # noqa: SLF001 - the parser of GitHub's answer as recorded live
     assert (q.entry.group_sha, q.added.id, q.removed.reason, q.removed.before) == (GROUP, "A2", "failed_checks", GROUP)
+    assert q.removed_last is False  # A2 was added after R1
+    assert gh_queue._state(pull | {"timelineItems": {"nodes": nodes[:2]}}).removed_last is True  # noqa: SLF001
     building = pull | {"mergeQueueEntry": queued | {"headCommit": None, "state": "QUEUED"}}
     assert gh_queue._state(building).entry.group_sha is None  # noqa: SLF001 - no group is built yet

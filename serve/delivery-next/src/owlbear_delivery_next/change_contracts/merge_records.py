@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+QUEUE_UNSEEN = "gate:merge:queue-unseen"  # the owner's question about an enqueue GitHub shows no trace of
+
 
 class _Record(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -29,6 +31,7 @@ class QueueClaim(_Record):
 
     head: str
     at: datetime
+    after: str = ""  # the latest added-to-queue event before this attempt; a later one is this attempt's
     settled: bool = False
     adopted: bool = False  # a person enqueued it and Delivery followed
     quiet: int = 0
