@@ -111,6 +111,7 @@ class Queue(Checks):
             mine = [
                 GroupRun(
                     id=r["id"],
+                    name=r.get("name") or "",
                     head_sha=r["head_sha"],
                     branch=r["head_branch"],
                     status=r["status"],

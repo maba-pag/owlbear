@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import evidence, failures, tool_schema, tools
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem, RestartItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -22,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Names,
     PersonCheck,
     Plan,
+    Question,
     QueueClaim,
     Response,
     Review,
@@ -1883,12 +1884,79 @@ def test_a_failed_dequeue_keeps_the_pause_waiting_and_unacknowledged(tmp_path, m
     assert (fold_pause(store, tmp_path).intent.paused_at, gh.dequeued) == (NOW, [7])
 
 
-def test_an_unsettled_attempt_keeps_the_pause_waiting(tmp_path, monkeypatch):
+@pytest.mark.parametrize("settled", [False, True])
+def test_an_attempt_without_a_trace_keeps_the_pause_waiting_until_the_owner_answers(tmp_path, monkeypatch, settled):
     gh = QueueGh(pr(head=A))
-    c = change()
-    c.queue = QueueClaim(head=A, at=NOW)
-    folded = fold_pause(fold_store(tmp_path, monkeypatch, gh, c), tmp_path)
-    assert (folded.intent.paused_at, gh.dequeued) == (None, [])
+    asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.PAUSE])
+    c = change(questions=[asked])
+    c.queue = QueueClaim(head=A, at=NOW, settled=settled, quiet=queue.QUIET)
+    store = fold_store(tmp_path, monkeypatch, gh, c)
+    assert (fold_pause(store, tmp_path).intent.paused_at, gh.dequeued) == (None, [])
+    store.put_inbox("c1", AnswerItem(at=NOW, question="q1", option="pause"))
+    folded = fold_pause(store, tmp_path)
+    assert (folded.intent.paused_at is not None, folded.queue) == (True, None)
+
+
+def test_a_merged_pr_keeps_a_restart_waiting_until_the_fold_sees_the_merge(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    gh.state = QueueState(merged=True, open=False, head_sha=A, removed=removal("merged"))
+    c = change(loops={"final": RoundLoop(subject="final", policy=RoundPolicy())})
+    store = fold_store(tmp_path, monkeypatch, gh, c)
+    store.put_inbox("c1", RestartItem(at=NOW))
+    with store.lock("c1") as lock:
+        assert store.fold(lock, "c1", NOW, leave=queue.barrier(store, tmp_path))[0].step.kind == StepKind.MERGE
+        folded, _ = store.fold(lock, "c1", NOW, "merged", leave=queue.barrier(store, tmp_path))
+    assert (folded.step.kind, folded.step.mode) == (StepKind.CLEANUP, None)
+
+
+def test_a_rules_question_takes_a_queued_pr_out_first(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
+    p = profile.confirm(prof(**profile.rule_entries(Rules(state="known", evidence="before"))), profile.RULES, "x", NOW)
+    p.entries[profile.QUEUE] = ProfileEntry(state="known", value="yes")
+    cx = ctx(tmp_path, gh, p)
+    cx.store.root.mkdir()
+    c, result = merge.run(cx, queued_change(clone))
+    assert (result.exit, gh.dequeued, c.queue) == (Exit.ASK, [7], None)
+
+
+def test_a_removal_older_than_the_attempt_is_not_its_own(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    old = removal("failed_checks").model_copy(update={"at": NOW - timedelta(hours=1)})
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED, "removed": old})
+    _, result = queue_step(tmp_path, gh, queued_change(clone))
+    assert (result.exit, result.reason) == (Exit.PENDING, "PR #7 in the merge queue: position 1, queued")
+
+
+def test_an_entry_seen_under_the_merge_lock_is_followed_not_sent_again(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    reads = iter([gh.state, gh.state.model_copy(update={"entry": entry(), "added": ADDED})])
+    gh.read_queue = lambda _r, _n: next(reads)
+    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (gh.enqueued, c.queue.adopted, result.exit) == ([], True, Exit.PENDING)
+
+
+def test_unreadable_group_diagnostics_still_give_one_fix_task_and_handle_the_removal(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.group_runs = lambda _r, _s: (_ for _ in ()).throw(
+        ProviderError(FailureCode.UNAVAILABLE, "runs", "x", retry_safe=True)
+    )
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
+    c, result = queue_step(tmp_path, gh, queued_change(clone))
+    assert (result.back_to, c.queue_seen) == (StepKind.BUILD, "RFMQE_1")
+    assert "could not be read" in result.fix_task.detail
+
+
+def test_group_fixes_score_by_failing_workflow_so_fewer_is_progress(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    run = {"head_sha": GROUP, "branch": "gh-readonly-queue/main/pr-7-x", "status": "completed", "updated_at": NOW}
+    gh.runs = (
+        GroupRun(id=1, name="Python", conclusion="failure", **run),
+        GroupRun(id=2, name="Static", conclusion="failure", **run),
+    )
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
+    _, result = queue_step(tmp_path, gh, queued_change(clone))
+    assert (result.score.failing, result.score.findings) == (2, ["Python", "Static"])
 
 
 def test_the_profile_keeps_only_the_merge_methods_the_pull_request_rule_allows(clone):

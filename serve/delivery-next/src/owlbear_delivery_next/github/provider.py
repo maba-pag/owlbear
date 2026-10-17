@@ -233,6 +233,7 @@ class GroupRun(_Model):
     """One Actions run of a merge group that holds this pull request."""
 
     id: int = Field(gt=0)
+    name: str = ""  # the workflow's name
     head_sha: str = Field(pattern=_SHA)  # the group's commit
     branch: str
     status: str
