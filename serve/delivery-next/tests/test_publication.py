@@ -2017,6 +2017,22 @@ def test_group_fixes_score_by_failing_workflow_so_fewer_is_progress(tmp_path, cl
     assert (result.score.failing, result.score.findings) == (2, ["Python", "Static"])
 
 
+def test_a_replacement_entry_rebinds_so_its_removal_is_repaired(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    later = NOW + timedelta(minutes=3)
+    b = QueueEvent(id="ATMQE_2", kind="added", at=later, actor="maba-pag")
+    replaced = entry().model_copy(update={"enqueued_at": later})
+    gh.state = gh.state.model_copy(
+        update={"entry": replaced, "added": b, "removed": removal("manual", actor="maba-pag")}
+    )
+    c, _ = queue_step(tmp_path, gh, queued_change(clone))  # bound to the first entry at NOW
+    assert c.queue.queued_at == later
+    gone = removal("failed_checks", rid="RFMQE_2").model_copy(update={"at": later + timedelta(minutes=1)})
+    gh.state = gh.state.model_copy(update={"entry": None, "removed": gone})
+    _, result = queue_step(tmp_path, gh, c)
+    assert result.back_to == StepKind.BUILD
+
+
 def test_the_profile_keeps_only_the_merge_methods_the_pull_request_rule_allows(clone):
     gh = FakeGh(pr(head=A))
     methods = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)

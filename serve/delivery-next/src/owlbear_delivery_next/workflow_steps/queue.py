@@ -176,8 +176,12 @@ def _queued(  # noqa: PLR0913, PLR0917 - the merge step's own inputs and this pa
         c.queue = QueueClaim(head=pr.head_sha, at=ctx.now, settled=True, adopted=True)
         ctx.log(c.slug, "queue-adopted", pr=pr.number, head=pr.head_sha)
     c.queue.settled, c.queue.quiet = True, 0
-    if c.queue.queued_at is None and e is not None:
-        c.queue.queued_at = e.enqueued_at  # the PR's one entry binds the attempt
+    if e is not None and c.queue.queued_at != e.enqueued_at:  # the PR's one entry binds the attempt
+        if c.queue.queued_at is not None:  # removed and enqueued again between two passes: follow the new entry
+            ctx.log(
+                c.slug, "queue-rebound", pr=pr.number, old=c.queue.queued_at.isoformat(), new=e.enqueued_at.isoformat()
+            )
+        c.queue.queued_at = e.enqueued_at
     c, held = gate(ctx, c, pr, rules)
     if held is not None:
         return _leave(ctx, c, pr, held)
