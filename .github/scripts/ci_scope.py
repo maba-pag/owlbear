@@ -137,14 +137,14 @@ def suites(paths: list[str]) -> list[str]:
 
 
 def changed(base: str, head: str) -> list[str]:
-    """Paths the pull request changes, from the merge base of *base* and *head* to *head*."""
+    """Paths the pull request changes, from the merge base of *base* and *head* to *head*, unquoted by ``-z``."""
     done = subprocess.run(  # noqa: S603 - fixed git argument vector
-        ["git", "diff", "--name-only", f"{base}...{head}"],  # noqa: S607 - git from the runner's PATH
+        ["git", "diff", "--name-only", "-z", f"{base}...{head}"],  # noqa: S607 - git from the runner's PATH
         capture_output=True,
         text=True,
         check=True,
     )
-    return [line for line in done.stdout.splitlines() if line]
+    return [path for path in done.stdout.split("\0") if path]
 
 
 def main(argv: list[str]) -> None:

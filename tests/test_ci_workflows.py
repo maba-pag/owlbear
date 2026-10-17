@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -98,6 +99,37 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
 )
 def test_the_scope_follows_github_path_filters(paths: list[str], touched: list[str]) -> None:
     assert ci_scope.suites(paths) == touched
+
+
+def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
+    def git(*args: str) -> str:
+        done = subprocess.run(  # noqa: S603 - fixed git argument vector
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return done.stdout.strip()
+
+    git("init", "-q")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    source = tmp_path / "serve/delivery-next/src/caf\u00e9 x.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "head")
+
+    paths = subprocess.run(  # noqa: S603
+        ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    assert paths == 'suites=["python", "python-browser", "static"]\n'
 
 
 def test_every_suite_lists_its_own_workflow_and_no_glob_twice() -> None:
