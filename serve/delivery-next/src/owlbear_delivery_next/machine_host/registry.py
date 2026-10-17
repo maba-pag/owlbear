@@ -1,0 +1,234 @@
+"""The machine's registered projects (TD-242): ``~/.owlbear/machine.json``, written under ``machine.lock``.
+
+A project is a clone. Registering one writes only two things into it: its store directory and the store's
+``clone-id``, the project's id. Loading checks the id again, so a re-clone at the same path shows as replaced
+(Remove or Adopt) and never inherits the old registration.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import secrets
+import shutil
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from pydantic import Field, ValidationError
+
+from owlbear_delivery_next.change_contracts.models import FORMAT, Record
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.state_store.store import STORE_DIR
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+MACHINE, LOCK, CLONE_ID = "machine.json", "machine.lock", "clone-id"
+MACHINE_FORMAT = 1
+
+
+class RegistryError(Exception):
+    """A project that cannot be registered or loaded, or a registry this code cannot read; the text says why."""
+
+
+class Project(Record):
+    """One registered clone: its id (the store's ``clone-id``), canonical work tree and when it was added."""
+
+    id: str
+    path: str
+    added_at: datetime
+
+
+class Machine(Record):
+    """``machine.json``: the registered projects and the last Resume."""
+
+    format: int = MACHINE_FORMAT
+    projects: list[Project] = Field(default_factory=list)
+    resumed_at: datetime | None = None
+
+
+def _home() -> Path:
+    home = local_home.root()
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return home
+
+
+@contextlib.contextmanager
+def locked() -> Iterator[None]:
+    """Hold ``machine.lock``: every registry change and every ``clone-id`` creation happens under it."""
+    fd = os.open(_home(), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        lock = open_lock(fd, blocking=True, name=LOCK)
+    finally:
+        os.close(fd)
+    try:
+        yield
+    finally:
+        os.close(lock)
+
+
+def load() -> Machine:
+    """The registry; empty before the first project, refused when another release wrote a newer one."""
+    path = _home() / MACHINE
+    try:
+        raw = path.read_text()
+    except FileNotFoundError:
+        return Machine()
+    except (OSError, ValueError) as exc:
+        msg = f"{path} is unreadable: {exc}"
+        raise RegistryError(msg) from exc
+    try:
+        machine = Machine.model_validate_json(raw)
+    except ValidationError as exc:
+        msg = f"{path} is unreadable: {exc.errors()[0]['msg']}"
+        raise RegistryError(msg) from exc
+    if machine.format > MACHINE_FORMAT:
+        msg = f"{path} has format {machine.format}, newer than {MACHINE_FORMAT}: this OwlBear is older"
+        raise RegistryError(msg)
+    return machine
+
+
+def save(machine: Machine) -> None:
+    """Write the registry atomically, readable only by the owner; call it under ``locked()``."""
+    path = _home() / MACHINE
+    atomic_write(path, machine.model_dump_json(indent=2) + "\n")
+    path.chmod(0o600)
+
+
+def _git(cwd: Path, *args: str) -> Path:
+    git = shutil.which("git") or "git"
+    try:
+        out = subprocess.run(  # noqa: S603 - fixed git argument vector
+            [git, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=30
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        msg = f"{cwd} is not a git work tree"
+        raise RegistryError(msg) from exc
+    return (cwd / out).resolve()
+
+
+def _owned(path: Path) -> None:
+    if path.stat().st_uid != os.getuid():
+        msg = f"{path} belongs to another user; OwlBear serves only your own clones"
+        raise RegistryError(msg)
+
+
+def store_of(work: Path) -> Path:
+    """The store directory of the clone at *work*: ``<git common dir>/owlbear-delivery``."""
+    return _git(work, "rev-parse", "--git-common-dir") / STORE_DIR
+
+
+def canonical(path: Path) -> tuple[Path, Path]:
+    """The clone's work tree and store, as real paths; refused unless it is the owner's git work tree."""
+    try:
+        work = _git(path.resolve(strict=True), "rev-parse", "--show-toplevel")
+    except OSError as exc:
+        msg = f"{path} does not exist"
+        raise RegistryError(msg) from exc
+    store = store_of(work)
+    for owned in (work, store.parent):
+        _owned(owned)
+    marker = store / "format"
+    try:
+        found = int(marker.read_text()) if marker.exists() else 0
+    except (OSError, ValueError) as exc:
+        msg = f"{marker} is unreadable"
+        raise RegistryError(msg) from exc
+    if found > FORMAT:
+        msg = f"{work}'s Delivery state has format {found}, newer than {FORMAT}: this OwlBear is older"
+        raise RegistryError(msg)
+    return work, store
+
+
+def clone_id(store: Path) -> str | None:
+    """The id written into the clone's store, or None when there is none."""
+    try:
+        return (store / CLONE_ID).read_text().strip() or None
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        msg = f"{store / CLONE_ID} is unreadable"
+        raise RegistryError(msg) from exc
+
+
+def _ensure_id(store: Path) -> str:
+    """The clone's id: reused when present, else created once with ``O_EXCL``; never rewritten."""
+    store.mkdir(mode=0o700, exist_ok=True)
+    if found := clone_id(store):
+        return found
+    new = secrets.token_hex(8)
+    fd = os.open(store / CLONE_ID, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as out:
+        out.write(new + "\n")
+        out.flush()
+        os.fsync(out.fileno())
+    return new
+
+
+def register(path: Path) -> Project:
+    """Add the clone at *path*; refused when it is registered already, under its id or its path."""
+    work, store = canonical(path)
+    with locked():
+        machine = load()
+        if found := next((p for p in machine.projects if p.path == str(work)), None):
+            msg = f"{work} is registered already (project {found.id})"
+            raise RegistryError(msg)
+        pid = _ensure_id(store)
+        if found := next((p for p in machine.projects if p.id == pid), None):
+            msg = f"this clone is registered already at {found.path}; remove that project first"
+            raise RegistryError(msg)
+        project = Project(id=pid, path=str(work), added_at=datetime.now(UTC))
+        machine.projects.append(project)
+        save(machine)
+    return project
+
+
+def replaced(project: Project) -> str | None:
+    """Why the registered clone is not the one at its path now; None when it is."""
+    work = Path(project.path)
+    if not work.is_dir():
+        return f"{work} is gone; Remove the project"
+    try:
+        found = clone_id(store_of(work))
+    except RegistryError as exc:
+        return str(exc)
+    if found != project.id:
+        return f"the clone at {work} is not the one registered; Remove or Adopt it"
+    return None
+
+
+def adopt(pid: str) -> Project:
+    """Let the clone now at a replaced project's path take its place, under that clone's own id."""
+    with locked():
+        machine = load()
+        old = next((p for p in machine.projects if p.id == pid), None)
+        if old is None:
+            msg = f"no project {pid} is registered"
+            raise RegistryError(msg)
+        work, store = canonical(Path(old.path))
+        new = Project(id=_ensure_id(store), path=str(work), added_at=datetime.now(UTC))
+        if any(p.id == new.id and p.id != pid for p in machine.projects):
+            msg = f"this clone is registered already as project {new.id}"
+            raise RegistryError(msg)
+        machine.projects = [new if p.id == pid else p for p in machine.projects]
+        save(machine)
+    return new
+
+
+def remove(pid: str) -> None:
+    """Forget a project; its clone keeps its store and ``clone-id``. The caller stops it first."""
+    with locked():
+        machine = load()
+        machine.projects = [p for p in machine.projects if p.id != pid]
+        save(machine)
+
+
+def resumed(at: datetime) -> None:
+    """Record the owner's Resume."""
+    with locked():
+        machine = load()
+        machine.resumed_at = at
+        save(machine)
