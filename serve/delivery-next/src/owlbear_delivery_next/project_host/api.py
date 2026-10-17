@@ -71,7 +71,7 @@ T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
 PICKER_NOTE = (  # the owner's typed messages run on the picker, not on the role's model (TD-277)
     '\n\nBegin your first message or question to the owner with this line: "Messages you type here run on this '
-    'chat\'s model picker: set it to {model} at {effort} effort."'
+    "chat's model picker: set it to {model} at {effort} effort.\""
 )
 LAUNCH_GAP = 5.0  # seconds after a new-Change launch ends before the next may start
 
