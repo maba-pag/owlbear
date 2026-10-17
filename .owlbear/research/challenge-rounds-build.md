@@ -212,7 +212,7 @@ step is built.
 - Code: `plan_rounds.py` (records, lines, marks, verdicts, questions, answers) and `steps/plan_round.py` (the
   challenge, the rejections-only check and the reconsideration, moved out of `runner.py`).
 
-### 3.11 The shaper's brief challenge (step 8), as built (TD-254)
+### 3.11 The shaper's brief challenge (step 8), as built (TD-254, TD-255)
 
 - Loop: subject `brief` on the Change, with the shaper's TD-209 values, pinned at the first request; it stays with the
   Change through planning. Each verdict records the version it judged.
@@ -237,9 +237,9 @@ step is built.
   rejection asks the owner first, with TD-193's options; a reconsideration runs in the SHAPE step; an upheld
   rejection whose question a stop replaced is asked again.
 - Approval: the approve button (with the reason when it is off) and the approve route require `Brief.challenged ==
-  version`, `challenged` now meaning the version its loop ended on; the fold ignores any other approval. **Pending
-  the owner's decision:** a version the shaper revised after the last round counts as challenged (unreviewed, listed
-  as such) - the reconciliation of TD-208 with TD-249 Sol could not settle. A later save needs one added round on
+  version`, `challenged` now meaning the version its loop ended on; the fold ignores any other approval. A version
+  the shaper revised after the last round counts as challenged, but the approve dialog makes the owner tick that he
+  accepts that unreviewed revision, and the route refuses it without the tick (TD-255). A later save needs one added round on
   the changes (TD-215, TD-235). The approval view shows the brief challenge's markers and details; after approval
   the "Review rounds" section does.
 - A Change the old flow approved before its challenge gets it on its next step and plans once its loop ends there;

@@ -1185,7 +1185,7 @@ function approval(d) {
   box.append(...agreement(d), ...technical(d));
   const start = async () => {
     const origin = shown;
-    if (await ask(approving(d))) send("/approve-brief", { version }, origin);
+    if (await ask(approving(d))) send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, origin);
   };
   const approve = button(`Approve brief v${version}`, start, { icon: "check", aria: DIALOG });
   const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
@@ -1222,6 +1222,9 @@ function approving(d) {
       + "running step. Spent credits and finished work are not undone. To change the brief, revise it in the shaping "
       + "chat and approve the new version."].join(" "),
     instead: "Nothing is built. The brief waits here; revise it in the shaping chat or come back later.",
+    ...(d.brief.unreviewed ? {  // TD-255: the revision after the challenge's last round, which no challenger judged
+      tick: `I accept brief v${v} as revised after its last challenge round; no challenger reviewed that revision.`,
+    } : {}),
   };
 }
 

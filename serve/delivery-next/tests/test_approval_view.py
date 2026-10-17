@@ -16,6 +16,7 @@ from owlbear_delivery_next import api
 from owlbear_delivery_next import models as m
 from owlbear_delivery_next.codebase import CURRENT
 from owlbear_delivery_next.host import HostRecord
+from owlbear_delivery_next.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.status import Activity
 from owlbear_delivery_next.store import Lock, Store
 from owlbear_delivery_next.visual_records import OwnerCriterion
@@ -103,6 +104,27 @@ def test_the_owner_approves_his_agreement_and_the_technical_details_stay_collaps
         page.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
     assert store.read("flip").brief.approved_version is None  # declining approves nothing
+
+
+@pytest.mark.browser
+def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_he_accepts_it(page_url) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    tail = change().model_copy(update={"slug": "tail"})
+    tail.loops["brief"] = RoundLoop(subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"])
+    store.write(Lock("tail"), tail)
+    with opened(base, "tail") as page:
+        page.get_by_role("button", name="Approve brief v2").click()
+        dialog = page.get_by_role("dialog")
+        confirm = dialog.get_by_role("button", name="Approve and start")
+        expect(confirm).to_be_disabled()  # TD-255
+        dialog.get_by_label("no challenger reviewed that revision", exact=False).check()
+        expect(confirm).to_be_enabled()
+        confirm.click()
+        expect(dialog).to_be_hidden()
+        page.wait_for_timeout(500)
+    assert store.fold(Lock("tail"), "tail", NOW)[0].brief.approved_version == 2
 
 
 @pytest.mark.browser

@@ -34,11 +34,12 @@ class ChallengeBody(BaseModel):
 
 
 class ApproveBody(BaseModel):
-    """Approve one brief version."""
+    """Approve one brief version; *unreviewed* says the owner accepts a last revision no challenger judged."""
 
     model_config = ConfigDict(extra="forbid")
 
     version: int = Field(ge=1)
+    unreviewed: bool = False
 
 
 def slug_of(store: Store, handle: str) -> str | None:
@@ -52,6 +53,24 @@ def slug_of(store: Store, handle: str) -> str | None:
     return None
 
 
+def refused(store: Store, c: Change, body: ApproveBody) -> str:
+    """Why the owner's approval of this brief version is refused, or ""."""
+    brief = c.brief
+    if body.version != brief.version:
+        return f"brief version {body.version} is not the current draft"
+    if why := brief_rounds.approvable(c):  # TD-249: only a version its challenge loop ended on
+        return f"brief v{brief.version} cannot be approved yet: {why}"
+    if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
+        return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"
+    if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
+        return (
+            f"The visual states {', '.join(stepped)} have clicks or typing, which run only on a prepared test copy "
+            "(TD-96); declare the project's preparation options in its settings first, or revise the brief "
+            "without those steps"
+        )
+    return ""
+
+
 def router(
     store: Store,
     read: Callable[[str], Change],
@@ -63,19 +82,8 @@ def router(
 
     @routes.post("/changes/{slug}/approve-brief")
     def approve(slug: str, body: ApproveBody) -> dict[str, str]:
-        c = read(slug)
-        brief = c.brief
-        if body.version != brief.version:
-            raise HTTPException(409, f"brief version {body.version} is not the current draft")
-        if why := brief_rounds.approvable(c):  # TD-249: only a version its challenge loop ended on
-            raise HTTPException(409, f"brief v{brief.version} cannot be approved yet: {why}")
-        if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
-            raise HTTPException(
-                409,
-                f"The visual states {', '.join(stepped)} have clicks or typing, which run only on a prepared test copy "
-                "(TD-96); declare the project's preparation options in its settings first, or revise the brief "
-                "without those steps",
-            )
+        if why := refused(store, read(slug), body):
+            raise HTTPException(409, why)
         return put(slug, BriefApproval(at=datetime.now(UTC), version=body.version))
 
     @routes.post("/briefs/challenge")

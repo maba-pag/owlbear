@@ -93,8 +93,9 @@ class Shaping:
         self.store.put_inbox(self.slug, AnswerItem(at=datetime.now(UTC), question=q.id, option=option, text=text))
         return self.store.fold(Lock(self.slug), self.slug, datetime.now(UTC))[0]
 
-    def approve(self, version: int):
-        return self.http.post(f"/api/next/changes/{self.slug}/approve-brief", json={"version": version})
+    def approve(self, version: int, *, unreviewed: bool = False):
+        body = {"version": version, "unreviewed": unreviewed}
+        return self.http.post(f"/api/next/changes/{self.slug}/approve-brief", json=body)
 
 
 @pytest.fixture
@@ -136,7 +137,8 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     assert shaping.ask_challenge(3).status_code == 200
     c = shaping.change()
     assert (c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (3, "count", ["v2", "v3"])
-    assert shaping.approve(3).json() == {"accepted": "brief-approval"}
+    assert "was not reviewed" in shaping.approve(3).json()["detail"]  # TD-255: the owner ticks that he accepts it
+    assert shaping.approve(3, unreviewed=True).json() == {"accepted": "brief-approval"}
     c, step = shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
     assert (c.brief.approved_version, step.kind) == (3, K.PLAN)
     plan_rounds.loop(c, RoundPolicy(), NOW)

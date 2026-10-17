@@ -107,6 +107,12 @@ def approvable(c: Change) -> str:
     return f"brief v{b.version} has not been challenged; the shaper asks for its challenge once the draft is ready"
 
 
+def unreviewed(c: Change) -> bool:
+    """Whether the approvable version carries a revision no full round reviewed (TD-255: the owner ticks it)."""
+    lp, v = c.loops.get(BRIEF), c.brief.version
+    return bool(lp and c.brief.challenged == v and f"v{v}" in lp.unreviewed)
+
+
 def owned_open(c: Change) -> bool:
     """Whether the Change waits on one of the brief loop's questions."""
     o = c.outcome

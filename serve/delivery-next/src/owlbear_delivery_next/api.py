@@ -343,6 +343,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     "ui": c.brief.ui,
                     "visual": [s.model_dump() for s in c.brief.visual],
                     "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
+                    "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
                 },
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],

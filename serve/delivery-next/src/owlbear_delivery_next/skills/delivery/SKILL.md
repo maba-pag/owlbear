@@ -54,8 +54,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    does not accept goes to the owner in the Changes page, and nothing can be saved until he decides.
 9. When the challenge says the brief is approvable, tell the owner to approve that version in the Changes
    page, using the link exactly as given (it carries the page's access token), and name the rejections
-   that stand and a last revision no round reviewed. Nothing starts before that approval; a later save
-   needs one more challenge round.
+   that stand and a last revision no round reviewed (the owner ticks that he accepts it). Nothing starts
+   before that approval; a later save needs one more challenge round.
 
 ## Read-Back
 

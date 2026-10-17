@@ -1,7 +1,8 @@
 "use strict";
 // The confirmation a consequential button opens (owner 2026-10-15): what happens now, what Delivery then does by
-// itself, what the owner can do afterwards, and the way forward if he declines; true only when he confirms.
-function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel" }) {
+// itself, what the owner can do afterwards, and the way forward if he declines; true only when he confirms. A *tick*
+// is a statement he must tick before confirming (TD-255).
+function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "" }) {
   const parts = [["Now", now, items], ["Then, by itself", then], ["Afterwards", after], ["If you don't", instead]]
     .filter(([, said]) => said);
   const designed = Boolean(customElements.get("p-modal")), back = document.activeElement;
@@ -42,13 +43,23 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel" 
       body.append(part);
     }
     const foot = make("div", undefined, { class: "row", ...(designed ? { slot: "footer" } : {}) });
+    let ticked = () => true;
     const choice = (label, answer, variant) => {
       const node = make(designed ? "p-button" : "button", label, { type: "button", ...(designed ? { variant } : {}) });
-      node.addEventListener("click", () => end(answer));
+      node.addEventListener("click", () => { if (!answer || ticked()) end(answer); });
       return node;
     };
-    const decline = choice(no, false, "secondary");
-    foot.append(choice(yes, true, "primary"), decline);
+    const decline = choice(no, false, "secondary"), confirm = choice(yes, true, "primary");
+    if (tick) {
+      const input = make("input", undefined, { type: "checkbox", id: "ask-tick" }), label = make("label");
+      label.append(input, ` ${tick}`);
+      ticked = () => input.checked;
+      const set = () => (ticked() ? confirm.removeAttribute("disabled") : confirm.setAttribute("disabled", "true"));
+      input.addEventListener("change", set);
+      set();
+      body.append(label);
+    }
+    foot.append(confirm, decline);
     box.append(titled(2, title, "lg", designed ? { slot: "header" } : { id: "ask-title" }), body, foot);
     document.body.append(box);
     if (designed) {
