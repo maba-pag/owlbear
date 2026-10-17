@@ -32,7 +32,8 @@ the latter is a placeholder that `init.py` adapts for a project using OwlBear.
 
 ## Pull-request checks
 
-Every automatically triggered workflow is disabled on GitHub (TD-204); `gh workflow enable <file>`
+The [CI](workflows/ci.yml) workflow and the six suites it calls are enabled (TD-278); every other
+automatically triggered workflow stays disabled on GitHub (TD-204), and `gh workflow enable <file>`
 restores one. The pre-commit hooks run only by hand (`pre-commit run --hook-stage manual`).
 
 Agents wait for every check on the head commit, so the checks are shaped to finish fast and to
