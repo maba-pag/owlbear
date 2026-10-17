@@ -127,6 +127,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             scope=tuple(change.brief.scope),
             model=role.model,
             effort=role.effort,
+            limit=roles.limit(store.settings(), s.kind),
             context=role.context,
             fresh=told,
             previous=_previous(store, slug, s.session) if resume else {},

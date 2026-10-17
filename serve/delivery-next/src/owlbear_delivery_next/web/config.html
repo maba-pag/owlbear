@@ -97,6 +97,19 @@
     "ask you at or above", which may not exceed the findings per round. The final review inherits the builder's
     values.</p-text>
 </section>
+<section class="panel" aria-labelledby="limits-title">
+  <p-heading size="lg"><h2 id="limits-title">Session time limits</h2></p-heading>
+  <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and runs
+    again. The shaper's chat has no limit.</p-text>
+  <p-table caption="Session time limits: they apply to the next session">
+    <p-table-head><p-table-head-row>
+      <p-table-head-cell>Agent</p-table-head-cell>
+      <p-table-head-cell>Minutes per session</p-table-head-cell>
+    </p-table-head-row></p-table-head>
+    <p-table-body id="limits"></p-table-body>
+  </p-table>
+  <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
+</section>
 <section class="panel" aria-labelledby="general-title">
   <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>
   <p-table caption="Visual check settings: they apply to the next visual check">
@@ -208,6 +221,7 @@ const SOURCES = { default: "built-in default", global: "global", project: "this 
 const LAYERS = { project: "This project", global: "All projects" };
 const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
+const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes"];  // fields typed as whole numbers (TD-286: minutes)
 const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"], ["updater", "Design pack updates (updater)"]];
 let pds = false, loaded = null, rendered = "project", saving = false;
@@ -569,7 +583,7 @@ function inactive(label, value, key) {
 function edit(event) {
   const input = event.target.closest("[data-key]");
   if (!input) return;
-  const key = input.dataset.key, [role, field] = key.split("."), round = ROUNDS.some(([f]) => f === field);
+  const key = input.dataset.key, [role, field] = key.split("."), round = NUMBERS.includes(field);
   const value = !round && input.value === INHERIT ? "" : (input.value ?? "").trim();
   if (value === saved(rendered, key)) delete drafts[rendered][key];
   else drafts[rendered][key] = value;
@@ -637,6 +651,9 @@ function render() {
   document.getElementById("agents").replaceChildren(...agents);
   document.getElementById("rounds").replaceChildren(...LOOPS.map(([owner, said]) => row(
     cell(el("p-text", said)), ...ROUNDS.map(([field, label]) => roundCell(owner, field, label)))));
+  document.getElementById("limits").replaceChildren(...Object.keys(loaded.settings.agents)
+    .filter((role) => role !== "shaper")
+    .map((role) => row(cell(el("p-text", role)), roundCell(role, "minutes", "Minutes per session"))));
   const later = [["runtime", "Runtime"], ["visible", "Needs visibility"], ["categories", "Categories"]];
   document.getElementById("agents-later").replaceChildren(...Object.entries(loaded.settings.agents).map(
     ([role, eff]) => row(cell(el("p-text", role)),
@@ -688,7 +705,7 @@ function edited(layer) {
       continue;
     }
     const [role, field] = key.split(".");
-    const round = ROUNDS.some(([f]) => f === field);  // a number; anything else is sent as typed and refused
+    const round = NUMBERS.includes(field);  // a number; anything else is sent as typed and refused
     const number = !round || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
     if (role === "final_review") {
       const own = { ...(next.final_review ?? {}), [field]: number };
@@ -823,7 +840,7 @@ async function start() {
     plain();
   }
   for (const type of ["input", "change"]) {
-    for (const id of ["agents", "rounds", "general"]) document.getElementById(id).addEventListener(type, edit);
+    for (const id of ["agents", "rounds", "limits", "general"]) document.getElementById(id).addEventListener(type, edit);
   }
   document.getElementById("agents").addEventListener("click", inherit);
   document.getElementById("scope").addEventListener("change", () => { if (loaded) render(); });

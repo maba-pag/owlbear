@@ -154,7 +154,8 @@ class _Driver:
             reminder=step_input.reminder(self.role, judging=cfg.judging) if reminder is None else reminder,
             attachments=embedded(cfg.attachments),
         )
-        out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=DEADLINES.get(cfg.kind, 1200.0))
+        limit = cfg.limit or DEADLINES.get(cfg.kind, 2400.0)  # the role's time limit (TD-286)
+        out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=limit)
         self.log(event="vscode-step", end=out.end, detail=out.detail, session=out.session)
         return out
 

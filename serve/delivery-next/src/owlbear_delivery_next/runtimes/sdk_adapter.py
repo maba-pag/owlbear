@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.processes import Pids
     from owlbear_delivery_next.runtimes.session_result import Ending
 
-DEADLINES = {StepKind.PLAN: 900.0, StepKind.BUILD: 1200.0, StepKind.REVIEW: 600.0, StepKind.CHECK: 900.0}
+DEADLINES = {StepKind.PLAN: 1800.0, StepKind.BUILD: 2400.0, StepKind.REVIEW: 1200.0, StepKind.CHECK: 1800.0}  # TD-286
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "preparer"}
 BUILTINS = (  # the runtime's own subagents, each excluded so none can start (benchmark 2026-10-15)
     *("explore", "task", "code-review", "rubber-duck", "research", "rem-agent", "security-review"),
@@ -117,6 +117,7 @@ class Session:
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
     context: str = "default"  # the model's context tier: "long" pins its long-context tier, else the runtime chooses
+    limit: float | None = None  # seconds the session may run in total: its role's setting (TD-286), else its kind's
     fresh: str = ""  # first message of a replacement session: stored context plus the pending answer
     previous: Pids = field(default_factory=dict)  # PIDs earlier runners recorded for this session
     journal: Journal = field(default_factory=Journal)
@@ -359,7 +360,7 @@ class _Step:
         return None
 
     async def wait(self, session: CopilotSession) -> None:
-        end, reminded = time.monotonic() + DEADLINES.get(self.cfg.kind, 1200.0), False
+        end, reminded = time.monotonic() + (self.cfg.limit or DEADLINES.get(self.cfg.kind, 2400.0)), False
         while not self.done:
             left = end - time.monotonic()
             if left <= 0:
@@ -453,7 +454,7 @@ async def run(cfg: Session) -> Run:
         return st.run
     client, session = None, None
     try:
-        async with asyncio.timeout(DEADLINES.get(cfg.kind, 1200.0) + START + CALL):
+        async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
             client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
             await _call(client.start(), "runtime start", START)
             st.runtime(client)

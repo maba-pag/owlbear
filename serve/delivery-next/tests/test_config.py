@@ -71,11 +71,30 @@ def test_an_empty_list_clears_false_disables_and_only_none_inherits():
         {"agents": {"builder": {"context": True}}},
         {"runtimes": {"sdk": "false"}},
         {"format": 99},
+        {"agents": {"builder": {"minutes": 0}}},
+        {"agents": {"builder": {"minutes": 481}}},
+        {"agents": {"builder": {"minutes": "40"}}},
     ],
 )
 def test_a_layer_refuses_anything_it_cannot_apply(raw):
     with pytest.raises(ValidationError):
         Layer.model_validate(raw)
+
+
+def test_session_time_limits_are_doubled_by_default_and_set_per_role_globally_or_per_project():
+    """TD-286: planner 30, preparer 30, builder 40, reviewer 20 minutes; each a role setting."""
+    base = resolve(None, Layer())
+    assert {r: base.agents[r].minutes for r in ("planner", "preparer", "builder", "reviewer")} == {
+        "planner": 30, "preparer": 30, "builder": 40, "reviewer": 20
+    }  # fmt: skip
+    glob = GlobalLayer(agents={"builder": Agent(minutes=60), "reviewer": Agent(minutes=25)})
+    eff = resolve(glob, Layer(agents={"builder": Agent(minutes=90)}))
+
+    assert (eff.agents["builder"].minutes, eff.agents["reviewer"].minutes) == (90, 25)
+    assert (eff.sources["agents.builder.minutes"], eff.sources["agents.reviewer.minutes"]) == ("project", "global")
+    assert roles.limit(eff, StepKind.BUILD) == 5400.0
+    assert roles.limit(eff, "design-review") == 20 * 60.0
+    assert roles.limit(eff, "plan-challenge") == 20 * 60.0
 
 
 def test_a_project_layer_round_trips_and_concurrent_saves_are_never_lost(repo, monkeypatch):

@@ -19,6 +19,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     DesignFailures,  # noqa: TC001 - pydantic resolves it at runtime
 )
 from owlbear_delivery_next.settings.roles import DEFAULTS
+from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
 CONFIG_FORMAT = 3  # format 3 renamed the designer role to design-judge (TD-169)
 type RuntimeName = Literal["sdk", "window"]
@@ -26,6 +27,7 @@ type Category = Literal["browser"]
 type Source = Literal["default", "global", "project", "builder"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
+MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
 
 
 class Agent(Record):
@@ -43,11 +45,19 @@ class Agent(Record):
     max_findings: int | None = None
     last_round_at: int | None = None
     ask_owner_at: int | None = None
+    minutes: int | None = None  # TD-286: one session's total running time
 
     @field_validator("model")
     @classmethod
     def _named(cls, v: str | None) -> str | None:
         return None if v is None else named(v)
+
+    @field_validator("minutes")
+    @classmethod
+    def _minutes(cls, v: int | None) -> int | None:
+        if v is not None and not MINUTES[0] <= v <= MINUTES[1]:
+            raise ValueError(f"minutes must be {MINUTES[0]} to {MINUTES[1]}")  # noqa: EM102, TRY003
+        return v
 
 
 class FinalReview(Record):
@@ -124,6 +134,7 @@ class Effective(Record):
     max_findings: int
     last_round_at: int
     ask_owner_at: int
+    minutes: int
 
     @model_validator(mode="after")
     def _rounds(self) -> Effective:
@@ -150,7 +161,14 @@ def _defaults() -> GlobalLayer:
     rounds = RoundPolicy().model_dump()
     agents = {
         role: Agent(
-            model=rm.model, effort=rm.effort, context="default", runtime="sdk", visible=False, categories=[], **rounds
+            model=rm.model,
+            effort=rm.effort,
+            context="default",
+            runtime="sdk",
+            visible=False,
+            categories=[],
+            minutes=MINUTES_BY_ROLE[role],
+            **rounds,
         )
         for role, rm in DEFAULTS.items()
     }

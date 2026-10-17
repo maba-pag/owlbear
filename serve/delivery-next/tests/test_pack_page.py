@@ -140,3 +140,22 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
         dialog.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
     assert job.read()["state"] == "waiting"  # declining activates nothing
+
+
+@pytest.mark.browser
+def test_a_roles_session_time_limit_is_shown_with_its_default_and_saved_as_a_number(served) -> None:
+    """TD-286: the Settings page lists each worker role's minutes, the shaper's chat has none."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    job, base = served()
+    with opened(base) as page:
+        limits = page.locator("#limits")
+        expect(limits).to_contain_text("builder")
+        expect(limits).not_to_contain_text("shaper")
+        builder = limits.get_by_label("Minutes per session, builder")
+        expect(builder).to_have_attribute("placeholder", "inherit (40)")
+        builder.fill("60")
+        page.get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_contain_text("Saved this project's settings")
+    assert job.store.read_config().agents["builder"].minutes == 60
+    assert job.store.settings().agents["builder"].minutes == 60

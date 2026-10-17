@@ -60,6 +60,8 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.builder.ask_owner_at", "agents.planner.max_rounds", "agents.planner.max_findings",
         "agents.planner.last_round_at", "agents.planner.ask_owner_at", "agents.shaper.max_rounds",
         "agents.shaper.max_findings", "agents.shaper.last_round_at", "agents.shaper.ask_owner_at", "final_review",
+        "agents.planner.minutes", "agents.builder.minutes", "agents.reviewer.minutes", "agents.challenger.minutes",
+        "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes",
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 
