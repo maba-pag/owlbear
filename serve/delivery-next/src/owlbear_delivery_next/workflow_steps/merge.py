@@ -15,7 +15,7 @@ from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.github.merge_offer import Block
 from owlbear_delivery_next.github.provider import MergeMethod, MergeRequest, MergeStatus, Refusal
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.workflow_steps import check, engine, follow, publish, visual
+from owlbear_delivery_next.workflow_steps import check, engine, follow, publish, queue, visual
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -95,9 +95,6 @@ def _blocked(  # noqa: PLR0911 - one exit per block reason
         case Block.DRAFT:
             ctx.gh.mark_ready(pr)
             return c, engine.pending(Waiting.GITHUB, f"PR #{pr.number} marked ready again", ctx.poll())
-        case Block.QUEUE:
-            text = f"merge PR #{pr.number} in GitHub ({detail})"
-            return c, engine.pending(Waiting.OWNER_ACTION, text, None, who="you")
         case b if b in _ASSISTED:
             text = f"merge PR #{pr.number} in GitHub ({b}: {detail or 'not supported here'})"
             return c, engine.pending(Waiting.OWNER_ACTION, text, None, who="you")
@@ -209,6 +206,8 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - ea
     pr = ctx.gh.read_pull_request(ctx.repository, number)
     if pr.merged:
         return c, StepResult(exit=Exit.DONE, reason=f"PR #{pr.number} was merged in GitHub")
+    if rules.queue_required:
+        return queue.run(ctx, c, pr, rules, gate)
     c, held = gate(ctx, c, pr, rules)
     if held is not None:
         return c, held

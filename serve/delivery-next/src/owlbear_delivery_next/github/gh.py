@@ -10,9 +10,9 @@ from urllib.parse import quote, urlencode
 from pydantic import ValidationError
 
 from owlbear_delivery_next.github import gh_client
-from owlbear_delivery_next.github.gh_checks import Checks
 from owlbear_delivery_next.github.gh_client import API_VERSION, Json, Missing, invalid, repo
 from owlbear_delivery_next.github.gh_conversation import Conversation
+from owlbear_delivery_next.github.gh_queue import Queue
 from owlbear_delivery_next.github.provider import (
     FailureCode,
     MergeMethod,
@@ -66,7 +66,7 @@ def _pull(repository: str, p: Json, operation: str) -> PullRequest:
         invalid(operation, "GitHub returned an invalid pull request", exc)
 
 
-class GhProvider(Checks, Conversation):
+class GhProvider(Queue, Conversation):
     """Execute only Delivery's fixed GitHub operations through ``gh``; GitHub Enterprise via ``host``."""
 
     def read_repository(self) -> Repository:
@@ -113,7 +113,12 @@ class GhProvider(Checks, Conversation):
                 strict = strict or bool(rsc.get("strict"))
             if isinstance(classic, dict):
                 resolution = resolution or bool((classic.get("required_conversation_resolution") or {}).get("enabled"))
-        except (KeyError, TypeError, AttributeError) as exc:
+            queue = next(((r.get("parameters") or {}) for r in rules if r["type"] == "merge_queue"), {})
+            pulls = [r.get("parameters") or {} for r in rules if r["type"] == "pull_request"]
+            allowed = {m for p in pulls for m in p.get("allowed_merge_methods") or ()}
+            queue_method = MergeMethod(queue["merge_method"].lower()) if queue.get("merge_method") else None
+            methods = tuple(m for m in MergeMethod if m.value in allowed)
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
             invalid(op, "GitHub returned invalid branch rules", exc)
         protection = "none" if isinstance(classic, Missing) else "set"
         evidence = f"rules {', '.join(types) or 'none'}; classic protection {protection}"
@@ -123,6 +128,9 @@ class GhProvider(Checks, Conversation):
             types=types,
             required_checks=tuple(sorted(set(contexts))),
             queue_required="merge_queue" in types,
+            queue_method=queue_method,
+            queue_timeout=queue.get("check_response_timeout_minutes"),
+            allowed_methods=methods,
             strict=strict,
             conversation_resolution=resolution,
         )

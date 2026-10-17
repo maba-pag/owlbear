@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
+from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
@@ -392,23 +393,6 @@ class MergeConsent(Record):
     delta: str = ""
 
 
-class Pullback(Record):
-    """The last attempt to bring the local target branch up to the merged remote one."""
-
-    state: Literal["updated", "behind", "skipped"]
-    reason: str = ""
-    worktree: str = ""
-    at: datetime
-
-
-class Episode(Record):
-    """When expected checks were first observed missing at one head (P10), or a PR first lagged a pushed head."""
-
-    head: str
-    since: datetime
-    pr: int | None = None
-
-
 class Stop(Record):
     """One action, its actor and the condition that resumes the step."""
 
@@ -479,6 +463,8 @@ class Change(Record):
     outcome: Outcome | None = None
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
+    queue: QueueClaim | None = None  # TD-226: Delivery's open enqueue attempt
+    queue_seen: str = ""  # the last merge-queue removal event Delivery handled
     missing: Episode | None = None
     lag: Episode | None = None  # GitHub's PR head behind a pushed branch head
     stop: Stop | None = None

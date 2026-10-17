@@ -33,7 +33,6 @@ class Block(StrEnum):
     BEHIND = "behind"
     CHECKING = "checking"
     PROTECTION = "protection"
-    QUEUE = "queue"
     REVIEW_REQUIRED = "review-required"
 
 
@@ -50,7 +49,7 @@ def _blocked(block: Block, detail: str = "") -> Decision:
     return Decision("block", block, detail)
 
 
-def decide(  # noqa: C901, PLR0911, PLR0912, PLR0913 - one ordered row per block reason
+def decide(  # noqa: C901, PLR0911, PLR0913 - one ordered row per block reason
     pr: PullRequest,
     *,
     target: str,
@@ -77,17 +76,15 @@ def decide(  # noqa: C901, PLR0911, PLR0912, PLR0913 - one ordered row per block
         return _blocked(Block.RULES_UNKNOWN, rules.evidence)
     if not can_push:
         return _blocked(Block.NO_PERMISSION)
-    if method not in methods:
+    if method not in methods and not rules.queue_required:  # the queue merges with its own method
         return _blocked(Block.METHOD_NOT_ALLOWED, f"{method} is not allowed")
-    if rules.queue_required:
-        return _blocked(Block.QUEUE, "merge queue not supported (TD-22)")
     if pr.mergeable is False or state == "dirty":
         return _blocked(Block.CONFLICTS)
     if state == "behind":
         return _blocked(Block.BEHIND)
     if pr.mergeable is None or state in {"", "unknown"}:
         return _blocked(Block.CHECKING)
-    if state == "blocked":
+    if state == "blocked" and not rules.queue_required:  # a required queue blocks direct merges by design
         return _blocked(Block.PROTECTION, "GitHub reports the merge blocked by reviews or rules")
     return Decision("merge")
 

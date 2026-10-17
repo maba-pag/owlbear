@@ -406,12 +406,23 @@ class Store:
         name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
         atomic_write(self._dir(slug) / "inbox" / name, _INBOX.dump_json(item).decode())
 
-    def fold(
-        self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None, *, moved: bool = False
+    def fold(  # noqa: PLR0913 - the PR observation and the queue barrier
+        self,
+        lock: Lock,
+        slug: str,
+        now: datetime,
+        pr_state: PrState | None = None,
+        *,
+        moved: bool = False,
+        leave: Callable[[Change, Change], Change | None] | None = None,
     ) -> tuple[Change, Step | None]:
-        """Fold the inbox under the lock; consumed item names are saved with the Change, so a replay skips them."""
+        """Fold the inbox under the lock; consumed item names are saved with the Change, so a replay skips them.
+
+        ``leave`` sees the Change before and after folding; None keeps every item waiting and nothing is written.
+        """
         lock.check(slug)
         change = self.read(slug)
+        before = change
         present = sorted((self._dir(slug) / "inbox").glob("*.json"))
         acked = [n for n in change.inbox_acked if n in {p.name for p in present}]
         files: list[Path] = []
@@ -425,6 +436,11 @@ class Store:
         asked = loop.open_question(change) if loop.waiting_consent(change) else None
         asking = profile.value(self.read_profile() or Profile(), profile.ASK) == "yes"
         change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
+        if leave is not None:
+            kept = leave(before, change)
+            if kept is None:  # a queued PR could not be taken out yet: the items wait for the next pass
+                return before, loop.next_step(before, now)
+            change = kept
         change.inbox_acked = acked + [p.name for p in files]
         self.write(lock, change)
         if asked and any(q.id == asked.id and q.answer and q.answer.option == loop.OBSOLETE for q in change.questions):

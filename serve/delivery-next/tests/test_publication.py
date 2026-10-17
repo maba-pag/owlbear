@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import evidence, failures, tool_schema, tools
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -22,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Names,
     PersonCheck,
     Plan,
+    QueueClaim,
     Response,
     Review,
     Step,
@@ -30,21 +31,31 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.change_flow import budgets, loop, worktree
+from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import budgets, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
-from owlbear_delivery_next.github import merge_offer
+from owlbear_delivery_next.github import gh_queue, merge_offer
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     Check,
+    CiState,
     ConversationItem,
+    EnqueueResult,
+    EnqueueStatus,
     FailureCode,
+    GroupRun,
+    MergeMethod,
     MergeResult,
     MergeStatus,
     ProviderError,
     PullRequest,
+    QueueEntry,
+    QueueEvent,
+    QueueState,
     Refusal,
+    Repository,
     Rules,
     ThreadComment,
     classify_checks,
@@ -65,6 +76,7 @@ from owlbear_delivery_next.workflow_steps import (
     follow,
     merge,
     publish,
+    queue,
     review,
 )
 
@@ -1231,17 +1243,6 @@ def test_a_head_without_a_valid_final_review_goes_back_to_publish(tmp_path, clon
     )
 
 
-def test_a_required_merge_queue_is_an_owner_action_and_never_submitted(tmp_path, clone):
-    queued = Rules(state="known", evidence="rules merge_queue", types=("merge_queue",), queue_required=True)
-    gh = FakeGh(pr(head=A))
-    gh.read_rules = lambda _repo, _branch: queued
-    p = profile.confirm(prof(**profile.rule_entries(queued)), profile.RULES, "merge_queue", NOW)
-    _, result = merge.run(ctx(tmp_path, gh, p), change(worktree=str(clone)))
-    assert (result.exit, result.waiting, result.who) == (Exit.PENDING, Waiting.OWNER_ACTION, "you")
-    assert result.reason == "merge PR #7 in GitHub (merge queue not supported (TD-22))"
-    assert gh.merges == []
-
-
 def test_a_required_human_review_is_pending_naming_the_reviewers(tmp_path, clone):
     gh = FakeGh(pr(head=A))
     gh.review = ("REVIEW_REQUIRED", ("alice", "team/core"))
@@ -1648,3 +1649,285 @@ def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(c
     assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1") is None
     assert not publish.hook_rejected(128, b"fatal: Could not read from remote repository.", hook=True)
     assert not publish.hook_rejected(1, b" ! [remote rejected] main (protected branch)", hook=True)
+
+
+# TD-226: merging through a merge queue, with a provider fake shaped by the live proof (TD-279)
+
+QUEUED = Rules(
+    state="known",
+    evidence="rules merge_queue",
+    types=("merge_queue",),
+    queue_required=True,
+    queue_method=MergeMethod.MERGE,
+)
+GROUP = "c" * 40
+ADDED = QueueEvent(id="ATMQE_1", kind="added", at=NOW, actor="maba-pag")
+
+
+def removal(reason, rid="RFMQE_1", actor="github-merge-queue", before=GROUP):
+    return QueueEvent(id=rid, kind="removed", at=NOW + timedelta(minutes=1), actor=actor, reason=reason, before=before)
+
+
+def entry(state="QUEUED", position=1, group=None):
+    return QueueEntry(state=state, position=position, group_sha=group, enqueued_at=NOW)
+
+
+class QueueGh(FakeGh):
+    """The provider fake with a merge queue; ``state`` is what each read returns."""
+
+    def __init__(self, current):
+        super().__init__(current)
+        self.state = QueueState(merged=False, open=True, head_sha=current.head_sha)
+        self.enqueued, self.dequeued, self.answer = [], [], EnqueueResult(status=EnqueueStatus.ENQUEUED)
+        self.runs, self.dequeue_fails = (), False
+
+    def read_rules(self, _repo, _branch):
+        return QUEUED
+
+    def read_queue(self, _repo, _number):
+        return self.state
+
+    def enqueue(self, _pull, head):
+        self.enqueued.append(head)
+        if self.answer.status == EnqueueStatus.ENQUEUED:
+            self.state = self.state.model_copy(update={"entry": entry(), "added": ADDED})
+        return self.answer
+
+    def dequeue(self, pull):
+        if self.dequeue_fails:
+            raise ProviderError(FailureCode.UNAVAILABLE, "dequeue", "down", retry_safe=True)
+        self.dequeued.append(pull.number)
+        self.state = self.state.model_copy(update={"entry": None, "removed": removal("manual", "RFMQE_9", "maba-pag")})
+
+    def group_runs(self, _repo, sha):
+        return tuple(r for r in self.runs if r.head_sha == sha)
+
+    def group_log(self, _repo, run_id, _lines=40):
+        return f"##[error]run {run_id} failed in the group"
+
+
+def qprof():
+    return profile.confirm(prof(**profile.rule_entries(QUEUED)), profile.RULES, "merge_queue", NOW)
+
+
+def queue_step(tmp_path, gh, c):
+    cx = ctx(tmp_path, gh, qprof())
+    cx.store.root.mkdir(exist_ok=True)
+    return merge.run(cx, c)
+
+
+def queued_change(clone, **fields):
+    c = change(worktree=str(clone), **fields)
+    c.queue = QueueClaim(head=A, at=NOW, settled=True)
+    return c
+
+
+def test_a_passing_gate_enqueues_the_exact_head_once_and_never_merges_directly(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (result.exit, result.waiting, result.reason) == (
+        Exit.PENDING,
+        Waiting.GITHUB,
+        "PR #7 added to the merge queue",
+    )
+    assert (gh.enqueued, gh.merges, c.queue.head, c.queue.settled) == ([A], [], A, True)
+    c, result = queue_step(tmp_path, gh, c)
+    assert (result.reason, gh.enqueued) == ("PR #7 in the merge queue: position 1, queued", [A])
+
+
+def test_an_already_queued_refusal_settles_and_a_stale_head_retries(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.answer = EnqueueResult(status=EnqueueStatus.REFUSED, message="Pull request is already in the queue")
+    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (result.exit, c.queue.settled) == (Exit.PENDING, True)
+    stale = "Failed to add PR #7: expected head oid does not match the current head oid"
+    gh.answer = EnqueueResult(status=EnqueueStatus.REFUSED, message=stale)
+    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (result.exit, result.cause, c.queue) == (Exit.RETRY, "conflict:merge:head", None)
+
+
+@pytest.mark.parametrize("status", [EnqueueStatus.UNKNOWN, EnqueueStatus.ENQUEUED])
+def test_an_attempt_without_evidence_is_never_sent_again_and_then_asks(tmp_path, clone, status):
+    gh = QueueGh(pr(head=A))
+    gh.answer = EnqueueResult(status=status)
+    c, _ = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    gh.state = QueueState(merged=False, open=True, head_sha=A)  # GitHub shows nothing of it
+    for _ in range(queue.QUIET - 1):
+        c, result = queue_step(tmp_path, gh, c)
+        assert (result.exit, result.waiting) == (Exit.PENDING, Waiting.GITHUB)
+    c, result = queue_step(tmp_path, gh, c)
+    assert (result.exit, result.cause, gh.enqueued) == (Exit.ASK, queue.UNSEEN, [A])
+    c = loop.apply(c, result, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="again")], NOW)
+    gh.answer = EnqueueResult(status=EnqueueStatus.ENQUEUED)
+    c, result = queue_step(tmp_path, gh, c)
+    assert (gh.enqueued, result.reason) == ([A, A], "PR #7 added to the merge queue")
+
+
+def test_a_persons_entry_is_adopted_and_gated(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"entry": entry("AWAITING_CHECKS", group=GROUP), "added": ADDED})
+    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (c.queue.adopted, gh.enqueued) == (True, [])
+    assert result.reason == "PR #7 in the merge queue: position 1, awaiting checks"
+
+
+def test_a_gate_failing_while_queued_takes_the_pr_out_before_routing(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
+    c, result = queue_step(tmp_path, gh, queued_change(clone, reviews=[]))  # no valid final review of the head
+    assert (result.exit, result.back_to, gh.dequeued) == (Exit.BACK, StepKind.PUBLISH, [7])
+    assert (c.queue, c.queue_seen) == (None, "RFMQE_9")
+
+
+def test_failed_group_checks_become_one_fix_task_from_that_group_handled_once(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    run = {"branch": "gh-readonly-queue/main/pr-7-x", "status": "completed", "conclusion": "failure", "updated_at": NOW}
+    gh.runs = (GroupRun(id=41, head_sha=GROUP, **run), GroupRun(id=42, head_sha="d" * 40, **run))
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
+    c, result = queue_step(tmp_path, gh, queued_change(clone))
+    assert (result.exit, result.back_to, c.queue, c.queue_seen) == (Exit.BACK, StepKind.BUILD, None, "RFMQE_1")
+    assert "run 41 failed in the group" in result.fix_task.detail
+    assert "run 42" not in result.fix_task.detail  # another group's run is never blamed
+    c.queue = QueueClaim(head=A, at=NOW, settled=True)  # a later attempt never handles that removal again
+    gh.state = gh.state.model_copy(update={"entry": entry()})
+    _, result = queue_step(tmp_path, gh, c)
+    assert result.exit == Exit.PENDING
+
+
+@pytest.mark.parametrize(
+    ("reason", "actor", "cause"),
+    [
+        ("checks_timed_out", "github-merge-queue", queue.TIMED_OUT),
+        ("manual", "maba-pag", queue.REMOVED),
+        ("something_new", "github-merge-queue", queue.REMOVED),
+    ],
+)
+def test_other_removals_ask_and_are_never_enqueued_again_on_their_own(tmp_path, clone, reason, actor, cause):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal(reason, actor=actor)})
+    _, result = queue_step(tmp_path, gh, queued_change(clone))
+    assert (result.exit, result.cause, gh.enqueued) == (Exit.ASK, cause, [])
+    assert [o.id for o in result.question.options] == ["again", "pause"]
+
+
+def test_a_removal_before_any_attempt_is_not_handled(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("manual", actor="maba-pag")})
+    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
+    assert (result.reason, c.queue_seen, gh.enqueued) == ("PR #7 added to the merge queue", "RFMQE_1", [A])
+
+
+def test_a_merge_by_the_queue_ends_the_step(tmp_path, clone):
+    gh = QueueGh(pr(head=A))
+    gh.state = QueueState(merged=True, open=False, head_sha=A, added=ADDED, removed=removal("merged"))
+    c, result = queue_step(tmp_path, gh, queued_change(clone))
+    assert (result.exit, c.queue) == (Exit.DONE, None)
+
+
+def test_the_gate_lets_the_queue_merge_with_its_own_method_and_ignores_blocked():
+    blocked = pr(head=A, merge_state="blocked")
+    args = {
+        "target": "main",
+        "ci": CiState(),
+        "rules_confirmed": True,
+        "can_push": True,
+        "methods": (MergeMethod.MERGE,),
+    }
+    queued = merge_offer.decide(blocked, rules=QUEUED, method=MergeMethod.SQUASH, **args)
+    direct = merge_offer.decide(blocked, rules=Rules(state="known", evidence="x"), method=MergeMethod.MERGE, **args)
+    assert (queued.action, direct.block) == ("merge", merge_offer.Block.PROTECTION)
+
+
+def test_restart_is_refused_for_a_direct_merge_in_flight_but_not_while_queued():
+    c = change(consent=MergeConsent(head=A, at=NOW), loops={"final": RoundLoop(subject="final", policy=RoundPolicy())})
+    assert round_flow.restartable(c) == "a merge is under way"
+    c.queue = QueueClaim(head=A, at=NOW, settled=True)
+    assert round_flow.restartable(c) == ""
+
+
+def fold_store(tmp_path, monkeypatch, gh, c):
+    store = Store(tmp_path / "s")
+    store.root.mkdir()
+    store.write_profile(qprof())
+    with store.lock("c1") as lock:
+        store.write(lock, c)
+    monkeypatch.setattr(profile, "provider", lambda _p, _r: gh)
+    store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
+    return store
+
+
+def fold_pause(store, tmp_path):
+    with store.lock("c1") as lock:
+        folded, _ = store.fold(lock, "c1", NOW, leave=queue.barrier(store, tmp_path))
+    return folded
+
+
+def test_a_pause_takes_the_queued_pr_out_before_it_folds(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW, settled=True)
+    folded = fold_pause(fold_store(tmp_path, monkeypatch, gh, c), tmp_path)
+    assert (folded.intent.paused_at, folded.queue, folded.queue_seen, gh.dequeued) == (NOW, None, "RFMQE_9", [7])
+
+
+def test_a_failed_dequeue_keeps_the_pause_waiting_and_unacknowledged(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
+    gh.dequeue_fails = True
+    store = fold_store(tmp_path, monkeypatch, gh, change())  # a person's entry: no claim of Delivery's
+    assert (fold_pause(store, tmp_path).intent.paused_at, store.read("c1").inbox_acked) == (None, [])
+    assert list((store.root / "changes" / "c1" / "inbox").glob("*.json"))
+    gh.dequeue_fails = False
+    assert (fold_pause(store, tmp_path).intent.paused_at, gh.dequeued) == (NOW, [7])
+
+
+def test_an_unsettled_attempt_keeps_the_pause_waiting(tmp_path, monkeypatch):
+    gh = QueueGh(pr(head=A))
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW)
+    folded = fold_pause(fold_store(tmp_path, monkeypatch, gh, c), tmp_path)
+    assert (folded.intent.paused_at, gh.dequeued) == (None, [])
+
+
+def test_the_profile_keeps_only_the_merge_methods_the_pull_request_rule_allows(clone):
+    gh = FakeGh(pr(head=A))
+    methods = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
+    gh.read_repository = lambda: Repository(
+        repository="o/r", url="https://github.com/o/r", default_branch="main", methods=methods, can_push=True,
+        delete_branch_on_merge=False,
+    )  # fmt: skip
+    gh.read_rules = lambda _r, _b: Rules(
+        state="known", evidence="rules pull_request", allowed_methods=(MergeMethod.MERGE,)
+    )
+    found = profile.detect(clone, gh, None)
+    assert (profile.value(found, profile.METHODS), profile.value(found, profile.METHOD)) == ("merge", "merge")
+
+
+def test_the_queue_read_takes_the_group_commit_and_the_latest_events():
+    added = {
+        "__typename": "AddedToMergeQueueEvent",
+        "createdAt": "2026-10-17T17:30:40Z",
+        "actor": {"login": "maba-pag"},
+    }
+    gone = {"__typename": "RemovedFromMergeQueueEvent", "id": "R1", "createdAt": "2026-10-17T17:33:45Z"}
+    gone |= {"reason": "failed_checks", "actor": {"login": "github-merge-queue"}, "beforeCommit": {"oid": GROUP}}
+    queued = {
+        "state": "AWAITING_CHECKS",
+        "position": 1,
+        "enqueuedAt": "2026-10-17T17:35:01Z",
+        "headCommit": {"oid": GROUP},
+    }
+    nodes = [added | {"id": "A1"}, gone, added | {"id": "A2", "actor": None}]
+    pull = {
+        "state": "OPEN",
+        "merged": False,
+        "headRefOid": A,
+        "mergeQueueEntry": queued,
+        "timelineItems": {"nodes": nodes},
+    }
+    q = gh_queue._state(pull)  # noqa: SLF001 - the parser of GitHub's answer as recorded live
+    assert (q.entry.group_sha, q.added.id, q.removed.reason, q.removed.before) == (GROUP, "A2", "failed_checks", GROUP)
+    building = pull | {"mergeQueueEntry": queued | {"headCommit": None, "state": "QUEUED"}}
+    assert gh_queue._state(building).entry.group_sha is None  # noqa: SLF001 - no group is built yet

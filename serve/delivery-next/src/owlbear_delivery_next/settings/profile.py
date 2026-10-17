@@ -233,23 +233,25 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
     prev = previous or Profile()
     r = gh.read_repository()
     host = urlparse(r.url).hostname or "github.com"
-    methods = ", ".join(r.methods)
+    rules = gh.read_rules(r.repository, r.default_branch)
+    allowed = [m for m in r.methods if not rules.allowed_methods or m in rules.allowed_methods]  # the PR rule limits
+    methods = ", ".join(allowed)
     entries = {
         HOST: _entry("known", host, "gh repo view"),
         REPO: _entry("known", r.repository, "gh repo view"),
         DEFAULT: _entry("known", r.default_branch, "gh repo view"),
-        METHODS: _entry("known", methods or "none", "gh repo view"),
+        METHODS: _entry("known", methods or "none", "gh repo view and the pull-request rule"),
         PUSH: _entry("known", "yes" if r.can_push else "no", "gh repo view viewerPermission"),
         **_ci(repo),
         HOOKS: _hook(repo),
         **package_entries(repo),
-        **rule_entries(gh.read_rules(r.repository, r.default_branch)),
+        **rule_entries(rules),
     }
     for key, default in SETTINGS.items():
         old = prev.entries.get(key)
         entries[key] = old or _entry("known", default, "default")
-    if not entries[METHOD].value or entries[METHOD].value not in r.methods:
-        chosen = next((m for m in _PREFERRED if m in r.methods), "")
+    if not entries[METHOD].value or entries[METHOD].value not in allowed:
+        chosen = next((m for m in _PREFERRED if m in allowed), "")
         entries[METHOD] = _entry("known" if chosen else "unsupported", chosen, f"allowed: {methods or 'none'}")
     for key, old in prev.entries.items():
         new = entries.get(key)

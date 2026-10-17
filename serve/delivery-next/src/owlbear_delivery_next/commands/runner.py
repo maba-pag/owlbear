@@ -40,6 +40,7 @@ from owlbear_delivery_next.workflow_steps import (
     plan_round,
     prepare,
     publish,
+    queue,
     review,
     session_choice,
     sessions,
@@ -365,7 +366,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with store.lock(args.change) as lock:
             state, moved = engine.observe(store, repo, args.change)
-            change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved)
+            leave = queue.barrier(store, repo)
+            change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
             _step(store, lock, change, step, repo)
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:

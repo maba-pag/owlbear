@@ -104,7 +104,10 @@ class Rules(_Model):
     evidence: str
     types: tuple[str, ...] = ()
     required_checks: tuple[str, ...] = ()
-    queue_required: bool = False  # detected only: the merge queue is not supported (TD-22)
+    queue_required: bool = False
+    queue_method: MergeMethod | None = None  # the queue's own method; it merges, not the profile's (TD-226)
+    queue_timeout: int | None = None  # minutes the queue waits for group checks
+    allowed_methods: tuple[MergeMethod, ...] = ()  # the pull-request rule's methods; empty means no limit
     strict: bool = False
     conversation_resolution: bool = False
 
@@ -178,6 +181,63 @@ class MergeResult(_Model):
     sha: str | None = Field(default=None, pattern=_SHA)
     refusal: Refusal | None = None
     message: str | None = Field(default=None, max_length=_MAX_MESSAGE)
+
+
+class QueueEvent(_Model):
+    """One added-to or removed-from merge-queue event of a pull request's timeline."""
+
+    id: str = Field(min_length=1)
+    kind: Literal["added", "removed"]
+    at: datetime
+    actor: str = ""
+    reason: str = ""  # a removal's text as GitHub gives it; "merged" when the queue merged it
+    before: str | None = Field(default=None, pattern=_SHA)  # a removal's ``beforeCommit``: the group's commit
+
+
+class QueueEntry(_Model):
+    """A pull request's place in its merge queue."""
+
+    state: str  # QUEUED, AWAITING_CHECKS, MERGEABLE, UNMERGEABLE or LOCKED
+    position: int | None = None
+    group_sha: str | None = Field(default=None, pattern=_SHA)  # the merge group's commit once it is built
+    enqueued_at: datetime
+
+
+class QueueState(_Model):
+    """One read of a pull request: merged or open, its head, its queue entry and its latest queue events."""
+
+    merged: bool
+    open: bool
+    head_sha: str = Field(pattern=_SHA)
+    entry: QueueEntry | None = None
+    added: QueueEvent | None = None
+    removed: QueueEvent | None = None
+
+
+class EnqueueStatus(StrEnum):
+    """Outcome of one enqueue: in the queue, refused by GitHub (nothing changed), or unknown."""
+
+    ENQUEUED = "enqueued"
+    REFUSED = "refused"
+    UNKNOWN = "unknown"
+
+
+class EnqueueResult(_Model):
+    """Result of one enqueue guarded by the expected head; UNKNOWN is settled only by later reads."""
+
+    status: EnqueueStatus
+    message: str | None = Field(default=None, max_length=_MAX_MESSAGE)
+
+
+class GroupRun(_Model):
+    """One Actions run of a merge group that holds this pull request."""
+
+    id: int = Field(gt=0)
+    head_sha: str = Field(pattern=_SHA)  # the group's commit
+    branch: str
+    status: str
+    conclusion: str | None = None
+    updated_at: datetime
 
 
 @dataclass(frozen=True)
@@ -294,4 +354,24 @@ class Provider(Protocol):
 
     def delete_branch(self, repository: str, branch: str) -> None:
         """Delete one remote branch."""
+        ...
+
+    def read_queue(self, repository: str, number: int) -> QueueState:
+        """Read one pull request's merge-queue membership and latest queue events in one query."""
+        ...
+
+    def enqueue(self, pr: PullRequest, expected_head: str) -> EnqueueResult:
+        """Add one pull request to its merge queue, guarded by the expected head."""
+        ...
+
+    def dequeue(self, pr: PullRequest) -> None:
+        """Take one pull request out of its merge queue; the caller reads the queue back."""
+        ...
+
+    def group_runs(self, repository: str, group_sha: str) -> tuple[GroupRun, ...]:
+        """The Actions runs of one merge group, by its commit, newest first."""
+        ...
+
+    def group_log(self, repository: str, run_id: int, lines: int = 40) -> str:
+        """The log tail of one merge-group run's first failed job; empty when there is none."""
         ...

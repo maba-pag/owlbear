@@ -39,7 +39,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
-from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, prepare, pullback
+from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, prepare, pullback, queue
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -282,7 +282,7 @@ class Host:
         with self.store.lock(slug) as lock:
             prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
             state, moved = self.observe_pr(slug)
-            c, _ = self.store.fold(lock, slug, now, state, moved=moved)
+            c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
             if moved:
                 self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
             c = self._woken(self._pull(lock, c, now), now)

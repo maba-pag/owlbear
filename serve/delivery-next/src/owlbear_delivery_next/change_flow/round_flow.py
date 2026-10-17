@@ -217,8 +217,13 @@ def restartable(c: Change) -> str:
         return "the Change has ended"
     if c.stop or c.env is not None:
         return "the Change is stopped or runs your check's environment; settle that first"
-    if s.kind == StepKind.MERGE and c.consent is not None and not (c.outcome and c.outcome.exit == Exit.ASK):
-        return "a merge is under way"
+    if (
+        s.kind == StepKind.MERGE
+        and c.consent is not None
+        and c.queue is None
+        and not (c.outcome and c.outcome.exit == Exit.ASK)
+    ):
+        return "a merge is under way"  # a queued PR is taken out first by the fold's barrier (TD-226)
     at = s.kind in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.CHECK, StepKind.MERGE}
     repairing = any(t.id == s.task and t.fixes == FINAL for t in (c.plan.tasks if c.plan else []))
     return "" if at or (s.kind == StepKind.REVIEW and s.task is None) or repairing else "not at its final review yet"

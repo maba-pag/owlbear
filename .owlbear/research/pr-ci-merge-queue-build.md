@@ -93,11 +93,10 @@ restart cannot revoke a merge GitHub already accepted; the next pass reconciles 
 
 | Reason (exact strings fixed by the live proof, §5) | Action |
 | --- | --- |
-| Group checks failed | A fix task carrying the failing job's log from the merge group this removal ended: the recorded run whose commit is the event's `beforeCommit` when the live proof shows that it names the group, else the only failed group run for this PR and head that completed between the claim's time and the removal; when that is ambiguous or absent, the task says the diagnostics are unavailable and carries the reason text. Counted like `fix_ci` (§3.7) |
-| Timed out waiting for checks | Ask the owner once: the queue waited for checks that never reported, usually a workflow without `merge_group:`; continue (enqueue again) or pause |
-| Conflict | Integrate the target (builder task), then the usual CI and TD-235 round, then the next pass enqueues |
-| Protection failure | Ask the owner, naming the unmet rule when GitHub gives it |
-| Removed by a person, or not classified | Ask the owner: enqueue again, or pause; never re-enqueue against a person's removal on its own |
+| Group checks failed (`failed_checks`) | A fix task carrying the failing job's log from the merge group this removal ended: the group runs whose commit is the event's `beforeCommit` (live: it is the group's commit); when none failed or none can be read, the task says the diagnostics are unavailable. Counted like `fix_ci` (§3.7) |
+| Timed out waiting for checks (`checks_timed_out`) | Ask the owner once: the queue waited for checks that never reported, usually a workflow without `merge_group:`; continue (enqueue again) or pause |
+| Conflict (a reason naming a conflict; not seen live) | Integrate the target (builder task), then the usual CI and TD-235 round, then the next pass enqueues |
+| Removed by a person (`manual`), a protection failure, or not classified | Ask the owner with GitHub's reason and actor: enqueue again, or pause; never re-enqueue on its own |
 
 ### 3.6 Leaving the queue
 
@@ -172,6 +171,16 @@ not touch their paths. So:
   `merge_group`, (e) the removal event's `beforeCommit` compared with the group run's commit. §3.5's
   strings and lookup are fixed from what it records.
 - OwlBear: §4.3 step 2.
+
+Live result (2026-10-17, `porsche-code/brief-layover`, script `.owlbear/scratch/mq-proof/proof.py`, PRs
+#3–#6): (a) enqueued, `QUEUED` → `AWAITING_CHECKS` → `MERGEABLE` → merged in about a minute, with a
+removal event `merged` by `github-merge-queue`; (b) removed with `failed_checks`, its `beforeCommit` equal to the
+group run's commit, the failing job's log read; (c) a dequeue gives `manual` by the dequeuing account and no
+`beforeCommit`; (d) a required check whose workflow lacks `merge_group` gives `checks_timed_out` after the
+queue's timeout. A second enqueue is refused "Pull request is already in the queue"; a stale expected head
+is refused "expected head oid does not match the current head oid". An entry's `headCommit` is empty until
+the group is built, then it is the group's commit; the group branch is `gh-readonly-queue/main/pr-{n}-{base}`.
+The proof ruleset was deleted and the open proof PRs closed afterwards.
 
 ## 6. Open
 
