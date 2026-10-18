@@ -251,6 +251,36 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page) -> None:
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     expected = registry.Settings(channel="major", update_when_idle=False, update_while_paused=False)
     assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
+    a_read_begun_during_a_save_never_undoes_it(page)
+
+
+def a_read_begun_during_a_save_never_undoes_it(page) -> None:
+    """Sol: a refresh of the machine's values asked for while a save runs never shows the values before it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    held, answered = [], []  # the save waits for the test; a refresh is answered by the server at once, delivered late
+
+    def hold(route) -> None:
+        if route.request.method == "GET":
+            answered.append((route, route.fetch()))
+        else:
+            held.append(route)
+
+    page.route("**/api/next/machine**", hold)
+    page.get_by_label("Update itself when idle").check()
+    page.get_by_role("button", name="Save machine settings").click()
+    while not held:
+        page.wait_for_timeout(50)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh while the save runs
+    page.wait_for_timeout(300)
+    held[0].continue_()
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+    for route, before in answered:
+        route.fulfill(response=before)  # the values from before the save, arriving after it
+    page.wait_for_timeout(300)
+    page.unroute("**/api/next/machine**")
+    expect(page.get_by_label("Update itself when idle")).to_be_checked()
+    assert registry.load().settings.update_when_idle
 
 
 def unsaved_edits_keep_the_page(page, here: str) -> None:

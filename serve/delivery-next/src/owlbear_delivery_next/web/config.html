@@ -832,11 +832,12 @@ async function saveMachine() {
     state.machineDraft = null;
     state.status = "Saved this machine's settings.";
   } catch (e) {
-    if (e.status === 409) await readMachine();
+    if (e.status === 409) state.machine = await call("/machine", { machine: true }).catch(() => state.machine);
     notify(e.status === 409 ? `${e.message}. The page loaded them again and kept your edits; check them and save `
       + "again." : e.message);
   } finally {
     state.machineSaving = false;
+    state.machineWrites += 1;
     show();
   }
 }
@@ -857,11 +858,12 @@ function machineSection() {
   </section>`;
 }
 
-// The machine's values, unless a machine save began after this read did; then the save's answer stands.
+// The machine's values, unless a machine save ran during this read; then the save's answer stands.
 async function readMachine() {
   const writes = state.machineWrites;
+  if (state.machineSaving) return;
   const read = await call("/machine", { machine: true }).catch(() => undefined);
-  if (read !== undefined && writes === state.machineWrites) state.machine = read;
+  if (read !== undefined && !state.machineSaving && writes === state.machineWrites) state.machine = read;
 }
 
 // The machine host's values and every other project's settings, each shared folder once (twin clones share one).
