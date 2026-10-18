@@ -8,10 +8,12 @@ and ``?`` do not.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 
+HOME = "maba-pag/owlbear"  # Snyk's token reaches only changes from OwlBear's own repository (TD-363)
 SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
@@ -103,6 +105,20 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/knowledge/**",
         "tests/test_knowledge_ops_contract.py",
     ),
+    "security": (  # TD-360: Snyk Code and Open Source on every change to code, manifests or locks
+        ".github/workflows/security.yml",
+        ".snyk",
+        "**/*.py",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.html",
+        "**/pyproject.toml",
+        "**/package.json",
+        "**/package-lock.json",
+        "uv.lock",
+    ),
 }
 GATE = (".github/workflows/ci.yml", ".github/scripts/ci_scope.py")
 
@@ -147,9 +163,18 @@ def changed(base: str, head: str) -> list[str]:
     return [path for path in done.stdout.split("\0") if path]
 
 
+def tokened() -> bool:
+    """Whether GitHub gives this run Snyk's token: OwlBear's own run of a change from OwlBear itself (TD-363)."""
+    if os.environ.get("GITHUB_REPOSITORY", HOME) != HOME:
+        return False
+    return os.environ.get("EVENT") != "pull_request" or os.environ.get("SOURCE_REPOSITORY") == HOME
+
+
 def main(argv: list[str]) -> None:
     """Print the touched suites for a base and head commit; every suite without a base."""
     names = suites(changed(argv[0], argv[1])) if len(argv) == 2 and argv[0] else list(SUITES)  # noqa: PLR2004
+    if not tokened():
+        names = [name for name in names if name != "security"]
     sys.stdout.write(f"suites={json.dumps(names)}\n")
 
 
