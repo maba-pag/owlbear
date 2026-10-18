@@ -767,6 +767,15 @@ def test_before_a_stop_when_idle_the_paused_pass_stops_the_check_environment(sto
     )  # fmt: skip
 
 
+def test_a_launch_that_left_no_pids_is_found_and_stopped_before_a_stop_when_idle(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    calls = environment(store, fake, monkeypatch, launched_at=NOW)
+    fake.host.draining = lambda: True
+    fake.found = {902: "node"}  # started in the worktree before the crash recorded its group
+    assert (fake.host.tick(NOW), calls["dispose"], store.read("c1").env.launched_at) == ([], [{902: 2.0}], None)
+
+
 def test_a_liveness_stop_found_while_paused_clears_once_its_processes_are_gone(store, tmp_path):
     fake, flag = Fake(store, tmp_path), [False]
     paused(fake, flag)

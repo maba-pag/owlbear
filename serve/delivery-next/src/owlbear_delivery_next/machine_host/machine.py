@@ -154,6 +154,10 @@ class Machine:
         """Pause and stop when idle (TD-288): nothing starts, check environments go, then OwlBear stops."""
         with self.lock:
             self.paused = self.ending = True
+        for p in list(self.projects.values()):
+            if p.host:
+                with p.host.launching:  # a launch admitted before the intent is counted from now on
+                    pass
         self.say("paused by you: OwlBear stops once nothing runs")
         self._wake()
 
@@ -164,7 +168,7 @@ class Machine:
 
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
-        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working()]
+        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
 
     def idle_stop(self) -> bool:
         """Stop OwlBear when a stop when idle is asked for and nothing runs; whether it stopped."""

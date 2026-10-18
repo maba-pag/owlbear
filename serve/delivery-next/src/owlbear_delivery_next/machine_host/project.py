@@ -171,8 +171,12 @@ class Project:
         self._publish()
         self.host.say("readiness: " + ("; ".join(failed) or "ok"))
 
-    def working(self) -> list[str]:
-        """What keeps the project from being removed: live runners, check environments and admitted work."""
+    def working(self, *, stopping: bool = False) -> list[str]:
+        """What keeps the project from being removed: live runners, check environments and admitted work.
+
+        With *stopping* (a stop when idle) also what is not yet confirmed gone: an ended step's processes, a block
+        on surviving processes, and an environment whose launch left no PIDs.
+        """
         if self.store and self.host and self.store.db.waiting():  # an older OwlBear's runners kept it from loading
             h = self.host
             return [f"{s}: a running step (process {r.pid})" for s in self.store.db.legacy_slugs()
@@ -185,9 +189,14 @@ class Project:
             rec = self.host.runner(slug)
             if rec and self.host.alive(rec.pid, rec.created) is not False:
                 left.append(f"{slug}: a running step (process {rec.pid})")
+            elif stopping and rec:
+                left.append(f"{slug}: the processes of its ended step")
             with contextlib.suppress(StoreError):
-                if (env := self.store.read(slug).env) and env.pids:
+                c = self.store.read(slug)
+                if (env := c.env) and (env.pids or (stopping and (env.pgid or env.launched_at))):
                     left.append(f"{slug}: a check environment")
+                if stopping and c.blocked and not rec:
+                    left.append(f"{slug}: {c.blocked.reason}")
         return left
 
     def stop(self, *, drain: float = DRAIN, refuse: bool = False) -> list[str]:

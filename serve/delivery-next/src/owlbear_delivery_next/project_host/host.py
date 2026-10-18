@@ -341,7 +341,7 @@ class Host:
         """
         if (rec or c.blocked or _unverified(c)) and not self._gone(lock, c, rec, now):
             return False
-        if self.draining() and c.env and (c.env.pids or c.env.pgid):
+        if self.draining() and c.env and (c.env.pids or c.env.pgid or c.env.launched_at):
             if (left := self.clear(c, c.env)) is None or left:
                 return self._blocked(lock, c, left, now)
             c.env = c.env.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": None})

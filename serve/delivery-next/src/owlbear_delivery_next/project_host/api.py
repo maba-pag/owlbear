@@ -282,8 +282,15 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
+
+        def work() -> dict[str, str]:
+            return launch(host.repo, shaper, prompt)
+
         try:
-            return {"started": True, "launch": launches.start(lambda: launch(host.repo, shaper, prompt), command, done)}
+            with host.launching:  # a stop when idle waits for an admission in flight: refused, or counted as opening
+                if host.draining():
+                    raise HTTPException(409, ENDING)
+                return {"started": True, "launch": launches.start(work, command, done)}
         except Refused as exc:
             raise HTTPException(exc.status, exc.text) from exc
 
