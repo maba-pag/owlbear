@@ -1,0 +1,56 @@
+---
+name: Security
+
+"on":
+  workflow_call:
+    secrets:
+      SNYK_TOKEN:
+        required: true
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  SNYK_API: https://api.eu.snyk.io
+  SNYK_ORG: porsche-ag-fdi3-scanners
+
+jobs:
+  snyk:
+    name: Snyk
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup uv  # Snyk reads uv.lock through uv itself
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
+        with:
+          enable-cache: false
+
+      - name: Check uv version
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+
+      # Tests only: no monitor and no --report, so nothing is written into the Snyk org (TD-319).
+      # Each finding is printed with its rule, file and line, so a failing run becomes a fix task.
+      - name: Snyk Code
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk code test --org="$SNYK_ORG" --severity-threshold=high
+
+      - name: Snyk Open Source
+        if: success() || failure()
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test --all-projects --org="$SNYK_ORG" --severity-threshold=high

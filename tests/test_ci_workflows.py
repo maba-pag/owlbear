@@ -17,6 +17,7 @@ SUITE_WORKFLOWS = (
     "cockpit.yml",
     "python.yml",
     "python-browser.yml",
+    "security.yml",
     "static.yml",
     "tooling.yml",
 )
@@ -92,8 +93,9 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
     ("paths", "touched"),
     [
         (["README.md"], []),
-        (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static"]),
-        (["serve/cockpit/web/src/app.tsx"], ["cockpit", "static"]),
+        (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static", "security"]),
+        (["serve/cockpit/web/src/app.tsx"], ["cockpit", "static", "security"]),
+        (["uv.lock"], ["python", "python-browser", "static", "tooling", "security"]),
         ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
         ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),
         (["share/skills/x/SKILL.md"], ["agent-ecosystem"]),
@@ -132,7 +134,18 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
         check=True,
     ).stdout
 
-    assert paths == 'suites=["python", "python-browser", "static"]\n'
+    assert paths == 'suites=["python", "python-browser", "static", "security"]\n'
+
+
+def test_the_snyk_suite_only_tests_and_gets_its_token_from_the_gate() -> None:
+    """TD-319: nothing is written into the Snyk org; a finding fails the run with its file and line in the log."""
+    steps = _jobs("security.yml")["snyk"]["steps"]
+    runs = _runs({"steps": steps})
+    assert "snyk code test" in runs
+    assert "snyk test --all-projects" in runs
+    assert not any(word in runs for word in ("monitor", "--report", "|| true"))
+    assert _workflow("security.yml")["env"]["SNYK_API"] == "https://api.eu.snyk.io"
+    assert _jobs("ci.yml")["security"]["secrets"] == {"SNYK_TOKEN": "${{ secrets.SNYK_TOKEN }}"}
 
 
 def test_every_suite_lists_its_own_workflow_and_no_glob_twice() -> None:
@@ -309,12 +322,15 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
         if not setups:
             continue
         setup = steps[setups[0]]["with"]
-        if name != "copilot-setup-steps.yml":
+        if name != "copilot-setup-steps.yml" and setup.get("enable-cache") is not False:
             assert setup["cache-suffix"] in {"python-tests", "python-browser", "delivery-next-browser", "dev-tools"}
         check = next(index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", "")))
         first_uv = next(
-            index
-            for index, step in enumerate(steps)
-            if re.search(r"\buv\s+(?:python|run|sync|lock)", str(step.get("run", "")))
+            (
+                index
+                for index, step in enumerate(steps)
+                if re.search(r"\buv\s+(?:python|run|sync|lock)", str(step.get("run", "")))
+            ),
+            len(steps),  # the security suite's uv runs only inside Snyk
         )
         assert setups[0] < check < first_uv

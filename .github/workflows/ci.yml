@@ -77,10 +77,17 @@ jobs:
     if: contains(fromJSON(needs.scope.outputs.suites), 'agent-ecosystem')
     uses: ./.github/workflows/agent-ecosystem.yml
 
+  security:
+    needs: scope
+    if: contains(fromJSON(needs.scope.outputs.suites), 'security')
+    uses: ./.github/workflows/security.yml
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
   ci:
     name: CI
     if: always()
-    needs: [scope, python, python-browser, cockpit, static, tooling, agent-ecosystem]
+    needs: [scope, python, python-browser, cockpit, static, tooling, agent-ecosystem, security]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

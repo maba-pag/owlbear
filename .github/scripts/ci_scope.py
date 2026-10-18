@@ -103,6 +103,20 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/knowledge/**",
         "tests/test_knowledge_ops_contract.py",
     ),
+    "security": (  # TD-319: Snyk Code and Open Source on every change to code, manifests or locks
+        ".github/workflows/security.yml",
+        ".snyk",
+        "**/*.py",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.html",
+        "**/pyproject.toml",
+        "**/package.json",
+        "**/package-lock.json",
+        "uv.lock",
+    ),
 }
 GATE = (".github/workflows/ci.yml", ".github/scripts/ci_scope.py")
 
