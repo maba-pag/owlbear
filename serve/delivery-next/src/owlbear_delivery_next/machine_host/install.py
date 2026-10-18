@@ -36,7 +36,7 @@ def runtime() -> Path:
 
 def install(say: Say, ask: Callable[[str], bool], parser: argparse.ArgumentParser) -> int:
     """Write the completion, then link the command and add the login item, each only after a yes."""
-    command = Path(sys.executable).parent / "owlbear"
+    command = local_home.stable(Path(sys.executable).parent / "owlbear")  # the alias, so updates keep it
     if not command.is_relative_to(runtime()):
         say(f"run this from the installed runtime: {runtime() / '.venv' / 'bin' / 'owlbear'} install")
         return 1

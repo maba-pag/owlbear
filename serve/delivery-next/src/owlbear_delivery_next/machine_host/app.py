@@ -38,6 +38,13 @@ class RegisterBody(api.Body):
     path: str = Field(min_length=1, max_length=4096)
 
 
+class SettingsBody(api.Body):
+    """The machine's settings as the page edited them, and the revision it read."""
+
+    rev: str = Field(min_length=1, max_length=64)
+    settings: registry.Settings
+
+
 def _local(host: str) -> bool:
     return host.rsplit(":", 1)[0] in api.LOCAL_HOSTS
 
@@ -139,11 +146,30 @@ def _routes(machine: Machine) -> APIRouter:
     def adopt(pid: str) -> dict[str, Any]:
         return answer(lambda: machine.adopt(pid).info())
 
+    _machine_routes(routes, machine)
+    return routes
+
+
+def _machine_routes(routes: APIRouter, machine: Machine) -> None:
+    """The machine's own values and its Resume and stop."""
+
     @routes.get("/machine")
     def values() -> dict[str, Any]:
-        """The machine's own values (TD-243): shown in the Settings page's machine section, changed by `owlbear`."""
+        """The machine's own values (TD-243): its settings, Resume and the login item, which `owlbear` changes."""
         login = control.autostarts() if sys.platform == "darwin" else "not available on this system"
-        return {"paused": machine.paused, "resumed_at": registry.load().resumed_at, "login_item": login}
+        saved = registry.load()
+        return {
+            "paused": machine.paused, "resumed_at": saved.resumed_at, "login_item": login,
+            "settings": saved.settings.model_dump(), "settings_rev": registry.revision(saved.settings),
+        }  # fmt: skip
+
+    @routes.put("/machine/settings")
+    def configure(body: SettingsBody) -> dict[str, Any]:
+        try:
+            registry.configure(body.settings, body.rev)
+        except registry.RegistryError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return values()
 
     @routes.post("/resume")
     def resume() -> dict[str, bool]:
@@ -154,5 +180,3 @@ def _routes(machine: Machine) -> APIRouter:
     def stop() -> dict[str, bool]:
         machine.on_stop()
         return {"stopping": True}
-
-    return routes

@@ -19,6 +19,7 @@ from starlette.routing import Mount, Route
 
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store import backlog_issues
@@ -73,9 +74,21 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
         return JSONResponse({"paused": False, "waiting": 0, "projects": listed})
 
     def values(_request):
-        return JSONResponse({"paused": False, "resumed_at": "2026-10-18T08:00:00Z", "login_item": "off"})
+        saved = registry.load()
+        rev = registry.revision(saved.settings)
+        answer = {"paused": False, "resumed_at": "2026-10-18T08:00:00Z", "login_item": "off"}
+        return JSONResponse(answer | {"settings": saved.settings.model_dump(), "settings_rev": rev})
+
+    async def configure(request):
+        body = await request.json()
+        try:
+            registry.configure(registry.Settings.model_validate(body["settings"]), body["rev"])
+        except registry.RegistryError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=409)
+        return values(request)
 
     routes = [Route("/api/next/projects", projects), Route("/api/next/machine", values)]
+    routes += [Route("/api/next/machine/settings", configure, methods=["PUT"])]
     routes += [Mount(f"/p/{pid}", app) for pid, app in apps.items()]
     return Starlette(routes=[*routes, Mount("/", apps[SHOP])]), launches
 
@@ -221,6 +234,55 @@ def test_an_older_scope_label_without_its_project_label_means_the_project_it_was
     )  # fmt: skip
 
 
+def machine_settings_are_saved_and_a_stale_save_is_refused(page) -> None:
+    """TD-288, TD-300: the machine section edits the machine's own settings against the revision it read."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    save = page.get_by_role("button", name="Save machine settings")
+    expect(save).to_be_disabled()
+    page.get_by_label("Versions this machine takes").select_option("major")
+    page.get_by_label("Update itself while paused").uncheck()
+    other = registry.load().settings  # another page saves first
+    registry.configure(other.model_copy(update={"update_when_idle": False}), registry.revision(other))
+    save.click()
+    expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
+    expect(page.get_by_label("Versions this machine takes")).to_have_value("major")
+    save.click()
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+    expected = registry.Settings(channel="major", update_when_idle=False, update_while_paused=False)
+    assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
+    a_read_begun_during_a_save_never_undoes_it(page)
+
+
+def a_read_begun_during_a_save_never_undoes_it(page) -> None:
+    """Sol: a refresh of the machine's values asked for while a save runs never shows the values before it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    held, answered = [], []  # the save waits for the test; a refresh is answered by the server at once, delivered late
+
+    def hold(route) -> None:
+        if route.request.method == "GET":
+            answered.append((route, route.fetch()))
+        else:
+            held.append(route)
+
+    page.route("**/api/next/machine**", hold)
+    page.get_by_label("Update itself when idle").check()
+    page.get_by_role("button", name="Save machine settings").click()
+    while not held:
+        page.wait_for_timeout(50)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh while the save runs
+    page.wait_for_timeout(300)
+    held[0].continue_()
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+    for route, before in answered:
+        route.fulfill(response=before)  # the values from before the save, arriving after it
+    page.wait_for_timeout(300)
+    page.unroute("**/api/next/machine**")
+    expect(page.get_by_label("Update itself when idle")).to_be_checked()
+    assert registry.load().settings.update_when_idle
+
+
 def unsaved_edits_keep_the_page(page, here: str) -> None:
     """No project choice, removal or addition leaves a page with unsaved edits."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -268,6 +330,7 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             page.get_by_label("Show all settings").uncheck()
             expect(across).not_to_contain_text("explore")
             expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
+            machine_settings_are_saved_and_a_stale_save_is_refused(page)
             scope = page.get_by_label("Layer")
             expect(scope.locator("option")).to_have_text(
                 ["Project docs-site", "Global (every project)", "Project shop-site (/s)", "Project shop-site (/s2)"]

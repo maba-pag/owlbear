@@ -274,3 +274,16 @@ def test_the_machine_s_own_values_are_read_apart_from_any_settings_layer(http, m
         True, "on", False, True
     )  # fmt: skip
     assert http.get("/api/next/machine").json()["login_item"] == "not available on this system"
+
+
+def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(http):
+    """TD-288, TD-300: channel and the two update switches, refused when another page saved first."""
+    read = http.get("/api/next/machine").json()
+    chosen = {"channel": "major", "update_when_idle": False, "update_while_paused": True}
+    saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
+    stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
+    wrong = http.put("/api/next/machine/settings", json={"rev": "x", "settings": {"channel": "nightly"}})
+    assert (read["settings"]["channel"], saved.json()["settings"], registry.load().settings.channel) == (
+        "minor", chosen, "major"
+    )  # fmt: skip
+    assert (stale.status_code, "changed since" in stale.json()["detail"], wrong.status_code) == (409, True, 422)

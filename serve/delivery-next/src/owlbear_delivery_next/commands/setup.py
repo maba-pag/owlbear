@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.design_packs import design_pack
-from owlbear_delivery_next.local_system import data_repo, git_files, preload, text_files
+from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -237,7 +237,11 @@ def run(  # noqa: PLR0913 - one answer per consent
     answer, given by flag or asked; without a terminal an unasked answer is no. The command line claims the
     project's shared folder first (``project_folder``).
     """
-    store, python, say = Store.open(repo), sys.executable, lambda t: sys.stdout.write(t + "\n")
+    store, python, say = (
+        Store.open(repo),
+        str(local_home.stable(Path(sys.executable))),
+        lambda t: sys.stdout.write(t + "\n"),
+    )
     try:
         prev = store.read_profile()
     except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
