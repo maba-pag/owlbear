@@ -593,22 +593,10 @@ def test_a_thread_a_person_unresolves_after_delivery_resolved_it_opens_again_unr
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
     first = result.fix_task.id
     c = handled(c, result, "answered", "Because.")
-    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (gh.resolved, c.handled[0].resolved) == (["t1"], True)
-    gh.items = [i.model_copy(update={"resolved": False}) for i in gh.items]
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.fix_task.id, gh.resolved) == (Exit.BACK, f"{first}-2", ["t1"])
-
-
-def test_an_acknowledged_resolve_is_recorded_at_once_and_a_later_unresolve_reopens_without_resolving(tmp_path):
-    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "why?")))
-    cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
-    first = result.fix_task.id
-    c = handled(c, result, "answered", "Because.")
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, gh.resolved, c.handled[0].resolved) == (None, ["t1"], True)
+    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (gh.resolved, c.handled[0].resolved) == (["t1"], True)
     gh.items = [i.model_copy(update={"resolved": False}) for i in gh.items]
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result.exit, result.fix_task.id, gh.resolved) == (Exit.BACK, f"{first}-2", ["t1"])
@@ -1407,15 +1395,11 @@ def worktree_with_work(clone, tmp_path):
     return clone, wt
 
 
-def test_inventory_finds_unmerged_commits_and_every_uncommitted_path(worktree_with_work):
-    _, wt = worktree_with_work
+def test_cleanup_removes_the_worktree_only_after_bundle_and_archive_verify(worktree_with_work, tmp_path):
+    clone, wt = worktree_with_work
     inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main", "absent-ref"])
     assert len(inv.commits) == 1
     assert sorted(inv.dirty) == ["a.txt", "new.txt", "staged.txt"]
-
-
-def test_cleanup_removes_the_worktree_only_after_bundle_and_archive_verify(worktree_with_work, tmp_path):
-    clone, wt = worktree_with_work
     c = change(StepKind.CLEANUP, worktree=str(wt))
     c.names.branch, c.names.pr = "owlbear/c2", None
     _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)

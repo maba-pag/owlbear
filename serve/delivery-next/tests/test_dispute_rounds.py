@@ -195,8 +195,15 @@ def judge(monkeypatch, verdict: dict | None = None, result: loop.StepResult | No
     return seen
 
 
-def test_a_withdrawn_finding_is_settled_and_the_review_completes(tmp_path, clone, monkeypatch):
-    store = reconsidering(tmp_path, clone, monkeypatch)
+def test_each_reconsideration_outcome_settles_clarifies_asks_or_runs_again(tmp_path, clone, monkeypatch):
+    asked = reconsidering(tmp_path, clone, monkeypatch).read("c1")
+
+    def fresh(name: str, c: Change | None = None) -> Store:
+        """An independent store holding a deep copy of the reconsidering Change; the clone is only read."""
+        return stored(tmp_path / name, c or asked.model_copy(deep=True))
+
+    # withdrawn: settled, and the review completes
+    store = fresh("withdrawn")
     seen = judge(monkeypatch, {"finding": "F1", "verdict": "withdrawn", "reason": "AC-1 allows English"})
     c = step(store, clone)
     label, submit, cfg = seen[0]
@@ -208,12 +215,10 @@ def test_a_withdrawn_finding_is_settled_and_the_review_completes(tmp_path, clone
         "English)" in disputes.review_lines(c, None)
     )
 
-
-def test_a_clarified_finding_goes_to_the_builder_as_the_owners(tmp_path, clone, monkeypatch):
-    store = reconsidering(tmp_path, clone, monkeypatch)
-    c = store.read("c1")
+    # clarified: goes to the builder as the owner's
+    c = asked.model_copy(deep=True)
     c.budgets.rounds[budgets.round_key(c)] = budgets.ROUND_LIMIT  # the owner's decision passes the gate once
-    store.write(Lock("c1"), c)
+    store = fresh("clarified", c)
     narrower = "a.txt:1: AC-1 greets German users in English - fix: use Hallo for de"
     judge(monkeypatch, {"finding": "F1", "verdict": "clarified", "text": narrower, "reason": "narrowed"})
     c = step(store, clone)
@@ -221,9 +226,8 @@ def test_a_clarified_finding_goes_to_the_builder_as_the_owners(tmp_path, clone, 
     assert (c.step.kind, c.step.task, fix.settled) == (K.BUILD, fix.id, ["F1"])
     assert (fix.detail, fix.notes) == (f"- {narrower}", {"F1": NOTE})
 
-
-def test_an_unsure_reconsideration_asks_the_owner_to_fix_or_drop(tmp_path, clone, monkeypatch):
-    store = reconsidering(tmp_path, clone, monkeypatch)
+    # unsure: asks the owner to fix or drop
+    store = fresh("unsure")
     judge(monkeypatch, {"finding": "F1", "verdict": "unsure", "reason": "only the owner knows the audience"})
     q = loop.open_question(step(store, clone))
     assert ([o.label for o in q.options], "could not settle" in q.text) == (["Fix it", "Drop it"], True)
@@ -232,9 +236,8 @@ def test_an_unsure_reconsideration_asks_the_owner_to_fix_or_drop(tmp_path, clone
     assert (c.step.kind, c.step.mode) == (K.REVIEW, disputes.DISPUTED)
     assert disputes.kept(c.plan.tasks[2]) == {f"- {ONE}": "use Hallo"}
 
-
-def test_a_failed_reconsideration_is_the_steps_result_and_runs_again(tmp_path, clone, monkeypatch):
-    store = reconsidering(tmp_path, clone, monkeypatch)
+    # failed: the session's failure is the step's result, and it runs again
+    store = fresh("failed")
     failed = loop.StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, K.REVIEW, "transcript"), reason="x")
     judge(monkeypatch, result=failed)
     c = step(store, clone)

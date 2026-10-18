@@ -535,17 +535,11 @@ def patched(env) -> tuple[Change, object, Path]:
     return c, s, tmp / "test.db"
 
 
-def test_data_only_seed_runs_the_setup_script_of_the_accepted_patch(env):
-    _repo, store, log, _tmp = env
+def test_seed_and_cleanup_run_with_the_setup_patch_and_a_failed_cleanup_stays_outstanding_until_it_succeeds(env):
+    repo, store, log, tmp = env
     c, s, db = patched(env)
     assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
-    assert (lines(log), db.read_text()) == (["seed-from-patch"], "seeded by the patch")
-
-
-def test_cleanup_runs_with_the_setup_patch_and_a_failed_one_stays_outstanding_until_it_succeeds(env):
-    repo, store, log, tmp = env
-    c, s, _db = patched(env)
-    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    assert (lines(log), db.read_text()) == (["seed-from-patch"], "seeded by the patch")  # the data-only seed
     (fails := tmp / "cleanup-fails").write_text("")
     c.env, events = None, []
     assert prepare.end(store, c, repo, s, events.append) is None

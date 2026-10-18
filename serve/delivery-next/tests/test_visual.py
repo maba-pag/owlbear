@@ -306,12 +306,6 @@ def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fai
     assert "text overflows" in result.fix_task.detail
 
 
-def test_an_oversize_screenshot_keeps_its_errors(tmp_path):
-    (tmp_path / "home-1280.png").write_bytes(b"x" * (visual.MAX_BYTES + 1))
-    shot = visual.Shot("home", 1280, "home-1280.png", errors=(err("boom"),))
-    assert visual.oversize(tmp_path, [shot])[0].errors == (err("boom"),)
-
-
 def test_doubt_is_only_offered_when_nothing_is_definitely_wrong(clone):
     head = commit(clone, "web/app.css")
     good = [visual.Shot("home", 1280, "home-1280.png")]
@@ -846,14 +840,16 @@ def test_an_unconfirmed_termination_wins_over_a_passing_verdict(flow):
     assert (after.outcome.exit, after.visual) == (Exit.STOP, None)
 
 
-def test_only_a_screenshot_larger_than_one_review_takes_is_a_finding(tmp_path):
+def test_only_a_screenshot_larger_than_one_review_takes_is_a_finding_and_keeps_its_errors(tmp_path):
     (tmp_path / "a.png").write_bytes(b"x" * (visual.MAX_BYTES + 1))
     (tmp_path / "b.png").write_bytes(b"x" * (visual.MAX_BYTES - 1))
-    shots = visual.oversize(tmp_path, [visual.Shot("home", 1280, "a.png"), visual.Shot("about", 1280, "b.png")])
+    big = visual.Shot("home", 1280, "a.png", errors=(err("boom"),))
+    shots = visual.oversize(tmp_path, [big, visual.Shot("about", 1280, "b.png")])
     assert [(s.file, s.error) for s in shots] == [
         ("", "state home at 1280px is over the 12 MB one review takes"),
         ("b.png", ""),
     ]
+    assert shots[0].errors == (err("boom"),)
 
 
 def test_a_capture_over_one_reviews_budget_is_judged_in_batches_by_both_judges(flow):

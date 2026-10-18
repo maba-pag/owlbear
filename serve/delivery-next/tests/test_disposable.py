@@ -104,7 +104,9 @@ def test_a_review_runs_in_the_change_s_read_only_worktree_at_its_head_which_stay
     assert store.read("c1").outcome.exit == Exit.DONE
 
 
-def test_the_read_only_worktree_is_reused_and_reset_to_the_next_head(store, change_repo, monkeypatch):
+def test_review_writes_never_reach_the_change_worktree_and_the_read_only_one_is_reset_to_the_next_head(
+    store, change_repo, monkeypatch
+):
     commit(change_repo, ".gitignore", "*.log\n")
 
     def act(cfg):
@@ -115,7 +117,10 @@ def test_the_read_only_worktree_is_reused_and_reset_to_the_next_head(store, chan
         (cfg.worktree / "out.log").write_text("ignored\n")
 
     first = reviewer(monkeypatch, act)
-    reviewed(store, change_repo)
+    c = reviewed(store, change_repo)
+    assert git(change_repo, "status", "--porcelain") == ""
+    assert (change_repo / "a.txt").read_text() == "a\n"
+    assert c.outcome.exit == Exit.DONE  # the dirty review's result stands
     at = first[0].worktree
     assert (at / "new.txt").exists()  # nothing removes it after the session
     head = commit(change_repo, "a.txt", "b\n")
@@ -129,34 +134,22 @@ def test_the_read_only_worktree_is_reused_and_reset_to_the_next_head(store, chan
     assert c.outcome.exit == Exit.DONE
 
 
-def test_files_a_review_writes_never_reach_the_change_worktree_and_its_result_stands(store, change_repo, monkeypatch):
+def test_refs_a_review_creates_or_moves_void_its_result_and_are_all_reported(store, change_repo, monkeypatch):
     def act(cfg):
-        (cfg.worktree / "a.txt").write_text("changed\n")
-        (cfg.worktree / "new.txt").write_text("new\n")
+        git(cfg.worktree, "branch", "probe-branch")
+        git(cfg.worktree, "tag", "v1")
+        git(cfg.worktree, "branch", "-f", "main", "HEAD")
 
-    reviewer(monkeypatch, act)
+    seen = reviewer(monkeypatch, act)
     c = reviewed(store, change_repo)
-    assert git(change_repo, "status", "--porcelain") == ""
-    assert (change_repo / "a.txt").read_text() == "a\n"
-    assert c.outcome.exit == Exit.DONE
-
-
-@pytest.mark.parametrize(
-    ("args", "said"),
-    [
-        (("branch", "probe-branch"), "created branch probe-branch"),
-        (("tag", "v1"), "created tag v1"),
-        (("branch", "-f", "main", "HEAD"), "moved branch main"),
-    ],
-)
-def test_a_ref_a_review_creates_or_moves_voids_its_result(store, change_repo, monkeypatch, args, said):
-    seen = reviewer(monkeypatch, lambda cfg: git(cfg.worktree, *args))
-    c = reviewed(store, change_repo)
+    said = ["moved branch main", "created branch probe-branch", "created tag v1"]
     assert (c.outcome.exit, c.outcome.cause) == (Exit.RETRY, VOIDED)
-    assert c.outcome.reason == f"a read-only step changed the repository: {said}"
-    assert git(change_repo, "for-each-ref", "--format=%(refname:short)", f"refs/*/{said.rsplit(' ', 1)[1]}")
+    assert c.outcome.reason == f"a read-only step changed the repository: {', '.join(said)}"
+    refs = ("refs/heads/main", "refs/heads/probe-branch", "refs/tags/v1")
+    kept = git(change_repo, "for-each-ref", "--format=%(refname:short)", *refs)
+    assert kept.split() == ["main", "probe-branch", "v1"]  # nothing restores them
     events = [e for e in store.events("c1") if e.get("event") == "read-only-violation"]
-    assert [e["refs"] for e in events] == [[said]]
+    assert [e["refs"] for e in events] == [said]
     assert seen[0].worktree.is_dir()
 
 

@@ -89,8 +89,12 @@ def test_agents_remember_in_the_projects_folder_of_the_shared_repository(shared,
 
 
 def test_without_a_shared_repository_agents_have_no_memory_and_the_clone_gets_none(repo) -> None:
-    assert sessions.memory(Store.open(repo)) is None
+    store = Store.open(repo)
+    assert sessions.memory(store) is None
     assert not (repo / ".owlbear").exists()
+    assert (store.config_path, store.global_path) == (store.root / "config.json", None)  # settings stay here
+    got = client(store).put("/api/next/config/global", json={"rev": EMPTY, "layer": {"widths": [1366]}})
+    assert got.status_code == 409
 
 
 def test_settings_live_in_the_shared_repository_and_each_save_is_committed_and_pushed(shared, repo) -> None:
@@ -244,13 +248,6 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     )
     assert change_record.save(store, Change(slug="never"), None, at) == ""  # never approved: no record
     assert not (folder / "20261015-090000-never.json").exists()
-
-
-def test_without_a_pointer_the_settings_stay_in_the_clone(repo) -> None:
-    store = Store.open(repo)
-    assert (store.config_path, store.global_path) == (store.root / "config.json", None)
-    got = client(store).put("/api/next/config/global", json={"rev": EMPTY, "layer": {"widths": [1366]}})
-    assert got.status_code == 409
 
 
 def test_a_pointer_to_no_repository_stops_delivery(tmp_path: Path, repo, monkeypatch) -> None:

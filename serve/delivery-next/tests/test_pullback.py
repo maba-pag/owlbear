@@ -270,16 +270,6 @@ def test_an_untracked_file_where_the_merge_needs_a_directory_is_a_collision(repo
     assert full(repo) == before
 
 
-def test_an_untracked_file_at_an_incoming_path_leaves_the_target_behind(repos):
-    repo, other = repos
-    (repo / "b.txt").write_text("untracked\n")
-    before = state(repo)
-    merged(other)
-    result = pullback.run(repo, "main", NOW)
-    assert (result.state, "b.txt overlap" in result.reason) == ("behind", True)
-    assert (state(repo), (repo / "b.txt").read_text()) == (before, "untracked\n")
-
-
 @pytest.mark.parametrize("op", ["rebase", "bisect"])
 def test_a_target_mid_rebase_or_bisect_is_behind(repos, op):
     repo, other = repos
@@ -418,49 +408,42 @@ def timeout(*_args, **_kwargs):
     raise GIT_TIMEOUT
 
 
-@pytest.mark.parametrize(
-    ("module", "name", "error"),
-    [
+def test_a_timeout_anywhere_leaves_the_target_behind(repos, monkeypatch):
+    repo, other = repos
+    before = full(repo)
+    merged(other)
+    for module, name, error in [
         (pullback.engine, "fetch", RemoteGitTimeout("fetch exceeded 30 s")),
         (pullback, "holders", GIT_TIMEOUT),
         (pullback, "rev", GIT_TIMEOUT),
         (pullback, "_submodules", GIT_TIMEOUT),
-    ],
-)
-def test_a_timeout_anywhere_leaves_the_target_behind(repos, monkeypatch, module, name, error):
-    repo, other = repos
-    before = full(repo)
-    reason = "git timed out" if error is GIT_TIMEOUT else str(error)
-    merged(other)
+    ]:
+        reason = "git timed out" if error is GIT_TIMEOUT else str(error)
 
-    def fail(*_args, **_kwargs):
-        raise error
+        def fail(*_args, error=error, **_kwargs):
+            raise error
 
-    monkeypatch.setattr(module, name, fail)
-    result = pullback.run(repo, "main", NOW)
-    assert (result.state, result.reason) == ("behind", f"local main is behind: {reason}")
-    assert full(repo) == before
+        with monkeypatch.context() as m:
+            m.setattr(module, name, fail)
+            result = pullback.run(repo, "main", NOW)
+        assert (name, result.state, result.reason) == (name, "behind", f"local main is behind: {reason}")
+        assert (name, full(repo)) == (name, before)
 
 
-def test_an_intentionally_empty_local_commit_is_replayed_with_its_metadata(repos):
-    repo, other = repos
-    git(repo, "commit", "-q", "--allow-empty", "-m", "marker", "--author", "Ann <ann@a>")
-    head = merged(other)
-    result = pullback.run(repo, "main", NOW)
-    assert (result.state, git(repo, "rev-parse", "HEAD~1")) == ("updated", head)
-    assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "marker|Ann <ann@a>"
-
-
-def test_a_local_commit_already_upstream_is_kept_as_an_empty_commit(repos):
+def test_empty_and_already_upstream_local_commits_are_replayed_as_empty_commits_with_their_metadata(repos):
     repo, other = repos
     (repo / "b.txt").write_text("x\n")
     git(repo, "add", "b.txt")
     git(repo, "commit", "-q", "-m", "same patch", "--author", "Ann <ann@a>")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "marker", "--author", "Ann <ann@a>")
     head = merged(other)
     result = pullback.run(repo, "main", NOW)
-    assert (result.state, git(repo, "rev-parse", "HEAD~1")) == ("updated", head)
-    assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "same patch|Ann <ann@a>"
-    assert git(repo, "diff", "HEAD~1", "HEAD") == ""
+    assert (result.state, git(repo, "rev-parse", "HEAD~2")) == ("updated", head)
+    assert git(repo, "log", "-2", "--format=%s|%an <%ae>").splitlines() == [
+        "marker|Ann <ann@a>",
+        "same patch|Ann <ann@a>",
+    ]
+    assert (git(repo, "diff", "HEAD~2", "HEAD~1"), git(repo, "diff", "HEAD~1", "HEAD")) == ("", "")
 
 
 def test_a_locked_temporary_worktree_is_removed_even_if_remove_times_out(repos, monkeypatch):

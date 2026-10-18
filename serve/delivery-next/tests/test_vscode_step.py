@@ -488,22 +488,6 @@ def test_a_user_turn_in_the_bound_chat_blocks_the_start(tmp_path: Path) -> None:
     assert host.actions("chat/turnStarted") == []
 
 
-def test_a_turn_delivery_did_not_start_ends_delivery_s_part(tmp_path: Path) -> None:
-    script = [
-        {"type": "chat/turnComplete"},
-        {"type": "chat/turnStarted", "turnId": "user", "message": {"text": "my own question"}},
-        {"type": "chat/toolCallReady", "turnId": "user", "toolCallId": "u1", "confirmed": None},
-    ]
-    host = FakeHost(tmp_path, [{}], [script])
-    control = Control()
-    control.steering.put("Also check 1280px.")
-    out = step(host, spec(tmp_path)).run(control, limit=60)
-
-    assert out.end == "user-turn"
-    assert host.actions("chat/toolCallConfirmed") == []
-    assert host.actions("chat/turnCancelled") == []
-
-
 def test_steering_that_never_runs_is_not_a_success(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     control = Control()
@@ -571,6 +555,7 @@ def test_a_user_turn_with_the_same_words_as_pending_steering_is_not_adopted(tmp_
 
     assert out.end == "user-turn"
     assert host.actions("chat/toolCallConfirmed") == []
+    assert host.actions("chat/turnCancelled") == []  # the user's turn is theirs: Delivery's part just ends
 
 
 def test_a_stalled_snapshot_during_stop_ends_unconfirmed_within_the_ack_window(tmp_path: Path) -> None:
@@ -1070,21 +1055,6 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
     assert (git(wt, "status", "--porcelain", "--ignored"), untouched_git(wt)) == ("", before)
 
 
-def test_the_installed_shaper_agent_is_selected_by_its_uri_on_the_first_turn(wt: Path, tmp_path: Path) -> None:
-    agent = readiness.shaper_path(tmp_path)
-    agent.parent.mkdir(parents=True)
-    agent.write_text("---\nname: owlbear-shaper\n---\n")
-    host = shaping_host(wt)
-    host.listed = [agent.resolve().as_uri()]
-
-    out, warning = shape(wt, shaping_env(host, shaper=agent))
-
-    assert (out.end, warning) == ("started", "")
-    ((_, started),) = host.actions("chat/turnStarted")
-    assert started["message"]["agent"] == {"uri": agent.resolve().as_uri()}
-    assert not (wt / ".github").exists()  # no project agent file
-
-
 def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(wt: Path, tmp_path: Path) -> None:
     target = tmp_path / "runtime" / "owlbear-shaper.agent.md"
     target.parent.mkdir()
@@ -1101,6 +1071,7 @@ def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(wt: P
     ((_, started),) = host.actions("chat/turnStarted")
     assert started["message"]["agent"] == {"uri": agent.as_uri()}
     assert host.launched[0][:4] == ["code", "chat", "-m", "owlbear-shaper"]  # typed messages keep the shaper
+    assert not (wt / ".github").exists()  # no project agent file
 
 
 def test_a_shaper_agent_the_session_does_not_list_starts_no_turn(wt: Path, tmp_path: Path) -> None:

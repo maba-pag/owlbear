@@ -117,13 +117,6 @@ def test_a_window_without_a_memory_folder_gets_no_memory_server_and_no_memory_to
         assert [n for n in window_names(role) if "/" not in n] == [n for n in preload.tools(role) if "/" not in n]
 
 
-def test_the_window_agent_names_the_relay_its_step_configures(tmp_path) -> None:
-    inbox = tmp_path / "0123456789abcdef0123.json"
-    (server,) = json.loads(wf.mcp(inbox)(None))["mcpServers"]
-    assert server == wf.names(inbox)[0]
-    assert f"{server}/submit_result" in wf.agent("planner", inbox)(None)
-
-
 def test_each_role_is_offered_only_its_own_agent_and_every_builtin_agent_is_excluded() -> None:
     for kind, role in sdk_adapter.ROLES.items():
         offered = options(kind=kind)

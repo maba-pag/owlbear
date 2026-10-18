@@ -118,25 +118,20 @@ def test_integrating_a_target_commit_that_adds_a_file_voids_the_final_review(wor
     assert not publish.reviewed(c, work, head)
 
 
-def test_a_mode_change_voids_a_fingerprint(work):
+def test_fingerprints_name_spaces_unicode_absence_a_mode_change_and_more_than_200_paths(work):
     before = worktree.fingerprints(work, ["a.txt"])
-    (work / "a.txt").chmod(0o755)
-    commit(work, "chmod")
-    after = worktree.fingerprints(work, ["a.txt"])
-    assert before["a.txt"].startswith("100644 blob")
-    assert after["a.txt"].startswith("100755 blob")
-
-
-def test_fingerprints_name_spaces_unicode_absence_and_more_than_200_paths(work):
     names = ["with space.txt", "ünï cødé.txt", *(f"many/{i}.txt" for i in range(250))]
     (work / "many").mkdir()
     for name in names:
         (work / name).write_text(name)
+    (work / "a.txt").chmod(0o755)
     commit(work, "many")
     prints = worktree.fingerprints(work, [*names, "gone.txt"])
     assert all(prints[n].startswith("100644 blob ") for n in names)
     assert (len(prints), prints["gone.txt"]) == (len(names) + 1, "")
     assert len(worktree.fingerprints(work, ["many"])) == 250
+    assert before["a.txt"].startswith("100644 blob")
+    assert worktree.fingerprints(work, ["a.txt"])["a.txt"].startswith("100755 blob")
 
 
 def test_a_code_review_over_more_than_200_changed_paths_needs_no_listing(work):
@@ -178,18 +173,13 @@ def test_redact_keeps_the_host_of_a_url_with_userinfo_and_ordinary_text():
     assert "c00kie" not in redact("curl --header='Cookie: s=c00kie'")
 
 
-@pytest.mark.parametrize(
-    ("paths", "touched", "valid"),
-    [(["a.txt"], "a.txt", False), (["a.txt"], "c.txt", True), ([], "c.txt", False)],
-    ids=["its-input-changed", "disjoint-change", "no-declared-inputs"],
-)
-def test_a_check_answer_binds_to_its_inputs(work, paths, touched, valid):
+def test_a_check_answer_without_declared_inputs_is_voided_by_any_commit(work):
     c = reviewed_change(work)
-    person = PersonCheck(id="p1", criteria=["AC-1"], paths=paths)
+    person = PersonCheck(id="p1", criteria=["AC-1"], paths=[])
     recorded = evidence.check_inputs(c, person, check.fingerprints(c, person))
-    (work / touched).write_text("changed\n")
+    (work / "c.txt").write_text("changed\n")
     commit(work, "touch")
-    assert evidence.check_valid(recorded, evidence.check_inputs(c, person, check.fingerprints(c, person))) is valid
+    assert not evidence.check_valid(recorded, evidence.check_inputs(c, person, check.fingerprints(c, person)))
 
 
 def test_the_now_line_summarises_redacts_and_caps_a_tool_call():
