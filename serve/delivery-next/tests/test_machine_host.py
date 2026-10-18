@@ -143,8 +143,15 @@ def test_a_closed_gate_admits_nothing_and_starts_no_runner_even_after_resume(tmp
     assert held.gate.close(0) == 0
 
 
-def test_a_stop_when_idle_waits_for_a_running_step_refuses_a_launch_and_resume_cancels_it(tmp_path, http, machine):
+def test_a_stop_when_idle_waits_for_a_running_step_refuses_a_launch_and_resume_cancels_it(
+    tmp_path, http, machine, monkeypatch
+):
     """TD-288: a plain Pause never stops OwlBear; a stop when idle names what it waits for, then stops."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "code").write_text("#!/bin/sh\nexit 1\n")
+    (bin_dir / "code").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")  # never run: the launch is refused
     p = add(http, clone(tmp_path / "a"))
     stopped = []
     machine.on_stop = lambda: stopped.append(True)
