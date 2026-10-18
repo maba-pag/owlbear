@@ -326,11 +326,14 @@ def _commands_for_paths(
 
 
 @contextlib.contextmanager
-def _testmon_lock(command: list[str]) -> Iterator[None]:
-    """Serialize testmon runs sharing one data file: a first run deletes and recreates the database."""
+def _testmon_lock(command: list[str]) -> Iterator[dict[str, tuple[int, ...]]]:
+    """Serialize testmon runs sharing one data file: a first run deletes and recreates the database.
+
+    The command inherits the locked descriptor, so the lock lasts as long as its process tree, Ctrl-C included.
+    """
     data = next((arg.split("=", 1)[1] for arg in command if arg.startswith("TESTMON_DATAFILE=")), None)
     if data is None:
-        yield
+        yield {}
         return
     with (_REPOSITORY_ROOT / f"{data}.lock").open("a") as handle:
         try:
@@ -338,7 +341,7 @@ def _testmon_lock(command: list[str]) -> Iterator[None]:
         except BlockingIOError:
             print("Waiting for another testmon run of this checkout to end")  # noqa: T201
             fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
+        yield {"pass_fds": (handle.fileno(),)}
 
 
 def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
@@ -347,8 +350,8 @@ def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
         relative_cwd = cwd.relative_to(_REPOSITORY_ROOT)
         location = "." if relative_cwd == Path() else str(relative_cwd)
         print(f"[{location}] {' '.join(command)}")  # noqa: T201
-        with _testmon_lock(command):
-            failures += int(bool(subprocess.call(command, cwd=cwd)))  # noqa: S603
+        with _testmon_lock(command) as inherited:
+            failures += int(bool(subprocess.call(command, cwd=cwd, **inherited)))  # noqa: S603
     return int(bool(failures))
 
 

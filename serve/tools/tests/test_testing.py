@@ -5,7 +5,6 @@ from __future__ import annotations
 import fcntl
 import sys
 import threading
-import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -112,22 +111,34 @@ def test_coverage_unknown_paths_and_deleted_sources_keep_the_old_scope(
 
 def test_testmon_runs_sharing_a_data_file_wait_for_each_other(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(testing_module, "_REPOSITORY_ROOT", tmp_path)
-    ran: list[float] = []
-    held = (tmp_path / "t.db.lock").open("a")
+    lock = tmp_path / "t.db.lock"
+    held = lock.open("a")
     fcntl.flock(held, fcntl.LOCK_EX)  # another run of this checkout
-    with patch(
-        "owlbear_tools.testing.subprocess.call", side_effect=lambda *_a, **_k: ran.append(time.monotonic()) or 0
-    ):
-        command = (["env", "TESTMON_DATAFILE=t.db", "uv"], tmp_path)
-        waiting = threading.Thread(target=testing_module._run_commands, args=([command],))  # noqa: SLF001
-        waiting.start()
-        time.sleep(0.3)
-        released = time.monotonic()
-        held.close()
-        waiting.join(5)
+    waiting, blocked = threading.Event(), []
 
-    assert len(ran) == 1
-    assert ran[0] >= released
+    def call(*_args: object, **kwargs: object) -> int:
+        with lock.open("a") as third:  # a third run while this one's command runs
+            try:
+                fcntl.flock(third, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                blocked.append(kwargs["pass_fds"])
+        return 0
+
+    def said(*args: object, **_kwargs: object) -> None:
+        if "Waiting" in str(args[0]):
+            waiting.set()
+
+    with patch("builtins.print", side_effect=said), patch("owlbear_tools.testing.subprocess.call", side_effect=call):
+        command = (["env", "TESTMON_DATAFILE=t.db", "uv"], tmp_path)
+        run = threading.Thread(target=testing_module._run_commands, args=([command],))  # noqa: SLF001
+        run.start()
+        assert waiting.wait(5)
+        assert blocked == []  # nothing ran while the other run held the lock
+        held.close()
+        run.join(5)
+
+    assert len(blocked) == 1  # held while the command ran
+    assert len(blocked[0]) == 1  # and handed to its process tree
 
 
 def test_knowledge_source_routes_importing_root_and_invariant_tests() -> None:
