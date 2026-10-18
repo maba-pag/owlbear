@@ -221,6 +221,24 @@ def test_an_older_scope_label_without_its_project_label_means_the_project_it_was
     )  # fmt: skip
 
 
+def unsaved_edits_keep_the_page(page, here: str) -> None:
+    """No project choice, removal or addition leaves a page with unsaved edits."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page.get_by_label("Layer").select_option(f"go:{SHOP}")
+    expect(page.locator("#error")).to_contain_text("Save or discard your edits")
+    expect(page.get_by_label("Layer")).to_have_value("project")
+    page.locator("#machine select").select_option(SHOP)
+    expect(page.locator("#machine [role=alert]")).to_contain_text("Save or discard your edits")
+    page.locator("#machine").get_by_role("button", name="Remove project").click()
+    expect(page.locator("dialog")).to_have_count(0)
+    page.locator("#machine summary").click()
+    page.locator("#machine").get_by_label("Folder").fill("/elsewhere")
+    page.locator("#machine").get_by_role("button", name="Add").click()
+    expect(page).to_have_url(here)
+    expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
+
+
 @pytest.mark.browser
 def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(tmp_path: Path, shared_repo) -> None:
     """TD-243: the global value and its source beside each project's differing value; the scope names Global and
@@ -250,18 +268,7 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
                 ["Project docs-site", "Global (every project)", "Project shop-site (/s)", "Project shop-site (/s2)"]
             )
             page.get_by_label("Rounds at most, builder").fill("4")
-            scope.select_option(f"go:{SHOP}")  # an unsaved edit keeps the page where it is
-            expect(page.locator("#error")).to_contain_text("Save or discard your edits")
-            expect(scope).to_have_value("project")
-            page.locator("#machine select").select_option(SHOP)  # so does the project bar
-            expect(page.locator("#machine [role=alert]")).to_contain_text("Save or discard your edits")
-            expect(page).to_have_url(f"{base}/config?project={DOCS}")
-            page.locator("#machine").get_by_role("button", name="Remove project").click()  # nor does a removal
-            expect(page.locator("dialog")).to_have_count(0)
-            page.locator("#machine summary").click()
-            page.locator("#machine").get_by_label("Folder").fill("/elsewhere")
-            page.locator("#machine").get_by_role("button", name="Add").click()  # nor an addition
-            expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
+            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}")
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
             docs.update_config(lambda layer: layer.model_copy(update={"explore": True}))  # another page saved first
             page.get_by_role("button", name="Save project settings").click()
