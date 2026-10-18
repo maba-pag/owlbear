@@ -34,7 +34,7 @@ from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
-from owlbear_delivery_next.commands import cli, runner, serve
+from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScanError
 from owlbear_delivery_next.local_system.storage_io import open_lock
@@ -174,15 +174,13 @@ def test_a_merged_pr_is_observed_before_a_paused_waiting_change_is_skipped(store
     assert store.read("c1").step.kind == StepKind.CLEANUP
 
 
-def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_path, capsys):
+def test_status_reads_the_host_lock_and_shows_host_down(store, tmp_path):
     save(store, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
     child = subprocess.Popen(  # noqa: S603
         [sys.executable, "-c", HOLD, str(tmp_path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
     try:
         assert child.stdout.readline().strip() == "held"
-        assert serve.serve(tmp_path) == 0
-        assert "already running: http://127.0.0.1:9/#token=t\n" in capsys.readouterr().out
         assert host.running(store).pid == child.pid
         assert "Delivery is not running" not in cli.show_status(store, NOW)
     finally:
@@ -190,9 +188,9 @@ def test_host_lock_excludes_a_second_host_and_status_shows_host_down(store, tmp_
         child.wait()
     assert host.running(store) is None
     assert cli.show_status(store, NOW).splitlines() == [
-        "Delivery is not running — run `owlbear-next host`",
+        f"Delivery is not running — {cli.START}",
         "c1: Build · Delivery is not running",
-        "  next: Start Delivery (run `owlbear-next host`)",
+        f"  next: Start Delivery ({cli.START})",
         "Models",
         "  planner: claude-opus-5.5 effort high",
         "  builder: claude-opus-5.5 effort medium",

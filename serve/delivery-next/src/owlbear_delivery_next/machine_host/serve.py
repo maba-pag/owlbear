@@ -30,6 +30,11 @@ def running() -> HostRecord | None:
     return running_at(local_home.root())
 
 
+def main(_argv: list[str] | None = None) -> int:
+    """``python -m owlbear_delivery_next machine``: the process ``owlbear start`` and the login item run."""
+    return serve()
+
+
 def serve() -> int:
     """Run the machine host until it is stopped, or print the running one's URL and exit 0."""
     for name in environment.scrub():

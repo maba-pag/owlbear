@@ -824,6 +824,22 @@ def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clon
     assert fakes.calls.count("challenger") == 1
 
 
+def test_one_update_runs_at_a_time_on_the_machine_whichever_project_starts_it(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    fakes.hold = threading.Event()
+    first = pack_job.Job(Store(tmp_path / "a", None, "alpha"), fakes.live(checkout))
+    second = pack_job.Job(Store(tmp_path / "b", None, "beta"), fakes.live(checkout))
+    first.start()
+    assert fakes.waiting.wait(10)
+    with pytest.raises(pack_job.Busy, match="runs for alpha; one runs at a time on this machine"):
+        second.start()
+    assert second.read()["state"] == "idle"
+    fakes.hold.set()
+    first.thread.join(30)
+    assert second.start()["state"] == "running"  # the lock went with the first run's thread
+    second.thread.join(30)
+
+
 def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkout, clone):
     job, _, state = upheld(tmp_path, checkout, clone)
     c = TestClient(api.create_app(job.store, "t", Host(), pack=job), base_url="http://127.0.0.1", headers=AUTH)

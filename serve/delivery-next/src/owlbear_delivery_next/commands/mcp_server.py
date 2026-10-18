@@ -21,8 +21,8 @@ from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 NOT_RUNNING = (
-    "Delivery is not running - start it with the VS Code task 'OwlBear Delivery host', or run "
-    "`owlbear-next --repo {repo} host`. Nothing advances until it runs."
+    "Delivery is not running for {repo} - run `owlbear start`, then add this project on its page if it is not "
+    "listed. Nothing advances until it runs."
 )
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 _STATE: dict[str, Chat] = {}

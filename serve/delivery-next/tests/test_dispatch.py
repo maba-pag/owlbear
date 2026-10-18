@@ -40,18 +40,15 @@ def test_the_dispatcher_loads_only_the_command_it_runs(monkeypatch) -> None:
     monkeypatch.setattr(dispatch, "import_module", lambda name: type("M", (), {"main": lambda rest: called.append(
         (name, rest)) or 3}))  # fmt: skip
     assert dispatch.main(["run", "c1", "--repo", "/r"]) == 3
-    assert dispatch.main(["--repo", "/r", "host"]) == 3
+    assert dispatch.main(["--repo", "/r", "status"]) == 3
+    assert dispatch.main(["machine"]) == 3
     assert called == [
         ("owlbear_delivery_next.commands.runner", ["c1", "--repo", "/r"]),
-        ("owlbear_delivery_next.commands.cli", ["--repo", "/r", "host"]),
+        ("owlbear_delivery_next.commands.cli", ["--repo", "/r", "status"]),
+        ("owlbear_delivery_next.machine_host.serve", []),
     ]
 
 
-def test_the_host_task_and_the_chat_server_name_only_the_dispatcher() -> None:
-    task = setup.with_task({}, "/py")["tasks"][0]
+def test_the_chat_server_names_only_the_dispatcher() -> None:
     server = setup.with_server({}, "/py", Path("/r"))["mcpServers"][setup.SERVER]
-    assert (task["command"], task["args"]) == (
-        "/py",
-        ["-m", "owlbear_delivery_next", "--repo", "${workspaceFolder}", "host"],
-    )
     assert (server["command"], server["args"]) == ("/py", ["-m", "owlbear_delivery_next", "mcp", "--repo", "/r"])

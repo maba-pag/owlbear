@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery_next.project_host.host import HostRecord
+    from owlbear_delivery_next.project_host.host import Host, HostRecord
 
 RETRY = 60.0  # seconds between loads of a project that failed to load
 
@@ -52,8 +52,22 @@ class Machine:
     def _load(self, entry: registry.Project) -> Project:
         p = self.projects[entry.id] = Project(entry)
         p.load(self.record, lambda: self.paused)
+        if p.host:
+            p.host.peers = lambda: self.sharing(p)
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
+
+    def sharing(self, p: Project) -> list[Host]:
+        """The schedulers of the machine's other clones whose shared settings folder is *p*'s."""
+        mine = p.store
+        if not (mine and mine.shared):
+            return []
+        return [
+            o.host
+            for o in list(self.projects.values())
+            if o is not p and o.host and o.store and o.store.shared
+            and o.store.shared.root == mine.shared.root and o.store.name == mine.name
+        ]  # fmt: skip
 
     def load_all(self) -> None:
         """Load every registered project; one that fails is listed with its reason."""

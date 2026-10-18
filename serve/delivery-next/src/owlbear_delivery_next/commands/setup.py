@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -86,19 +85,18 @@ def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]:
     return prof.model_copy(update={"entries": entries, "confirmed_at": now, "version": prof.version + 1}), unknown
 
 
-def with_task(data: dict[str, Any], python: str) -> dict[str, Any]:
-    """tasks.json with the folder-open host task replacing any earlier one."""
-    task = {
-        "label": TASK,
-        "type": "process",
-        "command": python,
-        "args": ["-m", "owlbear_delivery_next", "--repo", "${workspaceFolder}", "host"],
-        "isBackground": True,
-        "problemMatcher": [],
-        "runOptions": {"runOn": "folderOpen"},
-    }
-    tasks = [t for t in data.get("tasks", []) if not (isinstance(t, dict) and t.get("label") == TASK)]
-    return {"version": "2.0.0", **data, "tasks": [*tasks, task]}
+def without_task(data: dict[str, Any]) -> dict[str, Any]:
+    """tasks.json without the folder-open host task an earlier setup wrote (TD-281)."""
+    return {**data, "tasks": [t for t in data.get("tasks", []) if not (isinstance(t, dict) and t.get("label") == TASK)]}
+
+
+def has_task(path: Path) -> bool:
+    """Whether *path* holds the earlier folder-open host task."""
+    try:
+        data = json.loads(path.read_text())
+    except OSError, ValueError:
+        return False
+    return isinstance(data, dict) and any(isinstance(t, dict) and t.get("label") == TASK for t in data.get("tasks", []))
 
 
 def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]:
@@ -141,14 +139,6 @@ def refused(repo: Path, path: Path) -> str | None:
     if not git_files.untracked(repo, path):
         return f"not written: {path} is tracked, and Delivery commits nothing into the project"
     return None
-
-
-def automatic_tasks() -> str:
-    """The user's ``task.allowAutomaticTasks`` setting, as far as setup can read it."""
-    base = Path.home() / ("Library/Application Support" if sys.platform == "darwin" else ".config")
-    settings = base / "Code" / "User" / "settings.json"
-    found = re.search(r'"task\.allowAutomaticTasks"\s*:\s*"(\w+)"', settings.read_text()) if settings.exists() else None
-    return found[1] if found else "not set (VS Code asks on first open)"
 
 
 def ask_tty(question: str) -> str:
@@ -256,16 +246,16 @@ def run(  # noqa: PLR0913 - one answer per consent
 
 
 def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
-    """The host task, the chat server and the harness key, each written only with its own consent."""
-    start = f"`{python} -m owlbear_delivery_next --repo {repo} host`"
-    question = f"Write the folder-open task '{TASK}' into .vscode/tasks.json (kept out of git)?"
-    tasks = consent(repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, ask, yes=given)
-    say(tasks)
-    if tasks.startswith("written"):
-        say(f"VS Code starts it in a trusted workspace when automatic tasks are allowed ({automatic_tasks()});")
-        say(f"otherwise run the task '{TASK}' yourself.")
-    else:
-        say(f"Start Delivery yourself each time you open the project: {start}. Nothing advances until it runs.")
+    """The chat server and the harness key, each written only with its own consent; an earlier host task goes.
+
+    Opening a window never starts Delivery (TD-281): OwlBear runs once per machine and serves the projects
+    added on its page.
+    """
+    tasks = repo / ".vscode" / "tasks.json"
+    if has_task(tasks):
+        question = f"Remove the folder-open task '{TASK}' an earlier setup wrote into .vscode/tasks.json?"
+        say(consent(repo, tasks, without_task, question, ask, yes=given).replace("written", "rewritten", 1))
+    say("Delivery runs in OwlBear: run `owlbear start`, then add this project on its page.")
     question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
     server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=given)
     say(server)

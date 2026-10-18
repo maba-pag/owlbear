@@ -345,17 +345,12 @@ def test_the_shaper_agent_installs_where_the_window_lists_user_agents_idempotent
 def test_no_local_write_without_consent(repo):
     asked = []
     path = repo / ".vscode" / "tasks.json"
-    merge = lambda d: setup.with_task(d, "python")  # noqa: E731
-    no = setup.consent(repo, path, merge, "Write?", lambda q: asked.append(q) or "", yes=False)
-    assert no.startswith("not written")
-    assert asked == ["Write? [y/N] "]
-    assert not path.exists()
     path.parent.mkdir()
-    path.write_text(json.dumps({"version": "2.0.0", "tasks": [{"label": "build"}]}))
-    assert setup.consent(repo, path, merge, "Write?", lambda _q: "y", yes=False).startswith("written")
-    tasks = json.loads(path.read_text())["tasks"]
-    assert [t["label"] for t in tasks] == ["build", setup.TASK]
-    assert tasks[1]["runOptions"] == {"runOn": "folderOpen"}
+    path.write_text(json.dumps({"version": "2.0.0", "tasks": [{"label": "build"}, {"label": setup.TASK}]}))
+    no = setup.consent(repo, path, setup.without_task, "Remove?", lambda q: asked.append(q) or "", yes=False)
+    assert (no.startswith("not written"), asked, setup.has_task(path)) == (True, ["Remove? [y/N] "], True)
+    assert setup.consent(repo, path, setup.without_task, "Remove?", lambda _q: "y", yes=False).startswith("written")
+    assert (json.loads(path.read_text())["tasks"], setup.has_task(path)) == ([{"label": "build"}], False)
     jsonc = repo / ".mcp.json"
     jsonc.write_text("// mine\n{}")
     assert "not plain JSON" in setup.consent(repo, jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
@@ -599,7 +594,6 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
     written = [
-        repo / ".vscode" / "tasks.json",
         repo / ".mcp.json",
         repo / ".vscode" / "settings.json",
         home / ".copilot" / "skills" / "owlbear-change-shaping",
@@ -607,16 +601,17 @@ def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_
     written.append(readiness.shaper_path(home))
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
-    assert [p.exists() for p in written] == [False] * 5
-    assert len(asked) == 4  # the three local files and the skill were asked, never assumed
-    assert "chat.defaultToCopilotHarness" in asked[2]
-    assert "Install the Delivery chat skill" in asked[3]
+    assert [p.exists() for p in written] == [False] * 4
+    assert len(asked) == 3  # the two local files and the skill were asked, never assumed; no folder-open task
+    assert "chat.defaultToCopilotHarness" in asked[1]
+    assert "Install the Delivery chat skill" in asked[2]
     asked.clear()
     assert setup.run(repo, [], yes=True, local_files="no", skill="no", ask=lambda q: asked.append(q) or "y") == 0
-    assert (asked, [p.exists() for p in written]) == ([], [False] * 5)
+    assert (asked, [p.exists() for p in written]) == ([], [False] * 4)
     assert setup.run(repo, [], yes=True, local_files="yes", skill="yes", ask=pytest.fail) == 0
-    assert [p.exists() for p in written] == [True] * 5
-    assert json.loads(written[2].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
+    assert [p.exists() for p in written] == [True] * 4
+    assert not (repo / ".vscode" / "tasks.json").exists()  # TD-281: opening a window never starts Delivery
+    assert json.loads(written[1].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
 
 
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):

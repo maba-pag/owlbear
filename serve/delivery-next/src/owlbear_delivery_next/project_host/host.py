@@ -181,6 +181,7 @@ class Host:
     ) -> None:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
+        self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}

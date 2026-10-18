@@ -125,7 +125,7 @@ def _answers(routes: APIRouter, job: pack_job.Job, held: Callable[[], None]) -> 
         held()  # an answer continues the update's sessions
         try:
             return job.answer(body.question, body.option, body.note)
-        except pack_job.Stale as exc:
+        except (pack_job.Stale, pack_job.Busy) as exc:
             raise HTTPException(409, str(exc)) from exc
         except pack_job.Refused as exc:
             raise HTTPException(422, str(exc)) from exc

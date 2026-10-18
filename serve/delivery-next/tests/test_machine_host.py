@@ -2,6 +2,7 @@ import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import psutil
 import pytest
@@ -158,3 +159,15 @@ def test_a_reclone_is_shown_replaced_until_adopted(tmp_path, http, machine):
     assert http.get("/api/next/projects").json()["projects"][0]["state"] == "replaced"
     adopted = http.post(f"/api/next/projects/{pid}/adopt").json()
     assert (adopted["state"], adopted["id"] != pid) == ("loaded", True)
+
+
+def test_clones_sharing_a_settings_folder_are_each_others_peers(machine):
+    def clone_of(folder, root="/shared"):
+        store = SimpleNamespace(shared=SimpleNamespace(root=Path(root)), name=folder)
+        return SimpleNamespace(store=store, host=object())
+
+    a, b, other, elsewhere = clone_of("shop"), clone_of("shop"), clone_of("blog"), clone_of("shop", "/other")
+    machine.projects = {"a": a, "b": b, "c": other, "d": elsewhere}
+    found = (machine.sharing(a), machine.sharing(other))
+    machine.projects = {}  # none of them is a loaded project to stop
+    assert found == ([b.host], [])

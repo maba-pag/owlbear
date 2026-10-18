@@ -426,3 +426,24 @@ def test_a_rename_waits_for_running_steps_and_a_host_picks_up_a_rename_made_else
     host = host_module.Host(store, repo, alive=lambda _p, _c: True)
     host.tick()
     assert store.name == "acme-shop"
+
+
+@pytest.mark.usefixtures("shared")
+def test_a_rename_waits_for_steps_of_every_clone_sharing_the_folder_and_renames_it_for_all(repo, tmp_path):
+    store = Store.open(repo)
+    other = Store(tmp_path / "other-clone", store.shared, store.name)  # another clone of it on the machine host
+    (other.root / "changes" / "c9").mkdir(parents=True)
+    record = host_module.RunnerRecord(pid=4242, created=None, started_at=datetime.now(UTC))
+    (other.root / "changes" / "c9" / "runner.json").write_text(record.model_dump_json())
+    (other.root / "changes" / "c9" / "change.json").write_text("{}")  # listed
+    live = [True]
+    peer = host_module.Host(other, repo, alive=lambda _p, _c: live[0])
+    mine = host_module.Host(store, repo)
+    mine.peers = lambda: [peer]
+    c = TestClient(api.create_app(store, "t", mine), base_url="http://127.0.0.1", headers=AUTH)
+    got = c.put("/api/next/config/folder", json={"name": "acme-shop"})
+    assert (got.status_code, "steps of c9 are running" in got.json()["detail"]) == (409, True)
+    assert (peer.launching.locked(), mine.launching.locked()) == (False, False)
+    live[0] = False
+    assert c.put("/api/next/config/folder", json={"name": "acme-shop"}).status_code == 200
+    assert (store.name, other.name) == ("acme-shop", "acme-shop")

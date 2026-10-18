@@ -132,7 +132,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call as host, designSystem, HostDown, Restarted, token } from "/assets/ui.mjs";
+import { api, call as host, designSystem, here, HostDown, Restarted, token } from "/assets/ui.mjs";
 
 const TITLE = document.title;
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -179,9 +179,8 @@ function disclosure(summary, ...children) {
 
 function unreachable(e) {
   state.error = e instanceof Restarted
-    ? html`Delivery restarted at a new address — open the link from chat or <code>owlbear-next status</code>.`
-    : html`Delivery is not running. Start it with the VS Code task "OwlBear Delivery host" or
-      <code>owlbear-next host</code> in the project, then reload this page.`;
+    ? html`Delivery restarted at a new address — open the link from chat or <code>owlbear status</code>.`
+    : html`Delivery is not running. Start it with <code>owlbear start</code>, then reload this page.`;
   state.stale = true;
   if (lastSeen) state.seen = `last seen ${lastSeen.toLocaleTimeString()}`;
 }
@@ -724,7 +723,7 @@ function shot(slug, kind, name, at) {
     const entry = { url: null, failed: false };
     shots.set(key, entry);
     const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
-    entry.loading = fetch(`/api/next/changes/${slug}/${kind}/${encodeURIComponent(name)}`, init)
+    entry.loading = fetch(api(`/changes/${slug}/${kind}/${encodeURIComponent(name)}`), init)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
       .then((b) => { entry.url = URL.createObjectURL(b); }, () => { entry.failed = true; })
       .then(() => show());
@@ -1243,7 +1242,7 @@ function card([c, label, variant]) {
   }
   if (c.quiet) bits.push("quiet");
   return html`<li class=${current ? "card current" : "card"}>
-    <div class="top"><a href=${`?change=${encodeURIComponent(c.slug)}`} class="open" data-slug=${c.slug}
+    <div class="top"><a href=${here({ change: c.slug })} class="open" data-slug=${c.slug}
       aria-current=${current ? "true" : nothing} @click=${open}>${c.slug}</a>
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
@@ -1335,7 +1334,7 @@ function choose(slug, push = true) {
   arrived = Boolean(state.selected);
   if (state.selected !== was) state.started = null;  // a note belongs to its Change
   if (push && state.selected !== was) {
-    history.pushState(null, "", state.selected ? `?change=${encodeURIComponent(state.selected)}` : location.pathname);
+    history.pushState(null, "", here({ change: state.selected }));
   }
   show();
   if (!state.selected && was) document.querySelector(`#changes a[data-slug="${CSS.escape(was)}"]`)?.focus();
@@ -1352,7 +1351,7 @@ async function refresh() {
     state.changes = await call("/changes");
     if (state.selected && !state.changes.some((c) => c.slug === state.selected)) {  // gone, or a stale link
       state.selected = null;
-      history.replaceState(null, "", location.pathname);
+      history.replaceState(null, "", here({ change: "" }));
     }
     state.notes = (await call("/project")).notes;
     lastSeen = new Date();
