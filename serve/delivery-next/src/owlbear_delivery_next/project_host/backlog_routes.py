@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.runtimes.step_input import DETAIL, _quote
-from owlbear_delivery_next.state_store.backlog import ID, Backlog, BacklogError, Entry, Kind, Scope, Status, ordered
+from owlbear_delivery_next.state_store.backlog import ID, Backlog, BacklogError, Entry, Folder, Kind, Status, ordered
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,10 +49,10 @@ class PatchBody(Body):
 
     kind: Kind | None = None
     status: Status | None = None
-    scope: Scope | None = None
+    projects: list[Folder] | None = Field(default=None, max_length=50)  # [] is Global (TD-241)
     notes: str | None = Field(default=None, max_length=4000)
     links: list[Annotated[str, Field(pattern=ID)]] | None = Field(default=None, max_length=50)
-    change: str | None = Field(default=None, max_length=64)
+    change: str | None = Field(default=None, max_length=81)  # a slug of this clone, or ``{this clone's id}/{slug}``
 
 
 class ChangeBody(Body):
@@ -99,8 +99,19 @@ def _took(store: Store, ids: list[str], launch: str, end: dict[str, str]) -> dic
     return end | ({"warning": warning} if warning else {})
 
 
-def router(store: Store, start: Callable[..., dict[str, Any]]) -> APIRouter:
-    """The backlog routes; ``start(prompt, ended)`` opens the shaping chat. The caller adds the token check."""
+def named(store: Store, clone: str, change: str) -> str:
+    """The Change an entry went into as stored: ``{clone id}/{slug}`` under the machine host, else the slug."""
+    slug = change.removeprefix(f"{clone}/") if clone else change
+    if slug not in store.slugs():
+        raise HTTPException(422, f"change: {change} is not a Change of this clone")
+    return f"{clone}/{slug}" if clone else slug
+
+
+def router(store: Store, start: Callable[..., dict[str, Any]], clone: Callable[[], str] = str) -> APIRouter:
+    """The backlog routes; the caller adds the token check.
+
+    ``start(prompt, ended)`` opens the shaping chat; ``clone()`` is this clone's id on the machine host.
+    """
     routes = APIRouter()
     opening: dict[str, list[str]] = {}  # launch id -> the entries it would take
     guard = threading.Lock()
@@ -124,7 +135,7 @@ def router(store: Store, start: Callable[..., dict[str, Any]]) -> APIRouter:
             | ({"opening": pending[e.id]} if e.id in pending and e.status in {"inbox", "open"} else {})
             for e in ordered(found.values())
         ]
-        where = {"repository": backlog.repository, "project": store.name}
+        where = {"repository": backlog.repository, "project": store.name, "clone": clone()}
         return {"entries": entries, "unreadable": bad, "changes": store.slugs()} | where
 
     @routes.post("/backlog")
@@ -135,8 +146,8 @@ def router(store: Store, start: Callable[..., dict[str, Any]]) -> APIRouter:
     @routes.patch("/backlog/{entry_id}")
     def patch(entry_id: str, body: PatchBody) -> dict[str, Any]:
         fields = body.model_dump(exclude_unset=True, exclude_none=True)
-        if fields.get("change") and fields["change"] not in store.slugs():
-            raise HTTPException(422, f"change: {fields['change']} is not a Change here")
+        if fields.get("change"):
+            fields["change"] = named(store, clone(), fields["change"])
         entry = _run(store, lambda b: b.update(entry_id, fields))
         return {"entry": entry.model_dump(mode="json"), "notice": ""}
 

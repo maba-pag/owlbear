@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="owlbear-scope" content="all">
 <title>OwlBear Delivery · Backlog</title>
 <link rel="stylesheet" href="/assets/pds/index.css">
 <script type="module">
@@ -35,6 +36,9 @@
   .quiet .entry { background: none; box-shadow: inset 0 0 0 1px var(--p-color-contrast-lower); }
   ul.plain { margin: 0; padding-inline-start: var(--p-spacing-static-lg); }
   pre { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
+  fieldset.concerns { display: flex; flex-wrap: wrap; gap: var(--p-spacing-static-sm) var(--p-spacing-static-md);
+    margin: 0; padding: 0; border: 0; }
+  fieldset.concerns legend { font-size: var(--p-typescale-xs); font-weight: 600; padding: 0; }
 </style>
 </head>
 <body>
@@ -50,10 +54,9 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, designSystem } from "/assets/ui.mjs";
+import { call, designSystem, here, loaded, project } from "/assets/ui.mjs";
 
 const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
-const SCOPES = ["unassigned", "project", "cross-project", "global"];
 const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review", run: "a run" };
 const TAGS = { untriaged: "secondary", defect: "error", improvement: "info", idea: "success", question: "warning" };
 const DIALOG = "{ 'aria-haspopup': 'dialog' }";
@@ -61,12 +64,14 @@ const GET = 15000, WRITE = 60000;  // reads and writes go to GitHub's issues, a 
 // Everything the page shows comes from here, so a re-render never loses what the person typed, ticked or opened.
 const state = {
   pds: true, loaded: null, error: "", status: "", started: null, creating: false, adding: false,
-  idea: { title: "", text: "" },  // the Add an idea form
-  notes: new Map(),  // entry id -> notes typed and not saved yet
-  linkTo: new Map(),  // entry id -> the entry chosen in its "Link to another entry" list
+  idea: { title: "", text: "", clone: "" },  // the Add an idea form, and the clone it is found in
+  choosing: null,  // the entries a Change starts from while the owner picks its clone
+  notes: new Map(),  // entry key -> notes typed and not saved yet (an entry's key: its repository and number)
+  linkTo: new Map(),  // entry key -> the entry chosen in its "Link to another entry" list
   selected: new Set(), opened: new Set(),
 };
-const filter = { scope: "all", project: "all", kind: "all" };
+// projects: all, global, untriaged or a folder, kept in ?show=; "" until loaded, then the page's project's folder
+const filter = { projects: new URLSearchParams(location.search).get("show") ?? "", kind: "all" };
 
 function show() {
   const focused = document.activeElement;
@@ -121,6 +126,37 @@ function tick(label, checked, flipped) {
     : html`<input type="checkbox" aria-label=${label} .checked=${live(checked)} @change=${flip}>`;
 }
 
+function labelled(label, checked, flipped, disabled = false) {
+  const flip = (e) => flipped(e.target.checked === true);
+  return state.pds
+    ? html`<p-checkbox label=${label} .checked=${live(checked)} ?disabled=${disabled} @change=${flip}></p-checkbox>`
+    : html`<label><input type="checkbox" .checked=${live(checked)} .disabled=${disabled} @change=${flip}>
+        ${label}</label>`;
+}
+
+// The clones of the entry's repository on this machine: where its Changes start and its writes go.
+function clonesOf(e) {
+  return state.loaded.clones.filter((c) => c.repository === e.repository);
+}
+
+function concerns(e) {
+  if (e.projects === null) return `not triaged yet${e.origin ? ` (found in ${e.origin})` : ""}`;
+  return `${e.projects.length ? e.projects.join(", ") : "Global"}${e.origin ? ` · found in ${e.origin}` : ""}`;
+}
+
+// The Change an entry went into: its clone's id and slug; an older bare slug only when exactly one clone of the
+// project it was found in has it.
+function changeLink(e) {
+  if (!e.change) return nothing;
+  const [id, slug] = e.change.includes("/") ? e.change.split("/") : [null, e.change];
+  const owners = clonesOf(e).filter((c) => (id === null ? c.name === e.origin && c.changes.includes(slug)
+    : c.id === id));
+  if (owners.length !== 1) return html` · in Change ${slug} (not found on this machine)`;
+  const c = owners[0], key = c.id ? `${c.id}/${slug}` : slug;
+  const named = state.loaded.clones.length > 1 ? `${c.label}: ${slug}` : slug;
+  return html` · in Change <a href=${`/?change=${encodeURIComponent(key)}`}>${named}</a>`;
+}
+
 function age(iso) {
   const minutes = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000));
   if (minutes < 60) return `${minutes} min ago`;
@@ -137,10 +173,11 @@ function reference(ref) {
   return ref;
 }
 
-async function patch(e, fields, said = `Saved "${e.title}".`) {
+async function patch(e, fields, said = `Saved "${e.title}".`, of = e.via) {
   try {
-    const r = await call(`/backlog/${encodeURIComponent(e.id)}`, { method: "PATCH", body: fields, timeout: WRITE });
-    if ("notes" in fields) state.notes.delete(e.id);
+    const body = { method: "PATCH", body: fields, timeout: WRITE, of };
+    const r = await call(`/backlog/${encodeURIComponent(e.id)}`, body);
+    if ("notes" in fields) state.notes.delete(e.key);
     state.error = "";
     state.status = `${said}${r.notice ? ` ${r.notice}` : ""}`;
     await refresh();
@@ -150,16 +187,18 @@ async function patch(e, fields, said = `Saved "${e.title}".`) {
 }
 
 function linkPart(e, byId) {
-  const others = state.loaded.entries.filter((o) => o.id !== e.id && !e.links.includes(o.id));
+  const others = state.loaded.entries.filter((o) => o.repository === e.repository && o.id !== e.id
+    && !e.links.includes(o.id));
   // the pick as of the click, not as of the last render: choosing in the list does not render again
-  const target = () => (others.some((o) => o.id === state.linkTo.get(e.id)) ? state.linkTo.get(e.id) : others[0]?.id);
+  const target = () => (others.some((o) => o.id === state.linkTo.get(e.key)) ? state.linkTo.get(e.key)
+    : others[0]?.id);
   return html`<div class="more">
     ${e.links.length ? html`<p-text size="xs" weight="semibold">Linked entries</p-text><ul class="plain">
-      ${e.links.map((id) => html`<li>${byId.get(id)?.title ?? id} ${button("Unlink",
+      ${e.links.map((id) => html`<li>${byId.get(`${e.repository}#${id}`)?.title ?? id} ${button("Unlink",
         () => patch(e, { links: e.links.filter((x) => x !== id) }), { variant: "secondary" })}</li>`)}</ul>`
       : nothing}
     ${others.length ? html`<div class="row">${select("Link to another entry", others.map((o) => [o.id, o.title]),
-      target(), (v) => state.linkTo.set(e.id, v))}${button("Link", () => patch(e, { links: [...e.links, target()] }),
+      target(), (v) => state.linkTo.set(e.key, v))}${button("Link", () => patch(e, { links: [...e.links, target()] }),
       { variant: "secondary" })}</div>` : nothing}
   </div>`;
 }
@@ -177,10 +216,13 @@ function statusPart(e, drop = true) {
   const reopen = button("Reopen", () => patch(e, { status: e.kind === "untriaged" ? "inbox" : "open" }),
     { variant: "secondary", icon: "refresh" });
   if (e.status !== "in-change") return html`<div class="row">${reopen}</div>`;
-  const options = [["-", "not named yet"], ...state.loaded.changes.map((c) => [c, c])];
+  const clones = clonesOf(e), several = clones.length > 1;
+  const options = [["-", "not named yet"], ...clones.flatMap((c) => c.changes.map((slug) => [
+    c.id ? `${c.id}/${slug}` : slug, several ? `${c.label}: ${slug}` : slug]))];
   const named = (v) => {
-    const slug = v === "-" ? "" : v;
-    if (slug !== e.change) patch(e, { change: slug });
+    if (v === "-" || v === e.change) return;
+    const owner = clones.find((c) => (c.id ? v.startsWith(`${c.id}/`) : true));
+    patch(e, { change: v }, undefined, owner?.id ?? e.via);  // the clone holding the Change checks and names it
   };
   return html`<div class="row">${select("The Change it went into", options, e.change || "-", named)}${reopen}</div>`;
 }
@@ -191,23 +233,31 @@ function kindPicker(e, inline = false) {
   return select("Kind", options, e.kind, chosen, { compact: inline, hideLabel: inline });
 }
 
-function scopePicker(e) {
-  return select("Scope", SCOPES.map((s) => [s, s]), e.scope, (v) => { if (v !== e.scope) patch(e, { scope: v }); });
+// What the entry concerns: Global, or the projects ticked (TD-241); the last one ticked stays until Global is.
+function concernsPicker(e) {
+  const mine = e.projects ?? [], global = e.projects !== null && !mine.length;
+  const folders = [...new Set([...clonesOf(e).map((c) => c.name).filter(Boolean), ...mine])].sort();
+  const flip = (f) => (on) => patch(e, { projects: on ? [...mine, f] : mine.filter((x) => x !== f) });
+  return html`<fieldset class="concerns"><legend>Concerns</legend>
+    ${labelled("Global: every project", global, (on) => { if (on) patch(e, { projects: [] }); }, global)}
+    ${folders.map((f) => labelled(f, mine.includes(f), flip(f), mine.length === 1 && mine[0] === f))}
+  </fieldset>`;
 }
 
 function details(e, byId) {
-  const inbox = e.status === "inbox", notes = state.notes.get(e.id) ?? e.notes;
-  const toggled = (ev) => (ev.target.open ? state.opened.add(e.id) : state.opened.delete(e.id));
-  return html`<details .open=${state.opened.has(e.id)} @toggle=${toggled}>
+  const inbox = e.status === "inbox", notes = state.notes.get(e.key) ?? e.notes;
+  const toggled = (ev) => (ev.target.open ? state.opened.add(e.key) : state.opened.delete(e.key));
+  return html`<details .open=${state.opened.has(e.key)} @toggle=${toggled}>
     <summary>Details, notes and links</summary>
     <div class="more">
       ${e.text ? html`<p-text class="said">${e.text}</p-text>` : nothing}
       ${e.evidence.length ? html`<p-text size="xs" weight="semibold">Evidence</p-text>
         <ul class="plain">${e.evidence.map((ref) => html`<li>${reference(ref)}</li>`)}</ul>` : nothing}
-      <div class="row">${inbox ? nothing : kindPicker(e)}${scopePicker(e)}</div>
-      ${field("Your notes: context for whoever shapes the Change", notes, (v) => state.notes.set(e.id, v),
+      ${inbox ? nothing : html`<div class="row">${kindPicker(e)}</div>`}
+      ${concernsPicker(e)}
+      ${field("Your notes: context for whoever shapes the Change", notes, (v) => state.notes.set(e.key, v),
         { multiline: true })}
-      <div class="row">${button("Save notes", () => patch(e, { notes: (state.notes.get(e.id) ?? e.notes).trim() }),
+      <div class="row">${button("Save notes", () => patch(e, { notes: (state.notes.get(e.key) ?? e.notes).trim() }),
         { variant: "secondary" })}
       </div>
       ${linkPart(e, byId)}
@@ -219,21 +269,20 @@ function details(e, byId) {
 function card(e, byId) {
   const choosable = (e.status === "inbox" || e.status === "open") && !e.opening;
   const seen = e.count > 1 ? `seen ${e.count} times, last ${age(e.last_seen)}` : `seen ${age(e.last_seen)}`;
-  const where = e.change ? ` · in Change ${e.change}` : "";
-  const scope = ` · ${e.scope}${e.scope === "project" && e.project ? ` ${e.project}` : ""}`;
   const choose = (on) => {
-    if (on) state.selected.add(e.id);
-    else state.selected.delete(e.id);
+    if (on) state.selected.add(e.key);
+    else state.selected.delete(e.key);
     show();
   };
   return html`<li class=${choosable ? "entry" : "entry unselectable"}>
-    ${choosable ? tick(`Select ${e.title}`, state.selected.has(e.id), choose) : nothing}
+    ${choosable ? tick(`Select ${e.title}`, state.selected.has(e.key), choose) : nothing}
     <div class="body">
       <div class="title"><p-text weight="semibold">${e.title}</p-text>
         <p-tag variant=${TAGS[e.kind]} compact="true">${e.kind}</p-tag>
         ${e.status !== "inbox" && e.status !== "open" ? html`<p-tag compact="true">${e.status}</p-tag>` : nothing}
         ${e.opening ? html`<p-tag variant="info" compact="true">chat opening</p-tag>` : nothing}</div>
-      <p-text size="xs" color="contrast-medium">From ${SOURCES[e.source] ?? e.source} · ${seen}${where}${scope} ·
+      <p-text size="xs" color="contrast-medium">From ${SOURCES[e.source] ?? e.source} · ${seen}${changeLink(e)}
+        · <span class="concerns">${concerns(e)}</span> ·
         ${e.url ? html`<a href=${e.url} rel="noopener">#${e.id}</a>` : `#${e.id}`}</p-text>
       ${e.status === "inbox" && !e.opening ? html`<div class="row triage">${kindPicker(e, true)}${dropButton(e)}</div>`
         : nothing}
@@ -242,37 +291,55 @@ function card(e, byId) {
   </li>`;
 }
 
+// An untriaged entry shows under its origin too, so the project it was found in sees it to triage (TD-241).
 function shows(e) {
-  return ["scope", "project", "kind"].every((k) => filter[k] === "all" || e[k] === filter[k]);
+  const f = filter.projects, untriaged = e.projects === null;
+  const concerned = f === "all" || (f === "global" ? !untriaged && !e.projects.length
+    : f === "untriaged" ? untriaged : (e.projects ?? []).includes(f) || (untriaged && e.origin === f));
+  return concerned && (filter.kind === "all" || e.kind === filter.kind);
 }
 
 // The selectable entries still ticked; an entry that moved on or is opening a chat drops out.
 function chosen() {
-  return state.loaded.entries.filter((e) => state.selected.has(e.id) && !e.opening
+  return state.loaded.entries.filter((e) => state.selected.has(e.key) && !e.opening
     && ["inbox", "open"].includes(e.status));
 }
 
-// The filter row: scope, project and class; the state is the page's sections. A vanished project falls back to all.
+// The filter row: the projects an entry concerns and its class; the state is the page's sections. The page's
+// project (?project=) is the first choice; a vanished project falls back to all.
 function filters() {
-  const projects = [...new Set(state.loaded.entries.map((e) => e.project).filter(Boolean))].sort();
-  if (filter.project !== "all" && !projects.includes(filter.project)) filter.project = "all";
-  const pick = (label, k, values) => select(label, [["all", "all"], ...values.map((v) => [v, v])], filter[k],
-    (v) => { filter[k] = v; show(); });
+  const { entries, clones } = state.loaded;
+  const folders = [...new Set([...clones.map((c) => c.name), ...entries.flatMap((e) => e.projects ?? [])]
+    .filter(Boolean))].sort();
+  if (!filter.projects) filter.projects = clones.find((c) => c.id && c.id === project)?.name ?? "all";
+  if (!["all", "global", "untriaged", ...folders].includes(filter.projects)) filter.projects = "all";
+  const options = [["all", "All"], ["global", "Global"], ["untriaged", "Not triaged yet"],
+    ...folders.map((f) => [f, f])];
+  const shown = (v) => {
+    filter.projects = v;
+    history.replaceState(null, "", here({ show: v }));  // a reload or link keeps it, All too over ?project=
+    show();
+  };
+  const kinds = select("Class", [["all", "all"], ...KINDS.map((k) => [k, k])], filter.kind,
+    (v) => { filter.kind = v; show(); });
   return html`<div id="filters" class="row" role="group" aria-label="Show only">
-    ${pick("Scope", "scope", SCOPES)}${pick("Project", "project", projects)}${pick("Class", "kind", KINDS)}</div>`;
+    ${select("Projects", options, filter.projects, shown)}${kinds}</div>`;
 }
 
 function list(id, entries, byId, empty) {
-  const items = entries.length ? repeat(entries, (e) => e.id, (e) => card(e, byId))
+  const items = entries.length ? repeat(entries, (e) => e.key, (e) => card(e, byId))
     : html`<li><p-text size="sm" color="contrast-medium">${empty}</p-text></li>`;
   return html`<ul id=${id} class="entries" aria-labelledby=${id === "later" ? "later-title" : nothing}>${items}</ul>`;
 }
 
 function addForm() {
-  const add = () => addIdea();
+  const add = () => addIdea(), clones = state.loaded.clones;
+  if (!clones.some((c) => c.id === state.idea.clone)) state.idea.clone = clones[0]?.id ?? "";
+  const where = clones.length > 1 ? select("Found in", clones.map((c) => [c.id, c.label]), state.idea.clone,
+    (v) => { state.idea.clone = v; }) : nothing;
   return html`<section class="panel" aria-labelledby="add-title">
     <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
-    <div id="add" class="row">
+    <div id="add" class="row">${where}
       ${field("Title", state.idea.title, (v) => { state.idea.title = v; })}
       ${field("What you noticed (optional)", state.idea.text, (v) => { state.idea.text = v; },
         { multiline: true, rows: "1" })}
@@ -282,6 +349,7 @@ function addForm() {
 }
 
 function started() {
+  if (state.choosing) return chooser();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
   return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Run this
@@ -292,13 +360,15 @@ function view() {
   const loaded = state.loaded;
   const body = [];
   if (loaded) {
-    for (const id of [...state.selected]) if (!chosen().some((e) => e.id === id)) state.selected.delete(id);
-    const byId = new Map(loaded.entries.map((e) => [e.id, e]));
+    for (const key of [...state.selected]) if (!chosen().some((e) => e.key === key)) state.selected.delete(key);
+    const byId = new Map(loaded.entries.map((e) => [e.key, e]));
     const head = filters();
     const lists = { inbox: [], open: [], later: [] };
     for (const e of loaded.entries.filter(shows)) lists[e.status in lists ? e.status : "later"].push(e);
-    const notes = [`The backlog is the issues of ${loaded.repository} (this project: ${loaded.project || "none"}).`,
-      loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : ""];
+    const repositories = [...new Set(loaded.clones.map((c) => c.repository))];
+    const notes = [`The backlog is the issues of ${repositories.join(" and ")}.`,
+      loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : "",
+      ...loaded.failed.map((f) => `Not read just now: ${f}.`)];
     const ticked = chosen().length;
     body.push(html`<p-text id="where" size="xs" color="contrast-medium">${notes.filter(Boolean).join(" ")}</p-text>
       ${head}
@@ -335,9 +405,36 @@ function view() {
     ${body}`;
 }
 
+// Each repository's backlog once, from the first of its clones that answers; a chat opening in another clone shows on
+// its entries too. An entry's key is its repository and number, since numbers repeat across repositories. Every clone
+// is read whatever the filter shows: each is a place a Change may start or a Change was made.
+async function load() {
+  const projects = loaded() ?? [{ id: "", name: "", path: "" }];
+  const each = await Promise.allSettled(projects.map((p) => call("/backlog", { timeout: GET, of: p.id })));
+  const clones = [], first = new Map(), unreadable = [], failed = [];
+  each.forEach((r, i) => {
+    const p = projects[i];
+    if (r.status === "rejected") return failed.push(`${p.name || "this project"}: ${r.reason.message}`);
+    const b = r.value, mark = (e) => ({ ...e, key: `${b.repository}#${e.id}`, via: p.id, repository: b.repository });
+    const name = b.project || p.name, twin = projects.some((o) => o !== p && o.name === p.name);
+    clones.push({ id: p.id, name, label: twin ? `${name} (${p.path})` : name, repository: b.repository,
+      changes: b.changes });
+    if (!first.has(b.repository)) {
+      first.set(b.repository, b.entries.map(mark));
+      unreadable.push(...b.unreadable);
+      return undefined;
+    }
+    const opening = new Map(b.entries.filter((e) => e.opening).map((e) => [e.id, e.opening]));
+    for (const e of first.get(b.repository)) e.opening ||= opening.get(e.id);
+    return undefined;
+  });
+  if (!clones.length && failed.length) throw each.find((r) => r.status === "rejected").reason;
+  return { entries: [...first.values()].flat(), unreadable, clones, failed };
+}
+
 async function refresh() {
   try {
-    state.loaded = await call("/backlog", { timeout: GET });
+    state.loaded = await load();
   } catch (e) {
     return notify(e.message);
   }
@@ -350,8 +447,9 @@ async function addIdea() {
   state.adding = true;
   show();
   try {
-    const r = await call("/backlog", { method: "POST", body: { title, text }, timeout: WRITE });
-    state.idea = { title: "", text: "" };
+    const of = state.idea.clone;
+    const r = await call("/backlog", { method: "POST", body: { title, text }, timeout: WRITE, of });
+    state.idea = { title: "", text: "", clone: of };
     state.error = "";
     const what = r.new ? `Added "${r.entry.title}" to the inbox.` : `"${r.entry.title}" was already there; `
       + `seen ${r.entry.count} times now.`;
@@ -364,17 +462,46 @@ async function addIdea() {
   }
 }
 
-async function launched(id) {  // the host opens the chat in the background; VS Code may first have to start
+async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start
   for (;;) {
-    const s = await call(`/new-change/${encodeURIComponent(id)}`, { timeout: GET });
+    const s = await call(`/new-change/${encodeURIComponent(id)}`, { timeout: GET, of });
     if (s.state !== "opening") return s;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 
+// The clone a Change from *picked* starts in, when the entries name it: one project, held by one clone here. A
+// Global or untriaged entry names none.
+function clear(picked) {
+  const clones = clonesOf(picked[0]), named = new Set(picked.flatMap((e) => (e.projects?.length ? e.projects : ["?"])));
+  const only = named.size === 1 && !named.has("?") ? clones.filter((c) => c.name === [...named][0]) : [];
+  return clones.length === 1 ? clones[0] : only.length === 1 ? only[0] : null;
+}
+
+// Global, untriaged or several projects' entries, or a project with several clones here: the owner picks the clone.
+function chooser() {
+  const clones = clonesOf(state.choosing.picked[0]);
+  const go = () => { const { picked, of } = state.choosing; state.choosing = null; show(); shapeFrom(picked, of); };
+  const stop = () => { state.choosing = null; show(); };
+  return html`<div id="choose" class="row">${select("Shape the Change in", clones.map((c) => [c.id, c.label]),
+    state.choosing.of, (v) => { state.choosing.of = v; })}
+    ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
+}
+
 async function createChange() {
   const picked = chosen();
   if (!picked.length) return notify("Select one or more entries first.");
+  if (new Set(picked.map((e) => e.repository)).size > 1) {
+    return notify("These entries are in different repositories' backlogs; pick entries of one of them.");
+  }
+  const target = clear(picked);
+  if (target) return shapeFrom(picked, target.id);
+  state.choosing = { picked, of: clonesOf(picked[0])[0].id };
+  show();
+  return undefined;
+}
+
+async function shapeFrom(picked, of) {
   const titles = picked.map((e) => e.title), many = picked.length > 1;
   const wanted = await ask({
     title: `Shape a Change from ${many ? `these ${picked.length} entries` : "this entry"}?`, yes: "Open the chat",
@@ -391,8 +518,8 @@ async function createChange() {
   state.started = { text: "Opening the shaping chat…" };
   show();
   try {
-    const r = await call("/backlog/change", { body: { ids: picked.map((e) => e.id) }, timeout: WRITE });
-    const s = r.started ? await launched(r.launch) : { state: "failed", ...r };
+    const r = await call("/backlog/change", { body: { ids: picked.map((e) => e.id) }, timeout: WRITE, of });
+    const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
     if (r.started) state.selected.clear();
     state.error = "";
     state.started = s.state === "open"

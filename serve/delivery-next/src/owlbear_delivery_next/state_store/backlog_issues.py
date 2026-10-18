@@ -27,7 +27,7 @@ MARK = "owlbear-backlog"
 COLOUR = "A67C52"
 PAGE = 100
 LONGEST = 65000  # GitHub refuses an issue body over 65536 characters
-SCOPES = ("project", "cross-project", "global", "unassigned")
+UNTRIAGED = ("untriaged", "cross-project", "unassigned")  # scope labels of an entry no project was chosen for
 KINDS = ("untriaged", "defect", "improvement", "idea", "question")
 OURS = ("scope:", "project:", "class:")
 VISIBILITY = "repo_visibility"  # the operation whose failure refuses a write: the repository is not known private
@@ -120,9 +120,10 @@ class Issues(GhClient):
 
 
 def labels(fields: dict[str, Any]) -> list[str]:
-    """The entry's labels: its scope, its class, and its project when the scope is a project."""
-    named = [f"scope:{fields['scope']}", f"class:{fields['kind']}"]
-    return named + ([f"project:{fields['project']}"] if fields["scope"] == "project" and fields["project"] else [])
+    """The entry's labels: its class, and each project it concerns, or Global, or untriaged (TD-241)."""
+    projects = fields["projects"]
+    named = ["scope:untriaged"] if projects is None else ["scope:global"] if not projects else []
+    return [*named, f"class:{fields['kind']}", *(f"project:{p}" for p in projects or [])]
 
 
 def kept_labels(issue: Json) -> list[str]:
@@ -153,8 +154,10 @@ def _shown(text: str) -> str:
 def body(fields: dict[str, Any]) -> str:
     """The issue body: the entry's fields as Markdown, the Repeats line, and the block that round-trips them."""
     f = fields
-    where = f" ({f['project']})" if f["project"] else ""
-    head = f"**Class:** {f['kind']} · **Scope:** {f['scope']}{where} · **Source:** {f['source']}"
+    projects = f["projects"]
+    concerns = "not triaged yet" if projects is None else ", ".join(projects) or "Global"
+    found = f" · **Found in:** {f['origin']}" if f["origin"] else ""
+    head = f"**Class:** {f['kind']} · **Projects:** {concerns}{found} · **Source:** {f['source']}"
     head += f" · **State:** {f['status']}"
     parts = [_shown(f["text"]), head] if f["text"] else [head]
     if f["notes"]:
@@ -177,6 +180,23 @@ def _jsonable(fields: dict[str, Any]) -> dict[str, Any]:
     return {k: v.isoformat() if hasattr(v, "isoformat") else v for k, v in fields.items()}
 
 
+def _projects(names: list[str], block: dict[str, Any]) -> dict[str, Any]:
+    """What the labels say the entry concerns (they are edited on GitHub too); nothing when they say nothing.
+
+    An older ``scope:project`` label without its ``project:`` label means the project the entry was found in.
+    """
+    projects = [n.removeprefix("project:") for n in names if n.startswith("project:")]
+    scopes = [n.removeprefix("scope:") for n in names if n.startswith("scope:")]
+    if projects:
+        return {"projects": projects}
+    if scopes == ["global"]:
+        return {"projects": []}
+    if scopes == ["project"]:
+        found = block.get("project") or block.get("origin")
+        return {"projects": [found] if found else None}
+    return {"projects": None} if len(scopes) == 1 and scopes[0] in UNTRIAGED else {}
+
+
 def fields(issue: Json) -> dict[str, Any] | None:
     """An issue's entry fields: its block, with the title, labels and state GitHub holds; None without a block."""
     found = _BLOCK.search(issue.get("body") or "")
@@ -187,11 +207,9 @@ def fields(issue: Json) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         return None
     names = [label["name"] for label in issue.get("labels", [])]
-    for prefix, key, allowed in (("scope:", "scope", SCOPES), ("class:", "kind", KINDS)):
-        if len(said := [n.removeprefix(prefix) for n in names if n.startswith(prefix)]) == 1 and said[0] in allowed:
-            data[key] = said[0]
-    if data.get("scope") == "project" and len(said := [n for n in names if n.startswith("project:")]) == 1:
-        data["project"] = said[0].removeprefix("project:")
+    if len(said := [n.removeprefix("class:") for n in names if n.startswith("class:")]) == 1 and said[0] in KINDS:
+        data["kind"] = said[0]
+    data |= _projects(names, data)
     if issue.get("state") == "closed":  # GitHub's closing reason, as it is now: a reopened and reclosed issue too
         data["status"] = "dropped" if issue.get("state_reason") in {"not_planned", "duplicate"} else "done"
     elif data.get("status") in {"done", "dropped"}:

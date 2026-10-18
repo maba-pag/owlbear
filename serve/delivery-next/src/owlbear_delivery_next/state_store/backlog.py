@@ -16,7 +16,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.state_store import backlog_issues
@@ -36,7 +36,7 @@ RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later;
 type Source = Literal["owner", "watcher", "assistant", "review", "run"]
 type Kind = Literal["untriaged", "defect", "improvement", "idea", "question"]
 type Status = Literal["inbox", "open", "in-change", "done", "dropped"]
-type Scope = Literal["project", "cross-project", "global", "unassigned"]
+type Folder = Annotated[str, Field(min_length=1, max_length=100)]  # a project's folder in the shared repository
 type Ref = Annotated[str, Field(min_length=1, max_length=500)]
 ORDER = {"inbox": 0, "open": 1, "in-change": 2, "done": 3, "dropped": 4}
 NO_SHARED = "no shared repository is set up (`owlbear-next data PATH`); the backlog lives in its GitHub issues"
@@ -65,18 +65,31 @@ class Entry(BaseModel):
     source: Source
     kind: Kind = "untriaged"
     status: Status = "inbox"
-    scope: Scope = "unassigned"
-    project: str = Field(default="", max_length=100)  # where it was found; its label once the scope is a project
+    projects: list[Folder] | None = Field(default=None, max_length=50)  # what it concerns: [] Global, None untriaged
+    origin: str = Field(default="", max_length=100)  # the project it was found in, kept as attribution (TD-241)
     notes: str = Field(default="", max_length=4000)  # the owner's context
     links: list[Annotated[str, Field(pattern=ID)]] = Field(default_factory=list, max_length=50)
     evidence: list[Ref] = Field(default_factory=list, max_length=EVIDENCE)
-    change: str = ""  # the Change's slug once the entry went into one
+    change: str = ""  # the Change it went into: ``{clone id}/{slug}``, or an older entry's bare slug
     launch: str = ""  # the New Change launch that took the entry
     count: int = Field(default=1, ge=1)
     first_seen: datetime
     last_seen: datetime
     updated_at: datetime
     legacy: str = Field(default="", pattern=r"^(\d{8}-[0-9a-f]{6})?$")  # the file entry it was migrated from
+
+    @model_validator(mode="before")
+    @classmethod
+    def _scoped(cls, data: Any) -> Any:  # noqa: ANN401 - pydantic's raw input
+        """An entry written before TD-241: only what its scope states becomes ``projects``; its project, the origin."""
+        if not isinstance(data, dict) or not {"scope", "project"} & data.keys():
+            return data
+        data = dict(data)
+        scope, old = data.pop("scope", "unassigned"), data.pop("project", "")
+        data.setdefault("origin", old)
+        if "projects" not in data:
+            data["projects"] = [old] if scope == "project" and old else [] if scope == "global" else None
+        return data
 
 
 def key(source: str, title: str) -> str:
@@ -85,12 +98,8 @@ def key(source: str, title: str) -> str:
 
 
 def repeats(entry: Entry, project: str, source: str, title: str) -> bool:
-    """Whether a finding in *project* repeats *entry*: the same key, and the entry is that project's (TD-126).
-
-    An entry's project is its ``project:`` label once its scope is a project, else where it was found; so a global,
-    cross-project or unassigned entry still takes its own project's repeats, while another project's are its own.
-    """
-    return entry.project == project and key(entry.source, entry.title) == key(source, title)
+    """Whether a finding in *project* repeats *entry*: the same key, found in the same project (TD-126)."""
+    return entry.origin == project and key(entry.source, entry.title) == key(source, title)
 
 
 def ordered(entries: Iterable[Entry]) -> list[Entry]:
@@ -165,7 +174,7 @@ class Backlog:
             same = next((e for e in found.values() if repeats(e, self.project, source, title)), None)
             if same is None:
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
-                fields |= {"evidence": refs[-EVIDENCE:], "project": self.project}
+                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project}
                 return self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now})), True
             same = self._get(found, same.id)
             new = [r for r in refs if r not in same.evidence]
@@ -187,8 +196,6 @@ class Backlog:
             new = old.model_dump() | fields | {"updated_at": now}
             if fields.get("kind", "untriaged") != "untriaged" and old.status == "inbox" and "status" not in fields:
                 new["status"] = "open"
-            if fields.get("scope") == "project" and not new["project"]:
-                new["project"] = self.project
             others = []
             if "links" in fields:
                 new["links"] = links = list(dict.fromkeys(fields["links"]))

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 FOLDER = "backlog"
 JOURNAL = ".backlog-migration.json"  # old id -> issue number; data_repo.EXCLUDE keeps it out of git
-COMPARED = ("title", "text", "source", "kind", "status", "scope", "project", "notes", "evidence", "change", "launch")
+COMPARED = ("title", "text", "source", "kind", "status", "projects", "origin", "notes", "evidence", "change", "launch")
 COMPARED += ("count", "first_seen", "last_seen")
 
 
