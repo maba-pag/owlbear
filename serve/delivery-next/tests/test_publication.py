@@ -1065,8 +1065,8 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     assert (added, "Opened by OwlBear Delivery" in bodies[0]) == ([("o/r", 7, ["release:minor"])], False)
     said = {e["event"]: (e["pr"], e["labels"]) for e in cx.store.events(c.slug) if "labels" in e}
     assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"])}
-    publish.pull_request(cx, c, A)
-    assert (len(added), c.names.labelled) == (1, 7)  # never again on this PR
+    publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
+    assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
     cx.store.update_config(lambda layer: layer.model_copy(update={"pr_labels": None, "pr_marker": None}))
     gh.pr, c.names.labelled = None, None
     gh.create_pull_request = lambda *a: bodies.append(a[4]) or pr(head=A, draft=True)

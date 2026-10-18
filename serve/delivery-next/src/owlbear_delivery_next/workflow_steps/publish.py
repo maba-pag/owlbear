@@ -96,6 +96,7 @@ def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
         except ProviderError as exc:
             ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=str(exc)[:300])
     c.names.labelled = pr.number
+    ctx.store.write(ctx.lock, c)  # before anything else can fail: a recovering runner never labels it again
 
 
 def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
