@@ -129,7 +129,7 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     paths = subprocess.run(  # noqa: S603
         ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
         cwd=tmp_path,
-        env={**os.environ, "GITHUB_REPOSITORY": ci_scope.HOME},
+        env={**os.environ, "SOURCE_REPOSITORY": ci_scope.HOME},
         capture_output=True,
         text=True,
         check=True,
@@ -138,12 +138,16 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     assert paths == 'suites=["python", "python-browser", "static", "security"]\n'
 
 
-def test_a_copy_of_owlbear_never_selects_the_snyk_suite(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    """TD-322: Snyk and its token exist only in OwlBear's own repository, so a copy's CI must not wait for them."""
-    monkeypatch.setenv("GITHUB_REPOSITORY", "someone/owlbear")
+def test_a_copy_or_a_fork_never_selects_the_snyk_suite(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """TD-322: GitHub gives Snyk's token neither to a copy nor to a fork's pull request; CI must not wait for it."""
+    step = next(s for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
+    assert step["env"]["SOURCE_REPOSITORY"] == (
+        "${{ github.event.pull_request.head.repo.full_name || github.repository }}"
+    )
+    monkeypatch.setenv("SOURCE_REPOSITORY", "someone/owlbear")
     ci_scope.main([])
     assert "security" not in capsys.readouterr().out
-    monkeypatch.setenv("GITHUB_REPOSITORY", ci_scope.HOME)
+    monkeypatch.setenv("SOURCE_REPOSITORY", ci_scope.HOME)
     ci_scope.main([])
     assert "security" in capsys.readouterr().out
 

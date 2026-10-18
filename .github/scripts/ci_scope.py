@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-HOME = "maba-pag/owlbear"  # Snyk and its token exist only in OwlBear's own repository (TD-322)
+HOME = "maba-pag/owlbear"  # Snyk's token reaches only changes from OwlBear's own repository (TD-322)
 SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
@@ -166,7 +166,7 @@ def changed(base: str, head: str) -> list[str]:
 def main(argv: list[str]) -> None:
     """Print the touched suites for a base and head commit; every suite without a base."""
     names = suites(changed(argv[0], argv[1])) if len(argv) == 2 and argv[0] else list(SUITES)  # noqa: PLR2004
-    if os.environ.get("GITHUB_REPOSITORY", HOME) != HOME:
+    if os.environ.get("SOURCE_REPOSITORY", HOME) != HOME:  # a copy, or a fork's pull request without secrets
         names = [name for name in names if name != "security"]
     sys.stdout.write(f"suites={json.dumps(names)}\n")
 

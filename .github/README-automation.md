@@ -76,8 +76,9 @@ into `main` and comments on it. The integration imports the repository's default
 its projects are set never to retest. No ruleset requires its checks.
 
 The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-319),
-only in `maba-pag/owlbear`: a copy of OwlBear has neither Snyk nor its token, so its CI never selects
-the suite, and Delivery never runs Snyk in other projects (TD-322):
+only for changes from `maba-pag/owlbear` itself: GitHub gives its token neither to a copy of OwlBear
+nor to a fork's pull request, so their CI never selects the suite, and the push run after a merge
+scans the merged code. Delivery never runs Snyk in other projects (TD-322):
 `snyk code test` and `snyk test --all-projects` at high severity and above, never `monitor` or
 `--report`, so it writes nothing into the org. Each finding prints its rule, file and line, so a
 failing run is fixed like any failing test. A dependency finding fails only when
