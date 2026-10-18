@@ -10,11 +10,14 @@ name: CI
       - reopened
       - synchronize
       - ready_for_review
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -36,9 +39,13 @@ jobs:
       - name: List the suites this change touches
         id: scope
         env:
+          EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python3 .github/scripts/ci_scope.py "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+        run: |
+          base="$BASE_SHA"
+          if [ "$EVENT" = push ]; then base="$(git rev-parse "$HEAD_SHA^1")"; fi  # a merge against its first parent
+          python3 .github/scripts/ci_scope.py "$base" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
   python:
     needs: scope
