@@ -1374,11 +1374,23 @@ async function everything() {
     const rows = (await call("/changes")).map((c) => ({ ...c, key: c.slug, project: "", projectName: "" }));
     return [rows, (await call("/project")).notes];
   }
-  const each = await Promise.all(projects.map(async (p) => [p, await call("/changes", undefined, p.id),
+  const each = await Promise.allSettled(projects.map(async (p) => [await call("/changes", undefined, p.id),
     (await call("/project", undefined, p.id)).notes]));
-  const rows = each.flatMap(([p, changes]) => changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id,
-    projectName: p.name })));
-  const notes = each.flatMap(([p, , said]) => said.map((n) => (projects.length > 1 ? `${p.name}: ${n}` : n)));
+  const lost = (r) => r.status === "rejected" && (r.reason instanceof HostDown || r.reason instanceof Restarted);
+  const down = each.find(lost);
+  if (down) throw down.reason;
+  const rows = [], notes = [];
+  each.forEach((r, i) => {  // one project that cannot be read keeps its last Changes and says why; the others go on
+    const p = projects[i], named = (n) => (projects.length > 1 ? `${p.name}: ${n}` : n);
+    if (r.status === "rejected") {
+      rows.push(...(state.changes ?? []).filter((c) => c.project === p.id));
+      notes.push(named(`not read just now (${r.reason.message}); its Changes show as last read`));
+      return;
+    }
+    const [changes, said] = r.value;
+    rows.push(...changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id, projectName: p.name })));
+    notes.push(...said.map(named));
+  });
   return [rows, notes];
 }
 
@@ -1444,7 +1456,12 @@ function newChange() {
 
 function chooserView() {
   const picked = (e) => { state.choosing = e.target.value; };
-  const go = () => { const of = state.choosing; state.choosing = false; shape(of); };
+  const go = () => {
+    const of = state.choosing;
+    state.choosing = false;
+    show();  // the chooser goes at once, whatever the confirmation then says
+    shape(of);
+  };
   const stop = () => { state.choosing = false; show(); };
   return html`<div id="choose" class="row"><label>Shape the new Change in <select .value=${state.choosing}
     @change=${picked}>${shown().map((p) => html`<option value=${p.id} ?selected=${p.id === state.choosing}>${p.name}

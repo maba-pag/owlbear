@@ -131,7 +131,8 @@ async function act(name, work) {
 
 function control(label, onclick, { variant = "secondary", busy = false } = {}) {
   return customElements.get("p-button")
-    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy} @click=${onclick}>${label}</p-button>`
+    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy}
+        @click=${onclick}>${label}</p-button>`
     : html`<button type="button" .disabled=${busy} @click=${onclick}>${label}</button>`;
 }
 
@@ -163,7 +164,8 @@ function view() {
     <div class="projects">
       ${projects.length ? html`<label>Project <select .value=${project} @change=${go}>
         ${scope === "all" ? html`<option value="" ?selected=${!project}>All projects</option>` : nothing}
-        ${projects.map((o) => html`<option value=${o.id} ?selected=${o.id === project}>${chosen(o, projects)}</option>`)}
+        ${projects.map((o) => html`<option value=${o.id} ?selected=${o.id === project}>${chosen(o, projects)}
+          </option>`)}
       </select></label>` : html`<span>No project yet: add the folder of a clone.</span>`}
       ${p ? control("Remove project", () => remove(p), { busy: bar.busy === "remove" }) : nothing}
       ${p?.state === "replaced" ? control("Adopt the new clone", () => act("adopt", async () => {

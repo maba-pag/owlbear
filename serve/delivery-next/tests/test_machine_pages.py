@@ -133,6 +133,14 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             expect(page.locator("#choose select")).to_have_value(a.id)
             page.get_by_role("button", name="Cancel").click()
             expect(page.locator("#choose")).to_have_count(0)
+            page.get_by_role("button", name="New Change").click()
+            page.locator("#choose select").select_option(b.id)
+            page.get_by_role("button", name="Continue").click()
+            page.locator("dialog").get_by_role("button", name="Not now").click()
+            expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
+            page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
+            expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
+            expect(cards).to_have_count(2)  # its Changes stay as last read; beta's go on
             browser.close()
     finally:
         server.should_exit = True
