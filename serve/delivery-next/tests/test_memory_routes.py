@@ -233,7 +233,7 @@ def test_make_global_moves_the_entry_and_publishes_both_folders(shared):
     assert [e.id for e in MemoryEngine(root / "memory").get_entries()] == [entry.id]
 
 
-def test_make_global_refuses_an_entry_global_memory_already_holds(shared):
+def test_make_global_refuses_an_entry_global_memory_holds_or_the_curator_has_not_scoped(shared):
     root, _, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"
@@ -241,10 +241,14 @@ def test_make_global_refuses_an_entry_global_memory_already_holds(shared):
     (root / "memory").mkdir()
     (root / "memory" / "copy.md").write_bytes((folder / f"{entry.id}.md").read_bytes())
 
-    refused = client(store).post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+    pending = seed(folder, "Written by an agent")
+    c = client(store)
+    refused = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+    unscoped = c.post(f"/api/next/memory/{pending.id}/make-global", json={"updated_at": pending.updated_at})
 
     assert (refused.status_code, "already" in refused.json()["detail"]) == (409, True)
-    assert (folder / f"{entry.id}.md").is_file()
+    assert (unscoped.status_code, "curator" in unscoped.json()["detail"]) == (409, True)  # Global has no curator
+    assert ((folder / f"{entry.id}.md").is_file(), (folder / f"{pending.id}.md").is_file()) == (True, True)
 
 
 def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:

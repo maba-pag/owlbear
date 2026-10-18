@@ -230,7 +230,7 @@ function actions(m) {
       button("Delete", () => remove(m), { variant: "secondary", icon: "delete", aria: DIALOG,
         busy: busy(m, "delete") }));
   }
-  if (m.place.where === "project" && m.state !== "deleted") {
+  if (m.place.where === "project" && !["pending", "deleted"].includes(m.state)) {  // Global has no curator
     parts.push(button("Make global", () => globalize(m), { variant: "secondary", icon: "globe", aria: DIALOG,
       busy: busy(m, "make-global") }));
   }
@@ -319,12 +319,14 @@ function sources() {
 }
 
 // The answers as one list: each shared folder once (twin clones share one), Global once per shared repository;
-// an entry keeps its place, so an action goes through the project that read it.
-function gather(wanted) {
+// an entry keeps its place, so an action goes through the project that read it. A project that failed this time
+// stands for its folder only when no other project read it now.
+function gather(wanted, fresher) {
   const places = new Map(), entries = [], said = wanted.map((s) => answers.get(`${s.of}|${s.where}`));
   let errors = 0;
-  wanted.forEach((s, i) => {
-    const a = said[i];
+  const fresh = (i) => (fresher.has(`${wanted[i].of}|${wanted[i].where}`) ? 0 : 1);
+  [...wanted.keys()].sort((i, j) => fresh(i) - fresh(j)).forEach((i) => {  // this refresh's answers before older ones
+    const s = wanted[i], a = said[i];
     const key = a?.available && `${a.repository}#${s.where === "global" ? "" : a.project}`;
     if (!key || places.has(key)) return;
     const place = { key, of: s.of, where: s.where, folder: a.folder, repository: a.repository,
@@ -345,12 +347,15 @@ async function refresh() {
   const wanted = sources();
   const got = await Promise.allSettled(wanted.map((s) => call(s.where === "global" ? "/memory?where=global"
     : "/memory", { of: s.of })));
-  const failing = new Set();
+  const failing = new Set(), fresher = new Set();
   got.forEach((r, i) => {
-    if (r.status === "fulfilled") answers.set(`${wanted[i].of}|${wanted[i].where}`, r.value);
-    else failing.add(`${wanted[i].name ? `${wanted[i].name}: ` : ""}${r.reason.message}`);
+    const key = `${wanted[i].of}|${wanted[i].where}`;
+    if (r.status === "fulfilled") {
+      answers.set(key, r.value);
+      fresher.add(key);
+    } else failing.add(`${wanted[i].name ? `${wanted[i].name}: ` : ""}${r.reason.message}`);
   });
-  state.loaded = gather(wanted);
+  state.loaded = gather(wanted, fresher);
   state.error = failing.size ? [...failing].join(" ") : "";
   show();
 }

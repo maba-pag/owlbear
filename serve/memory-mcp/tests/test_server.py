@@ -886,7 +886,9 @@ async def test_live_server_reads_global_memory_named_beside_its_store(
     async with mcp.Client(memory_mcp) as client:
         read = await client.call_tool("read_memory", {"entry_id": common.id})
         recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
-        approved = await client.call_tool("approve_memory", {"entry_id": common.id, "expected_revision": "x"})
+        approved = await client.call_tool(
+            "approve_memory", {"entry_id": common.id, "revision": _recall_revision(recalled, common.id)}
+        )
 
     assert (read.is_error, "Global habit" in _text(read), "Global habit" in _text(recalled)) == (False, True, True)
-    assert approved.is_error  # Global memory is changed on the Memory page, never by an agent
+    assert (approved.is_error, "not found" in _text(approved)) == (True, True)  # changed on the Memory page only

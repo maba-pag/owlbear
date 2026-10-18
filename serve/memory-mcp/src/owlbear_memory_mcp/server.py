@@ -94,7 +94,8 @@ class AppContext:
 
     engine: MemoryEngine
     memory_dir: Path
-    global_engine: MemoryEngine | None = None  # the shared repository's Global memory, read beside the store
+    global_dir: Path | None = None  # the shared repository's Global memory, read beside the store and never written
+    global_engine: MemoryEngine | None = None  # opened once ``global_dir`` exists; Make global may create it later
 
 
 def memory_dir() -> Path:
@@ -120,8 +121,8 @@ async def app_lifespan(
 ) -> AsyncGenerator[AppContext]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
     store, shared = memory_dir(), global_dir()
-    common = MemoryEngine(memory_dir=shared) if shared and shared != store and shared.is_dir() else None
-    yield AppContext(engine=MemoryEngine(memory_dir=store), memory_dir=store, global_engine=common)
+    common = shared if shared != store else None
+    yield AppContext(engine=MemoryEngine(memory_dir=store), memory_dir=store, global_dir=common)
 
 
 mcp = MCPServer("owlbear-memory", lifespan=app_lifespan)

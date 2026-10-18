@@ -88,10 +88,19 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
         raise ToolError(msg) from exc
 
 
+def _global_engine(ctx: Context) -> MemoryEngine | None:
+    """Global memory's engine, opened once its folder exists: the owner's first Make global may create it later."""
+    context = ctx.request_context.lifespan_context
+    engine, folder = getattr(context, "global_engine", None), getattr(context, "global_dir", None)
+    if engine is None and folder is not None and folder.is_dir():
+        engine = context.global_engine = MemoryEngine(folder)
+    return engine
+
+
 def _readable(ctx: Context) -> list[MemoryEntry]:
     """The store's entries, then Global memory's ones it does not hold: what agents read (TD-241)."""
     entries = _engine_from_ctx(ctx).get_entries()
-    shared = getattr(ctx.request_context.lifespan_context, "global_engine", None)
+    shared = _global_engine(ctx)
     if shared is None:
         return entries
     mine = {entry.id for entry in entries}
@@ -386,7 +395,7 @@ async def list_memories(
 async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Return a full entry by ID, excluding deleted state."""
     engine = _engine_from_ctx(ctx)
-    shared = getattr(ctx.request_context.lifespan_context, "global_engine", None)
+    shared = _global_engine(ctx)
     try:
         entry = engine.get_entry(entry_id)
     except NotFoundError:

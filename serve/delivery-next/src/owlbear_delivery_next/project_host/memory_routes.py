@@ -128,6 +128,8 @@ def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]:
             path, entry = found[0]
             if _shown(entry)["updated_at"] != shown:
                 raise ConcurrencyError(entry_id)
+            if entry.state in {MemoryState.PENDING, MemoryState.DELETED}:  # only the project's curator scopes it
+                raise HTTPException(409, f"{entry.title} is {entry.state}: the curator scopes it before it goes global")
             moved = target / path.name
             if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
                 raise HTTPException(409, f"Global memory holds {entry.title} already")

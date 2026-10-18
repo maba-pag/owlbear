@@ -120,18 +120,22 @@ def _approved(engine: MemoryEngine, title: str) -> str:
 @pytest.mark.asyncio
 async def test_agents_read_global_memory_beside_their_projects_and_write_only_their_projects(tmp_path: Path) -> None:
     """TD-241: the store and Global memory are both read; a save goes to the store."""
-    mine, shared = MemoryEngine(tmp_path / "shop" / "memory"), MemoryEngine(tmp_path / "memory")
-    own, common = _approved(mine, "Run the shop's tests"), _approved(shared, "Every project signs commits")
+    mine, shared_dir = MemoryEngine(tmp_path / "shop" / "memory"), tmp_path / "memory"
+    own = _approved(mine, "Run the shop's tests")
     context = SimpleNamespace(
         request_context=SimpleNamespace(
-            lifespan_context=SimpleNamespace(engine=mine, memory_dir=tmp_path / "shop" / "memory", global_engine=shared)
+            lifespan_context=SimpleNamespace(
+                engine=mine, memory_dir=tmp_path / "shop" / "memory", global_dir=shared_dir
+            )
         )
     )
+    before_any = {entry["id"] for entry in await tools.list_memories(context)}
+    common = _approved(MemoryEngine(shared_dir), "Every project signs commits")  # the first Make global, mid-session
     listed = {entry["id"] for entry in await tools.list_memories(context)}
     recalled = await tools.recall_memory(context, agent="*")
     read = await tools.read_memory(context, entry_id=common)
-    assert (listed, "Every project signs commits" in recalled, read["title"]) == (
-        {own, common}, True, "Every project signs commits"
+    assert (before_any, listed, "Every project signs commits" in recalled, read["title"]) == (
+        {own}, {own, common}, True, "Every project signs commits"
     )  # fmt: skip
     before = sorted(p.name for p in (tmp_path / "memory").iterdir())
     saved = await tools.save_memory(
