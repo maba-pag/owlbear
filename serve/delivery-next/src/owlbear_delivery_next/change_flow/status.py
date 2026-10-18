@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
 from owlbear_delivery_next.local_system.mask import redact
@@ -155,6 +156,16 @@ def card(
     }
 
 
+def passes(c: Change, now: datetime) -> bool:
+    """Whether the next step runs while Delivery is paused (TD-287, TD-303).
+
+    A cleanup, or the brief challenge the owner's chat asked for; planning, building, publishing and merging wait for
+    Resume.
+    """
+    step = loop.next_step(c, now)
+    return step is not None and (step.kind == StepKind.CLEANUP or (step.kind == StepKind.SHAPE and step.mode in MODES))
+
+
 def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status:
     """Derive the status; while Delivery is paused, a step that would start waits for Resume instead (TD-282)."""
     line = _status(c, activity, now, tool)
@@ -162,6 +173,8 @@ def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | 
         return line
     if activity.runner_alive:
         return Status(f"{stage(c)} · finishing {c.step.kind} (started before the restart)", None, "delivery")
+    if passes(c, now):
+        return line
     if line.actor in {"delivery", "github"}:  # nothing is observed or started until Resume
         return Status(f"{stage(c)} · Delivery is paused: continues after Resume", RESUME, "you")
     return line

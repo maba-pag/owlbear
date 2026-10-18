@@ -56,13 +56,16 @@ class Machine:
         if self.stopping.is_set():
             raise MachineError(503, "OwlBear is stopping")
         p = self.projects[entry.id] = Project(entry)
+
+        def bind(h: Host) -> None:  # before its scheduler's first pass
+            h.peers = lambda: self.sharing(p)
+            h.draining = lambda: self.ending
+            h.closed = lambda: self.stopping.is_set() or not p.gate.open
+
         try:
-            p.load(self.record, lambda: self.paused or self.stopping.is_set())
+            p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
-        if p.host:
-            p.host.peers = lambda: self.sharing(p)
-            p.host.draining = lambda: self.ending
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 

@@ -31,7 +31,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.change_flow.status import Activity, passes
 from owlbear_delivery_next.local_system import codebase, data_repo, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -184,6 +184,8 @@ class Host:
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
+        self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
+        self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
@@ -294,6 +296,7 @@ class Host:
             self.say(f"{slug}: {text}")
 
     def _one(self, slug: str, now: datetime) -> bool:
+        self.passing.discard(slug)  # a permission holds only for the launch of this same pass
         rec = self.runner(slug)
         if rec and self.alive(rec.pid, rec.created) is not False:
             return False  # A live runner finishes on its own; the host never kills it.
@@ -301,7 +304,9 @@ class Host:
         with self.store.lock(slug) as lock:
             c = self._folded(lock, slug, rec, now, paused=paused)
             if paused:
-                return self._ended(lock, c, rec, now)
+                if not (self.owner_runs() and passes(c, now)):
+                    return self._ended(lock, c, rec, now)
+                self.passing.add(slug)  # its launch passes the pause in this same pass
             act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
                 if (left := self.clear(c, c.env)) is None or left:
@@ -322,13 +327,18 @@ class Host:
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 
     def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change:
-        """Fold the inbox with the PR's state (none while paused), run an asked Pull, charge a runner gone."""
+        """Fold the inbox with the PR's state, run an asked Pull, charge a runner gone.
+
+        While paused only a PR's end is taken (its cleanup runs then, TD-303) and the owner's Pull runs (TD-287).
+        """
         prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
-        state, moved = (None, False) if paused else self.observe_pr(slug)
+        state, moved = self.observe_pr(slug)
+        if paused:
+            state, moved = (state if state in {"merged", "closed"} else None), False
         c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
         if moved:
             self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
-        c = self._woken(c if paused else self._pull(lock, c, now), now)
+        c = self._woken(self._pull(lock, c, now) if not paused or self.owner_runs() else c, now)
         if rec and disappeared(prior, rec, now) and c.step == prior.step:
             c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
             self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
@@ -402,6 +412,13 @@ class Host:
             return None
         return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
+    def owner_runs(self) -> bool:
+        """Whether maintenance and the owner's own requests may start while paused.
+
+        Not while OwlBear or this project stops, nor once the owner asked to stop when idle.
+        """
+        return not (self.closed() or self.draining())
+
     def env_action(self, c: Change) -> check.Action | None:
         """What the check environment needs now: launch, dispose or settle; None to leave it."""
         e = c.env
@@ -439,7 +456,7 @@ class Host:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
         self.launches[slug] = [*recent, time.monotonic()]
         with self.launching:  # a project folder rename or a project's stop waits, so no runner starts during it
-            if self.paused():
+            if self.paused() and not (slug in self.passing and self.owner_runs()):
                 return False
             rec = self.spawn(slug)
             atomic_write(self._path(slug), rec.model_dump_json())

@@ -3,6 +3,7 @@ parts: upstream, downloads, golden pages, replay and the challenger. Git runs on
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -22,8 +23,9 @@ from owlbear_delivery_next.design_packs import calibration, design_pack, pack_gi
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.pack_runs import pack_job, pack_rounds, pack_updater
-from owlbear_delivery_next.project_host import api, pack_routes
-from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.admission import STOPPING
+from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
 
@@ -787,18 +789,41 @@ class Host:
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     paused = staticmethod(lambda: False)
+    draining = staticmethod(lambda: False)
+    closed = staticmethod(lambda: False)
+    launching = threading.Lock()
 
 
-def test_while_delivery_is_paused_no_update_starts_or_goes_on(tmp_path, checkout, clone):
+def test_a_pause_holds_no_update_but_a_stop_holds_its_start_and_answers(tmp_path, checkout, clone):
     job, _, state = upheld(tmp_path, checkout, clone)
     stopped = Host()
-    stopped.paused = lambda: True
+    stopped.paused = lambda: True  # TD-287: the owner's update runs while paused
     c = TestClient(api.create_app(job.store, "t", stopped, pack=job), base_url="http://127.0.0.1", headers=AUTH)
+    assert "waits for your answers" in c.post("/api/next/design-pack/update").json()["detail"]
     answer = {"question": state["questions"][0]["id"], "option": "drop"}
-    for path, body in (("/api/next/design-pack/update", None), ("/api/next/design-pack/update/answer", answer)):
-        refused = c.post(path, json=body)
-        assert (refused.status_code, refused.json()["detail"]) == (409, pack_routes.PAUSED)
+    for flag, code, said in (("draining", 409, ENDING), ("closed", 503, STOPPING)):
+        setattr(stopped, flag, lambda: True)
+        for path, body in (("/api/next/design-pack/update", None), ("/api/next/design-pack/update/answer", answer)):
+            refused = c.post(path, json=body)
+            assert (refused.status_code, refused.json()["detail"]) == (code, said)
     assert c.get("/api/next/design-pack/update").json()["state"] == "waiting"
+
+
+def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_path):
+    """TD-290: the lock's holder names its project; the pack section of every project reads it."""
+    store = Store(tmp_path / "store")
+    store.name = "shop"
+    job = pack_job.Job(store)
+    assert pack_job.running_for() is None
+    job._claim()  # noqa: SLF001 - what a starting run takes
+    try:
+        c = TestClient(api.create_app(Store(tmp_path / "other"), "t", Host()), base_url="http://127.0.0.1")
+        assert (pack_job.running_for(), c.get("/api/next/design-pack", headers=AUTH).json()["machine"]) == (
+            "shop", "shop"
+        )  # fmt: skip
+    finally:
+        os.close(job.held)
+    assert pack_job.running_for() is None
 
 
 def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clone):

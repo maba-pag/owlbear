@@ -48,6 +48,7 @@ DRAFT = {
 class Host:
     wake = SimpleNamespace(set=lambda: None)
     paused = staticmethod(lambda: False)
+    draining = staticmethod(lambda: False)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 
     def activity(self, _slug):
@@ -196,6 +197,7 @@ def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
 
 def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shaping, monkeypatch):
     shaping.save()
+    shaping.host.paused = lambda: True  # TD-287: the challenge the owner's chat asks for runs while paused
     shaping.verdicts += [verdict("AC-1")]
     chat = mcp_server.Chat.__new__(mcp_server.Chat)
     chat.store = shaping.store
@@ -212,9 +214,9 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
     assert chat.challenge_brief("c1", 2, [])["requested"] is False  # no such version
 
 
-def test_a_challenge_asked_while_delivery_is_paused_is_recorded_and_the_chat_returns_at_once(shaping, monkeypatch):
+def test_a_challenge_asked_before_a_stop_when_idle_is_recorded_and_the_chat_returns_at_once(shaping, monkeypatch):
     shaping.save()
-    shaping.host.paused = lambda: True
+    shaping.host.draining = lambda: True
     chat = mcp_server.Chat.__new__(mcp_server.Chat)
     chat.store = shaping.store
     chat.call = lambda method, path, body=None: (

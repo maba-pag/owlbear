@@ -1882,7 +1882,7 @@ def test_a_paused_host_takes_the_queued_pr_out_before_the_pause_applies(tmp_path
     c.queue = QueueClaim(head=A, at=NOW, settled=True)
     store = fold_store(tmp_path, monkeypatch, gh, c)
     paused = scheduler.Host(store, tmp_path, paused=lambda: True)
-    paused.observe_pr = lambda _slug: pytest.fail("no PR state is read while Delivery is paused")
+    paused.observe_pr = lambda _slug: ("open", True)  # only a PR's end applies while paused (TD-303)
     assert paused.tick(NOW) == []
     assert (store.read("c1").intent.paused_at, store.read("c1").queue is not None) == (None, True)  # waits (TD-226)
     gh.dequeue_fails = False
