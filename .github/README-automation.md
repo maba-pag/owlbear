@@ -55,7 +55,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 | [Static checks](workflows/static.yml) | Ruff, repository-wide Biome, HTMLHint | Python, JSON, frontend, lint configuration |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, PDS, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
-| [Security](workflows/security.yml) | Snyk Code and Snyk Open Source tests, high severity and above; on a pull request, one comment per Code finding | Code, manifests, locks, `.snyk` |
+| [Security](workflows/security.yml) | Snyk Code test, high severity and above; on a pull request, one comment per finding | Code, `.snyk` |
 
 The scope evaluates the whole PR diff, so a follow-up push reruns every suite the PR ever
 touched. To avoid repeating identical proofs, each job fingerprints its inputs with
@@ -71,21 +71,20 @@ keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup id
 
 ## Snyk
 
-Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) tests every pull request
-into `main` and comments on it. The integration imports the repository's default branch, `main`;
-its projects are set never to retest. No ruleset requires its checks.
+Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) has its pull-request
+checks off (TD-382). Renovate keeps dependencies current.
 
 The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-360),
 only for changes from `maba-pag/owlbear` itself: GitHub gives its token neither to a copy of OwlBear
 nor to a fork's pull request, so their CI never selects the suite, and the push run after a merge
 scans the merged code. Delivery never runs Snyk in other projects (TD-363):
-`snyk code test` and `snyk test --all-projects` at high severity and above, never `monitor` or
-`--report`, so it writes nothing into the org. Each finding prints its rule, file and line, so a
-failing run is fixed like any failing test. A dependency finding fails only when
-Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-362); others print and pass. It
+`snyk code test` at high severity and above, never `monitor` or `--report`, so it writes nothing
+into the org. Only Snyk Code runs: its tests are unlimited, while dependency tests would spend the
+org's small private-test quota on what Renovate already does (TD-382). Each finding prints its rule,
+file and line, so a failing run is fixed like any failing test. It
 authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-361; a
 read-only CLI tester role replaces it once the Group offers one), whose token is the `SNYK_TOKEN`
-Actions secret. A dependency finding accepted on purpose goes into `.snyk` with its reason.
+Actions secret.
 
 A Snyk Code finding on a pull request gets one comment from the Security job with a box and an empty
 `Reason:` line ([`snyk_findings.py`](scripts/snyk_findings.py), TD-363). The lead chat judges it: a
@@ -140,6 +139,6 @@ packages, or missing credentials leave a visible failed workflow instead of sele
 After correcting a transient failure, rerun the failed job on the current PR head. An unexpected
 bundled downgrade is reflected exactly in the reviewable PR, rather than silently retaining drift.
 
-Keep GitHub Dependabot alerts enabled: disabling independent Renovate updates is not a security
-exception policy. An urgent Ruff or Biome fix unavailable in MegaLinter requires an explicit reviewed
+Renovate is the only dependency watch, with no Dependabot (TD-382), so disabling its independent updates
+is not a security exception policy. An urgent Ruff or Biome fix unavailable in MegaLinter requires an explicit reviewed
 exception or a newer MegaLinter release; the parity check intentionally blocks silent divergence.

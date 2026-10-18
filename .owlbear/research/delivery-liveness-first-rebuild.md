@@ -1461,11 +1461,11 @@ TD-379 (`decided`).
   workflow disable` (files and tests unchanged), every pre-commit hook runs only by hand, and Renovate
   keeps running [TD-204, TD-280].
 - Snyk is for OwlBear's own repository only; Delivery never runs Snyk elsewhere. It is a Security suite in
-  the required CI gate, selected only when `maba-pag/owlbear` runs a change from itself: `snyk code test`
-  and `snyk test --all-projects` at high severity and above, the dependency scan with
-  `--fail-on=upgradable`, never `monitor` or `--report`; each finding prints its rule, file and line, so a
-  failing run is a fix task like any failing test. The Snyk app's PR checks stay, not required
-  [TD-360, TD-362, TD-363].
+  the required CI gate, selected only when `maba-pag/owlbear` runs a change from itself to code: only
+  `snyk code test` at high severity and above, never `monitor` or `--report`; each finding prints its
+  rule, file and line, so a failing run is a fix task like any failing test. Snyk does only what it
+  specialises in or what is free: no dependency scan, Renovate alone keeps dependencies current, no
+  Dependabot, and the Snyk app's PR checks are off [TD-360, TD-363, TD-382].
 - It authenticates as the service account `owlbear-ci` with the predefined Org Collaborator role until
   the Group admins create a read-only CLI tester role; its token is the `SNYK_TOKEN` Actions secret,
   which the owner creates and sets himself, never through the assistant; ordinary scans never create or
@@ -2461,6 +2461,7 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 | TD-379 | Settles TD-16's open point: besides an upheld rejection (TD-193) and a note contradicting the brief (TD-340), a CI check that keeps failing after the fix retries goes to the owner | `decided`: chose "Also when a CI check keeps failing after the fix retries" in the consolidation review | 2026-10-18 |
 | TD-380 | TD-205's "a recheck may not name a repeat and a verdict at once" is history: TD-208 replaced TD-189's repeats, and the settings migration drops `repeat_of` | `autonomous`: settled in the consolidation from the code (`settings/migrations.py`) | 2026-10-18 |
 | TD-381 | TD-273's "the package's manifest, notice and skills are as at the start" stays under merge-based activation (TD-357): a run whose package skill changed since its start stops (`pack_run._unchanged`), which keeps the pull request's content to what was challenged | `autonomous`: settled in the consolidation from the code | 2026-10-18 |
+| TD-382 | Re-decides TD-360's dependency scan and TD-362's `--fail-on` after the org's private manifest tests ran out (293 of 200): Snyk only does what it specialises in or what is free, so CI runs only Snyk Code, whose tests are unlimited, and the dependency scan goes. Renovate alone keeps dependencies current, with no Dependabot; nothing watches for new advisories between its updates. The owner turned the Snyk app's pull-request checks off himself | `decided`: the owner wrote "Renovate is first. we dont use dependabot. snyk is limited to actions it is either specialised in or that are free. we dont pay for what renovate gives us free" and chose the reading "CI keeps only Snyk Code (unlimited); the CLI dependency scan goes; Renovate alone keeps dependencies current; nothing watches for new advisories in between" | 2026-10-18 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.

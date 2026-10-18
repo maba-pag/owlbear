@@ -95,7 +95,7 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
         (["README.md"], []),
         (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static", "security"]),
         (["serve/cockpit/web/src/app.tsx"], ["cockpit", "static", "security"]),
-        (["uv.lock"], ["python", "python-browser", "static", "tooling", "security"]),
+        (["uv.lock"], ["python", "python-browser", "static", "tooling"]),
         ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
         ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),
         (["share/skills/x/SKILL.md"], ["agent-ecosystem"]),
@@ -163,13 +163,12 @@ def test_only_owlbear_s_own_changes_select_the_snyk_suite(
     assert ("security" in capsys.readouterr().out) is selected
 
 
-def test_the_snyk_suite_only_tests_and_gets_its_token_from_the_gate() -> None:
-    """TD-360: nothing is written into the Snyk org; a finding fails the run with its file and line in the log."""
+def test_the_snyk_suite_only_tests_code_and_gets_its_token_from_the_gate() -> None:
+    """TD-360: nothing is written into the Snyk org. TD-382: only Snyk Code, whose tests are unlimited, runs."""
     steps = _jobs("security.yml")["snyk"]["steps"]
     runs = _runs({"steps": steps})
     assert "snyk code test" in runs
-    assert "snyk test --all-projects" in runs
-    assert "--fail-on=upgradable" in runs  # TD-362: a finding without a Snyk fix prints but passes
+    assert "snyk test" not in runs  # dependencies are Renovate's; manifest tests would spend the private quota
     assert not any(word in runs for word in ("monitor", "--report", "|| true"))
     assert _workflow("security.yml")["env"]["SNYK_API"] == "https://api.eu.snyk.io"
     assert _jobs("ci.yml")["security"]["secrets"] == {"SNYK_TOKEN": "${{ secrets.SNYK_TOKEN }}"}
@@ -358,6 +357,6 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
                 for index, step in enumerate(steps)
                 if re.search(r"\buv\s+(?:python|run|sync|lock)", str(step.get("run", "")))
             ),
-            len(steps),  # the security suite's uv runs only inside Snyk
+            len(steps),
         )
         assert setups[0] < check < first_uv
