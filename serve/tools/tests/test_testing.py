@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import fcntl
 import sys
+import threading
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -63,6 +66,7 @@ def test_delivery_next_source_runs_testmon_beside_the_tests_it_cannot_see() -> N
     (plain, monitored) = _routed(_LOOP)
 
     assert "serve/delivery-next/tests/test_dispatch.py" in plain  # runs the package in a child process
+    assert {"serve/delivery-next/tests/test_layers.py", "serve/delivery-next/tests/test_module_rules.py"} <= set(plain)
     assert "tests/test_package_boundary.py" in plain
     assert "serve/delivery-next/tests/test_loop.py" not in plain
     assert monitored[:3] == [
@@ -104,6 +108,26 @@ def test_coverage_unknown_paths_and_deleted_sources_keep_the_old_scope(
 
     assert "--testmon" not in command
     assert "serve/delivery-next/tests/test_loop.py" in command or command[4:6] == ["tests", "serve"]
+
+
+def test_testmon_runs_sharing_a_data_file_wait_for_each_other(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(testing_module, "_REPOSITORY_ROOT", tmp_path)
+    ran: list[float] = []
+    held = (tmp_path / "t.db.lock").open("a")
+    fcntl.flock(held, fcntl.LOCK_EX)  # another run of this checkout
+    with patch(
+        "owlbear_tools.testing.subprocess.call", side_effect=lambda *_a, **_k: ran.append(time.monotonic()) or 0
+    ):
+        command = (["env", "TESTMON_DATAFILE=t.db", "uv"], tmp_path)
+        waiting = threading.Thread(target=testing_module._run_commands, args=([command],))  # noqa: SLF001
+        waiting.start()
+        time.sleep(0.3)
+        released = time.monotonic()
+        held.close()
+        waiting.join(5)
+
+    assert len(ran) == 1
+    assert ran[0] >= released
 
 
 def test_knowledge_source_routes_importing_root_and_invariant_tests() -> None:

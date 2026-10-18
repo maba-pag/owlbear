@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import fcntl
 import re
 import shutil
 import subprocess
@@ -13,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _COCKPIT_WEB = _REPOSITORY_ROOT / "serve/cockpit/web"
@@ -141,22 +143,25 @@ def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
     return targets
 
 
-def _starts_package(path: Path, namespace: str) -> bool:
-    """Whether a test module runs the package in a child Python process, whose code testmon cannot see."""
+def _unseen_by_testmon(path: Path, namespace: str) -> bool:
+    """Whether a test module depends on code testmon cannot trace: the package in a child process, or read as data."""
     try:
         nodes = list(ast.walk(ast.parse(path.read_text(encoding="utf-8"))))
     except OSError, SyntaxError:
         return True
-    executable = any(
-        isinstance(node, ast.Attribute)
-        and node.attr == "executable"
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "sys"
-        for node in nodes
-    )
-    return executable and any(
-        isinstance(node, ast.Constant) and isinstance(node.value, str) and namespace in node.value for node in nodes
-    )
+
+    def attribute(owner: str, name: str) -> bool:
+        return any(
+            isinstance(node, ast.Attribute)
+            and node.attr == name
+            and isinstance(node.value, ast.Name)
+            and node.value.id == owner
+            for node in nodes
+        )
+
+    texts = [node.value for node in nodes if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+    child = attribute("sys", "executable") and any(namespace in text for text in texts)
+    return child or attribute("ast", "parse") or any(text.endswith("*.py") for text in texts)
 
 
 def _monitored_package(path: str) -> _WorkspacePackage | None:
@@ -174,7 +179,7 @@ def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -
     commands: list[tuple[list[str], Path]] = []
     for package in packages:
         tests = _package_tests(package)
-        forced.update(_relative_paths(path for path in tests if _starts_package(path, package.namespace)))
+        forced.update(_relative_paths(path for path in tests if _unseen_by_testmon(path, package.namespace)))
         forced.update(_relative_paths(_neighbour_tests(package)))
         selected = [path for path in _relative_paths(tests) if path not in forced]
         if selected:
@@ -320,13 +325,30 @@ def _commands_for_paths(
     return commands
 
 
+@contextlib.contextmanager
+def _testmon_lock(command: list[str]) -> Iterator[None]:
+    """Serialize testmon runs sharing one data file: a first run deletes and recreates the database."""
+    data = next((arg.split("=", 1)[1] for arg in command if arg.startswith("TESTMON_DATAFILE=")), None)
+    if data is None:
+        yield
+        return
+    with (_REPOSITORY_ROOT / f"{data}.lock").open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Waiting for another testmon run of this checkout to end")  # noqa: T201
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+
+
 def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
     failures = 0
     for command, cwd in commands:
         relative_cwd = cwd.relative_to(_REPOSITORY_ROOT)
         location = "." if relative_cwd == Path() else str(relative_cwd)
         print(f"[{location}] {' '.join(command)}")  # noqa: T201
-        failures += int(bool(subprocess.call(command, cwd=cwd)))  # noqa: S603
+        with _testmon_lock(command):
+            failures += int(bool(subprocess.call(command, cwd=cwd)))  # noqa: S603
     return int(bool(failures))
 
 
