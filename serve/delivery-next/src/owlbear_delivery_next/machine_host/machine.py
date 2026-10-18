@@ -1,6 +1,7 @@
 """The machine host's state (TD-242): its record, the projects it serves and whether Delivery is paused.
 
-Every start is paused (TD-259); only the owner's Resume in the UI unpauses it, and the Resume is recorded.
+Every start is paused (TD-259); only the owner's Resume in the UI unpauses it, and the Resume is recorded. The
+owner pauses again with Pause, or with Pause and stop when idle (TD-288), which stops OwlBear once nothing runs.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.project_host.host import Host, HostRecord
 
 RETRY = 60.0  # seconds between loads of a project that failed to load
+IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
 
 
 class MachineError(Exception):
@@ -39,6 +41,7 @@ class Machine:
     def __init__(self, record: HostRecord) -> None:
         """Start paused, with no project loaded yet."""
         self.record, self.paused = record, True
+        self.ending = False  # the owner's stop when idle; held in memory, so a restart never stops again
         self.projects: dict[str, Project] = {}
         self.lock = threading.RLock()
         self.stopping = threading.Event()
@@ -59,6 +62,7 @@ class Machine:
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
         if p.host:
             p.host.peers = lambda: self.sharing(p)
+            p.host.draining = lambda: self.ending
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 
@@ -134,13 +138,54 @@ class Machine:
             return self._load(entry)
 
     def resume(self) -> None:
-        """The owner's Resume: work starts again in every project."""
+        """The owner's Resume: work starts again in every project; a stop when idle is cancelled."""
         registry.resumed(datetime.now(UTC))
-        self.paused = False
+        with self.lock:
+            self.paused = self.ending = False
         self.say("resumed by you")
+        self._wake()
+
+    def pause(self) -> None:
+        """The owner's Pause: no automatic step starts until Resume; running steps finish (TD-282, TD-287)."""
+        self.paused = True
+        self.say("paused by you")
+
+    def pause_stop(self) -> None:
+        """Pause and stop when idle (TD-288): nothing starts, check environments go, then OwlBear stops."""
+        with self.lock:  # idle_stop waits for the barrier too, so nothing admitted before it goes uncounted
+            self.paused = self.ending = True
+            for p in list(self.projects.values()):
+                if p.host:
+                    with p.host.launching:  # a launch admitted before the intent is counted from now on
+                        pass
+        self.say("paused by you: OwlBear stops once nothing runs")
+        self._wake()
+
+    def _wake(self) -> None:
         for p in list(self.projects.values()):
             if p.host:
                 p.host.wake.set()
+
+    def left(self) -> list[str]:
+        """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
+        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
+
+    def idle_stop(self) -> bool:
+        """Stop OwlBear when a stop when idle is asked for and nothing runs; whether it stopped."""
+        with self.lock:  # a Resume in between cancels it
+            if not self.ending or self.stopping.is_set() or self.left():
+                return False
+            self.say("stopping: nothing runs")
+            self.on_stop()
+            return True
+
+    def idle_loop(self) -> None:
+        """Thread: look every ``IDLE`` seconds whether a stop when idle may stop OwlBear."""
+        while not self.stopping.wait(IDLE):
+            try:
+                self.idle_stop()
+            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
+                self.say(f"looking whether OwlBear may stop failed: {type(exc).__name__}: {exc}")
 
     def waiting(self) -> int:
         """How many Changes would continue on Resume."""

@@ -56,6 +56,7 @@ BURST = (5, 60.0)  # at most five runner launches per Change in this many second
 PROBE = timedelta(seconds=10)  # between network probes while a Change waits on the network
 PROBE_TIMEOUT = 3.0
 RESTART = "Delivery's code changed since the host started; restart the host"
+ENDING = "OwlBear stops once the running steps end; press Resume to cancel"
 type Found = dict[int, str]
 
 
@@ -182,6 +183,7 @@ class Host:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
+        self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
@@ -333,9 +335,17 @@ class Host:
         return c
 
     def _ended(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool:
-        """While paused: confirm an ended runner and its processes gone; nothing starts."""
+        """While paused: confirm an ended runner and its processes gone; nothing starts.
+
+        Before a stop when idle the check environment goes too; it launches again after the next start.
+        """
         if (rec or c.blocked or _unverified(c)) and not self._gone(lock, c, rec, now):
             return False
+        if self.draining() and c.env and (c.env.pids or c.env.pgid or c.env.launched_at):
+            if (left := self.clear(c, c.env)) is None or left:
+                return self._blocked(lock, c, left, now)
+            c.env = c.env.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": None})
+            self.say(f"{c.slug}: check environment stopped before OwlBear stops")
         self.store.write(lock, c)
         return False
 

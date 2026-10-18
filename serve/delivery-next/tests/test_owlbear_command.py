@@ -77,7 +77,9 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert said[-1] == f"OwlBear started, paused until you press Resume: {rec.url}#token={rec.token}"
     assert control.start(said.append) == 0
     assert said[-1].startswith("OwlBear is running")
-    assert control.projects() == {"paused": True, "waiting": 0, "projects": []}
+    assert control.projects() == {
+        "paused": True, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True
+    }  # fmt: skip
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     logged = (local_home.root() / control.LOG).read_text()

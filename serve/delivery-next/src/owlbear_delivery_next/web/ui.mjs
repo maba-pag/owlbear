@@ -178,7 +178,7 @@ async function remove(p) {
 }
 
 function view() {
-  const { projects, paused, waiting } = bar.data;
+  const { projects, paused, waiting, ending, left = [] } = bar.data;
   const p = projects.find((o) => o.id === project);
   const go = (e) => {
     if (held()) {
@@ -208,15 +208,29 @@ function view() {
           @input=${(e) => { bar.draft = e.target.value; }}></label>
         ${control("Add", add, { busy: bar.busy === "add" })}
       </details>
+      ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
+        machine: true })), { busy: bar.busy === "pause" })}
     </div>
     ${p && p.state !== "loaded" ? html`<p role="status">${p.name} is ${p.state}: ${p.reason}</p>` : nothing}
     ${p?.setup ? html`<p role="status">Setup required: the chats of ${p.name} cannot reach Delivery yet. Run
       <code>${p.setup}</code> in a terminal, then reload the project's VS Code window.</p>` : nothing}
-    ${paused ? html`<p class="paused" role="status">Delivery is paused since it started: ${waiting}
-      Change${waiting === 1 ? "" : "s"} would continue.
+    ${paused ? html`<p class="paused" role="status">${ending
+        ? `OwlBear stops once nothing runs${left.length ? `; it waits for ${left.join("; ")}` : ""}.`
+        : `Delivery is paused: ${waiting} Change${waiting === 1 ? "" : "s"} would continue.`}
       ${control("Resume", () => act("resume", () => call("/resume", { method: "POST", machine: true })),
-        { variant: "primary", busy: bar.busy === "resume" })}</p>` : nothing}
+        { variant: "primary", busy: bar.busy === "resume" })}
+      ${!ending && bar.data.update_while_paused ? control("Pause and stop when idle", stopWhenIdle,
+        { busy: bar.busy === "pause-stop" }) : nothing}</p>` : nothing}
     ${bar.error ? html`<p role="alert">${bar.error}</p>` : nothing}`;
+}
+
+async function stopWhenIdle() {
+  const yes = await window.ask({ title: "Pause and stop OwlBear when idle?",
+    now: "No step starts from now on; running steps finish and check environments close.",
+    then: "OwlBear stops once nothing runs. Start it again with owlbear start.",
+    after: "Resume cancels the stop while OwlBear still waits.", instead: "Delivery stays paused and OwlBear runs.",
+    yes: "Pause and stop" });
+  if (yes) await act("pause-stop", () => call("/pause-stop", { method: "POST", machine: true }));
 }
 
 function showBar() {

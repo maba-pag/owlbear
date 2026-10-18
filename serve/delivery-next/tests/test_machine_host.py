@@ -13,13 +13,13 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import Host, HostRecord, RunnerRecord, running
+from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -141,6 +141,91 @@ def test_a_closed_gate_admits_nothing_and_starts_no_runner_even_after_resume(tmp
     assert http.get(f"/p/{p['id']}/api/next/changes").status_code == 503
     held.gate.leave()
     assert held.gate.close(0) == 0
+
+
+def test_a_stop_when_idle_waits_for_a_running_step_refuses_a_launch_and_resume_cancels_it(
+    tmp_path, http, machine, monkeypatch
+):
+    """TD-288: a plain Pause never stops OwlBear; a stop when idle names what it waits for, then stops."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "code").write_text("#!/bin/sh\nexit 1\n")
+    (bin_dir / "code").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")  # never run: the launch is refused
+    p = add(http, clone(tmp_path / "a"))
+    stopped = []
+    machine.on_stop = lambda: stopped.append(True)
+    machine.resume()
+    assert http.post("/api/next/pause").json() == {"paused": True}
+    assert (machine.projects[p["id"]].host.paused(), machine.idle_stop()) == (True, False)
+    assert http.post("/api/next/pause-stop").json() == {"paused": True, "ending": True}
+    http.post("/api/next/resume")
+    assert (machine.idle_stop(), machine.paused, http.get("/api/next/projects").json()["ending"]) == (
+        False, False, False
+    )  # fmt: skip
+    http.post("/api/next/pause-stop")
+    runner = running_step(Path(p["path"]))
+    listed = http.get("/api/next/projects").json()
+    assert (listed["ending"], listed["left"]) == (True, [f"a: c1: a running step (process {os.getpid()})"])
+    refused = http.post(f"/p/{p['id']}/api/next/new-change")
+    assert (refused.status_code, refused.json()["detail"]) == (409, ENDING)
+    assert (machine.idle_stop(), stopped) == (False, [])
+    runner.unlink()
+    assert (machine.idle_stop(), stopped) == (True, [True])
+
+
+def test_a_stop_when_idle_waits_for_a_launch_admitted_before_it(tmp_path, http, machine):
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    stopped, held, release, looked = [], threading.Event(), threading.Event(), []
+    machine.on_stop = lambda: stopped.append(True)
+
+    def admit():
+        with p.host.launching:  # a runner that passed its pause check before the intent
+            held.set()
+            release.wait(5)
+            running_step(Path(p.entry.path))  # recorded before the lock is released
+
+    admitting = threading.Thread(target=admit)
+    admitting.start()
+    held.wait(5)
+    pausing = threading.Thread(target=machine.pause_stop)
+    pausing.start()
+    while not machine.ending:
+        time.sleep(0.01)
+    looking = threading.Thread(target=lambda: looked.append(machine.idle_stop()))
+    looking.start()
+    time.sleep(0.2)  # the look waits behind the barrier
+    release.set()
+    for t in (admitting, pausing, looking):
+        t.join(5)
+    assert (looked, stopped) == ([False], [])
+
+
+def test_a_stop_when_idle_waits_for_what_is_not_confirmed_gone(tmp_path, http, machine):
+    """An ended step's runner record, a block on surviving processes and a launch without PIDs keep OwlBear up."""
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    p.host.stopped.set()
+    p.host.wake.set()
+    p.scheduler.join(5)  # no pass confirms anything in between
+    runner = running_step(Path(p.entry.path))
+    rec = RunnerRecord.model_validate_json(runner.read_text())
+    runner.write_text(rec.model_copy(update={"created": rec.created - 100}).model_dump_json())  # its process ended
+    now = datetime.now(UTC)
+    with p.store.lock("c1") as lock:
+        c = p.store.read("c1")
+        url = "http://127.0.0.1:1/"
+        c.env = Environment(check="preview", command="x", directory=".", ready_url=url, launched_at=now)
+        p.store.write(lock, c)
+    ended = ["c1: the processes of its ended step", "c1: a check environment"]
+    assert (p.working(), p.working(stopping=True)) == ([], ended)
+    runner.unlink()
+    with p.store.lock("c1") as lock:
+        c = p.store.read("c1")
+        c.env = None
+        p.host.mark(c, {4242: "sleep"}, now)
+        p.store.write(lock, c)
+    machine.ending = True
+    assert (p.working(), machine.left(), machine.idle_stop()) == ([], [f"a: c1: {c.blocked.reason}"], False)
 
 
 def test_every_change_that_would_continue_is_counted_until_resume(tmp_path, http):

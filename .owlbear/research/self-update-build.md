@@ -114,7 +114,8 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
 - **Pause** (machine route `POST /pause`): no automatic agent step starts; the banner at the top of every page
   shows the pause with Resume, Run updates now, and Pause and stop when idle. The Pause tooltip says OwlBear
   may still update itself while Update while paused is on.
-- **Pause and stop when idle** (`POST /pause-stop`): records a stop intent in `machine.json`; from then no
+- **Pause and stop when idle** (`POST /pause-stop`): holds a stop intent in the host's memory, never in
+  `machine.json`, so a crash or restart (which pauses anyway, TD-259) never stops OwlBear again; from then no
   launch of any kind starts (update, maintenance, New Change's chat, a brief challenge, a pack update), each
   refused with "OwlBear stops once the running steps end; press Resume to cancel", while input that launches
   nothing is still taken; check environments are disposed (the paused pass does that now); OwlBear stops once
