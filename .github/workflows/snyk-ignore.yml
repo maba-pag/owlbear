@@ -1,0 +1,44 @@
+---
+name: Snyk ignore
+
+"on":
+  issue_comment:
+    types:
+      - edited
+
+permissions: {}
+
+jobs:
+  ignore:
+    name: Snyk ignore
+    # Only the owner's tick on the Security job's own finding comment in OwlBear's repository (TD-363).
+    if: >-
+      github.repository == 'maba-pag/owlbear'
+      && github.event.issue.pull_request
+      && github.event.sender.id == 238680231
+      && github.event.comment.user.login == 'github-actions[bot]'
+      && contains(github.event.comment.body, '<!-- snyk-finding: ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25  # it waits up to 20 minutes for the pull request's CI to end before re-running it
+    concurrency:
+      group: snyk-ignore-${{ github.event.comment.id }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: write
+    steps:
+      - name: Checkout main, never a pull request's code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Ignore the ticked finding and re-run the failed CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_API: https://api.eu.snyk.io
+          PR: ${{ github.event.issue.number }}
+          COMMENT: ${{ github.event.comment.id }}
+        run: python3 .github/scripts/snyk_findings.py ignore

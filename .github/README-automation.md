@@ -55,7 +55,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 | [Static checks](workflows/static.yml) | Ruff, repository-wide Biome, HTMLHint | Python, JSON, frontend, lint configuration |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, PDS, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
-| [Security](workflows/security.yml) | Snyk Code and Snyk Open Source tests, high severity and above | Code, manifests, locks, `.snyk` |
+| [Security](workflows/security.yml) | Snyk Code and Snyk Open Source tests, high severity and above; on a pull request, one comment per Code finding | Code, manifests, locks, `.snyk` |
 
 The scope evaluates the whole PR diff, so a follow-up push reruns every suite the PR ever
 touched. To avoid repeating identical proofs, each job fingerprints its inputs with
@@ -85,9 +85,19 @@ failing run is fixed like any failing test. A dependency finding fails only when
 Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-362); others print and pass. It
 authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-361; a
 read-only CLI tester role replaces it once the Group offers one), whose token is the `SNYK_TOKEN`
-Actions secret. A Snyk Code false positive is ignored by the owner in the Snyk web UI, which the
-CLI honours (Consistent Ignores); a dependency finding accepted on purpose goes into `.snyk` with
-its reason.
+Actions secret. A dependency finding accepted on purpose goes into `.snyk` with its reason.
+
+A Snyk Code finding on a pull request gets one comment from the Security job with a box and an empty
+`Reason:` line ([`snyk_findings.py`](scripts/snyk_findings.py), TD-363). The lead chat judges it: a
+real finding is fixed; for a false positive it writes the reason under the box. The owner's tick
+starts [Snyk ignore](workflows/snyk-ignore.yml) from `main`, which runs only for edits by his account
+(`maba-pag`, ID 238680231) and reads the comment as it is then, since GitHub may reorder or replace
+queued runs: a ticked box over a written reason sets the finding "Not vulnerable" in Snyk without
+expiry, records the policy in a receipt comment (which a stale editor copy cannot erase, so a finding
+is ignored once), marks the box with the policy's ID and re-runs the failed CI once it has ended, whose
+`snyk code test` then honours the ignore (Consistent Ignores). A tick over an empty reason, or one
+Snyk refuses, is unticked with why. The lead chat works through the same account, so the tick is
+the owner's by agreement, not proof (TD-363); an ignore can also be set in the Snyk web UI.
 
 ## Releases
 
