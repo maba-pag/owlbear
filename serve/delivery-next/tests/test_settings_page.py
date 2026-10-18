@@ -85,6 +85,11 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store) as page:
+        limits = page.locator("#limits")  # TD-286: each worker role's minutes; the shaper's chat has none
+        expect(limits).to_contain_text("builder")
+        expect(limits).not_to_contain_text("shaper")
+        minutes = limits.get_by_label("Minutes per session, builder")
+        expect(minutes).to_have_attribute("placeholder", "inherit (40)")
         page.get_by_label("Model for builder").select_option("tiny")
         expect(page.locator("#agents")).to_contain_text("tiny takes no effort setting")
         page.get_by_label("Model for reviewer").select_option("claude-opus-5.5")
@@ -94,12 +99,15 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
         expect(page.locator("#error")).to_contain_text("Not saved: claude-opus-5.5 does not offer effort xhigh")
         page.get_by_label("Effort for reviewer").select_option("high")
         expect(message).to_have_text("")
+        minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     agents = store.read_config().agents
     assert (agents["builder"].model, agents["reviewer"].model, agents["reviewer"].effort) == (
         "tiny", "claude-opus-5.5", "high"
     )  # fmt: skip
+    assert agents["builder"].minutes == 60
+    assert store.settings().agents["builder"].minutes == 60
 
 
 @pytest.mark.browser

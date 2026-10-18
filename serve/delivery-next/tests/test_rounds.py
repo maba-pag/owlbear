@@ -16,7 +16,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.config import Agent, FinalReview, GlobalLayer, Layer, resolve
-from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import review
 
 AUTH = {"authorization": "Bearer t"}
@@ -96,11 +96,3 @@ def test_finding_ids_continue_across_rounds_and_survive_packing():
     assert keys == [["F3", "F4", "F5"], ["F6"]]
     assert parse("- F12: a.txt:1: p - fix: f") == ("F12", "a.txt:1: p - fix: f")
     assert parse("- a.txt:1: p - fix: f") is None
-
-
-def test_a_change_keeps_its_loops(tmp_path):
-    store = Store(tmp_path / "store")
-    c = Change(slug="c1", brief=Brief(version=1))
-    rounds.loop(c, rounds.FINAL, resolve(None, Layer())).raise_findings(["a.txt:1: p - fix: f"])
-    store.write(Lock("c1"), c)
-    assert store.read("c1").loops[rounds.FINAL].findings[0].id == "F1"

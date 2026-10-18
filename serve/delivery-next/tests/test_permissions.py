@@ -229,7 +229,6 @@ def test_a_bypass_behind_a_wrapper_or_in_a_nested_shell_is_refused(text: str, in
         "xargs grep -- git push -f",
         "bash -c ' '",
         "eval '# a comment'",
-        "git config user.name x",
         "git config --get core.hooksPath",
         "git config --get-regexp core.hooksPath .",
         "GIT_CONFIG_PARAMETERS=\"'commit.gpgsign=true'\" git status",

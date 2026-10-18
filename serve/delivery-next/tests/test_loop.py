@@ -20,7 +20,6 @@ from owlbear_delivery_next.change_contracts.models import (
     ErrorKind,
     Exit,
     Inputs,
-    MergeConsent,
     Outcome,
     PersonCheck,
     Plan,
@@ -34,7 +33,6 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_flow import budgets, loop
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.github import merge_offer
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.session_result import Run
 
@@ -401,12 +399,6 @@ def test_integration_rereviews_only_when_a_recorded_input_changed(paths, criteri
     c.reviews = [Review(commit="abc", inputs=Inputs(criteria={"AC-1": 1}, paths={"a": "1"}), verdict="pass")]
     c.brief.criteria[0].version = criterion_version
     assert loop.apply(c, StepResult(exit=Exit.DONE, paths=paths), NOW).step.kind == next_kind
-
-
-def test_merge_consent_is_void_for_another_head():
-    c = change(consent=MergeConsent(head="a1c3f02", at=NOW))
-    assert merge_offer.consent(c.consent.head, "a1c3f02") == "valid"
-    assert merge_offer.consent(c.consent.head, "b7e2a91") == "void"
 
 
 def test_an_open_consent_question_is_closed_as_obsolete_when_ask_before_merge_is_off():

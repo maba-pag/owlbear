@@ -73,28 +73,7 @@ def installs(store: Store) -> list[dict]:
     return [e for e in store.events("c1") if e["event"] == "ro-install"]
 
 
-def test_dependencies_are_installed_once_and_reused_while_their_inputs_are_unchanged(tmp_path, app):
-    store, change = store_with(tmp_path, INSTALL)
-    first = session(store, change, app)
-    at = first.worktree
-    assert (at / "app" / "node_modules" / "count").read_text() == "x\n"
-    second = session(store, change, app)
-    assert (at / "app" / "node_modules" / "count").read_text() == "x\n"
-    assert [(e["package"], e["command"], e["ok"]) for e in installs(store)] == [("app", INSTALL, True)]
-    assert isinstance(installs(store)[0]["seconds"], float)
-    assert (first.message, second.message) == ("review", "review")
-
-
-def test_dependencies_are_installed_again_when_the_lockfile_changes(tmp_path, app):
-    store, change = store_with(tmp_path, INSTALL)
-    at = session(store, change, app).worktree
-    commit(app, {"app/package-lock.json": "2\n"})
-    session(store, change, app)
-    assert (at / "app" / "node_modules" / "count").read_text() == "x\nx\n"
-    assert len(installs(store)) == 2
-
-
-def test_the_reset_keeps_ignored_files_and_discards_session_files_and_tracked_edits(tmp_path, app):
+def test_dependencies_install_once_survive_the_reset_and_install_again_when_the_lockfile_changes(tmp_path, app):
     store, change = store_with(tmp_path, INSTALL)
 
     def act(at: Path) -> None:
@@ -102,12 +81,23 @@ def test_the_reset_keeps_ignored_files_and_discards_session_files_and_tracked_ed
         (at / "new.txt").write_text("new\n")
         (at / "app" / "node_modules" / "built").write_text("kept\n")
 
-    at = session(store, change, app, act).worktree
-    session(store, change, app)
+    first = session(store, change, app, act)
+    at = first.worktree
+    count = at / "app" / "node_modules" / "count"
+    assert count.read_text() == "x\n"
+    second = session(store, change, app)
+    assert count.read_text() == "x\n"
+    assert [(e["package"], e["command"], e["ok"]) for e in installs(store)] == [("app", INSTALL, True)]
+    assert isinstance(installs(store)[0]["seconds"], float)
+    assert (first.message, second.message) == ("review", "review")
     assert (at / "a.txt").read_text() == "a\n"
     assert not (at / "new.txt").exists()
     assert (at / "app" / "node_modules" / "built").read_text() == "kept\n"
     assert git(at, "status", "--porcelain") == ""
+    commit(app, {"app/package-lock.json": "2\n"})
+    session(store, change, app)
+    assert count.read_text() == "x\nx\n"
+    assert len(installs(store)) == 2
 
 
 def test_a_failed_install_is_noted_for_the_session_and_tried_again_next_time(tmp_path, app):

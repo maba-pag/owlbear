@@ -233,29 +233,22 @@ def test_a_backlog_marker_pasted_into_the_text_or_notes_leaves_the_entry_readabl
     assert github.issues[1]["body"].count("<!-- owlbear-backlog") == 1  # the pasted ones show, hiding nothing
 
 
-@pytest.mark.parametrize(
-    ("entry", "fields", "status"),
-    [
-        ("missing", {"notes": "x"}, 404),
-        ("self", {"links": ["self"]}, 422),
-        ("self", {"links": ["99"]}, 422),
-        ("self", {"notes": "x" * 4001}, 422),
-    ],
-)
-def test_unknown_entries_links_and_oversized_fields_are_refused_and_nothing_is_written(
-    shared, github, entry, fields, status
-):
+def test_unknown_entries_links_and_oversized_fields_are_refused_and_nothing_is_written(shared, github):
     backlog = view(shared[0])
     me = backlog.add("me")[0]
     before = copy.deepcopy(github.issues)
-    target = me.id if entry == "self" else "99"
-    fields = {k: [me.id if i == "self" else i for i in v] if k == "links" else v for k, v in fields.items()}
+    attempts = [
+        ("99", {"notes": "x"}, 404),
+        (me.id, {"links": [me.id]}, 422),
+        (me.id, {"links": ["99"]}, 422),
+        (me.id, {"notes": "x" * 4001}, 422),
+    ]
 
-    with pytest.raises(BacklogError) as caught:
-        backlog.update(target, fields)
-
-    assert caught.value.status == status
-    assert github.issues == before
+    for target, fields, status in attempts:
+        with pytest.raises(BacklogError) as caught:
+            backlog.update(target, fields)
+        assert caught.value.status == status, fields
+        assert github.issues == before
 
 
 def test_taking_entries_into_a_change_records_the_launch_or_changes_nothing(shared, github):
@@ -293,27 +286,26 @@ def test_saving_is_online_only_and_an_unreachable_github_fails_with_its_reason(s
         Backlog.of(Store(tmp_path / "store"))
 
 
-@pytest.mark.parametrize(
-    ("visibility", "said"),
-    [
+def test_nothing_is_written_unless_github_says_the_shared_repository_is_private(shared, github):
+    root, answer = shared[0], github.answer
+
+    def unread(method, parts, *rest):
+        return (404, "Not Found") if not parts else answer(method, parts, *rest)
+
+    for visibility, said in [
         ("public", "it is public, not private"),
         ("internal", "it is internal, not private"),
         ("unread", "its visibility is unknown (repo_visibility: Not Found (HTTP 404))"),
-    ],
-)
-def test_nothing_is_written_unless_github_says_the_shared_repository_is_private(shared, github, visibility, said):
-    root, _ = shared
-    github.visibility, answer = visibility, github.answer
-    if visibility == "unread":
-        github.answer = lambda method, parts, *rest: (404, "Not Found") if not parts else answer(method, parts, *rest)
+    ]:
+        github.visibility, github.answer = visibility, unread if visibility == "unread" else answer
 
-    with pytest.raises(BacklogError) as refused:
-        view(root).add("a report")
+        with pytest.raises(BacklogError) as refused:
+            view(root).add("a report")
 
-    assert refused.value.status == 503
-    said = f"not saved to GitHub (acme/owlbear-data): repo_visibility: {said}; the backlog is written only to a "
-    assert refused.value.text == said + "private repository"
-    assert (github.issues, github.labels, [m for m, *_ in github.calls if m != "GET"]) == ({}, {}, [])
+        assert refused.value.status == 503
+        why = f"not saved to GitHub (acme/owlbear-data): repo_visibility: {said}; the backlog is written only to a "
+        assert refused.value.text == why + "private repository"
+        assert (github.issues, github.labels, [m for m, *_ in github.calls if m != "GET"]) == ({}, {}, [])
 
 
 def test_a_private_repository_is_checked_once_for_a_while_before_the_first_write(shared, github):

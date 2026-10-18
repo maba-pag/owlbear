@@ -85,24 +85,6 @@ def test_an_item_folded_before_a_crash_kept_its_file_is_not_imported_again(tmp_p
         assert store.fold(lock, "c1", NOW)[0].brief.approved == []
 
 
-def test_an_older_runtime_refuses_the_store_once_the_import_has_begun(tmp_path, monkeypatch) -> None:
-    """The fence: every older runtime refuses a marker above its record format, before any file is read."""
-    legacy(tmp_path)
-
-    def crashed(_self, _connection) -> None:
-        msg = "power lost while reading"
-        raise OSError(msg)
-
-    with monkeypatch.context() as patched:
-        patched.setattr(database.Database, "_fill", crashed)
-        with pytest.raises(OSError, match="power lost"):
-            Store(tmp_path).db.import_files()
-    assert int((tmp_path / "format").read_text()) > FORMAT  # what the older Store.open compares
-    assert ((tmp_path / database.DB).exists(), (tmp_path / "changes" / "c1" / "change.json").exists()) == (False, True)
-    with pytest.raises(NotImportedError):
-        Store(tmp_path).read("c1")
-
-
 @pytest.mark.parametrize("boundary", ["fill", "publish", "wal", "retire"])
 def test_a_crash_at_each_import_boundary_resumes_without_loss_or_repeat(tmp_path, monkeypatch, boundary) -> None:
     legacy(tmp_path)
@@ -117,6 +99,14 @@ def test_a_crash_at_each_import_boundary_resumes_without_loss_or_repeat(tmp_path
         patched.setattr(owner, where, crashed)
         with pytest.raises((OSError, StoreError), match="crashed"):
             Store(tmp_path).db.import_files()
+    if boundary == "fill":  # the fence: an older runtime refuses a marker above its format before reading a file
+        assert int((tmp_path / "format").read_text()) > FORMAT  # what the older Store.open compares
+        assert ((tmp_path / database.DB).exists(), (tmp_path / "changes" / "c1" / "change.json").exists()) == (
+            False,
+            True,
+        )
+        with pytest.raises(NotImportedError):
+            Store(tmp_path).read("c1")
     if boundary in {"wal", "retire"}:  # published: the next open sets WAL and retires the files the ledger names
         assert ((tmp_path / database.DB).exists(), (tmp_path / "changes" / "c1" / "change.json").exists()) == (
             True,
