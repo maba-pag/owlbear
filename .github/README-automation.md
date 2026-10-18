@@ -71,9 +71,8 @@ keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup id
 
 ## Snyk
 
-Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) imports the repository's
-default branch, `main`; its projects are set never to retest, and its pull-request checks are off
-(TD-382). Renovate keeps dependencies current.
+Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) has its pull-request
+checks off (TD-382). Renovate keeps dependencies current.
 
 The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-360),
 only for changes from `maba-pag/owlbear` itself: GitHub gives its token neither to a copy of OwlBear
@@ -140,6 +139,6 @@ packages, or missing credentials leave a visible failed workflow instead of sele
 After correcting a transient failure, rerun the failed job on the current PR head. An unexpected
 bundled downgrade is reflected exactly in the reviewable PR, rather than silently retaining drift.
 
-Keep GitHub Dependabot alerts enabled: disabling independent Renovate updates is not a security
-exception policy. An urgent Ruff or Biome fix unavailable in MegaLinter requires an explicit reviewed
+Renovate is the only dependency watch, with no Dependabot (TD-382), so disabling its independent updates
+is not a security exception policy. An urgent Ruff or Biome fix unavailable in MegaLinter requires an explicit reviewed
 exception or a newer MegaLinter release; the parity check intentionally blocks silent divergence.

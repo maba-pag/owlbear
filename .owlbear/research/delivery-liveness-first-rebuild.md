@@ -1461,11 +1461,11 @@ TD-379 (`decided`).
   workflow disable` (files and tests unchanged), every pre-commit hook runs only by hand, and Renovate
   keeps running [TD-204, TD-280].
 - Snyk is for OwlBear's own repository only; Delivery never runs Snyk elsewhere. It is a Security suite in
-  the required CI gate, selected only when `maba-pag/owlbear` runs a change from itself: `snyk code test`
-  and `snyk test --all-projects` at high severity and above, the dependency scan with
-  `--fail-on=upgradable`, never `monitor` or `--report`; each finding prints its rule, file and line, so a
-  failing run is a fix task like any failing test. The Snyk app's PR checks stay, not required
-  [TD-360, TD-362, TD-363].
+  the required CI gate, selected only when `maba-pag/owlbear` runs a change from itself to code: only
+  `snyk code test` at high severity and above, never `monitor` or `--report`; each finding prints its
+  rule, file and line, so a failing run is a fix task like any failing test. Snyk does only what it
+  specialises in or what is free: no dependency scan, Renovate alone keeps dependencies current, no
+  Dependabot, and the Snyk app's PR checks are off [TD-360, TD-363, TD-382].
 - It authenticates as the service account `owlbear-ci` with the predefined Org Collaborator role until
   the Group admins create a read-only CLI tester role; its token is the `SNYK_TOKEN` Actions secret,
   which the owner creates and sets himself, never through the assistant; ordinary scans never create or
