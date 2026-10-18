@@ -602,6 +602,16 @@ async function readPack() {
   }
 }
 
+// TD-290: an update another project runs on this machine shows here once it starts and goes once it ends.
+setInterval(async () => {
+  if (!state.pack || document.hidden) return;
+  const machine = await call("/design-pack/machine").then((r) => r.machine, () => state.pack.machine);
+  if (machine !== state.pack.machine) {
+    state.pack = { ...state.pack, machine };
+    show();
+  }
+}, 5000);
+
 function poll() {
   clearTimeout(polling);
   polling = setTimeout(async () => {

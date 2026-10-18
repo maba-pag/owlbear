@@ -296,6 +296,7 @@ class Host:
             self.say(f"{slug}: {text}")
 
     def _one(self, slug: str, now: datetime) -> bool:
+        self.passing.discard(slug)  # a permission holds only for the launch of this same pass
         rec = self.runner(slug)
         if rec and self.alive(rec.pid, rec.created) is not False:
             return False  # A live runner finishes on its own; the host never kills it.
@@ -304,7 +305,6 @@ class Host:
             c = self._folded(lock, slug, rec, now, paused=paused)
             if paused:
                 if not (self.owner_runs() and passes(c, now)):
-                    self.passing.discard(slug)
                     return self._ended(lock, c, rec, now)
                 self.passing.add(slug)  # its launch passes the pause in this same pass
             act = self.env_action(c)
@@ -327,13 +327,18 @@ class Host:
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 
     def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change:
-        """Fold the inbox with the PR's state (none while paused), run an asked Pull, charge a runner gone."""
+        """Fold the inbox with the PR's state, run an asked Pull, charge a runner gone.
+
+        While paused only a PR's end is taken (its cleanup runs then, TD-303) and the owner's Pull runs (TD-287).
+        """
         prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
-        state, moved = (None, False) if paused else self.observe_pr(slug)
+        state, moved = self.observe_pr(slug)
+        if paused:
+            state, moved = (state if state in {"merged", "closed"} else None), False
         c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
         if moved:
             self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
-        c = self._woken(c if paused else self._pull(lock, c, now), now)
+        c = self._woken(self._pull(lock, c, now) if not paused or self.owner_runs() else c, now)
         if rec and disappeared(prior, rec, now) and c.step == prior.step:
             c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
             self.say(f"{slug}: runner {rec.pid} ended without recording an exit")

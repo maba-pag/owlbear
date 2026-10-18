@@ -5,6 +5,7 @@ The overview only links each maintenance action to where it lives and shows its 
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 from typing import TYPE_CHECKING, Any
@@ -14,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.pack_runs import pack_job
-from owlbear_delivery_next.project_host.host import ENDING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from contextlib import AbstractContextManager
 
     from owlbear_delivery_next.state_store.store import Store
 
@@ -84,16 +85,15 @@ def overview(store: Store) -> list[dict[str, Any]]:
     ]  # fmt: skip
 
 
-def router(store: Store, job: pack_job.Job, ending: Callable[[], bool] = lambda: False) -> APIRouter:
+def router(
+    store: Store, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]] = contextlib.nullcontext
+) -> APIRouter:
     """The design pack and maintenance routes; the caller adds the token check.
 
-    An update and its answers run while Delivery is paused (TD-287); only a stop when idle refuses them.
+    An update and its answers run while Delivery is paused (TD-287); *admitted* refuses them once OwlBear stops or
+    before a stop when idle, and holds the launch lock while one starts.
     """
     routes = APIRouter()
-
-    def held() -> None:
-        if ending():
-            raise HTTPException(409, ENDING)
 
     @routes.get("/design-pack")
     def read() -> dict[str, Any]:
@@ -103,15 +103,19 @@ def router(store: Store, job: pack_job.Job, ending: Callable[[], bool] = lambda:
     def update_state() -> dict[str, Any]:
         return job.read()
 
+    @routes.get("/design-pack/machine")
+    def machine() -> dict[str, str | None]:
+        return {"machine": pack_job.running_for()}  # TD-290: polled while the page is open
+
     @routes.post("/design-pack/update")
     def update() -> dict[str, Any]:
-        held()
         try:
-            return job.start()
+            with admitted():
+                return job.start()
         except pack_job.Busy as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    _answers(routes, job, held)
+    _answers(routes, job, admitted)
 
     @routes.get("/maintenance")
     def maintenance() -> list[dict[str, Any]]:
@@ -120,14 +124,14 @@ def router(store: Store, job: pack_job.Job, ending: Callable[[], bool] = lambda:
     return routes
 
 
-def _answers(routes: APIRouter, job: pack_job.Job, held: Callable[[], None]) -> None:
+def _answers(routes: APIRouter, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]]) -> None:
     """The owner's answers to a waiting update (TD-193, TD-256), and its discard."""
 
     @routes.post("/design-pack/update/answer")
     def answer(body: AnswerBody) -> dict[str, Any]:
-        held()  # an answer continues the update's sessions
         try:
-            return job.answer(body.question, body.option, body.note)
+            with admitted():  # an answer continues the update's sessions
+                return job.answer(body.question, body.option, body.note)
         except (pack_job.Stale, pack_job.Busy) as exc:
             raise HTTPException(409, str(exc)) from exc
         except pack_job.Refused as exc:

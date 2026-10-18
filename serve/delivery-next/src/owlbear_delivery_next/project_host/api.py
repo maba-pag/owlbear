@@ -41,7 +41,7 @@ from owlbear_delivery_next.project_host import (
     pack_routes,
     pages,
 )
-from owlbear_delivery_next.project_host.host import ENDING
+from owlbear_delivery_next.project_host.admission import admitted
 from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
@@ -285,9 +285,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             return launch(host.repo, shaper, prompt)
 
         try:
-            with host.launching:  # a stop when idle waits for an admission in flight: refused, or counted as opening
-                if host.draining():
-                    raise HTTPException(409, ENDING)
+            with admitted(host):
                 return {"started": True, "launch": launches.start(work, command, done)}
         except Refused as exc:
             raise HTTPException(exc.status, exc.text) from exc
@@ -491,7 +489,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
     job = pack or pack_job.Job(store)
-    router.include_router(pack_routes.router(store, job, ending))
+    router.include_router(pack_routes.router(store, job, lambda: admitted(host)))
     app.include_router(router)
     app.state.busy = lambda: [  # work admitted outside a request, which a project's stop waits for (TD-242)
         *(["a shaping chat opening"] if launches.opening else []),

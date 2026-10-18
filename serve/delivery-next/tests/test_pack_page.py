@@ -31,6 +31,8 @@ class Host:
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
+    closed = staticmethod(lambda: False)
+    launching = threading.Lock()
 
 
 def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:

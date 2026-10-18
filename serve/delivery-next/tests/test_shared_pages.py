@@ -37,6 +37,7 @@ class Host:
     repo = None
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
+    closed = staticmethod(lambda: False)
     launching = threading.Lock()
 
     def __init__(self, project: str) -> None:

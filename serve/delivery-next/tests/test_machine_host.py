@@ -174,6 +174,17 @@ def test_a_stop_when_idle_waits_for_a_running_step_refuses_a_launch_and_resume_c
     assert (machine.idle_stop(), stopped) == (True, [True])
 
 
+def test_a_project_loaded_during_a_stop_when_idle_has_the_machines_guards_from_its_first_pass(
+    tmp_path, http, machine, monkeypatch
+):
+    seen = []
+    monkeypatch.setattr(Host, "run", lambda self: seen.append((self.draining(), self.closed())))
+    machine.ending = True
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    p.scheduler.join(5)
+    assert seen == [(True, False)]
+
+
 def test_a_stop_when_idle_waits_for_a_launch_admitted_before_it(tmp_path, http, machine):
     p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
     stopped, held, release, looked = [], threading.Event(), threading.Event(), []

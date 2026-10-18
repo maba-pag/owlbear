@@ -9,6 +9,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.evidence import check_inputs, next_check
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, CheckResult, IntentItem
+from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Answer,
@@ -692,25 +693,47 @@ def test_network_probes_keep_a_ten_second_schedule_from_each_probe_start(store, 
 
 def paused(fake, flag):
     fake.host.paused = lambda: flag[0]
-    fake.host.observe_pr = lambda _slug: pytest.fail("no PR is read while Delivery is paused")
+    fake.host.observe_pr = lambda _slug: ("open", True)  # neither applied while paused: only a PR's end is
 
 
-def test_while_paused_input_is_applied_and_nothing_is_read_pulled_or_started(store, tmp_path, monkeypatch):
+def test_while_paused_input_and_the_owners_pull_are_applied_and_nothing_else_starts(store, tmp_path, monkeypatch):
     fake, flag = Fake(store, tmp_path), [True]
     paused(fake, flag)
     save(store, asking(fake).model_copy(update={"pull_requested": NOW}))
     store.put_inbox("c1", AnswerItem(at=NOW, question="q1", text="German"))
-    monkeypatch.setattr(host.pullback, "run", lambda *_a: pytest.fail("no Pull runs while Delivery is paused"))
+    pulled = []
+    monkeypatch.setattr(host.pullback, "run", lambda *_a: pulled.append(True) or Pullback(state="updated", at=NOW))
     assert fake.host.tick(NOW) == []
     c = store.read("c1")
-    assert (c.outcome, c.pull_requested, fake.host.runner("c1")) == (None, NOW, None)  # TD-283: applied at once
+    assert (c.outcome, c.pull_requested, fake.host.runner("c1"), pulled) == (None, None, None, [True])  # TD-287
     said = status(c, fake.host.activity("c1"), NOW)
     assert (said.line, said.action, said.actor) == ("Build 1/1 · Delivery is paused: continues after Resume",
                                                      "Resume Delivery", "you")  # fmt: skip
-    save(store, c.model_copy(update={"pull_requested": None}))  # the Pull is no part of what Resume proves here
     flag[0] = False
     fake.host.observe_pr = lambda _slug: (None, False)
     assert fake.host.tick(NOW) == ["c1"]
+
+
+def test_a_pr_merged_while_paused_starts_its_cleanup(store, tmp_path):
+    """TD-303: maintenance OwlBear starts itself runs while paused, a merged PR's cleanup with it."""
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    save(store, asking(fake))
+    fake.host.observe_pr = lambda _slug: ("merged", False)
+    assert (fake.host.tick(NOW), store.read("c1").step.kind) == (["c1"], StepKind.CLEANUP)
+
+
+def test_a_permission_to_pass_the_pause_holds_only_for_its_own_pass(store, tmp_path):
+    fake, flag = Fake(store, tmp_path), [True]
+    paused(fake, flag)
+    c = asking(fake).model_copy(update={"outcome": None, "step": Step(kind=StepKind.SHAPE, mode="challenge")})
+    save(store, c)
+    assert fake.host._one("c1", NOW)  # noqa: SLF001 - a paused pass lets the challenge through
+    save(store, store.read("c1").model_copy(update={"step": Step(kind=StepKind.PLAN)}))
+    flag[0] = False
+    assert fake.host._one("c1", NOW)  # noqa: SLF001 - planning is due once resumed
+    flag[0] = True  # paused again before that pass launches
+    assert fake.host._launch("c1") is False  # noqa: SLF001
 
 
 def test_a_paused_fold_still_takes_a_queued_pr_out_through_the_barrier(store, tmp_path, monkeypatch):
@@ -758,7 +781,7 @@ def test_a_runner_gone_while_paused_is_charged_and_forgotten_and_nothing_starts(
     finishing = status(store.read("c1"), Activity(host_up=True, runner_alive=True, paused=True), NOW)
     assert finishing.line == "Build 1/1 · finishing build (started before the restart)"
     fake.live.clear()
-    fake.host.observe_pr = lambda _slug: pytest.fail("no PR is read while Delivery is paused")
+    fake.host.observe_pr = lambda _slug: ("open", True)  # only a PR's end applies while paused (TD-303)
     assert fake.host.tick(NOW) == []
     c = store.read("c1")
     assert (c.outcome.exit, fake.host.runner("c1"), fake.pid) == (Exit.RETRY, None, 101)

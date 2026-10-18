@@ -88,8 +88,13 @@ class Project:
         """The shared-folder name, else the directory name."""
         return (self.store.name if self.store else "") or Path(self.entry.path).name
 
-    def load(self, record: HostRecord, paused: Callable[[], bool]) -> None:
-        """Open the clone's store, take its host lock and start its scheduler and readiness check."""
+    def load(
+        self, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None] = lambda _h: None
+    ) -> None:
+        """Open the clone's store, take its host lock and start its scheduler and readiness check.
+
+        *bind* gives the new scheduler the machine's guards before it starts.
+        """
         repo = Path(self.entry.path)
         if why := registry.replaced(self.entry):
             self.state, self.reason = "replaced", why
@@ -113,7 +118,7 @@ class Project:
         finally:
             os.close(fd)
         try:
-            self._start(store, record, paused)
+            self._start(store, record, paused, bind)
         except ImportWaitingError as exc:
             self.stop(drain=0)
             self.state, self.reason = "failed", str(exc)
@@ -121,10 +126,13 @@ class Project:
             self.stop(drain=0)
             self.state, self.reason = "failed", f"it could not start: {type(exc).__name__}: {exc}"
 
-    def _start(self, store: Store, record: HostRecord, paused: Callable[[], bool]) -> None:
+    def _start(
+        self, store: Store, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None]
+    ) -> None:
         repo = Path(self.entry.path)
         self.store = store
         self.host = Host(store, repo, paused=lambda: paused() or not self.gate.open)
+        bind(self.host)
         if store.db.waiting():
             self.import_state(store, self.host)
         self.host.record = record.model_copy(update={"pid": os.getpid(), "project": self.entry.id, "ready": None})
