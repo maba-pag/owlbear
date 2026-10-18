@@ -2,8 +2,8 @@
 
 ``comment`` runs in the Security job after ``snyk code test`` failed: it comments each open high finding of the
 SARIF file on the pull request once, with a box and an empty reason. ``ignore`` runs when such a comment is edited
-by the owner (the workflow checks his account): once the box is newly ticked under a written reason, it sets the
-finding "Not vulnerable" in Snyk, marks the comment and re-runs the pull request's failed CI.
+by the owner's account (the workflow checks it): when the comment's box is ticked under a written reason, it sets
+the finding "Not vulnerable" in Snyk, marks the comment and re-runs the pull request's failed CI.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ BOX = "- [ ] **Not vulnerable**: tick to ignore this finding in Snyk; only the o
 TICKED = BOX.replace("[ ]", "[x]", 1)
 DONE = "- [x] **Not vulnerable**: ignored in Snyk as policy"
 REASON = "Reason:"
+EMPTY = "the reason under the finding is empty"
 FINDING = "snyk/asset/finding/v1"
 SNYK_VERSION = "2024-10-15"
 ORG = "porsche-ag-fdi3-scanners"
@@ -170,28 +171,32 @@ def comment(gh: GitHub, sarif: dict, pr: int) -> list[str]:
     return [f["id"] for f in new]
 
 
-def ticked(before: str, after: str) -> tuple[str, str] | str:
-    """The finding and reason the owner just ticked, or why this edit sets nothing."""
-    mark = MARK.search(after)
-    if not mark or not (old := MARK.search(before)) or old[1] != mark[1]:
-        return "the edit is not to one finding's comment"
-    if DONE in after:
+def pending(now: str) -> tuple[str, str] | str:
+    """The finding and reason a comment's ticked box asks to ignore, or why it asks for nothing."""
+    mark = MARK.search(now)
+    if not mark:
+        return "not a finding's comment"
+    if DONE in now:
         return "the finding is ignored already"
-    if BOX not in before or TICKED not in after:
-        return "the box was not just ticked"
-    reason = after.split(REASON, 1)[1].strip() if REASON in after else ""
-    return (mark[1], reason) if reason else "the reason under the finding is empty"
+    if TICKED not in now:
+        return "the box is not ticked"
+    reason = now.split(REASON, 1)[1].strip() if REASON in now else ""
+    return (mark[1], reason) if reason else EMPTY
 
 
-def ignore(gh: GitHub, snyk: Snyk, pr: int, comment_id: int, edit: tuple[str, str]) -> str:
-    """Act on one edit of a finding's comment; a refused ignore unticks the box with Snyk's error."""
-    before, after = edit
-    if isinstance(tick := ticked(before, after), str):
-        return f"nothing set: {tick}"
+def ignore(gh: GitHub, snyk: Snyk, pr: int, comment_id: int) -> str:
+    """Reconcile one finding's comment as it is now; a refused or reasonless tick is unticked with why.
+
+    Any edit by the owner's account starts this, and GitHub may reorder queued runs or replace a pending one,
+    so the comment's live state decides, never the edit that started the run.
+    """
     now = gh.current(comment_id)
-    if isinstance(tick := ticked(before, now), str):  # a queued run of an earlier tick may have acted already
-        return f"nothing set now: {tick}"
-    finding, reason = tick
+    if (state := pending(now)) == EMPTY:
+        gh.update(comment_id, now.replace(TICKED, f"{BOX}\n\nWrite the reason below first, then tick.", 1))
+        return f"nothing set: {EMPTY}; unticked"
+    if isinstance(state, str):
+        return f"nothing set: {state}"
+    finding, reason = state
     try:
         policy = snyk.ignore(finding, reason, f"OwlBear #{pr}: {finding}")
     except (urllib.error.URLError, RuntimeError, KeyError) as exc:
@@ -213,7 +218,7 @@ def main(argv: list[str]) -> int:
     else:
         vnd = "application/vnd.api+json"
         snyk = Snyk(Http(env["SNYK_API"], f"token {env['SNYK_TOKEN']}", vnd, vnd))
-        report = ignore(gh, snyk, pr, int(env["COMMENT"]), (env["BEFORE"], env["BODY"]))
+        report = ignore(gh, snyk, pr, int(env["COMMENT"]))
     sys.stdout.write(report + "\n")
     return 0
 

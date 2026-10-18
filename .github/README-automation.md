@@ -90,11 +90,12 @@ Actions secret. A dependency finding accepted on purpose goes into `.snyk` with 
 A Snyk Code finding on a pull request gets one comment from the Security job with a box and an empty
 `Reason:` line ([`snyk_findings.py`](scripts/snyk_findings.py), TD-363). The lead chat judges it: a
 real finding is fixed; for a false positive it writes the reason under the box. The owner's tick
-starts [Snyk ignore](workflows/snyk-ignore.yml) from `main`, which acts only on his account's
-(`maba-pag`, ID 238680231) newly ticked box over a written reason: it sets the finding
-"Not vulnerable" in Snyk without expiry, marks the comment with the policy's ID and re-runs the
-failed CI, whose `snyk code test` then honours the ignore (Consistent Ignores). A refused ignore
-unticks the box with Snyk's error. The lead chat works through the same account, so the tick is
+starts [Snyk ignore](workflows/snyk-ignore.yml) from `main`, which runs only for edits by his account
+(`maba-pag`, ID 238680231) and reads the comment as it is then, since GitHub may reorder or replace
+queued runs: a ticked box over a written reason sets the finding "Not vulnerable" in Snyk without
+expiry, marks the comment with the policy's ID and re-runs the failed CI once it has ended, whose
+`snyk code test` then honours the ignore (Consistent Ignores). A tick over an empty reason, or one
+Snyk refuses, is unticked with why. The lead chat works through the same account, so the tick is
 the owner's by agreement, not proof (TD-363); an ignore can also be set in the Snyk web UI.
 
 ## Releases

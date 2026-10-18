@@ -41,6 +41,4 @@ jobs:
           SNYK_API: https://api.eu.snyk.io
           PR: ${{ github.event.issue.number }}
           COMMENT: ${{ github.event.comment.id }}
-          BEFORE: ${{ github.event.changes.body.from }}
-          BODY: ${{ github.event.comment.body }}
         run: python3 .github/scripts/snyk_findings.py ignore

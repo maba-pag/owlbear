@@ -106,35 +106,38 @@ TICKED = snyk_findings.TICKED
 
 
 @pytest.mark.parametrize(
-    ("before", "after", "why"),
+    ("now", "why"),
     [
-        (finding_comment(), finding_comment(box=TICKED), "the reason under the finding is empty"),
-        (finding_comment("why"), finding_comment("why changed"), "the box was not just ticked"),
-        (finding_comment("why", box=TICKED), finding_comment("why"), "the box was not just ticked"),
-        ("plain words", finding_comment("why", box=TICKED), "the edit is not to one finding's comment"),
-        (finding_comment("why"), finding_comment("why", box=TICKED).replace("f-1", "f-9"), "the edit is not to one"),
-        (finding_comment("why"), finding_comment("why", box=TICKED) + snyk_findings.DONE, "is ignored already"),
+        (finding_comment("why"), "the box is not ticked"),
+        ("plain words", "not a finding's comment"),
+        (finding_comment("why", box=f"{snyk_findings.DONE} `pol-1` (TD-363)"), "the finding is ignored already"),
     ],
 )
-def test_an_edit_sets_nothing_unless_it_newly_ticks_one_finding_under_a_reason(
-    before: str, after: str, why: str
-) -> None:
-    gh, gh_calls = github([])
+def test_the_live_comment_sets_nothing_unless_its_box_is_ticked_once_under_a_reason(now: str, why: str) -> None:
+    """GitHub may reorder or replace queued runs, so whatever edit started the run, the live comment decides."""
+    gh, gh_calls = github([], current=now)
     api, snyk_calls = snyk()
-    why_not = snyk_findings.ticked(before, after)
-    assert why in why_not
-    assert snyk_findings.ignore(gh, api, 5, 11, (before, after)) == f"nothing set: {why_not}"
-    assert not gh_calls.calls
+    assert snyk_findings.ignore(gh, api, 5, 11) == f"nothing set: {why}"
+    assert not any(method != "GET" for method, _, _ in gh_calls.calls)
+    assert not snyk_calls.calls
+
+
+def test_a_tick_over_an_empty_reason_is_unticked_with_a_note() -> None:
+    gh, gh_calls = github([], current=finding_comment(box=TICKED))
+    api, snyk_calls = snyk()
+    assert snyk_findings.ignore(gh, api, 5, 11) == f"nothing set: {snyk_findings.EMPTY}; unticked"
+    edit = next(body for method, _, body in gh_calls.calls if method == "PATCH")["body"]
+    assert snyk_findings.BOX in edit
+    assert "Write the reason below first, then tick." in edit
     assert not snyk_calls.calls
 
 
 def test_the_owner_s_tick_sets_not_vulnerable_marks_the_comment_and_reruns_the_failed_ci() -> None:
     reason = "Only stored names reach the path."
-    after = finding_comment(reason, box=TICKED)
-    gh, gh_calls = github([], current=after)
+    gh, gh_calls = github([], current=finding_comment(reason, box=TICKED))
     api, snyk_calls = snyk()
 
-    report = snyk_findings.ignore(gh, api, 5, 11, (finding_comment(reason), after))
+    report = snyk_findings.ignore(gh, api, 5, 11)
 
     assert report == "ignored f-1 as policy pol-1; re-ran the failed jobs of CI run 7"
     _, path, policy = snyk_calls.calls[-1]
@@ -151,31 +154,17 @@ def test_the_owner_s_tick_sets_not_vulnerable_marks_the_comment_and_reruns_the_f
 
 
 def test_a_refused_ignore_unticks_the_box_with_the_error_and_runs_nothing() -> None:
-    after = finding_comment("why", box=TICKED)
-    gh, gh_calls = github([], current=after)
+    gh, gh_calls = github([], current=finding_comment("why", box=TICKED))
     error = urllib.error.HTTPError("u", 403, "Forbidden", {}, None)
     api, _ = snyk(policy=error)
 
-    report = snyk_findings.ignore(gh, api, 5, 11, (finding_comment("why"), after))
+    report = snyk_findings.ignore(gh, api, 5, 11)
 
     assert report.startswith("Snyk refused the ignore: HTTP Error 403")
     edit = next(body for method, path, body in gh_calls.calls if method == "PATCH")["body"]
     assert snyk_findings.BOX in edit
     assert snyk_findings.TICKED not in edit
     assert not any("rerun" in path for _, path, _ in gh_calls.calls)
-
-
-def test_a_queued_run_of_an_earlier_tick_sets_nothing_twice() -> None:
-    """Tick, untick and tick again queue two runs; the second finds the first one's mark on the live comment."""
-    done = finding_comment("why", box=f"{snyk_findings.DONE} `pol-1` (TD-363)")
-    gh, gh_calls = github([], current=done)
-    api, snyk_calls = snyk()
-
-    report = snyk_findings.ignore(gh, api, 5, 11, (finding_comment("why"), finding_comment("why", box=TICKED)))
-
-    assert report == "nothing set now: the finding is ignored already"
-    assert not snyk_calls.calls
-    assert not any(method != "GET" for method, _, _ in gh_calls.calls)
 
 
 def test_a_tick_while_ci_still_runs_waits_for_it_to_end_then_reruns_it() -> None:
