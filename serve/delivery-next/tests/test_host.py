@@ -752,6 +752,21 @@ def test_while_paused_no_check_environment_launches_or_is_disposed(store, tmp_pa
     assert store.read("c1").env.pgid is None
 
 
+def test_before_a_stop_when_idle_the_paused_pass_stops_the_check_environment(store, tmp_path, monkeypatch):
+    """TD-288: it launches again after the next start, since nothing of it is recorded as running."""
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    calls = environment(store, fake, monkeypatch, pids={900: 2.0}, pgid=900, ready_at=NOW, launched_at=NOW)
+    fake.host.draining = lambda: True
+    calls["left"] = [{900: "npm"}]
+    assert (fake.host.tick(NOW), store.read("c1").blocked.action) == ([], "End processes 900")
+    assert (fake.host.tick(NOW), calls["dispose"], calls["start"]) == ([], [{900: 2.0}, {900: 2.0}], [])
+    e = store.read("c1").env
+    assert (e.pids, e.pgid, e.ready_at, e.launched_at, fake.host.env_action(store.read("c1"))) == (
+        {}, None, None, None, "launch"
+    )  # fmt: skip
+
+
 def test_a_liveness_stop_found_while_paused_clears_once_its_processes_are_gone(store, tmp_path):
     fake, flag = Fake(store, tmp_path), [False]
     paused(fake, flag)

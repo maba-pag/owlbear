@@ -41,6 +41,7 @@ from owlbear_delivery_next.project_host import (
     pack_routes,
     pages,
 )
+from owlbear_delivery_next.project_host.host import ENDING
 from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
@@ -270,6 +271,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
+        if host.draining():
+            raise HTTPException(409, ENDING)
         try:
             shaper = store.settings().agents["shaper"]
         except StoreError as exc:

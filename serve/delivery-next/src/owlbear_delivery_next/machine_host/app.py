@@ -131,7 +131,11 @@ def _routes(machine: Machine) -> APIRouter:
     @routes.get("/projects")
     def projects() -> dict[str, Any]:
         listed = [p.info() for p in list(machine.projects.values())]
-        return {"paused": machine.paused, "waiting": machine.waiting(), "projects": listed}
+        return {
+            "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
+            "left": machine.left() if machine.ending else [],
+            "update_while_paused": registry.load().settings.update_while_paused,
+        }  # fmt: skip
 
     @routes.post("/projects")
     def register(body: RegisterBody) -> dict[str, Any]:
@@ -175,6 +179,16 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
     def resume() -> dict[str, bool]:
         machine.resume()
         return {"paused": machine.paused}
+
+    @routes.post("/pause")
+    def pause() -> dict[str, bool]:
+        machine.pause()
+        return {"paused": machine.paused}
+
+    @routes.post("/pause-stop")
+    def pause_stop() -> dict[str, bool]:
+        machine.pause_stop()
+        return {"paused": machine.paused, "ending": machine.ending}
 
     @routes.post("/stop")
     def stop() -> dict[str, bool]:

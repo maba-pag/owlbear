@@ -36,6 +36,7 @@ class Host:
     wake = SimpleNamespace(set=lambda: None)
     repo = None
     paused = staticmethod(lambda: False)
+    draining = staticmethod(lambda: False)
 
     def __init__(self, project: str) -> None:
         self.record = HostRecord(

@@ -82,6 +82,7 @@ def serve() -> int:
     machine.say(f"OwlBear {os.getpid()} on {link(record)} · paused until you press Resume")
     machine.load_all()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
+    threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
 
     def ended() -> None:  # the discovery file goes while this process still holds the lock
         (home / "host.json").unlink(missing_ok=True)

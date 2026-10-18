@@ -19,7 +19,7 @@ from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import Host, HostRecord, RunnerRecord, running
+from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -141,6 +141,30 @@ def test_a_closed_gate_admits_nothing_and_starts_no_runner_even_after_resume(tmp
     assert http.get(f"/p/{p['id']}/api/next/changes").status_code == 503
     held.gate.leave()
     assert held.gate.close(0) == 0
+
+
+def test_a_stop_when_idle_waits_for_a_running_step_refuses_a_launch_and_resume_cancels_it(tmp_path, http, machine):
+    """TD-288: a plain Pause never stops OwlBear; a stop when idle names what it waits for, then stops."""
+    p = add(http, clone(tmp_path / "a"))
+    stopped = []
+    machine.on_stop = lambda: stopped.append(True)
+    machine.resume()
+    assert http.post("/api/next/pause").json() == {"paused": True}
+    assert (machine.projects[p["id"]].host.paused(), machine.idle_stop()) == (True, False)
+    assert http.post("/api/next/pause-stop").json() == {"paused": True, "ending": True}
+    http.post("/api/next/resume")
+    assert (machine.idle_stop(), machine.paused, http.get("/api/next/projects").json()["ending"]) == (
+        False, False, False
+    )  # fmt: skip
+    http.post("/api/next/pause-stop")
+    runner = running_step(Path(p["path"]))
+    listed = http.get("/api/next/projects").json()
+    assert (listed["ending"], listed["left"]) == (True, [f"a: c1: a running step (process {os.getpid()})"])
+    refused = http.post(f"/p/{p['id']}/api/next/new-change")
+    assert (refused.status_code, refused.json()["detail"]) == (409, ENDING)
+    assert (machine.idle_stop(), stopped) == (False, [])
+    runner.unlink()
+    assert (machine.idle_stop(), stopped) == (True, [True])
 
 
 def test_every_change_that_would_continue_is_counted_until_resume(tmp_path, http):

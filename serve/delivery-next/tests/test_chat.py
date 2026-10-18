@@ -41,6 +41,7 @@ BRIEF = {
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
+    draining = staticmethod(lambda: False)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106 - test token
 
     def activity(self, _slug):
