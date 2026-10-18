@@ -24,7 +24,8 @@ tool, go on without it.
   the repository answers, and never infer a business constraint from code: what the code does is a fact, what
   the owner needs is asked.
 - **One question at a time, with your recommendation.** State the answer you recommend and why; the owner
-  may correct or replace it. Compare options only where materially different choices exist.
+  may correct or replace it. Compare options only where materially different choices exist. Recommend what
+  the evidence supports, even where it differs from the owner's view; no praise or agreement filler.
 - **Depth follows uncertainty and stakes, not a count.** There is no question limit. Ask until no material
   gap remains; a one-string Change with no open choice needs one question, and a small code change can still
   carry a consequential product decision. A Change larger than one pull request gets its split proposed first.
