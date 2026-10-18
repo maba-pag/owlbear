@@ -239,10 +239,11 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             raise HTTPException(401, "token required")
 
     def read(slug: str) -> Change:
-        if not SLUG.fullmatch(slug) or slug not in store.slugs():
+        known = next((s for s in store.slugs() if s == slug), None) if SLUG.fullmatch(slug) else None
+        if known is None:  # reads go by the stored name, never request text
             raise HTTPException(404, "no such Change")
         try:
-            return store.read(slug)
+            return store.read(known)
         except StoreError as exc:
             raise HTTPException(409, str(exc)) from exc
 
