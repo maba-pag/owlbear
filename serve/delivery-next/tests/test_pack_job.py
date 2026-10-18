@@ -965,17 +965,18 @@ def test_maintenance_sums_each_role_s_subagents_once_per_step(tmp_path):
         store.write(Lock(slug), Change(slug=slug, brief=Brief(version=1)))
     explore = {"agent": "explore", "credits": 1.5, "credits_known": True}
     unknown = {"agent": "code-review", "credits": 0.0, "credits_known": False}
+    odd = [explore, unknown, None, {"agent": "research", "credits": "1"}]  # a None and text credits
     for slug, event in [
         ("a", {"event": "step", "session": "s1", "kind": "plan", "subagents": [explore]}),
         ("a", {"event": "step", "session": "s2", "kind": "brief-challenge", "exit": "held", "subagents": [explore]}),
-        ("a", {"event": "step", "session": "s2", "kind": "brief-challenge", "subagents": [explore]}),  # decided
-        ("b", {"event": "step", "session": "s3", "kind": "plan"}),
-        ("b", {"event": "step", "session": "s4", "kind": "plan-challenge", "subagents": [explore, unknown]}),
+        ("a", {"event": "step", "session": "s2", "kind": "brief-challenge"}),  # decided: logged again without them
+        ("b", {"event": "step", "session": "s3", "kind": "plan", "subagents": "odd"}),  # never a list: none
+        ("b", {"event": "step", "session": "s4", "kind": "plan-challenge", "subagents": odd}),
         ("b", {"event": "subagent", "agent": "explore"}),  # its own event; the step carries the record
     ]:
         store.log(Lock(slug), slug, event)
     got = {u["role"]: u for u in c.get("/api/next/maintenance/subagents").json()}
     assert got["planner"] == {"role": "planner", "steps": 2, "with": 1, "runs": 1, "credits": 1.5, "unknown": 0,
                               "agents": {"explore": 1}}  # fmt: skip
-    assert got["challenger"] == {"role": "challenger", "steps": 2, "with": 2, "runs": 3, "credits": 3.0,
-                                 "unknown": 1, "agents": {"explore": 2, "code-review": 1}}  # fmt: skip
+    assert got["challenger"] == {"role": "challenger", "steps": 2, "with": 2, "runs": 4, "credits": 3.0,
+                                 "unknown": 2, "agents": {"explore": 2, "code-review": 1, "research": 1}}  # fmt: skip

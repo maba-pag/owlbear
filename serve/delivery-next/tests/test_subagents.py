@@ -11,7 +11,7 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKi
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, session_result, subagents
+from owlbear_delivery_next.runtimes import sdk_adapter, sdk_usage, session_result, subagents
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config, roles
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -87,12 +87,18 @@ def test_a_call_whose_credits_are_not_reported_is_unknown_not_zero(tmp_path):
 
 def test_several_builtins_may_run_at_once_each_counted_as_its_own(tmp_path):
     st = step(tmp_path, kind=StepKind.REVIEW, role="challenger")  # a read-only judge too (TD-375)
-    for ev in (started("c1", "code-review"), started("c2", "general-purpose"), usage("c1", 1e9), usage("c2", 2e9)):
+    luna = "gpt-6-luna"
+    for ev in (
+        started("c1", "code-review"), started("c2", "general-purpose", luna), usage("c1", 1e9), usage("c2", 2e9, luna)
+    ):  # fmt: skip
         st.on_event(ev)
     assert st.gate.done is False
     assert [(s["agent"], s["allowed"], s["credits"]) for s in st.watch.report()] == [
         ("code-review", True, 1.0), ("general-purpose", True, 2.0)
     ]  # fmt: skip
+    billed = {"models": {m: {"tokens": 1} for m in (PLANNER, HELPER, luna, "claude-sonnet-5")}}
+    unexpected = set(sdk_usage.unexpected_models({"models": {}}, billed, PLANNER)) - st.watch.child_models()
+    assert unexpected == {"claude-sonnet-5"}  # TD-377: each subagent's own model is logged, any other still found
 
 
 @pytest.mark.parametrize(
