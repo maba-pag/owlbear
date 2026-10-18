@@ -1,6 +1,7 @@
 """The design pack's Settings section and the Maintenance overview (TD-101, TD-113): reads, and the one update start.
 
-The overview only links each maintenance action to where it lives and shows its last run where Delivery keeps one.
+The overview only links each maintenance action to where it lives and shows its last run where Delivery keeps one;
+beside it, each role's use of built-in subagents (TD-376).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.pack_runs import pack_job
+from owlbear_delivery_next.settings import roles
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -79,10 +81,35 @@ def overview(store: Store) -> list[dict[str, Any]]:
          "last": None, "note": "Not built yet (TD-112)."},
         {"name": "Backlog triage", "where": "Backlog", "href": "/backlog", "built": True, "recorded": False,
          "last": None, "note": "Triage items in the Backlog tab; Delivery keeps no run record for it."},
-        {"name": "Explore experiment", "where": "Report", "href": None, "built": False, "recorded": False,
-         "last": None, "note": "Pilot run 2026-10-16 under a proven credit limit: explore never started "
-                                 "unprompted in three pairs, so it tested availability only. The setting stays off."},
     ]  # fmt: skip
+
+
+def subagent_use(store: Store) -> list[dict[str, Any]]:
+    """Per role, its steps and the built-in subagents they started, from the step events each Change keeps (TD-376).
+
+    A step logged twice (held, then decided) counts once, as its last event says.
+    """
+    steps: dict[tuple[str, str], dict[str, Any]] = {}
+    for slug in store.slugs():
+        for e in store.events(slug):
+            if e.get("event") == "step":
+                steps[slug, str(e.get("session") or id(e))] = e
+    use: dict[str, dict[str, Any]] = {}
+    for e in steps.values():
+        kind = str(e.get("kind", ""))
+        role = roles.SESSIONS.get(kind, kind)
+        r = use.setdefault(role, {"role": role, "steps": 0, "with": 0, "runs": 0, "credits": 0.0, "unknown": 0,
+                                  "agents": {}})  # fmt: skip
+        ran = e.get("subagents") or []
+        r["steps"], r["with"], r["runs"] = r["steps"] + 1, r["with"] + bool(ran), r["runs"] + len(ran)
+        for s in ran:
+            name = s.get("agent") or "unnamed"
+            r["agents"][name] = r["agents"].get(name, 0) + 1
+            if s.get("credits_known", True):
+                r["credits"] += float(s.get("credits") or 0.0)
+            else:
+                r["unknown"] += 1
+    return sorted(use.values(), key=lambda r: r["role"])
 
 
 def router(
@@ -120,6 +147,10 @@ def router(
     @routes.get("/maintenance")
     def maintenance() -> list[dict[str, Any]]:
         return overview(store)
+
+    @routes.get("/maintenance/subagents")
+    def subagents() -> list[dict[str, Any]]:
+        return subagent_use(store)
 
     return routes
 

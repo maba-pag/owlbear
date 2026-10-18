@@ -62,7 +62,10 @@ agent `builder`); never save task notes or code. Without the memory tools, go on
   weigh against the brief and `owlbear-interface-design`, not a verdict.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
-- Not granted: `task`, `read_agent`, `list_agents`, `write_agent`. You start no subagents.
+- `task`, while your role's subagent setting is on (the default): start a built-in subagent, such as explore,
+  research or code-review, for a bounded side question and wait for its answer. It works under your step's
+  permissions, and Delivery records what it did.
+- Not granted: `read_agent`, `list_agents`, `write_agent`. A subagent you start answers before you go on.
 
 </tools>
 

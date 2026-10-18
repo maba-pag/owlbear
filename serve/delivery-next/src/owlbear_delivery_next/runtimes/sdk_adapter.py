@@ -43,10 +43,6 @@ if TYPE_CHECKING:
 
 DEADLINES = {StepKind.PLAN: 1800.0, StepKind.BUILD: 2400.0, StepKind.REVIEW: 1200.0, StepKind.CHECK: 1800.0}  # TD-286
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "preparer"}
-BUILTINS = (  # the runtime's own subagents, each excluded so none can start (benchmark 2026-10-15)
-    *("explore", "task", "code-review", "rubber-duck", "research", "rem-agent", "security-review"),
-    "general-purpose",
-)
 POLL = 5.0
 START = 60.0  # runtime start, session create or resume
 NOW_LIMIT = 80  # characters of the now line's summary
@@ -112,7 +108,7 @@ class Session:
     settled: tuple[str, ...] = ()  # finding keys the owner decided to fix: never rejected (TD-193)
     amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
-    explore: bool = False  # the experiment setting (TD-129); only an SDK planner session acts on it
+    subagents: bool = False  # its role's setting: it may start built-in subagents (TD-374, TD-376)
     credit_limit: float | None = None  # the runtime's hard session limit; an experiment's ledger sets it (TD-178)
     model: str | None = None
     effort: str | None = None  # the SDK's reasoning effort
@@ -153,7 +149,7 @@ class _Step:
         self.preloaded: set[str] = set()  # skills the runtime loaded from Delivery's folder before the first turn
         self.checked = False  # the preload was checked at the first turn
         self.skills = cfg.skills or preload.directory()  # the folder its skills load from
-        self.watch = subagents.Watch(allowed=subagents.eligible(cfg.kind, role_of(cfg), enabled=cfg.explore))
+        self.watch = subagents.Watch(allowed=cfg.subagents)
 
     @property
     def done(self) -> bool:
@@ -193,7 +189,7 @@ class _Step:
             self.subagent_seen(kind, ev.data)
 
     def subagent_seen(self, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
-        """Only an allowed `explore` may run (TD-129); any other start voids the step; Auto is a wrong model (TD-53).
+        """Any built-in may run when the role allows it (TD-374); any other start voids the step; Auto is a wrong model.
 
         Each end is journaled as it arrives, so a runner killed later keeps what its subagents did.
         """
@@ -237,12 +233,13 @@ class _Step:
             self.gate.revoke(f"skills not preloaded: {', '.join(absent)}")
 
     def model_seen(self, model: str | None, parent: str | None) -> None:
-        """Void the step when its own agent runs on another model (TD-94) or a subagent runs that may not (TD-129)."""
+        """Void the step when its own agent runs on another model (TD-94) or a subagent runs that may not (TD-374)."""
         if model and parent and model.lower() == "auto":
             self.gate.wrong_model("a subagent ran on auto")
         elif model and parent:
             if not self.watch.owns(parent):  # an allowed subagent's own turns are its model's, not the step's
-                self.gate.revoke("a subagent ran; no subagent may run")
+                why = "no allowed start announced it" if self.watch.allowed else "no subagent may run"
+                self.gate.revoke(f"a subagent ran; {why}")
         elif model and self.cfg.model and model != self.cfg.model:
             self.gate.wrong_model(f"a turn ran on {model}, the step needs {self.cfg.model}")
 
@@ -331,7 +328,7 @@ class _Step:
             "tools": self.tools(),
             "custom_agents": [role | {"infer": False}],  # the role never starts itself as a subagent
             "agent": role["name"],
-            "excluded_builtin_agents": [b for b in BUILTINS if not (self.watch.allowed and b == subagents.ALLOWED)],
+            "excluded_builtin_agents": [] if self.watch.allowed else list(subagents.BUILTINS),
             "excluded_tools": ["ask_user"],  # autopilot: the owner is asked only through ask_question (N4, N10)
             "skill_directories": preload.folders(
                 role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills

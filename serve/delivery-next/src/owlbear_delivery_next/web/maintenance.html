@@ -19,6 +19,10 @@
   }
   .action .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
   .action a { font-size: var(--p-typescale-sm); color: inherit; }
+  .scroll { overflow-x: auto; }
+  #use { border-collapse: collapse; font-size: var(--p-typescale-sm); }
+  #use th, #use td { padding: var(--p-spacing-static-xs) var(--p-spacing-static-sm); text-align: start; }
+  #use td:nth-child(n+2):nth-child(-n+5) { text-align: end; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -34,7 +38,7 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, designSystem, here } from "/assets/ui.mjs";
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
-const state = { pds: true, actions: [], error: "" };
+const state = { pds: true, actions: [], use: [], error: "" };
 
 // The last run in words, so its state never rests on the tag's colour alone.
 function lastRun(a) {
@@ -61,6 +65,27 @@ function action(a) {
   </li>`;
 }
 
+// TD-376: one row per agent, from the steps this project's Changes keep; credits unknown are counted apart.
+function useRow(u) {
+  const agents = Object.entries(u.agents).map(([name, n]) => `${name} ${n}`).join(", ") || "none";
+  const credits = `${u.credits.toFixed(2)}${u.unknown ? ` (${u.unknown} unknown)` : ""}`;
+  return html`<tr><th scope="row">${u.role}</th><td>${u.steps}</td><td>${u.with}</td><td>${u.runs}</td>
+    <td>${credits}</td><td>${agents}</td></tr>`;
+}
+
+function useSection() {
+  const heads = ["Agent", "Steps", "Steps with subagents", "Subagents", "Their credits", "Which"];
+  return html`<section aria-labelledby="use-title">
+    <p-heading size="lg"><h2 id="use-title">Subagent use per agent</h2></p-heading>
+    <p-text size="sm">Built-in subagents the agents started in this project's Change steps, switched per agent in
+      Settings; their credits are part of each step's own. A design pack update keeps no session record.</p-text>
+    ${state.use.length ? html`<div class="scroll" role="region" tabindex="0" aria-label="Subagent use per agent">
+      <table id="use"><thead><tr>${heads.map((h) => html`<th scope="col">${h}</th>`)}</tr></thead>
+      <tbody>${state.use.map(useRow)}</tbody></table></div>`
+      : html`<p-text id="use-none" size="sm">No step has run in this project yet.</p-text>`}
+  </section>`;
+}
+
 function view() {
   const error = state.error ? state.error.charAt(0).toUpperCase() + state.error.slice(1) : "";
   return html`
@@ -72,7 +97,8 @@ function view() {
     <section aria-labelledby="actions-title">
       <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
-    </section>`;
+    </section>
+    ${useSection()}`;
 }
 
 function show() {
@@ -81,7 +107,9 @@ function show() {
 
 async function refresh() {
   try {
-    state.actions = await call("/maintenance", { timeout: 15000 });
+    [state.actions, state.use] = await Promise.all([
+      call("/maintenance", { timeout: 15000 }), call("/maintenance/subagents", { timeout: 15000 }),
+    ]);
     state.error = "";
   } catch (e) {
     state.error = e.message;

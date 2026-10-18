@@ -41,6 +41,9 @@ memory tool, go on without it.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`): lessons for agent `design-judge`, before you start.
 - Results: `submit_first_look`, `submit_result`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
+- `task`, while your role's subagent setting is on (the default): start a built-in subagent, such as explore
+  or research, for a bounded side question and wait for its answer. It works under your step's read-only
+  permissions, and Delivery records what it did.
 - Not granted: `ask_question`. A doubt only the owner can decide is a verdict of `unsure`.
 
 </tools>

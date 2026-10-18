@@ -104,6 +104,12 @@ def labelled_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def subagents_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 5 to 6: each role's subagent switch (TD-376) replaces the planner-only experiment's."""
+    data.pop("explore", None)
+    return data
+
+
 CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept, 4: labelled_added}
 PROFILE: Migrations = {1: roles_moved}
-CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed, 3: minutes_added, 4: labels_added}
+CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed, 3: minutes_added, 4: labels_added, 5: subagents_added}

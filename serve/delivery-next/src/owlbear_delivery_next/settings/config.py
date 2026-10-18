@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.settings.roles import DEFAULTS
 from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 5  # 3 renamed the designer to design-judge (TD-169); 4 added minutes (TD-286); 5 PR labels (TD-308)
+CONFIG_FORMAT = 6  # 3 renamed the designer to design-judge (TD-169); 4 minutes (TD-286); 5 PR labels; 6 subagents
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "project", "builder"]
@@ -47,6 +47,7 @@ class Agent(Record):
     last_round_at: int | None = None
     ask_owner_at: int | None = None
     minutes: int | None = None  # TD-286: one session's total running time
+    subagents: bool | None = None  # TD-374, TD-376: its sessions may start built-in subagents
 
     @field_validator("model")
     @classmethod
@@ -84,7 +85,6 @@ class Layer(Record):
     preparations: list[Preparation] | None = None  # TD-96: the project's test-copy options, owner-declared
     data: DataPermissions | None = None  # TD-96: the owner's standing permissions for those test copies
     design_failures: DesignFailures | None = None  # TD-78: a design judge's fail goes back, or to the owner
-    explore: bool | None = None  # TD-129: experimental, SDK planner only: one built-in `explore` at a time
     final_review: FinalReview | None = None  # TD-211
     pr_labels: list[str] | None = None  # TD-308: on every PR OwlBear opens; a project's list replaces the global one
     pr_marker: bool | None = None  # TD-308: the "Opened by OwlBear Delivery" line, switched per project
@@ -152,6 +152,7 @@ class Effective(Record):
     last_round_at: int
     ask_owner_at: int
     minutes: int
+    subagents: bool
 
     @model_validator(mode="after")
     def _rounds(self) -> Effective:
@@ -169,7 +170,6 @@ class Settings(Record):
     preparations: list[Preparation] = Field(default_factory=list)
     data: DataPermissions = Field(default_factory=DataPermissions)
     design_failures: DesignFailures = "ask"
-    explore: bool = False
     final_review: RoundPolicy = Field(default_factory=RoundPolicy)
     pr_labels: list[str] = Field(default_factory=list)
     pr_marker: bool = True
@@ -187,6 +187,7 @@ def _defaults() -> GlobalLayer:
             visible=False,
             categories=[],
             minutes=MINUTES_BY_ROLE[role],
+            subagents=True,  # TD-376: on by default for every role
             **rounds,
         )
         for role, rm in DEFAULTS.items()
@@ -245,7 +246,6 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         ("global", glob.design_failures),
         ("default", "ask"),  # autonomous default (TD-78)
     )
-    explore = _pick("explore", sources, ("project", project.explore), ("global", glob.explore), ("default", False))
     own, theirs = project.final_review or FinalReview(), glob.final_review or FinalReview()
     final = {
         name: _pick(
@@ -267,7 +267,6 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         preparations=prep,
         data=data,
         design_failures=design,
-        explore=bool(explore),
         final_review=RoundPolicy.model_validate(final),
         pr_labels=labels,
         pr_marker=bool(marker),

@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
+from owlbear_delivery_next.change_contracts.models import Brief, Change
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.design_packs import calibration, design_pack, pack_git, pack_update
@@ -27,7 +28,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 AUTH = {"authorization": "Bearer t"}
 PKG = files("owlbear_delivery_next")
@@ -941,13 +942,7 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     assert 'from "/assets/lit-html/3.3.3/lit-html.js"' in page.text
 
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
-    assert list(got) == [
-        "Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage",
-        "Explore experiment",
-    ]  # fmt: skip
-    assert (got["Explore experiment"]["built"], "availability only" in got["Explore experiment"]["note"]) == (
-        False, True
-    )  # fmt: skip
+    assert list(got) == ["Memory curation", "Design pack update", "Engine update", "Review Tests", "Backlog triage"]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
     assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("/config#pack", None)
     assert (got["Engine update"]["built"], got["Engine update"]["note"]) == (False, "Not built yet.")
@@ -960,3 +955,27 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     last = {a["name"]: a for a in c.get("/api/next/maintenance").json()}["Design pack update"]["last"]
     assert last == {"state": "failed", "started_at": "2026-10-15T10:00:00+00:00",
                     "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"}  # fmt: skip
+
+
+def test_maintenance_sums_each_role_s_subagents_once_per_step(tmp_path):
+    store = Store(tmp_path)
+    c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
+    assert c.get("/api/next/maintenance/subagents").json() == []
+    for slug in ("a", "b"):
+        store.write(Lock(slug), Change(slug=slug, brief=Brief(version=1)))
+    explore = {"agent": "explore", "credits": 1.5, "credits_known": True}
+    unknown = {"agent": "code-review", "credits": 0.0, "credits_known": False}
+    for slug, event in [
+        ("a", {"event": "step", "session": "s1", "kind": "plan", "subagents": [explore]}),
+        ("a", {"event": "step", "session": "s2", "kind": "brief-challenge", "exit": "held", "subagents": [explore]}),
+        ("a", {"event": "step", "session": "s2", "kind": "brief-challenge", "subagents": [explore]}),  # decided
+        ("b", {"event": "step", "session": "s3", "kind": "plan"}),
+        ("b", {"event": "step", "session": "s4", "kind": "plan-challenge", "subagents": [explore, unknown]}),
+        ("b", {"event": "subagent", "agent": "explore"}),  # its own event; the step carries the record
+    ]:
+        store.log(Lock(slug), slug, event)
+    got = {u["role"]: u for u in c.get("/api/next/maintenance/subagents").json()}
+    assert got["planner"] == {"role": "planner", "steps": 2, "with": 1, "runs": 1, "credits": 1.5, "unknown": 0,
+                              "agents": {"explore": 1}}  # fmt: skip
+    assert got["challenger"] == {"role": "challenger", "steps": 2, "with": 2, "runs": 3, "credits": 3.0,
+                                 "unknown": 1, "agents": {"explore": 2, "code-review": 1}}  # fmt: skip

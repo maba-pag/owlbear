@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import preload
-from owlbear_delivery_next.runtimes import readiness, sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import readiness, sdk_adapter, step_input, subagents
 from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -91,7 +91,8 @@ def audit(granted: Sequence[str], body: str) -> list[str]:
 
 
 def granted(role: str) -> list[str]:
-    return [*preload.tools(role), *tools.results(role, ui=True), *tools.results(role, ui=False)]
+    launcher = [subagents.LAUNCHER]  # offered while the role's subagent setting is on (TD-376)
+    return [*preload.tools(role), *tools.results(role, ui=True), *tools.results(role, ui=False), *launcher]
 
 
 def test_every_worker_role_has_its_own_agent_file_or_is_explicitly_pending() -> None:
@@ -113,6 +114,7 @@ def test_each_agent_explains_exactly_its_grants_and_names_only_granted_tools(rol
 @pytest.mark.parametrize("role", AGENTS)
 def test_conditional_tools_say_their_condition_and_the_window_offers_the_same_tools(role, tmp_path) -> None:
     _, body = preload.agent_file(role)
+    assert "while your role's subagent setting is on" in entry(body, subagents.LAUNCHER)
     for name in set(tools.results(role, ui=True)) - set(tools.results(role, ui=False)):
         assert "UI Changes only" in entry(body, name)
     if role in {roles.SESSIONS[label] for label in tools.VERDICTS}:
@@ -125,7 +127,7 @@ def test_conditional_tools_say_their_condition_and_the_window_offers_the_same_to
     assert ticks(note) & VOCABULARY == set(tools.results(role, ui=True))
 
 
-def test_no_role_has_subagent_tools() -> None:
+def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> None:
     assert {r for r in AGENTS if set(preload.tools(r)) & {"task", "read_agent", "list_agents", "write_agent"}} == set()
 
 

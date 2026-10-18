@@ -276,6 +276,14 @@ function tokens(n) {
   return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
 }
 
+// TD-376: whether a role's sessions may start the runtime's built-in subagents; on unless a layer says off.
+function subagentsCell(role) {
+  const key = `${role}.subagents`, below = inherited().agents[role].subagents ? "on" : "off";
+  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, `inherit (${below})`], ["true", "on: may start them"],
+    ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
+  source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
+}
+
 // The model a role runs with in the edited layer: its own draft or saved value, else what it inherits.
 function modelOf(role) {
   return own(`${role}.model`).trim() || inherited().agents[role].model;
@@ -449,7 +457,7 @@ function edited(layer) {
       continue;
     }
     const agent = next.agents[role] ?? {};
-    agent[field] = number ?? (value || null);
+    agent[field] = field === "subagents" ? (value ? value === "true" : null) : number ?? (value || null);
     if (Object.values(agent).some((v) => v !== null)) next.agents[role] = agent;
     else delete next.agents[role];
   }
@@ -981,6 +989,14 @@ function settingsSections() {
         roles.filter((role) => role !== "shaper").map((role) => row(text(role),
           numberCell(role, "minutes", "Minutes per session"))))}
       <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="subagents-title">
+      <p-heading size="lg"><h2 id="subagents-title">Subagents</h2></p-heading>
+      <p-text>An agent may start the runtime's built-in subagents, such as explore or code-review, for side
+        questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows their
+        use per agent.</p-text>
+      ${table("Subagents: they apply to the next session", ["Agent", "Built-in subagents"], "subagents",
+        roles.filter((role) => role !== "shaper").map((role) => row(text(role), subagentsCell(role))))}
     </section>
     <section class="panel" aria-labelledby="general-title">
       <p-heading size="lg"><h2 id="general-title">Visual checks</h2></p-heading>

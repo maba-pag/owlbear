@@ -78,6 +78,7 @@ def replay(
             policy=Policy(Path(tmp), write=False), observe=lambda: tools.Worktree("", ""), checks=(),
             model=role.model, effort=role.effort, context=role.context, memory=memory,
             limit=roles.limit(store.settings(), "design-review"),
+            subagents=roles.subagents(store.settings(), "design-review"),
             skills=candidate.skills if candidate else None,  # the judge loads the candidate's skills, as edited
         )  # fmt: skip
         for kept, kept_files in calibration.cases(store.shared, store.name):

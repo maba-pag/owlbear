@@ -29,7 +29,10 @@ challenger's findings: claims to check, not orders. Delivery runs the checks and
 
 - Files: `view`, `create`, `edit`, `glob`, `grep`: read upstream's text, read and edit the skills.
 - Results: `submit_result`, `report_wrong_premise`, `report_missing_tool`: how you end, under Output format.
-- Not granted: shell, `ask_question`, memory. You start no subagents.
+- `task`, while your role's subagent setting is on (the default): start a built-in subagent, such as explore
+  or research, for a bounded side question and wait for its answer. It works under your step's
+  permissions, and Delivery records what it did.
+- Not granted: shell, `ask_question`, memory.
 
 </tools>
 

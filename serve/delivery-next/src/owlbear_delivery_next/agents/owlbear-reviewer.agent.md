@@ -45,6 +45,9 @@ memory tool, go on without it.
   start.
 - Results: `submit_result`, `ask_question` (not in screenshot judgements), `report_wrong_premise`,
   `report_missing_tool`: how you end, under Output format.
+- `task`, while your role's subagent setting is on (the default): start a built-in subagent, such as explore,
+  research or code-review, for a bounded side question and wait for its answer. It works under your step's
+  read-only permissions, and Delivery records what it did.
 - Not granted: `save_memory`, `create`, `edit`.
 
 </tools>
