@@ -188,7 +188,7 @@ def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: 
 def _working(store: Store, host: Host) -> list[str]:
     """The Changes whose runner may still run, or whose lock another process holds: they may use the old folder."""
     out = []
-    for slug in store.slugs():
+    for slug in store.db.legacy_slugs() if store.db.waiting() else store.slugs():  # a clone not yet imported too
         rec, holder = host.runner(slug), store.holder(slug)
         if (rec and host.alive(rec.pid, rec.created) is not False) or (holder and holder.pid != host.record.pid):
             out.append(slug)

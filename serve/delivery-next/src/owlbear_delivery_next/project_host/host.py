@@ -282,10 +282,10 @@ class Host:
         return c
 
     def _unloadable(self, slug: str, text: str) -> None:
-        """Report an unloadable Change once, and again only after its file changes; not on every pass."""
+        """Report an unloadable Change once, and again only after its record changes; not on every pass."""
         try:
-            stamp = (self.store.root / "changes" / slug / "change.json").stat().st_mtime_ns
-        except OSError:
+            stamp = self.store.rev(slug)
+        except StoreError:
             stamp = None
         if self.reported.get(slug) != (text, stamp):
             self.reported[slug] = (text, stamp)

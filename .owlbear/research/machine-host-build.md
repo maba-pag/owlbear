@@ -210,6 +210,14 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
 - `fold` keeps the Change flock throughout but holds no database transaction across network work: it reads
   the inbox rows (their ids), computes, runs the barrier, then commits the Change and deletes exactly those
   rows in one short transaction. `_unloadable` uses the row's `rev` instead of a file's mtime.
+  (Revision 3.2: a store with no file-format state starts its database at once, through the same marker,
+  temporary file and rename; one with such state refuses every operation until the machine host imports it.
+  `handles.json` becomes the `meta` row `issued`; `history.jsonl` stays a file. The import skips inbox files
+  a Change already acknowledged; after it `inbox_acked` stays empty, and an inbox row that no longer
+  validates is removed with the fold and kept as an `inbox-rejected` activity event. A `change.json` an older
+  process writes after the import makes that Change unreadable with the action to compare and delete the
+  file, never silently ignored; a file that is not UTF-8 stays unreadable. The disk check runs before the
+  marker changes.)
 - **Import, fenced and resumable:** the format marker is the old-code fence. Every new-code store operation
   (host, runner, CLI, chat server) holds `<store>/migrate.lock` shared for that one operation only, so an
   idle long-lived client never blocks an import. The machine host imports while it holds the project's

@@ -40,6 +40,7 @@ from owlbear_delivery_next.local_system.process_probe import WorktreeProcessScan
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
+from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
 
@@ -203,15 +204,18 @@ def test_status_reads_the_host_lock_and_shows_host_down(store, tmp_path):
     ]
 
 
-def test_an_unloadable_change_is_reported_once_until_its_file_changes(store, tmp_path, capsys):
+def raw(store, slug, text):
+    with store.db.write() as db:
+        put_record(db, slug, text)
+
+
+def test_an_unloadable_change_is_reported_once_until_its_record_changes(store, tmp_path, capsys):
     fake = Fake(store, tmp_path)
-    path = store.root / "changes" / "c1" / "change.json"
-    path.parent.mkdir(parents=True)
-    path.write_text('{"format": 0, "slug": 5}')
+    raw(store, "c1", '{"format": 0, "slug": 5}')
     for _ in range(3):
         assert fake.host.tick(NOW) == []
     assert capsys.readouterr().out.count("cannot be migrated") == 1
-    path.write_text('{"format": 0, "slug": 6, "x": 1}')
+    raw(store, "c1", '{"format": 0, "slug": 6, "x": 1}')
     fake.host.tick(NOW)
     assert capsys.readouterr().out.count("cannot be migrated") == 1
 
@@ -582,7 +586,7 @@ def test_a_host_whose_own_code_was_unreadable_at_start_starts_no_runner(store, t
 def test_a_runner_beside_a_host_of_other_code_runs_and_writes_nothing(store, tmp_path, capsys):
     save(store, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
     store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
-    before = (store.root / "changes" / "c1" / "change.json").read_text()
+    before = store.rev("c1")
     record = host.HostRecord(url="http://127.0.0.1:9/", token="t", pid=os.getpid(), started_at=NOW, code="older")  # noqa: S106
     (store.root / "host.json").write_text(record.model_dump_json())
     dir_fd = os.open(store.root, os.O_RDONLY)
@@ -591,8 +595,9 @@ def test_a_runner_beside_a_host_of_other_code_runs_and_writes_nothing(store, tmp
     try:
         assert runner.main(["c1", "--repo", str(tmp_path)]) == 1
         assert capsys.readouterr().out == f"c1: {host.RESTART}\n"
-        assert (store.root / "changes" / "c1" / "change.json").read_text() == before
-        assert len(list((store.root / "changes" / "c1" / "inbox").glob("*.json"))) == 1
+        assert store.rev("c1") == before
+        with store.db.read() as db:
+            assert db.execute("SELECT count(*) FROM inbox").fetchone() == (1,)
         assert host.RESTART in cli.show_status(store, NOW).splitlines()
     finally:
         os.close(lock_fd)

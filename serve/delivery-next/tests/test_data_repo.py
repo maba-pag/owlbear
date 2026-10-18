@@ -19,6 +19,7 @@ from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import change_record, profile_share
+from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import STORE_DIR, Store, StoreError
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -414,7 +415,8 @@ def test_a_rename_waits_for_running_steps_and_a_host_picks_up_a_rename_made_else
     (store.root / "changes" / "c1").mkdir(parents=True)
     record = host_module.RunnerRecord(pid=4242, created=None, started_at=datetime.now(UTC))
     (store.root / "changes" / "c1" / "runner.json").write_text(record.model_dump_json())
-    (store.root / "changes" / "c1" / "change.json").write_text("{}")  # listed; the host reports it unloadable
+    with store.db.write() as db:  # listed; the host reports it unloadable
+        put_record(db, "c1", "{}")
 
     got = renamer(store, repo, alive=lambda _p, _c: True).put("/api/next/config/folder", json={"name": "acme-shop"})
 
@@ -435,7 +437,8 @@ def test_a_rename_waits_for_steps_of_every_clone_sharing_the_folder_and_renames_
     (other.root / "changes" / "c9").mkdir(parents=True)
     record = host_module.RunnerRecord(pid=4242, created=None, started_at=datetime.now(UTC))
     (other.root / "changes" / "c9" / "runner.json").write_text(record.model_dump_json())
-    (other.root / "changes" / "c9" / "change.json").write_text("{}")  # listed
+    with other.db.write() as db:  # listed
+        put_record(db, "c9", "{}")
     live = [True]
     peer = host_module.Host(other, repo, alive=lambda _p, _c: live[0])
     mine = host_module.Host(store, repo)

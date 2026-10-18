@@ -146,9 +146,13 @@ class Machine:
         """How many Changes would continue on Resume."""
         now, n = datetime.now(UTC), 0
         for p in list(self.projects.values()):
-            if not (p.store and p.host):
+            if not (p.store and p.host and p.state == "loaded"):
                 continue
-            for slug in p.store.slugs():
+            try:
+                slugs = p.store.slugs()
+            except StoreError:
+                continue
+            for slug in slugs:
                 try:
                     n += status(p.store.read(slug), p.host.activity(slug), now).action == RESUME
                 except StoreError:

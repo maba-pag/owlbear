@@ -15,6 +15,7 @@ from owlbear_delivery_next.state_store import backlog as backlog_module
 from owlbear_delivery_next.state_store import backlog_issues, backlog_migrate
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.backlog_issues import Issues
+from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Store
 
 T0 = datetime(2026, 10, 14, 8, tzinfo=UTC)
@@ -568,8 +569,8 @@ def test_an_entry_written_before_projects_keeps_only_what_its_scope_states(scope
 
 def test_the_change_an_entry_went_into_names_its_clone(repo):
     store = Store.open(repo)
-    (store.root / "changes" / "c1").mkdir(parents=True)
-    (store.root / "changes" / "c1" / "change.json").write_text("{}")
+    with store.db.write() as db:
+        put_record(db, "c1", "{}")
     assert (backlog_routes.named(store, "", "c1"), backlog_routes.named(store, "ab12", "c1")) == ("c1", "ab12/c1")
     assert backlog_routes.named(store, "ab12", "ab12/c1") == "ab12/c1"
     with pytest.raises(HTTPException, match="is not a Change of this clone"):
