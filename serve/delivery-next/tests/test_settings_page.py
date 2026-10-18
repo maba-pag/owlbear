@@ -128,7 +128,10 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         )
         page.get_by_label("When the design judge fails a change").select_option("back")  # renders the page again
         expect(rounds).to_have_value("4")
-        page.get_by_label("Labels, comma-separated; none for no labels").fill("release:minor, owlbear")
+        labels = page.get_by_label("Labels, comma-separated; none for no labels")
+        labels.fill("inherit")  # a label may be named so: typing it never means "inherit"
+        expect(labels).to_have_value("inherit")
+        labels.fill("release:minor, owlbear")
         page.get_by_label("The line Opened by OwlBear Delivery").select_option("off")
         page.get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")

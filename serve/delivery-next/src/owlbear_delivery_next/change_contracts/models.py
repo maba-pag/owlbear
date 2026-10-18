@@ -14,7 +14,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
 
-FORMAT = 4
+FORMAT = 5
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
@@ -434,6 +434,7 @@ class Names(Record):
     target: str = ""
     worktree: str = ""
     pr: int | None = None  # kept to find a merged or closed PR; its state is always read from GitHub
+    labelled: int | None = None  # the PR the project's labels were added to, once (TD-308)
     preserved: list[str] = Field(default_factory=list)
 
 

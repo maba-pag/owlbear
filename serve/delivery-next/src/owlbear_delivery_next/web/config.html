@@ -215,8 +215,10 @@ function inherited() {
 }
 
 // One edit of the edited layer; a value equal to the saved one is no edit, an inherit choice clears the value.
-function edit(key, raw) {
-  const field = key.split(".")[1] ?? key, value = !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
+// A *literal* value is typed text, where "inherit" is just a word (a label may be named so).
+function edit(key, raw, literal = false) {
+  const field = key.split(".")[1] ?? key;
+  const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
   if (value.trim() === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
   show();
@@ -257,7 +259,7 @@ function widths() {
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
 function prLabels() {
   const key = "pr_labels", below = inherited()[key].join(", ") || "none";
-  return cell(typed("Labels, comma-separated; none for no labels", own(key), (v) => edit(key, v),
+  return cell(typed("Labels, comma-separated; none for no labels", own(key), (v) => edit(key, v, true),
     { key, placeholder: `inherit (${below})`, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 

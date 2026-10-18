@@ -883,6 +883,8 @@ const SAID = {
   session: (e) => (e.resumed ? "Session resumed" : `Session started${e.role ? ` (${e.role})` : ""}`),
   denied: (e) => `Denied: ${e.reason || e.kind}`,
   publish: (e) => `Published PR #${e.pr}`,
+  labels: (e) => `Labelled PR #${e.pr}: ${e.labels.join(", ")}`,
+  "labels-failed": (e) => `Could not label PR #${e.pr} with ${e.labels.join(", ")}: ${e.reason}`,
   ci: (e) => (e.failed?.length ? `CI failed: ${e.failed.join(", ")}`
     : `CI passed${e.passed?.length ? `: ${e.passed.join(", ")}` : ""}`),
   "merge-offer": (e) => `Merge offered for ${String(e.head || "").slice(0, 7)}`,

@@ -86,21 +86,20 @@ def _body(c: Change, *, marker: bool) -> str:
 
 
 def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
-    """Add the project's labels to Delivery's draft (TD-308); a failure is logged and never holds the publish."""
-    if not labels:
+    """Add the project's labels once per PR (TD-308), so the owner's later edits stay; a failure never holds it."""
+    if c.names.labelled == pr.number:
         return
-    try:
-        ctx.gh.add_labels(pr.repository, pr.number, labels)
-    except ProviderError as exc:
-        ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=str(exc)[:300])
+    if labels:
+        try:
+            ctx.gh.add_labels(pr.repository, pr.number, labels)
+            ctx.log(c.slug, "labels", pr=pr.number, labels=labels)
+        except ProviderError as exc:
+            ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=str(exc)[:300])
+    c.names.labelled = pr.number
 
 
 def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
-    """Find the open PR of the branch or create a draft; an unknown create is read back, never repeated blindly.
-
-    The project's labels go on while the PR is still Delivery's draft, so a retry adds them again and the owner's
-    later label edits stay.
-    """
+    """Find the open PR of the branch or create a draft; an unknown create is read back, never repeated blindly."""
     repo, branch, target = ctx.repository, c.names.branch, c.names.target
     settings = ctx.store.settings()
     pr = ctx.gh.find_pull_request(repo, branch, target)
@@ -112,8 +111,9 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
             if exc.retry_safe:
                 raise
             pr = ctx.gh.find_pull_request(repo, branch, target)
-    if pr and pr.draft and pr.head_sha == head:
+    if pr:
         labelled(ctx, c, pr, settings.pr_labels)
+    if pr and pr.draft and pr.head_sha == head:
         try:
             ctx.gh.mark_ready(pr)
         except ProviderError as exc:
