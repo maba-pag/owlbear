@@ -13,11 +13,22 @@ from owlbear_delivery_next.machine_host import command, control, install
 
 def test_help_and_completion_load_no_command_module() -> None:
     code = (
-        "import sys; from owlbear_delivery_next.machine_host import command; command.parser(); "
+        "import sys; from owlbear_delivery_next.machine_host import command; command.app(['--help']); "
+        "command.app.generate_completion(shell='zsh'); "
         "print(sorted(m for m in sys.modules if m.startswith('owlbear_delivery_next.')))"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
-    assert done.stdout.strip() == "['owlbear_delivery_next.machine_host', 'owlbear_delivery_next.machine_host.command']"
+    loaded = done.stdout.strip().splitlines()[-1]
+    assert loaded == "['owlbear_delivery_next.machine_host', 'owlbear_delivery_next.machine_host.command']"
+
+
+def test_machine_commands_get_their_options_and_return_their_exit_code(monkeypatch) -> None:
+    called = []
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(control, "logs", lambda _say, lines: called.append(lines) or 0)
+    monkeypatch.setattr(control, "autostart", lambda _say, *, on: called.append(on) or 1)
+    assert (command.main(["logs", "-n", "5"]), command.main(["logs"]), command.main(["autostart", "off"])) == (0, 0, 1)
+    assert called == [5, 40, False]
 
 
 def test_project_commands_run_as_owlbear_next_with_the_repo_before_them(monkeypatch) -> None:
@@ -38,13 +49,17 @@ def test_other_systems_are_refused(monkeypatch, capsys) -> None:
 
 def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) -> None:
     said, asked, items = [], [], []
-    assert install.install(said.append, pytest.fail, command.parser()) == 1  # not the installed runtime
+    assert install.install(said.append, pytest.fail, command.app) == 1  # not the installed runtime
     monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
     monkeypatch.setattr(control, "autostart", lambda _say, *, on: items.append(on) or 0)
     answers = iter([True, False])
-    assert install.install(said.append, lambda q: asked.append(q) or next(answers), command.parser()) == 0
+    assert install.install(said.append, lambda q: asked.append(q) or next(answers), command.app) == 0
     completion = local_home.root() / install.COMPLETION
-    assert ("#compdef owlbear" in completion.read_text(), (Path.home() / ".zshrc").exists()) == (True, False)
+    script = completion.read_text()
+    assert ("#compdef owlbear" in script, (Path.home() / ".zshrc").exists()) == (True, False)
+    assert "paused until you press Resume" in script  # a description per command
+    assert "How many lines to show" in script  # and per option
+    assert "__complete" not in script  # static: TAB never starts Python (TD-263)
     assert (install.link_path().readlink(), items, len(asked)) == (Path(sys.executable).parent / "owlbear", [], 2)
     assert install.uninstall(said.append) == 0
     assert (install.link_path().is_symlink(), completion.exists(), items) == (False, False, [False])

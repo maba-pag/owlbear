@@ -16,8 +16,9 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import control, registry
 
 if TYPE_CHECKING:
-    import argparse
     from collections.abc import Callable
+
+    from cyclopts import App
 
     from owlbear_delivery_next.machine_host.control import Say
 
@@ -34,16 +35,14 @@ def runtime() -> Path:
     return local_home.root() / "runtime"
 
 
-def install(say: Say, ask: Callable[[str], bool], parser: argparse.ArgumentParser) -> int:
+def install(say: Say, ask: Callable[[str], bool], app: App) -> int:
     """Write the completion, then link the command and add the login item, each only after a yes."""
     command = local_home.stable(Path(sys.executable).parent / "owlbear")  # the alias, so updates keep it
     if not command.is_relative_to(runtime()):
         say(f"run this from the installed runtime: {runtime() / '.venv' / 'bin' / 'owlbear'} install")
         return 1
-    import shtab  # noqa: PLC0415 - only install needs it
-
     path = local_home.root() / COMPLETION
-    path.write_text(shtab.complete(parser, shell="zsh"))  # noqa: S604 - shtab's shell name
+    path.write_text(app.generate_completion(shell="zsh"))  # noqa: S604 - the script's shell; it is static (TD-263)
     say(f"completion written to {path}; to use it, add this line to ~/.zshrc: source {path}")
     target = link_path()
     if ask(f"Link {target} to {command}, so `owlbear` runs in any shell?"):
