@@ -1884,7 +1884,8 @@ def test_a_failed_dequeue_keeps_the_pause_waiting_and_unacknowledged(tmp_path, m
     gh.dequeue_fails = True
     store = fold_store(tmp_path, monkeypatch, gh, change())  # a person's entry: no claim of Delivery's
     assert (fold_pause(store, tmp_path).intent.paused_at, store.read("c1").inbox_acked) == (None, [])
-    assert list((store.root / "changes" / "c1" / "inbox").glob("*.json"))
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox WHERE slug = 'c1'").fetchone() == (1,)
     gh.dequeue_fails = False
     assert (fold_pause(store, tmp_path).intent.paused_at, gh.dequeued) == (NOW, [7])
 

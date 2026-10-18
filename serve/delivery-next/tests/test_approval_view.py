@@ -144,6 +144,18 @@ def test_the_approved_brief_lists_what_the_owner_added_since(page_url) -> None:
         expect(page.locator(".brief").first).to_contain_text("Your approval accepted these choices.")
 
 
+def sent(store: Store, slug: str) -> str:
+    """The one inbox item the page sent; the answer may still be on its way when the page shows it."""
+    until = time.monotonic() + 5
+    while True:
+        with store.db.read() as db:
+            rows = db.execute("SELECT item FROM inbox WHERE slug = ?", (slug,)).fetchall()
+        if rows or time.monotonic() > until:
+            [(item,)] = rows
+            return item
+        time.sleep(0.05)
+
+
 def asking() -> m.Change:
     """A Change waiting on the owner's answer to an ordinary build question."""
     options = [m.Option(id="de", label="German"), m.Option(id="en", label="English")]
@@ -172,9 +184,9 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
         expect(page.locator("#changes .card.current")).to_contain_text("greet")
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
-    [item] = (store.root / "changes" / "greet" / "inbox").glob("*.json")
-    assert '"option":"en"' in item.read_text().replace(" ", "")
-    assert "the site is read in Canada" in item.read_text()
+    item = sent(store, "greet")
+    assert '"option":"en"' in item.replace(" ", "")
+    assert "the site is read in Canada" in item
 
 
 @pytest.mark.browser
@@ -215,5 +227,4 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left) -> 
         expect(form.locator("input:checked")).to_have_count(0)
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
-    [item] = (store.root / "changes" / "greet" / "inbox").glob("*.json")
-    assert '"option":null' in item.read_text().replace(" ", "")
+    assert '"option":null' in sent(store, "greet").replace(" ", "")

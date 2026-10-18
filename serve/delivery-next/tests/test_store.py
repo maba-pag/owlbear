@@ -3,7 +3,6 @@ import os
 import subprocess
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 
@@ -72,6 +71,17 @@ def save(store, change):
         store.write(lock, change)
 
 
+def record(store, slug):
+    """The Change's stored text, as a damaged or older record would be found."""
+    with store.db.read() as db:
+        return db.execute("SELECT record FROM changes WHERE slug = ?", (slug,)).fetchone()[0]
+
+
+def overwrite(store, slug, text):
+    with store.db.write() as db:
+        db.execute("UPDATE changes SET record = ? WHERE slug = ?", (text, slug))
+
+
 def test_every_worktree_opens_the_same_store_in_the_common_git_dir(repo, store):
     git(repo, "worktree", "add", "-q", str(repo.parent / "wt"))
     assert Store.open(repo.parent / "wt").root == store.root == (repo / ".git" / "owlbear-delivery").resolve()
@@ -88,7 +98,7 @@ def test_unusable_store_format_is_refused_with_its_stop(repo, store, marker, act
 @pytest.mark.parametrize("text", ["{broken", "[]", '{"format": "x"}', '{"format": null}', '{"format": 1, "slug": 3}'])
 def test_malformed_state_is_a_store_error_with_a_restore_stop(store, text):
     save(store, Change(slug="c1"))
-    (store.root / "changes" / "c1" / "change.json").write_text(text)
+    overwrite(store, "c1", text)
     with pytest.raises(StoreError) as err:
         store.read("c1")
     assert status.unloadable(err.value.stop(NOW)).action == "Restore the previous state"
@@ -104,8 +114,7 @@ def test_malformed_state_is_a_store_error_with_a_restore_stop(store, text):
 )
 def test_a_current_format_file_that_does_not_validate_was_written_by_another_delivery(store, edit, said):
     save(store, Change(slug="c1"))
-    path = store.root / "changes" / "c1" / "change.json"
-    path.write_text(json.dumps(edit(json.loads(path.read_text()))))
+    overwrite(store, "c1", json.dumps(edit(json.loads(record(store, "c1")))))
     with pytest.raises(StoreError) as err:
         store.read("c1")
     assert str(err.value) == f"state of c1 was written by a newer or different Delivery ({said})"
@@ -139,32 +148,29 @@ def test_change_records_migrate_forward_or_refuse(store, monkeypatch):
 def test_a_stored_brief_review_becomes_its_challenge(store):
     approved = Brief(version=1, challenged=None)
     save(store, Change(slug="c1", brief=Brief(version=2, challenged=2, approved=[approved])))
-    path = store.root / "changes" / "c1" / "change.json"
-    old = json.loads(path.read_text())
+    old = json.loads(record(store, "c1"))
     old["format"], old["brief"]["reviewed"] = 1, old["brief"].pop("challenged")
     old["brief"]["approved"][0]["reviewed"] = old["brief"]["approved"][0].pop("challenged")
-    path.write_text(json.dumps(old))
+    overwrite(store, "c1", json.dumps(old))
     brief = store.read("c1").brief
     assert (brief.challenged, brief.approved) == (2, [approved])
 
 
 def test_a_format_1_consent_drops_the_merge_queue_field(store):
     save(store, Change(slug="c1", consent=MergeConsent(head="a" * 40, at=datetime(2026, 10, 10, tzinfo=UTC))))
-    path = store.root / "changes" / "c1" / "change.json"
-    old = json.loads(path.read_text())
+    old = json.loads(record(store, "c1"))
     old["format"], old["consent"]["queued_at"] = 1, None
-    path.write_text(json.dumps(old))
+    overwrite(store, "c1", json.dumps(old))
     assert store.read("c1").consent.head == "a" * 40
 
 
 def test_a_format_3_change_drops_the_td_189_round_fields(store):
     fix = Task(id="t2", title="fix", origin="review", fixes="t1", disputes=[Dispute(key="F1", finding="f", reason="r")])
     save(store, Change(slug="c1", plan=Plan(tasks=[Task(id="t1", title="one"), fix])))
-    path = store.root / "changes" / "c1" / "change.json"
-    old = json.loads(path.read_text())
+    old = json.loads(record(store, "c1"))
     old["format"], old["plan"]["tasks"][1]["found_in"] = 3, 2
     old["plan"]["tasks"][1]["disputes"][0] |= {"direct": True, "repeat_of": "E1"}
-    path.write_text(json.dumps(old))
+    overwrite(store, "c1", json.dumps(old))
     assert store.read("c1").plan.tasks[1].disputes[0].key == "F1"
 
 
@@ -172,10 +178,7 @@ def test_write_keeps_prev_and_restore_brings_it_back(store):
     with store.lock("c1") as lock:
         store.write(lock, Change(slug="c1", profile_version=1))
         store.write(lock, Change(slug="c1", profile_version=2))
-        (store.root / "changes" / "c1" / "change.json").write_text("{broken")
-        with pytest.raises(StoreError, match="unreadable"):
-            store.read("c1")
-        (store.root / "changes" / "c1" / "change.json").write_bytes(b'{"slug": "c1\xff"}')
+        overwrite(store, "c1", "{broken")
         with pytest.raises(StoreError, match="unreadable"):
             store.read("c1")
         store.restore(lock, "c1")
@@ -209,7 +212,8 @@ def test_inbox_written_without_the_lock_is_folded_by_its_holder(store):
         change, step = store.fold(lock, "c1", NOW)
     assert (change.questions[0].answer.text, step.kind) == ("FOO", StepKind.BUILD)
     assert store.read("c1") == change
-    assert not list((store.root / "changes" / "c1" / "inbox").iterdir())
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
 
 
 def test_an_open_consent_question_is_closed_and_logged_once_ask_before_merge_is_off(store):
@@ -222,21 +226,25 @@ def test_an_open_consent_question_is_closed_and_logged_once_ask_before_merge_is_
 
 
 def test_interrupted_fold_never_applies_an_item_twice(store, monkeypatch):
+    """The Change and the removal of the items it took commit together: a failure keeps both as they were."""
     save(store, Change(slug="c1", brief=Brief(version=1, challenged=1)))
     store.put_inbox("c1", BriefApproval(at=NOW, version=1))
+    real = store_mod.put_record
 
     def killed(*_args, **_kwargs):
         msg = "killed"
         raise OSError(msg)
 
-    monkeypatch.setattr(Path, "unlink", killed)
+    monkeypatch.setattr(store_mod, "put_record", killed)
     with store.lock("c1") as lock, pytest.raises(OSError, match="killed"):
         store.fold(lock, "c1", NOW)
-    monkeypatch.undo()
+    assert store.read("c1").brief.approved == []
+    monkeypatch.setattr(store_mod, "put_record", real)
+    with store.lock("c1") as lock:
+        assert len(store.fold(lock, "c1", NOW)[0].brief.approved) == 1
     save(store, apply(store.read("c1"), StepResult(exit=Exit.BACK, back_to=StepKind.SHAPE, cause="scope:plan:"), NOW))
     with store.lock("c1") as lock:
-        assert store.fold(lock, "c1", NOW)[1].kind == StepKind.SHAPE
-        assert store.fold(lock, "c1", NOW)[0].inbox_acked == []
+        assert store.fold(lock, "c1", NOW)[1].kind == StepKind.SHAPE  # the approval is not applied again
 
 
 def test_activity_keeps_only_the_last_events(store, monkeypatch):
@@ -244,5 +252,4 @@ def test_activity_keeps_only_the_last_events(store, monkeypatch):
     with store.lock("c1") as lock:
         for n in range(5):
             store.log(lock, "c1", {"n": n})
-    lines = (store.root / "changes" / "c1" / "activity.jsonl").read_text().splitlines()
-    assert [json.loads(line)["n"] for line in lines] == [2, 3, 4]
+    assert [e["n"] for e in store.events("c1")] == [2, 3, 4]

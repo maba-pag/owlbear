@@ -18,9 +18,10 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field, ValidationError
 
-from owlbear_delivery_next.change_contracts.models import FORMAT, Record
+from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.state_store.database import STORE_FORMAT
 from owlbear_delivery_next.state_store.store import STORE_DIR
 
 if TYPE_CHECKING:
@@ -137,8 +138,8 @@ def canonical(path: Path) -> tuple[Path, Path]:
     except (OSError, ValueError) as exc:
         msg = f"{marker} is unreadable"
         raise RegistryError(msg) from exc
-    if found > FORMAT:
-        msg = f"{work}'s Delivery state has format {found}, newer than {FORMAT}: this OwlBear is older"
+    if found > STORE_FORMAT:
+        msg = f"{work}'s Delivery state has format {found}, newer than {STORE_FORMAT}: this OwlBear is older"
         raise RegistryError(msg)
     return work, store
 

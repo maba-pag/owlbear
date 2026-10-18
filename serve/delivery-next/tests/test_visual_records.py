@@ -178,11 +178,11 @@ def test_a_round_the_owner_decided_is_kept_with_its_before_and_after_screenshots
 def test_a_change_stored_before_round_decisions_loads_without_its_old_answer(tmp_path) -> None:
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), Change(slug="c1", visual=VisualResult(head="h", tree="t", at=NOW)))
-    path = store.root / "changes" / "c1" / "change.json"
-    data = json.loads(path.read_text())
-    data["format"] = 2
-    data["visual"] |= {"decision": "accept", "note": "fine"}
-    path.write_text(json.dumps(data))
+    with store.db.write() as db:
+        data = json.loads(db.execute("SELECT record FROM changes WHERE slug = 'c1'").fetchone()[0])
+        data["format"] = 2
+        data["visual"] |= {"decision": "accept", "note": "fine"}
+        db.execute("UPDATE changes SET record = ? WHERE slug = 'c1'", (json.dumps(data),))
     assert store.read("c1").visual.head == "h"
 
 

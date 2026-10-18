@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import InboxItem
-from owlbear_delivery_next.change_contracts.models import FORMAT, Change, ErrorKind, Record, Stop
+from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system import data_repo
@@ -25,6 +25,14 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.settings import migrations, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, Settings, resolve
 from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store.database import (
+    STORE_FORMAT,
+    Database,
+    FormatTooNewError,
+    StoreError,
+    append_activity,
+    put_record,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -51,22 +59,7 @@ class Holder(Record):
     since: datetime
 
 
-class StoreError(Exception):
-    """State that cannot be used; the loop shows it as a ``state`` stop."""
-
-    action = "Restore the previous state"
-    resume = "State loads"
-
-    def stop(self, now: datetime) -> Stop:
-        """Return the stop record for this error."""
-        return Stop(kind=ErrorKind.STATE, reason=str(self), action=self.action, resume=self.resume, at=now)
-
-
-class FormatTooNewError(StoreError):
-    """The state was written by a newer OwlBear."""
-
-    action = "Upgrade OwlBear"
-    resume = "State loads on the newer OwlBear"
+__all__ = ["FormatTooNewError", "StoreError"]  # defined with the database, raised by every store operation
 
 
 class SharedError(StoreError):
@@ -178,11 +171,12 @@ def update_layer[T: Layer](path: Path, model: type[T], change: Callable[[T], T])
 
 
 class Store:
-    """Change records, locks, inboxes and activity logs of one clone."""
+    """Change records, locks, inboxes and activity logs of one clone; the records live in its database (TD-265)."""
 
     def __init__(self, root: Path, shared: DataRepo | None = None, name: str = "") -> None:
         self.root, self.shared, self.name = root, shared, name
         self.global_path = shared.global_path if shared else None
+        self.db = Database(root)
 
     @property
     def config_path(self) -> Path:
@@ -199,17 +193,9 @@ class Store:
             raise StoreError(str(exc)) from exc
         store = cls(git_common_dir(cwd) / STORE_DIR, shared, name)
         store.root.mkdir(mode=0o700, exist_ok=True)
-        marker = store.root / "format"
-        try:
-            found = int(marker.read_text()) if marker.exists() else 0
-        except (OSError, ValueError) as exc:
-            msg = "store format marker is unreadable"
-            raise StoreError(msg) from exc
-        if found > FORMAT:
-            msg = f"store format {found} is newer than {FORMAT}"
+        if (found := store.db.marker()) > STORE_FORMAT:  # the database itself opens with the first operation
+            msg = f"store format {found} is newer than {STORE_FORMAT}"
             raise FormatTooNewError(msg)
-        if found < FORMAT:
-            atomic_write(marker, f"{FORMAT}\n")
         try:
             store.adopt(data_repo.identity(cwd) if shared else "")
             profile_share.move_roles(store)
@@ -270,11 +256,12 @@ class Store:
             raise StoreError(msg) from exc
 
     def _dir(self, slug: str) -> Path:
-        if "." in slug:
-            msg = f"{slug} is not a Change name: it holds a dot"
+        """The Change's folder of run locks and artifacts."""
+        if "." in slug or "/" in slug:
+            msg = f"{slug} is not a Change name: it holds a dot or a slash"
             raise StoreError(msg)
         path = self.root / "changes" / slug
-        (path / "inbox").mkdir(parents=True, exist_ok=True)
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
         return path
 
     def visual_dir(self, slug: str, head: str) -> Path:
@@ -285,30 +272,44 @@ class Store:
         """The "before" screenshots of one Change at its merge-base *base* (TD-24)."""
         return self.root / "changes" / slug / "before" / base[:7]
 
+    def _record(self, slug: str) -> str:
+        with self.db.read() as db:
+            row = db.execute("SELECT record FROM changes WHERE slug = ?", (slug,)).fetchone()
+        if row is None:
+            msg = f"state of {slug} is unreadable"
+            raise StoreError(msg)
+        return row[0]
+
     def read(self, slug: str) -> Change:
         """Read one Change, migrating an older format forward."""
-        return _load(self._dir(slug) / "change.json", Change, FORMAT, migrations.CHANGE)
+        return _parse(self._record(slug), slug, Change, FORMAT, migrations.CHANGE)
+
+    def rev(self, slug: str) -> int | None:
+        """How often the Change's record was written; None when there is none."""
+        with self.db.read() as db:
+            row = db.execute("SELECT rev FROM changes WHERE slug = ?", (slug,)).fetchone()
+        return row[0] if row else None
 
     def raw_handle(self, slug: str) -> str | None:
-        """The handle in the Change file without loading it, for a Change that cannot be read; None if absent."""
+        """The handle in the Change record without loading it, for a Change that cannot be read; None if absent."""
         try:
-            handle = json.loads((self.root / "changes" / slug / "change.json").read_text()).get("handle")
-        except AttributeError, OSError, ValueError:
+            handle = json.loads(self._record(slug)).get("handle")
+        except AttributeError, StoreError, ValueError:
             return None
         return handle if isinstance(handle, str) and HANDLE.fullmatch(handle) else None
 
     def issued(self) -> int:
-        """The highest handle number ever issued here, kept apart so a lost or restored Change file never frees one."""
-        try:
-            number = json.loads((self.root / "handles.json").read_text()).get("issued")
-        except AttributeError, OSError, ValueError:
-            return 0
-        return number if isinstance(number, int) else 0
+        """The highest handle number ever issued here, kept apart so a lost or restored Change never frees one."""
+        with self.db.read() as db:
+            row = db.execute("SELECT value FROM meta WHERE key = 'issued'").fetchone()
+        return int(row[0]) if row and row[0].isdigit() else 0
 
     def issue(self, number: int) -> None:
-        """Record *number* as issued, atomically; the mark never goes down."""
-        if number > self.issued():
-            atomic_write(self.root / "handles.json", json.dumps({"issued": number}))
+        """Record *number* as issued; the mark never goes down."""
+        with self.db.write() as db:
+            row = db.execute("SELECT value FROM meta WHERE key = 'issued'").fetchone()
+            if not (row and row[0].isdigit() and int(row[0]) >= number):
+                db.execute("INSERT OR REPLACE INTO meta VALUES ('issued', ?)", (str(number),))
 
     def read_profile(self) -> Profile | None:
         """Read the confirmed project profile under its own format gate; None before confirmation."""
@@ -323,25 +324,26 @@ class Store:
             raise SharedError(str(exc)) from exc
 
     def write(self, lock: Lock, change: Change) -> None:
-        """Write one Change atomically, keeping the previous file as ``.prev``."""
+        """Write one Change, keeping the previous record as ``prev``."""
         lock.check(change.slug)
-        path, text = self._dir(change.slug) / "change.json", change.model_dump_json(indent=1)
-        old = path.read_text() if path.exists() else None
-        if old == text:
-            return
-        if old is not None:
-            atomic_write(path.with_name("change.json.prev"), old)
-        atomic_write(path, text)
+        self._dir(change.slug)
+        with self.db.write() as db:
+            put_record(db, change.slug, change.model_dump_json(indent=1))
 
     def slugs(self) -> list[str]:
         """Return every Change of this clone."""
-        return sorted(p.parent.name for p in (self.root / "changes").glob("*/change.json"))
+        with self.db.read() as db:
+            return [row[0] for row in db.execute("SELECT slug FROM changes ORDER BY slug")]
 
     def restore(self, lock: Lock, slug: str) -> None:
-        """Replace the current Change file with its previous version."""
+        """Replace the current Change record with its previous version."""
         lock.check(slug)
-        path = self._dir(slug) / "change.json"
-        atomic_write(path, path.with_name("change.json.prev").read_text())
+        with self.db.write() as db:
+            row = db.execute("SELECT prev FROM changes WHERE slug = ?", (slug,)).fetchone()
+            if not (row and row[0] is not None):
+                msg = f"{slug} has no previous state"
+                raise StoreError(msg)
+            db.execute("UPDATE changes SET record = prev, rev = rev + 1 WHERE slug = ?", (slug,))
 
     @contextlib.contextmanager
     def lock(self, slug: str) -> Iterator[Lock]:
@@ -402,9 +404,13 @@ class Store:
         return None
 
     def put_inbox(self, slug: str, item: InboxItem) -> None:
-        """Write one inbox item without the Change lock; only a lock holder folds it."""
+        """Add one inbox item without the Change lock; only a lock holder folds it."""
         name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
-        atomic_write(self._dir(slug) / "inbox" / name, _INBOX.dump_json(item).decode())
+        self._dir(slug)
+        with self.db.write() as db:
+            db.execute(
+                "INSERT INTO inbox(slug, name, item) VALUES (?, ?, ?)", (slug, name, _INBOX.dump_json(item).decode())
+            )
 
     def fold(  # noqa: PLR0913 - the PR observation and the queue barrier
         self,
@@ -416,23 +422,23 @@ class Store:
         moved: bool = False,
         leave: Callable[[Change, Change], Change | None] | None = None,
     ) -> tuple[Change, Step | None]:
-        """Fold the inbox under the lock; consumed item names are saved with the Change, so a replay skips them.
+        """Fold the inbox under the lock: the Change and the removal of exactly the items it took commit together.
 
-        ``leave`` sees the Change before and after folding; None keeps every item waiting and nothing is written.
+        No transaction spans the computation or ``leave``, which sees the Change before and after folding; None
+        keeps every item waiting and nothing is written. Items an older process left as files are taken first.
         """
         lock.check(slug)
+        self.db.ingest(slug, self._dir(slug) / "inbox")
         change = self.read(slug)
         before = change
-        present = sorted((self._dir(slug) / "inbox").glob("*.json"))
-        acked = [n for n in change.inbox_acked if n in {p.name for p in present}]
-        files: list[Path] = []
-        items: list[InboxItem] = []
-        for path in (p for p in present if p.name not in acked):
+        with self.db.read() as db:
+            rows = db.execute("SELECT id, item FROM inbox WHERE slug = ? ORDER BY name, id", (slug,)).fetchall()
+        items, events = [], []
+        for _, text in rows:
             try:
-                items.append(_INBOX.validate_json(path.read_bytes()))
-                files.append(path)
-            except ValidationError:
-                path.rename(path.with_suffix(".rejected"))
+                items.append(_INBOX.validate_json(text))
+            except ValidationError:  # taken all the same, and kept in the activity for the record
+                events.append({"event": "inbox-rejected", "at": now.isoformat(timespec="seconds"), "item": text[:2000]})
         asked = loop.open_question(change) if loop.waiting_consent(change) else None
         asking = profile.value(self.read_profile() or Profile(), profile.ASK) == "yes"
         change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
@@ -441,38 +447,40 @@ class Store:
             if kept is None:  # a queued PR could not be taken out yet: the items wait for the next pass
                 return before, loop.next_step(before, now)
             change = kept
-        change.inbox_acked = acked + [p.name for p in files]
-        self.write(lock, change)
+        change.inbox_acked = []
         if asked and any(q.id == asked.id and q.answer and q.answer.option == loop.OBSOLETE for q in change.questions):
-            at = now.isoformat(timespec="seconds")
-            self.log(lock, slug, {"event": "consent-obsolete", "at": at, "question": asked.id})
-        for path in present:
-            path.unlink(missing_ok=True)
+            events.append({"event": "consent-obsolete", "at": now.isoformat(timespec="seconds"), "question": asked.id})
+        with self.db.write() as db:
+            put_record(db, change.slug, change.model_dump_json(indent=1))
+            db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])
+            for event in events:
+                append_activity(db, slug, json.dumps(event, default=str, sort_keys=True), ACTIVITY_LIMIT)
         return change, step
 
     def events(self, slug: str) -> list[dict[str, Any]]:
         """Return the retained activity events, oldest first."""
-        path = self._dir(slug) / "activity.jsonl"
-        return [json.loads(line) for line in path.read_text().splitlines() if line] if path.exists() else []
+        with self.db.read() as db:
+            rows = db.execute("SELECT event FROM activity WHERE slug = ? ORDER BY id", (slug,)).fetchall()
+        return [json.loads(row[0]) for row in rows]
 
     def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None:
         """Append one activity event, keeping only the last ``ACTIVITY_LIMIT``."""
         lock.check(slug)
-        path = self._dir(slug) / "activity.jsonl"
-        lines = path.read_text().splitlines() if path.exists() else []
-        lines.append(json.dumps(event, default=str, sort_keys=True))
-        atomic_write(path, "\n".join(lines[-ACTIVITY_LIMIT:]) + "\n")
+        with self.db.write() as db:
+            append_activity(db, slug, json.dumps(event, default=str, sort_keys=True), ACTIVITY_LIMIT)
 
     def now(self, slug: str) -> dict[str, Any] | None:
         """Return the step's latest tool call, or None when none was recorded or it is unreadable."""
-        path = self._dir(slug) / "now.json"
+        with self.db.read() as db:
+            row = db.execute("SELECT data FROM now WHERE slug = ?", (slug,)).fetchone()
         try:
-            data = json.loads(path.read_text())
-        except OSError, ValueError:
+            data = json.loads(row[0]) if row else None
+        except ValueError:
             return None
         return data if isinstance(data, dict) else None
 
     def write_now(self, lock: Lock, slug: str, data: dict[str, Any]) -> None:
         """Overwrite the now line; it is a hint for status and never part of activity."""
         lock.check(slug)
-        atomic_write(self._dir(slug) / "now.json", json.dumps(data, sort_keys=True))
+        with self.db.write() as db:
+            db.execute("INSERT OR REPLACE INTO now VALUES (?, ?)", (slug, json.dumps(data, sort_keys=True)))

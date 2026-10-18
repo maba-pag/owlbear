@@ -27,6 +27,7 @@ from owlbear_delivery_next.runtimes import readiness, step_input
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings.config import Agent, Layer, resolve
 from owlbear_delivery_next.state_store import briefs
+from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -57,24 +58,26 @@ def repo(tmp_path):
     return tmp_path
 
 
+def raw(store: Store, slug: str, text: str) -> None:
+    """A Change record as stored, damaged or of an older format."""
+    with store.db.write() as db:
+        put_record(db, slug, text)
+
+
 def test_an_unloadable_change_keeps_its_handle_from_a_new_brief(tmp_path):
     store = Store(tmp_path)
-    path = tmp_path / "changes" / "old" / "change.json"
-    path.parent.mkdir(parents=True)
-    path.write_text('{"format": 0, "slug": 5, "handle": "c1"}')
+    raw(store, "old", '{"format": 0, "slug": 5, "handle": "c1"}')
     assert client(store).post("/api/next/briefs", json=BRIEF).json()["change"] == "c2"
 
 
 def test_a_handle_once_issued_is_never_issued_again(tmp_path):
     store, c = Store(tmp_path), client(Store(tmp_path))
     assert [c.post("/api/next/briefs", json=BRIEF).json()["change"] for _ in range(2)] == ["c1", "c2"]
-    (tmp_path / "changes" / "add-farewell-2" / "change.json").write_text('{"handle": "c')  # truncated
-    odd = tmp_path / "changes" / "odd" / "change.json"
-    odd.parent.mkdir()
-    odd.write_text('{"format": 0, "handle": "x999"}')  # not a handle the host issues
+    raw(store, "add-farewell-2", '{"handle": "c')  # truncated
+    raw(store, "odd", '{"format": 0, "handle": "x999"}')  # not a handle the host issues
     assert c.post("/api/next/briefs", json=BRIEF).json()["change"] == "c3"
-    for name in ("add-farewell-2", "add-farewell-3"):  # a restore or loss leaves only c1 readable
-        (tmp_path / "changes" / name / "change.json").unlink()
+    with store.db.write() as db:  # a restore or loss leaves only c1 readable
+        db.execute("DELETE FROM changes WHERE slug IN ('add-farewell-2', 'add-farewell-3')")
     assert (store.issued(), c.post("/api/next/briefs", json=BRIEF).json()["change"]) == (3, "c4")
 
 
@@ -250,7 +253,8 @@ def test_chat_refuses_recovery_decisions(repo):
     refused = chat.answer_question("c1.q2", "abandon", "")
     assert (refused["answered"], refused["error"].startswith(api.T6)) == (False, True)
     assert chat.answer_question("c1.q1", "o1", "") == {"answered": False, "error": NOT_RUNNING.format(repo=repo)}
-    assert not list((store.root / "changes" / "greet" / "inbox").glob("*.json"))
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
     status = chat.show_status("c1")
     assert (status["running"], status["changes"][0]["question"]["answer_in"]) == (False, "changes-page")
     assert {"progress", "spend"} <= set(status["changes"][0])

@@ -21,7 +21,7 @@ from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord, running
 from owlbear_delivery_next.runtimes import readiness
-from owlbear_delivery_next.state_store.store import Store, StoreError
+from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -64,6 +64,10 @@ class Gate:
         """Admit again, after a refused removal."""
         with self.cond:
             self.open = True
+
+
+class ImportWaitingError(Exception):
+    """The clone's file-format state cannot move to its database yet; loading again later retries."""
 
 
 class Project:
@@ -110,6 +114,9 @@ class Project:
             os.close(fd)
         try:
             self._start(store, record, paused)
+        except ImportWaitingError as exc:
+            self.stop(drain=0)
+            self.state, self.reason = "failed", str(exc)
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
             self.stop(drain=0)
             self.state, self.reason = "failed", f"it could not start: {type(exc).__name__}: {exc}"
@@ -118,6 +125,8 @@ class Project:
         repo = Path(self.entry.path)
         self.store = store
         self.host = Host(store, repo, paused=lambda: paused() or not self.gate.open)
+        if store.db.waiting():
+            self.import_state(store, self.host)
         self.host.record = record.model_copy(update={"pid": os.getpid(), "project": self.entry.id, "ready": None})
         self._publish()
         self.app = api.create_app(store, record.token, self.host)
@@ -125,6 +134,27 @@ class Project:
         self.scheduler.start()
         threading.Thread(target=self._ready, daemon=True, name=f"readiness-{self.entry.id}").start()
         self.state, self.reason = "loaded", ""
+
+    @staticmethod
+    def import_state(store: Store, host: Host) -> None:
+        """Move the clone's file state into its database (TD-265), under the host lock this project holds.
+
+        Only once no runner of an older OwlBear is alive and with every Change lock held, so nothing writes the
+        files while they are read; the database's own fence waits for operations already running.
+        """
+        slugs = store.db.legacy_slugs()
+        if alive := [s for s in slugs if (r := host.runner(s)) and host.alive(r.pid, r.created) is not False]:
+            msg = f"its state moves to the database once the running steps of {', '.join(alive)} end"
+            raise ImportWaitingError(msg)
+        try:
+            with contextlib.ExitStack() as held:
+                for slug in slugs:
+                    held.enter_context(store.lock(slug))
+                store.db.import_files()
+        except LockHeldError as exc:
+            msg = f"its state moves to the database once process {exc.holder.pid if exc.holder else '?'} ends its step"
+            raise ImportWaitingError(msg) from exc
+        host.say(f"moved the state of {len(slugs)} Change{'s' if len(slugs) != 1 else ''} into the database")
 
     def _publish(self) -> None:
         if self.store and self.host and not self.host.stopped.is_set():

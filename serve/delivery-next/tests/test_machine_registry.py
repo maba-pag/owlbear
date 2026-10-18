@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.models import FORMAT
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import environment, registry
 from owlbear_delivery_next.machine_host.registry import RegistryError
+from owlbear_delivery_next.state_store.database import STORE_FORMAT
 
 
 @pytest.fixture
@@ -83,8 +83,8 @@ def test_a_folder_that_is_no_clone_of_the_owner_or_newer_state_is_refused(tmp_pa
     work = clone(tmp_path / "work")
     store = work / ".git" / "owlbear-delivery"
     store.mkdir()
-    (store / "format").write_text(f"{FORMAT + 1}\n")
-    with pytest.raises(RegistryError, match=f"format {FORMAT + 1}, newer than {FORMAT}"):
+    (store / "format").write_text(f"{STORE_FORMAT + 1}\n")
+    with pytest.raises(RegistryError, match=f"format {STORE_FORMAT + 1}, newer than {STORE_FORMAT}"):
         registry.register(work)
     (store / "format").write_text("four\n")
     with pytest.raises(RegistryError, match="is unreadable"):
