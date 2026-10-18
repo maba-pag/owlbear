@@ -48,6 +48,8 @@ decisions TD-41..43, TD-150 and TD-156 in
   plus "your words as written", "show me more readings" and "explain first".
 - Before asking, challenge the proposal against his intent: what it lacks and what it overdoes,
   not only what is wrong (TD-150).
+- Record each answer as C-31 of the decision record says: edit its topic in the same change, never
+  append history rows; number it after the highest TD number in the record on a freshly fetched `main`.
 
 ## Directory Structure
 
