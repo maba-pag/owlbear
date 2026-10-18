@@ -1372,17 +1372,18 @@ async function everything() {
   const projects = shown();
   if (projects === null) {  // a clone's own host: the one project it serves
     const rows = (await call("/changes")).map((c) => ({ ...c, key: c.slug, project: "", projectName: "" }));
-    return [rows, (await call("/project")).notes];
+    return [rows, (await call("/project")).notes, new Set()];
   }
   const each = await Promise.allSettled(projects.map(async (p) => [await call("/changes", undefined, p.id),
     (await call("/project", undefined, p.id)).notes]));
   const lost = (r) => r.status === "rejected" && (r.reason instanceof HostDown || r.reason instanceof Restarted);
   const down = each.find(lost);
   if (down) throw down.reason;
-  const rows = [], notes = [];
+  const rows = [], notes = [], failing = new Set();
   each.forEach((r, i) => {  // one project that cannot be read keeps its last Changes and says why; the others go on
     const p = projects[i], named = (n) => (projects.length > 1 ? `${p.name}: ${n}` : n);
     if (r.status === "rejected") {
+      failing.add(p.id);
       rows.push(...(state.changes ?? []).filter((c) => c.project === p.id));
       notes.push(named(`not read just now (${r.reason.message}); its Changes show as last read`));
       return;
@@ -1391,7 +1392,7 @@ async function everything() {
     rows.push(...changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id, projectName: p.name })));
     notes.push(...said.map(named));
   });
-  return [rows, notes];
+  return [rows, notes, failing];
 }
 
 async function refresh() {
@@ -1401,8 +1402,10 @@ async function refresh() {
   }
   busy = true;
   try {
-    [state.changes, state.notes] = await everything();
-    if (state.selected && !state.changes.some((c) => c.key === state.selected)) {  // gone, or a stale link
+    const [rows, notes, failing] = await everything();
+    [state.changes, state.notes] = [rows, notes];
+    const unread = state.selected && failing.has(parts(state.selected)[0]);  // absent only once its project answers
+    if (state.selected && !unread && !rows.some((c) => c.key === state.selected)) {  // gone, or a stale link
       state.selected = null;
       history.replaceState(null, "", here({ change: "" }));
     }
@@ -1411,7 +1414,9 @@ async function refresh() {
     state.seen = "";
     state.stale = false;
     const key = state.selected;
-    if (key) {
+    if (key && unread) {
+      // its project did not answer: the detail stays as last read
+    } else if (key) {
       const [of, slug] = parts(key), d = await call(`/changes/${encodeURIComponent(slug)}`, undefined, of);
       const row = state.changes.find((c) => c.key === key);
       Object.assign(d, { key, project: of, projectName: row?.projectName ?? "" });

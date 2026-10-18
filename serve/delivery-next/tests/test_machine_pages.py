@@ -141,6 +141,11 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
             expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
             expect(cards).to_have_count(2)  # its Changes stay as last read; beta's go on
+            page.goto(f"{base}/?change={a.id}%2Fsame")  # a link into the project that does not answer just now
+            expect(page.locator("#notes")).to_contain_text("alpha: not read just now")
+            page.unroute(f"**/p/{a.id}/api/next/changes")
+            expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
+            assert page.evaluate("location.search") == f"?change={a.id}%2Fsame"
             browser.close()
     finally:
         server.should_exit = True
