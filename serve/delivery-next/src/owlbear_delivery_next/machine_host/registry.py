@@ -8,13 +8,14 @@ A project is a clone. Registering one writes only two things into it: its store 
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import os
 import secrets
 import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, ValidationError
 
@@ -28,7 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK, CLONE_ID = "machine.json", "machine.lock", "clone-id"
-MACHINE_FORMAT = 1
+MACHINE_FORMAT = 2  # 2: the machine's own settings (TD-243, TD-288, TD-300)
+STALE = "the machine settings changed since this page loaded them"
 
 
 class RegistryError(Exception):
@@ -43,12 +45,21 @@ class Project(Record):
     added_at: datetime
 
 
+class Settings(Record):
+    """The machine's own settings, changed only in Settings → This machine."""
+
+    channel: Literal["minor", "major"] = "minor"  # every minor version, or major versions only (TD-300)
+    update_when_idle: bool = True  # TD-288
+    update_while_paused: bool = True
+
+
 class Machine(Record):
-    """``machine.json``: the registered projects and the last Resume."""
+    """``machine.json``: the registered projects, the last Resume and the machine's settings."""
 
     format: int = MACHINE_FORMAT
     projects: list[Project] = Field(default_factory=list)
     resumed_at: datetime | None = None
+    settings: Settings = Field(default_factory=Settings)  # format 1 had none: the defaults
 
 
 def _home() -> Path:
@@ -93,10 +104,27 @@ def load() -> Machine:
 
 
 def save(machine: Machine) -> None:
-    """Write the registry atomically, readable only by the owner; call it under ``locked()``."""
+    """Write the registry atomically in this format, readable only by the owner; call it under ``locked()``."""
     path = _home() / MACHINE
+    machine.format = MACHINE_FORMAT
     atomic_write(path, machine.model_dump_json(indent=2) + "\n")
     path.chmod(0o600)
+
+
+def revision(settings: Settings) -> str:
+    """What the page names when it saves: any other save since then refuses the page's."""
+    return hashlib.sha256(settings.model_dump_json().encode()).hexdigest()
+
+
+def configure(settings: Settings, rev: str) -> Settings:
+    """Replace the machine's settings, refused when they changed since *rev* was read."""
+    with locked():
+        machine = load()
+        if revision(machine.settings) != rev:
+            raise RegistryError(STALE)
+        machine.settings = settings
+        save(machine)
+    return settings
 
 
 def _git(cwd: Path, *args: str) -> Path:

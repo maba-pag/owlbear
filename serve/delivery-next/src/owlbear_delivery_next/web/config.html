@@ -82,6 +82,7 @@ const state = {
   folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
+  machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
 };
 const drafts = { project: {}, global: {} };
 let polling = null, arrived = null;  // arrived: models read while a setting held the focus, applied once it leaves
@@ -733,7 +734,7 @@ function scopeSection() {
 // Why another project may not open now: edits of either layer or a folder name typed and not saved.
 function unsaved() {
   const folder = state.folder !== null && state.folder.trim() !== (state.loaded?.folder ?? "");
-  return Object.keys(drafts.project).length || Object.keys(drafts.global).length || folder
+  return Object.keys(drafts.project).length || Object.keys(drafts.global).length || folder || state.machineDraft
     ? "Save or discard your edits before you open another project." : "";
 }
 
@@ -779,6 +780,61 @@ function acrossSection() {
 }
 
 // The machine's own values: changed only here, from a terminal, never in a settings layer (TD-243).
+const CHANNELS = [["minor", "Every minor version (v0.1, v0.2 …)"], ["major", "Major versions only (v1, v2 …)"]];
+
+// The machine's settings as shown: each edited one as edited, the others as saved (TD-288, TD-300); a save after
+// another page's lands only the edited ones on top of that page's.
+function machineValue(key) {
+  return state.machineDraft && key in state.machineDraft ? state.machineDraft[key] : state.machine.settings[key];
+}
+
+function machineEdit(key, value) {
+  const draft = { ...(state.machineDraft ?? {}), [key]: value };
+  if (value === state.machine.settings[key]) delete draft[key];
+  state.machineDraft = Object.keys(draft).length ? draft : null;
+  show();
+}
+
+function machineControls() {
+  const pick = (e) => machineEdit("channel", e.target.value);
+  const channel = state.pds
+    ? html`<p-select id="machine-channel" label="Versions this machine takes" .value=${live(machineValue("channel"))}
+        @change=${pick}>${CHANNELS.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}
+      </p-select>`
+    : html`<label class="field">Versions this machine takes<select id="machine-channel"
+        .value=${live(machineValue("channel"))} @change=${pick}>${CHANNELS.map(([v, said]) => html`<option
+        value=${v} ?selected=${v === machineValue("channel")}>${said}</option>`)}</select></label>`;
+  const box = (key, label) => {
+    const flip = (e) => machineEdit(key, e.target.checked === true);
+    return state.pds
+      ? html`<p-checkbox label=${label} .checked=${live(machineValue(key))} @change=${flip}></p-checkbox>`
+      : html`<label><input type="checkbox" .checked=${live(machineValue(key))} @change=${flip}> ${label}</label>`;
+  };
+  return html`${channel}${box("update_when_idle", "Update itself when idle")}
+    ${box("update_while_paused", "Update itself while paused")}
+    <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
+      disabled: !state.machineDraft })}</div>`;
+}
+
+async function saveMachine() {
+  if (!state.machineDraft || state.machineSaving) return;
+  state.machineSaving = true;
+  show();
+  try {
+    state.machine = await call("/machine/settings", { method: "PUT", machine: true, timeout: WRITE,
+      body: { rev: state.machine.settings_rev, settings: { ...state.machine.settings, ...state.machineDraft } } });
+    state.machineDraft = null;
+    state.status = "Saved this machine's settings.";
+  } catch (e) {
+    if (e.status === 409) state.machine = await call("/machine", { machine: true }).catch(() => state.machine);
+    notify(e.status === 409 ? `${e.message}. The page loaded them again and kept your edits; check them and save `
+      + "again." : e.message);
+  } finally {
+    state.machineSaving = false;
+    show();
+  }
+}
+
 function machineSection() {
   const m = state.machine;
   if (!m) return nothing;
@@ -789,6 +845,9 @@ function machineSection() {
       : `runs${since}`}.</p-text>
     <p-text id="machine-login">Start at login: ${m.login_item}. Change it in a terminal with
       <code>owlbear autostart on</code> or <code>owlbear autostart off</code>.</p-text>
+    ${machineControls()}
+    <p-text id="machine-note" size="xs" color="contrast-medium">OwlBear does not update itself yet; these settings
+      take effect once it does.</p-text>
   </section>`;
 }
 

@@ -97,8 +97,8 @@ def test_a_folder_that_is_no_clone_of_the_owner_or_newer_state_is_refused(tmp_pa
 
 
 def test_a_registry_from_a_newer_release_is_refused(home):
-    (home / "machine.json").write_text('{"format": 2, "projects": []}')
-    with pytest.raises(RegistryError, match="newer than 1"):
+    (home / "machine.json").write_text(f'{{"format": {registry.MACHINE_FORMAT + 1}, "projects": []}}')
+    with pytest.raises(RegistryError, match=f"newer than {registry.MACHINE_FORMAT}"):
         registry.load()
 
 
@@ -117,3 +117,28 @@ def test_the_scrub_drops_credential_and_repository_selectors_and_keeps_transport
     dropped = environment.scrub(env)
     assert dropped == ["GH_TOKEN", "GITHUB_TOKEN", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_KEY_0", "GIT_DIR"]
     assert env == {"SSH_AUTH_SOCK": "/s", "GIT_SSH_COMMAND": "ssh -i k", "GIT_SSH": "ssh", "PATH": "/bin"}
+
+
+def test_a_format_1_registry_gets_the_default_machine_settings_and_a_save_writes_format_2(home):
+    """TD-243, TD-288, TD-300: the machine's own settings; a page's save names the revision it read."""
+    (home / registry.MACHINE).write_text('{"format": 1, "projects": [], "resumed_at": null}')
+    loaded = registry.load()
+    assert (loaded.format, loaded.settings) == (1, registry.Settings())
+    rev = registry.revision(loaded.settings)
+    chosen = registry.Settings(channel="major", update_while_paused=False)
+    registry.configure(chosen, rev)
+    with pytest.raises(RegistryError, match="changed since this page loaded them"):
+        registry.configure(registry.Settings(), rev)
+    assert (registry.load().format, registry.load().settings) == (registry.MACHINE_FORMAT, chosen)
+
+
+def test_paths_outside_owlbear_name_the_runtime_alias_so_a_later_version_serves_them(home, tmp_path):
+    """The self-update build, section 3: what setup, install and the login item write survives an update."""
+    version = home / local_home.VERSIONS / "v0.2" / ".venv" / "bin"
+    version.mkdir(parents=True)
+    (home / local_home.RUNTIME).symlink_to(home / local_home.VERSIONS / "v0.2")
+    elsewhere = tmp_path / "checkout" / ".venv" / "bin" / "python"
+    alias = home / local_home.RUNTIME / ".venv" / "bin"
+    assert local_home.stable(version / "python") == alias / "python"
+    assert local_home.stable(alias / "owlbear") == alias / "owlbear"
+    assert local_home.stable(elsewhere) == elsewhere  # a developer checkout keeps its own path

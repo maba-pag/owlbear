@@ -41,7 +41,7 @@ def plist_path() -> Path:
 
 def argv() -> list[str]:
     """The machine host's process: this interpreter and the one dispatcher."""
-    return [sys.executable, "-m", "owlbear_delivery_next", "machine"]
+    return [str(local_home.stable(Path(sys.executable))), "-m", "owlbear_delivery_next", "machine"]
 
 
 def start(say: Say) -> int:
