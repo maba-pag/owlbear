@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 MARK = re.compile(r"<!-- snyk-finding: ([A-Za-z0-9-]+) -->")
+RECEIPT = re.compile(r"<!-- snyk-ignored: ([A-Za-z0-9-]+) policy=([A-Za-z0-9-]+) -->")
 BOX = "- [ ] **Not vulnerable**: tick to ignore this finding in Snyk; only the owner's tick counts (TD-363)"
 TICKED = BOX.replace("[ ]", "[x]", 1)
 DONE = "- [x] **Not vulnerable**: ignored in Snyk as policy"
@@ -197,11 +198,17 @@ def ignore(gh: GitHub, snyk: Snyk, pr: int, comment_id: int) -> str:
     if isinstance(state, str):
         return f"nothing set: {state}"
     finding, reason = state
+    receipts = {m[1]: m[2] for c in gh.comments(pr) if c["user"]["login"] == BOT and (m := RECEIPT.search(c["body"]))}
+    if policy := receipts.get(finding):  # an editor's stale copy may have saved over the mark
+        gh.update(comment_id, now.replace(TICKED, f"{DONE} `{policy}` (TD-363)", 1))
+        return f"nothing set: {finding} is ignored already as policy {policy}"
     try:
         policy = snyk.ignore(finding, reason, f"OwlBear #{pr}: {finding}")
     except (urllib.error.URLError, RuntimeError, KeyError) as exc:
         gh.update(comment_id, now.replace(TICKED, f"{BOX}\n\nSnyk refused the ignore ({exc}); tick to retry.", 1))
         return f"Snyk refused the ignore: {exc}"
+    gh.create(pr, f"<!-- snyk-ignored: {finding} policy={policy} -->\nSnyk Code finding `{finding}` is ignored as "
+              f'"Not vulnerable" by policy `{policy}`, after the owner\'s tick (TD-363).')  # fmt: skip
     gh.update(comment_id, now.replace(TICKED, f"{DONE} `{policy}` (TD-363)", 1))
     return f"ignored {finding} as policy {policy}; {gh.rerun(pr)}"
 

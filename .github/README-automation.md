@@ -93,7 +93,8 @@ real finding is fixed; for a false positive it writes the reason under the box. 
 starts [Snyk ignore](workflows/snyk-ignore.yml) from `main`, which runs only for edits by his account
 (`maba-pag`, ID 238680231) and reads the comment as it is then, since GitHub may reorder or replace
 queued runs: a ticked box over a written reason sets the finding "Not vulnerable" in Snyk without
-expiry, marks the comment with the policy's ID and re-runs the failed CI once it has ended, whose
+expiry, records the policy in a receipt comment (which a stale editor copy cannot erase, so a finding
+is ignored once), marks the box with the policy's ID and re-runs the failed CI once it has ended, whose
 `snyk code test` then honours the ignore (Consistent Ignores). A tick over an empty reason, or one
 Snyk refuses, is unticked with why. The lead chat works through the same account, so the tick is
 the owner's by agreement, not proof (TD-363); an ignore can also be set in the Snyk web UI.

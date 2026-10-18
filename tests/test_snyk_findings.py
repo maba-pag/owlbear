@@ -150,7 +150,22 @@ def test_the_owner_s_tick_sets_not_vulnerable_marks_the_comment_and_reruns_the_f
     assert "expires" not in attributes["action"]["data"]
     edit = next(body for method, path, body in gh_calls.calls if method == "PATCH")
     assert f"{snyk_findings.DONE} `pol-1` (TD-363)" in edit["body"]
+    receipt = next(body for method, path, body in gh_calls.calls if method == "POST" and path.endswith("/comments"))
+    assert receipt["body"].startswith("<!-- snyk-ignored: f-1 policy=pol-1 -->")
     assert ("POST", "repos/o/r/actions/runs/7/rerun-failed-jobs", None) in gh_calls.calls
+
+
+def test_a_stale_copy_saved_over_the_mark_finds_the_receipt_and_sets_nothing_twice() -> None:
+    """The owner's editor may save a ticked copy from before the mark; the bot's receipt still knows the policy."""
+    receipt = {"user": {"login": "github-actions[bot]"}, "body": "<!-- snyk-ignored: f-1 policy=pol-1 -->\nIgnored."}
+    gh, gh_calls = github([receipt], current=finding_comment("a better reason", box=TICKED))
+    api, snyk_calls = snyk()
+
+    assert snyk_findings.ignore(gh, api, 5, 11) == "nothing set: f-1 is ignored already as policy pol-1"
+
+    assert not snyk_calls.calls
+    edit = next(body for method, _, body in gh_calls.calls if method == "PATCH")["body"]
+    assert f"{snyk_findings.DONE} `pol-1` (TD-363)" in edit
 
 
 def test_a_refused_ignore_unticks_the_box_with_the_error_and_runs_nothing() -> None:
