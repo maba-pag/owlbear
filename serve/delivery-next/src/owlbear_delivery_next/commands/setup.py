@@ -86,19 +86,18 @@ def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]:
     return prof.model_copy(update={"entries": entries, "confirmed_at": now, "version": prof.version + 1}), unknown
 
 
-def with_task(data: dict[str, Any], python: str) -> dict[str, Any]:
-    """tasks.json with the folder-open host task replacing any earlier one."""
-    task = {
-        "label": TASK,
-        "type": "process",
-        "command": python,
-        "args": ["-m", "owlbear_delivery_next", "--repo", "${workspaceFolder}", "host"],
-        "isBackground": True,
-        "problemMatcher": [],
-        "runOptions": {"runOn": "folderOpen"},
-    }
-    tasks = [t for t in data.get("tasks", []) if not (isinstance(t, dict) and t.get("label") == TASK)]
-    return {"version": "2.0.0", **data, "tasks": [*tasks, task]}
+def without_task(data: dict[str, Any]) -> dict[str, Any]:
+    """tasks.json without the folder-open host task an earlier setup wrote (TD-281)."""
+    return {**data, "tasks": [t for t in data.get("tasks", []) if not (isinstance(t, dict) and t.get("label") == TASK)]}
+
+
+def has_task(path: Path) -> bool:
+    """Whether *path* holds the earlier folder-open host task."""
+    try:
+        data = json.loads(path.read_text())
+    except OSError, ValueError:
+        return False
+    return isinstance(data, dict) and any(isinstance(t, dict) and t.get("label") == TASK for t in data.get("tasks", []))
 
 
 def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]:
@@ -110,6 +109,40 @@ def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]
         "tools": ["*"],
     }
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
+
+
+def user_mcp(home: Path) -> Path:
+    """The user's VS Code MCP configuration."""
+    base = home / ("Library/Application Support" if sys.platform == "darwin" else ".config")
+    return base / "Code" / "User" / "mcp.json"
+
+
+def _loose_json(text: str) -> object:
+    """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed."""
+    text = re.sub(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', lambda m: m[1] or "", text, flags=re.DOTALL)
+    return json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
+
+
+def _serves(servers: object, repo: Path) -> bool:
+    """Whether one of *servers* is Delivery's chat server for *repo*."""
+    entries = servers.values() if isinstance(servers, dict) else []
+    return any(
+        isinstance(e, dict) and isinstance(args := e.get("args"), list)
+        and "owlbear_delivery_next" in args and "mcp" in args and str(repo) in args
+        for e in entries
+    )  # fmt: skip
+
+
+def registered(repo: Path, home: Path | None = None) -> bool:
+    """Whether the chat server of *repo* is registered: in its ``.mcp.json`` or the user's MCP configuration."""
+    for path, key in ((repo / ".mcp.json", "mcpServers"), (user_mcp(home or Path.home()), "servers")):
+        try:
+            data = _loose_json(path.read_text())
+        except OSError, ValueError:
+            continue
+        if isinstance(data, dict) and _serves(data.get(key), repo):
+            return True
+    return False
 
 
 def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
@@ -141,14 +174,6 @@ def refused(repo: Path, path: Path) -> str | None:
     if not git_files.untracked(repo, path):
         return f"not written: {path} is tracked, and Delivery commits nothing into the project"
     return None
-
-
-def automatic_tasks() -> str:
-    """The user's ``task.allowAutomaticTasks`` setting, as far as setup can read it."""
-    base = Path.home() / ("Library/Application Support" if sys.platform == "darwin" else ".config")
-    settings = base / "Code" / "User" / "settings.json"
-    found = re.search(r'"task\.allowAutomaticTasks"\s*:\s*"(\w+)"', settings.read_text()) if settings.exists() else None
-    return found[1] if found else "not set (VS Code asks on first open)"
 
 
 def ask_tty(question: str) -> str:
@@ -256,16 +281,16 @@ def run(  # noqa: PLR0913 - one answer per consent
 
 
 def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
-    """The host task, the chat server and the harness key, each written only with its own consent."""
-    start = f"`{python} -m owlbear_delivery_next --repo {repo} host`"
-    question = f"Write the folder-open task '{TASK}' into .vscode/tasks.json (kept out of git)?"
-    tasks = consent(repo, repo / ".vscode" / "tasks.json", lambda d: with_task(d, python), question, ask, yes=given)
-    say(tasks)
-    if tasks.startswith("written"):
-        say(f"VS Code starts it in a trusted workspace when automatic tasks are allowed ({automatic_tasks()});")
-        say(f"otherwise run the task '{TASK}' yourself.")
-    else:
-        say(f"Start Delivery yourself each time you open the project: {start}. Nothing advances until it runs.")
+    """The chat server and the harness key, each written only with its own consent; an earlier host task goes.
+
+    Opening a window never starts Delivery (TD-281): OwlBear runs once per machine and serves the projects
+    added on its page.
+    """
+    tasks = repo / ".vscode" / "tasks.json"
+    if has_task(tasks):
+        question = f"Remove the folder-open task '{TASK}' an earlier setup wrote into .vscode/tasks.json?"
+        say(consent(repo, tasks, without_task, question, ask, yes=given).replace("written", "rewritten", 1))
+    say("Delivery runs in OwlBear: run `owlbear start`, then add this project on its page.")
     question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
     server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, python, repo), question, ask, yes=given)
     say(server)

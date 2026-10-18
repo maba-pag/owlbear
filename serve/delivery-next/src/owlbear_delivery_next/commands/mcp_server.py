@@ -21,8 +21,8 @@ from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 NOT_RUNNING = (
-    "Delivery is not running - start it with the VS Code task 'OwlBear Delivery host', or run "
-    "`owlbear-next --repo {repo} host`. Nothing advances until it runs."
+    "Delivery is not running for {repo} - run `owlbear start`, then add this project on its page if it is not "
+    "listed. Nothing advances until it runs."
 )
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 _STATE: dict[str, Chat] = {}
@@ -47,7 +47,7 @@ class Chat:
             return 503, {"error": down}
         headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json"}
         data = None if body is None else json.dumps(body).encode()
-        url = f"{rec.url}api/next{path}"
+        url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{path}"  # the machine host's (TD-242)
         request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
         try:
             with _LOCAL.open(request, timeout=15) as response:

@@ -1,8 +1,8 @@
 """The one entry of every Delivery process (TD-173): it reads the command, then imports only what that command needs.
 
 ``python -m owlbear_delivery_next run <change> --repo PATH`` starts a step runner, ``mcp --repo PATH`` the chat
-server and ``step-mcp --inbox PATH`` a window step's relay; anything else is a command of the owner's CLI, such as
-``--repo PATH host``.
+server, ``step-mcp --inbox PATH`` a window step's relay and ``machine`` the machine host (TD-242); anything else is
+a command of the owner's CLI, such as ``--repo PATH status``.
 """
 
 from __future__ import annotations
@@ -10,7 +10,12 @@ from __future__ import annotations
 import sys
 from importlib import import_module
 
-PROCESSES = {"run": "runner", "mcp": "mcp_server", "step-mcp": "step_mcp"}  # started by Delivery itself
+PROCESSES = {  # started by Delivery itself
+    "run": "commands.runner",
+    "mcp": "commands.mcp_server",
+    "step-mcp": "commands.step_mcp",
+    "machine": "machine_host.serve",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,5 +24,5 @@ def main(argv: list[str] | None = None) -> int:
     if args and args[0] in PROCESSES:
         name, rest = PROCESSES[args[0]], args[1:]
     else:
-        name, rest = "cli", args
-    return import_module(f"owlbear_delivery_next.commands.{name}").main(rest) or 0
+        name, rest = "commands.cli", args
+    return import_module(f"owlbear_delivery_next.{name}").main(rest) or 0

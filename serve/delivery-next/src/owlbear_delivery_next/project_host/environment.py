@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock
 
 
-def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:
+def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PLR0911 - one exit per refusal
     """Launch the check environment after the preparing Builder is gone; pending once it answers."""
     e = c.env
     if e is None or h.env_action(c) != "launch" or before.due(c) or prepare.due(h.store, c):
@@ -34,12 +34,15 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:
         c.env = c.recipe = None
         h.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
         return loop.apply(c, check.failed("; ".join(errors)), now)
-    c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
-    h.store.write(lock, c)
     log = h.store.root / "changes" / c.slug / "env.log"
-    if proc := check.start(e, root, log, env):
-        c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
+    with h.launching:  # a project's stop or a folder rename waits; once paused or stopping, nothing starts
+        if h.paused():
+            return c
+        c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
         h.store.write(lock, c)
+        if proc := check.start(e, root, log, env):
+            c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
+            h.store.write(lock, c)
     pids = check.ready(e, proc) if proc else None
     if pids is None:
         if (left := h.clear(c, e)) is None or left:

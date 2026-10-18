@@ -9,7 +9,9 @@ while a run the host stopped during reads as failed.
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 import shutil
 import threading
 import uuid
@@ -21,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_update
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pack_runs import pack_candidate, pack_replay, pack_rounds, pack_run
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
@@ -47,6 +50,7 @@ STAGES = (
     ("push", "Push the branch"),
 )
 LOG = 200  # lines kept of the last run's log
+MACHINE_LOCK = "design-pack.lock"  # one running update per machine, whichever project started it (TD-242)
 OPEN = frozenset({"pending", "running", "waiting"})
 
 
@@ -99,6 +103,7 @@ class Job:
         """Read the last run; one the host stopped during reads as failed, one waiting for the owner still waits."""
         self.store, self.live, self.lock = store, live or Live(), threading.Lock()
         self.thread: threading.Thread | None = None
+        self.held: int | None = None
         self.state = self._read()
         if self.state["state"] == "running":
             self._end("failed", "the host stopped during this run; check the package checkout before running again")
@@ -127,7 +132,8 @@ class Job:
     def _copy(self) -> dict[str, Any]:
         return json.loads(json.dumps({k: v for k, v in self.state.items() if k != "context"}))
 
-    def _busy(self) -> bool:
+    def busy(self) -> bool:
+        """Whether an update's thread runs now."""
         return self.thread is not None and self.thread.is_alive()
 
     def start(self) -> dict[str, Any]:
@@ -137,12 +143,13 @@ class Job:
             Busy: A run is in progress, or waits for the owner's answers.
         """
         with self.lock:
-            if self.state["state"] == "running" or self._busy():
+            if self.state["state"] == "running" or self.busy():
                 msg = "a design pack update is already running"
                 raise Busy(msg)
             if self.state["state"] == "waiting":
                 msg = "a design pack update waits for your answers; answer or discard it first"
                 raise Busy(msg)
+            self._claim()
             self.state = _blank() | {"state": "running", "started_at": _now(), "run": uuid.uuid4().hex}
             self._save()
             self.thread = threading.Thread(
@@ -159,7 +166,7 @@ class Job:
             Refused: The option is not one of the question's, or a reconsideration lacks its note.
         """
         with self.lock:
-            asked = self.state["questions"] if self.state["state"] == "waiting" and not self._busy() else []
+            asked = self.state["questions"] if self.state["state"] == "waiting" and not self.busy() else []
             q = next((q for q in asked if q["id"] == question), None)
             if q is None:
                 msg = "this question is no longer open; reload the page"
@@ -170,15 +177,17 @@ class Job:
             if option == pack_rounds.RECONSIDER and not note.strip():
                 msg = "asking the challenger to reconsider needs your note"
                 raise Refused(msg)
-            self._log(
-                f"you answered {q['kind']} {q.get('finding', '')}: {pack_rounds.LABELS[option]}".replace("  ", " ")
-            )
+            said = f"you answered {q['kind']} {q.get('finding', '')}: {pack_rounds.LABELS[option]}".replace("  ", " ")
             if option == pack_rounds.DISCARD:
+                self._log(said)
                 self._finish("discarded", "discarded by you; nothing changed")
                 return self._copy()
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
             left = _decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
+            if not left:
+                self._claim()  # before anything changes: a refusal leaves the question open
+            self._log(said)
             self.state |= {"loop": lp.model_dump(mode="json"), "context": ctx.model_dump(mode="json")}
             self.state["questions"] = left
             if not left:
@@ -199,7 +208,7 @@ class Job:
             Stale: No run waits for the owner.
         """
         with self.lock:
-            if self.state["state"] != "waiting" or self._busy():
+            if self.state["state"] != "waiting" or self.busy():
                 msg = "no design pack update waits for you"
                 raise Stale(msg)
             self._log("you discarded the update")
@@ -260,7 +269,35 @@ class Job:
         shutil.rmtree(self.store.root / UPDATER, ignore_errors=True)
         self._save()
 
+    def _claim(self) -> None:
+        """Take the machine's one pack lock for the run's thread; the pack is shared by every project.
+
+        Raises:
+            Busy: Another project's update runs now.
+        """
+        path = local_home.root() / MACHINE_LOCK
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            who = path.read_text(encoding="utf-8").strip() or "another project"
+            msg = f"a design pack update runs for {who}; one runs at a time on this machine"
+            raise Busy(msg) from None
+        os.ftruncate(fd, 0)
+        os.write(fd, (self.store.name or self.store.root.parent.parent.name).encode())
+        self.held = fd
+
     def _run(self, work: Callable[[], str | None]) -> None:
+        try:
+            self._steps(work)
+        finally:
+            if self.held is not None:
+                os.close(self.held)
+                self.held = None
+
+    def _steps(self, work: Callable[[], str | None]) -> None:
         try:
             reason = work()
         except Stopped as exc:

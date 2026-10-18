@@ -196,24 +196,32 @@ def _working(store: Store, host: Host) -> list[str]:
 
 
 def _rename(store: Store, host: Host, name: str) -> str:
-    """Move the project's folder while no runner can start or run, then use it here; the publication notice."""
+    """Move the project's folder while no runner of any clone using it can start or run; the publication notice.
+
+    The machine's other clones of the project share the folder (TD-242): each one's launch mutex is held too.
+    """
     if store.shared is None:
         raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-    if not host.launching.acquire(timeout=STARTING):
-        raise HTTPException(409, "a runner is starting; try again")
+    held: list[Host] = []
     try:
-        if busy := _working(store, host):
+        for h in sorted([host, *host.peers()], key=id):  # one order, so two renames never wait for each other
+            if not h.launching.acquire(timeout=STARTING):
+                raise HTTPException(409, "a runner is starting; try again")
+            held.append(h)
+        if busy := [s for h in held for s in _working(h.store, h)]:
             raise HTTPException(409, f"steps of {', '.join(busy)} are running; rename once they have finished")
         until = time.monotonic() + data_repo.SAVE_SECONDS
         with store.shared.locked():
             notice = store.shared.rename(store.name, name, until)
-            store.name = name
+            for h in held:
+                h.store.name = name
     except DataRepoError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:
         raise HTTPException(503, f"the folder could not be renamed: {exc.strerror or exc}") from exc
     finally:
-        host.launching.release()
+        for h in held:
+            h.launching.release()
     return notice
 
 

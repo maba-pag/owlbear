@@ -1,4 +1,4 @@
-"""Commands: ``setup``, ``host`` starts Delivery, ``status`` reads the state; ``seed``, ``answer``, ``show`` for dev."""
+"""Project commands, which `owlbear` runs too: ``setup``, ``status``; ``seed``, ``answer``, ``show`` for dev."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
     in_window,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
-from owlbear_delivery_next.commands import serve, setup
+from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -43,7 +43,7 @@ from owlbear_delivery_next.state_store import backlog_migrate
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
-START = "run `owlbear-next host`"
+START = "run `owlbear start`, then add this project on its page"
 
 
 def show_data(path: Path | None) -> str:
@@ -54,7 +54,7 @@ def show_data(path: Path | None) -> str:
         return f"Not set: {exc}"
     if shared is None:
         return "No shared settings repository; settings stay in each clone. Set one: `owlbear-next data PATH`"
-    return f"Shared data repository: {shared.root} (pointer {data_repo.pointer()}). Restart a running host to use it."
+    return f"Shared data repository: {shared.root} (pointer {data_repo.pointer()}). Run `owlbear restart` to use it."
 
 
 def show_home() -> str:
@@ -250,12 +250,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     parser = argparse.ArgumentParser(prog="owlbear-next")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("host", help="start Delivery for this clone, or print the running host's URL")
     sub.add_parser("status", help="print every Change's status line and next action")
-    up = sub.add_parser("setup", help="check readiness, confirm the profile, register the host task and chat server")
+    up = sub.add_parser("setup", help="check readiness, confirm the profile, register the chat server")
     up.add_argument("--yes", action="store_true", help="confirm the profile (only the profile)")
     choices = ("yes", "no", "ask")
-    up.add_argument("--local-files", choices=choices, default="ask", help="write .vscode/tasks.json and .mcp.json")
+    up.add_argument("--local-files", choices=choices, default="ask", help="write .mcp.json and .vscode/settings.json")
     up.add_argument("--skill", choices=choices, default="ask", help="install the chat skill in ~/.copilot/skills")
     up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
     up.add_argument("--folder", default="", help="the project's folder in the shared settings when its name is taken")
@@ -313,8 +312,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     if a.command == "design-pack":
         updating = a.check or a.diff or a.golden or a.replay
         return update_pack(a, a.repo.resolve()) if updating else show_pack(install=a.install)
-    if a.command == "host":
-        return serve.serve(a.repo.resolve())
     if a.command == "setup":
         say, repo = lambda t: sys.stdout.write(t + "\n"), a.repo.resolve()
         found = setup.project_folder(repo, a.folder, setup.ask_tty, say)

@@ -124,8 +124,9 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   check environment or admitted operations still running after that wait. Machine stop leaves live runners to
   finish (TD-282).
 - Cross-project locks come with the host, since it is the first place two projects run at once: one
-  machine-owned design-pack job with one lock serves every project's pack page (the initiating project shown
-  as context), and a shared-folder rename is refused while any registered clone using that folder has a live
+  machine lock lets one design pack update run at a time, whichever project's page started it; another
+  project's start names the project whose update runs (revision 3.2: each project keeps its own run
+  record), and a shared-folder rename is refused while any registered clone using that folder has a live
   runner (its `runner.json` process alive, including one that outlived a restart), holding every such
   project's launch mutex while it runs.
 
@@ -135,10 +136,12 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   `resume`, `stop`. Each project's existing routes move unchanged under `/p/{id}/api/next/…`, chosen by a
   small ASGI dispatcher; an unknown or unloaded id answers 404 with the project's state. One token and the
   Host-header check guard everything; the token is not a project boundary (one owner, loopback).
-- `link()` becomes `{url}#token=…&project={id}` (and `&change={slug}` for a Change), so a link opens the
-  machine page filtered to its project. The chat server calls `{url}p/{id}/api/next{path}`.
+- `link()` becomes `{url}?project={id}#token=…`, so a link opens the machine page on its project; the
+  Changes page keeps its `?change={slug}`. The chat server calls `{url}p/{id}/api/next{path}`. (Revision 3.2:
+  the project is a query value like `change`, not a hash value; only the token stays out of the address bar.)
 - Until step 3 the pages show one project at a time (staging, not TD-241's finished UI): the `project` and
-  `change` hash values survive token extraction, the tab links, reload and Back, and a selector changes them.
+  `change` values survive token extraction, the tab links, reload and Back; a bar under the tabs selects the
+  project, adds a folder, removes or adopts a project, and shows Resume with the count of waiting Changes.
 
 ### 5.4 The `owlbear` command (TD-257, TD-272)
 

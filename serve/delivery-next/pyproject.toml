@@ -12,12 +12,14 @@ dependencies = [
   "psutil>=7.2.2",
   "pydantic>=2.13.4",
   "pyyaml>=6.0.3",
+  "shtab>=1.12.1",
   "truststore>=0.10.4",
   "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
 owlbear-next = "owlbear_delivery_next.commands.dispatch:main"
+owlbear = "owlbear_delivery_next.machine_host.command:main"
 
 [tool.uv.sources]
 owlbear-memory = { workspace = true }

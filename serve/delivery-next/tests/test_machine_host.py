@@ -1,0 +1,256 @@
+import json
+import os
+import signal
+import subprocess
+import threading
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
+
+import psutil
+import pytest
+import uvicorn
+from fastapi.testclient import TestClient
+
+from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
+from owlbear_delivery_next.commands import mcp_server, setup
+from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.machine_host import app, project, registry, serve
+from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import Host, HostRecord, RunnerRecord, running
+from owlbear_delivery_next.state_store.store import Store
+
+AUTH = {"authorization": "Bearer t"}
+
+
+def clone(path: Path) -> Path:
+    for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    return path.resolve()
+
+
+@pytest.fixture
+def machine(monkeypatch):
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts in these tests ({slug})"))
+    now = datetime.now(UTC)
+    record = HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=now, code=codebase.CURRENT)  # noqa: S106
+    m = Machine(record)
+    yield m
+    m.stop_all()
+
+
+@pytest.fixture
+def http(machine):
+    return TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH)
+
+
+def add(http, path: Path) -> dict:
+    r = http.post("/api/next/projects", json={"path": str(path)})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_one_host_serves_each_project_under_its_id_and_each_clone_finds_it(tmp_path, http, machine):
+    a, b = add(http, clone(tmp_path / "a")), add(http, clone(tmp_path / "b"))
+    listed = http.get("/api/next/projects").json()
+    assert (listed["paused"], [(p["name"], p["state"]) for p in listed["projects"]]) == (
+        True, [("a", "loaded"), ("b", "loaded")]
+    )  # fmt: skip
+    for p in (a, b):
+        assert http.get(f"/p/{p['id']}/api/next/changes").json() == []
+        rec = running(Store.open(Path(p["path"])))
+        assert (rec.url, rec.token, rec.project, rec.pid) == ("http://127.0.0.1:9/", "t", p["id"], os.getpid())
+        assert api.link(rec) == f"http://127.0.0.1:9/?project={p['id']}#token=t"
+    assert http.get("/p/0123456789abcdef/api/next/changes").json() == {"detail": "no such project"}
+    assert TestClient(http.app, base_url="http://127.0.0.1").get(f"/p/{a['id']}/api/next/changes").status_code == 401
+    assert http.get(f"/p/{a['id']}/api/next/changes", headers={"host": "evil.test"}).status_code == 403
+    second = project.Project(registry.load().projects[0])  # a per-clone host can never start beside it
+    second.load(machine.record, lambda: True)
+    assert (second.state, second.reason) == (
+        "failed",
+        f"another Delivery host (process {os.getpid()}) serves it; stop that one",
+    )
+
+
+def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, http, monkeypatch):
+    p = add(http, clone(tmp_path / "a"))
+    sent = []
+
+    class Opener:
+        def open(self, request, **_kw):
+            sent.append(request.full_url)
+            raise OSError
+
+    monkeypatch.setattr(mcp_server, "_LOCAL", Opener())
+    mcp_server.Chat(Path(p["path"])).call("GET", "/changes")
+    assert sent == [f"http://127.0.0.1:9/p/{p['id']}/api/next/changes"]
+
+
+def test_a_project_that_fails_to_load_is_listed_with_its_reason_beside_a_working_one(tmp_path, http, machine):
+    bad, good = registry.register(clone(tmp_path / "bad")), registry.register(clone(tmp_path / "good"))
+    (Path(bad.path) / ".git" / "owlbear-delivery" / "format").write_text("99\n")
+    machine.load_all()
+    shown = {p["name"]: p for p in http.get("/api/next/projects").json()["projects"]}
+    assert (shown["bad"]["state"], "newer than" in shown["bad"]["reason"], shown["good"]["state"]) == (
+        "failed", True, "loaded"
+    )  # fmt: skip
+    assert "bad is failed" in http.get(f"/p/{bad.id}/api/next/changes").json()["detail"]
+    assert http.get(f"/p/{good.id}/api/next/changes").status_code == 200
+    (Path(bad.path) / ".git" / "owlbear-delivery" / "format").unlink()
+    machine.retry()
+    assert http.get(f"/p/{bad.id}/api/next/changes").status_code == 200
+
+
+def running_step(path: Path) -> Path:
+    store = Store.open(path)
+    with store.lock("c1") as lock:
+        store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
+    me = psutil.Process(os.getpid())
+    rec = RunnerRecord(pid=me.pid, created=me.create_time(), started_at=datetime.now(UTC))
+    path = store.root / "changes" / "c1" / "runner.json"
+    path.write_text(rec.model_dump_json())
+    return path
+
+
+def test_removal_is_refused_while_a_step_runs_and_then_stops_the_project_before_forgetting_it(tmp_path, http, machine):
+    p = add(http, clone(tmp_path / "a"))
+    runner = running_step(Path(p["path"]))
+    refused = http.delete(f"/api/next/projects/{p['id']}")
+    assert (refused.status_code, refused.json()["detail"]) == (
+        409, f"a still runs c1: a running step (process {os.getpid()}); remove it once they end"
+    )  # fmt: skip
+    assert http.get(f"/p/{p['id']}/api/next/changes").status_code == 200  # admitted again
+    held = machine.projects[p["id"]]
+    runner.unlink()
+    assert http.delete(f"/api/next/projects/{p['id']}").json() == {"removed": p["id"]}
+    assert (held.host.stopped.is_set(), held.scheduler.is_alive(), running(held.store)) == (True, False, None)
+    assert (registry.load().projects, http.get(f"/p/{p['id']}/api/next/changes").status_code) == ([], 404)
+
+
+def test_a_closed_gate_admits_nothing_and_starts_no_runner_even_after_resume(tmp_path, http, machine):
+    p = add(http, clone(tmp_path / "a"))
+    held = machine.projects[p["id"]]
+    assert http.post("/api/next/resume").json() == {"paused": False}
+    assert (held.host.paused(), registry.load().resumed_at is not None) == (False, True)
+    assert held.gate.enter()
+    assert held.gate.close(0.05) == 1  # the admitted request still runs after the wait
+    assert held.host.paused()
+    assert http.get(f"/p/{p['id']}/api/next/changes").status_code == 503
+    held.gate.leave()
+    assert held.gate.close(0) == 0
+
+
+def test_every_change_that_would_continue_is_counted_until_resume(tmp_path, http):
+    p = add(http, clone(tmp_path / "a"))
+    store = Store.open(Path(p["path"]))
+    with store.lock("c1") as lock:
+        store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
+    assert http.get("/api/next/projects").json()["waiting"] == 1
+    assert http.get(f"/p/{p['id']}/api/next/changes").json()[0]["action"] == "Resume Delivery"
+
+
+def test_a_reclone_is_shown_replaced_until_adopted(tmp_path, http, machine):
+    work = clone(tmp_path / "a")
+    old = add(http, work)
+    machine.remove(old["id"])
+    registry.register(work)  # registered again without the host, then re-cloned at the same path
+    subprocess.run(["rm", "-rf", str(work)], check=True)  # noqa: S603, S607
+    clone(work)
+    machine.load_all()
+    pid = registry.load().projects[0].id
+    assert http.get("/api/next/projects").json()["projects"][0]["state"] == "replaced"
+    adopted = http.post(f"/api/next/projects/{pid}/adopt").json()
+    assert (adopted["state"], adopted["id"] != pid) == ("loaded", True)
+
+
+def test_clones_sharing_a_settings_folder_are_each_others_peers(machine):
+    def clone_of(folder, root="/shared"):
+        store = SimpleNamespace(shared=SimpleNamespace(root=Path(root)), name=folder)
+        return SimpleNamespace(store=store, host=object())
+
+    a, b, other, elsewhere = clone_of("shop"), clone_of("shop"), clone_of("blog"), clone_of("shop", "/other")
+    machine.projects = {"a": a, "b": b, "c": other, "d": elsewhere}
+    found = (machine.sharing(a), machine.sharing(other))
+    machine.projects = {}  # none of them is a loaded project to stop
+    assert found == ([b.host], [])
+
+
+def test_a_project_whose_lock_cannot_be_taken_fails_alone(tmp_path, http, machine):
+    bad = registry.register(clone(tmp_path / "bad"))
+    registry.register(clone(tmp_path / "good"))
+    lock = Path(bad.path) / ".git" / "owlbear-delivery" / "host.lock"
+    lock.symlink_to(tmp_path / "elsewhere")
+    machine.load_all()
+    shown = {p["name"]: p for p in http.get("/api/next/projects").json()["projects"]}
+    assert (shown["bad"]["state"], "host lock cannot be taken" in shown["bad"]["reason"]) == ("failed", True)
+    assert shown["good"]["state"] == "loaded"
+
+
+def test_a_stop_waits_for_work_started_in_the_background_and_closing_closes_every_gate(tmp_path, http, machine):
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    until = time.monotonic() + 0.5
+    p.app.state.busy = lambda: ["a shaping chat opening"] if time.monotonic() < until else []
+    p.stop(drain=5)
+    assert (time.monotonic() >= until, p.state) == (True, "stopped")
+    q = machine.projects[add(http, clone(tmp_path / "b"))["id"]]
+    server = serve.Server(uvicorn.Config(app.create(machine)), machine)
+    server.handle_exit(signal.SIGTERM, None)
+    assert (q.gate.open, q.host.paused(), server.should_exit) == (False, True, True)
+
+
+def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http):
+    work = clone(tmp_path / "a")
+    listed = add(http, work)
+    assert listed["setup"] == f"owlbear setup --repo {work}"
+    (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", work)))
+    assert "setup" not in http.get("/api/next/projects").json()["projects"][0]
+    (work / ".mcp.json").unlink()
+    setup.user_mcp(Path.home()).parent.mkdir(parents=True)
+    servers = setup.with_server({}, "/py", work)["mcpServers"]
+    setup.user_mcp(Path.home()).write_text("// mine\n" + json.dumps({"servers": servers}))
+    assert setup.registered(work)
+
+
+def test_nothing_loads_or_is_admitted_once_the_machine_stops(tmp_path, http, machine):
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    machine.resume()
+    machine.closing()
+    assert (p.host.paused(), http.get(f"/p/{p.entry.id}/api/next/changes").status_code) == (True, 503)
+    late = http.post("/api/next/projects", json={"path": str(clone(tmp_path / "b"))})
+    assert (late.status_code, late.json()["detail"]) == (503, "OwlBear is stopping")
+
+
+def test_a_project_that_fails_while_starting_releases_its_lock(tmp_path, machine, monkeypatch):
+    entry = registry.register(clone(tmp_path / "a"))
+    real, broken = project.api.create_app, [True]
+
+    def create_app(*args):
+        if broken[0]:
+            msg = "boom"
+            raise RuntimeError(msg)
+        return real(*args)
+
+    monkeypatch.setattr(project.api, "create_app", create_app)
+    machine.load_all()
+    failed = machine.projects[entry.id]
+    assert (failed.state, failed.reason, failed.lock_fd) == ("failed", "it could not start: RuntimeError: boom", None)
+    broken[0] = False
+    machine.retry()
+    again = machine.projects[entry.id]
+    assert (again.state, again.reason) == ("loaded", "")  # the lock was free again
+    unstarted = project.Project(entry)
+    unstarted.scheduler = threading.Thread(target=lambda: None)
+    assert (unstarted.stop(drain=0), unstarted.state) == ([], "stopped")
+
+
+def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
+    work = clone(tmp_path / "a")
+    (work / ".mcp.json").write_text(json.dumps({"mcpServers": {setup.SERVER: {"args": None}}}))
+    assert setup.registered(work) is False
+    setup.user_mcp(Path.home()).parent.mkdir(parents=True)
+    unrelated = {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo", "/other"]}, "y": {"args": [str(work)]}}
+    setup.user_mcp(Path.home()).write_text(json.dumps({"servers": unrelated}))
+    assert setup.registered(work) is False
