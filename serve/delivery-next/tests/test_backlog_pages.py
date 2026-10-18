@@ -111,6 +111,9 @@ def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_
             page.goto(f"{base}/backlog?project={DOCS}#token=t")
             entries = page.locator("li.entry")
             expect(entries.locator(".title p-text")).to_have_text(["Both sites"])  # the page's project's entries
+            page.locator("#filters select").first.select_option("all")
+            page.reload()  # All stays All, though the address names a project
+            expect(entries).to_have_count(3)
             page.goto(f"{base}/backlog")
             expect(entries).to_have_count(3)  # one repository: each entry once, though three clones read it
             projects = page.locator("#filters select").first

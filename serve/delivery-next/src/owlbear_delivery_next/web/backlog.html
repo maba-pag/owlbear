@@ -317,7 +317,7 @@ function filters() {
     ...folders.map((f) => [f, f])];
   const shown = (v) => {
     filter.projects = v;
-    history.replaceState(null, "", here({ show: v === "all" ? "" : v }));  // a reload or link keeps it
+    history.replaceState(null, "", here({ show: v }));  // a reload or link keeps it, All too over ?project=
     show();
   };
   const kinds = select("Class", [["all", "all"], ...KINDS.map((k) => [k, k])], filter.kind,
