@@ -177,6 +177,8 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   serve them once per shared repository (backlog) and once per shared folder (memory), deduplicated, with
   the projects that use each folder; per-clone overlays (launch state) join by project id. The selected
   project of an action is explicit and separate from the resource's owner.
+  (Revision 3.2: the backlog is read through each clone's own route and shown once per repository by the
+  page, the first answering clone's read standing for it; launch overlays join from every clone.)
 - **Backlog:** an entry names the shared folders (repositories) it concerns and keeps its legacy attribution
   apart: `projects: list[str] | None` (`[]` = Global, `None` = not yet triaged) and `origin: str`. Migration
   takes only what the old scope states: `project` becomes `[project]`, `global` becomes `[]`,

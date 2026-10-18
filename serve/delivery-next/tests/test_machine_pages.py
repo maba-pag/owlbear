@@ -92,7 +92,9 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             expect(page).to_have_url(f"{base}/")  # back to All
             assert [p.id for p in registry.load().projects] == [a.id, b.id]
             page.get_by_role("link", name="Backlog").click()
-            expect(page).to_have_url(f"{base}/backlog?project={a.id}")  # a project page opens the first project
+            expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
+            page.get_by_role("link", name="Settings").click()
+            expect(page).to_have_url(f"{base}/config?project={a.id}")  # a project page opens the first project
             browser.close()
     finally:
         server.should_exit = True
