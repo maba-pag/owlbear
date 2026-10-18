@@ -50,6 +50,62 @@ def test_package_test_module_routes_to_itself() -> None:
     assert scope == ["serve/tools/tests/test_testing.py"]
 
 
+_LOOP = "serve/delivery-next/src/owlbear_delivery_next/change_flow/loop.py"
+_PAGE = "serve/delivery-next/src/owlbear_delivery_next/web/config.html"
+
+
+def _routed(*paths: str, coverage: bool = False) -> list[list[str]]:
+    commands = _commands_for_paths(list(paths), all_tests=False, python_only=False, web_only=False, coverage=coverage)
+    return [command for command, _cwd in commands]
+
+
+def test_delivery_next_source_runs_testmon_beside_the_tests_it_cannot_see() -> None:
+    (plain, monitored) = _routed(_LOOP)
+
+    assert "serve/delivery-next/tests/test_dispatch.py" in plain  # runs the package in a child process
+    assert "tests/test_package_boundary.py" in plain
+    assert "serve/delivery-next/tests/test_loop.py" not in plain
+    assert monitored[:3] == [
+        "env",
+        "COVERAGE_CORE=ctrace",
+        "TESTMON_DATAFILE=.owlbear/scratch/testmon-delivery-next.db",
+    ]
+    assert monitored[-2:] == ["--testmon", "--testmon-forceselect"]
+    assert "serve/delivery-next/tests/test_loop.py" in monitored
+    assert not set(plain) & {path for path in monitored if path.endswith(".py")}
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [(_PAGE,), (_PAGE, _LOOP), ("serve/delivery-next/tests/conftest.py", _LOOP)],
+    ids=["page", "page-and-source", "fixture-and-source"],
+)
+def test_a_delivery_next_change_testmon_cannot_see_runs_the_whole_package(paths: tuple[str, ...]) -> None:
+    (command,) = _routed(*paths)
+
+    assert "serve/delivery-next/tests/test_loop.py" in command
+    assert "--testmon" not in command
+
+
+@pytest.mark.parametrize(
+    ("paths", "coverage"),
+    [
+        ((_LOOP,), True),
+        ((_LOOP, "setup/init.py"), False),
+        (("serve/delivery-next/src/owlbear_delivery_next/gone.py",), False),
+    ],
+    ids=["coverage", "unknown-path", "deleted-source"],
+)
+def test_coverage_unknown_paths_and_deleted_sources_keep_the_old_scope(
+    paths: tuple[str, ...],
+    coverage: bool,  # noqa: FBT001 - a parametrized case
+) -> None:
+    (command,) = _routed(*paths, coverage=coverage)
+
+    assert "--testmon" not in command
+    assert "serve/delivery-next/tests/test_loop.py" in command or command[4:6] == ["tests", "serve"]
+
+
 def test_knowledge_source_routes_importing_root_and_invariant_tests() -> None:
     scope = testing_module._python_scope("serve/knowledge/src/owlbear_knowledge/query.py")  # noqa: SLF001
 

@@ -23,6 +23,10 @@ _INVARIANT_TESTS = (
     "tests/test_package_boundary.py",
     "tests/test_write_guard_hooks.py",
 )
+# Packages whose own tests testmon selects for a Python source change; it needs the classic tracer on 3.14 and
+# --testmon-forceselect, because the configured -m otherwise turns its selection off.
+_TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
+_TESTMON_DATA = ".owlbear/scratch"
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,13 +128,60 @@ def _relative_paths(paths: Iterable[Path]) -> list[str]:
 
 
 def _package_scope(package: _WorkspacePackage) -> list[str]:
+    return _relative_paths([*_package_tests(package), *_neighbour_tests(package)])
+
+
+def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
+    """Root and consumer tests that import the package, and the invariant tests."""
     packages = _workspace_packages()
-    targets = _package_tests(package)
-    targets.extend(_tests_importing(package.namespace, _root_tests()))
+    targets = _tests_importing(package.namespace, _root_tests())
     for consumer in _direct_consumers(package, packages):
         targets.extend(_tests_importing(package.namespace, _package_tests(consumer)))
     targets.extend(_REPOSITORY_ROOT / path for path in _INVARIANT_TESTS)
-    return _relative_paths(targets)
+    return targets
+
+
+def _starts_package(path: Path, namespace: str) -> bool:
+    """Whether a test module runs the package in a child Python process, whose code testmon cannot see."""
+    try:
+        nodes = list(ast.walk(ast.parse(path.read_text(encoding="utf-8"))))
+    except OSError, SyntaxError:
+        return True
+    executable = any(
+        isinstance(node, ast.Attribute)
+        and node.attr == "executable"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "sys"
+        for node in nodes
+    )
+    return executable and any(
+        isinstance(node, ast.Constant) and isinstance(node.value, str) and namespace in node.value for node in nodes
+    )
+
+
+def _monitored_package(path: str) -> _WorkspacePackage | None:
+    """The testmon package of an existing Python source file; None for anything else."""
+    normalized = path.removeprefix("./")
+    package = _package_for_path(normalized)
+    if package is None or package.namespace not in _TESTMON_NAMESPACES:
+        return None
+    source = normalized.startswith(f"serve/{package.directory.name}/src/") and normalized.endswith(".py")
+    return package if source and (_REPOSITORY_ROOT / normalized).is_file() else None
+
+
+def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -> list[tuple[list[str], Path]]:
+    """One testmon run per package over its tests, after adding to *forced* what must run regardless."""
+    commands: list[tuple[list[str], Path]] = []
+    for package in packages:
+        tests = _package_tests(package)
+        forced.update(_relative_paths(path for path in tests if _starts_package(path, package.namespace)))
+        forced.update(_relative_paths(_neighbour_tests(package)))
+        selected = [path for path in _relative_paths(tests) if path not in forced]
+        if selected:
+            data = f"TESTMON_DATAFILE={_TESTMON_DATA}/testmon-{package.directory.name}.db"
+            pytest = ["uv", "run", "--locked", "pytest", *selected, "--testmon", "--testmon-forceselect"]
+            commands.append((["env", "COVERAGE_CORE=ctrace", data, *pytest], _REPOSITORY_ROOT))
+    return commands
 
 
 def _package_for_path(normalized: str) -> _WorkspacePackage | None:
@@ -224,24 +275,34 @@ def _changed_paths(base: str | None) -> list[str]:
     return sorted(paths)
 
 
+def _split_paths(paths: list[str], *, coverage: bool) -> tuple[set[str] | None, list[_WorkspacePackage]]:
+    """The plain pytest scope (None: the full suite) and the packages whose changed sources testmon selects for."""
+    scopes: set[str] = set()
+    monitored: dict[str, _WorkspacePackage] = {}
+    for path in paths:
+        if not coverage and (package := _monitored_package(path)) is not None:
+            monitored[package.namespace] = package
+        elif (scope := _python_scope(path)) is None:
+            return None, []
+        else:
+            scopes.update(scope)
+    return scopes, list(monitored.values())
+
+
 def _commands_for_paths(
     paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool
 ) -> list[tuple[list[str], Path]]:
     commands: list[tuple[list[str], Path]] = []
+    selected: list[tuple[list[str], Path]] = []
     if all_tests:
         python_targets = ["tests", "serve"]
         run_python = not web_only
         run_web = not python_only
     else:
-        scopes: set[str] = set()
-        fallback = False
-        for path in paths:
-            scope = _python_scope(path)
-            if scope is None:
-                fallback = True
-            else:
-                scopes.update(scope)
-        python_targets = ["tests", "serve"] if fallback else sorted(scopes)
+        scopes, monitored = _split_paths(paths, coverage=coverage)
+        if scopes is not None and not web_only:
+            selected = _testmon_commands(monitored, scopes)
+        python_targets = ["tests", "serve"] if scopes is None else sorted(scopes)
         run_python = bool(python_targets) and not web_only
         run_web = any(_is_web_path(path) for path in paths) and not python_only
 
@@ -250,6 +311,7 @@ def _commands_for_paths(
         if coverage:
             command.append("--cov")
         commands.append((command, _REPOSITORY_ROOT))
+    commands.extend(selected)
     if run_web:
         command = ["npm", "test"]
         if coverage:
