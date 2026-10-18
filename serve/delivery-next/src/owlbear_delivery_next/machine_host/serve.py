@@ -10,7 +10,6 @@ from __future__ import annotations
 import contextlib
 import os
 import secrets
-import signal
 import socket
 import sys
 import threading
@@ -39,9 +38,14 @@ class Server(uvicorn.Server):
         self.machine = machine
 
     def handle_exit(self, sig: int, frame: FrameType | None) -> None:
-        """A signal or the stop route: close the gates, then let Uvicorn shut down."""
+        """A signal: close the gates, then let Uvicorn shut down (it replays the signal once it has)."""
         self.machine.closing()
         super().handle_exit(sig, frame)
+
+    def stop(self) -> None:
+        """The stop route: close the gates and shut down, with no signal to replay."""
+        self.machine.closing()
+        self.should_exit = True
 
 
 def running() -> HostRecord | None:
@@ -78,13 +82,17 @@ def serve() -> int:
     machine.say(f"OwlBear {os.getpid()} on {link(record)} · paused until you press Resume")
     machine.load_all()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
-    server = Server(uvicorn.Config(app.create(machine), log_level="warning"), machine)
-    machine.on_stop = lambda: server.handle_exit(signal.SIGTERM, None)
+
+    def ended() -> None:  # the discovery file goes while this process still holds the lock
+        (home / "host.json").unlink(missing_ok=True)
+
+    server = Server(uvicorn.Config(app.create(machine, ended), log_level="warning"), machine)
+    machine.on_stop = server.stop
     try:
         with contextlib.suppress(KeyboardInterrupt):
             server.run(sockets=[sock])
     finally:
         machine.stop_all()
-        (home / "host.json").unlink(missing_ok=True)
+        ended()
         os.close(lock_fd)
     return 0

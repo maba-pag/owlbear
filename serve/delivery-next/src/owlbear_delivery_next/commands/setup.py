@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -116,24 +117,32 @@ def user_mcp(home: Path) -> Path:
     return base / "Code" / "User" / "mcp.json"
 
 
+def _loose_json(text: str) -> object:
+    """JSON as VS Code writes its own files: line comments, block comments and trailing commas allowed."""
+    text = re.sub(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', lambda m: m[1] or "", text, flags=re.DOTALL)
+    return json.loads(re.sub(r",(\s*[}\]])", r"\1", text))
+
+
+def _serves(servers: object, repo: Path) -> bool:
+    """Whether one of *servers* is Delivery's chat server for *repo*."""
+    entries = servers.values() if isinstance(servers, dict) else []
+    return any(
+        isinstance(e, dict) and isinstance(args := e.get("args"), list)
+        and "owlbear_delivery_next" in args and "mcp" in args and str(repo) in args
+        for e in entries
+    )  # fmt: skip
+
+
 def registered(repo: Path, home: Path | None = None) -> bool:
     """Whether the chat server of *repo* is registered: in its ``.mcp.json`` or the user's MCP configuration."""
-    try:
-        data = json.loads((repo / ".mcp.json").read_text())
-    except OSError, ValueError:
-        data = None
-    servers = data.get("mcpServers") if isinstance(data, dict) else None
-    if (
-        isinstance(servers, dict)
-        and isinstance(mine := servers.get(SERVER), dict)
-        and str(repo) in mine.get("args", [])
-    ):
-        return True
-    try:  # the user's file may hold comments, so it is searched rather than parsed
-        text = user_mcp(home or Path.home()).read_text()
-    except OSError:
-        return False
-    return "owlbear_delivery_next" in text and json.dumps(str(repo)) in text
+    for path, key in ((repo / ".mcp.json", "mcpServers"), (user_mcp(home or Path.home()), "servers")):
+        try:
+            data = _loose_json(path.read_text())
+        except OSError, ValueError:
+            continue
+        if isinstance(data, dict) and _serves(data.get(key), repo):
+            return True
+    return False
 
 
 def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer

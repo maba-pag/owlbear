@@ -2,6 +2,7 @@ import json
 import os
 import signal
 import subprocess
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -211,3 +212,45 @@ def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http
     servers = setup.with_server({}, "/py", work)["mcpServers"]
     setup.user_mcp(Path.home()).write_text("// mine\n" + json.dumps({"servers": servers}))
     assert setup.registered(work)
+
+
+def test_nothing_loads_or_is_admitted_once_the_machine_stops(tmp_path, http, machine):
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    machine.resume()
+    machine.closing()
+    assert (p.host.paused(), http.get(f"/p/{p.entry.id}/api/next/changes").status_code) == (True, 503)
+    late = http.post("/api/next/projects", json={"path": str(clone(tmp_path / "b"))})
+    assert (late.status_code, late.json()["detail"]) == (503, "OwlBear is stopping")
+
+
+def test_a_project_that_fails_while_starting_releases_its_lock(tmp_path, machine, monkeypatch):
+    entry = registry.register(clone(tmp_path / "a"))
+    real, broken = project.api.create_app, [True]
+
+    def create_app(*args):
+        if broken[0]:
+            msg = "boom"
+            raise RuntimeError(msg)
+        return real(*args)
+
+    monkeypatch.setattr(project.api, "create_app", create_app)
+    machine.load_all()
+    failed = machine.projects[entry.id]
+    assert (failed.state, failed.reason, failed.lock_fd) == ("failed", "it could not start: RuntimeError: boom", None)
+    broken[0] = False
+    machine.retry()
+    again = machine.projects[entry.id]
+    assert (again.state, again.reason) == ("loaded", "")  # the lock was free again
+    unstarted = project.Project(entry)
+    unstarted.scheduler = threading.Thread(target=lambda: None)
+    assert (unstarted.stop(drain=0), unstarted.state) == ([], "stopped")
+
+
+def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
+    work = clone(tmp_path / "a")
+    (work / ".mcp.json").write_text(json.dumps({"mcpServers": {setup.SERVER: {"args": None}}}))
+    assert setup.registered(work) is False
+    setup.user_mcp(Path.home()).parent.mkdir(parents=True)
+    unrelated = {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo", "/other"]}, "y": {"args": [str(work)]}}
+    setup.user_mcp(Path.home()).write_text(json.dumps({"servers": unrelated}))
+    assert setup.registered(work) is False

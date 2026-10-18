@@ -50,9 +50,11 @@ class Machine:
         sys.stdout.flush()
 
     def _load(self, entry: registry.Project) -> Project:
+        if self.stopping.is_set():
+            raise MachineError(503, "OwlBear is stopping")
         p = self.projects[entry.id] = Project(entry)
         try:
-            p.load(self.record, lambda: self.paused)
+            p.load(self.record, lambda: self.paused or self.stopping.is_set())
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
         if p.host:
@@ -82,7 +84,8 @@ class Machine:
         """Load again each project that failed or was replaced."""
         with self.lock:
             for p in [p for p in self.projects.values() if p.state in {"failed", "replaced"}]:
-                self._load(p.entry)
+                if not self.stopping.is_set():
+                    self._load(p.entry)
 
     def retry_loop(self) -> None:
         """Thread: retry failed projects every ``RETRY`` seconds until the machine stops."""
@@ -161,6 +164,8 @@ class Machine:
     def stop_all(self) -> None:
         """Close every gate, then stop each project; live runners finish on their own (TD-282)."""
         self.closing()
-        with self.lock:
+        with self.lock:  # a load in flight finishes first, so its project is stopped too
             for p in self.projects.values():
-                p.stop()
+                if p.state != "stopped":
+                    p.stop()
+        self.say("stopped: every project closed")

@@ -174,14 +174,16 @@ class Project:
                     return left
             self.host.stopped.set()
             self.host.wake.set()
-        if self.scheduler:
-            self.scheduler.join(JOIN)
-        if self.lock_fd is not None:  # the discovery file is this host's only while it holds the lock
-            if self.store:
+        try:
+            if self.scheduler and self.scheduler.ident is not None:  # one that never started has nothing to join
+                self.scheduler.join(JOIN)
+            if self.lock_fd is not None and self.store:  # the discovery file is ours only while we hold the lock
                 (self.store.root / "host.json").unlink(missing_ok=True)
-            os.close(self.lock_fd)
-            self.lock_fd = None
-        self.state = "stopped"
+        finally:
+            if self.lock_fd is not None:
+                os.close(self.lock_fd)
+                self.lock_fd = None
+            self.state = "stopped"
         return []
 
     def info(self) -> dict[str, Any]:

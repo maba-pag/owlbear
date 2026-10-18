@@ -45,27 +45,25 @@ def argv() -> list[str]:
 
 
 def start(say: Say) -> int:
-    """Start the machine host in the background unless it runs; say its address once its API answers."""
-    if rec := serve.running():
-        say(f"OwlBear is running: {link(rec) or '(starting)'}")
-        return 0
-    home = local_home.root()
-    home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with (home / LOG).open("ab") as out:
-        child = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
-            argv(), cwd=home, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, start_new_session=True
-        )
+    """Start the machine host in the background unless it runs; success only once its API answers."""
+    child = None
+    if serve.running() is None:
+        home = local_home.root()
+        home.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with (home / LOG).open("ab") as out:
+            child = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
+                argv(), cwd=home, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, start_new_session=True
+            )
     deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
-        if child.poll() is not None:
-            if rec := serve.running():  # another start won the lock first
-                say(f"OwlBear is running: {link(rec) or '(starting)'}")
-                return 0
+        if projects() is not None:  # an API answers with the token its host wrote: this start's or another's
+            started = child is not None and child.poll() is None
+            said = "OwlBear started, paused until you press Resume" if started else "OwlBear is running"
+            say(f"{said}: {link(serve.running())}")
+            return 0
+        if child is not None and child.poll() is not None and serve.running() is None:
             say(f"OwlBear ended at once (exit {child.returncode}); see `owlbear logs`")
             return 1
-        if projects() is not None:  # its API answers with the token it wrote
-            say(f"OwlBear started, paused until you press Resume: {link(serve.running())}")
-            return 0
         time.sleep(0.2)
     say(f"OwlBear did not answer within {WAIT:.0f} s; see `owlbear logs`")
     return 1

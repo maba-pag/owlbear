@@ -702,9 +702,9 @@ def test_while_paused_input_is_applied_and_nothing_is_read_pulled_or_started(sto
     said = status(c, fake.host.activity("c1"), NOW)
     assert (said.line, said.action, said.actor) == ("Build 1/1 · Delivery is paused: continues after Resume",
                                                      "Resume Delivery", "you")  # fmt: skip
+    save(store, c.model_copy(update={"pull_requested": None}))  # the Pull is no part of what Resume proves here
     flag[0] = False
     fake.host.observe_pr = lambda _slug: (None, False)
-    monkeypatch.undo()
     assert fake.host.tick(NOW) == ["c1"]
 
 

@@ -79,7 +79,8 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert control.projects() == {"paused": True, "waiting": 0, "projects": []}
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
-    assert "paused until you press Resume" in (local_home.root() / control.LOG).read_text()
+    logged = (local_home.root() / control.LOG).read_text()
+    assert ("paused until you press Resume" in logged, "stopped: every project closed" in logged) == (True, True)
 
 
 def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:
@@ -97,3 +98,15 @@ def test_a_host_that_ends_at_once_is_reported_not_started(monkeypatch) -> None:
     monkeypatch.setattr(control, "argv", lambda: [sys.executable, "-c", "raise SystemExit(3)"])
     assert control.start(said.append) == 1
     assert said[-1] == "OwlBear ended at once (exit 3); see `owlbear logs`"
+
+
+def test_a_running_host_whose_api_does_not_answer_is_no_success(monkeypatch) -> None:
+    said = []
+    at = "2026-10-10T12:00:00Z"
+    up = control.serve.HostRecord(url="http://127.0.0.1:9/", token="t", pid=9, started_at=at, code="")  # noqa: S106
+    monkeypatch.setattr(control.serve, "running", lambda: up)
+    monkeypatch.setattr(control, "projects", lambda: None)
+    monkeypatch.setattr(control, "WAIT", 0.3)
+    monkeypatch.setattr(control.subprocess, "Popen", lambda *_a, **_k: pytest.fail("one host runs already"))
+    assert control.start(said.append) == 1
+    assert said[-1] == "OwlBear did not answer within 0 s; see `owlbear logs`"

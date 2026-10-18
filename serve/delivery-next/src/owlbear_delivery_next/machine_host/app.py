@@ -7,6 +7,8 @@ the token is no project boundary (one owner, loopback).
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import re
 import secrets
 from pathlib import Path
@@ -20,7 +22,7 @@ from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import api, pages
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from starlette.responses import Response
     from starlette.types import ASGIApp, Receive, Scope, Send
@@ -58,6 +60,9 @@ class Dispatcher:
         if not secrets.compare_digest(headers.get(b"authorization", b""), self.expected):
             await JSONResponse({"detail": "token required"}, 401)(scope, receive, send)
             return
+        if self.machine.stopping.is_set():
+            await JSONResponse({"detail": "OwlBear is stopping"}, 503)(scope, receive, send)
+            return
         p = self.machine.projects.get(found[1])
         if p is None or p.app is None or p.state != "loaded":
             said = f"{p.name} is {p.state}" + (f": {p.reason}" if p.reason else "") if p else "no such project"
@@ -72,9 +77,20 @@ class Dispatcher:
             p.gate.leave()
 
 
-def create(machine: Machine) -> ASGIApp:
-    """The machine host's app: pages, the machine routes and every project's API."""
-    app = FastAPI(title="OwlBear", docs_url=None, redoc_url=None, openapi_url=None)
+def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIApp:
+    """The machine host's app: pages, the machine routes and every project's API.
+
+    Its shutdown stops every project, then calls *ended*, inside Uvicorn's own shutdown: a stop signal is
+    replayed once Uvicorn returns, so nothing after ``server.run`` may be relied on.
+    """
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        await asyncio.to_thread(machine.stop_all)
+        ended()
+
+    app = FastAPI(title="OwlBear", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     expected = f"Bearer {machine.record.token}".encode()
 
     @app.middleware("http")
