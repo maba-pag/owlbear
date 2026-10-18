@@ -164,7 +164,10 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   `GET /repos/{owner}/{repo}/commits/{sha}/pulls`, checked to be merged into `main` with exactly that merge
   commit; a merge without such a pull request makes no version. Labels are read when the run reaches the
   merge, so a label set after the merge counts until a later version passes it; no check asks for or
-  guards a label (TD-306, TD-307).
+  guards a label (TD-306, TD-307). A label added to or removed from a merged pull request into `main`
+  starts the same drain (`pull_request_target` for `labeled` and `unlabeled`, its job only when the pull
+  request is merged, running `main`'s workflow code, never the pull request's), so a late label is tagged
+  and a removed label no longer holds back the passed merges after it; `workflow_dispatch` starts it by hand.
 - **Allocation:** inside the release group, each tag is decided against freshly read tags: versions are
   compared numerically, `vN` as `(N, 0)`; `release:minor` makes `vX.Y+1` after the highest,
   `release:major` makes `vX+1` (with both labels, `release:major`); no label makes no tag (TD-306). A
@@ -208,6 +211,6 @@ the pull request labels and marker settings (TD-308).
 | --- | --- | --- |
 | 1 | Machine settings, `machine.json` format 2, stable alias in setup and install (§3, §7) | migration and Settings page tests; written paths use the alias |
 | 2 | Pause, Pause and stop when idle with intent, owner actions and cleanup while paused, TD-290 (§6, §9) | route and page tests: a live runner and a check environment while stopping; a pack update, a brief challenge and a cleanup while paused, publishing held |
-| 3 | `ci.yml` on pushes to `main`, the `release` workflow and its labels; the `pr_labels` and `pr_marker` settings in Delivery's publish; design pack updates through a pull request (§8) | workflow tests on a disposable repository; publish tests with labels and without the marker; one real minor tag from a labelled merge |
+| 3 | `ci.yml` on pushes to `main`, the `release` workflow and its labels; the `pr_labels` and `pr_marker` settings in Delivery's publish; design pack updates through a pull request (§8) | workflow tests on a disposable repository, a label added after the drain and a removed label on a merge whose CI failed among them; publish tests with labels and without the marker; one real minor tag from a labelled merge |
 | 4 | `repo.git`, versions, leases, never backwards, selfcheck, standby, fence, alias activation with first migration, handover, watch, Run updates now (§3–§5) | disposable macOS processes with two local tags: success, selfcheck and standby failure, a crash injected at each ownership step and around the alias rename, an open page and a chat server across it, a second update, disk refusal |
 | 5 | Idle, use, announcement, automatic updates (§7) | clock-driven tests: polls never count, Postpone, cancel, sleep |
