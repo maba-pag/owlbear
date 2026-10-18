@@ -22,6 +22,7 @@ def test_help_and_completion_load_no_command_module() -> None:
 
 def test_project_commands_run_as_owlbear_next_with_the_repo_before_them(monkeypatch) -> None:
     called = []
+    monkeypatch.setattr(sys, "platform", "darwin")  # CI runs on Linux, which the command refuses
     monkeypatch.setattr(cli, "main", lambda argv: called.append(argv) or 0)
     command.main(["setup", "--yes", "--repo", "/r"])
     command.main(["status", "--repo", "/r"])
