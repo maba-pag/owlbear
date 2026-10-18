@@ -24,7 +24,11 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    not a count: ask until no material gap remains. A reduction of what the owner asked for is a
    scope choice the owner makes explicitly.
 3. Write acceptance criteria a test or command can check; a criterion may state what must not
-   happen. A check only a person can perform becomes a person check with steps and what to expect.
+   happen. Consider how the criteria could all pass while missing the owner's outcome, and close a
+   material gap with a criterion or a person check. Where an expected result is not obvious, take it
+   from the rule that governs it, a real input with its known result, or the owner's explicit
+   choice, not from your guess. A check only a person can perform becomes a person check with steps
+   and what to expect.
 4. For a UI change ask which page states must render: each visual state has a `name`, a `path`
    under the preview root and what to `expect`. Write each expectation as what a screenshot shows
    ("the Dark mode button is filled and darker than in light mode"), not as a state only the code

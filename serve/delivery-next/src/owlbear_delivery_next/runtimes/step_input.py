@@ -432,8 +432,9 @@ def brief_challenge(change: Change, worktree: Path) -> str:
             (
                 "Findings only for: criteria that contradict each other or the code; a criterion no test or command "
                 "can check and no person-only check covers; a behaviour only a person can confirm without a "
-                "person-only check; repository facts the brief cites that the code does not support; a brief larger "
-                "than one reviewable pull request (propose the split as the fix). Place: the criterion id or field."
+                "person-only check; repository facts the brief cites that the code does not support; what the "
+                "owner's intent implies but the brief lacks, or what goes beyond it; a brief larger than one "
+                "reviewable pull request (propose the split as the fix). Place: the criterion id or field."
             ),
             *brief_rounds.challenge_lines(change),
             "",
