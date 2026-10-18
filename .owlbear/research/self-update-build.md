@@ -9,8 +9,11 @@
 > built), TD-290 (one design pack update at a time), TD-296 (install beside, switch on answer), TD-297
 > (`v0.1`), TD-298 (green CI and one finished Change), TD-299 (back as it was), TD-300 (no machine follows
 > `main`; minor or major channel), TD-301 (idle), TD-302 (every merge is a minor version), TD-303 (cleanup
-> while paused), TD-304 (Run updates now while paused), TD-305 (forward repair after the switch)
-> **Date:** 2026-10-18 (revision 5: the owner's answers TD-302..TD-305; revision 1 at Sol 30% with
+> while paused), TD-304 (Run updates now while paused), TD-305 (forward repair after the switch), TD-306
+> (versions only by label), TD-307 (no label checks; pack updates labelled as any pull request), TD-308 (pull
+> request labels and marker settings)
+> **Date:** 2026-10-18 (revision 6: release labels TD-306..TD-308 in §8; revision 5: the owner's answers
+> TD-302..TD-305; revision 1 at Sol 30% with
 > seventeen findings, revision 2 at 55% with seven, revision 4 at 65% with six, revision 5 at 80% with
 > three in §8, all taken)
 > **Question:** How does the machine host pause and stop on the owner's word, update itself to the newest
@@ -140,7 +143,7 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
 - **Machine settings** (Settings → This machine; `machine.json` format 2): `channel`, `update_when_idle`,
   `update_while_paused`, both on at first. With Update when idle off, only Run updates now updates.
 
-## 8. Versions from Merges (TD-302)
+## 8. Versions from Merges (TD-302, TD-306..TD-308)
 
 - `ci.yml` gains a `push` trigger for `main`, so each merge commit gets its own `CI` check. Push runs get a
   concurrency group per commit and are never cancelled, in `ci.yml` and in every reusable suite; pull
@@ -150,26 +153,39 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   this repository, in one release concurrency group that never cancels a running release. Every run drains
   the whole of `main` as it is when the run starts, never only up to its own `workflow_run.head_sha`: it walks
   `main`'s first-parent history from the frontier to its tip in merge order, and for each merge commit
-  without a version tag (tags compared by the commit they peel to) whose own `CI` passed, allocates the next
-  version; it stops at the first merge whose `CI` has not passed yet, which a later run continues. Because
-  every run drains all of `main`, a run GitHub replaced or coalesced loses nothing. The **frontier** is the
+  without a version tag (tags compared by the commit they peel to) whose pull request carries a release
+  label and whose own `CI` passed, allocates the next version; it stops at the first labelled merge whose
+  `CI` has not passed yet, which a later run continues. Merges without a release label are passed over
+  without waiting for their `CI`. Because every run drains all of `main`, a run GitHub replaced or
+  coalesced loses nothing. The **frontier** is the
   newest version tag's commit, but never earlier than the first merge whose `CI` ran on its push (`v0.1`'s
   successors #470 and #471 had none; the step that adds the push trigger records that first merge in the
   workflow, so the walk starts after them). Each merge's pull request is found by
   `GET /repos/{owner}/{repo}/commits/{sha}/pulls`, checked to be merged into `main` with exactly that merge
-  commit; a missing pull request or conflicting labels fail the run visibly.
+  commit; a merge without such a pull request makes no version. Labels are read when the run reaches the
+  merge, so a label set after the merge counts until a later version passes it; no check asks for or
+  guards a label (TD-306, TD-307).
 - **Allocation:** inside the release group, each tag is decided against freshly read tags: versions are
-  compared numerically, `vN` as `(N, 0)`; the next minor is `vX.Y+1` after the highest; `release:none`
-  makes no tag, `release:major` makes `vX+1`. A tag is an annotated tag object plus a non-forced ref
+  compared numerically, `vN` as `(N, 0)`; `release:minor` makes `vX.Y+1` after the highest,
+  `release:major` makes `vX+1` (with both labels, `release:major`); no label makes no tag (TD-306). A
+  machine on the major channel takes only the `vN` tags (TD-300). A tag is an annotated tag object plus a
+  non-forced ref
   (`contents: write` on the job alone); a commit that already peels from a version tag is skipped, so a
   rerun or a second run makes no second version of it.
 - **Design pack updates** (TD-101, TD-125, TD-256 as amended): the candidate is the running version's
   files plus the updated pack, built in a worktree of `repo.git` at the running version's commit, where the
   checks run; the running worktree is never touched. Once the challenger passes, or the owner accepts an
   unreviewed repair (TD-256), it commits there on a branch `pack/<id>`, pushes it and opens a pull request
-  labelled `pack-update`; the branch and pull request are kept in the update's state, so a retry reuses
-  them. Its merge, brought up to date with `main` as any pull request and checked by CI, is always a minor
-  version: `pack-update` takes precedence over the release labels. Machines take it at their next idle time.
+  with the labels OwlBear adds to every pull request it opens (TD-307, TD-308); the branch and pull request
+  are kept in the update's state, so a retry reuses them. Its merge, brought up to date with `main` as any
+  pull request and checked by CI, becomes a version as its labels say; machines take it at their next idle
+  time.
+- **Pull request labels and marker** (TD-308): a global setting `pr_labels` lists the labels OwlBear adds
+  to every pull request it opens, Delivery's and the design pack update's; a project's value replaces the
+  list whole (TD-243); empty at first. OwlBear's own project sets `release:minor`. A project setting
+  `pr_marker` (on at first) leaves out the line "Opened by OwlBear Delivery for …" when off. A failure to
+  add labels, a label the repository lacks included, is reported on the Change and does not undo the pull
+  request.
 - No evidence is recorded per commit and no tag is proposed (TD-240's evidence and proposal and TD-298 are
   superseded).
 
@@ -182,7 +198,9 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
 
 The owner answered revision 3's five questions on 2026-10-18: versions from merges (TD-302, replacing the
 candidate-proof question and the design pack question), cleanup while paused (TD-303), Run updates now
-while paused (TD-304) and forward repair after the switch (TD-305).
+while paused (TD-304) and forward repair after the switch (TD-305). Release labels followed the same day:
+versions only by label (TD-306), no label checks and pack updates labelled as any pull request (TD-307), and
+the pull request labels and marker settings (TD-308).
 
 ## 11. Build Steps
 
@@ -190,6 +208,6 @@ while paused (TD-304) and forward repair after the switch (TD-305).
 | --- | --- | --- |
 | 1 | Machine settings, `machine.json` format 2, stable alias in setup and install (§3, §7) | migration and Settings page tests; written paths use the alias |
 | 2 | Pause, Pause and stop when idle with intent, owner actions and cleanup while paused, TD-290 (§6, §9) | route and page tests: a live runner and a check environment while stopping; a pack update, a brief challenge and a cleanup while paused, publishing held |
-| 3 | `ci.yml` on pushes to `main`, the `release` workflow and its labels; design pack updates through a pull request (§8) | workflow tests on a disposable repository; one real minor tag from a merge |
+| 3 | `ci.yml` on pushes to `main`, the `release` workflow and its labels; the `pr_labels` and `pr_marker` settings in Delivery's publish; design pack updates through a pull request (§8) | workflow tests on a disposable repository; publish tests with labels and without the marker; one real minor tag from a labelled merge |
 | 4 | `repo.git`, versions, leases, never backwards, selfcheck, standby, fence, alias activation with first migration, handover, watch, Run updates now (§3–§5) | disposable macOS processes with two local tags: success, selfcheck and standby failure, a crash injected at each ownership step and around the alias rename, an open page and a chat server across it, a second update, disk refusal |
 | 5 | Idle, use, announcement, automatic updates (§7) | clock-driven tests: polls never count, Postpone, cancel, sleep |
