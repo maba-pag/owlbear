@@ -149,6 +149,13 @@ def test_a_pull_request_cancels_its_older_runs_but_a_push_to_main_runs_per_commi
     assert concurrency["cancel-in-progress"] == PR_ONLY
 
 
+def test_tooling_scopes_a_push_by_the_merge_against_its_first_parent() -> None:
+    """A push has no pull request base; reading it made git exit 128 on main's first push run."""
+    step = next(s for s in _jobs("tooling.yml")["verify"]["steps"] if s.get("id") == "scope")
+    assert step["env"]["HEAD_SHA"] == "${{ github.event.pull_request.head.sha || github.sha }}"
+    assert 'if [[ "$EVENT_NAME" == "push" ]]; then BASE_SHA="$(git rev-parse "$HEAD_SHA^1")"; fi' in step["run"]
+
+
 def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) -> None:
     def git(*args: str) -> str:
         done = subprocess.run(  # noqa: S603 - fixed git argument vector
