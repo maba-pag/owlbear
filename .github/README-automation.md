@@ -75,15 +75,15 @@ Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) test
 into `main` and comments on it. The integration imports the repository's default branch, `main`;
 its projects are set never to retest. No ruleset requires its checks.
 
-The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-319),
+The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-360),
 only for changes from `maba-pag/owlbear` itself: GitHub gives its token neither to a copy of OwlBear
 nor to a fork's pull request, so their CI never selects the suite, and the push run after a merge
-scans the merged code. Delivery never runs Snyk in other projects (TD-322):
+scans the merged code. Delivery never runs Snyk in other projects (TD-363):
 `snyk code test` and `snyk test --all-projects` at high severity and above, never `monitor` or
 `--report`, so it writes nothing into the org. Each finding prints its rule, file and line, so a
 failing run is fixed like any failing test. A dependency finding fails only when
-Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-321); others print and pass. It
-authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-320; a
+Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-362); others print and pass. It
+authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-361; a
 read-only CLI tester role replaces it once the Group offers one), whose token is the `SNYK_TOKEN`
 Actions secret. A Snyk Code false positive is ignored by the owner in the Snyk web UI, which the
 CLI honours (Consistent Ignores); a dependency finding accepted on purpose goes into `.snyk` with

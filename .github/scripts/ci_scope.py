@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-HOME = "maba-pag/owlbear"  # Snyk's token reaches only changes from OwlBear's own repository (TD-322)
+HOME = "maba-pag/owlbear"  # Snyk's token reaches only changes from OwlBear's own repository (TD-363)
 SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
@@ -105,7 +105,7 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/knowledge/**",
         "tests/test_knowledge_ops_contract.py",
     ),
-    "security": (  # TD-319: Snyk Code and Open Source on every change to code, manifests or locks
+    "security": (  # TD-360: Snyk Code and Open Source on every change to code, manifests or locks
         ".github/workflows/security.yml",
         ".snyk",
         "**/*.py",
@@ -164,7 +164,7 @@ def changed(base: str, head: str) -> list[str]:
 
 
 def tokened() -> bool:
-    """Whether GitHub gives this run Snyk's token: OwlBear's own run of a change from OwlBear itself (TD-322)."""
+    """Whether GitHub gives this run Snyk's token: OwlBear's own run of a change from OwlBear itself (TD-363)."""
     if os.environ.get("GITHUB_REPOSITORY", HOME) != HOME:
         return False
     return os.environ.get("EVENT") != "pull_request" or os.environ.get("SOURCE_REPOSITORY") == HOME

@@ -153,7 +153,7 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
 def test_only_owlbear_s_own_changes_select_the_snyk_suite(
     monkeypatch: pytest.MonkeyPatch, capsys, case: tuple[str, str, str, bool]
 ) -> None:
-    """TD-322: GitHub gives Snyk's token only to OwlBear's own runs of its own changes; others must not wait for it."""
+    """TD-363: GitHub gives Snyk's token only to OwlBear's own runs of its own changes; others must not wait for it."""
     step = next(s for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
     assert step["env"]["SOURCE_REPOSITORY"] == "${{ github.event.pull_request.head.repo.full_name }}"
     *values, selected = case
@@ -164,12 +164,12 @@ def test_only_owlbear_s_own_changes_select_the_snyk_suite(
 
 
 def test_the_snyk_suite_only_tests_and_gets_its_token_from_the_gate() -> None:
-    """TD-319: nothing is written into the Snyk org; a finding fails the run with its file and line in the log."""
+    """TD-360: nothing is written into the Snyk org; a finding fails the run with its file and line in the log."""
     steps = _jobs("security.yml")["snyk"]["steps"]
     runs = _runs({"steps": steps})
     assert "snyk code test" in runs
     assert "snyk test --all-projects" in runs
-    assert "--fail-on=upgradable" in runs  # TD-321: a finding without a Snyk fix prints but passes
+    assert "--fail-on=upgradable" in runs  # TD-362: a finding without a Snyk fix prints but passes
     assert not any(word in runs for word in ("monitor", "--report", "|| true"))
     assert _workflow("security.yml")["env"]["SNYK_API"] == "https://api.eu.snyk.io"
     assert _jobs("ci.yml")["security"]["secrets"] == {"SNYK_TOKEN": "${{ secrets.SNYK_TOKEN }}"}

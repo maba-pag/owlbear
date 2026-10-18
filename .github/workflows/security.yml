@@ -42,7 +42,7 @@ jobs:
       - name: Setup Snyk CLI
         uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
 
-      # Tests only: no monitor and no --report, so nothing is written into the Snyk org (TD-319).
+      # Tests only: no monitor and no --report, so nothing is written into the Snyk org (TD-360).
       # Each finding is printed with its rule, file and line, so a failing run becomes a fix task.
       - name: Snyk Code
         env:
@@ -53,4 +53,4 @@ jobs:
         if: success() || failure()
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-projects --org="$SNYK_ORG" --severity-threshold=high --fail-on=upgradable  # TD-321
+        run: snyk test --all-projects --org="$SNYK_ORG" --severity-threshold=high --fail-on=upgradable  # TD-362
