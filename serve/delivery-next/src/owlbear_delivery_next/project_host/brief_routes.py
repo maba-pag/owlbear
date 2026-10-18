@@ -78,9 +78,13 @@ def router(
     read: Callable[[str], Change],
     put: Callable[[str, InboxItem], dict[str, str]],
     wake: Callable[[], None],
-    paused: Callable[[], bool] = lambda: False,
+    held: Callable[[], bool] = lambda: False,
 ) -> APIRouter:
-    """POST /briefs/challenge records the shaper's request; POST /changes/{slug}/approve-brief the owner's approval."""
+    """POST /briefs/challenge records the shaper's request; POST /changes/{slug}/approve-brief the owner's approval.
+
+    The challenge runs at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until
+    Resume.
+    """
     routes = APIRouter()
 
     @routes.post("/changes/{slug}/approve-brief")
@@ -107,7 +111,7 @@ def router(
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
         wake()
-        out = {"requested": True, "change": body.change, "version": body.version, "paused": paused()}
+        out = {"requested": True, "change": body.change, "version": body.version, "paused": held()}
         return out | brief_rounds.status(c)
 
     return routes

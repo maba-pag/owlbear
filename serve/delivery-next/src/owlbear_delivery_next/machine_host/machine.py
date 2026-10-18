@@ -63,6 +63,7 @@ class Machine:
         if p.host:
             p.host.peers = lambda: self.sharing(p)
             p.host.draining = lambda: self.ending
+            p.host.closed = lambda: self.stopping.is_set() or not p.gate.open
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 

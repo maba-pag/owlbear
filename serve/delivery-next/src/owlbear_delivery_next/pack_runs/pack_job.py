@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
-__all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last"]
+__all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
 FILE = "design-pack-update.json"  # the last run, under the store
 STAGES = (
     ("notice", "Notice: newer upstream release"),
@@ -402,3 +402,19 @@ def last(store: Store) -> dict[str, Any] | None:
     if not isinstance(kept, dict) or not kept.get("started_at"):
         return None
     return {k: kept.get(k) for k in ("state", "started_at", "ended_at", "reason")}
+
+
+def running_for() -> str | None:
+    """The project whose design pack update runs on this machine now, by its name; None while none runs (TD-290)."""
+    path = local_home.root() / MACHINE_LOCK
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)  # a running update holds it exclusively
+    except BlockingIOError:
+        return path.read_text(encoding="utf-8").strip() or "another project"
+    finally:
+        os.close(fd)  # closing releases a shared lock taken here
+    return None

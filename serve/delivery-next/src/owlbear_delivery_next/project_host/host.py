@@ -31,7 +31,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.change_flow.status import Activity, passes
 from owlbear_delivery_next.local_system import codebase, data_repo, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -184,6 +184,8 @@ class Host:
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
+        self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
+        self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
@@ -301,7 +303,10 @@ class Host:
         with self.store.lock(slug) as lock:
             c = self._folded(lock, slug, rec, now, paused=paused)
             if paused:
-                return self._ended(lock, c, rec, now)
+                if not (self.owner_runs() and passes(c, now)):
+                    self.passing.discard(slug)
+                    return self._ended(lock, c, rec, now)
+                self.passing.add(slug)  # its launch passes the pause in this same pass
             act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
                 if (left := self.clear(c, c.env)) is None or left:
@@ -402,6 +407,13 @@ class Host:
             return None
         return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}
 
+    def owner_runs(self) -> bool:
+        """Whether maintenance and the owner's own requests may start while paused.
+
+        Not while OwlBear or this project stops, nor once the owner asked to stop when idle.
+        """
+        return not (self.closed() or self.draining())
+
     def env_action(self, c: Change) -> check.Action | None:
         """What the check environment needs now: launch, dispose or settle; None to leave it."""
         e = c.env
@@ -439,7 +451,7 @@ class Host:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
         self.launches[slug] = [*recent, time.monotonic()]
         with self.launching:  # a project folder rename or a project's stop waits, so no runner starts during it
-            if self.paused():
+            if self.paused() and not (slug in self.passing and self.owner_runs()):
                 return False
             rec = self.spawn(slug)
             atomic_write(self._path(slug), rec.model_dump_json())

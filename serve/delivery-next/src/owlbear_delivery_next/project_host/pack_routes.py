@@ -14,13 +14,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.pack_runs import pack_job
+from owlbear_delivery_next.project_host.host import ENDING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.state_store.store import Store
-
-PAUSED = "Delivery is paused: press Resume on the Changes page, then continue the update"
 
 
 class AnswerBody(BaseModel):
@@ -43,6 +42,7 @@ def pack(job: pack_job.Job) -> dict[str, Any]:
         "status": design_pack.status(),
         "notice": pack_update.said(pack_update.notice(refresh=False)),
         "update": job.read(),
+        "machine": pack_job.running_for(),  # TD-290: an update any project runs on this machine
     }
 
 
@@ -84,13 +84,16 @@ def overview(store: Store) -> list[dict[str, Any]]:
     ]  # fmt: skip
 
 
-def router(store: Store, job: pack_job.Job, paused: Callable[[], bool] = lambda: False) -> APIRouter:
-    """The design pack and maintenance routes; the caller adds the token check. An update waits for Resume."""
+def router(store: Store, job: pack_job.Job, ending: Callable[[], bool] = lambda: False) -> APIRouter:
+    """The design pack and maintenance routes; the caller adds the token check.
+
+    An update and its answers run while Delivery is paused (TD-287); only a stop when idle refuses them.
+    """
     routes = APIRouter()
 
     def held() -> None:
-        if paused():
-            raise HTTPException(409, PAUSED)
+        if ending():
+            raise HTTPException(409, ENDING)
 
     @routes.get("/design-pack")
     def read() -> dict[str, Any]:

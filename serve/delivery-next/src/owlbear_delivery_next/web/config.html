@@ -659,14 +659,17 @@ function packSection() {
     + `${plain(pack.status)}.` : "";
   const questions = u?.state === "waiting" ? u.questions : [], found = u?.loop?.findings ?? [];
   const p = u?.pushed, busy = u?.state === "running" || u?.state === "waiting";
+  const elsewhere = !busy && Boolean(pack?.machine);  // TD-290: one update runs at a time on this machine
   return html`<section id="pack" class="panel" aria-labelledby="pack-title">
     <p-heading size="lg"><h2 id="pack-title">Design pack</h2></p-heading>
     <p-text id="pack-active">${active}</p-text>
     <p-text id="pack-notice" size="xs" color="contrast-medium">${pack ? `Last notice: ${pack.notice}.` : ""}</p-text>
     <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
       only if every stage passes, or if you accept it after its challenge rounds end without a pass.</p-text>
+    ${elsewhere ? html`<p-text id="pack-machine" size="sm" role="status">A design pack update runs on this machine
+      for ${pack.machine}; one runs at a time, so this one can start once it has ended.</p-text>` : nothing}
     <div class="row">
-      ${button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh", disabled: busy })}
+      ${button("Update design pack", startUpdate, { id: "pack-update", icon: "refresh", disabled: busy || elsewhere })}
       <p-text id="pack-state" size="sm" role="status" aria-live="polite">${packLine(u)}</p-text>
     </div>
     <ol id="pack-stages" aria-label="Update stages">${(u?.stages ?? []).map((s) => html`<li>

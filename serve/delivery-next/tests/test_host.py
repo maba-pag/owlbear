@@ -727,6 +727,26 @@ def test_a_paused_fold_still_takes_a_queued_pr_out_through_the_barrier(store, tm
     assert (fake.host.tick(NOW), seen) == ([], [(None, NOW)])  # TD-284: the dequeue goes out at once
 
 
+@pytest.mark.parametrize(
+    ("kind", "mode", "runs"),
+    [(StepKind.CLEANUP, None, True), (StepKind.SHAPE, "challenge", True), (StepKind.SHAPE, "planned", False),
+     (StepKind.BUILD, None, False)],
+)  # fmt: skip
+def test_while_paused_only_a_cleanup_or_the_owners_brief_challenge_starts(store, tmp_path, kind, mode, runs):
+    """TD-287, TD-303: never while OwlBear or the project stops, nor once the owner asked to stop when idle."""
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    c = asking(fake).model_copy(update={"outcome": None, "step": Step(kind=kind, mode=mode, task="t1")})
+    save(store, c)
+    assert (status(c, fake.host.activity("c1"), NOW).action == "Resume Delivery") is not runs
+    fake.host.draining = lambda: True
+    assert fake.host.tick(NOW) == []
+    fake.host.draining, fake.host.closed = (lambda: False), (lambda: True)
+    assert fake.host.tick(NOW) == []
+    fake.host.closed = lambda: False
+    assert fake.host.tick(NOW) == (["c1"] if runs else [])
+
+
 def test_a_runner_gone_while_paused_is_charged_and_forgotten_and_nothing_starts(store, tmp_path):
     fake, flag = Fake(store, tmp_path), [False]
     paused(fake, flag)
