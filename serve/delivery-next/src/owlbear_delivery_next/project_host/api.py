@@ -271,8 +271,6 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
-        if host.draining():
-            raise HTTPException(409, ENDING)
         try:
             shaper = store.settings().agents["shaper"]
         except StoreError as exc:
