@@ -180,14 +180,20 @@ def _jsonable(fields: dict[str, Any]) -> dict[str, Any]:
     return {k: v.isoformat() if hasattr(v, "isoformat") else v for k, v in fields.items()}
 
 
-def _projects(names: list[str]) -> dict[str, Any]:
-    """What the labels say the entry concerns (they are edited on GitHub too); nothing when they say nothing."""
+def _projects(names: list[str], block: dict[str, Any]) -> dict[str, Any]:
+    """What the labels say the entry concerns (they are edited on GitHub too); nothing when they say nothing.
+
+    An older ``scope:project`` label without its ``project:`` label means the project the entry was found in.
+    """
     projects = [n.removeprefix("project:") for n in names if n.startswith("project:")]
     scopes = [n.removeprefix("scope:") for n in names if n.startswith("scope:")]
     if projects:
         return {"projects": projects}
     if scopes == ["global"]:
         return {"projects": []}
+    if scopes == ["project"]:
+        found = block.get("project") or block.get("origin")
+        return {"projects": [found] if found else None}
     return {"projects": None} if len(scopes) == 1 and scopes[0] in UNTRIAGED else {}
 
 
@@ -203,7 +209,7 @@ def fields(issue: Json) -> dict[str, Any] | None:
     names = [label["name"] for label in issue.get("labels", [])]
     if len(said := [n.removeprefix("class:") for n in names if n.startswith("class:")]) == 1 and said[0] in KINDS:
         data["kind"] = said[0]
-    data |= _projects(names)
+    data |= _projects(names, data)
     if issue.get("state") == "closed":  # GitHub's closing reason, as it is now: a reopened and reclosed issue too
         data["status"] = "dropped" if issue.get("state_reason") in {"not_planned", "duplicate"} else "done"
     elif data.get("status") in {"done", "dropped"}:

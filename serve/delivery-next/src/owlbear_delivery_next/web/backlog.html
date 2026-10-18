@@ -54,7 +54,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, designSystem, project, shown } from "/assets/ui.mjs";
+import { call, designSystem, here, loaded, project } from "/assets/ui.mjs";
 
 const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
 const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review", run: "a run" };
@@ -70,7 +70,8 @@ const state = {
   linkTo: new Map(),  // entry key -> the entry chosen in its "Link to another entry" list
   selected: new Set(), opened: new Set(),
 };
-const filter = { projects: "", kind: "all" };  // projects: all, global, untriaged or a folder; "" until loaded
+// projects: all, global, untriaged or a folder, kept in ?show=; "" until loaded, then the page's project's folder
+const filter = { projects: new URLSearchParams(location.search).get("show") ?? "", kind: "all" };
 
 function show() {
   const focused = document.activeElement;
@@ -140,17 +141,19 @@ function clonesOf(e) {
 
 function concerns(e) {
   if (e.projects === null) return `not triaged yet${e.origin ? ` (found in ${e.origin})` : ""}`;
-  return e.projects.length ? e.projects.join(", ") : "Global";
+  return `${e.projects.length ? e.projects.join(", ") : "Global"}${e.origin ? ` · found in ${e.origin}` : ""}`;
 }
 
-// The Change an entry went into: its clone's id and slug; an older bare slug only when one clone of it has it.
+// The Change an entry went into: its clone's id and slug; an older bare slug only when exactly one clone of the
+// project it was found in has it.
 function changeLink(e) {
   if (!e.change) return nothing;
   const [id, slug] = e.change.includes("/") ? e.change.split("/") : [null, e.change];
-  const owners = clonesOf(e).filter((c) => (id === null ? c.changes.includes(slug) : c.id === id));
+  const owners = clonesOf(e).filter((c) => (id === null ? c.name === e.origin && c.changes.includes(slug)
+    : c.id === id));
   if (owners.length !== 1) return html` · in Change ${slug} (not found on this machine)`;
   const c = owners[0], key = c.id ? `${c.id}/${slug}` : slug;
-  const named = state.loaded.clones.length > 1 ? `${c.name}: ${slug}` : slug;
+  const named = state.loaded.clones.length > 1 ? `${c.label}: ${slug}` : slug;
   return html` · in Change <a href=${`/?change=${encodeURIComponent(key)}`}>${named}</a>`;
 }
 
@@ -215,7 +218,7 @@ function statusPart(e, drop = true) {
   if (e.status !== "in-change") return html`<div class="row">${reopen}</div>`;
   const clones = clonesOf(e), several = clones.length > 1;
   const options = [["-", "not named yet"], ...clones.flatMap((c) => c.changes.map((slug) => [
-    c.id ? `${c.id}/${slug}` : slug, several ? `${c.name}: ${slug}` : slug]))];
+    c.id ? `${c.id}/${slug}` : slug, several ? `${c.label}: ${slug}` : slug]))];
   const named = (v) => {
     if (v === "-" || v === e.change) return;
     const owner = clones.find((c) => (c.id ? v.startsWith(`${c.id}/`) : true));
@@ -312,7 +315,11 @@ function filters() {
   if (!["all", "global", "untriaged", ...folders].includes(filter.projects)) filter.projects = "all";
   const options = [["all", "All"], ["global", "Global"], ["untriaged", "Not triaged yet"],
     ...folders.map((f) => [f, f])];
-  const shown = (v) => { filter.projects = v; show(); };
+  const shown = (v) => {
+    filter.projects = v;
+    history.replaceState(null, "", here({ show: v === "all" ? "" : v }));  // a reload or link keeps it
+    show();
+  };
   const kinds = select("Class", [["all", "all"], ...KINDS.map((k) => [k, k])], filter.kind,
     (v) => { filter.kind = v; show(); });
   return html`<div id="filters" class="row" role="group" aria-label="Show only">
@@ -328,7 +335,7 @@ function list(id, entries, byId, empty) {
 function addForm() {
   const add = () => addIdea(), clones = state.loaded.clones;
   if (!clones.some((c) => c.id === state.idea.clone)) state.idea.clone = clones[0]?.id ?? "";
-  const where = clones.length > 1 ? select("Found in", clones.map((c) => [c.id, c.name]), state.idea.clone,
+  const where = clones.length > 1 ? select("Found in", clones.map((c) => [c.id, c.label]), state.idea.clone,
     (v) => { state.idea.clone = v; }) : nothing;
   return html`<section class="panel" aria-labelledby="add-title">
     <p-heading size="md"><h2 id="add-title">Add an idea</h2></p-heading>
@@ -399,16 +406,19 @@ function view() {
 }
 
 // Each repository's backlog once, from the first of its clones that answers; a chat opening in another clone shows on
-// its entries too. An entry's key is its repository and number, since numbers repeat across repositories.
+// its entries too. An entry's key is its repository and number, since numbers repeat across repositories. Every clone
+// is read whatever the filter shows: each is a place a Change may start or a Change was made.
 async function load() {
-  const projects = shown() ?? [{ id: "", name: "" }];
+  const projects = loaded() ?? [{ id: "", name: "", path: "" }];
   const each = await Promise.allSettled(projects.map((p) => call("/backlog", { timeout: GET, of: p.id })));
   const clones = [], first = new Map(), unreadable = [], failed = [];
   each.forEach((r, i) => {
     const p = projects[i];
     if (r.status === "rejected") return failed.push(`${p.name || "this project"}: ${r.reason.message}`);
     const b = r.value, mark = (e) => ({ ...e, key: `${b.repository}#${e.id}`, via: p.id, repository: b.repository });
-    clones.push({ id: p.id, name: b.project || p.name, repository: b.repository, changes: b.changes });
+    const name = b.project || p.name, twin = projects.some((o) => o !== p && o.name === p.name);
+    clones.push({ id: p.id, name, label: twin ? `${name} (${p.path})` : name, repository: b.repository,
+      changes: b.changes });
     if (!first.has(b.repository)) {
       first.set(b.repository, b.entries.map(mark));
       unreadable.push(...b.unreadable);
@@ -460,9 +470,10 @@ async function launched(id, of) {  // the host opens the chat in the background;
   }
 }
 
-// The clone a Change from *picked* starts in, when the entries name it: one project, held by one clone here.
+// The clone a Change from *picked* starts in, when the entries name it: one project, held by one clone here. A
+// Global or untriaged entry names none.
 function clear(picked) {
-  const clones = clonesOf(picked[0]), named = new Set(picked.flatMap((e) => e.projects ?? ["?"]));
+  const clones = clonesOf(picked[0]), named = new Set(picked.flatMap((e) => (e.projects?.length ? e.projects : ["?"])));
   const only = named.size === 1 && !named.has("?") ? clones.filter((c) => c.name === [...named][0]) : [];
   return clones.length === 1 ? clones[0] : only.length === 1 ? only[0] : null;
 }
@@ -472,7 +483,7 @@ function chooser() {
   const clones = clonesOf(state.choosing.picked[0]);
   const go = () => { const { picked, of } = state.choosing; state.choosing = null; show(); shapeFrom(picked, of); };
   const stop = () => { state.choosing = null; show(); };
-  return html`<div id="choose" class="row">${select("Shape the Change in", clones.map((c) => [c.id, c.name]),
+  return html`<div id="choose" class="row">${select("Shape the Change in", clones.map((c) => [c.id, c.label]),
     state.choosing.of, (v) => { state.choosing.of = v; })}
     ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }

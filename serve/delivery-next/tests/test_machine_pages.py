@@ -45,7 +45,7 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
 
 
 @pytest.mark.browser
-def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_resumes(
+def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_resumes(  # noqa: PLR0915 - a journey
     tmp_path: Path, monkeypatch
 ) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime

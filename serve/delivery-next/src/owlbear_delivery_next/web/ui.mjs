@@ -112,6 +112,11 @@ export function shown() {
   if (!bar.data) return null;
   return bar.data.projects.filter((p) => p.state === "loaded" && (!project || p.id === project));
 }
+
+// Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
+export function loaded() {
+  return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
+}
 for (const link of document.querySelectorAll("nav a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 
 // One action of the bar: its button shows it running; an error is said beside the bar until the next action.
