@@ -190,6 +190,9 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
 - **Memory:** each shared folder's memory plus Global (`<shared>/memory/`). Agents read Global with their
   project's memory: sessions pass both folders and the memory server reads both, writing only to the project
   folder. Make global (owner action, same locks and publish) moves an entry once agents read Global.
+  (Revision 3.2: like the backlog, the page reads each shown clone's `/memory` and `/memory?where=global`
+  and shows each shared folder and each repository's Global once; an action goes through the clone that read
+  the entry. The memory server gets Global as `OWLBEAR_MEMORY_GLOBAL_DIR`; a project entry wins an id clash.)
 - **Proof:** browser tests with two projects holding the same Change slug (list, detail, answer, screenshot,
   reload, back); a backlog entry naming two projects and none, and the migration of each old scope; memory
   read and Make global.

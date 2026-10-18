@@ -70,10 +70,11 @@ def test_the_sdk_agent_is_offered_its_own_tools_and_the_result_tools() -> None:
     assert options(kind=StepKind.REVIEW)["custom_agents"][0]["tools"] == [*preload.tools("reviewer"), *RESULT_TOOLS]
 
 
-def test_the_projects_memory_folder_is_given_to_the_memory_server(tmp_path) -> None:
-    server = options(memory=tmp_path)["mcp_servers"][preload.MEMORY]
+def test_the_projects_memory_folder_and_global_memory_are_given_to_the_memory_server(tmp_path) -> None:
+    mine = tmp_path / "shop-site" / "memory"
+    server = options(memory=mine)["mcp_servers"][preload.MEMORY]
     assert server["args"] == ["-m", preload.MEMORY_MODULE]
-    assert server["env"] == {preload.MEMORY_DIR: str(tmp_path)}
+    assert server["env"] == {preload.MEMORY_DIR: str(mine), preload.MEMORY_GLOBAL: str(tmp_path / "memory")}
 
 
 def test_without_a_memory_folder_or_the_memory_server_the_agents_go_on_without_memory(tmp_path, monkeypatch) -> None:
@@ -102,7 +103,7 @@ def test_the_window_agent_offers_the_same_tools_and_this_steps_servers_tools(tmp
     relay, memory = wf.names(INBOX)
     servers = json.loads(wf.mcp(INBOX, tmp_path)(None))["mcpServers"]
     assert list(servers) == [relay, memory]  # unique to the step: the host disables a name another holds (P21)
-    assert servers[memory]["env"] == {preload.MEMORY_DIR: str(tmp_path)}
+    assert servers[memory]["env"][preload.MEMORY_DIR] == str(tmp_path)
     assert servers[memory]["args"] == ["-m", preload.MEMORY_MODULE]
     for role in ROLES:  # the window runs the same harness, which offered exactly these names live (TD-69)
         own = [n.replace(f"{preload.MEMORY}/", f"{memory}/") for n in preload.tools(role)]

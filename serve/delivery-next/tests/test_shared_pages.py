@@ -1,5 +1,5 @@
-"""The Backlog page across clones (TD-241): one backlog per repository, the projects an entry concerns, and the
-clone a Change starts in."""
+"""The shared repository's pages across clones (TD-241): one backlog per repository, the projects an entry concerns,
+the clone a Change starts in; each shared folder's memory once, beside Global memory."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 import uvicorn
+from owlbear_memory import MemoryCategory, MemoryEngine
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
@@ -143,6 +144,66 @@ def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_
             browser.close()
     finally:
         server.should_exit = True
+
+
+def curated(folder: Path, title: str) -> None:
+    engine = MemoryEngine(folder)
+    entry = engine.save(
+        title=title, content=f"{title}: what to know", categories=[MemoryCategory.PROCESS], confidence=0.8,
+        source_agent="builder", scope_agents=[],
+    )  # fmt: skip
+    engine.edit(entry.id, {"scope_agents": ["builder"]}, expected_revision=entry.revision)
+
+
+@pytest.mark.browser
+def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(tmp_path: Path, shared_repo) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    root = shared_repo[0]
+    curated(root / "shop-site" / "memory", "Run ruff first")
+    curated(root / "docs-site" / "memory", "Pin the runtime")
+    curated(root / "memory", "Sign every commit")
+    server, base = serving(machine(tmp_path, root)[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/memory#token=t")
+            entries = page.locator("li.entry")
+            expect(entries).to_have_count(3)  # the twin clones' folder once, Global once
+            expect(entries.locator(".place")).to_have_text(["Global", "docs-site", "shop-site"])  # newest first
+            page.goto(f"{base}/memory?project={DOCS}")
+            expect(entries.locator(".place")).to_have_text(["Global", "docs-site"])
+            common = entries.filter(has_text="Sign every commit")
+            common.get_by_role("button", name="Approve").click()
+            expect(page.locator("#status")).to_contain_text('Approved "Sign every commit"')
+            entries.filter(has_text="Pin the runtime").get_by_role("button", name="Make global").click()
+            page.locator("dialog").get_by_role("button", name="Make global").click()
+            expect(page.locator("#status")).to_contain_text('Made "Pin the runtime" global')
+            expect(entries.filter(has_text="Pin the runtime").locator(".place")).to_have_text("Global")
+            page.goto(f"{base}/memory")
+            expect(entries).to_have_count(3)
+            page.route(f"**/p/{SHOP}/api/next/memory**", lambda r: r.abort())  # the shop's first clone stops answering
+            curated(root / "shop-site" / "memory", "Read the twin")
+            page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+            expect(page.locator("#error")).to_contain_text("shop-site")
+            fresh = entries.filter(has_text="Read the twin")  # its twin answered now, so the folder is current
+            fresh.get_by_role("button", name="Approve").click()  # and the action goes through the twin
+            expect(page.locator("#status")).to_contain_text('Approved "Read the twin"')
+            expect(fresh.get_by_role("button", name="Make global")).to_be_visible()
+            browser.close()
+    finally:
+        server.should_exit = True
+    states = {e.title: e.state for e in MemoryEngine(root / "memory").get_entries()}
+    assert states == {"Sign every commit": "approved", "Pin the runtime": "curated"}
+    assert MemoryEngine(root / "docs-site" / "memory").get_entries() == []
+    assert {e.title: e.state for e in MemoryEngine(root / "shop-site" / "memory").get_entries()}["Read the twin"] == (
+        "approved"
+    )
 
 
 def test_an_older_scope_label_without_its_project_label_means_the_project_it_was_found_in():

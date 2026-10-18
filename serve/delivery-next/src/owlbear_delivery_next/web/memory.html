@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OwlBear Delivery · Memory</title>
+<meta name="owlbear-scope" content="all">
 <link rel="stylesheet" href="/assets/pds/index.css">
 <script type="module">
   import { load } from "/assets/pds/load.mjs";
@@ -41,7 +42,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, designSystem } from "/assets/ui.mjs";
+import { call, designSystem, shown as projects } from "/assets/ui.mjs";
 
 const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved", "deleted"];  // needs you first
 const GROUPS = [  // who acts next on an entry in each state
@@ -58,7 +59,8 @@ const DIALOG = "{ 'aria-haspopup': 'dialog' }";
 // editing: the entry being edited and its draft, so what is typed lives in state, not in an element (TD-264);
 // pending: the entry and action whose request is under way.
 const state = { pds: true, loaded: null, editing: null, pending: null, error: "", status: "" };
-const filter = { state: ACTIVE, category: ANY, agent: ANY };
+const filter = { state: ACTIVE, category: ANY, agent: ANY, place: ANY };
+const answers = new Map();  // each read's last answer by "project id|where", kept while that project fails to answer
 
 function show() {
   render(view(), document.getElementById("page"));
@@ -123,15 +125,17 @@ function age(iso) {
 }
 
 function busy(m, action) {
-  return state.pending === `${m.id}:${action}`;
+  return state.pending === `${m.key}:${action}`;
 }
 
+// One owner action, through the project that read the entry; Global memory is named with ?where=global.
 async function act(m, action, body = {}) {
-  state.pending = `${m.id}:${action}`;
+  state.pending = `${m.key}:${action}`;
   show();
   try {
-    const r = await call(`/memory/${encodeURIComponent(m.id)}/${action}`,
-      { body: { updated_at: m.updated_at, ...body }, timeout: 60000 });  // a push can take a network round trip
+    const where = m.place.where === "global" && action !== "make-global" ? "?where=global" : "";
+    const r = await call(`/memory/${encodeURIComponent(m.id)}/${action}${where}`,
+      { body: { updated_at: m.updated_at, ...body }, timeout: 60000, of: m.place.of });  // a push can take a while
     state.error = "";
     state.editing = null;
     const title = `"${r.entry.title}"`, again = action === "edit" && m.state === "approved";
@@ -140,6 +144,7 @@ async function act(m, action, body = {}) {
       resolve: `Approved ${title} as it reads now; its challenges are cleared.`,
       edit: again ? `Saved ${title}; it needs your approval again.` : `Saved ${title}.`,
       delete: `Deleted ${title}.`,
+      "make-global": `Made ${title} global: the agents of every project read it.`,
     }[action];
     state.status = `${done}${r.notice ? ` ${r.notice}` : ""}`;
     state.pending = null;
@@ -172,8 +177,19 @@ async function resolve(m) {
   if (sure) act(m, "resolve");
 }
 
+async function globalize(m) {
+  const sure = await ask({
+    title: `Make “${m.title}” global?`, yes: "Make global", no: `Keep it in ${m.place.label}`,
+    now: `It moves from the memory of ${m.place.label} to Global memory, as it reads now.`,
+    then: "The agents of every project in this shared repository read it beside their own memory.",
+    after: "Edit or delete it in Global memory; it does not move back.",
+    instead: `It stays in the memory of ${m.place.label}.`,
+  });
+  if (sure) act(m, "make-global");
+}
+
 function edit(m) {
-  state.editing = { id: m.id, draft: { title: m.title, content: m.content, categories: [...m.categories] } };
+  state.editing = { id: m.key, draft: { title: m.title, content: m.content, categories: [...m.categories] } };
   show();
 }
 
@@ -214,6 +230,10 @@ function actions(m) {
       button("Delete", () => remove(m), { variant: "secondary", icon: "delete", aria: DIALOG,
         busy: busy(m, "delete") }));
   }
+  if (m.place.where === "project" && !["pending", "deleted"].includes(m.state)) {  // Global has no curator
+    parts.push(button("Make global", () => globalize(m), { variant: "secondary", icon: "globe", aria: DIALOG,
+      busy: busy(m, "make-global") }));
+  }
   return parts.length ? html`<div class="row">${parts}</div>` : nothing;
 }
 
@@ -224,9 +244,10 @@ function card(m) {
   return html`<li class="entry">
     <div class="title"><p-text weight="semibold">${m.title}</p-text>
       <p-tag variant=${TAGS[m.state]} compact="true">${m.state}</p-tag>
+      <p-tag class="place" compact="true">${m.place.label}</p-tag>
       ${m.categories.map((c) => html`<p-tag compact="true">${c}</p-tag>`)}</div>
     <p-text size="xs" color="contrast-medium">${meta}</p-text>
-    ${state.editing?.id === m.id ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
+    ${state.editing?.id === m.key ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
   </li>`;
 }
 
@@ -234,7 +255,7 @@ function matches(m) {
   const own = filter.state === ANY || (filter.state === ACTIVE ? m.state !== "deleted" : m.state === filter.state);
   const category = filter.category === ANY || m.categories.includes(filter.category);
   const agent = filter.agent === ANY || m.scope_agents.includes("*") || m.scope_agents.includes(filter.agent);
-  return own && category && agent;
+  return own && category && agent && (filter.place === ANY || m.place.key === filter.place);
 }
 
 // The filter choices the loaded entries offer; a choice no longer offered falls back to Any before anything is shown.
@@ -245,6 +266,7 @@ function choices() {
     ["state", "State", [[ACTIVE, "All but deleted"], [ANY, "All"], ...loaded.states.map((s) => [s, s])]],
     ["category", "Category", [[ANY, "Any"], ...loaded.categories.map((c) => [c, c])]],
     ["agent", "Agent", [[ANY, "Any"], ...agents.map((a) => [a, a])]],
+    ["place", "Kept in", [[ANY, "Anywhere"], ...loaded.places.map((p) => [p.key, p.label])]],
   ];
   for (const [key, , options] of parts) if (!options.some(([v]) => v === filter[key])) filter[key] = ANY;
   return parts;
@@ -257,7 +279,7 @@ function entries(shown) {
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
         : nothing}</div>
-      <ul class="entries">${repeat(mine, (m) => m.id, card)}</ul></section>`;
+      <ul class="entries">${repeat(mine, (m) => m.key, card)}</ul></section>`;
   });
   const empty = state.loaded.entries.length ? "No memory matches these filters."
     : "Agents have not remembered anything yet.";
@@ -283,16 +305,58 @@ function view() {
     ${available ? html`<section id="filters" class="row" aria-label="Filters">
       ${parts.map(([key, label, options]) => select(key, label, options))}</section>` : nothing}
     ${available ? html`<div id="entries">${entries(shown)}</div>` : nothing}
-    ${available ? html`<p-text id="where" size="xs" color="contrast-medium" title=${loaded.folder}>Kept in
-      ${loaded.folder.split("/").slice(-2).join("/")} of the shared repository.${errors}</p-text>` : nothing}`;
+    ${available ? html`<p-text id="where" size="xs" color="contrast-medium"
+      title=${loaded.places.map((p) => p.folder).join("\n")}>Kept in
+      ${loaded.places.map((p) => p.folder.split("/").slice(-2).join("/")).join(", ")} of the shared
+      repository.${errors}</p-text>` : nothing}`;
+}
+
+// What the page reads (TD-241): each shown project's memory and its shared repository's Global memory, each
+// through that project's own route; without a machine host, this host's project and Global.
+function sources() {
+  return (projects() ?? [{ id: "", name: "" }]).flatMap(({ id, name }) => [{ of: id, name, where: "project" },
+    { of: id, name, where: "global" }]);
+}
+
+// The answers as one list: each shared folder once (twin clones share one), Global once per shared repository;
+// an entry keeps its place, so an action goes through the project that read it. A project that failed this time
+// stands for its folder only when no other project read it now.
+function gather(wanted, fresher) {
+  const places = new Map(), entries = [], said = wanted.map((s) => answers.get(`${s.of}|${s.where}`));
+  let errors = 0;
+  const fresh = (i) => (fresher.has(`${wanted[i].of}|${wanted[i].where}`) ? 0 : 1);
+  [...wanted.keys()].sort((i, j) => fresh(i) - fresh(j)).forEach((i) => {  // this refresh's answers before older ones
+    const s = wanted[i], a = said[i];
+    const key = a?.available && `${a.repository}#${s.where === "global" ? "" : a.project}`;
+    if (!key || places.has(key)) return;
+    const place = { key, of: s.of, where: s.where, folder: a.folder, repository: a.repository,
+      name: s.where === "global" ? "Global" : a.project };
+    places.set(key, place);
+    errors += a.parse_errors;
+    entries.push(...a.entries.map((m) => ({ ...m, key: `${key}/${m.id}`, place })));
+  });
+  const shape = said.find((a) => a?.available), first = said.find(Boolean);
+  if (!first) return null;
+  const several = new Set([...places.values()].map((p) => p.repository)).size > 1;
+  for (const p of places.values()) p.label = several ? `${p.name} (${p.repository.split("/").pop()})` : p.name;
+  return { available: Boolean(shape), reason: first.reason, entries, parse_errors: errors,
+    states: shape?.states ?? [], categories: shape?.categories ?? [], places: [...places.values()] };
 }
 
 async function refresh() {
-  try {
-    state.loaded = await call("/memory");
-  } catch (e) {
-    return notify(e.message);
-  }
+  const wanted = sources();
+  const got = await Promise.allSettled(wanted.map((s) => call(s.where === "global" ? "/memory?where=global"
+    : "/memory", { of: s.of })));
+  const failing = new Set(), fresher = new Set();
+  got.forEach((r, i) => {
+    const key = `${wanted[i].of}|${wanted[i].where}`;
+    if (r.status === "fulfilled") {
+      answers.set(key, r.value);
+      fresher.add(key);
+    } else failing.add(`${wanted[i].name ? `${wanted[i].name}: ` : ""}${r.reason.message}`);
+  });
+  state.loaded = gather(wanted, fresher);
+  state.error = failing.size ? [...failing].join(" ") : "";
   show();
 }
 
