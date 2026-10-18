@@ -8,10 +8,12 @@ and ``?`` do not.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 
+HOME = "maba-pag/owlbear"  # Snyk and its token exist only in OwlBear's own repository (TD-322)
 SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
@@ -164,6 +166,8 @@ def changed(base: str, head: str) -> list[str]:
 def main(argv: list[str]) -> None:
     """Print the touched suites for a base and head commit; every suite without a base."""
     names = suites(changed(argv[0], argv[1])) if len(argv) == 2 and argv[0] else list(SUITES)  # noqa: PLR2004
+    if os.environ.get("GITHUB_REPOSITORY", HOME) != HOME:
+        names = [name for name in names if name != "security"]
     sys.stdout.write(f"suites={json.dumps(names)}\n")
 
 

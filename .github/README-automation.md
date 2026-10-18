@@ -75,10 +75,12 @@ Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) test
 into `main` and comments on it. The integration imports the repository's default branch, `main`;
 its projects are set never to retest. No ruleset requires its checks.
 
-The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-319):
+The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-319),
+only in `maba-pag/owlbear`: a copy of OwlBear has neither Snyk nor its token, so its CI never selects
+the suite, and Delivery never runs Snyk in other projects (TD-322):
 `snyk code test` and `snyk test --all-projects` at high severity and above, never `monitor` or
 `--report`, so it writes nothing into the org. Each finding prints its rule, file and line, so a
-failing run is fixed like any failing test, by Delivery too. A dependency finding fails only when
+failing run is fixed like any failing test. A dependency finding fails only when
 Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-321); others print and pass. It
 authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-320; a
 read-only CLI tester role replaces it once the Group offers one), whose token is the `SNYK_TOKEN`

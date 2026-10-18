@@ -129,12 +129,23 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     paths = subprocess.run(  # noqa: S603
         ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
         cwd=tmp_path,
+        env={**os.environ, "GITHUB_REPOSITORY": ci_scope.HOME},
         capture_output=True,
         text=True,
         check=True,
     ).stdout
 
     assert paths == 'suites=["python", "python-browser", "static", "security"]\n'
+
+
+def test_a_copy_of_owlbear_never_selects_the_snyk_suite(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """TD-322: Snyk and its token exist only in OwlBear's own repository, so a copy's CI must not wait for them."""
+    monkeypatch.setenv("GITHUB_REPOSITORY", "someone/owlbear")
+    ci_scope.main([])
+    assert "security" not in capsys.readouterr().out
+    monkeypatch.setenv("GITHUB_REPOSITORY", ci_scope.HOME)
+    ci_scope.main([])
+    assert "security" in capsys.readouterr().out
 
 
 def test_the_snyk_suite_only_tests_and_gets_its_token_from_the_gate() -> None:
