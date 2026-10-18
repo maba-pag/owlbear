@@ -5,12 +5,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.project_host import backlog_routes
 from owlbear_delivery_next.state_store import backlog as backlog_module
-from owlbear_delivery_next.state_store import backlog_migrate
+from owlbear_delivery_next.state_store import backlog_issues, backlog_migrate
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.backlog_issues import Issues
 from owlbear_delivery_next.state_store.store import Store
@@ -66,15 +68,16 @@ def test_a_finding_is_one_issue_with_a_readable_body_and_labels_and_nothing_is_w
 
     entry, new = view(root).add("Status line hides the step", "the line cuts at 80", "watcher", refs)
 
-    assert (new, entry.id, entry.scope, entry.project, entry.status) == (True, "1", "unassigned", "shop-site", "inbox")
+    assert (new, entry.id, entry.projects, entry.origin, entry.status) == (True, "1", None, "shop-site", "inbox")
     [issue] = github.issues.values()
-    assert (issue["title"], names(issue)) == ("Status line hides the step", ["scope:unassigned", "class:untriaged"])
+    assert (issue["title"], names(issue)) == ("Status line hides the step", ["scope:untriaged", "class:untriaged"])
     body = issue["body"]
-    head = "**Class:** untriaged · **Scope:** unassigned (shop-site) · **Source:** watcher · **State:** inbox"
+    head = "**Class:** untriaged · **Projects:** not triaged yet · **Found in:** shop-site · **Source:** watcher"
+    head += " · **State:** inbox"
     assert body.startswith(f"the line cuts at 80\n\n{head}\n\n### Evidence\n\n- c3 build\n- https://ci.example.com/1")
     assert "\n\n**Repeats:** seen 1 time · first 2026-10-14 08:00 UTC · last 2026-10-14 08:00 UTC\n\n<!-- " in body
     assert {n: label["color"] for n, label in github.labels.items()} == {
-        "scope:unassigned": "A67C52",
+        "scope:untriaged": "A67C52",
         "class:untriaged": "A67C52",
     }
     assert view(root).read(fresh=True) == ({"1": entry}, [])
@@ -113,40 +116,41 @@ def test_a_repeat_counts_up_only_its_own_project_s_entry_and_another_project_s_i
     first = shop.add(title, source="watcher")[0]
 
     elsewhere, new = docs.add(title, source="watcher")
-    assert (new, elsewhere.id, elsewhere.project, len(github.issues)) == (True, "2", "docs-site", 2)
+    assert (new, elsewhere.id, elsewhere.origin, len(github.issues)) == (True, "2", "docs-site", 2)
     assert [shop.add(title, source="watcher")[0].id, docs.add(title, source="watcher")[0].id] == ["1", "2"]
 
-    shop.update(first.id, {"scope": "global", "links": [elsewhere.id]})  # shared: linked as connected entries
+    shop.update(first.id, {"projects": [], "links": [elsewhere.id]})  # Global: linked as connected entries
     assert (shop.add(title, source="watcher")[0].count, docs.add(title, source="watcher")[0].count) == (3, 3)
-    docs.update(elsewhere.id, {"scope": "project", "project": "shop-site"})  # its project is now shop-site's
-    moved, new = docs.add(title, source="watcher")
-    assert (new, moved.id, names(github.issues[2])[-1]) == (True, "3", "project:shop-site")
+    docs.update(elsewhere.id, {"projects": ["shop-site", "docs-site"]})  # it concerns both; found in docs-site
+    assert (docs.add(title, source="watcher")[0].id, names(github.issues[2])[-2:]) == (
+        "2", ["project:shop-site", "project:docs-site"]
+    )  # fmt: skip
     assert docs.read(fresh=True)[0]["1"].links == ["2"]
 
 
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):
     root, _ = shared
-    github.labels["scope:unassigned"] = {"name": "scope:unassigned", "color": "000000"}
+    github.labels["scope:untriaged"] = {"name": "scope:untriaged", "color": "000000"}
     github.labels["help wanted"] = {"name": "help wanted", "color": "008672"}
     a = view(root).add("a")[0]
     view(root).add("b")
     github.issues[1]["labels"].append({"name": "help wanted"})
     github.issues[1]["updated_at"] = "2099-01-01"
 
-    view(root).update(a.id, {"kind": "defect", "scope": "project"})
+    view(root).update(a.id, {"kind": "defect", "projects": ["shop-site"]})
 
     made = [body["name"] for method, endpoint, body in github.calls if method == "POST" and endpoint.endswith("labels")]
-    assert made == ["class:untriaged", "scope:project", "class:defect", "project:shop-site"]
-    assert names(github.issues[1]) == ["help wanted", "scope:project", "class:defect", "project:shop-site"]
+    assert made == ["class:untriaged", "class:defect", "project:shop-site"]
+    assert names(github.issues[1]) == ["help wanted", "class:defect", "project:shop-site"]
     assert {n: label["color"] for n, label in github.labels.items()} == {
-        "scope:unassigned": "000000",
+        "scope:untriaged": "000000",
         "help wanted": "008672",
     } | dict.fromkeys(made, "A67C52")
     issues = Issues(DataRepo(root))
     issues.ensure_labels([])
     github.labels["scope:global"] = {"name": "scope:global", "color": "0e8a16"}  # made by another writer meanwhile
     issues.ensure_labels(["scope:global"])
-    assert (len(github.labels), github.labels["scope:global"]["color"]) == (7, "0e8a16")
+    assert (len(github.labels), github.labels["scope:global"]["color"]) == (6, "0e8a16")
 
 
 @pytest.mark.usefixtures("github")
@@ -195,10 +199,10 @@ def test_github_holds_the_title_class_scope_and_state_and_an_issue_without_a_rea
 
     found, bad = backlog.read(fresh=True)
 
-    assert (found["1"].title, found["1"].status, found["1"].scope, found["1"].kind) == (
+    assert (found["1"].title, found["1"].status, found["1"].projects, found["1"].kind) == (
         "renamed",
         "dropped",
-        "global",
+        [],
         "idea",
     )
     assert (list(found), bad) == (["1"], ["#2"])
@@ -377,7 +381,7 @@ def test_the_cli_adds_an_issue_and_counts_a_repeat(repo, capsys):
     out = capsys.readouterr().out.splitlines()
     [entry] = Backlog.of(Store.open(repo)).entries()
     assert out == ["added #1: Flaky check", "seen again #1: Flaky check (2 times)"]
-    assert (entry.source, entry.text, entry.count, entry.project) == ("run", "fails one run in five", 2, "shop-site")
+    assert (entry.source, entry.text, entry.count, entry.origin) == ("run", "fails one run in five", 2, "shop-site")
     assert entry.evidence == ["c7 check", "https://ci.example.com/run/1"]
 
 
@@ -426,8 +430,8 @@ def test_migration_moves_each_file_into_one_issue_verifies_then_deletes_and_push
         f"created #2: {b} Visual judges",
         "verified 2 issues in acme/owlbear-data; deleted 2 files",
     ]
-    assert names(github.issues[1]) == ["scope:project", "class:untriaged", "project:owlbear"]
-    assert (names(github.issues[2])[1], github.issues[2]["state"], github.issues[2]["state_reason"]) == (
+    assert names(github.issues[1]) == ["class:untriaged", "project:owlbear"]
+    assert (names(github.issues[2])[0], github.issues[2]["state"], github.issues[2]["state_reason"]) == (
         "class:defect",
         "closed",
         "completed",
@@ -538,3 +542,35 @@ def test_an_issue_that_does_not_read_back_as_its_file_or_an_unreadable_file_bloc
     assert backlog_migrate.migrate(DataRepo(root), said.append) == 1
     assert said[0].startswith("unreadable: owlbear/backlog/20261014-000003.json")
     assert all(p.exists() for p in files)
+
+
+@pytest.mark.parametrize(
+    ("scope", "labels", "projects"),
+    [
+        ("project", ["scope:project", "project:shop-site"], ["shop-site"]),
+        ("global", ["scope:global"], []),
+        ("cross-project", ["scope:cross-project"], None),
+        ("unassigned", ["scope:unassigned"], None),
+    ],
+)
+def test_an_entry_written_before_projects_keeps_only_what_its_scope_states(scope, labels, projects):
+    """TD-241: the old project becomes the origin; only a project or Global scope names what the entry concerns."""
+    at = "2026-10-01T08:00:00+00:00"
+    block = {"source": "run", "scope": scope, "project": "docs-site", "first_seen": at, "last_seen": at}
+    issue = {"number": 7, "title": "old", "state": "open", "labels": [{"name": n} for n in labels]}
+    issue["body"] = f"<!-- {backlog_issues.MARK} {json.dumps(block | {'updated_at': at})} -->"
+    entry = backlog_module.Entry.model_validate(backlog_issues.fields(issue))
+    assert (entry.projects, entry.origin) == (projects, "docs-site")
+    assert backlog_issues.labels(entry.model_dump())[-1] == (
+        f"project:{projects[0]}" if projects else "class:untriaged"
+    )  # fmt: skip
+
+
+def test_the_change_an_entry_went_into_names_its_clone(repo):
+    store = Store.open(repo)
+    (store.root / "changes" / "c1").mkdir(parents=True)
+    (store.root / "changes" / "c1" / "change.json").write_text("{}")
+    assert (backlog_routes.named(store, "", "c1"), backlog_routes.named(store, "ab12", "c1")) == ("c1", "ab12/c1")
+    assert backlog_routes.named(store, "ab12", "ab12/c1") == "ab12/c1"
+    with pytest.raises(HTTPException, match="is not a Change of this clone"):
+        backlog_routes.named(store, "ab12", "ff00/c1")
