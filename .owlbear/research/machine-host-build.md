@@ -169,7 +169,8 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
 
 ## 6. Step 3: One UI Across Projects (TD-241)
 
-- **Filters:** every page offers each project, Global and All (default All), kept in the URL hash; every item
+- **Filters:** every page offers each project, Global and All (default All), kept in the URL query (`?project=`,
+  revision 3.2); every item
   shows its project; every action calls its project's route and every link carries its project id.
 - **Changes:** one list across projects; New Change asks which project unless the filter names one.
 - **Shared resources once:** backlog and memory belong to the shared repository, not a clone. Machine routes
