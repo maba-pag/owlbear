@@ -81,6 +81,7 @@ const state = {
   pds: true, loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
   folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
+  everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
 };
 const drafts = { project: {}, global: {} };
 let polling = null, arrived = null;  // arrived: models read while a setting held the focus, applied once it leaves
@@ -756,13 +757,21 @@ function acrossSection() {
       : "built-in default";
     const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(global));
     return { key, global, from, differ };
-  }).filter((r) => r.differ.length);
+  }).filter((r) => state.everything || r.differ.length);
   const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${plain(r.global)} (${r.from})`),
-    cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; "))));
+    cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
+  const flip = (e) => { state.everything = e.target.checked === true; show(); };
+  const showAll = state.pds
+    ? html`<p-checkbox id="across-all" label="Show all settings" .checked=${live(state.everything)}
+        @change=${flip}></p-checkbox>`
+    : html`<label><input id="across-all" type="checkbox" .checked=${live(state.everything)} @change=${flip}>
+        Show all settings</label>`;
   const unread = state.unread.length ? `Not read: ${state.unread.join("; ")}.` : "";
   return html`<section class="panel" aria-labelledby="across-title">
     <p-heading size="lg"><h2 id="across-title">Across projects</h2></p-heading>
-    ${rows.length ? table("Settings a project sets apart from the global value", ["Setting", "Global", "Projects"],
+    ${showAll}
+    ${rows.length ? table(state.everything ? "Every setting, with the projects that set it apart"
+      : "Settings a project sets apart from the global value", ["Setting", "Global", "Projects"],
       "across", body, { id: "across-table" })
       : html`<p-text id="across-none">Every project uses the global settings.</p-text>`}
     ${unread ? html`<p-text id="across-unread" size="xs">${unread}</p-text>` : nothing}

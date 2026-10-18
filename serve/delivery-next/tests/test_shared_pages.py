@@ -262,6 +262,11 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             expect(across).to_contain_text("(built-in default)")
             expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
             expect(across).not_to_contain_text("docs-site")
+            expect(across).not_to_contain_text("explore")
+            page.get_by_label("Show all settings").check()  # every setting, those nobody sets apart too (TD-295)
+            expect(across.get_by_text("explore", exact=True)).to_have_count(1)
+            page.get_by_label("Show all settings").uncheck()
+            expect(across).not_to_contain_text("explore")
             expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
             scope = page.get_by_label("Layer")
             expect(scope.locator("option")).to_have_text(
