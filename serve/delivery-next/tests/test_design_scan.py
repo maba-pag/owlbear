@@ -300,3 +300,13 @@ def test_the_scan_answers_without_ending_the_builders_step_in_both_runtimes(tmp_
     assert tools.SCAN_DESIGN not in sdk_adapter.agent(StepKind.BUILD)["tools"]
     relay, _ = window_files.names(tmp_path / "inbox.json")
     assert f"{relay}/{tools.SCAN_DESIGN}" in window_files.agent("builder", tmp_path / "inbox.json", ui=True)(None)
+
+
+def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch, machine_home) -> None:
+    monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only
+    if design_pack.installed() is None:
+        pytest.skip("the design pack is not installed (owlbear-next design-pack --install)")
+    (tmp_path / "index.html").write_text(BAD)
+    reply = design.builder_scan(tmp_path, scan_args(paths=["index.html"]))
+    assert "design detector findings" in reply, reply
+    assert "at index.html" in reply  # relative to the worktree, never the absolute path
