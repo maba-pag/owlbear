@@ -20,6 +20,7 @@ from typing import Protocol
 
 FLOOR = "941ee5d9d692532e9184350eb4f6b079a9b96699"  # the last merge before pushes to main ran CI
 LABELS = {"release:major": "major", "release:minor": "minor"}  # major wins when both are set
+CI = ".github/workflows/ci.yml"
 VERSION = re.compile(r"v(\d+)(?:\.(\d+))?")
 BOT = ("-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com")
 
@@ -125,11 +126,12 @@ class Api:
         return next((p for p in found if p.get("merge_commit_sha") == sha and p["base"]["ref"] == "main"), None)
 
     def ci(self, sha: str) -> str:
-        """The latest run of the ``CI`` check on this commit."""
-        runs = self._get(f"commits/{sha}/check-runs?check_name=CI&filter=latest")["check_runs"]
-        if not runs or any(r["status"] != "completed" for r in runs):
+        """The newest run of the CI workflow for this merge's own push to main."""
+        found = self._get(f"actions/runs?head_sha={sha}&event=push&branch=main&per_page=100")["workflow_runs"]
+        runs = [r for r in found if r.get("path") == CI]
+        if not runs or (run := max(runs, key=lambda r: r["id"]))["status"] != "completed":
             return "pending"
-        return "success" if all(r["conclusion"] == "success" for r in runs) else "failure"
+        return "success" if run["conclusion"] == "success" else "failure"
 
 
 def main() -> int:

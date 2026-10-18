@@ -134,18 +134,24 @@ def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, mo
 
 @pytest.mark.parametrize(
     ("runs", "said"),
-    [([], "pending"), ([{"status": "in_progress", "conclusion": None}], "pending"),
-     ([{"status": "completed", "conclusion": "success"}], "success"),
-     ([{"status": "completed", "conclusion": "failure"}], "failure")],
+    [([], "pending"),
+     ([{"id": 1, "path": ".github/workflows/release.yml", "status": "completed", "conclusion": "success"}], "pending"),
+     ([{"id": 2, "path": release.CI, "status": "in_progress", "conclusion": None}], "pending"),
+     ([{"id": 3, "path": release.CI, "status": "completed", "conclusion": "failure"},
+       {"id": 4, "path": release.CI, "status": "completed", "conclusion": "success"}], "success"),
+     ([{"id": 6, "path": release.CI, "status": "completed", "conclusion": "failure"},
+       {"id": 5, "path": release.CI, "status": "completed", "conclusion": "success"}], "failure")],
 )  # fmt: skip
-def test_the_api_takes_the_pull_request_merged_with_this_commit_and_its_latest_ci(monkeypatch, runs, said):
+def test_the_api_takes_the_pull_request_merged_with_this_commit_and_its_newest_push_ci(monkeypatch, runs, said):
     answers = {
         "https://api.test/repos/o/r/commits/s/pulls": [
             {"number": 6, "merge_commit_sha": "other", "base": {"ref": "main"}},
             {"number": 8, "merge_commit_sha": "s", "base": {"ref": "release"}},
             {"number": 7, "merge_commit_sha": "s", "base": {"ref": "main"}},
         ],
-        "https://api.test/repos/o/r/commits/s/check-runs?check_name=CI&filter=latest": {"check_runs": runs},
+        "https://api.test/repos/o/r/actions/runs?head_sha=s&event=push&branch=main&per_page=100": {
+            "workflow_runs": runs
+        },
     }
     asked = []
 
@@ -165,14 +171,15 @@ def test_the_workflow_drains_after_ci_on_main_or_a_label_change_and_runs_mains_c
     assert (on["workflow_run"], on["pull_request_target"]) == (
         {"workflows": ["CI"], "types": ["completed"]}, {"types": ["labeled", "unlabeled"], "branches": ["main"]}
     )  # fmt: skip
-    assert (document["concurrency"], document["permissions"]) == ({"group": "release", "cancel-in-progress": False}, {})
+    assert (document["permissions"], "concurrency" in document) == ({}, False)
     job = document["jobs"]["release"]
+    assert job["concurrency"] == {"group": "release", "cancel-in-progress": False}  # skipped runs never queue
     for needed in (
         "workflow_run.event == 'push'", "workflow_run.head_branch == 'main'", "workflow_run.conclusion == 'success'",
         "pull_request.merged", "label.name, 'release:'",
     ):  # fmt: skip
         assert needed in job["if"]
-    assert job["permissions"] == {"contents": "write", "checks": "read", "pull-requests": "read"}
+    assert job["permissions"] == {"contents": "write", "actions": "read", "pull-requests": "read"}
     checkout, walk = job["steps"]
     assert (checkout["with"]["ref"], checkout["with"]["fetch-depth"]) == ("main", 0)  # never a PR's own code
     assert (walk["env"]["RELEASE_TAGS"], walk["run"]) == (
