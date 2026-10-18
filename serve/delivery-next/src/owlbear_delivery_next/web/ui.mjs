@@ -158,7 +158,15 @@ function chosen(p, all) {
   return `${p.name}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
 }
 
+// Whether unsaved edits keep the page where it is; the bar says why. Checked before anything changes or opens.
+function held() {
+  if (!(bar.error = unsaved())) return false;
+  showBar();
+  return true;
+}
+
 async function remove(p) {
+  if (held()) return;
   const yes = await window.ask({ title: `Remove ${p.name}?`, now: `OwlBear stops serving ${p.path}.`,
     then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
     after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project" });
@@ -173,13 +181,13 @@ function view() {
   const { projects, paused, waiting } = bar.data;
   const p = projects.find((o) => o.id === project);
   const go = (e) => {
-    if ((bar.error = unsaved())) {
+    if (held()) {
       e.target.value = project;  // the page keeps showing the project being edited
       return showBar();
     }
     location.assign(here({ project: e.target.value, change: "" }));
   };
-  const add = () => act("add", async () => {
+  const add = () => !held() && act("add", async () => {
     const added = await call("/projects", { body: { path: bar.draft.trim() }, machine: true });
     location.assign(here({ project: added.id, change: "" }));
   });
@@ -191,7 +199,7 @@ function view() {
           </option>`)}
       </select></label>` : html`<span>No project yet: add the folder of a clone.</span>`}
       ${p ? control("Remove project", () => remove(p), { busy: bar.busy === "remove" }) : nothing}
-      ${p?.state === "replaced" ? control("Adopt the new clone", () => act("adopt", async () => {
+      ${p?.state === "replaced" ? control("Adopt the new clone", () => !held() && act("adopt", async () => {
         const adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
         location.assign(here({ project: adopted.id }));
       }), { busy: bar.busy === "adopt" }) : nothing}

@@ -256,6 +256,12 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             page.locator("#machine select").select_option(SHOP)  # so does the project bar
             expect(page.locator("#machine [role=alert]")).to_contain_text("Save or discard your edits")
             expect(page).to_have_url(f"{base}/config?project={DOCS}")
+            page.locator("#machine").get_by_role("button", name="Remove project").click()  # nor does a removal
+            expect(page.locator("dialog")).to_have_count(0)
+            page.locator("#machine summary").click()
+            page.locator("#machine").get_by_label("Folder").fill("/elsewhere")
+            page.locator("#machine").get_by_role("button", name="Add").click()  # nor an addition
+            expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
             docs.update_config(lambda layer: layer.model_copy(update={"explore": True}))  # another page saved first
             page.get_by_role("button", name="Save project settings").click()
