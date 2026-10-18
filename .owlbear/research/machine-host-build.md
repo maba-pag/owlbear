@@ -143,13 +143,14 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   `change` values survive token extraction, the tab links, reload and Back; a bar under the tabs selects the
   project, adds a folder, removes or adopts a project, and shows Resume with the count of waiting Changes.
 
-### 5.4 The `owlbear` command (TD-257, TD-272)
+### 5.4 The `owlbear` command (TD-257, TD-327)
 
-- One argparse command whose subcommands import their modules only when run: with no arguments it starts
+- One Cyclopts command whose subcommands import their modules only when run: with no arguments it starts
   OwlBear if stopped, else shows status; `start`, `stop`, `restart`, `status`, `logs`, `doctor`,
   `autostart on|off`; today's `owlbear-next` commands move under it unchanged (`setup`, `profile`, `seed`,
   `answer`, `show`, `data`, `home`, `design-pack`, `backlog`, `status --repo`).
-- `owlbear install` (run from `~/.owlbear/runtime`) writes the shtab zsh completion into `~/.owlbear/`
+- `owlbear install` (run from `~/.owlbear/runtime`) writes Cyclopts' static zsh completion, which registers
+  itself when sourced, into `~/.owlbear/`
   (never `~/.zshrc`, which it only names), then asks separately for the `~/.local/bin/owlbear` link and for the
   login item `~/Library/LaunchAgents/…owlbear.plist` (TD-258, TD-260); `owlbear uninstall` removes both. A
   Mac that refuses the login item is reported by the installer and `owlbear status`; on-demand start keeps
