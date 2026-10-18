@@ -35,6 +35,10 @@ def sarif(*results: dict) -> dict:
     return {"runs": [{"tool": {"driver": {"rules": rules}}, "results": list(results)}]}
 
 
+class Seq(list):
+    """Answers given one per call, the last one repeating."""
+
+
 class Fake:
     """One API: answers by method and path prefix, and records every call."""
 
@@ -45,18 +49,24 @@ class Fake:
         self.calls.append((method, path, body))
         for (verb, prefix), answer in self.answers.items():
             if verb == method and path.startswith(prefix):
-                if isinstance(answer, Exception):
-                    raise answer
-                return answer
+                given = (answer.pop(0) if len(answer) > 1 else answer[0]) if isinstance(answer, Seq) else answer
+                if isinstance(given, Exception):
+                    raise given
+                return given
         return None
 
 
-def github(comments: list[dict], *, ci: dict | None = None) -> tuple[object, Fake]:
-    run = ci or {"id": 7, "path": ".github/workflows/ci.yml", "status": "completed", "conclusion": "failure"}
+def ci_run(status: str = "completed", conclusion: str | None = "failure") -> dict:
+    run = {"id": 7, "path": ".github/workflows/ci.yml", "status": status, "conclusion": conclusion}
+    return {"workflow_runs": [run]}
+
+
+def github(comments: list[dict], *, current: str = "", runs: object = None) -> tuple[object, Fake]:
     fake = Fake({
         ("GET", "repos/o/r/issues/5/comments?per_page=100&page=1"): comments,
+        ("GET", "repos/o/r/issues/comments/11"): {"body": current},
         ("GET", "repos/o/r/pulls/5"): {"head": {"sha": "abc"}},
-        ("GET", "repos/o/r/actions/runs?head_sha=abc"): {"workflow_runs": [run]},
+        ("GET", "repos/o/r/actions/runs?head_sha=abc"): runs or ci_run(),
     })  # fmt: skip
     return snyk_findings.GitHub(fake, "o/r"), fake
 
@@ -119,10 +129,10 @@ def test_an_edit_sets_nothing_unless_it_newly_ticks_one_finding_under_a_reason(
 
 
 def test_the_owner_s_tick_sets_not_vulnerable_marks_the_comment_and_reruns_the_failed_ci() -> None:
-    gh, gh_calls = github([])
-    api, snyk_calls = snyk()
     reason = "Only stored names reach the path."
     after = finding_comment(reason, box=TICKED)
+    gh, gh_calls = github([], current=after)
+    api, snyk_calls = snyk()
 
     report = snyk_findings.ignore(gh, api, 5, 11, (finding_comment(reason), after))
 
@@ -141,10 +151,10 @@ def test_the_owner_s_tick_sets_not_vulnerable_marks_the_comment_and_reruns_the_f
 
 
 def test_a_refused_ignore_unticks_the_box_with_the_error_and_runs_nothing() -> None:
-    gh, gh_calls = github([])
+    after = finding_comment("why", box=TICKED)
+    gh, gh_calls = github([], current=after)
     error = urllib.error.HTTPError("u", 403, "Forbidden", {}, None)
     api, _ = snyk(policy=error)
-    after = finding_comment("why", box=TICKED)
 
     report = snyk_findings.ignore(gh, api, 5, 11, (finding_comment("why"), after))
 
@@ -155,14 +165,36 @@ def test_a_refused_ignore_unticks_the_box_with_the_error_and_runs_nothing() -> N
     assert not any("rerun" in path for _, path, _ in gh_calls.calls)
 
 
+def test_a_queued_run_of_an_earlier_tick_sets_nothing_twice() -> None:
+    """Tick, untick and tick again queue two runs; the second finds the first one's mark on the live comment."""
+    done = finding_comment("why", box=f"{snyk_findings.DONE} `pol-1` (TD-363)")
+    gh, gh_calls = github([], current=done)
+    api, snyk_calls = snyk()
+
+    report = snyk_findings.ignore(gh, api, 5, 11, (finding_comment("why"), finding_comment("why", box=TICKED)))
+
+    assert report == "nothing set now: the finding is ignored already"
+    assert not snyk_calls.calls
+    assert not any(method != "GET" for method, _, _ in gh_calls.calls)
+
+
+def test_a_tick_while_ci_still_runs_waits_for_it_to_end_then_reruns_it() -> None:
+    waits = []
+    gh, fake = github([], runs=Seq([ci_run("in_progress", None), ci_run("in_progress", None), ci_run()]))
+    assert gh.rerun(5, sleep=waits.append) == "re-ran the failed jobs of CI run 7"
+    assert waits == [30, 30]
+    assert ("POST", "repos/o/r/actions/runs/7/rerun-failed-jobs", None) in fake.calls
+
+
 @pytest.mark.parametrize(
     ("status", "conclusion", "said"),
     [("in_progress", None, "is still running"), ("completed", "success", "passed already")],
 )
-def test_a_running_or_passed_ci_is_not_rerun(status: str, conclusion: str | None, said: str) -> None:
-    run = {"id": 7, "path": ".github/workflows/ci.yml", "status": status, "conclusion": conclusion}
-    gh, fake = github([], ci=run)
-    assert said in gh.rerun(5)
+def test_a_ci_still_running_after_the_wait_or_passed_is_not_rerun(
+    status: str, conclusion: str | None, said: str
+) -> None:
+    gh, fake = github([], runs=ci_run(status, conclusion))
+    assert said in gh.rerun(5, tries=2, sleep=lambda _: None)
     assert not any(method == "POST" for method, _, _ in fake.calls)
 
 

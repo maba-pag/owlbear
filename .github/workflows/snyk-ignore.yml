@@ -19,7 +19,7 @@ jobs:
       && github.event.comment.user.login == 'github-actions[bot]'
       && contains(github.event.comment.body, '<!-- snyk-finding: ')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25  # it waits up to 20 minutes for the pull request's CI to end before re-running it
     concurrency:
       group: snyk-ignore-${{ github.event.comment.id }}
       cancel-in-progress: false

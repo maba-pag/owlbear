@@ -12,9 +12,14 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 MARK = re.compile(r"<!-- snyk-finding: ([A-Za-z0-9-]+) -->")
 BOX = "- [ ] **Not vulnerable**: tick to ignore this finding in Snyk; only the owner's tick counts (TD-363)"
@@ -69,16 +74,27 @@ class GitHub:
         """Rewrite one comment; an edit with the workflow's token starts no workflow."""
         self.http.call("PATCH", f"repos/{self.repo}/issues/comments/{comment}", {"body": body})
 
-    def rerun(self, pr: int) -> str:
-        """Re-run the failed jobs of the newest CI run of the pull request's head."""
+    def current(self, comment: int) -> str:
+        """One comment's body as it is now, not as the event saw it."""
+        return self.http.call("GET", f"repos/{self.repo}/issues/comments/{comment}")["body"]
+
+    def rerun(self, pr: int, *, tries: int = 40, sleep: Callable[[float], None] = time.sleep) -> str:
+        """Once the newest CI run of the pull request's head has completed, re-run its failed jobs."""
         sha = self.http.call("GET", f"repos/{self.repo}/pulls/{pr}")["head"]["sha"]
-        found = self.http.call("GET", f"repos/{self.repo}/actions/runs?head_sha={sha}&event=pull_request&per_page=100")
-        runs = [r for r in found["workflow_runs"] if r.get("path") == CI]
-        if not runs:
-            return "no CI run to re-run"
-        run = max(runs, key=lambda r: r["id"])
-        if run["status"] != "completed":
-            return f"CI run {run['id']} is still running; re-run it once it has failed"
+        for attempt in range(tries):
+            found = self.http.call(
+                "GET", f"repos/{self.repo}/actions/runs?head_sha={sha}&event=pull_request&per_page=100"
+            )
+            runs = [r for r in found["workflow_runs"] if r.get("path") == CI]
+            if not runs:
+                return "no CI run to re-run"
+            run = max(runs, key=lambda r: r["id"])
+            if run["status"] == "completed":
+                break
+            if attempt < tries - 1:
+                sleep(30)
+        else:
+            return f"CI run {run['id']} is still running; re-run its failed jobs once it ends"
         if run["conclusion"] == "success":
             return f"CI run {run['id']} passed already"
         self.http.call("POST", f"repos/{self.repo}/actions/runs/{run['id']}/rerun-failed-jobs")
@@ -170,16 +186,18 @@ def ticked(before: str, after: str) -> tuple[str, str] | str:
 def ignore(gh: GitHub, snyk: Snyk, pr: int, comment_id: int, edit: tuple[str, str]) -> str:
     """Act on one edit of a finding's comment; a refused ignore unticks the box with Snyk's error."""
     before, after = edit
-    tick = ticked(before, after)
-    if isinstance(tick, str):
+    if isinstance(tick := ticked(before, after), str):
         return f"nothing set: {tick}"
+    now = gh.current(comment_id)
+    if isinstance(tick := ticked(before, now), str):  # a queued run of an earlier tick may have acted already
+        return f"nothing set now: {tick}"
     finding, reason = tick
     try:
         policy = snyk.ignore(finding, reason, f"OwlBear #{pr}: {finding}")
     except (urllib.error.URLError, RuntimeError, KeyError) as exc:
-        gh.update(comment_id, after.replace(TICKED, f"{BOX}\n\nSnyk refused the ignore ({exc}); tick to retry.", 1))
+        gh.update(comment_id, now.replace(TICKED, f"{BOX}\n\nSnyk refused the ignore ({exc}); tick to retry.", 1))
         return f"Snyk refused the ignore: {exc}"
-    gh.update(comment_id, after.replace(TICKED, f"{DONE} `{policy}` (TD-363)", 1))
+    gh.update(comment_id, now.replace(TICKED, f"{DONE} `{policy}` (TD-363)", 1))
     return f"ignored {finding} as policy {policy}; {gh.rerun(pr)}"
 
 
