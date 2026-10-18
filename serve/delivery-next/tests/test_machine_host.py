@@ -254,3 +254,9 @@ def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
     unrelated = {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", "--repo", "/other"]}, "y": {"args": [str(work)]}}
     setup.user_mcp(Path.home()).write_text(json.dumps({"servers": unrelated}))
     assert setup.registered(work) is False
+
+
+def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine, capsys):
+    p = machine.projects[add(http, clone(tmp_path / "shop"))["id"]]
+    p.host.say("c1: runner 7 started")
+    assert capsys.readouterr().out.endswith(" shop: c1: runner 7 started\n")

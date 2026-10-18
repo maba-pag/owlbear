@@ -139,7 +139,7 @@ class Project:
         failed = [f"{c.name}: {c.detail} · fix: {c.fix}" for c in checks if not c.ok]
         self.host.record = self.host.record.model_copy(update={"ready": failed})
         self._publish()
-        self.host.say(f"{self.name}: readiness: " + ("; ".join(failed) or "ok"))
+        self.host.say("readiness: " + ("; ".join(failed) or "ok"))
 
     def working(self) -> list[str]:
         """What keeps the project from being removed: live runners, check environments and admitted work."""
