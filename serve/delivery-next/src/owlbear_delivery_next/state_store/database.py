@@ -71,6 +71,13 @@ class NotImportedError(StoreError):
     resume = "OwlBear loads the project"
 
 
+class LateWriteError(StoreError):
+    """An older OwlBear, open since before the import, wrote a Change file the database does not read."""
+
+    action = "Compare the file an older OwlBear wrote with the Change, then delete that file"
+    resume = "The file is gone"
+
+
 def _fsync(path: Path) -> None:
     fd = os.open(path, os.O_RDONLY)
     try:
@@ -127,6 +134,7 @@ class Database:
             if self.waiting():
                 raise NotImportedError(NOT_IMPORTED)
             self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+            _local(self.root)
             with self.fenced():
                 if not self.path.exists():
                     self._build(None)
@@ -210,6 +218,7 @@ class Database:
         Resumable: a crash before the database is published leaves the files authoritative and this runs
         again; after it, the retirement of the files the ledger names repeats on the next open.
         """
+        _local(self.root)  # before the marker changes: a network store is refused untouched
         with self.fenced():
             if not self.path.exists():
                 self._build(self._fill)
@@ -280,7 +289,7 @@ class Database:
                 name = f"inbox/{path.name}"
                 if connection.execute("SELECT 1 FROM imported WHERE slug = ? AND name = ?", (slug, name)).fetchone():
                     continue  # taken before a crash kept it from being retired
-                text = path.read_bytes().decode(errors="replace")
+                text = _text(path)
                 connection.execute("INSERT INTO inbox(slug, name, item) VALUES (?, ?, ?)", (slug, path.name, text))
                 connection.execute("INSERT INTO imported VALUES (?, ?)", (slug, name))
         for path in files:
@@ -288,8 +297,15 @@ class Database:
                 path.rename(path.with_name(path.name + RETIRED))
 
 
+UNREADABLE = "(not UTF-8: unreadable)"  # what an undecodable file becomes; it parses as no record or item
+
+
 def _text(path: Path) -> str:
-    return path.read_bytes().decode(errors="replace")  # a damaged file stays damaged: reading it reports that
+    """The file's text; a file that is not UTF-8 stays unreadable, never repaired into something that validates."""
+    try:
+        return path.read_bytes().decode()
+    except UnicodeDecodeError:
+        return UNREADABLE
 
 
 def _fill_change(connection: sqlite3.Connection, folder: Path) -> list[tuple[str, str]]:
@@ -308,7 +324,8 @@ def _fill_change(connection: sqlite3.Connection, folder: Path) -> list[tuple[str
         taken.append((slug, f"inbox/{item.name}"))
     if (log := folder / "activity.jsonl").exists():
         for line in _text(log).splitlines():
-            if line.strip():
+            with contextlib.suppress(ValueError):  # a torn line was never readable activity
+                json.loads(line)
                 append_activity(connection, slug, line)
         taken.append((slug, log.name))
     if (now := folder / "now.json").exists():

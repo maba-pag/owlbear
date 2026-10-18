@@ -15,9 +15,11 @@ import pytest
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval, IntentItem
 from owlbear_delivery_next.change_contracts.models import FORMAT, Brief, Change
 from owlbear_delivery_next.commands.mcp_server import Chat
+from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import ImportWaitingError, Project
+from owlbear_delivery_next.project_host import config_routes
 from owlbear_delivery_next.state_store import database
-from owlbear_delivery_next.state_store.database import STORE_FORMAT, NotImportedError, StoreError
+from owlbear_delivery_next.state_store.database import STORE_FORMAT, LateWriteError, NotImportedError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 18, 12, tzinfo=UTC)
@@ -212,11 +214,44 @@ def test_a_fold_whose_barrier_waits_does_not_hold_another_changes_write(tmp_path
         folding.join(10)
 
 
-def test_a_store_on_a_network_disk_is_refused(tmp_path, monkeypatch) -> None:
+def test_a_store_on_a_network_disk_is_refused_before_anything_is_written(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(database, "_local_devices", set())
     monkeypatch.setattr(database.subprocess, "run", lambda *_a, **_k: SimpleNamespace(returncode=1, stdout=""))
     with pytest.raises(StoreError, match="not on a local disk"):
-        Store(tmp_path).slugs()
+        Store(tmp_path / "fresh").slugs()
+    legacy(tmp_path / "old")
+    with pytest.raises(StoreError, match="not on a local disk"):
+        Store(tmp_path / "old").db.import_files()
+    assert ((tmp_path / "old" / "format").read_text(), (tmp_path / "fresh" / database.DB).exists()) == (
+        f"{FORMAT}\n", False
+    )  # fmt: skip
+
+
+def test_a_change_file_an_older_process_writes_after_the_import_is_never_silently_ignored(tmp_path) -> None:
+    folder = legacy(tmp_path, acked=True)
+    store = imported(tmp_path)
+    (folder / "change.json").write_text(Change(slug="c1", profile_version=9).model_dump_json())
+    (tmp_path / "changes" / "c7").mkdir()
+    (tmp_path / "changes" / "c7" / "change.json").write_text(Change(slug="c7").model_dump_json())
+    assert store.slugs() == ["c1", "c7"]
+    for slug in ("c1", "c7"):
+        with pytest.raises(LateWriteError) as late:
+            store.read(slug)
+        assert "Compare the file" in late.value.stop(NOW).action
+
+
+def test_files_that_are_not_utf8_stay_unreadable_after_the_import(tmp_path) -> None:
+    folder = legacy(tmp_path)
+    (folder / "change.json").write_bytes(Change(slug="c1").model_dump_json().encode().replace(b"c1", b"c\xff1", 1))
+    with pytest.raises(StoreError, match="unreadable"):
+        imported(tmp_path).read("c1")
+    folder = legacy(tmp_path / "answer")
+    item = BriefApproval(at=NOW, version=1).model_dump_json().encode().replace(b"version", b"versi\xffon")
+    (folder / "inbox" / "00000000000000000001-aaaaaaaa.json").write_bytes(item)
+    store = imported(tmp_path / "answer")
+    with store.lock("c1") as lock:
+        assert store.fold(lock, "c1", NOW)[0].brief.approved == []
+    assert [e["event"] for e in store.events("c1")] == ["started", "inbox-rejected"]
 
 
 class Probe:
@@ -233,6 +268,16 @@ class Probe:
 
     def say(self, text: str) -> None:
         self.said.append(text)
+
+    record = SimpleNamespace(pid=0)
+
+
+def test_an_unimported_clone_with_an_older_runner_is_neither_removed_nor_renamed_beside(tmp_path) -> None:
+    legacy(tmp_path)
+    project = Project(registry.Project(id="a" * 16, path=str(tmp_path), added_at=NOW))
+    project.store, project.host = Store(tmp_path), Probe({"c1"})
+    assert project.working() == ["c1: a running step (process 4242)"]
+    assert config_routes._working(project.store, Probe({"c1"})) == ["c1"]  # noqa: SLF001 - the rename's own check
 
 
 def test_the_machine_host_imports_once_no_older_runner_is_alive_and_no_change_is_locked(tmp_path) -> None:

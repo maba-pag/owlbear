@@ -29,6 +29,7 @@ from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
     Database,
     FormatTooNewError,
+    LateWriteError,
     StoreError,
     append_activity,
     put_record,
@@ -275,6 +276,9 @@ class Store:
     def _record(self, slug: str) -> str:
         with self.db.read() as db:
             row = db.execute("SELECT record FROM changes WHERE slug = ?", (slug,)).fetchone()
+        if (late := self.root / "changes" / slug / "change.json").exists():  # never silently ignored (TD-265)
+            msg = f"an older OwlBear wrote {late} after {slug} moved to the database"
+            raise LateWriteError(msg)
         if row is None:
             msg = f"state of {slug} is unreadable"
             raise StoreError(msg)
@@ -333,7 +337,8 @@ class Store:
     def slugs(self) -> list[str]:
         """Return every Change of this clone."""
         with self.db.read() as db:
-            return [row[0] for row in db.execute("SELECT slug FROM changes ORDER BY slug")]
+            stored = {row[0] for row in db.execute("SELECT slug FROM changes")}
+        return sorted(stored | set(self.db.legacy_slugs()))  # one an older OwlBear wrote since shows as unreadable
 
     def restore(self, lock: Lock, slug: str) -> None:
         """Replace the current Change record with its previous version."""

@@ -173,6 +173,10 @@ class Project:
 
     def working(self) -> list[str]:
         """What keeps the project from being removed: live runners, check environments and admitted work."""
+        if self.store and self.host and self.store.db.waiting():  # an older OwlBear's runners kept it from loading
+            h = self.host
+            return [f"{s}: a running step (process {r.pid})" for s in self.store.db.legacy_slugs()
+                    if (r := h.runner(s)) and h.alive(r.pid, r.created) is not False]  # fmt: skip
         if not (self.store and self.host and self.app):
             return []
         left = [f"{n} request{'s' if n > 1 else ''}" for n in [self.gate.count] if n]
