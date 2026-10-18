@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import subprocess
 import tomllib
@@ -21,6 +22,7 @@ SUITE_WORKFLOWS = (
 )
 REUSING_WORKFLOWS = ("cockpit.yml", "python.yml", "python-browser.yml", "static.yml", "tooling.yml")
 SKIPPED_PACKAGE_WORKFLOWS = ("python.yml", "copilot-setup-steps.yml")
+PR_ONLY = "${{ github.event_name == 'pull_request' }}"
 _SPEC = importlib.util.spec_from_file_location("ci_scope", ROOT / ".github/scripts/ci_scope.py")
 ci_scope = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(ci_scope)
@@ -73,6 +75,7 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
 
     assert (pull_request["branches"], "paths" in pull_request) == (["main"], False)
     assert "ready_for_review" in pull_request["types"]
+    assert gate["on"]["push"] == {"branches": ["main"]}  # every merge gets its own CI (self-update design section 8)
     assert set(called) == set(ci_scope.SUITES)
     assert {job["uses"] for job in called.values()} == {f"./.github/workflows/{n}" for n in SUITE_WORKFLOWS}
     for name, job in called.items():
@@ -138,6 +141,42 @@ def test_every_suite_lists_its_own_workflow_and_no_glob_twice() -> None:
         assert f".github/workflows/{name}.yml" in globs or ".github/workflows/**" in globs, name
 
 
+@pytest.mark.parametrize("name", ["ci.yml", *SUITE_WORKFLOWS])
+def test_a_pull_request_cancels_its_older_runs_but_a_push_to_main_runs_per_commit_to_the_end(name: str) -> None:
+    """A cancelled push run would leave its merge without a passed CI, which holds back every later version."""
+    concurrency = _workflow(name)["concurrency"]
+    assert concurrency["group"].endswith("-${{ github.event.pull_request.number || github.sha }}")
+    assert concurrency["cancel-in-progress"] == PR_ONLY
+
+
+def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) -> None:
+    def git(*args: str) -> str:
+        done = subprocess.run(  # noqa: S603 - fixed git argument vector
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+            cwd=tmp_path, capture_output=True, text=True, check=True,
+        )  # fmt: skip
+        return done.stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    (tmp_path / ".github/scripts").mkdir(parents=True)
+    (tmp_path / ".github/scripts/ci_scope.py").write_bytes((ROOT / ".github/scripts/ci_scope.py").read_bytes())
+    git("add", ".")
+    git("commit", "-q", "-m", "base")
+    git("switch", "-q", "-c", "work")
+    (tmp_path / "share/skills/x").mkdir(parents=True)
+    (tmp_path / "share/skills/x/SKILL.md").write_text("x\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "skill")
+    git("switch", "-q", "main")
+    git("merge", "-q", "--no-ff", "-m", "merge", "work")
+    run = next(s["run"] for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
+    out = tmp_path / "output"
+    env = {"PATH": os.environ["PATH"], "EVENT": "push", "BASE_SHA": "", "HEAD_SHA": git("rev-parse", "HEAD"),
+           "GITHUB_OUTPUT": str(out)}  # fmt: skip
+    subprocess.run(["bash", "-c", run], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
+    assert out.read_text() == 'suites=["agent-ecosystem"]\n'  # the merge's own change, not every suite
+
+
 @pytest.mark.parametrize("name", sorted(path.name for path in WORKFLOWS.glob("*.yml")))
 def test_workflow_actions_are_pinned_to_full_commits(name: str) -> None:
     for line in (WORKFLOWS / name).read_text(encoding="utf-8").splitlines():
@@ -152,7 +191,7 @@ def test_workflow_actions_are_pinned_to_full_commits(name: str) -> None:
 def test_proof_jobs_reuse_only_identical_passing_inputs(name: str) -> None:
     workflow = _workflow(name)
     assert workflow["permissions"] == {"contents": "read"}
-    assert workflow["concurrency"]["cancel-in-progress"] is True
+    assert workflow["concurrency"]["cancel-in-progress"] == PR_ONLY
     for job_name, job in _jobs(name).items():
         steps = job["steps"]
         checkout = steps[0]

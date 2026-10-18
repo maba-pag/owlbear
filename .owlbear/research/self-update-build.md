@@ -176,6 +176,10 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   non-forced ref
   (`contents: write` on the job alone); a commit that already peels from a version tag is skipped, so a
   rerun or a second run makes no second version of it.
+- **Switch (TD-315):** the walk tags only while the repository variable `RELEASE_TAGS` is `on`; otherwise
+  every run writes what it would tag to its job summary. The owner sets it after one correct report:
+  `gh variable set RELEASE_TAGS --body on --repo maba-pag/owlbear`. The walk is `.github/scripts/release.py`,
+  run by `.github/workflows/release.yml`; its floor is the merge before the push trigger (#480's).
 - **Design pack updates** (TD-101, TD-125, TD-256 as amended): the candidate is the running version's
   files plus the updated pack, built in a worktree of `repo.git` at the running version's commit, where the
   checks run; the running worktree is never touched. Once the challenger passes, or the owner accepts an

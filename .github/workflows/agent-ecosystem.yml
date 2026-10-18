@@ -6,8 +6,8 @@ name: Agent ecosystem validation
   workflow_dispatch:
 
 concurrency:
-  group: agent-ecosystem-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: agent-ecosystem-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions: {}
 

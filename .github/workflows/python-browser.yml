@@ -6,8 +6,8 @@ name: Python browser
   workflow_dispatch:
 
 concurrency:
-  group: python-browser-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: python-browser-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
