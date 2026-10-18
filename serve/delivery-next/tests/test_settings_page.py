@@ -128,14 +128,18 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         )
         page.get_by_label("When the design judge fails a change").select_option("back")  # renders the page again
         expect(rounds).to_have_value("4")
+        page.get_by_label("Labels, comma-separated; none for no labels").fill("release:minor, owlbear")
+        page.get_by_label("The line Opened by OwlBear Delivery").select_option("off")
         page.get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         page.get_by_label("Layer").select_option("global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
+        expect(page.locator("#pr")).to_contain_text("Set in each project")  # TD-308: the marker is per project
     project = store.read_config()
     assert (project.agents["builder"].max_rounds, project.design_failures, project.agents["builder"].minutes) == (
         4, "back", None
     )  # fmt: skip
+    assert (project.pr_labels, project.pr_marker) == (["release:minor", "owlbear"], False)
     assert not store.global_path.exists()
 
 

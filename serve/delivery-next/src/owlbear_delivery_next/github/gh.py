@@ -175,6 +175,11 @@ class GhProvider(Queue, Conversation):
         if not isinstance(result, dict) or result.get("errors"):
             raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "mark_ready", str(result)[:200], retry_safe=False)
 
+    def add_labels(self, repository: str, number: int, labels: list[str]) -> None:
+        """Add labels to one pull request, keeping those it has."""
+        endpoint = f"{repo(repository)}/issues/{number}/labels"
+        self._api("add_labels", "POST", endpoint, body={"labels": labels}, write=True)
+
     def close_pull_request(self, repository: str, number: int) -> None:
         """Close one pull request without merging it."""
         endpoint = f"{repo(repository)}/pulls/{number}"

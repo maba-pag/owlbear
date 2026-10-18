@@ -79,24 +79,41 @@ def push(path: Path, c: Change, head: str) -> StepResult | None:  # noqa: PLR091
     return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.NETWORK, P, "push"), reason=reason)
 
 
-def _body(c: Change) -> str:
+def _body(c: Change, *, marker: bool) -> str:
     criteria = "\n".join(f"- {k.id}: {k.text}" for k in c.brief.criteria)
-    return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}\n\nOpened by OwlBear Delivery for `{c.slug}`."
+    said = f"\n\nOpened by OwlBear Delivery for `{c.slug}`." if marker else ""
+    return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}{said}"
+
+
+def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
+    """Add the project's labels to Delivery's draft (TD-308); a failure is logged and never holds the publish."""
+    if not labels:
+        return
+    try:
+        ctx.gh.add_labels(pr.repository, pr.number, labels)
+    except ProviderError as exc:
+        ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=str(exc)[:300])
 
 
 def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
-    """Find the open PR of the branch or create a draft; an unknown create is read back, never repeated blindly."""
+    """Find the open PR of the branch or create a draft; an unknown create is read back, never repeated blindly.
+
+    The project's labels go on while the PR is still Delivery's draft, so a retry adds them again and the owner's
+    later label edits stay.
+    """
     repo, branch, target = ctx.repository, c.names.branch, c.names.target
+    settings = ctx.store.settings()
     pr = ctx.gh.find_pull_request(repo, branch, target)
     if pr is None:
         title = c.brief.title or (c.plan.tasks[0].title if c.plan and c.plan.tasks else c.slug)
         try:
-            pr = ctx.gh.create_pull_request(repo, branch, target, title[:200], _body(c))
+            pr = ctx.gh.create_pull_request(repo, branch, target, title[:200], _body(c, marker=settings.pr_marker))
         except ProviderError as exc:
             if exc.retry_safe:
                 raise
             pr = ctx.gh.find_pull_request(repo, branch, target)
     if pr and pr.draft and pr.head_sha == head:
+        labelled(ctx, c, pr, settings.pr_labels)
         try:
             ctx.gh.mark_ready(pr)
         except ProviderError as exc:

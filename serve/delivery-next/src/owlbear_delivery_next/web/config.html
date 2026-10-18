@@ -195,6 +195,11 @@ function saved(layer, key) {
   const loaded = state.loaded;
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
   if (key === "design_failures") return loaded[layer]?.[key] ?? "";
+  if (key === "pr_labels" || key === "pr_marker") {
+    const v = loaded[layer]?.[key];
+    if (v === null || v === undefined) return "";
+    return key === "pr_marker" ? (v ? "on" : "off") : v.join(", ") || "none";
+  }
   const [role, field] = key.split(".");
   const value = role === "final_review" ? loaded[layer]?.final_review?.[field] : loaded[layer]?.agents?.[role]?.[field];
   return value === null || value === undefined ? "" : String(value);
@@ -247,6 +252,22 @@ function widths() {
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
     (v) => edit("widths", v), { key: "widths", placeholder: `inherit (${below})`, disabled: state.saving }),
   source("widths", state.loaded.settings.widths));
+}
+
+// TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
+function prLabels() {
+  const key = "pr_labels", below = inherited()[key].join(", ") || "none";
+  return cell(typed("Labels, comma-separated; none for no labels", own(key), (v) => edit(key, v),
+    { key, placeholder: `inherit (${below})`, disabled: state.saving }), source(key, state.loaded.settings[key]));
+}
+
+// TD-308: the line "Opened by OwlBear Delivery for …" at the end of a pull request's text, switched per project.
+function prMarker() {
+  const key = "pr_marker";
+  if (state.layer === "global") return cell(html`<p-text>Set in each project</p-text>`, source(key, state.loaded.settings[key]));
+  return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, "inherit (on)"], ["on", "on: end with the line"],
+    ["off", "off: leave it out"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
+  source(key, state.loaded.settings[key]));
 }
 
 function tokens(n) {
@@ -408,6 +429,14 @@ function edited(layer) {
     }
     if (key === "design_failures") {
       next[key] = value || null;
+      continue;
+    }
+    if (key === "pr_labels") {
+      next[key] = !value ? null : value === "none" ? [] : value.split(",").map((l) => l.trim()).filter(Boolean);
+      continue;
+    }
+    if (key === "pr_marker") {
+      next[key] = value ? value === "on" : null;
       continue;
     }
     const [role, field] = key.split(".");
@@ -965,6 +994,12 @@ function settingsSections() {
         loaded.agreement.map((a) => row(...[a.judge, a.model, String(a.decided), share(a.agreed, a.decided),
           share(a.disagreed, a.decided), share(a.unsure, a.decided)].map(text))),
         { id: "agreement-table", hidden: !loaded.agreement.length })}
+    </section>
+    <section class="panel" aria-labelledby="pr-title">
+      <p-heading size="lg"><h2 id="pr-title">Pull requests</h2></p-heading>
+      <p-text>What OwlBear adds to each pull request it opens.</p-text>
+      ${table("Pull request settings: they apply to the next pull request", ["Setting", "Value"], "pr",
+        [row(text("Labels"), prLabels()), row(text("Marker line"), prMarker())])}
     </section>
     ${packSection()}
     <details class="panel">

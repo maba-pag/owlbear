@@ -74,11 +74,28 @@ def test_an_empty_list_clears_false_disables_and_only_none_inherits():
         {"agents": {"builder": {"minutes": 0}}},
         {"agents": {"builder": {"minutes": 481}}},
         {"agents": {"builder": {"minutes": "40"}}},
+        {"pr_labels": ["a", "a"]},
+        {"pr_labels": [""]},
+        {"pr_labels": [" release:minor"]},
+        {"pr_labels": ["x" * 51]},
+        {"pr_marker": "off"},
     ],
 )
 def test_a_layer_refuses_anything_it_cannot_apply(raw):
     with pytest.raises(ValidationError):
         Layer.model_validate(raw)
+
+
+def test_pull_request_labels_replace_the_global_list_and_the_marker_is_a_project_switch():
+    """TD-308: a project's list replaces the global one whole, [] included; the marker line is on unless off."""
+    glob = GlobalLayer(pr_labels=["owlbear"])
+    assert (resolve(None, Layer()).pr_labels, resolve(None, Layer()).pr_marker) == ([], True)
+    assert resolve(glob, Layer()).pr_labels == ["owlbear"]
+    mine = resolve(glob, Layer(pr_labels=["release:minor"], pr_marker=False))
+    assert (mine.pr_labels, mine.pr_marker, mine.sources["pr_labels"]) == (["release:minor"], False, "project")
+    assert resolve(glob, Layer(pr_labels=[])).pr_labels == []
+    with pytest.raises(ValidationError, match="project setting"):
+        GlobalLayer(pr_marker=False)
 
 
 def test_session_time_limits_are_doubled_by_default_and_set_per_role_globally_or_per_project():
