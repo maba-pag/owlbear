@@ -60,6 +60,8 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert "paused until you press Resume" in script  # a description per command
     assert "How many lines to show" in script  # and per option
     assert "__complete" not in script  # static: TAB never starts Python (TD-263)
+    assert "\n_cyclopts_owlbear() {" in script  # sourcing registers the function the script defines
+    assert script.rstrip().splitlines()[-1].startswith("compdef _cyclopts_owlbear owlbear ")
     assert (install.link_path().readlink(), items, len(asked)) == (Path(sys.executable).parent / "owlbear", [], 2)
     assert install.uninstall(said.append) == 0
     assert (install.link_path().is_symlink(), completion.exists(), items) == (False, False, [False])

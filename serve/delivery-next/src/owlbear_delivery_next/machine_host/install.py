@@ -42,8 +42,9 @@ def install(say: Say, ask: Callable[[str], bool], app: App) -> int:
         say(f"run this from the installed runtime: {runtime() / '.venv' / 'bin' / 'owlbear'} install")
         return 1
     path = local_home.root() / COMPLETION
-    path.write_text(app.generate_completion(shell="zsh"))  # noqa: S604 - the script's shell; it is static (TD-263)
-    say(f"completion written to {path}; to use it, add this line to ~/.zshrc: source {path}")
+    script = app.generate_completion(shell="zsh")  # noqa: S604 - the script's shell; it is static (TD-263)
+    path.write_text(f"{script}\ncompdef _cyclopts_owlbear owlbear  # sourced, not autoloaded: register it\n")
+    say(f"completion written to {path}; to use it, add this line to ~/.zshrc after compinit: source {path}")
     target = link_path()
     if ask(f"Link {target} to {command}, so `owlbear` runs in any shell?"):
         target.parent.mkdir(parents=True, exist_ok=True)
