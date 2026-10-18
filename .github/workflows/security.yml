@@ -34,19 +34,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
-      - name: Setup uv  # Snyk reads uv.lock through uv itself
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
-        with:
-          enable-cache: false
-
-      - name: Check uv version
-        run: python3 .github/scripts/check_uv_version.py
-
       - name: Setup Snyk CLI
         uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
 
       # Tests only: no monitor and no --report, so nothing is written into the Snyk org (TD-360).
-      # Each finding is printed with its rule, file and line, so a failing run becomes a fix task.
+      # Snyk Code only: its tests are unlimited, and Renovate keeps dependencies current (TD-382).
       - name: Snyk Code
         id: code
         env:
@@ -61,9 +53,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: python3 .github/scripts/snyk_findings.py comment snyk-code.sarif
-
-      - name: Snyk Open Source
-        if: success() || failure()
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-projects --org="$SNYK_ORG" --severity-threshold=high --fail-on=upgradable  # TD-362

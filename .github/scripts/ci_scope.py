@@ -105,7 +105,7 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/knowledge/**",
         "tests/test_knowledge_ops_contract.py",
     ),
-    "security": (  # TD-360: Snyk Code and Open Source on every change to code, manifests or locks
+    "security": (  # TD-382: Snyk Code on every change to code; .snyk can exclude paths from it
         ".github/workflows/security.yml",
         ".snyk",
         "**/*.py",
@@ -114,10 +114,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "**/*.ts",
         "**/*.tsx",
         "**/*.html",
-        "**/pyproject.toml",
-        "**/package.json",
-        "**/package-lock.json",
-        "uv.lock",
     ),
 }
 GATE = (".github/workflows/ci.yml", ".github/scripts/ci_scope.py")

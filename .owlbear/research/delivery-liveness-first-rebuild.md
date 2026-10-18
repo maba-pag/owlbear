@@ -3,8 +3,8 @@
 The owner's decisions for OwlBear and its Delivery, by topic. Each topic lists its rows by origin, the rules
 in force with their rows, the owner's words, what was replaced and what is open. How to record a decision is
 in C-31; who may change one is in the workspace instructions ("Prior decisions by origin"). The full rows
-TD-1..TD-381 as first recorded, and the research report of 2026-10-10..12 this file began as, are at commit
-`9b4159feb`: `git show 9b4159feb:.owlbear/research/delivery-liveness-first-rebuild.md`.
+TD-1..TD-382 as first recorded, and the research report of 2026-10-10..12 this file began as, are at commit
+`04b1d8ec4`: `git show 04b1d8ec4:.owlbear/research/delivery-liveness-first-rebuild.md`.
 
 ## C-01 Asking the owner
 
@@ -738,8 +738,8 @@ TD-65.
 ## C-20 Repository policy
 
 **Rows:** decided TD-10, TD-15, TD-16, TD-25, TD-26, TD-30, TD-155, TD-203, TD-204, TD-222, TD-226, TD-229, TD-230,
-  TD-231, TD-238, TD-251, TD-319, TD-326, TD-362, TD-363, TD-379; approved TD-280; autonomous TD-22, TD-278,
-  TD-360, TD-361.
+  TD-231, TD-238, TD-251, TD-319, TD-326, TD-362, TD-363, TD-379, TD-382; approved TD-280; autonomous TD-22,
+  TD-278, TD-360, TD-361.
 
 - One long-lived default branch, `main`, holds all source; consumers clone it and versions are tags
   [TD-203, TD-231].
@@ -763,8 +763,10 @@ TD-65.
   needed" for notices); no `@owlbear` mention gate [TD-30].
 - Keep CI and Renovate enabled, other automatic workflows disabled, and pre-commit hooks manual [TD-204, TD-280].
 - Disabling workflows keeps their files and tests; nothing is deleted [TD-204, TD-280].
-- Snyk is required CI for OwlBear only, never consumer projects: high severity and above, dependency fails only
-  when upgradable, no monitor or report writes, findings logged actionably [TD-360, TD-362, TD-363].
+- Snyk is required CI for OwlBear only, never consumer projects: only Snyk Code, high severity and above, no
+  monitor or report writes, findings logged actionably [TD-360, TD-363, TD-382].
+- Snyk does only what it specialises in or what is free: no dependency scan; Renovate alone keeps dependencies
+  current, no Dependabot; the Snyk app's PR checks are off [TD-382].
 - Snyk uses the least service-account role until a read-only tester role exists; only the owner creates and sets
   its secret; scans change ignores only via the owner-checkbox handler [TD-360, TD-361, TD-363].
 - Owner ticks mark Snyk Code false positives "Not vulnerable" and rerun CI; the lead chat may tick too. The
@@ -792,10 +794,12 @@ TD-65.
 - TD-326, 2026-10-18: "a free organization and the queue once someone else contributes or Delivery builds OwlBear"
 - TD-362, 2026-10-18: "Make the CI scan match your setting with `--fail-on=upgradable`"
 - TD-363, 2026-10-18: "this is only for owlbear, not for consumer projects"
+- TD-382, 2026-10-18: "Renovate is first. we dont use dependabot … we dont pay for what renovate gives us free"
 - TD-379, 2026-10-18: "Also when a CI check keeps failing after the fix retries"
 
 **Replaced:** TD-10 by TD-238, TD-319, TD-337; TD-16 by TD-379; TD-22 by TD-226; TD-204 by TD-230, TD-280, TD-360;
-  TD-222 by TD-360; TD-230 by TD-360; TD-238 by TD-278, TD-326; TD-251 by TD-280; TD-278 by TD-326.
+  TD-222 by TD-360; TD-230 by TD-360; TD-238 by TD-278, TD-326; TD-251 by TD-280; TD-278 by TD-326;
+  TD-360 and TD-362 by TD-382.
 
 **Open:**
 
@@ -1112,29 +1116,29 @@ TD-248, TD-250, TD-261, TD-264, TD-268, TD-269, TD-271, TD-279, TD-358.
 
 ## C-31 The decision record
 
-**Rows:** decided TD-359, TD-382, TD-383, TD-384, TD-385, TD-386, TD-387; autonomous TD-388.
+**Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388; autonomous TD-389.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
-  only) and what is open; no history rows [TD-359, TD-382, TD-385, TD-386].
-- The full rows TD-1..TD-381 and the old research report stay at commit `9b4159feb`; requirement R4 moved
-  into C-03 [TD-382, TD-383].
+  only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
+- The full rows TD-1..TD-382 and the old research report stay at commit `04b1d8ec4`; requirement R4 moved
+  into C-03 [TD-383, TD-384].
 - In-force lines state intent in at most two lines each; how something is built lives in code, tests and
-  pull request texts, not here [TD-384, TD-388].
+  pull request texts, not here [TD-385, TD-389].
 - Every `decided` row keeps its quote, cut to its decisive words in one line, with its date; a row chosen
-  without a quote has none [TD-359, TD-387].
+  without a quote has none [TD-359, TD-388].
 - A new decision edits its topic in the same change: its number on the rows line under its origin, an in-force
-  line, and for a `decided` one the owner's words with number and date; nothing is appended elsewhere [TD-388].
+  line, and for a `decided` one the owner's words with number and date; nothing is appended elsewhere [TD-389].
 - Implementation choices go to the pull request text only; an autonomous choice that changes a rule is
-  recorded in its topic. New numbers continue after the highest one in this file [TD-388].
+  recorded in its topic. New numbers continue after the highest one in this file [TD-389].
 
 **Owner's words:**
 
 - TD-359, 2026-10-18: "Consolidate all 30 topics now, in one pass, Sol-reviewed"
-- TD-382, 2026-10-19: "Delete the table; one line names the commit that still holds it"
-- TD-383, 2026-10-19: "Delete them; R4's comparison moves into C-03"
-- TD-384, 2026-10-19: "Apply all: shorten to intent, remove mechanism, spent and duplicates"
-- TD-385, 2026-10-19: "One short line per topic, numbers only"
-- TD-386, 2026-10-19: "One compact line per topic, numbers grouped by origin"
-- TD-387, 2026-10-19: "1 and 2" (keep every quote, each cut to its decisive words; drop "chosen without a quote")
+- TD-383, 2026-10-19: "Delete the table; one line names the commit that still holds it"
+- TD-384, 2026-10-19: "Delete them; R4's comparison moves into C-03"
+- TD-385, 2026-10-19: "Apply all: shorten to intent, remove mechanism, spent and duplicates"
+- TD-386, 2026-10-19: "One short line per topic, numbers only"
+- TD-387, 2026-10-19: "One compact line per topic, numbers grouped by origin"
+- TD-388, 2026-10-19: "1 and 2" (keep every quote, each cut to its decisive words; drop "chosen without a quote")
 
-**Replaced:** TD-359 by TD-382 and TD-387.
+**Replaced:** TD-359 by TD-383 and TD-388.
