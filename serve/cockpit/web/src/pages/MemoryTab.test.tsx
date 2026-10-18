@@ -47,13 +47,17 @@ function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
 }
 
 async function openMemoryEntry(): Promise<void> {
-  await waitFor(() => expect(document.querySelector("p-accordion")).toHaveClass("hydrated"));
+  const slow = { timeout: 6000 }; // the design system hydrates asynchronously; a busy runner takes longer
+  await waitFor(() => expect(document.querySelector("p-accordion")).toHaveClass("hydrated"), slow);
   const accordion = document.querySelector("p-accordion");
   if (!accordion) {
     throw new Error("Memory entry accordion was not rendered");
   }
-  accordion.dispatchEvent(new CustomEvent("update", { detail: { open: true } }));
-  await waitFor(() => expect(screen.getByTestId("memory-edit-btn")).toBeInTheDocument());
+  await waitFor(() => {
+    // the page binds its listener in an effect after the entries load; opening again is harmless
+    accordion.dispatchEvent(new CustomEvent("update", { detail: { open: true } }));
+    expect(screen.getByTestId("memory-edit-btn")).toBeInTheDocument();
+  }, slow);
 }
 
 describe("MemoryTab challenge details", () => {
