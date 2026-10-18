@@ -60,15 +60,15 @@ def test_layers_that_do_not_combine_are_refused_on_save_and_stop_a_run(tmp_path)
     store.global_path = tmp_path / "global.json"
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
     got = c.get("/api/next/config").json()
-    layer = {"format": 4, "agents": {"builder": {"ask_owner_at": 6}}}
+    layer = {"format": 5, "agents": {"builder": {"ask_owner_at": 6}}}
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": layer}).status_code == 200
     got = c.get("/api/next/config").json()
-    clash = {"format": 4, "agents": {"builder": {"last_round_at": 6}}}  # valid alone, not over the global layer
+    clash = {"format": 5, "agents": {"builder": {"last_round_at": 6}}}  # valid alone, not over the global layer
     assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": clash}).status_code == 422
-    fits = {"format": 4, "agents": {"builder": {"last_round_at": 5}}}
+    fits = {"format": 5, "agents": {"builder": {"last_round_at": 5}}}
     assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": fits}).status_code == 200
     got = c.get("/api/next/config").json()
-    under = {"format": 4, "agents": {"builder": {"ask_owner_at": 5}}}  # valid alone, not under the project layer
+    under = {"format": 5, "agents": {"builder": {"ask_owner_at": 5}}}  # valid alone, not under the project layer
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": under}).status_code == 422
     path = Path(store.config_path)
     path.parent.mkdir(parents=True, exist_ok=True)

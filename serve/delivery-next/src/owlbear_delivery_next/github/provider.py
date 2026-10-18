@@ -307,6 +307,10 @@ class Provider(Protocol):
         """Mark one draft pull request ready for review."""
         ...
 
+    def add_labels(self, repository: str, number: int, labels: list[str]) -> None:
+        """Add labels to one pull request, keeping those it has."""
+        ...
+
     def close_pull_request(self, repository: str, number: int) -> None:
         """Close one pull request without merging it."""
         ...

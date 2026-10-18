@@ -21,13 +21,14 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.settings.roles import DEFAULTS
 from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 4  # format 3 renamed the designer role to design-judge (TD-169); 4 added session minutes (TD-286)
+CONFIG_FORMAT = 5  # 3 renamed the designer to design-judge (TD-169); 4 added minutes (TD-286); 5 PR labels (TD-308)
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "project", "builder"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
+LABEL = 50  # GitHub's longest label name
 
 
 class Agent(Record):
@@ -85,12 +86,21 @@ class Layer(Record):
     design_failures: DesignFailures | None = None  # TD-78: a design judge's fail goes back, or to the owner
     explore: bool | None = None  # TD-129: experimental, SDK planner only: one built-in `explore` at a time
     final_review: FinalReview | None = None  # TD-211
+    pr_labels: list[str] | None = None  # TD-308: on every PR OwlBear opens; a project's list replaces the global one
+    pr_marker: bool | None = None  # TD-308: the "Opened by OwlBear Delivery" line, switched per project
 
     @field_validator("format")
     @classmethod
     def _current(cls, v: int) -> int:
         if v != CONFIG_FORMAT:
             raise ValueError(f"a layer is written in format {CONFIG_FORMAT}")  # noqa: EM102, TRY003
+        return v
+
+    @field_validator("pr_labels")
+    @classmethod
+    def _labels(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None and (len(set(v)) < len(v) or any(not 0 < len(x) <= LABEL or x != x.strip() for x in v)):
+            raise ValueError(f"labels must be distinct, each 1 to {LABEL} characters without outer spaces")  # noqa: EM102, TRY003
         return v
 
     @field_validator("widths")
@@ -118,6 +128,13 @@ class GlobalLayer(Layer):
     def _project_only(cls, v: object) -> object:
         if v is not None:
             raise ValueError("test preparation is a project setting")  # noqa: EM101, TRY003
+        return v
+
+    @field_validator("pr_marker")
+    @classmethod
+    def _marker(cls, v: bool | None) -> bool | None:  # noqa: FBT001 - a validator's value
+        if v is not None:
+            raise ValueError("the pull request marker line is a project setting")  # noqa: EM101, TRY003
         return v
 
 
@@ -154,6 +171,8 @@ class Settings(Record):
     design_failures: DesignFailures = "ask"
     explore: bool = False
     final_review: RoundPolicy = Field(default_factory=RoundPolicy)
+    pr_labels: list[str] = Field(default_factory=list)
+    pr_marker: bool = True
     sources: dict[str, Source]
 
 
@@ -238,6 +257,8 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         )
         for name in RoundPolicy.model_fields
     }
+    labels = _pick("pr_labels", sources, ("project", project.pr_labels), ("global", glob.pr_labels), ("default", []))
+    marker = _pick("pr_marker", sources, ("project", project.pr_marker), ("default", True))
     return Settings(
         visible=visible,
         agents=agents,
@@ -248,5 +269,7 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         design_failures=design,
         explore=bool(explore),
         final_review=RoundPolicy.model_validate(final),
+        pr_labels=labels,
+        pr_marker=bool(marker),
         sources=sources,
     )

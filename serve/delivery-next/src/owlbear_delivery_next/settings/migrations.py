@@ -94,6 +94,16 @@ def minutes_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept}
+def labels_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 4 to 5: pull request labels and the marker switch (TD-308); older runtimes refuse format 5."""
+    return data
+
+
+def labelled_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 4 to 5: the PR its labels went on (TD-308); older runtimes refuse format 5."""
+    return data
+
+
+CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept, 4: labelled_added}
 PROFILE: Migrations = {1: roles_moved}
-CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed, 3: minutes_added}
+CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed, 3: minutes_added, 4: labels_added}
