@@ -140,7 +140,9 @@ def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, mo
      ([{"id": 3, "path": release.CI, "status": "completed", "conclusion": "failure"},
        {"id": 4, "path": release.CI, "status": "completed", "conclusion": "success"}], "success"),
      ([{"id": 6, "path": release.CI, "status": "completed", "conclusion": "failure"},
-       {"id": 5, "path": release.CI, "status": "completed", "conclusion": "success"}], "failure")],
+       {"id": 5, "path": release.CI, "status": "completed", "conclusion": "success"}], "failure"),
+     ([{"id": 7, "path": release.CI, "status": "completed", "conclusion": "success"},
+       {"id": 8, "path": release.CI, "status": "queued", "conclusion": None}], "pending")],
 )  # fmt: skip
 def test_the_api_takes_the_pull_request_merged_with_this_commit_and_its_newest_push_ci(monkeypatch, runs, said):
     answers = {
