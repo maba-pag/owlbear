@@ -173,7 +173,1868 @@ and M3 are approved. Most of the effort belongs in M3: past designs failed on or
 modes, not for lack of history or test volume. The new core is built on the Copilot runtime, not on
 the Local harness; the old Delivery keeps running on Local until M6.
 
-### 3.8 Decisions reserved for the user
+### 3.8 Decisions in force, by topic (TD-359)
+
+Each topic states the decisions in force today, built from its member rows and any other rows that amend
+or replace them in the decision history (§3.8.1), quoting the owner's recorded words from every `decided`
+member. Later amendments and re-decisions govern where they speak; unresolved conflicts stay Open. On any
+doubt the rows and their origins are authoritative. A new decision gets a new TD row in the history and,
+in the same change, its topic here; a topic's **Open** items are unresolved points awaiting the owner.
+Consolidated 2026-10-18 from TD-1..TD-381 (30 topics with 332 rows, 49 standalone rows).
+
+#### C-01 Asking the owner
+
+**Members:** TD-41 (`decided`), TD-42 (`decided`), TD-43 (`decided`), TD-150 (`decided`),
+TD-156 (`decided`), TD-340 (`decided`), TD-364 (`decided`).
+
+**In force:**
+
+- Read-back of a recorded decision (pattern P6): three close variants of the decision as the norm, fewer
+  only when fewer really differ in consequence, never padded, the matching one at varying positions
+  (TD-364); one or two other directions, the opposite among them; then "take your recommendation (…)" naming the recommendation in the brackets,
+  "none of these: show me more options" and "explain first"; free text always open; no other
+  recommendation mark (TD-41, TD-156).
+- The question shows the decision's record and what changed since (TD-156).
+- When the direction itself is in doubt, the direction is asked first, then the nuances, with the reason
+  stated (TD-41).
+- Used at the end of ideation, before design approval and for consequential choices of the assistant
+  (TD-41).
+- "Take your recommendation" makes the result the assistant's `autonomous` choice, with reasons (TD-41).
+- "Show me more options" gives a bounded set across directions, each with pros, cons, risks and its own
+  percentage that it is a good choice, not adding up across the options (TD-41, TD-42).
+- A free-text chat answer is never recorded as written: the assistant offers 2 to 5 readings that fill
+  gaps differently, plus "your words as written", "show me more readings" and "explain first"; the owner
+  chooses the one meant (TD-43, TD-340).
+- Comments on Delivery's pages (TD-79, TD-153, TD-193) are taken as written; one that contradicts the
+  approved brief is held for the owner, never applied (TD-340).
+- Every challenge of owner input (Sol challenges the agent runs, Delivery's brief and plan challenger,
+  the shaper's read-back) extracts the owner's intent and reports what it implies but is missing and what
+  is overdone, not only what is wrong; the owner's words are evidence of intent, not a literal spec
+  (TD-150).
+- The structure is written in `.github/copilot-instructions.md` and in the shaping skill's read-back
+  (TD-156).
+
+**Owner's words:**
+
+- TD-41: "3 options in the same direction"
+- TD-42: "A separate percentage per option that it is a good choice, not adding up"
+- TD-43: "let me choose the one i emant, not the one i wrote"
+- TD-150: "intent has to be extracted"
+- TD-156: "with your recommendation in brackets"
+- TD-340: "TD-43 covers chat answers"
+- TD-364: "Three as the norm; fewer only when fewer really differ, never padded"
+
+**Replaced:**
+
+- TD-41's plain "take your recommendation" closing option and "other directions where real ones exist",
+  by TD-156 (recommendation named in brackets; the opposite always among the directions).
+- TD-43's readings for every free-text answer, narrowed by TD-340 to chat answers.
+- TD-41's "as many as really differ in consequence (1 to 4)", settled by TD-364 (three as the norm).
+
+#### C-02 Permissions and agent writes
+
+**Members:** TD-29 (`decided`), TD-45 (`decided`), TD-46 (`decided`), TD-81 (`decided`),
+TD-82 (`decided`), TD-102 (`decided`), TD-146 (`decided`), TD-320 (`decided`).
+
+**In force:**
+
+- SDK steps allow every shell command except hook or signing bypass and force push, and, in read-only
+  steps (plan, reviews, challenges, judges), anything that writes (TD-82, TD-320).
+- Read-only steps are enforced without an allow list, by a deny list of writing commands (`autonomous`
+  part of TD-82).
+- Nothing blocks an agent's writes outside its worktree, a plain `git push` or GitHub writes through `gh`
+  (TD-320).
+- Agents never push: TD-29 holds as an instruction; agents are told never to push or write to GitHub,
+  and Delivery performs the git and GitHub writes (TD-29, TD-320).
+- Intended writes outside the worktree are Delivery's own state, temporary files and the user's tool
+  caches (TD-46); the watcher never judges those (TD-365, C-04).
+- Every security restriction and every security relaxation the assistant introduces is reviewed with
+  the owner (TD-81, TD-102).
+- After each read-only (judge) run, Delivery compares shared Git config and the hooks folder with their
+  state before the run; a difference stops the Change with a question and is never restored
+  automatically (TD-146).
+
+**Owner's words:**
+
+- TD-29: "agree on agents never push...Github write"
+- TD-45: "Keep it permanently on the SDK route"
+- TD-46: "anything else is stopped unless the brief names it"
+- TD-81: "i want to review each of these decisions you made regarding security"
+- TD-82: "Drop it: allow all except rows 2-6"
+- TD-102: "Also every security relaxation"
+- TD-146: "Build the narrow check now"
+- TD-320: "TD-82 governs; agents are told never to push or write to GitHub, nothing blocks it"
+
+**Replaced:**
+
+- Charter §3.8's default-deny permission policy with an explicit allow list (`approved` with TD-23),
+  by TD-82.
+- The per-step shell allow list, the always-refused `git push`/`gh`/`git config`/`git -c`/`sudo`, the
+  worktree-only path rule, the URL rule in shell commands and the host's launch-command list, by TD-82.
+- TD-45's permanent SDK hard guard against writes outside the worktree, by TD-82 and TD-320.
+- TD-29 as an enforced block on agent pushes and GitHub writes, by TD-320 (kept as an instruction).
+- TD-81's review of restrictions only, widened by TD-102 to relaxations too. Its pipe-filter
+  postponement was tied to the inventory review recorded in TD-82.
+- TD-46's "anything else is stopped by the watcher unless the brief names it", by TD-365 (C-04: the
+  watcher stops only what it judges dangerous or inappropriate).
+
+#### C-03 Models and credits
+
+**Members:** TD-21 (`decided`), TD-27 (`decided`), TD-32 (`decided`), TD-47 (`decided`),
+TD-54 (`decided`), TD-56 (`decided`), TD-75 (`decided`), TD-94 (`decided`), TD-117 (`decided`),
+TD-144 (`decided`), TD-333 (`decided`), TD-378 (`decided`).
+
+**In force:**
+
+- No cost question: credits are shown per Change and step, never used to stop or ask (TD-21).
+- Model and credits are separate. Credits that cannot be read are logged and the result is accepted;
+  spend shows as unknown, never zero (TD-94).
+- Models and effort per role: reviews `gpt-6.1-sol` `xhigh`; challenges `gpt-6.1-sol` `high`; design and
+  planning `claude-opus-5.5` `high`; building `claude-opus-5.5` `medium`, also the default for roles
+  not yet chosen; model and effort are chosen per role where that has not happened yet (TD-27).
+- A benchmark on OwlBear's own work compares `gpt-6-luna` max with `claude-haiku-5.5` high, and
+  `claude-haiku-5.5` xhigh with `gpt-6.1-sol` low, for quality and cost; it only informs, and the cheap
+  tier is chosen with the owner afterwards (TD-27).
+- The watcher's model and effort are chosen with the owner after TD-27's benchmark has run (TD-47,
+  TD-378).
+- Delivery never uses `auto`; every session names its model. Turns whose output is thrown away (probes,
+  tests), including the first turn a VS Code chat window starts and Delivery cancels, use `gpt-6-luna`
+  `low`; small tasks that must be done correctly use `claude-haiku-5.5` `medium` (TD-32).
+- Only usage metrics prove which model ran: verified, mismatch or unknown (TD-94).
+- A wrong model voids the result; the step reruns once after a fixed 5-minute wait (behind other ready
+  work once the host schedules sessions); a second wrong model in a row asks the owner (TD-117, TD-144).
+- An unknown model stops the Change until the owner retries or accepts; accept is offered only while
+  nothing the result depends on changed (TD-94).
+- Accept is offered for a step's own session and a screenshot round; challenge sessions (TD-71) only
+  rerun (TD-333).
+- Accepting a screenshot round accepts the whole round and waives only the model check; the verdicts
+  still decide (TD-94).
+
+**Owner's words:**
+
+- TD-21: chosen without a quote (answered question; re-confirmed in the read-back of 2026-10-11)
+- TD-27: "i see sol xhigh as reviewer, sol high as challenger"
+- TD-32: "we never use auto, ever"
+- TD-47: "Decide after the benchmark (N2)"
+- TD-54: "unreadable usage lets the step run until the end"
+- TD-56: "Accept only while nothing it depends on changed"
+- TD-75: "i dont think we need an accept button there"
+- TD-94: "if the model can not be read or is wrong, this is a failure mode"
+- TD-117: "for wrong model, put back in the queue if there is one, and rerun only once, then ask"
+- TD-144: "Keep 5 minutes (TD-117)"
+- TD-333: "As built: challenge sessions only rerun; accept is for a step's own session and a screenshot round"
+- TD-378: "Run TD-27's benchmark first, then choose with you"
+
+**Replaced:**
+
+- TD-27's earlier record (luna and haiku at max, reviews Sol high, challenges Sol medium), by its
+  read-back of 2026-10-11.
+- TD-54's stop of the Change on unreadable usage until the owner retries or accepts, by TD-94.
+- TD-56's stored unprocessed result for TD-54's accept, by TD-94 (accept now applies to an unknown model).
+- TD-75's rerun-only screenshot judgement when the model cannot be verified, by TD-94.
+- TD-94's immediate automatic rerun of a wrong model "before anything else", by TD-117 and TD-144.
+
+**Open:**
+
+- No row records the TD-27 benchmark's result or the cheap tier chosen afterwards; the benchmark has
+  not run (TD-378 runs it before the watcher's model is chosen).
+
+#### C-04 Window steps and the watcher
+
+**Members:** TD-20 (`decided`), TD-34 (`decided`), TD-35 (`decided`), TD-36 (`decided`),
+TD-44 (`decided`), TD-48 (`autonomous`), TD-50 (`decided`), TD-55 (`decided`), TD-67 (`autonomous`),
+TD-86 (`decided`), TD-137 (`decided`), TD-145 (`decided`), TD-223 (`decided`), TD-224 (`decided`),
+TD-267 (`autonomous`), TD-316 (`autonomous`), TD-338 (`decided`), TD-342 (`decided`), TD-365 (`decided`),
+TD-366 (`decided`), TD-367 (`decided`).
+
+**In force:**
+
+- First release, before real-project use: New Change button, automatic merge with pull-back, thread
+  replies and resolution, agent visual pre-check, Change card with a deterministic "now" line, step time,
+  quiet warning and credits, and the watcher agent; notifications, scanner triage and a knowledge home
+  wait for evidence from real use (TD-20).
+- The watcher stays a gate before real-project use, for SDK steps too: no real project uses OwlBear
+  before the watcher exists; this holds over TD-297 and TD-316's timing (TD-20, TD-338).
+- Until the watcher exists, steps may run outside VS Code (SDK or CLI) and the owner reads their logs
+  afterwards; steps that normally run in the SDK cannot be watched, and the owner accepts they cannot be
+  controlled or stopped from misbehaving meanwhile (TD-44, TD-50).
+- Afterwards, watching may change only how writes outside the worktree are controlled; everything else
+  stays the same (TD-50).
+- Watcher stance: it intervenes only after an action (stop, then D6's retry); nothing is prevented
+  beforehand. Safety checks judge actions, not reasoning; reasoning may prompt a closer look at next
+  actions but is never a stop reason alone and otherwise feeds memory and improvement; catching
+  exfiltration is not a design goal for now; the watcher is multi-purpose, e.g. a status summary for the
+  overview (to be discussed) (TD-55).
+- The watcher judges each write outside the worktree and each outgoing data transfer after the fact and
+  stops the step only when it finds it dangerous or inappropriate for the task, not solely because it is
+  outside and unnamed; a harmless one passes and is noted in its report. TD-46's allowed places
+  (Delivery's own state, temporary files, the user's tool caches) are never judged (TD-365).
+- Each agent has a default runtime (initially the SDK) and its own model, effort and context size on the
+  config page; the watcher must be able to read, steer and stop every runtime in use (TD-34).
+- Missing tools: an agent still lacking a tool ends the step with a "missing tool" report; Delivery
+  retries a temporary error now, then later; reruns once in another runtime that has it; asks the owner
+  for a needed setup action; or sends the Change back to planning when it exists nowhere. A denial by
+  Delivery's guard never leads to more tools (TD-36). While window steps are paused, a tool that exists
+  only in a window runtime is asked of the owner, naming it, instead of a rerun there (TD-367).
+- Automated window (`vscode`) steps are paused; steps run only through the SDK until probes close the
+  gaps (subagent detection, built-in exclusion, project hooks, judge shell, read-only containment), with
+  probes (1) offline replay of subagent events, (2) one isolated sacrificial window probe (an
+  owner-granted exception to TD-129) and (3) a synthetic containment fixture (TD-137).
+- Window steps reopen only when windows keep repository hooks and user MCP servers out, the observer
+  detects and counts subagents (parent tool calls marked subagent, models in `turnTokenTotals`), and
+  judge effects beyond refs are contained or sandboxed (TD-145, TD-223).
+- That gate is built after TD-208, its first commit replacing `ahp.py`'s hand-written WebSocket code with
+  the `websockets` library (sync `unix_connect`; size limits, keepalive, close and error mapping chosen
+  explicitly); then routing is switched on and the `runtime=vscode` switch removed (TD-223, TD-267).
+- The whole watcher design is built right after the window-step gate; its proposals O1–O6 are decided
+  with the owner when window steps are about to come back, not before (TD-224, TD-316).
+- Suspended while window steps are paused, reviewed again when the gate passes (TD-342): TD-34 and
+  TD-35's routing (default runtime unless needed tools are elsewhere; a step is visible if its agent
+  needs it, its Change is always visible or the global switch is on; visible steps run as window chats
+  with the unwatched tool list); TD-48's window start (shell-only first turn, sign-in and wait for the
+  model, every turn names model and effort, another model stops the step); TD-67's per-project
+  `runtime=vscode` switch and its removal notice; TD-86's disposable read-only worktree `<slug>.ro`.
+- TD-86's SDK part stays in force: the guard is Delivery's own code, the SDK permission callback, not
+  hook files (TD-86, TD-366).
+
+**Owner's words:**
+
+- TD-20: "The six items, plus the watcher agent"
+- TD-34: "Each agent has a default runtime (initially the SDK)"
+- TD-35: "visible steps run as chats in a VS Code window, so you see them in a window"
+- TD-36: "Known needs choose the runtime up front"
+- TD-44: "SDK steps may run meanwhile; only their logs can be read afterwards"
+- TD-50: "i accept that steps inside the sdk cannot be controlled and prevented from doing shady things"
+- TD-55: "i accept the risk that watcher can only intervene post haste"
+- TD-86: "non commited guard hooks make no sense"
+- TD-137: "Pause; run probes 1, 2 and 3 now (I allow the window exception)"
+- TD-145: "Record as the reopen gate; no work now"
+- TD-223: "Build the gate now, after TD-208"
+- TD-224: "build it after the window steps"
+- TD-338: "The watcher stays a gate before real-project use, for SDK steps too"
+- TD-342: "The window rows are marked suspended and are reviewed again when the gate passes"
+- TD-365: "it stops the step after an outside write IF it finds the write dangerous or inappropriate,
+  not soley because its outside ant not explicitly allowed. thats why its an agetn deciding this, not a
+  hook."
+- TD-366: "Only the window part is suspended; the SDK permission callback stays in force"
+- TD-367: "You are asked, naming the window-only tool, like the 'needs the owner's setup' case"
+
+**Replaced:**
+
+- TD-34's tools added per task ("plus its task's additions"), by TD-343.
+- TD-35's earlier "managed or all in VS Code" switch, by TD-35's read-back of 2026-10-12.
+- TD-50's SDK guard as the SDK-side control of outside writes, by TD-320.
+- TD-86's first window mechanism (Delivery answering approval requests) and an in-place restore, by
+  TD-86's detached read-only worktree.
+- TD-145's "no work now", by TD-223.
+- TD-55's "an outgoing transfer of local data that it notices is stopped like an unwanted outside
+  write", by TD-365 (judged like any outside write).
+- TD-36's "one rerun there" while window steps are paused, by TD-367.
+
+#### C-05 Roles, agents and skills
+
+**Members:** TD-58 (`decided`), TD-69 (`decided`), TD-99 (`decided`), TD-106 (`decided`),
+TD-108 (`decided`), TD-109 (`decided`), TD-110 (`decided`), TD-134 (`decided`), TD-135 (`decided`),
+TD-136 (`decided`), TD-139 (`decided`), TD-157 (`decided`), TD-159 (`decided`), TD-166 (`decided`),
+TD-167 (`decided`), TD-169 (`decided`), TD-170 (`decided`), TD-274 (`autonomous`),
+TD-317 (`autonomous`), TD-329 (`decided`), TD-343 (`decided`).
+
+**In force:**
+
+- Delivery's agents, skills, prompts and instructions are not written from scratch: the existing ones
+  are studied for good parts, ideas and structure and serve as the base to improve, not a plain reuse
+  (TD-58).
+- Every role has its own agent file; reusing one for several roles needs a recorded decision. The
+  challenger's file builds on the old `planner-challenger` and `r-challenger-protocol`; the preparer has
+  its own file and may edit only test-system setup files, whose edits are discarded after the check and
+  never become Change code (TD-107, C-10); the shaper's agent (TD-93) is built from the shaping skill and a cleaned
+  `w-idea-refinement` interview whose depth scales with the Change's size (TD-106).
+- Agent files are flat `agents/owlbear-<role>.agent.md` with a matching `name`; the engine keeps short
+  role keys; the designer is `owlbear-design-judge`, role key `design-judge`, with settings and history
+  migrated (TD-169, TD-274).
+- Each agent file lists its tools, window-only tools included; each runtime offers exactly those plus
+  Delivery's result tools; a step gets exactly its agent file's tools and nothing is added per task
+  (TD-69, TD-99, TD-343).
+- A structural test checks that every tool an agent's prose names is granted and every granted tool is
+  explained (TD-99).
+- The plan challenger and the visual judges have no `ask_question` tool; they answer with their
+  verdict, using `unsure` where the owner's intent is unclear (TD-108).
+- The shaper's capabilities: read and search, structured questions, web fetch, memory recall, memory
+  save; their runtime names are verified when the agent is built (TD-109).
+- The builder keeps `assess_memories` and `scan_design`, the planner `web_fetch`; each is explained in
+  the agent's prose (TD-110).
+- Responsibility model: who = agent file; how = skill; what this time = brief, plan, task; why = brief
+  outcome and the owner's decisions; when and where = engine; tools = agent file plus tool schemas;
+  model = Settings; rules = agent boundaries plus instructions; events = Delivery's own event handling
+  (repository hooks are off, TD-142); invoked by the owner = prompt or user-invocable skill; done when =
+  criteria plus the code-enforced result contract (TD-135, TD-159).
+- Substantial or shared procedures become skills; short single-role steps stay in the agent file; the
+  engine keeps enforcement (TD-159).
+- Skill names: `owlbear-` plus a noun phrase naming the subject area, folder `<name>/SKILL.md`; skill
+  name ≤64, description ≤1024. No agent-name limit is published (Claude: 256); VS Code's 13-character
+  server-segment and 64-character MCP tool-ID limits do not apply to agent or skill names (TD-170).
+- Each role gets only the skill folders its job needs, each step seeing only those (one SDK folder per
+  skill). Names per TD-170, prefix omitted: builder acceptance-criteria + module-design
+  (+ interface-design with a UI brief); planner acceptance-criteria + module-design; code reviewer
+  acceptance-criteria + module-design + review-judgment; screenshot reviewer acceptance-criteria +
+  review-judgment; brief challenger acceptance-criteria + review-judgment; plan challenger
+  acceptance-criteria + module-design + review-judgment; design judge interface-design + design-review;
+  preparer none; shaper its shaping skill; the updater (TD-125) gets its list when built (TD-134,
+  TD-166, TD-170).
+- A brief challenge's reconsideration and an amendment challenge also load acceptance-criteria and
+  review-judgment; every skill, the owner's chat skill included, sits in one `skills/` folder with
+  `NOTICE.md` and the Impeccable licence (TD-274).
+- The shaping procedure is one skill that only the shaper preloads, named `owlbear-change-shaping`; the
+  agent keeps identity, authority and tools; there is no global `/delivery` skill (TD-136, TD-170).
+- Steps are strict: one agent, their own skills, project agents and skills off. In the owner's chat
+  OwlBear limits only what it adds and hides its skill from the `/` menu (`user-invocable: false`,
+  proven in a real shaping chat before the old link goes) (TD-167, TD-274).
+- SDK steps run with repository instructions on and repository agents and skills off (TD-139). On a
+  conflict, Delivery's steps, tools and result format win; the repository's conventions and required
+  checks still apply; a real clash becomes a question to the owner (TD-157).
+- "Project agents and skills off" in SDK steps is not built yet; it is probed and built after
+  self-update step 5, and until then steps may run with the project's own agents and skills
+  discoverable (TD-274, TD-317, TD-329).
+
+**Owner's words:**
+
+- TD-58: "the agent werent the problem with old delivery"
+- TD-69: "ofc you need to define tools for eac agent"
+- TD-99: chosen without a quote (in the read-back of 2026-10-14, after asking whether tools could live
+  in a config only)
+- TD-106: "we shouldnt have a role without an agent"
+- TD-108: chosen without a quote (chose removal after the reuse study found the guidance conflicting)
+- TD-109: chosen without a quote (chose these five capabilities)
+- TD-110: "Keep for builder, explain in prose"
+- TD-134: chosen without a quote (in the structure session)
+- TD-135: "Adopt this model for the structure"
+- TD-136: "No global /delivery; procedure preloaded by the shaper only"
+- TD-139: chosen without a quote (in the structure session)
+- TD-157: "Delivery's steps, tools and result format win"
+- TD-159: chosen without a quote (in the TD-150 recap)
+- TD-166: "Per job as listed; each step sees only those folders"
+- TD-167: "Steps strict; in your chat OwlBear limits its additions and hides its skill from the / menu"
+- TD-169: "Flat as above, and the designer becomes owlbear-design-judge (settings key migrated)"
+- TD-170: "Noun phrase (subject area)"
+- TD-329: "Allowed until the fix after self-update step 5"
+- TD-343: "A step gets exactly its agent file's tools; nothing is added per task, as built"
+
+**Replaced:**
+
+- TD-166's and TD-136's skill names (acceptance, findings, ui-design, ui-review, `delivery`), by
+  TD-170's renames; the designer role name, by TD-169.
+- TD-135's "events = hooks", by TD-159 (Delivery's own event handling).
+- TD-139's plain "Delivery wins on conflict", by TD-157.
+- TD-139's local-path clause (`~/Library/Application Support/OwlBear`), by rows of C-08 Local home
+  and paths.
+- TD-139 and TD-167's "project agents and skills off" in SDK steps, suspended by TD-329 until TD-317's
+  fix.
+
+#### C-06 The shaper
+
+**Members:** TD-83 (`decided`), TD-93 (`decided`), TD-138 (`decided`), TD-160 (`decided`), TD-163 (`decided`),
+TD-164 (`decided`), TD-165 (`decided`), TD-244 (`decided`), TD-275 (`autonomous`), TD-276 (`autonomous`),
+TD-277 (`autonomous`), TD-328 (`decided`), TD-348 (`decided`).
+
+**In force:**
+
+- New Change starts the shaping chat as a Copilot session through Delivery's window route, with a
+  `shaper` role in Settings and allow-all; shaping no longer happens in the owner's own chat with the
+  model he chooses (TD-83).
+- The shaper role defaults to `claude-opus-5.5`, default tier, at medium effort (TD-83, TD-93).
+- The shaping chat has its own narrow `owlbear-shaper` agent; TD-106 keeps its role rules (TD-93, TD-348).
+- The shaping chat finds the shaper and its skill through symlinks in `~/.copilot/agents` and
+  `~/.copilot/skills`; no workspace line; both show up in every project. The links are part of the
+  install approval, asked at install and removed at uninstall (C-08) (TD-165, TD-244, TD-348).
+- The shaper links point into `~/.owlbear/runtime`, a clean runtime clone with its locked environment
+  (TD-244). Chat tools find the one machine host (TD-242); setup writes no folder-open host task
+  (TD-281, TD-321).
+- A new shaper location counts as proven only if, in the real shaping chat, the shaper is chosen, its
+  skill preloads, its tools work and the owner's settings are restored; one proof turn in the sandbox
+  comes before old copies are removed (TD-160, TD-163).
+- Delivery selects the shaper by name and keeps refusing when it is not listed (TD-163).
+- Setup writes `chat.defaultToCopilotHarness: true` into the project's untracked `.vscode/settings.json`
+  with its own consent; New Change keeps adding the key while a chat opens and, when no Copilot chat
+  appears, tells the owner to reload the window (TD-275).
+- New Change launches its chat with `code chat -m owlbear-shaper`; Delivery's own turn still names the
+  agent file (TD-276).
+- The shaper role's model and effort apply to what Delivery sends; the owner's typed turns run on the
+  chat's model picker, with one reminder from the shaper to set the picker to the role's model and
+  effort; Delivery pins nothing, since a `model:` line in the agent file moved neither the picker nor
+  the turn's model (TD-277, TD-328).
+- The Settings page marks the shaper's model and effort as a recommendation for the owner's chat (TD-328).
+
+**Owner's words:**
+
+- TD-83: "A shaper role in Settings"
+- TD-93: "but make it medium thinking"
+- TD-138: chosen without a quote (decided in the structure session)
+- TD-160: chosen without a quote (decided in the TD-150 recap)
+- TD-163: "Permanent workspace line to the checkout's shaper-only folder"
+- TD-164: "the pinned run checkout until then; main once live"
+- TD-165: "Switch now to symlinks in ~/.copilot"
+- TD-244: chosen without a quote (approved all five items of the install list: location, purpose,
+  alternative, what declining means)
+- TD-328: "the Settings page marks the shaper's model and effort as a recommendation for your chat"
+- TD-348: "TD-165/244 replace the location"
+
+**Replaced:**
+
+- The shaper agent at user level in the VS Code user prompts folder (TD-93, TD-106), and TD-160's
+  "until then today's user-level install stays": replaced by TD-165 and TD-244 (TD-348).
+- TD-163's permanent workspace line in each project's `.vscode/settings.json` pointing at a shaper-only
+  folder, with `~/.copilot` symlinks only where a project tracks its settings: replaced by TD-165.
+- TD-138's temporary user-settings probe of the agent and skill location settings: carried out (TD-163);
+  those settings were dropped as deprecated by TD-165.
+- TD-164's checkout for the links and `.mcp.json` (pinned run checkout, then `owlbear-dev`, then main):
+  replaced by TD-244's runtime in `~/.owlbear/runtime`.
+- TD-244's sandbox host task and its chat tools running the runtime's Python: replaced by the machine
+  host and the removal of folder-open tasks (TD-242, TD-281, TD-321); its run-checkout deletion was an
+  install-round action.
+
+#### C-07 Local installs
+
+**Members:** TD-5 (`decided`), TD-131 (`decided`), TD-140 (`decided`), TD-162 (`decided`),
+TD-346 (`decided`).
+
+**In force:**
+
+- Local Copilot CLI and Copilot SDK use with the owner's seat is allowed by the employer (TD-5, TD-346).
+- Anything OwlBear keeps outside the repositories is reviewed, necessary, without real alternative and
+  explicitly approved by the owner; the package structure and every local install are reviewed with
+  research and a Sol challenge (TD-131).
+- Local installs are approved in one round after the structure change (TD-140).
+- The approval is one list giving location, purpose, alternative and what declining means, approved per
+  location and kind of artifact; a new location or capability asks again (TD-162, TD-346).
+
+**Owner's words:**
+
+- TD-5: "Yes, allowed; install them wherever convenient"
+- TD-131: "anything local should be well reviewed, absolutely necessary, with no real alternative, and
+  explicitly approved by me"
+- TD-140: chosen without a quote (decided in the structure session)
+- TD-162: chosen without a quote (decided in the TD-150 recap)
+- TD-346: "TD-162 replaces TD-5's 'wherever convenient'"
+
+**Replaced:**
+
+- TD-5's "probe tools may be installed wherever convenient": replaced by TD-162's approval list (TD-346).
+- TD-131's "the user-level shaper agent stays until that decision": settled by the shaper location rows
+  (C-06).
+
+#### C-08 Local home and paths
+
+**Members:** TD-147 (`decided`), TD-161 (`decided`), TD-182 (`decided`), TD-198 (`decided`),
+TD-260 (`decided`), TD-334 (`decided`), TD-335 (`decided`).
+
+**In force:**
+
+- OwlBear's local files all live in `~/.owlbear` on every system (data pointer, design pack, worktrees
+  with their snapshots); no Application Support folder, no XDG folder, no `OWLBEAR_HOME`; the
+  Application Support code and `owlbear-next home --move` go (TD-198).
+- This Mac's two sandbox worktrees move once in the install round, with `git worktree move` (TD-198).
+- Every project's live Delivery database lives under `~/.owlbear`, one folder per project
+  (TD-334, TD-198, TD-265).
+- The confirmed project profile is kept in the project's folder in the data repository and re-checked
+  on a new clone, so a fresh clone needs no new setup (TD-147).
+- Three exceptions live outside `~/.owlbear`: the `owlbear` command link in `~/.local/bin`, the login
+  item in `~/Library/LaunchAgents`, and the `~/.copilot` links to the shaper and its skill; each is
+  asked for separately at install (TD-162) and removed again by uninstall (TD-260, TD-335).
+
+**Owner's words:**
+
+- TD-147: "Live state in .git; profile to owlbear-data now"
+- TD-161: chosen without a quote (decided in the TD-150 recap)
+- TD-182: "Code tonight; this Mac's files move in the morning install round"
+- TD-198: "no application support folder, we stay in ~/.owlbear/ with everything or move everything there"
+- TD-260: "Both, each asked for separately at install, removed again by uninstall"
+- TD-334: "Move every project's database under ~/.owlbear too, one folder per project"
+- TD-335: "join TD-260's list as the third outside exception"
+
+**Replaced:**
+
+- TD-139 and TD-161: everything under `~/Library/Application Support/OwlBear`, the new location winning
+  with the old kept as backup, `OWLBEAR_HOME` moving the whole tree: replaced by TD-198.
+- TD-182: L4 code with new paths first and old as fallback, and moving this Mac's `~/.owlbear/data.json`
+  and `~/.owlbear/design-pack/` in the install round: falls with TD-198 (the files stay in `~/.owlbear`).
+- TD-147's "live Delivery state stays in the repository's `.git`": replaced by TD-334.
+- TD-198's "only in `~/.owlbear`" for the command link, login item and `~/.copilot` links: re-decided by
+  TD-260 and TD-335.
+
+#### C-09 Data repository and settings
+
+**Members:** TD-7 (`decided`), TD-52 (`decided`), TD-57 (`decided`), TD-59 (`decided`), TD-64 (`decided`),
+TD-95 (`decided`), TD-98 (`decided`), TD-105 (`decided`), TD-128 (`decided`), TD-227 (`decided`),
+TD-243 (`decided`), TD-295 (`autonomous`), TD-336 (`decided`), TD-347 (`decided`).
+
+**In force:**
+
+- One private shared repository, `maba-pag/owlbear-data`, serves all projects with a folder per project;
+  it takes project research and the former `.owlbear/` documents, OwlBear's own included; consumer
+  projects no longer contain them (TD-7, TD-95).
+- Research moves into `owlbear-data` now, before the old-engine removal (TD-227, TD-347).
+- Research about a consumer project is never committed into that project (TD-7, TD-347).
+- The internal names follow the rename: `common` becomes `data` (module, pointer file, environment
+  variable), with a pointer migration (TD-128).
+- Global settings live at the repository's root, each project's settings in its project folder (TD-57).
+- A project's folder name defaults to the repository name; on a collision at setup Delivery asks the
+  owner; it can be renamed on the settings page, and the chosen name is stored for the repository (TD-98).
+- A save on the settings page commits and pushes (TD-64).
+- Preferences may be set on four levels, built-in → global → machine → project, the project winning;
+  global and built-in defaults stay separate; capabilities are checked after resolving and a value is
+  never silently replaced (TD-336).
+- Scope-only settings stay in their scope: update channel and registered projects on the machine (local
+  in `~/.owlbear`); test preparations, data permissions and the PR marker in the project (TD-336, TD-243).
+- Session limits count agent sessions, with no per-model limit: sessions at once on this machine
+  (machine only, default 4) and sessions at once per project (layered, default 2), all projects together
+  within the machine's total. A free slot goes round-robin across projects, first-ready within a project;
+  waiting never spends a budget; running sessions are never stopped (TD-336, TD-105).
+- The settings page shows the global defaults plus each project's differences, with each value's source,
+  and asks the scope on every edit (TD-243). Its "Across projects" table lists the settings some project
+  sets apart, with the global value, its source and each differing project, plus a Show all switch (TD-295).
+
+**Owner's words:**
+
+- TD-7: "One shared documents repository for all projects, a folder per project"
+- TD-52: "Global with overrides per project"
+- TD-57: "why cant it also hold global settings?"
+- TD-59: "new private repo maba-pag/owlbear-common cloned to ~/Projects/owlbear-common"
+- TD-64: "Commit and push"
+- TD-95: "i dont like common"
+- TD-98: "folder named after the repo, but changeable in project config dashboard"
+- TD-105: "global + project, not model"
+- TD-128: "Rename internals to 'data' too"
+- TD-227: "Move research into owlbear-data now, before the old-engine removal"
+- TD-243: "i think we still do need project settings"
+- TD-336: "preferences can be different between machines and between projects"
+- TD-347: "TD-227 replaces TD-7's 'commit to dev for now'"
+
+**Replaced:**
+
+- TD-7's "OwlBear's own research is committed to `dev` and pushed right away, for now": replaced by
+  TD-227 (TD-347).
+- TD-59's repository `maba-pag/owlbear-common` at `~/Projects/owlbear-common`: renamed `owlbear-data` by
+  TD-95, internals by TD-128.
+- TD-64's folder named after the repository, fixed: replaced by TD-98's renameable name.
+- TD-52's two levels (global with per-project overrides): replaced by TD-243's three scopes, then
+  TD-336's four levels.
+- TD-243's three scopes (machine, global, project) with session limits as a machine setting: re-decided
+  by TD-336.
+- TD-105's global limit (default 4) capping the per-project one: replaced by TD-336's machine-only
+  limit with the per-project limit layered.
+
+#### C-10 Test preparation
+
+**Members:** TD-60 (`decided`), TD-65 (`autonomous`), TD-80 (`decided`), TD-92 (`decided`), TD-96 (`decided`),
+TD-107 (`decided`), TD-118 (`decided`), TD-119 (`decided`), TD-120 (`decided`), TD-121 (`decided`),
+TD-130 (`decided`), TD-349 (`decided`).
+
+**In force:**
+
+- Three tiers: dev (the Change's worktree), test, live; Delivery's checks never touch live (TD-60, TD-96).
+- Test is a copy of live running the Change's code. Projects declare preparation options like launch
+  recipes: live copy, live copy plus added test data, or test data only, each with export and restore,
+  masking, isolation and cleanup. The preparer picks one, Delivery validates and runs it; one frozen
+  snapshot is restored separately for the before and the after capture (TD-96).
+- The owner's standing per-project permissions cover data classes, keys, isolation and retention; with
+  no safe option Delivery asks or blocks. Live-copy recipes are built now (TD-96).
+- Every project declares at least one preparation option before a check launches; without one Delivery
+  asks. The sandbox has the data-only option `none` (TD-120).
+- A data-only preparation that copies no data classes may declare no isolation (TD-121).
+- Each live-copy preparation declares its live resource identities; Delivery refuses a test environment
+  that names any of them; restore, seed, cleanup and the check launch run with an explicit environment
+  built only from declared variables, never the inherited one; export and masking run only declared,
+  committed scripts (TD-118).
+- Preparation options and data permissions are project-only; the global settings layer refuses them
+  (TD-130).
+- Agents keep allow-all (TD-82) and may write the project settings that hold preparation permissions
+  (TD-119).
+- Check preparation has its own role, `preparer`, default `claude-haiku-5.5` at the default tier, effort
+  `low` (kept after the 2026-10-14 benchmark). A later check reuses the recipe that last launched; an
+  agent prepares again only after a launch fails (TD-80).
+- The preparer has its own agent file (TD-106) and edits only test-system setup files: fixtures, seed and
+  preparation scripts, test configuration; its edits are discarded after the check and never become
+  Change code (TD-107).
+
+**Owner's words:**
+
+- TD-60: "we should adopt a three tier model of dev, test, live system/repo"
+- TD-80: "own role default haiku 5.5"
+- TD-92: chosen without a quote (decided in the decision session of 2026-10-14)
+- TD-96: "but its not something i decide but that is decided by an agent"
+- TD-107: "B"
+- TD-118: "A: declared live identities + explicit test environment"
+- TD-119: "B: keep allow-all"
+- TD-120: "A: require an option; add 'none' for the sandbox"
+- TD-121: "Allow empty isolation for data-only without data classes"
+- TD-130: "Keep project-only"
+- TD-349: "TD-92 becomes history"
+
+**Replaced:**
+
+- TD-60's "click and type steps run only on seeded test data (fixtures), never on live data or a live
+  snapshot": replaced by TD-96.
+- TD-65's seed command in the project settings, run before the "before" and the "after" capture, with
+  only static states without one: replaced by TD-96's declared options and frozen snapshot.
+- The sandbox's seed command (`true`, TD-92): replaced by TD-120's option `none` (TD-349).
+- TD-92's overnight choices: history, built or done once; its guard replaced by TD-82 (TD-349).
+- TD-80's "effort to be benchmarked": settled by the benchmark recorded in its origin (`low` kept).
+
+#### C-11 Visual checks
+
+**Members:** TD-14 (`decided`), TD-24 (`decided`), TD-38 (`decided`), TD-40 (`decided`), TD-49 (`decided`),
+TD-51 (`decided`), TD-77 (`decided`), TD-78 (`decided`), TD-79 (`decided`), TD-91 (`decided`).
+
+**In force:**
+
+- UI changes always get visual testing of design and layout. The agent's visual check is enough for the
+  automatic merge, except when the agent is unsure or the brief declares a person-only check: then the merge
+  waits until the owner has looked. The owner can always look at any screenshot on the card without anything
+  waiting [TD-14].
+- Before and after screenshots are captured and shown to the owner without interrupting the run, so he can
+  intervene or simply see the difference [TD-24, TD-38].
+- "Before" is part of shaping: once a Change is known to alter a page, shaping establishes the render recipe,
+  captures the current pages from the target and writes the visual states against them; approval waits until
+  that capture has finished [TD-38].
+- The comparison is per Change, not per task. If the target's UI paths changed since the shaping capture,
+  "before" is retaken at the visual check from the new starting point; the shaping set stays the design
+  reference [TD-38].
+- Every preview run gets a free port chosen by Delivery; recipes take the port as a placeholder [TD-40].
+- Delivery captures each UI state itself with a headless browser, at the configured desktop widths; a state
+  may contain simple steps such as clicks or typing before the screenshot; the reviewer judges images and
+  errors [TD-49].
+- The capture collects console errors, and page errors (uncaught exceptions) count as console errors: new ones
+  since "before" fail the check, existing ones are reported [TD-49, TD-51].
+- The detector's findings are evidence for the judges, never a fail on their own [TD-77].
+- Two judges, correctness and design, judge every visual review in parallel; no "another verdict" button. A
+  correctness fail goes back to the build automatically. A design fail goes back or to the owner, by a setting
+  with two values that a project may override; its default `ask` is `autonomous` [TD-78].
+- The correctness judge checks every expectation clause of a visual state and names its visible evidence;
+  hidden attributes and passing tests do not count; `unsure` when the owner's intent is unclear. Shaping
+  writes expectations as visible statements [TD-91].
+- The owner decides on one page: screenshot comparison, both verdicts, then Pass or Fail, with each verdict's
+  findings as checkboxes and an optional comment. Fail needs a finding or a comment, and its comment becomes a
+  criterion of the next visual review; a Pass comment is kept as a note [TD-79]. Such a page comment is taken
+  as written; one that contradicts the approved brief is held for the owner, never applied [TD-340].
+- The visual review of the screenshots is one of Delivery's three reviews [TD-74].
+
+**Owner's words:**
+
+- TD-14: "there needs to always be visual testing regarding design and layout"
+- TD-24: "screenshots of the before/after are created and presented to the user. this does not interrupt the
+  process"
+- TD-38: "1: agree"
+- TD-40: "3 is confiremd option 3 now"
+- TD-49: "As the first, plus: a task can add 'browser use' for the reviewer, to explore in a window beyond the
+  states (console there untested)"
+- TD-51: "Page errors count as console errors: new ones fail, existing ones are reported"
+- TD-77: "evidence for the judges"
+- TD-78: "can we make it configurable if design failures go back automatically?"
+- TD-79: "you pass/fail recommendation"
+- TD-91: "Also shaping hint for visible expectations"
+
+**Replaced:**
+
+- The charter's "before" capture "before the first build task": replaced by TD-38's shaping capture.
+- Charter §3.10's "desktop and phone sizes": amended by TD-49 to the configured desktop widths.
+- TD-49's "a task can add the tool category 'browser use' for the reviewer, to explore in a window beyond the
+  states": re-decided by TD-343; a step gets exactly its agent file's tools, nothing is added per task.
+
+#### C-12 Review loops and rounds
+
+**Members:** TD-71 (`decided`), TD-74 (`decided`), TD-123 (`decided`), TD-124 (`decided`), TD-175 (`decided`),
+TD-176 (`decided`), TD-187 (`autonomous`), TD-189 (`autonomous`), TD-190 (`decided`), TD-193 (`decided`),
+TD-205 (`autonomous`), TD-207 (`autonomous`), TD-208 (`decided`), TD-209 (`decided`), TD-211 (`autonomous`),
+TD-212 (`decided`), TD-213 (`autonomous`), TD-215 (`decided`), TD-218 (`autonomous`), TD-219 (`decided`),
+TD-220 (`decided`), TD-233 (`autonomous`), TD-235 (`decided`), TD-237 (`autonomous`), TD-253 (`autonomous`),
+TD-322 (`autonomous`), TD-323 (`decided`), TD-330 (`decided`), TD-331 (`decided`), TD-332 (`decided`),
+TD-380 (`autonomous`).
+
+**In force:**
+
+- Three reviews: after each task's build, at the end of a Change, and the visual review of the screenshots;
+  other judgements are most probably challenges, and Delivery does not keep what challengers and subagents
+  judge (their sessions inside a step stay rerun-only). Reviews count per task and Change: a task's last
+  repair is covered by the final review, the final loop's last repair by CI and the pull request
+  [TD-71, TD-74, TD-332].
+- One shared round module serves the builder's task and final reviews, the planner and the pack updater; the
+  shaper's brief challenge uses it too. Values per role, as settings: `max rounds` 3, `max findings` 10 new
+  per round (more are refused), `last round at` 4, `ask owner at` 7; the final review uses the builder's
+  values unless its own are set [TD-209, TD-211, TD-213, TD-220, TD-221].
+- A loop runs at most `max rounds` per subject (a task with its repairs; the final review; a plan; a pack
+  update); repairs, progress and failures never reset the count. Round 1 judges the work. From round 2 the
+  challenger gets the previous round's rejected findings and no other earlier findings, judges each rejection
+  acceptable (it stands) or not (the owner decides it before the repair), and looks for new findings; finding
+  IDs stay the same [TD-208, TD-323, TD-330].
+- A worker's reasoned rejection is rechecked independently before the owner is asked: one fresh-session
+  recheck, counted separately from repair rounds; if upheld, the owner is asked [TD-124, TD-176, TD-330].
+- A round with `last round at` or fewer new findings is the last. A loop's final round, ended early or at the
+  maximum, gets one rejections-only check outside the round count that looks for no new findings (it answers
+  `pass`); a rejection the challenger does not accept goes to the owner [TD-208, TD-233, TD-330].
+- After the last round the worker still repairs, unreviewed; the Change page lists the standing rejections
+  and unreviewed repairs. Only at `max rounds` with `ask owner at` or more new findings is the owner shown
+  that round's findings, each with what became of it, and chooses another round or to reject and retry the
+  work; judgements of earlier rejections count toward neither cap nor thresholds [TD-208, TD-233].
+- Repairs: the producing session gets one repair chance, a fresh session takes over when a substantive
+  finding survives it (plan challenge and pack updater: same session first; final review: a new session,
+  then that session once more). If it cannot be resumed, a fresh session takes the chance, recorded, budgets
+  unchanged. A fresh session gets Delivery's own records (build summary, changed paths, at most 2,000
+  characters), never the transcript [TD-123, TD-175, TD-187, TD-322].
+- The planner may reject plan-challenge findings with reasons, the same way as the builder and the pack
+  updater [TD-190, TD-220].
+- For a rejection a fresh reviewer upheld, the owner chooses per finding: Fix it (optional note within the
+  approved brief), Ask the reviewer to reconsider (note required; it may withdraw or clarify, never enlarge;
+  once per finding; never a round) or Drop it (optional reason; raised again only with new evidence). A note
+  contradicting a criterion or non-goal is held, a drop never waives a criterion; after Fix it the builder
+  may report a wrong premise but not reargue; no "pause" option [TD-193, TD-219].
+- A reconsideration runs inside the disputed review's completion; a finding comes back unsure only once,
+  then with Fix it or Drop it only; the owner's note travels whole on the repair task; a build with an
+  owner-decided finding always commits; dropped findings with reasons reach only reviews outside a loop
+  [TD-205, TD-323]. A fresh reviewer receives the finding, the builder's reason, the recheck and the owner's
+  note; enlarged, contradictory or unsure findings return to the owner. A failed reconsideration session is
+  the step's result, retried or stopped normally. Notes travel whole, per finding key, in `Task.notes`, not
+  the finding line. Owner questions are per finding, answers carried out together; dropped findings have no
+  10-finding cap [TD-193, TD-205].
+- Planner: the options read Revise the plan for it, Ask the challenger to reconsider, Drop it; the last round
+  offers Another round or Plan again from the brief; the plan is stored before its challenge; a challenger's
+  wrong premise counts as a finding; an accepted plan moves the old plan's task loops into history [TD-253].
+  The retried planner receives the owner's rejection and that round's findings, not the old plan. The plan
+  and its revision marks are stored before challenge; an interrupted or failed challenge retries that same
+  plan. Leaving planning ends its attempt; later planning starts a new attempt with the same values.
+  Questions settle only while open; an upheld rejection whose question a stop replaced is asked again before
+  planning [TD-253].
+- A task's loop starts at its first build; a new attempt keeps the pinned values; a retried head is archived
+  locally and undone by one revert commit, and a blocked undo asks for another round or a pause [TD-233].
+  A task already built before TD-208 keeps the earlier rules to its end. The old attempt's repairs retire.
+  Undo runs in a scratch worktree and is fast-forwarded with repository hooks running normally; uncommitted
+  edits, a revert conflict or another task's build inside the attempt stop it [TD-233].
+- The final loop starts only in a Change without an earlier final review; a final repair is reviewed by the
+  next final round; the completion record stands for equal trees under the same criterion versions [TD-237].
+  A Change with an earlier final review keeps the old rules. A final repair is marked `fixes: "final"` and is
+  done once built. A full final round counts every earlier unreviewed repair as reviewed. Rejected findings
+  from person-check, visual-check and pre-push-hook repairs get a rejections-only check before the final
+  round [TD-237].
+- Work added to reviewed work is never reviewed twice. A later fix (CI, PR comment, merge of main,
+  person-check, visual-check or pre-push hook repair) reopens the final loop with one round beyond
+  `max rounds` per addition, judging the former last round's unjudged rejections and reviewing the Change
+  focused on the new commits, not blind to the rest; then the normal end rules apply. Work added to a task
+  under review goes to its next round [TD-215, TD-235, TD-237, TD-331].
+- Only the owner escalates a big addition, with the "restart review loop" button: a new loop that retires
+  every open question and the merge consent [TD-215, TD-235, TD-237]. Restart is offered at final review,
+  publishing, following the PR, person checks, merge consent and a final repair's build; it is refused while
+  stopped, running a check environment, merging or running a step. Merge consent counts only while the
+  Change waits for it [TD-237].
+
+**Owner's words:**
+
+- TD-71: "no we dont keep what challenger and subagent judge, as these are not reviews, those are challenges"
+- TD-74: "agree theres a review for each task build and at the end of a change"
+- TD-123: "Sol's modified C, per loop as listed"
+- TD-124: "Independent recheck first, then ask me"
+- TD-175: "Fresh session with the old session's transcript summary attached; recorded; budgets unchanged"
+- TD-176: "One fresh-session recheck; counted separately; if upheld, I'm asked"
+- TD-190: "Build the planner's rejections next, the same way"
+- TD-193: "Sol's three without Pause …"
+- TD-208: "i dont want round 3 rejections to go to me … we only do three rounds"
+- TD-209: "3/10/4/7"
+- TD-212: "postponed"
+- TD-215: "also possible for the user to just restart the loop via button"
+- TD-219: "Keep it as built; it runs only when you pick it and never counts as a round"
+- TD-220: "All three now, inside the current TD-208 build"
+- TD-235: "what i def dont want is two different review/challenge rounds for the same work"
+- TD-323: "As built: loop reviewers judge rejections only; dropped findings reach reviews outside a loop"
+- TD-330: "td218 is bs. 124 and 176 generally stand"
+- TD-331: "Each later addition gets one round beyond the maximum, as built"
+- TD-332: "TD-74 counts reviews per task and Change"
+
+**Replaced:**
+
+- TD-175's transcript summary for the fresh session: replaced by TD-187's records (TD-322).
+- TD-189 as built (rechecks in rounds 1 and 2, round-2 repeats, round 3+ rejections to the owner): TD-208.
+- TD-207's round gate (Fix builds the pending repair, Accept leaves it out) and TD-193's "Fix it passes the
+  round gate once": TD-208, TD-219.
+- TD-218's session judging an early-ended round's rejections in the next round's slot, last allowed round's
+  rejections unjudged: replaced by TD-330.
+- TD-233's "challenged task reviews get no earlier findings at all": corrected by TD-323.
+- TD-193's drop reason "shown to later reviewers": now only reviews outside a loop (TD-323).
+- TD-212's postponements: resolved by TD-218 (now TD-330), TD-219, TD-220 and TD-236.
+- TD-237's interim question after the last final round (Another round, Accept as done): TD-245's step 4.
+- TD-71's open point whether the visual review counts as a review: settled by TD-74.
+- TD-205's "a recheck may not name a repeat and a verdict at once": history with TD-189's repeats, which
+  TD-208 replaced (TD-380).
+
+#### C-13 Retry and Accept as done
+
+**Members:** TD-210 (`decided`), TD-214 (`decided`), TD-216 (`decided`), TD-217 (`decided`),
+TD-245 (`autonomous`), TD-246 (`autonomous`), TD-252 (`autonomous`), TD-324 (`autonomous`),
+TD-341 (`decided`).
+
+**In force:**
+
+- "Reject the work and retry it": a task is rebuilt by a fresh builder from its plan entry; for the final
+  review the owner picks the tasks to rebuild or a new plan from the brief; a plan is planned again from the
+  brief; the rejected attempt is archived on a branch, never deleted [TD-210].
+- A retry of published work keeps the same PR: Delivery adds commits that undo the rejected work and rebuild
+  it, never force [TD-214].
+- Every final-review finding names the plan task it belongs to (several allowed; none only with a reason), so
+  a retry can point at tasks; no extra agent [TD-216].
+- The final review's retry list shows the plan's tasks with a checkbox, ticked = rebuild; the button reads
+  "Rebuild N tasks" and, with none ticked, "Accept as done": the review completes, the remaining findings stay
+  recorded as accepted by the owner, the Change goes on to publishing. Tasks with a red marker start ticked
+  (`autonomous`) [TD-217].
+- "Accept as done" names in its confirmation the criteria the remaining findings report unmet; confirming
+  accepts them as the owner's decision [TD-341].
+- The final question offers Rebuild the ticked tasks, Accept as done, Another round, and Plan again from the
+  brief on the existing code or from a clean state, chosen each time; a clean state is one commit back to the
+  target's tree at the merge base [TD-217, TD-245].
+- A rebuild's answer binds to the question, the loop attempt and the head; the whole selection is checked.
+  Every build session records its commit span; an undo takes only what the ticked tasks' sessions made (with
+  their task-loop repairs and each final repair whose findings name only ticked tasks of the current plan) and stops on an unknown
+  span or a final repair of both rebuilt and kept work. The undo's start head is recorded before it is
+  promoted, so a restart never repeats it; the task retry uses the same spans and start record [TD-245].
+- Planning again starts a new final-loop attempt and marks the old one `replanned`; a rebuild ends the final
+  loop `retried` and it reopens with one round [TD-245].
+- A rebuilt task a kept task may depend on (shared files) shows a warning beside the kept task, above the
+  button and in the popup (`autonomous`) [TD-217].
+- After a rebuild the last rebuilt task's builder runs its own and each kept task's checks, each from its
+  task's own package (a report from one package never counts for another), and fixes any failure before its
+  result is accepted; that task's review rounds review the fix; CI on the pull request is the second net
+  [TD-246, TD-324].
+- Markers beside each task show its rounds with findings, task review and final review apart, the loop's last
+  round bold, in the most urgent colour: red = open (fix agreed, not implemented; rejection the challenger did
+  not accept), yellow = unverified (fix reported, not re-reviewed; rejection never judged), grey = settled
+  (verified; rejection accepted; dropped; withdrawn) [TD-217].
+- A marker reads `R<round> · <count> <kind>`, where the count is that round's findings of its most urgent
+  kind, with the PDS icon of that kind; a fix is verified once a full
+  round ran after its repair (a rejections-only check is no full round); markers show in the Plan section and
+  beside the retry question's tasks, for each loop's current attempt only [TD-252].
+- A "Finding details" toggle (keyboard and touch, no hover) names per round and per line its loop; a "Review
+  rounds" section lists the final review's markers, the unreviewed repairs and the standing rejections; the
+  settings page has a "Challenge rounds" group for task reviews (builder) and the final review
+  [TD-217, TD-252].
+
+**Owner's words:**
+
+- TD-210: chosen without a quote (chose the first option)
+- TD-214: "Keep the same PR …"
+- TD-216: "include this in the challenger for the reviewer, that it always names the task that is attached
+  to a finding"
+- TD-217: "tick = rebuild … not disabled at zero: why not keep everything?"
+- TD-341: "Accept as done names the unmet criteria in its confirmation; confirming accepts them as your
+  decision"
+
+**Replaced:**
+
+- TD-217's "after the rebuild the kept tasks' checks run again and a failure comes back as a finding":
+  replaced by TD-246 (TD-324).
+
+#### C-14 Brief, approval and amendments
+
+**Members:** TD-73 (`decided`), TD-122 (`decided`), TD-179 (`decided`), TD-181 (`decided`),
+TD-185 (`decided`), TD-221 (`decided`), TD-236 (`decided`), TD-249 (`decided`), TD-254 (`autonomous`),
+TD-255 (`decided`).
+
+**In force:**
+
+- The brief review is a challenge, not a review, named "brief challenge" [TD-73].
+- The brief is challenged in the shaping chat before approval: the shaper revises on findings it accepts and
+  may reject others with reasons, under TD-208 with the shaper's own values; the owner approves the challenged
+  draft seeing its standing rejections; there is no challenge after approval [TD-221].
+- "Designer" in the owner's words meant this shaping of the brief, not the UI design judge; nothing new is
+  added [TD-236].
+- The shaper requests the challenge once the draft is ready, with a chat tool naming the saved version and its
+  rejections; the host checks and records it under the Change's lock, and the tool waits for the verdict by
+  reading the Change [TD-249, TD-254].
+- The approve button stays off until the current brief version has been challenged [TD-249]. Exception: the
+  shaper's revision after the last round, which no challenger judged, may be approved only if the owner ticks
+  in the approve dialog that he accepts that unreviewed revision; the approve route refuses it without the
+  tick [TD-255].
+- Saves are refused while a challenge runs or the owner decides; a later save adds one round on the changes;
+  the last round's retry for a brief is "Shape the brief again" (a new attempt, the shaper told why); a Change
+  the old flow approved before its challenge gets it and plans once its loop ends there [TD-254].
+- Approval view: the owner approves the outcome, his decisions (question, answer, origin) and the non-goals, open; criteria, visual and
+  person checks sit collapsed under technical details. The page is redesigned for structure and spacing, and
+  Sol challenges the design before it is built [TD-122, TD-179].
+- Levels by origin, not by field: the owner's direct choices anywhere are `decided`, generated items included
+  in the approval are `approved`, later implementation choices are `autonomous`; authorship and current
+  authority are both recorded [TD-179].
+- Approve is a bounded delegation: the dialog says it authorises the work and intent-preserving changes, not
+  new product commitments [TD-179].
+- "Weaker" means "what could now pass that failed before?", judged cumulatively against the approved intent.
+  Only equivalent fixes: a redundant or over-specific generated check may be replaced when independent
+  evidence shows equal coverage, else the owner is asked; tightening is checked for scope and cost; a check
+  never changes because the build fails [TD-179].
+- Anyone proposes, the artifact's owner prepares, an independent challenger judges the exact change; doubt
+  about intent goes to the owner. Existing loops and limits apply, changes batched per challenge [TD-179].
+- Scope of amendments: criteria, UI flag, visual states, person checks, constraints, assumptions; plan tasks
+  and test commands stay autonomous [TD-179].
+- The approved baseline is kept; every later change is listed (old → new, reason, level, challenger); an
+  objection pauses dependent work; undo is promised only where possible [TD-179].
+- The page part (rules 1, 2, 7 and the rule-8 list) and the amendment engine (rules 3–6) are separate items
+  [TD-181]. The amendment flow gets one end-to-end design (a worker proposes, the owner decides, what the work
+  does meanwhile, applying, undo) before more amendment code; until then the built part (proposal, challenge,
+  record, nothing applied) stays as is [TD-185].
+
+**Owner's words:**
+
+- TD-73: "for me it feels like a challenge"
+- TD-122: "challenge the design with sol before giving it into implementation"
+- TD-179: "we already have a three level hardness for decisions … transport this same system to this"
+- TD-181: "Tonight: page (rules 1, 2, 7, 8 display) in item 5"
+- TD-185: "this needs to be designed end to end, not as this tiny part"
+- TD-221: "option 2 (brief is challenged before approval)"
+- TD-236: "'Designer' meant the shaping of the brief (already TD-221), not the UI judge"
+- TD-249: "The shaper requests the challenge once the draft is ready"
+- TD-255: "Approvable, but the approve dialog makes me tick that I accept the unreviewed last revision"
+
+**Replaced:**
+
+- TD-249's "approve button stays off until the current version has been challenged" for the last round's
+  revision: re-decided by TD-255.
+
+**Open:**
+
+- The end-to-end amendment design (TD-185), with its known gap: a builder's or reviewer's proposal sends the
+  Change back to planning against the unchanged brief.
+
+#### C-15 Design pack update
+
+**Members:** TD-76 (`decided`), TD-101 (`decided`), TD-125 (`decided`), TD-177 (`decided`),
+TD-194 (`decided`), TD-256 (`decided`), TD-270 (`autonomous`), TD-273 (`autonomous`),
+TD-290 (`autonomous`), TD-325 (`decided`), TD-357 (`decided`), TD-368 (`decided`), TD-381 (`autonomous`).
+
+**In force:**
+
+- Impeccable is extracted once into Delivery's own design skill, not installed [TD-76, TD-101].
+- An update button runs the whole update of detector and skills together, with the existing checks
+  (diff, golden pages, calibration replay) and a challenger that checks the whole pack; design-pack
+  updates sit in Settings [TD-101, TD-113].
+- A writing updater session with its own role in Settings does the update; its findings follow TD-123
+  (pack updater: same session first) [TD-125].
+- The updater may change anything in its candidate copy (skills, pins, the detector code); it writes
+  only in its own folder and runs no shell; upstream's skill text is read at the pinned commit
+  [TD-194, TD-273].
+- Affected checks rerun after its edits; changing expected evidence (golden expectations, calibration)
+  asks the owner [TD-177].
+- The challenger checks each change is needed by the upgrade and asks the owner when unsure, with every
+  changed file and one line per file on what changed and why it is suspicious [TD-194].
+- The challenge rounds follow TD-208, with one loop per run using the updater's values. The run's context,
+  loop and questions persist in its state file across restarts. Every final round gets a rejections-only
+  check outside the round count, looking for no new findings. An upheld rejection is asked on the Settings
+  page with TD-193's three options; the run continues once all are answered. Dropped findings and the
+  owner's reasons reach only reviews outside a loop [TD-220, TD-273, TD-323, TD-330].
+- Any end without a pass stops before activating and asks the owner on the pack page: "Activate the
+  unreviewed repair" or "Discard the update", with TD-208's "Another round" first only when the last
+  allowed round found `ask owner at` or more; "Discard the update" is offered whenever the run waits
+  [TD-256, TD-273].
+- The manifest is written with `json.dumps` in the same key order and indent, during TD-208 step 7
+  [TD-270].
+- Activation is the merge: the update always opens a pull request; the pack takes effect when it merges
+  and machines take the version; the challenger's pass, the owner's approval of detector code changes
+  (with the changed-file list) and his word on an unreviewed repair gate the pull request
+  [TD-194, TD-256, TD-302, TD-357].
+- Activation publishes only the pack identity the last full round passed or the owner was asked about;
+  the package's manifest, notice and skills stay as at the start: a run whose package skill changed
+  meanwhile stops [TD-273, TD-357, TD-381].
+- Its pull request gets the labels OwlBear adds to every pull request it opens and becomes a version as
+  they say [TD-307, TD-308].
+- One design pack update runs at a time on the machine; every project's pack page shows the running
+  update and its stages, naming the project that started it [TD-290].
+- An update the owner starts runs at once, also while paused, and end to end: it commits, opens its pull
+  request, waits for CI and merges it itself once CI passes, paused or not; a failure stops it and asks
+  the owner. Started while paused, this machine then takes the new version at once, whatever "Update
+  while paused" says [TD-287, TD-325, TD-368].
+
+**Owner's words:**
+
+- TD-76: "extract"
+- TD-101: "extract once, have a button that updates it"
+- TD-125: "shouldnt the challenger return the result to the updater and the updater implements them"
+- TD-177: "Pack source, skills and needed adapter repairs; affected checks rerun; changing expected
+  evidence (golden, calibration) asks me"
+- TD-194: "a code change waits for your approval"
+- TD-256: "Stop before activating and ask me on the pack page: activate the unreviewed repair, or discard
+  the update"
+- TD-325: "it runs fully end to end, including merge"
+- TD-357: "Activation is the merge"
+- TD-368: "It merges itself once CI passes, paused or not"
+
+**Replaced:**
+
+- TD-76's regular update by a structured plan: replaced by TD-101's extract-once and update button.
+- TD-101's and TD-125's push once the challenger passes: replaced by a pull request (TD-302) whose merge
+  is the activation (TD-357).
+- TD-177's limit to pack source, skills and needed adapter repairs: replaced by TD-194 (anything in its
+  candidate copy).
+- TD-194's skills and pins activating when the challenger passes, and TD-273's activation as a commit
+  the runtime pushes: replaced by TD-357 (they gate the pull request; activation is the merge).
+- TD-302's "a design pack update ... becomes a minor version": replaced by TD-307 (a version as its
+  labels say).
+
+#### C-16 Versions, labels and release
+
+**Members:** TD-240 (`autonomous`), TD-298 (`decided`), TD-302 (`decided`), TD-306 (`decided`),
+TD-307 (`decided`), TD-308 (`decided`), TD-310 (`decided`), TD-314 (`autonomous`),
+TD-315 (`autonomous`), TD-354 (`decided`), TD-355 (`decided`), TD-356 (`decided`).
+
+**In force:**
+
+- Tags are versions; "stable" means major versions only, the channel for those afraid of a broken
+  build [TD-354].
+- A merge to `main` of OwlBear's own repository becomes a version only by its pull request's label:
+  `release:minor` makes the next minor version, `release:major` the next major version; a pull request
+  with neither label, even a forgotten one, makes none; one with both makes a major version
+  [TD-306, TD-356].
+- A workflow makes the tag once that merge commit's own CI passes [TD-302, TD-306].
+- No label is checked or protected; no CI check asks for or checks a label [TD-306, TD-307].
+- Minor versions may be unproven; `release:major` alone makes a major version, with no release by hand;
+  testing a minor version first is the owner's, nothing checks it [TD-302, TD-307, TD-355].
+- The release workflow merges in dry run: it reports the tags it would make and makes none until the
+  owner switches it on after one correct report [TD-315].
+- A global setting lists the labels OwlBear adds to every pull request it opens (Delivery's and the
+  design pack update's); a project may replace the list whole (TD-243); empty at first; OwlBear's own
+  project sets `release:minor` [TD-308].
+- A project switch leaves out the line "Opened by OwlBear Delivery for …" in the pull request's text
+  [TD-308].
+- A design pack update's pull request gets those labels and becomes a version as they say [TD-307].
+- Renovate's configuration sets no release label; the owner adds `release:minor` or `release:major` by
+  hand to a dependency pull request he wants released; others reach machines with the next labelled
+  merge [TD-310].
+- Pull requests the lead opens from a chat in OwlBear's repository get `release:minor` when they change
+  runtime code, no release label when they change only docs or tests, and `release:major` only on the
+  owner's word [TD-314].
+
+**Owner's words:**
+
+- TD-298: "No count or days: green CI and one finished Change, then it asks you"
+- TD-302: "i see no problem in setting tags for unproven versions, as long as these are minor versions"
+- TD-306: "nl label is the same as release:none, even if it a=was just forgotten"
+- TD-307: "this is defending against an imaginary but nonexistent attacker"
+- TD-308: "projects can use this to mark a pr from owlbear to whatever it likes"
+- TD-310: "4. No label in config; you label by hand when you want it released"
+- TD-354: "Call them versions; 'stable' means major versions only"
+- TD-355: "release:major alone makes a major version; testing a minor first is yours, nothing checks it"
+- TD-356: "Major wins"
+
+**Replaced:**
+
+- TD-240's stable tag from recorded evidence (CI, N Changes, no Delivery defect, D days), the owner's
+  approval in the UI and urgent fixes on request: conditions re-decided by TD-298, then evidence and
+  proposal superseded by TD-302.
+- TD-298's proposal after green CI and one finished Change: replaced by TD-302.
+- TD-302's default that every merge to `main` is the next minor version: replaced by TD-306 (labels
+  only).
+- TD-302's "a pack update is always a new minor version": replaced by TD-307.
+- TD-302's major version released by hand after a minor version was tested: replaced by TD-307 and
+  TD-355.
+
+#### C-17 Runtime and self-update
+
+**Members:** TD-239 (`decided`), TD-247 (`autonomous`), TD-289 (`decided`), TD-296 (`autonomous`),
+TD-297 (`decided`), TD-299 (`decided`), TD-300 (`decided`), TD-301 (`decided`), TD-305 (`autonomous`),
+TD-309 (`autonomous`), TD-352 (`decided`), TD-353 (`decided`), TD-369 (`decided`).
+
+**In force:**
+
+- Projects run one OwlBear runtime per machine in `~/.owlbear` (`~/.owlbear/runtime`), never a developer
+  checkout [TD-239, TD-247].
+- No machine follows `main`; one machine setting chooses every minor version or only major versions,
+  minor at first; the runtime updates itself to the newest version of that choice [TD-239, TD-300,
+  TD-354].
+- It never moves backwards on its own [TD-239].
+- TD-297 records the initial annotated, pushed tag `v0.1` at `main` commit `8ebc00afe`. No real project
+  may use OwlBear before the watcher exists, including for SDK steps [TD-297, TD-338].
+- A machine set to major versions only starts at the newest major; until `v1.0` exists that is `v0.1`
+  [TD-369].
+- Idle for a self-update: no agent step, check environment or design pack update runs in any project,
+  no page or chat was used for 15 minutes, and open pages announce the update 2 minutes ahead with
+  Postpone [TD-301].
+- Machine settings Update when idle and Update while paused, both on at first; OwlBear updates itself
+  when idle, also while paused; with Update while paused off, no automatic update starts while paused
+  and the owner's Run updates now still updates [TD-288, TD-352].
+- Run updates now skips the 15 minutes without use and the announcement, and waits for running steps,
+  check environments and pack updates to end [TD-353].
+- A design pack update the owner starts while paused makes this machine take the new version at once,
+  whatever "Update while paused" says [TD-325].
+- A self-update installs each version beside the running runtime and switches once the new version
+  answered in a standby without projects; otherwise the old one keeps running and the owner is told
+  [TD-296, TD-305].
+- A failure while it loads projects after the switch is repaired forward: OwlBear restarts the new
+  version once and tells the owner, never returning to the old one [TD-305].
+- After an update, Delivery comes back as it was (running stays running, paused stays paused), and the
+  page tells the owner once which version it now runs [TD-299, TD-350].
+- Until self-update is built: after each merge, the lead stops the machine host (running steps finish on
+  their own), updates the runtime with `uv sync --locked` and starts it with its pre-update running or
+  paused state; Resume is needed only to leave a paused state [TD-289, TD-299, TD-309, TD-350].
+- A merge to `main` from the owner's other sessions needs no review by the deploying session; when a
+  deploy includes a merge the deploying session did not make, it tells the owner which [TD-309].
+
+**Owner's words:**
+
+- TD-239: "runtime in .owlbear, auto-update to newest tag when idle, but has option in settings to
+  update to current commit"
+- TD-289: "After each Sol-accepted merge, stop, update, start and press Resume myself, as I did"
+- TD-297: "Create and push the annotated tag v0.1 at 8ebc00afe now"
+- TD-299: "As it was, and the page tells you once which version it now runs"
+- TD-300: "never track main"
+- TD-301: "Nothing runs, no page or chat used for 15 minutes, and open pages announce it 2 minutes ahead
+  with Postpone"
+- TD-352: "your button still updates (TD-304 folded in)"
+- TD-353: "It skips the 15 minutes and the announcement, and waits for running steps, environments and
+  pack updates to end"
+- TD-369: "A major-only machine starts at the newest major; until v1.0 exists that is v0.1"
+
+**Replaced:**
+
+- TD-239's machine setting "Track main": replaced by TD-300 (never track main; minor or major).
+- TD-239's "newest stable-version tag" and TD-297's "first stable version": TD-354 makes tags versions
+  and "stable" major versions only; the channel is TD-300's setting.
+- TD-239's open points (settings and one UI for all projects; what creates a stable tag): answered by
+  TD-241 and TD-242, and by TD-302 and TD-306.
+- TD-247's move "tonight" to each later Sol-accepted commit while no sandbox host runs: superseded by
+  TD-289.
+- TD-289's Sol acceptance for every deployed merge: merges from the owner's other sessions need none
+  (TD-309).
+- TD-296's switch once the new runtime "started and answered" and never moving back "because it never
+  left": amended by TD-305 (standby without projects; later failures repaired forward).
+- TD-289's unconditional Resume after each deploy start: replaced by TD-350 (start comes back as it was).
+
+#### C-18 Pause, stop and resume
+
+**Members:** TD-259 (`decided`), TD-282 (`autonomous`), TD-283 (`autonomous`), TD-284 (`autonomous`),
+TD-287 (`decided`), TD-288 (`decided`), TD-303 (`autonomous`), TD-304 (`autonomous`),
+TD-313 (`autonomous`), TD-350 (`decided`), TD-351 (`decided`).
+
+**In force:**
+
+- OwlBear starts paused only at the login item's start and on any start after a crash; `owlbear start`
+  from stopped runs; `owlbear restart` keeps the state it had; a `--paused` option starts paused on
+  purpose; an update comes back as it was [TD-350, TD-299].
+- While paused, Delivery continues no Change by itself until the owner presses Resume in the UI, which
+  shows how many Changes would continue; opening the UI or a chat grants nothing [TD-259, TD-350].
+- The pause holds Delivery's automatic work on Changes; the owner's own actions and the listed
+  maintenance run [TD-351, TD-287].
+- While paused, everything the owner triggers runs at once: settings, memory, folder rename, a design
+  pack update, cleanups and other maintenance; maintenance OwlBear starts itself also runs; New Change
+  opens and starts its shaping session [TD-287].
+- A Change's cleanup runs in full while paused, including deleting branches, closing pull requests and
+  pulling back. Publishing and merging that Delivery starts itself wait for Resume; a design pack update
+  the owner starts runs end to end, including its merge (C-15) [TD-303, TD-325, TD-351].
+- Before Resume, the owner's answers and approvals take effect at once and show as answered; Delivery's
+  automatic work on Changes resulting from them waits for Resume. The owner's own actions and the listed
+  maintenance run [TD-283, TD-351].
+- Pause or Abandon on a Change whose PR is in the merge queue tries at once, before Resume, to take the
+  PR out of the queue; GitHub may still merge it first [TD-284].
+- Stopping or restarting Delivery while an agent step runs: the agent keeps running until its step
+  ends, its result is recorded and the step shows as finishing [TD-282].
+- The pause is shown prominently at the top of every page (with Resume), never by pausing each Change
+  [TD-287].
+- The pause banner offers Resume and Run updates now; Run updates now also runs pending maintenance and
+  is enabled only once no step from before the pause still runs, otherwise disabled with the reason
+  shown [TD-288].
+- A global Pause button and a separate "Pause and stop when idle" button (no new work; it waits for
+  every project's running steps, then stops OwlBear, for shutting the computer down); their tooltips
+  say that a plain Pause may still update [TD-288].
+- With Update while paused off, "Pause and stop when idle" is hidden and no automatic update starts
+  while paused; the owner's Run updates now still updates [TD-288, TD-352].
+- The stop-when-idle intent stays in the host's memory, so a crash or restart never stops OwlBear
+  again; step 4's handover file carries it across an update [TD-313].
+
+**Owner's words:**
+
+- TD-259: "Paused until I press Resume in the UI, which shows how many would continue"
+- TD-287: "any maintenance action including pack update, self update, any cleanup"
+- TD-288: "option 4, plus a global setting if to update while paused and if to update while idle"
+- TD-350: "only a login start and after a crash owlbear is paused, both manual start and restart are not
+  paused"
+- TD-351: "The pause holds Delivery's automatic work on Changes"
+
+**Replaced:**
+
+- TD-259's paused start after every restart or login start: re-decided by TD-350.
+- TD-282's and TD-283's "nothing new starts" (until Resume): narrowed by TD-351 to Delivery's automatic
+  work on Changes; after a restart, TD-350 keeps the state it had.
+- TD-288's "no updates automatically started while paused" with the setting off, and TD-304: read by
+  TD-352 as "no automatic update starts while paused" (TD-304 folded in).
+- TD-313's "a crash or restart, which starts paused (TD-259)": a restart now keeps its state (TD-350).
+- The self-update design's `approved` §6 stop intent in `machine.json`: superseded by TD-313.
+
+#### C-19 Machine host and UI
+
+**Members:** TD-11 (`decided`), TD-85 (`decided`), TD-104 (`decided`), TD-113 (`decided`),
+TD-241 (`decided`), TD-242 (`decided`), TD-262 (`decided`), TD-265 (`decided`), TD-281 (`decided`),
+TD-294 (`autonomous`), TD-321 (`decided`).
+
+**In force:**
+
+- One Delivery host per machine serves every registered project (one dashboard, one process);
+  registered projects keep advancing while their folders are closed [TD-104, TD-242].
+- Each project keeps its own Change store, worktrees, repository and credentials, and a failing project
+  does not stop the others; its chat tools find the machine host [TD-242].
+- One repository per Change; Change groups are dropped [TD-104, TD-241].
+- Opening a project's VS Code window never touches Delivery; projects are added only in the UI (Add
+  project), so setup writes no folder-open task [TD-281, TD-321].
+- Setup writes `.mcp.json` (chat tools) only with consent; nothing from OwlBear is committed into the
+  consumer project [TD-11, TD-321].
+- One UI by kind of work (Changes, Backlog, Memory, Settings, Maintenance) with no project mode: every
+  page shows all projects of the machine, each item tagged with its project, with filters for a project,
+  for Global and for All; each action and link names its project [TD-241].
+- A Change names one repository; a backlog entry may name several or none (TD-103) [TD-241].
+- A memory's project comes from where the agent worked; making a memory global is a curator's or the
+  owner's step; global memories are where this starts [TD-241].
+- The host pages get tabs for the other modules, Memory first, and a UX review of the end-to-end flows
+  and a visual overhaul with the extracted design skill and detector [TD-85].
+- Maintenance actions sit next to their data (memory curation in Memory; design-pack and engine updates
+  in Settings; Review Tests as a project action), and a Maintenance overview links them and their runs
+  [TD-113].
+- Mac first: Linux and Windows are clearly stated as not supported yet before OwlBear goes to a colleague
+  [TD-262].
+- The Change stores move from files with writer locks to SQLite (stdlib) as part of the machine host.
+  Every project's live Delivery database lives under `~/.owlbear`, one folder per project; run locks
+  stay, and git-shared data in owlbear-data stays files [TD-265, TD-334].
+- After a clone's move into its database, a Change file an older OwlBear process writes stops that
+  Change until the owner compares the file with the Change and deletes it (as built in PR #468)
+  [TD-294].
+
+**Owner's words:**
+
+- TD-11: chosen without a quote (approved the fork's proposal)
+- TD-85: "cockpit needs tabs for the other modules again: memory"
+- TD-104: "lets do one instance of owlbear for multiple consumer projects on the same computer"
+- TD-113: "1, but maintenance overview now"
+- TD-241: "subpages have a filter for each project or the global view with everything"
+- TD-242: "One host for the machine serves every registered project; projects stay apart in their own
+  stores, worktrees and repositories"
+- TD-262: "Mac first; Linux and Windows clearly stated as not supported yet"
+- TD-265: "Move to SQLite as part of TD-242 (the machine host)"
+- TD-281: "Opening a window never touches Delivery; projects are added only in the UI"
+- TD-321: "TD-281 replaces TD-11's task; TD-11 keeps: .mcp.json only with consent, nothing committed"
+
+**Replaced:**
+
+- TD-11's `.vscode/tasks.json` host start on folder open: replaced by TD-281 (TD-321).
+- TD-242's registration when a project's VS Code window opens: re-decided by TD-281 (Add project in the
+  UI only).
+
+#### C-20 Repository policy
+
+**Members:** TD-10 (`decided`), TD-15 (`decided`), TD-16 (`decided`), TD-22 (`autonomous`), TD-25
+(`decided`), TD-26 (`decided`), TD-30 (`decided`), TD-203 (`decided`), TD-204 (`decided`), TD-222
+(`decided`), TD-226 (`decided`), TD-229 (`decided`), TD-230 (`decided`), TD-231 (`decided`), TD-238
+(`decided`), TD-251 (`decided`), TD-278 (`autonomous`), TD-280 (`approved`), TD-319 (`decided`),
+TD-326 (`decided`), TD-360 (`autonomous`), TD-361 (`autonomous`), TD-362 (`decided`), TD-363 (`decided`),
+TD-379 (`decided`).
+
+**In force:**
+
+- One long-lived branch, `main` (GitHub's default), holds the complete source; consumers clone it;
+  versions will be git tags; until Cockpit's last pages move to the new engine, a clone builds
+  Cockpit's bundle with Node. Work continues on `main`; PR #449 is merged into it by merge commit
+  [TD-203, TD-231].
+- OwlBear builds itself through its own Delivery, with a manual repair PR when Delivery itself is
+  broken; developing OwlBear directly in chat stays allowed beside it for good. Downloadable releases
+  are not wanted [TD-238, TD-319].
+- OwlBear's `main` takes changes only through pull requests: one `CI` workflow calls the six suites
+  the PR touches as reusable workflows, and its final `CI` job is the one required check (strict "up
+  to date"); merge commits only; the `main` ruleset keeps `deletion` and `non_fast_forward` and has no
+  bypass actor [TD-278, TD-280, TD-326].
+- OwlBear's `main` has no merge queue now (GitHub offers none for a personal account's repository); a
+  free organization with the queue comes once someone else contributes or Delivery builds OwlBear
+  [TD-278, TD-326].
+- Delivery's merge-queue support is built now and proven on an organization repository [TD-226,
+  TD-278].
+- Delivery merges automatically once every gate passes, including no unanswered comments or open
+  discussions, and pulls the result back to the local clone [TD-15, TD-238].
+- The assistant merges PRs at the right time, with merge commits, not squash, so commits the records
+  cite stay reachable [TD-229, TD-280].
+- Pull-back assumes the local copy is dirty and updates it reliably without conflicts, by rebase where
+  needed, without losing local work [TD-26].
+- When the target repository lacks "require branches to be up to date" or "require conversation
+  resolution", Delivery shows a visible note, not a warning, and behaves as if they were on [TD-25].
+- Routine CI fixes and reactions to comments and reviews are automated, including replying to and
+  resolving the threads an agent fixed [TD-16]. Besides an upheld rejection (TD-193) and a note
+  contradicting the brief (TD-340), a CI check that keeps failing after the fix retries goes to the
+  owner [TD-379].
+- Every human PR comment is answered; the agent judges bot comments (acts on real findings, records
+  "no action needed" for notices); no `@owlbear` mention gate [TD-30].
+- The six CI suites run again; every other automatically triggered workflow stays disabled with `gh
+  workflow disable` (files and tests unchanged), every pre-commit hook runs only by hand, and Renovate
+  keeps running [TD-204, TD-280].
+- Snyk is for OwlBear's own repository only; Delivery never runs Snyk elsewhere. It is a Security suite in
+  the required CI gate, selected only when `maba-pag/owlbear` runs a change from itself: `snyk code test`
+  and `snyk test --all-projects` at high severity and above, the dependency scan with
+  `--fail-on=upgradable`, never `monitor` or `--report`; each finding prints its rule, file and line, so a
+  failing run is a fix task like any failing test. The Snyk app's PR checks stay, not required
+  [TD-360, TD-362, TD-363].
+- It authenticates as the service account `owlbear-ci` with the predefined Org Collaborator role until
+  the Group admins create a read-only CLI tester role; its token is the `SNYK_TOKEN` Actions secret,
+  which the owner creates and sets himself, never through the assistant; ordinary scans never create or
+  remove ignores; TD-363 supersedes that prohibition for the owner-checkbox handler, which sets the
+  selected "Not vulnerable" ignore [TD-360, TD-361, TD-363].
+- A Snyk Code false positive is cleared by a checkbox: the Security job comments each Code finding with a
+  box, and a tick by `maba-pag` (numeric ID checked) sets "Not vulnerable" with the one token and re-runs
+  the job; the lead chat could tick too, accepted. The screenshot route's Path Traversal in
+  `project_host/api.py` is ignored as "Not vulnerable", not expiring [TD-362, TD-363].
+
+**Owner's words:**
+
+- TD-10: "i dont need it to work on itself"
+- TD-15: "letting the agent/delivery also merge automatically"
+- TD-16: "fix ci, react to comments including reviews"
+- TD-25: "make it a visible note, but not a warning"
+- TD-26: "we have to assume local copy is never clean"
+- TD-30: "suggestion 2 is accepted"
+- TD-203: "rename dev to main"
+- TD-204: "just deactivate all workflows and precommit hooks"
+- TD-222: "you can remove the snyk workflow"
+- TD-226: "Build merge-queue support now"
+- TD-229: "you take care of merging prs, i.e. 449, at the right time"
+- TD-230: "yes remove the snyk token"
+- TD-231: "Merge now; I look at the finding in Snyk's project later and tell you"
+- TD-238: "2 is better than 3"
+- TD-251: "Keep everything off until the pull-request Change, which switches CI on as part of its flow"
+- TD-319: "TD-238 replaces TD-10, but chat work stays allowed beside Delivery for good"
+- TD-326: "a free organization and the queue once someone else contributes or Delivery builds OwlBear"
+- TD-362: "Make the CI scan match your setting with `--fail-on=upgradable`, so findings without a Snyk
+  fix never fail it"
+- TD-363: "this is only for owlbear, not for consumer projects"
+- TD-379: "Also when a CI check keeps failing after the fix retries"
+
+**Replaced:**
+
+- TD-10's "Delivery-next need not support OwlBear developing itself … not a goal now": replaced by
+  TD-319 with TD-238.
+- TD-10's "TD-2's open Changes still finish on the old engine": history, since TD-337 (C-21).
+- TD-22's "no merge-queue support until a consumer project uses one": superseded by TD-226.
+- TD-238's merge queue on OwlBear's `main`: amended by TD-278 and TD-326 (none now; a free
+  organization later).
+- TD-278's "moving OwlBear into an organization stays open": settled by TD-326.
+- TD-204's "every automatically triggered GitHub workflow is disabled" for CI, kept by TD-251 until
+  the pull-request Change: ended by TD-280, which enabled the six suites.
+- TD-222's "Snyk runs only through its GitHub integration and its UI" and TD-230's deleted `SNYK_TOKEN`:
+  re-decided by TD-360 (a Security suite in CI with a token the owner sets), amended by TD-361..TD-363.
+- TD-204's "the Snyk required-checks ruleset is disabled, not deleted": spent; that ruleset no longer
+  exists (TD-230) and Snyk's required check returns inside the CI gate (TD-360).
+- TD-16's "when human input is still needed stays open": settled by TD-379.
+
+**Open:**
+
+- TD-231: the Snyk Code "1 new Code Analysis issue" is for the owner to read in Snyk later; TD-362
+  ignores one Code finding (the screenshot route's Path Traversal), but no row says whether that was
+  TD-231's issue.
+
+#### C-21 Old engine retirement
+
+**Members:** TD-2 (`decided`), TD-183 (`decided`), TD-199 (`decided`), TD-200 (`decided`), TD-201
+(`decided`), TD-202 (`decided`), TD-337 (`decided`).
+
+**In force:**
+
+- The old Delivery leaves in dependency-closed batches, each deleting old paths with their tests and
+  unwiring edits, each one revertible commit, after PR #449 is merged; tag `delivery-v1-final` before
+  batch 1. The sixth batch (the `main` sync) is removed [TD-199, TD-203].
+- The unadmitted `interactive-browser-tools` design stays in issue #233, the draft reachable from the
+  final tag; a brief only when OwlBear develops itself on the new engine [TD-200].
+- `h-decision-requests`, `h-process-observations` and `w-deviation-audit` retire with batch 3, after
+  a check that nothing in them is not already in the new engine [TD-201].
+- The old engine's live state was deleted at once (2026-10-16): `.owlbear/delivery/`, 24
+  `refs/owlbear/*`, the listed GitHub branches, the discarded uncommitted edits, and the
+  `owlbear-delivery` server entry in `.vscode/mcp.json` and the seed; SHAs are kept in
+  `.owlbear/scratch/old-live-state-recovery-2026-10-16.txt` [TD-202].
+- The Delivery redesign programme is superseded by the new engine [TD-202].
+- As history: TD-2's open Changes were finished and merged (on `dev`, now `main`); only the Change
+  never designed (PR #314) was abandoned [TD-337].
+
+**Owner's words:**
+
+- TD-2: "i do want to finish the open changes"
+- TD-183: "we can start deleting things from dev the moment we have transferred it into the new version"
+- TD-199: "Six dependency-closed batches"
+- TD-200: "Keep it in issue #233"
+- TD-201: "make sure there is nothing in there of any value to us that we can re-use, then option 1"
+- TD-202: "Delete it now"
+- TD-337: "old changes were implemented and are now on main after being on dev earlier."
+
+**Replaced:**
+
+- TD-2's "the open Changes continue on the old engine in parallel until finished; their failures feed
+  the catalogue": history by TD-337.
+- TD-202's abandonment note: leaves the active rules as history by TD-337.
+- TD-183's research and morning decision (transfer ledger, the three open old-engine Changes, a
+  burndown version of D5): decided as TD-199 (D), TD-200 (Q1), TD-201 (Q2) and TD-202 (Q3); its "way
+  into dev and main" amended by TD-203 (one branch, `main`).
+- TD-199's "one main sync after the last" batch: removed by TD-203.
+
+#### C-22 Package structure
+
+**Members:** TD-133 (`decided`), TD-158 (`autonomous`), TD-168 (`decided`), TD-171 (`decided`),
+TD-172 (`decided`), TD-173 (`decided`), TD-174 (`decided`), TD-186 (`decided`), TD-191 (`decided`),
+TD-196 (`autonomous`), TD-197 (`autonomous`).
+
+**In force:**
+
+- No content folder: `agents/` (every role including the shaper, named by job) and `skills/` sit at
+  the `delivery-next` package root next to `web/` and `golden/`; each top-level folder is one Python
+  responsibility or one kind of file named in its reader's word [TD-133, TD-168].
+- Folders follow the import graph: each is one responsibility and imports only the folders before it,
+  enforced by a test. Order: `git/`, `github/`, `local_system/`, `change_contracts/`, `change_flow/`,
+  `design_packs/`, `settings/`, `state_store/`, `runtimes/`, `workflow_steps/`, `pack_runs/`,
+  `project_host/`, `commands/`; plus `agents/`, `skills/`, `web/`, `golden/` [TD-171, TD-172].
+- Code moves: setup's generic git/file helpers into `git_files` and `text_files`, `cli_path` into
+  `copilot_cli`; setup splits into `readiness` and `setup` (installs); the server start moves from
+  `host` to `serve`; `steps/worktree` into `change_flow`; built with Sol review [TD-171].
+- The `setup` split stays as built: `steps/publish` takes `Check` from `readiness`, `store` imports
+  `git_common_dir` from `git_files` [TD-197].
+- The root holds only `__init__.py` and a `__main__.py` forwarder to one lazy dispatcher in
+  `commands/`; the `owlbear-next` script points at the same dispatcher; every process starts through
+  it (children with `sys.executable -m owlbear_delivery_next <command>`); `.mcp.json` and
+  `tasks.json` name only the dispatcher; no backwards compatibility [TD-173].
+- `prompts.py` becomes `runtimes/step_input.py`, which builds every message a step receives and the
+  bundle with write permission, checks and submission spec [TD-174].
+- One import path per type: `PageError` and `VisualResult` only from `visual_records`, `Spend` and
+  `ModelSpend` only from `spend`; `models` re-exports none of them; the layer test proves the imports
+  stay one-directional [TD-186, TD-191].
+
+**Owner's words:**
+
+- TD-133: chosen without a quote (in the structure session after the research report and Sol's
+  challenge)
+- TD-168: "No umbrella: agents/ and skills/ at the package root next to web/ and golden/"
+- TD-171: "As shown, with the three code moves; built with Sol review"
+- TD-172: "Sol's names as listed"
+- TD-173: "2, and the owlbear-next script also points at that dispatcher"
+- TD-174: "step_input"
+- TD-186: "make sure [the import chain] is still valid"
+- TD-191: "Same rule as TD-186: one path, spend.py only"
+
+**Replaced:**
+
+- TD-133's one content folder holding `agents/` and `skills/`, with "the package root holds only
+  modules": re-decided by TD-168 (no umbrella).
+- TD-158's narrowing of that content folder (web pages, golden fixtures and the design pack stay at
+  the root): moot, since TD-168 drops the content folder.
+- TD-196's separate structure build: completed (TD-274); its scheduling instruction is history.
+
+#### C-23 The owlbear command
+
+**Members:** TD-257 (`decided`), TD-258 (`decided`), TD-263 (`decided`), TD-272 (`autonomous`),
+TD-327 (`decided`).
+
+**In force:**
+
+- After the one-per-machine host (TD-242), one `owlbear` command runs the one OwlBear instance in
+  `~/.owlbear`: with no arguments it starts OwlBear if stopped, else shows its status; `start`,
+  `stop`, `restart`, `status`, `logs`, `doctor`; today's `owlbear-next` commands move under it; no VS
+  Code button [TD-257].
+- The command uses Cyclopts: its static zsh completion file (a description per command and option,
+  written into `~/.owlbear`, never editing `~/.zshrc`) completes without starting Python, and its
+  commands load lazily (TD-173) [TD-257, TD-263, TD-327].
+- Start at login is asked once at install; `owlbear autostart on` / `off` changes it later; `owlbear
+  status` and the machine settings page show it; on a Mac that blocks login items, the installer and
+  the command say so and `owlbear` keeps working on demand [TD-258].
+
+**Owner's words:**
+
+- TD-257: "def no vs code button"
+- TD-258: "ask at install and offer a cli cmd to activate/deactivate it"
+- TD-263: "Cyclopts: a static completion file, so TAB is instant; lazy commands"
+- TD-327: "Cyclopts, as decided in TD-263"
+
+**Replaced:**
+
+- The owner's Typer choice in TD-257: superseded by TD-263 (Cyclopts).
+- TD-272's argparse (stdlib) with shtab writing the completion file at install: re-decided by TD-327
+  (Cyclopts, as TD-263).
+
+#### C-24 Backlog
+
+**Members:** TD-84 (`decided`), TD-103 (`decided`), TD-126 (`decided`), TD-345 (`decided`).
+
+**In force:**
+
+- Potential improvements and changes found by the owner, the watcher, the assistant, reviews or runs
+  are collected; the owner classifies them (defect, improvement, idea, question), adds context,
+  connects several and creates a Change from them; an entry links its evidence and the Change it went
+  into; untriaged entries form an inbox [TD-84].
+- The backlog lives in GitHub issues: one private issue per entry in `owlbear-data`, no public
+  reports; labels `scope:project`, `scope:cross-project`, `scope:global`, `scope:unassigned` plus
+  `project:<name>`; OwlBear's label colour is tawny brown `#A67C52`; saving is online-only; the
+  Backlog tab is a view over these issues; the file entries migrate once, then the file storage
+  retires [TD-103].
+- Repeats are counted in a summary in the issue, comments only for new evidence [TD-103].
+- An entry may name several projects or none (TD-241); repeats merge only when they name the same
+  projects (or both none); otherwise they are linked as connected entries [TD-126, TD-345].
+
+**Owner's words:**
+
+- TD-84: "when potential for improvement or changes is identified"
+- TD-103: "i think we should drop public altogether"
+- TD-126: "Merge only within a project"
+- TD-345: "Repeats merge only when they name the same projects (or both none); otherwise they are linked"
+
+**Replaced:**
+
+- TD-84's storage (one entry per file in the project's folder of the shared repository, repeated
+  watcher findings counted up in it): superseded by TD-103.
+- TD-126's "merge only within a project": refined by TD-345 (same projects, or both none).
+
+#### C-25 Memory
+
+**Members:** TD-70 (`decided`), TD-72 (`decided`), TD-100 (`decided`), TD-291 (`autonomous`), TD-292
+(`decided`), TD-293 (`decided`), TD-318 (`autonomous`).
+
+**In force:**
+
+- Delivery's agents keep using owlbear-memory: recall at the start, save non-obvious lessons, curated
+  [TD-70]. Agents never recall pending entries [TD-293].
+- Agent memory lives in the shared repository (TD-57): one memory folder per project, in the
+  project's folder there; the working repository holds no memory files [TD-72].
+- A lesson specific to the project's structure or problems stays in the project; a general one
+  (agent work and process, linting, formatting, a programming language, design packs, Delivery
+  itself) goes to Global. The saving agent pre-sets project or general as a recommendation; the entry
+  waits, unused, in its project until curated; today's project memories are sorted by the rule once
+  [TD-293].
+- The owner makes a curated or approved entry global on the Memory page; it moves, and can be moved
+  back to its project [TD-292].
+- The memory curator works interactively (a decision below the confidence threshold is asked of the
+  owner) or automatically (it is skipped); above the threshold it decides by itself in both modes,
+  making entries global included, and in an interactive session it proposes Make global. The
+  threshold is one Global setting, 90% at first; the curator applies TD-293's rule under it [TD-292,
+  TD-293].
+- With one project chosen, the Memory page shows that project's memory and its repository's Global
+  memory, each entry labelled with where it is kept, with a "Kept in" filter [TD-291].
+- Once the watcher exists it may save lessons about agent behaviour (process pitfalls), scoped to the
+  observed role, as pending entries curated like the rest [TD-100].
+- The unbuilt parts (the curator's two modes and threshold setting, moving an entry back to its
+  project, the saving agent's pre-set, the one-time sorting) are built after the self-update
+  [TD-318].
+
+**Owner's words:**
+
+- TD-70: "the agents will still use owlbear-memory"
+- TD-72: "yes, move memory to the common repo"
+- TD-100: "plus watcher may write memories from watched actions"
+- TD-292: "2 plus threshold is a setting"
+- TD-293: "i dont think this is the right way to approach it"
+
+**Replaced:**
+
+- TD-72's "a folder for lessons that span projects may follow": settled by Global memory (TD-291,
+  TD-292, TD-293).
+
+#### C-26 Tests
+
+**Members:** TD-3 (`decided`), TD-112 (`decided`), TD-311 (`decided`), TD-312 (`decided`), TD-339 (`decided`),
+TD-370 (`decided`), TD-371 (`decided`), TD-372 (`decided`), TD-373 (`decided`).
+
+**In force:**
+
+- Proof over test volume: automated tests are build artifacts and stay minimal; no tests of agent prose
+  wording; structural checks of agent definitions remain. The concrete policy (P8) and budget are set in
+  R4 [TD-3].
+- TD-311's test review is the rule: reviewers each take a share of the project's test files under
+  `w-test-curation` and report only; the curator checks their retire and merge verdicts against the code,
+  applies what holds in a reviewed Change the owner can still stop, without approving first, then
+  measures again [TD-311, TD-339, TD-372].
+- A test review starts only on the owner's request and covers every registered project, each started from
+  its own Maintenance page; the Sol challenge when it is built may still move the button
+  [TD-370, TD-371].
+- The reviewers run as Delivery steps of their own, in parallel, each with its role's values, credits and
+  retry; then the curator step checks their verdicts [TD-373].
+- The reviewers run on GPT-6.1 Sol at medium effort with the default context; the curator runs on Claude
+  Opus 5.5 at high effort with long context; reviewer and curator are roles in Settings with these
+  defaults [TD-339].
+- TD-112's evidence and protection rules stay: keep, rewrite lower, merge, retire; uncertainty keeps; each
+  removal names the behaviour, a plausible bug and the surviving test that catches it; security guards,
+  fixed-incident regressions and public contracts are never removed; protection is classified from
+  assertions and incident evidence, never from test names [TD-112, TD-339].
+- After the first review (1743 to 1697 tests, every kept assertion preserved), the reviewers' speed-ups
+  (real timers and sleeps, about 30 rewrites to cheaper layers, roughly 10% of test work) are not done
+  now; the curation merges and work returns to the self-update [TD-312].
+
+**Owner's words:**
+
+- TD-3: "proof are important. tests are not. tests are build artifacts"
+- TD-112: "in some capacity similar to memory curator"
+- TD-311: "have multiple sol subagents review the tests, each split of all"
+- TD-312: "Stop here: measure, merge the curation, and return to the self-update"
+- TD-339: "td-311 becomes the rule, but with sol medium thinking and short context"
+- TD-370: "only on user request, on the maintenance page (where should be challenged)"
+- TD-371: "Every registered project, each from its own Maintenance page"
+- TD-372: "No: the curator applies what holds in a reviewed Change you can still stop"
+- TD-373: "Delivery starts each reviewer as its own step in parallel, then the curator step"
+
+**Replaced:**
+
+- TD-112's route (a test curator run on demand: an assessment first, then a reviewed Change for the edits
+  the owner approves; the first delivery-next assessment after the agent work): re-decided by TD-339,
+  which makes TD-311's review the rule.
+- TD-311's lead as the one who checks and applies verdicts: TD-339 gives this to the curator role.
+- TD-311's delivery-next-only scope and its Sol subagents: every registered project (TD-371), reviewers as
+  their own steps (TD-373).
+- TD-112's owner approval before edits apply: replaced by TD-372.
+
+#### C-27 Status and progress
+
+**Members:** TD-61 (`decided`), TD-66 (`decided`), TD-97 (`decided`); also Q5 (recommendation in the
+reserved-decisions table, no origin).
+
+**In force:**
+
+- A card shows the named step and its round ("Build · Task 2 of 4 · Task review · round 4"); the detail
+  shows a stepper with a loop badge [TD-97].
+- A round counts the loops that repeat inside the normal process (challenge then re-plan, review then
+  fix, visual fail then fix), not retries after a crash or a network wait [TD-97].
+- Workflow position and rounds come from Delivery's own records [TD-97].
+- Stages inside an agent session come from the watcher later, which infers them [TD-66, TD-97]. Each
+  agent has stages, possibly different per role: preparation (loading skills and memories, getting the
+  work from Delivery), working (implementing, designing, reviewing, …), challenge #1, #2, … (each
+  challenger run), fixing #1, #2, … (work after each challenge), finalizing (committing, writing memory
+  back, returning the task to Delivery) [TD-61].
+
+**Owner's words:**
+
+- TD-61: "for every agent there are stages. maybe different, maybe identical."
+- TD-66: "The watcher infers it"
+- TD-97: "i thought it meant challenge/fix rounds, so things that might repeat inside the regular process"
+
+**Replaced:**
+
+- TD-61's "How the stages are detected is open": decided by TD-66 (the watcher infers them).
+- TD-66's watcher as the source of all of TD-61's stages: TD-97 takes workflow position and rounds from
+  Delivery's own records and leaves the watcher only the stages inside an agent session, later.
+
+**Recommendation, not a recorded TD decision:**
+
+- One status line and one next action per Change (P6) [Q5].
+
+#### C-28 Code and tool rules
+
+**Members:** TD-1 (`decided`), TD-19 (`decided`), TD-31 (`decided`), TD-33 (`decided`), TD-63 (`decided`),
+TD-184 (`autonomous`).
+
+**In force:**
+
+- Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63
+  [TD-1, TD-63].
+- No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
+- A test checks every agent-facing tool: each field described (T4), small and flat (T5: about six fields,
+  one nesting level). Whether the surface works is measured (T8), not counted [TD-63].
+- Item 7 gets its own `report_missing_tool` [TD-63].
+- `save_brief` has nine fields, an exception to "about six": a brief records what the owner wrote with
+  `specified` (criteria by `AC-n`) and `owner: true` on states and checks [TD-184].
+- No ceilings on agent instructions; instead a language style: specialist terms instead of fillers or
+  explanations, but not "caveman" style [TD-19].
+- For code, a size limit is fine when exceeding it means splitting into more modules, not cutting logic
+  [TD-19]. Agents aim for at most 400 lines per module; a test fails at 500 raw lines, without excluding
+  comments or structure [TD-33].
+- Code size and complexity: default rules of tools such as SonarQube or Snyk guide whether code is still
+  acceptable or needs a split or rework, with wiggle room, not as a hard tool gate; SonarQube itself is
+  not used (licence), Snyk perhaps later [TD-31].
+
+**Owner's words:**
+
+- TD-1: "make your proposed rules accepted decisions"
+- TD-19: "strict budgets for agents dont work"
+- TD-31: "take these default rules as an instruction to decide whether something is still acceptable"
+- TD-33: chosen without a quote (answered question, the user's own proposal; re-confirmed in the
+  read-back of 2026-10-11)
+- TD-63: "i do not agree with t7, this is far too strict."
+
+**Replaced:**
+
+- TD-1's T7 tool budget (values set in R4; the charter's tool budget, values 6/3): re-decided by TD-63,
+  no tool-count limits.
+- The logic-line counter of TD-19's implementation and its interface-overhead exclusion: replaced by
+  TD-33's 500 raw lines.
+
+#### C-29 Confirmations and input
+
+**Members:** TD-151 (`decided`), TD-152 (`decided`), TD-153 (`decided`), TD-154 (`decided`).
+
+**In force:**
+
+- Consequential buttons open one shared confirmation in four short parts: what happens now, what Delivery
+  then does by itself, what the owner can do afterwards (including undo and its limits), and the way
+  forward if he declines; cost and disruption are named where they apply; buttons name the action
+  [TD-151].
+- A bare "are you sure" is the exception. The New Change button keeps its dialog; reversible, cheap
+  actions get a note after the click instead [TD-151].
+- Page hints: text that changes how the owner fills an input or whether he acts, or states a rule that
+  keeps applying, stays at normal size; consequences of one click move into its dialog; only pure
+  restatement is cut (for example, a visual-round comment becoming a criterion stays) [TD-152].
+- A person check's Pass confirms only when it is the last gate before an automatic merge; a Fail always
+  confirms and needs a note, and the server refuses one without it. The note is taken as written and
+  becomes the builder's fix task unless it contradicts the approved brief; then it is held for the owner,
+  never applied [TD-153, TD-340].
+- Settings Save shows the unsaved changes next to the button, which names the layer; only saving global
+  defaults confirms [TD-154].
+
+**Owner's words:**
+
+- TD-151: "it should give the user info on what will happen immediately"
+- TD-152: "you removed too much"
+- TD-153: "Sol's rule; Failed needs a note"
+- TD-154: "Sol: inline summary; dialog only for global"
+
+#### C-30 Subagents
+
+**Members:** TD-53 (`decided`), TD-111 (`decided`), TD-116 (`decided`), TD-129 (`decided`), TD-178
+(`decided`), TD-195 (`decided`), TD-344 (`decided`), TD-374 (`decided`), TD-375 (`decided`),
+TD-376 (`autonomous`), TD-377 (`decided`).
+
+**In force:**
+
+- Every step of every role may start every built-in subagent the runtime offers (explore, task,
+  code-review, rubber-duck, research, rem-agent, security-review) [TD-374]. Read-only steps may too, under
+  the same read-only guard (TD-82); that the guard reaches subagents is proven when built [TD-375].
+- Subagent monitoring stays (agent, model, tokens, credits per agent, duration) [TD-129, TD-195, TD-344,
+  TD-374]; use is measured by a per-role summary on the Maintenance page and a per-role on/off setting,
+  on by default [TD-376].
+- A subagent may use any named model; one on Auto voids the step; other models are logged. The main agent
+  is checked against its own model [TD-53, TD-377].
+
+**Owner's words:**
+
+- TD-53: "Subagents may use any named model; only Auto voids the step"
+- TD-111: "more research needed"
+- TD-116: "Remove the researcher"
+- TD-129: "make this configurable and also monitor use"
+- TD-178: "As before, but the judge is Sol (another model family) and I see the pairs too"
+- TD-195: "Keep it off; monitoring stays; no further pilot"
+- TD-344: "The setting goes; delegation would need a new decision; monitoring stays"
+- TD-374: "dont we use subagents for the test reviewer/curator/ was this decision to forbid subagents a
+  mistake?"; "Every built-in the runtime offers, for every role"
+- TD-375: "Allowed in read-only steps too, under the same read-only guard"
+- TD-377: "Keep the Auto check as a safety net for any subagent monitoring sees"
+
+**Replaced:**
+
+- TD-53's partial supersession by TD-111: TD-377 keeps TD-53's subagent rule in full.
+- TD-111's tool removals (the builder's `task`, `read_agent`, `list_agents`, `write_agent`) and TD-116's
+  "no subagent at all" with every built-in excluded: re-decided by TD-374.
+- TD-111's planner keeping `task` and `read_agent` in SDK runs (the window planner after its restricted
+  profile is validated), its one Delivery-defined read-only researcher with a benchmark-chosen model and
+  context tier, and the with/without measurement: replaced by TD-116 after the measurement.
+- TD-129's planner-only experimental setting (off by default, one genuine built-in at a time), the
+  `explore` experiment under a 2,000-credit ceiling and `research` needing the owner's web approval: the
+  experiment stays off with no further pilot (TD-195) and the setting goes (TD-344); TD-374 allows every
+  built-in, measured per role (TD-376).
+- TD-178's protocol for the TD-129 experiment (paired tasks judged blind by Sol, 2,000-credit ceiling,
+  report to Maintenance): no longer runs (TD-195, TD-344).
+- TD-344's "delegation would need a new decision": that decision is TD-374.
+
+#### Standalone decisions in force
+
+- `TD-4` (decided): OwlBear stays on GitHub Copilot.
+- `TD-6` (decided): the sandbox repository for R8 and M4 is under `maba-pag`, or under `boecht` when that
+  is the signed-in account; this does not establish an account rule for future experiments.
+- `TD-9` (decided): OwlBear is for the owner's personal use on his laptop; a colleague would at most read
+  the repository and build his own variant.
+- `TD-12` (decided): overlapping parallel Changes are not asked about by default; they show "overlaps
+  with X", integration handles conflicts, only real behavioural collisions ask; docs, lockfiles and
+  generated files are ignored.
+- `TD-13` (decided): Cockpit's New Change button opens a VS Code chat for shaping, so no prompt is
+  copied; how it launches (shaper agent, not a bare skill) is set by the shaper topic (TD-83, TD-276).
+- `TD-17` (decided): Copilot runs on `maba-pag`'s business seat; target is every GitHub write by the
+  repository owner's account where possible, else `maba-pag` as collaborator; `maba-pag` does everything
+  until that target works (TD-266 keeps `gh` on this login).
+- `TD-23` (decided), partly: the charter and design approval on nine cornerstones still grounds the
+  `approved` origin of charter parts no later row replaced; replaced parts include §3.8's allow list
+  (TD-82).
+- `TD-39` (decided): the Changes page loads the Porsche Design System from its documented CDN and
+  nothing else: no own fallback rendering, no own load diagnostic.
+- `TD-87` (decided): the builder's code is linted once, when it submits, on the changed files with the
+  project's linters; no lint per edit, no broad-edit warning, no session-start context hook.
+- `TD-88` (decided): lint may refuse 5 builder submits per session; later submits pass marked
+  `lint-unresolved`.
+- `TD-89` (decided): a repository quality service separate from Delivery (core package plus CLI) runs
+  linters and handles agents' requests to change protected surfaces (lint/format configs, CI workflows,
+  Git hooks); agents request, the owner approves; refuses from the start; every existing suppression is
+  reviewed, none grandfathered; built after delivery-next M4's open demonstrations.
+- `TD-90` (decided), partly: the memory MCP server stays for now; the slot "fix memory publication and
+  curation (F17) after M4, before M5" holds only if that work is still open.
+- `TD-114` (decided): the old Knowledge agents are not Delivery roles.
+- `TD-115` (decided): the nine ECC adoptions remain agent rules: the builder never deletes, skips or
+  weakens tests or checks to get green, and the reviewer reports it; defect fixes prefer existing
+  discriminating tests and show failing-before evidence where feasible, otherwise state the reproduction
+  basis and gap; reviewers check existing caller handling and fallbacks hiding failures; test curators
+  use TD-112's vocabulary; watcher lesson signals need causal evidence, with merging left to the curator;
+  shapers never infer business constraints from code, may use "must not" criteria, and ask for observable
+  pain, workaround and evidence against assumptions; UI uses `partial`, WCAG 2.5.8 target sizes with its
+  exceptions, and browser-proven modal focus containment and return; planners find consumers through
+  real imports and include their tests in task checks; builders and reviewers trace state changes in
+  order.
+- `TD-127` (decided): delivery-next's browser tests run in CI (`python-browser.yml`, re-enabled by
+  TD-280); the slowest test captures its three cases in one browser launch.
+- `TD-132` (decided), partly: the night-2 choices N2–N9, N11–N14, N18, N20–N23, N25–N27, N30, N31, N33,
+  N34 stand; N10 was later settled (TD-163, TD-165); N16 and N32 follow the later subagent decisions
+  (TD-344) and the project-only preparation rules (TD-130, TD-336).
+- `TD-142` (decided): every SDK session runs with repository agent hooks (`.github/hooks`) off; Git
+  hooks are unaffected.
+- `TD-143` (decided): the owner's user MCP servers stay as they are in SDK steps (steps cannot see or
+  call them); no separate Copilot home.
+- `TD-148` (decided): a finished Change leaves a record (brief, decisions, outcome, PR, spend) in its
+  project's folder in the data repository; unfinished Changes leave none.
+- `TD-149` (decided): work-project data may live in the data repository; `maba-pag` is the owner's
+  employer account, `boecht` his personal one.
+- `TD-155` (decided): the sandbox keeps merging automatically once every gate passes
+  (`merge:ask-before` no).
+- `TD-188` (decided): a plan returning from its challenge is recognised by a typed field on the outcome;
+  the reason text is display only.
+- `TD-192` (decided): Delivery does not check for or report commits it did not make in its worktrees;
+  the final review covers them.
+- `TD-225` (decided): never containers; work happens in worktrees for good.
+- `TD-250` (decided), partly: the build order's remaining tail holds: after runtime updates and version
+  tags come the research move (TD-227), the window-step gate (TD-223) and the watcher (TD-224); its
+  earlier steps are built.
+- `TD-264` (autonomous): the Delivery pages render with lit-html bundled in the repository, no build
+  step, as part of TD-241; PDS stays as web components; the bundled version is recorded and checked.
+- `TD-266` (decided): GitHub access stays on the `gh` CLI for good; no GitHub SDK.
+- `TD-268` (autonomous): the write guard's hand-written shell lexer stays until a corpus of tricky
+  commands exists; it moves to tree-sitter-bash only if that passes the corpus, rejecting error nodes,
+  never via tree-sitter-language-pack.
+- `TD-269` (autonomous): agent-file front matter is parsed with PyYAML, not by splitting on `---`/`:`.
+- `TD-271` (autonomous): kept as built: the step machine, settings layers, process probing, urllib,
+  prompts, retry budgets, host scheduler, git, lint and masking; no workflow engine (Temporal, Prefect,
+  DBOS).
+- `TD-279` (decided): live merge-queue proofs use `porsche-code/brief-layover`, which the owner gave for
+  experiments.
+- `TD-285` (decided): a shaping chat never expires; the owner continues in the same or a new chat, and
+  the saved brief stays.
+- `TD-286` (decided): agent sessions keep a total running-time limit, doubled (planner 30, test preparer
+  30, builder 40, reviewer 20 minutes); each is a setting (global and per project) with these defaults.
+- `TD-358` (decided): the build work of TD-319..TD-357 is done now, before self-update step 3b; TD-274's
+  gap stays until after self-update step 5 (TD-329).
+- `TD-359` (decided): the record is consolidated into its merge topics in one Sol-reviewed pass: one
+  current row per topic, owner's words of `decided` members quoted, old rows moved unchanged to history.
+
+#### Standalone rows that are history
+
+- `TD-8`: overnight authorisation of 2026-10-10 (work as far as possible, no usage limit); carried out.
+- `TD-18`: "PR #449 is the base to continue"; carried out: PR #449 was reshaped and merged (TD-231).
+- `TD-28`: replaced by TD-225 ("Closes TD-28: never containers; worktrees for good").
+- `TD-37`: overnight authorisation of 2026-10-11 (and `maba-pag` added as collaborator); carried out.
+- `TD-62`: one-time work order of 2026-10-12 (item 9 proof, TD-58 study, items 6 and 7); later build
+  orders (TD-180, TD-228, TD-250) took over.
+- `TD-68`: authorisation for the night of 2026-10-13 (pushes, rebases, window reloads, credits);
+  carried out.
+- `TD-141`: one-time deletion of the old browser profiles; done 2026-10-15.
+- `TD-180`: night order of 2026-10-16 (items 1, 3, 5, 7, 8, 6, 2, 4); a completed build order.
+- `TD-206`: incident repair of 2026-10-17 (test isolation fault, two folders removed from
+  `owlbear-data`); carried out; its `HOME` guard test lives on in code.
+- `TD-228`: build order restated and extended by TD-250 ("Extends TD-228's order"), which moves the
+  research move behind PRs with CI, the machine host and runtime updates.
+- `TD-232`: one-time "next work" order of 2026-10-17 (TD-208 step 2, generator fix, install round);
+  carried out: step 2 (TD-233), the index generator fix (`62f6eb74c`), the install round (TD-244).
+- `TD-234`: one-time removal of 20 old worktrees with patches saved; done; its 13 leftover folders were
+  ordered deleted by TD-248.
+- `TD-248`: one-time order to delete the 13 leftover non-Git `owlbear-dev-*` folders; done (none of them
+  remained on 2026-10-18).
+- `TD-261`: interim rule "until the machine host, the owner starts Delivery with a given shell line";
+  the machine host and `owlbear` command now exist (TD-289, TD-327), so it is spent.
+
+### 3.8.1 Decision history: every decision as recorded
 
 | ID | Decision | Recommendation |
 | --- | --- | --- |
@@ -582,6 +2443,24 @@ Chosen, not built ([runtime research P14](delivery-next-agent-runtime.md)) | `au
 | TD-361 | Amends TD-360's role: the owner, an Org Admin without Group rights, can offer the service account only Org Admin, Org Collaborator or the Group's custom "Test Org Collaborator", whose permissions he cannot see; `owlbear-ci` gets the predefined Org Collaborator, the least of the known roles that can test, and never runs `monitor` or `--report` (a test enforces that). Under Consistent Ignores that role can also create and remove ignores; the workflow never does. A Read-only CLI Tester role replaces it once the Group admins create one | `autonomous`: the owner asked "which one do i choose and why?" | 2026-10-18 |
 | TD-362 | Amends TD-360's "a failing run is a fix task" after the first scan: the dependency scan runs with `--fail-on=upgradable`, so a high finding fails only when Snyk knows an upgrade that fixes it, and the others (today ten in transformers, accelerate and torch, with no fixed version) print and pass; the owner set the Snyk app's matching "only fail when a fix is available" himself. The Snyk Code Path Traversal in `project_host/api.py`'s screenshot route, a false positive no rewrite cleared, gets the owner's web UI ignore "Not vulnerable" that does not expire | `decided`: the owner chose "Make the CI scan match your setting with `--fail-on=upgradable`, so findings without a Snyk fix never fail it" and "Not vulnerable, does not expire", after Sol's challenge that the app setting does not reach the CLI | 2026-10-18 |
 | TD-363 | Corrects TD-360's "Delivery's included": Snyk is for OwlBear's own repository only, since other projects do not always have Snyk; CI selects the Security suite only when `maba-pag/owlbear` runs a change from itself (a copy, a fork's pull request or OwlBear's branch into a fork gets no token; the push run after a merge scans it), and Delivery never runs Snyk elsewhere. A Snyk Code false positive is cleared by a checkbox: the Security job comments each Code finding with a box, and a tick by `maba-pag` (numeric ID checked) sets "Not vulnerable" with the one `SNYK_TOKEN` and re-runs the job. Accepted: the lead chat acts through `maba-pag` too, so it could tick; no second token, as the scan token can set ignores anyway. It ships after #483, since comment-edit workflows run only from `main` | `decided`: the owner said "this is only for owlbear, not for consumer projects", then chose "OwlBear only, checkbox now: … a tick from maba-pag sets "Not vulnerable" with the one token and re-runs; accept that I could tick too" after challenges of agent-set ignores, reactions and a separate token | 2026-10-18 |
+| TD-364 | Settles TD-41 against TD-156: a read-back offers three close variants as the norm, fewer only when fewer really differ in consequence, never padded | `decided`: chose "Three as the norm; fewer only when fewer really differ, never padded" in the consolidation review | 2026-10-18 |
+| TD-365 | Replaces TD-46's "anything else is stopped by the watcher unless the brief names it" and TD-55's automatic stop of an outgoing transfer: the watcher judges each write outside the worktree and each outgoing data transfer after the fact, and stops the step only when it finds it dangerous or inappropriate for the task, not solely because it is outside and unnamed; a harmless one passes and is noted in its report. TD-46's allowed places (Delivery's own state, temporary files, the user's tool caches) are never judged | `decided`: wrote "it stops the step after an outside write IF it finds the write dangerous or inappropriate, not soley because its outside ant not explicitly allowed. thats why its an agetn deciding this, not a hook.", then chose readings "2 and 3" | 2026-10-18 |
+| TD-366 | TD-342 suspends only TD-86's window part; TD-86's SDK permission callback stays in force | `decided`: chose "Only the window part is suspended; the SDK permission callback stays in force" in the consolidation review | 2026-10-18 |
+| TD-367 | While window steps are paused (TD-137), a step whose missing tool exists only in a window runtime asks the owner, naming the tool, as in TD-36's "needs the owner's setup" case; this replaces TD-36's "one rerun there" meanwhile | `decided`: chose "You are asked, naming the window-only tool, like the 'needs the owner's setup' case" in the consolidation review | 2026-10-18 |
+| TD-368 | Extends TD-325: a design pack update's pull request merges itself once CI passes, whether OwlBear is paused or not | `decided`: chose "It merges itself once CI passes, paused or not" in the consolidation review | 2026-10-18 |
+| TD-369 | Settles TD-297 against TD-354: a machine set to major versions only starts at the newest major; until `v1.0` exists that is `v0.1` | `decided`: chose "A major-only machine starts at the newest major; until v1.0 exists that is v0.1" in the consolidation review | 2026-10-18 |
+| TD-370 | A test review (TD-339) starts only on the owner's request; where its button goes is decided when it is built, after a Sol challenge, the Maintenance page being the first candidate | `decided`: wrote "only on user request, on the maintenance page (where should be challenged)", then chose "Only you start it; where the button goes is decided when it is built, after a Sol challenge, the Maintenance page being the first candidate" | 2026-10-18 |
+| TD-371 | Delivery's test review covers every registered project, each started from its own Maintenance page; TD-370's Sol challenge when it is built may still move the button | `decided`: wrote "i am unsure if this is owlbear only or also for consumer projects", then chose "Every registered project, each from its own Maintenance page" | 2026-10-18 |
+| TD-372 | Replaces TD-112's "edits the owner approves": the test curator applies what holds in a reviewed Change the owner can still stop; no approval before it applies | `decided`: chose "No: the curator applies what holds in a reviewed Change you can still stop" in the consolidation review | 2026-10-18 |
+| TD-373 | The test review's Sol reviewers run as Delivery steps of their own, in parallel, each with its role's values, credits and retry; then the curator step checks their verdicts | `decided`: chose "Delivery starts each reviewer as its own step in parallel, then the curator step" | 2026-10-18 |
+| TD-374 | Re-decides TD-116 and TD-344 (and TD-111's tool removals): every step of every role may start every built-in subagent the runtime offers (explore, task, code-review, rubber-duck, research, rem-agent, security-review); subagent monitoring stays | `decided`: asked "dont we use subagents for the test reviewer/curator/ was this decision to forbid subagents a mistake?", chose "Allow subagents again for every role, monitored, and measure their use", then "Every built-in the runtime offers, for every role" after seeing TD-116's measurement (0/6, slower) | 2026-10-18 |
+| TD-375 | Read-only steps may start subagents too, under the same read-only guard (TD-82); that the guard reaches subagents is proven when built | `decided`: chose "Allowed in read-only steps too, under the same read-only guard" | 2026-10-18 |
+| TD-376 | Subagent use is measured by the monitoring as built, a per-role summary on the Maintenance page, and a per-role on/off setting, on by default | `autonomous`: the owner chose "Take your recommendation (monitoring plus a per-role summary on the Maintenance page and a per-role on/off setting, on by default)" | 2026-10-18 |
+| TD-377 | TD-53's subagent rule stays as a safety net: a subagent may use any named model, one on Auto voids the step, other models are logged | `decided`: chose "Keep the Auto check as a safety net for any subagent monitoring sees" ("apaort from that: option 2") | 2026-10-18 |
+| TD-378 | The watcher's model and effort (TD-47): TD-27's benchmark runs first, then the owner chooses with the assistant | `decided`: chose "Run TD-27's benchmark first, then choose with you" in the consolidation review | 2026-10-18 |
+| TD-379 | Settles TD-16's open point: besides an upheld rejection (TD-193) and a note contradicting the brief (TD-340), a CI check that keeps failing after the fix retries goes to the owner | `decided`: chose "Also when a CI check keeps failing after the fix retries" in the consolidation review | 2026-10-18 |
+| TD-380 | TD-205's "a recheck may not name a repeat and a verdict at once" is history: TD-208 replaced TD-189's repeats, and the settings migration drops `repeat_of` | `autonomous`: settled in the consolidation from the code (`settings/migrations.py`) | 2026-10-18 |
+| TD-381 | TD-273's "the package's manifest, notice and skills are as at the start" stays under merge-based activation (TD-357): a run whose package skill changed since its start stops (`pack_run._unchanged`), which keeps the pull request's content to what was challenged | `autonomous`: settled in the consolidation from the code | 2026-10-18 |
 | TD-49 | Screenshot method (read-back of charter §3.10, which was `approved` but never asked).
 - Delivery captures each UI state itself with a headless browser, at the configured desktop widths (R7).
 - A state may contain simple steps such as clicks or typing before the screenshot.
