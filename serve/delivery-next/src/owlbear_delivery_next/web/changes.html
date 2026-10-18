@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="owlbear-scope" content="all">
 <title>OwlBear Delivery · Changes</title>
 <link rel="stylesheet" href="/assets/pds/index.css">
 <script type="module">
@@ -132,10 +133,10 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { api, call as host, designSystem, here, HostDown, Restarted, token } from "/assets/ui.mjs";
+import { api, call as host, designSystem, here, HostDown, project, Restarted, shown, token } from "/assets/ui.mjs";
 
 const TITLE = document.title;
-const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const KEY = /^(?:[0-9a-f]{16}\/)?[a-z0-9][a-z0-9-]{0,63}$/;  // a Change: its project's id, then its slug (TD-241)
 const DIALOG = "{ 'aria-haspopup': 'dialog' }";  // PDS's aria property, for a button that opens a dialog
 const REVERT = "Reversing the merge needs a revert you make yourself.";
 // Everything the page shows comes from here (TD-264): the list and the detail as last read, the owner's unsent input
@@ -143,6 +144,7 @@ const REVERT = "Reversing the merge needs a revert you make yourself.";
 const state = {
   pds: true, changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
   stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, creating: false,
+  choosing: false,
 };
 let busy = false, again = false, lastSeen = null, arrived = false;
 
@@ -157,8 +159,23 @@ function show() {
   document.title = youCount() ? `(${youCount()}) ${TITLE}` : TITLE;
 }
 
-function call(path, body) {
-  return host(path, body === undefined ? {} : { body });
+// One call to the project *of* (this page's by default); a Change's own calls name its project.
+function call(path, body, of = project) {
+  return host(path, body === undefined ? { of } : { body, of });
+}
+
+// The key of a Change in the page: its project's id and slug, so two projects' Changes of one slug stay apart.
+function keyOf(of, slug) {
+  return of ? `${of}/${slug}` : slug;
+}
+
+function parts(key) {
+  const at = key.indexOf("/");
+  return at < 0 ? [project, key] : [key.slice(0, at), key.slice(at + 1)];
+}
+
+function several() {
+  return (shown()?.length ?? 0) > 1;
 }
 
 function draft(key, fresh) {
@@ -199,7 +216,7 @@ function notify(message) {
 // The forms the detail shows, as a key: a refusal stays beside them until they change.
 function formsOf(d) {
   const r = d.visual_round, asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
-  return JSON.stringify([d.slug, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head, asked,
+  return JSON.stringify([d.key, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head, asked,
     d.brief.version, d.brief.approved, d.pullback?.state, d.paused, r?.number, r?.outcome,
     d.owner_criteria.map((k) => k.id), d.retry?.attempt, d.retry?.head]);
 }
@@ -208,9 +225,9 @@ function formsOf(d) {
 // where he is looking; the poll keeps it until the forms change. True once the host took it.
 async function send(path, body, d, form = "") {
   try {
-    await call(`/changes/${d.slug}${path}`, body);
+    await call(`/changes/${d.slug}${path}`, body, d.project);
   } catch (e) {
-    if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.slug) return failed(e) && false;
+    if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.key) return failed(e) && false;
     state.refused = { forms: formsOf(d), form, text: e.message };
     show();
     document.querySelector("#detail .refused")?.scrollIntoView({ block: "nearest" });
@@ -322,7 +339,7 @@ function meta(value, cls = "meta") {
 }
 
 function questionForm(q, d) {
-  const key = `${d.slug}:question:${q.id}`, mine = draft(key, () => ({}));
+  const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
   const answer = async () => {
     const picked = q.options.some((o) => o.id === mine.option) ? mine.option : null, words = mine.text ?? "";
@@ -339,7 +356,7 @@ function questionForm(q, d) {
 // finding ticked for him; with none ticked the work is accepted as done. A kept task that shares changed files with a
 // ticked one may depend on it: said beside it, above the button and in the confirmation.
 function retryForm(q, r, d) {
-  const key = `${d.slug}:retry:${q.id}:${r.attempt}:${r.head}`;
+  const key = `${d.key}:retry:${q.id}:${r.attempt}:${r.head}`;
   const mine = draft(key, () => ({ ticked: r.tasks.filter((t) => t.ticked).map((t) => t.id) }));
   const ticked = () => r.tasks.filter((t) => mine.ticked.includes(t.id)).map((t) => t.id);
   const risks = () => {
@@ -545,7 +562,7 @@ function detectorLines(r) {
 // The owner's decision on one visual round (TD-79): the screenshots, both verdicts, the problems he sends back,
 // a comment, Pass or Fail.
 function decisionForm(q, r, pictures, d) {
-  const all = problems(r), key = `${d.slug}:visual:${r.number}:${r.head}`;
+  const all = problems(r), key = `${d.key}:visual:${r.number}:${r.head}`;
   const proposed = r.proposed || [];
   const mine = draft(key, () => ({ picked: all.filter((p) => p.items.some((f) => proposed.includes(f.id)))
     .map((p) => p.key) }));
@@ -617,7 +634,7 @@ function criteriaPanel(d) {
 }
 
 function checkForm(check, d) {
-  const key = `${d.slug}:check:${check.id}:${JSON.stringify(check.inputs)}`, mine = draft(key, () => ({}));
+  const key = `${d.key}:check:${check.id}:${JSON.stringify(check.inputs)}`, mine = draft(key, () => ({}));
   const result = (passed) => ({ check: check.id, passed, note: mine.note ?? "", inputs: check.inputs });
   const last = !d.asks_merge && d.checks.every((c) => c.id === check.id || c.passed === true);
   const passed = async () => {
@@ -654,7 +671,7 @@ function checkForm(check, d) {
 const CHECKED = { passed: "success", success: "success", failed: "error", failure: "error", error: "error" };
 
 function mergeForm(m, d) {
-  const head = m.head.slice(0, 7), key = `${d.slug}:merge:${m.head}`;
+  const head = m.head.slice(0, 7), key = `${d.key}:merge:${m.head}`;
   const approve = async () => {
     const sure = await ask({
       title: `Merge pull request #${m.pr} at ${head}?`, yes: "Merge", no: "Not now",
@@ -717,13 +734,13 @@ function pullbackNote(p, d) {
 // Screenshots load with the token once each; a loaded one renders from its object URL.
 const shots = new Map();
 
-function shot(slug, kind, name, at) {
-  const key = `${slug}/${kind}/${name}/${at}`;
+function shot(change, kind, name, at) {
+  const key = `${change}/${kind}/${name}/${at}`, [of, slug] = parts(change);
   if (!shots.has(key)) {
     const entry = { url: null, failed: false };
     shots.set(key, entry);
     const init = { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) };
-    entry.loading = fetch(api(`/changes/${slug}/${kind}/${encodeURIComponent(name)}`), init)
+    entry.loading = fetch(api(`/changes/${slug}/${kind}/${encodeURIComponent(name)}`, of), init)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.statusText))))
       .then((b) => { entry.url = URL.createObjectURL(b); }, () => { entry.failed = true; })
       .then(() => show());
@@ -1070,7 +1087,7 @@ function technical(d) {
 }
 
 function approval(d) {
-  const version = d.brief.version, key = `${d.slug}:approve:${version}`;
+  const version = d.brief.version, key = `${d.key}:approve:${version}`;
   const start = async () => {
     if (await ask(approving(d))) {
       send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, d, key);
@@ -1153,7 +1170,7 @@ function detailHead(d) {
       ? "Resumed: Delivery goes on once no question, check or stop holds the Change."
       : "Pause requested: the running step finishes first, then nothing new starts until you resume.";
     const go = async () => {
-      if (await send("/intent", body, d) && state.selected === d.slug) {
+      if (await send("/intent", body, d) && state.selected === d.key) {
         state.started = { text: said };
         show();
       }
@@ -1162,7 +1179,8 @@ function detailHead(d) {
       : { variant: "secondary", icon: "pause" });
   }
   return html`<div class="detail-head">${back}<div>${hd(2, d.slug, "xl", { tabindex: "-1" })}${d.brief.title
-    ? text(d.brief.title, { color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
+    ? text(d.brief.title, { color: "contrast-medium" }) : nothing}${several()
+    ? text(`in ${d.projectName}`, { size: "xs", color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
 }
 
 const PAUSED = /· paused by you/;
@@ -1183,8 +1201,8 @@ function detailView(d) {
   const refusedTop = state.refused && !state.refused.form ? refusal(state.refused.text) : nothing;
   const behind = d.pullback?.state === "behind";
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
-  const pictures = d.visual ? visualSection(d.slug, d.visual, d.before, d.visual_existing_errors, deciding)
-    : d.before ? beforeSection(d.slug, d.before) : null;
+  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding)
+    : d.before ? beforeSection(d.key, d.before) : null;
   const approvingNow = d.step === "shape" && d.brief.approved !== d.brief.version;
   let question = nothing;
   if (d.question) {
@@ -1227,11 +1245,11 @@ function split(line) {  // the stage, then what is happening in it
 }
 
 function card([c, label, variant]) {
-  const current = c.slug === state.selected, [stage, rest] = split(c.line), step = c.progress?.line;
+  const current = c.key === state.selected, [stage, rest] = split(c.line), step = c.progress?.line;
   const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    choose(c.slug);
+    choose(c.key);
   };
   const bits = [];
   if (c.now && label !== "Done" && (!step || c.now.includes(" \u00b7 "))) bits.push(split(c.now)[1]);
@@ -1242,9 +1260,10 @@ function card([c, label, variant]) {
   }
   if (c.quiet) bits.push("quiet");
   return html`<li class=${current ? "card current" : "card"}>
-    <div class="top"><a href=${here({ change: c.slug })} class="open" data-slug=${c.slug}
+    <div class="top"><a href=${here({ change: c.key })} class="open" data-key=${c.key}
       aria-current=${current ? "true" : nothing} @click=${open}>${c.slug}</a>
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
+    ${several() ? html`<p class="meta project">${c.projectName}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
     <p class="says">${stage && !step ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
@@ -1277,14 +1296,15 @@ function listView() {
   return html`${head}${Object.entries(GROUPS).map(([key, title]) => {
     if (!groups[key].length) return nothing;
     const said = `${title} (${groups[key].length})`;
-    const cards = html`<ul class="cards">${repeat(groups[key], ([c]) => c.slug, card)}</ul>`;
+    const cards = html`<ul class="cards">${repeat(groups[key], ([c]) => c.key, card)}</ul>`;
     if (key !== "done") return html`<section class="group">${hd(2, said, "md")}${cards}</section>`;
-    const open = state.doneOpen || groups.done.some(([c]) => c.slug === state.selected);
+    const open = state.doneOpen || groups.done.some(([c]) => c.key === state.selected);
     return html`<details class="group" .open=${open} @toggle=${toggled}><summary>${said}</summary>${cards}</details>`;
   })}`;
 }
 
 function startedView() {
+  if (state.choosing) return chooserView();
   const s = state.started;
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
   return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}. Copy
@@ -1292,7 +1312,7 @@ function startedView() {
 }
 
 function view() {
-  const d = state.detail && state.detail.slug === state.selected ? state.detail : null;
+  const d = state.detail && state.detail.key === state.selected ? state.detail : null;
   return html`
     <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
       cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
@@ -1328,17 +1348,51 @@ function focusHeading() {
   reveal(target);
 }
 
-function choose(slug, push = true) {
+// A key the page can open: a bare slug from an older link names the page's project, if it names one.
+function wanted(key) {
+  if (!key || !KEY.test(key)) return null;
+  return key.includes("/") || !project ? key : keyOf(project, key);
+}
+
+function choose(key, push = true) {
   const was = state.selected;
-  state.selected = slug && SLUG.test(slug) ? slug : null;
+  state.selected = wanted(key);
   arrived = Boolean(state.selected);
   if (state.selected !== was) state.started = null;  // a note belongs to its Change
   if (push && state.selected !== was) {
     history.pushState(null, "", here({ change: state.selected }));
   }
   show();
-  if (!state.selected && was) document.querySelector(`#changes a[data-slug="${CSS.escape(was)}"]`)?.focus();
+  if (!state.selected && was) document.querySelector(`#changes a[data-key="${CSS.escape(was)}"]`)?.focus();
   refresh();
+}
+
+// Every shown project's Changes, each with its project, and the projects' repository notes.
+async function everything() {
+  const projects = shown();
+  if (projects === null) {  // a clone's own host: the one project it serves
+    const rows = (await call("/changes")).map((c) => ({ ...c, key: c.slug, project: "", projectName: "" }));
+    return [rows, (await call("/project")).notes, new Set()];
+  }
+  const each = await Promise.allSettled(projects.map(async (p) => [await call("/changes", undefined, p.id),
+    (await call("/project", undefined, p.id)).notes]));
+  const lost = (r) => r.status === "rejected" && (r.reason instanceof HostDown || r.reason instanceof Restarted);
+  const down = each.find(lost);
+  if (down) throw down.reason;
+  const rows = [], notes = [], failing = new Set();
+  each.forEach((r, i) => {  // one project that cannot be read keeps its last Changes and says why; the others go on
+    const p = projects[i], named = (n) => (projects.length > 1 ? `${p.name}: ${n}` : n);
+    if (r.status === "rejected") {
+      failing.add(p.id);
+      rows.push(...(state.changes ?? []).filter((c) => c.project === p.id));
+      notes.push(named(`not read just now (${r.reason.message}); its Changes show as last read`));
+      return;
+    }
+    const [changes, said] = r.value;
+    rows.push(...changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id, projectName: p.name })));
+    notes.push(...said.map(named));
+  });
+  return [rows, notes, failing];
 }
 
 async function refresh() {
@@ -1348,25 +1402,30 @@ async function refresh() {
   }
   busy = true;
   try {
-    state.changes = await call("/changes");
-    if (state.selected && !state.changes.some((c) => c.slug === state.selected)) {  // gone, or a stale link
+    const [rows, notes, failing] = await everything();
+    [state.changes, state.notes] = [rows, notes];
+    const unread = state.selected && failing.has(parts(state.selected)[0]);  // absent only once its project answers
+    if (state.selected && !unread && !rows.some((c) => c.key === state.selected)) {  // gone, or a stale link
       state.selected = null;
       history.replaceState(null, "", here({ change: "" }));
     }
-    state.notes = (await call("/project")).notes;
     lastSeen = new Date();
     state.error = null;
     state.seen = "";
     state.stale = false;
-    const wanted = state.selected;
-    if (wanted) {
-      const d = await call(`/changes/${encodeURIComponent(wanted)}`);
-      if (d.slug === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
+    const key = state.selected;
+    if (key && unread) {
+      // its project did not answer: the detail stays as last read
+    } else if (key) {
+      const [of, slug] = parts(key), d = await call(`/changes/${encodeURIComponent(slug)}`, undefined, of);
+      const row = state.changes.find((c) => c.key === key);
+      Object.assign(d, { key, project: of, projectName: row?.projectName ?? "" });
+      if (key === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
     } else {
       state.detail = null;
     }
     show();
-    if (arrived && state.detail?.slug === state.selected) {
+    if (arrived && state.detail?.key === state.selected) {
       arrived = false;
       focusHeading();
     }
@@ -1381,15 +1440,41 @@ async function refresh() {
   }
 }
 
-async function launched(id) {  // the host opens the chat in the background; VS Code may first have to start
+async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start
   for (;;) {
-    const s = await call(`/new-change/${encodeURIComponent(id)}`);
+    const s = await call(`/new-change/${encodeURIComponent(id)}`, undefined, of);
     if (s.state !== "opening") return s;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 
-async function newChange() {
+// New Change asks which project first when the page shows several (TD-241).
+function newChange() {
+  if (several()) {
+    state.choosing = shown()[0].id;
+    show();
+    document.querySelector("#choose select")?.focus();
+    return undefined;
+  }
+  return shape(shown()?.[0]?.id ?? project);
+}
+
+function chooserView() {
+  const picked = (e) => { state.choosing = e.target.value; };
+  const go = () => {
+    const of = state.choosing;
+    state.choosing = false;
+    show();  // the chooser goes at once, whatever the confirmation then says
+    shape(of);
+  };
+  const stop = () => { state.choosing = false; show(); };
+  return html`<div id="choose" class="row"><label>Shape the new Change in <select .value=${state.choosing}
+    @change=${picked}>${shown().map((p) => html`<option value=${p.id} ?selected=${p.id === state.choosing}>${p.name}
+    </option>`)}</select></label>
+    ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
+}
+
+async function shape(of) {
   const wanted = await ask({
     title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
     now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
@@ -1403,8 +1488,8 @@ async function newChange() {
   state.started = { text: "Opening the shaping chat…" };
   show();
   try {
-    const r = await call("/new-change", {});
-    const s = r.started ? await launched(r.launch) : { state: "failed", ...r };
+    const r = await call("/new-change", {}, of);
+    const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
     state.started = s.state === "open"
       ? { text: `A chat opened in VS Code to shape the new Change.${s.warning ? ` Note: ${s.warning}.` : ""}` }
       : { reason: s.reason, command: s.command };
@@ -1418,8 +1503,7 @@ async function newChange() {
 }
 
 // The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
-const asked = new URLSearchParams(location.search).get("change");
-state.selected = asked && SLUG.test(asked) ? asked : null;
+state.selected = wanted(new URLSearchParams(location.search).get("change"));
 arrived = Boolean(state.selected);
 state.pds = await designSystem(["p-button"]);
 show();

@@ -186,7 +186,7 @@ def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(p
     with opened(base, "flip") as page:
         expect(page.locator("#detail h2")).to_have_text("flip")
         expect(page.locator("#changes")).to_contain_text("Needs you (")
-        page.locator("#changes a[data-slug='greet']").click()
+        page.locator("#changes a[data-key='greet']").click()
         expect(page.locator("#detail h2")).to_have_text("greet")
         assert page.evaluate("location.search") == "?change=greet"
         page.go_back()

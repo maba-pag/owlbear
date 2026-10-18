@@ -1,4 +1,4 @@
-"""The pages under the machine host (TD-242): one project at a time, chosen by the bar under the tabs."""
+"""The pages under the machine host (TD-242, TD-241): Changes of all projects or one, chosen by the bar."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import subprocess
 import threading
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 import uvicorn
@@ -19,16 +19,14 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store.store import Store
 
-if TYPE_CHECKING:
-    from pathlib import Path
 
-
-def clone(path: Path) -> Path:
+def clone(path: Path, slug: str = "") -> Path:
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
     store = Store.open(path)
-    with store.lock(f"{path.name}-1") as lock:
-        store.write(lock, Change(slug=f"{path.name}-1", step=Step(kind=StepKind.BUILD)))
+    slug = slug or f"{path.name}-1"
+    with store.lock(slug) as lock:
+        store.write(lock, Change(slug=slug, step=Step(kind=StepKind.BUILD)))
     return path.resolve()
 
 
@@ -47,7 +45,9 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
 
 
 @pytest.mark.browser
-def test_each_page_shows_one_project_the_bar_switches_adds_removes_and_resumes(tmp_path: Path, monkeypatch) -> None:
+def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_resumes(
+    tmp_path: Path, monkeypatch
+) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
@@ -64,15 +64,18 @@ def test_each_page_shows_one_project_the_bar_switches_adds_removes_and_resumes(t
             page = browser.new_page()
             page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
             page.goto(f"{base}/#token=t")
-            expect(page).to_have_url(f"{base}/?project={a.id}")  # a link without a project opens the first
-            expect(page.locator("#changes")).to_contain_text("alpha-1")
+            expect(page.locator("#changes")).to_contain_text("alpha-1")  # All: every project's Changes
+            expect(page.locator("#changes")).to_contain_text("beta-1")
+            expect(page).to_have_url(f"{base}/")
+            expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
             expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
             expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
             page.locator("#machine select").select_option(b.id)
             expect(page.locator("#changes")).to_contain_text("beta-1")
+            expect(page.locator("#changes")).not_to_contain_text("alpha-1")
             expect(page.get_by_role("link", name="Backlog")).to_have_attribute("href", f"/backlog?project={b.id}")
             page.locator("#changes a.open").first.click()
-            expect(page).to_have_url(f"{base}/?project={b.id}&change=beta-1")
+            expect(page).to_have_url(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")
             page.reload()
             expect(page.locator("#machine select")).to_have_value(b.id)
             page.get_by_role("button", name="Resume").click()
@@ -86,8 +89,63 @@ def test_each_page_shows_one_project_the_bar_switches_adds_removes_and_resumes(t
             expect(page).to_have_url(f"{base}/?project={added.id}")
             page.get_by_role("button", name="Remove project").click()
             page.locator("dialog").get_by_role("button", name="Remove project").click()
-            expect(page).to_have_url(f"{base}/?project={a.id}")
+            expect(page).to_have_url(f"{base}/")  # back to All
             assert [p.id for p in registry.load().projects] == [a.id, b.id]
+            page.get_by_role("link", name="Backlog").click()
+            expect(page).to_have_url(f"{base}/backlog?project={a.id}")  # a project page opens the first project
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(tmp_path: Path, monkeypatch) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
+    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
+    a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/#token=t")
+            cards = page.locator("#changes li.card")
+            expect(cards).to_have_count(2)
+            cards.filter(has_text="beta").locator("a.open").click()
+            expect(page).to_have_url(f"{base}/?change={b.id}%2Fsame")
+            expect(page.locator("#detail")).to_contain_text("in beta")
+            page.reload()
+            expect(page.locator("#detail")).to_contain_text("in beta")
+            page.locator("#detail").get_by_role("button", name="Pause").click()
+            expect(page.locator("#started")).to_contain_text("Pause requested")
+            paused = {Path(p.path).name: Store.open(Path(p.path)).read("same").intent.paused_at for p in (a, b)}
+            assert (paused["alpha"], paused["beta"] is not None) == (None, True)  # only beta's Change
+            page.go_back()
+            expect(page).to_have_url(f"{base}/")
+            page.get_by_role("button", name="New Change").click()
+            expect(page.locator("#choose select")).to_have_value(a.id)
+            page.get_by_role("button", name="Cancel").click()
+            expect(page.locator("#choose")).to_have_count(0)
+            page.get_by_role("button", name="New Change").click()
+            page.locator("#choose select").select_option(b.id)
+            page.get_by_role("button", name="Continue").click()
+            page.locator("dialog").get_by_role("button", name="Not now").click()
+            expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
+            page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
+            expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
+            expect(cards).to_have_count(2)  # its Changes stay as last read; beta's go on
+            page.goto(f"{base}/?change={a.id}%2Fsame")  # a link into the project that does not answer just now
+            expect(page.locator("#notes")).to_contain_text("alpha: not read just now")
+            page.unroute(f"**/p/{a.id}/api/next/changes")
+            expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
+            assert page.evaluate("location.search") == f"?change={a.id}%2Fsame"
             browser.close()
     finally:
         server.should_exit = True

@@ -1,5 +1,6 @@
 // What every Delivery page shares (TD-264): the token, calls to the host and the design system's arrival.
-// Under the machine host (TD-242) each page shows one project, named by ?project=, until one UI shows them all.
+// Under the machine host (TD-242) ?project= names the project a page shows. The Changes page also shows all projects
+// (TD-241): it declares <meta name="owlbear-scope" content="all">, and without ?project= it lists every project.
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 
@@ -10,10 +11,11 @@ if (hash.get("token")) {
 }
 export const token = sessionStorage.getItem("token");
 export const project = new URLSearchParams(location.search).get("project") ?? "";
+const scope = document.querySelector('meta[name="owlbear-scope"]')?.content ?? "project";
 
-// Where this page's project answers: its own API on the machine host, the host's own on a clone's host.
-export function api(path) {
-  return project ? `/p/${encodeURIComponent(project)}/api/next${path}` : `/api/next${path}`;
+// Where a project answers (this page's unless *of* names another): its own API on the machine host, else the host's.
+export function api(path, of = project) {
+  return of ? `/p/${encodeURIComponent(of)}/api/next${path}` : `/api/next${path}`;
 }
 
 // A page address with the project kept and *params* set (an empty value drops one); a #section stays last.
@@ -52,8 +54,8 @@ function said(detail) {
 }
 
 // One call to the host's API; GET without a body. Throws HostDown, Restarted, or an Error with the host's words.
-// A *machine* call goes to the machine host's own routes rather than the project's.
-export async function call(path, { method, body, timeout = 5000, machine = false } = {}) {
+// A *machine* call goes to the machine host's own routes; *of* names the project when it is not the page's.
+export async function call(path, { method, body, timeout = 5000, machine = false, of = project } = {}) {
   if (!token) throw new Error("Open the URL the host printed, including #token=…");
   const init = { method: method ?? (body ? "POST" : "GET"), headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(timeout) };
@@ -63,7 +65,7 @@ export async function call(path, { method, body, timeout = 5000, machine = false
   }
   let response;
   try {
-    response = await fetch(machine ? `/api/next${path}` : api(path), init);
+    response = await fetch(machine ? `/api/next${path}` : api(path, of), init);
   } catch {
     throw new HostDown();
   }
@@ -96,12 +98,19 @@ async function machine() {
 }
 
 const bar = { data: token ? await machine().catch(() => null) : null, draft: "", busy: "", error: "" };
-if (bar.data && !bar.data.projects.some((p) => p.id === project)) {
+const listed = (id) => bar.data.projects.some((p) => p.id === id);
+if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
-  if (first) {  // a page always shows one project; the first loaded one when the link named none it serves
-    location.replace(here({ project: first.id }));
+  if (first || project) {  // a project page shows one project: the first loaded one when the link named none
+    location.replace(here({ project: first && scope !== "all" ? first.id : "" }));
     await new Promise(() => {});
   }
+}
+
+// The projects a page shows: this one, or under the All filter every loaded one; null when no machine host serves it.
+export function shown() {
+  if (!bar.data) return null;
+  return bar.data.projects.filter((p) => p.state === "loaded" && (!project || p.id === project));
 }
 for (const link of document.querySelectorAll("nav a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 
@@ -122,7 +131,8 @@ async function act(name, work) {
 
 function control(label, onclick, { variant = "secondary", busy = false } = {}) {
   return customElements.get("p-button")
-    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy} @click=${onclick}>${label}</p-button>`
+    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy}
+        @click=${onclick}>${label}</p-button>`
     : html`<button type="button" .disabled=${busy} @click=${onclick}>${label}</button>`;
 }
 
@@ -153,7 +163,9 @@ function view() {
   return html`
     <div class="projects">
       ${projects.length ? html`<label>Project <select .value=${project} @change=${go}>
-        ${projects.map((o) => html`<option value=${o.id} ?selected=${o.id === project}>${chosen(o, projects)}</option>`)}
+        ${scope === "all" ? html`<option value="" ?selected=${!project}>All projects</option>` : nothing}
+        ${projects.map((o) => html`<option value=${o.id} ?selected=${o.id === project}>${chosen(o, projects)}
+          </option>`)}
       </select></label>` : html`<span>No project yet: add the folder of a clone.</span>`}
       ${p ? control("Remove project", () => remove(p), { busy: bar.busy === "remove" }) : nothing}
       ${p?.state === "replaced" ? control("Adopt the new clone", () => act("adopt", async () => {
