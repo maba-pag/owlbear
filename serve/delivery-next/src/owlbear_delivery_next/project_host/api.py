@@ -239,11 +239,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             raise HTTPException(401, "token required")
 
     def read(slug: str) -> Change:
-        known = next((s for s in store.slugs() if s == slug), None) if SLUG.fullmatch(slug) else None
-        if known is None:  # reads go by the stored name, never request text
+        if not SLUG.fullmatch(slug) or slug not in store.slugs():
             raise HTTPException(404, "no such Change")
         try:
-            return store.read(known)
+            return store.read(slug)
         except StoreError as exc:
             raise HTTPException(409, str(exc)) from exc
 
@@ -394,22 +393,21 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         )
 
     def png(shots: VisualResult | None, folder_of: Callable[[str], Path], name: str) -> FileResponse:
-        stored = next((f for f in shots.files if f == name), None) if shots else None  # the path takes no request text
-        if not (shots and stored and visual.FILE.fullmatch(stored)):
+        if not (shots and visual.FILE.fullmatch(name) and name in shots.files):
             raise HTTPException(404, "no such screenshot")
         folder = folder_of(shots.head).resolve()
-        path = (folder / stored).resolve()
+        path = (folder / name).resolve()
         if path.parent != folder or not path.is_file():
             raise HTTPException(404, "no such screenshot")
         return FileResponse(path, media_type="image/png")
 
     @router.get("/changes/{slug}/visual/{name}")
     def screenshot(slug: str, name: str) -> FileResponse:
-        return png((c := read(slug)).visual, lambda head: store.visual_dir(c.slug, head), name)
+        return png(read(slug).visual, lambda head: store.visual_dir(slug, head), name)
 
     @router.get("/changes/{slug}/before/{name}")
     def before_screenshot(slug: str, name: str) -> FileResponse:
-        return png((c := read(slug)).before, lambda base: store.before_dir(c.slug, base), name)
+        return png(read(slug).before, lambda base: store.before_dir(slug, base), name)
 
     @router.post("/changes/{slug}/answers")
     def answer(slug: str, body: AnswerBody) -> dict[str, str]:
