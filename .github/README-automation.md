@@ -78,10 +78,13 @@ its projects are set never to retest. No ruleset requires its checks.
 The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-319):
 `snyk code test` and `snyk test --all-projects` at high severity and above, never `monitor` or
 `--report`, so it writes nothing into the org. Each finding prints its rule, file and line, so a
-failing run is fixed like any failing test, by Delivery too. It authenticates with the org service
-account `owlbear-ci` in the Org Collaborator role (TD-320; a read-only CLI tester role replaces it once
-the Group offers one), whose token is the `SNYK_TOKEN` Actions secret. A finding
-accepted on purpose goes into `.snyk` with its reason.
+failing run is fixed like any failing test, by Delivery too. A dependency finding fails only when
+Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-321); others print and pass. It
+authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-320; a
+read-only CLI tester role replaces it once the Group offers one), whose token is the `SNYK_TOKEN`
+Actions secret. A Snyk Code false positive is ignored by the owner in the Snyk web UI, which the
+CLI honours (Consistent Ignores); a dependency finding accepted on purpose goes into `.snyk` with
+its reason.
 
 ## Releases
 

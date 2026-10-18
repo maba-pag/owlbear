@@ -143,6 +143,7 @@ def test_the_snyk_suite_only_tests_and_gets_its_token_from_the_gate() -> None:
     runs = _runs({"steps": steps})
     assert "snyk code test" in runs
     assert "snyk test --all-projects" in runs
+    assert "--fail-on=upgradable" in runs  # TD-321: a finding without a Snyk fix prints but passes
     assert not any(word in runs for word in ("monitor", "--report", "|| true"))
     assert _workflow("security.yml")["env"]["SNYK_API"] == "https://api.eu.snyk.io"
     assert _jobs("ci.yml")["security"]["secrets"] == {"SNYK_TOKEN": "${{ secrets.SNYK_TOKEN }}"}

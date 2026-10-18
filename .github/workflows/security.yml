@@ -53,4 +53,4 @@ jobs:
         if: success() || failure()
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --all-projects --org="$SNYK_ORG" --severity-threshold=high
+        run: snyk test --all-projects --org="$SNYK_ORG" --severity-threshold=high --fail-on=upgradable  # TD-321
