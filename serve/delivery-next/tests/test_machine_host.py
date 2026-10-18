@@ -169,21 +169,29 @@ def test_a_stop_when_idle_waits_for_a_running_step_refuses_a_launch_and_resume_c
 
 def test_a_stop_when_idle_waits_for_a_launch_admitted_before_it(tmp_path, http, machine):
     p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
-    held, order = threading.Event(), []
+    stopped, held, release, looked = [], threading.Event(), threading.Event(), []
+    machine.on_stop = lambda: stopped.append(True)
 
     def admit():
-        with p.host.launching:  # a New Change chat that passed its check before the intent
+        with p.host.launching:  # a runner that passed its pause check before the intent
             held.set()
-            time.sleep(0.3)
-            order.append("admitted")
+            release.wait(5)
+            running_step(Path(p.entry.path))  # recorded before the lock is released
 
-    t = threading.Thread(target=admit)
-    t.start()
+    admitting = threading.Thread(target=admit)
+    admitting.start()
     held.wait(5)
-    machine.pause_stop()
-    order.append("stop intent")
-    t.join()
-    assert order == ["admitted", "stop intent"]
+    pausing = threading.Thread(target=machine.pause_stop)
+    pausing.start()
+    while not machine.ending:
+        time.sleep(0.01)
+    looking = threading.Thread(target=lambda: looked.append(machine.idle_stop()))
+    looking.start()
+    time.sleep(0.2)  # the look waits behind the barrier
+    release.set()
+    for t in (admitting, pausing, looking):
+        t.join(5)
+    assert (looked, stopped) == ([False], [])
 
 
 def test_a_stop_when_idle_waits_for_what_is_not_confirmed_gone(tmp_path, http, machine):

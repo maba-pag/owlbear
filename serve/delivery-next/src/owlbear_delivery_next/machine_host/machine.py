@@ -152,12 +152,12 @@ class Machine:
 
     def pause_stop(self) -> None:
         """Pause and stop when idle (TD-288): nothing starts, check environments go, then OwlBear stops."""
-        with self.lock:
+        with self.lock:  # idle_stop waits for the barrier too, so nothing admitted before it goes uncounted
             self.paused = self.ending = True
-        for p in list(self.projects.values()):
-            if p.host:
-                with p.host.launching:  # a launch admitted before the intent is counted from now on
-                    pass
+            for p in list(self.projects.values()):
+                if p.host:
+                    with p.host.launching:  # a launch admitted before the intent is counted from now on
+                        pass
         self.say("paused by you: OwlBear stops once nothing runs")
         self._wake()
 
