@@ -260,3 +260,17 @@ def test_each_project_line_in_the_log_names_its_project(tmp_path, http, machine,
     p = machine.projects[add(http, clone(tmp_path / "shop"))["id"]]
     p.host.say("c1: runner 7 started")
     assert capsys.readouterr().out.endswith(" shop: c1: runner 7 started\n")
+
+
+def test_the_machine_s_own_values_are_read_apart_from_any_settings_layer(http, machine, monkeypatch):
+    """TD-243: the Settings page's machine section; the login item as launchctl reports it, on a Mac only."""
+    monkeypatch.setattr(app.sys, "platform", "darwin")
+    monkeypatch.setattr(app.control, "autostarts", lambda: "on")
+    paused = http.get("/api/next/machine").json()
+    machine.resume()
+    resumed = http.get("/api/next/machine").json()
+    monkeypatch.setattr(app.sys, "platform", "linux")
+    assert (paused["paused"], paused["login_item"], resumed["paused"], resumed["resumed_at"] is not None) == (
+        True, "on", False, True
+    )  # fmt: skip
+    assert http.get("/api/next/machine").json()["login_item"] == "not available on this system"
