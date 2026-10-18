@@ -48,7 +48,7 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { call, designSystem, here, loaded as clones, project as current } from "/assets/ui.mjs";
+import { call, designSystem, guard, here, loaded as clones, project as current } from "/assets/ui.mjs";
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const INHERIT = "inherit";  // the option that clears the layer's own value
@@ -461,6 +461,7 @@ async function save() {
   } catch (e) {
     state.status = "";
     if (e.status === 409 && await reload()) {
+      await readAcross();
       state.error = `${e.message}. The page loaded the current settings and kept your unsaved edits; `
         + "check them and save again.";
       state.error = state.error.charAt(0).toUpperCase() + state.error.slice(1);
@@ -705,9 +706,9 @@ function scopeSection() {
       state.layer = v;
       return show();
     }
-    if (Object.keys(drafts.project).length || Object.keys(drafts.global).length) {
+    if (unsaved()) {
       show();  // the select shows the layer being edited again
-      return notify("Save or discard your edits before you edit another project.");
+      return notify(unsaved());
     }
     location.assign(here({ project: v.slice(3) }));
   };
@@ -728,24 +729,36 @@ function scopeSection() {
   </section>`;
 }
 
+// Why another project may not open now: edits of either layer or a folder name typed and not saved.
+function unsaved() {
+  const folder = state.folder !== null && state.folder.trim() !== (state.loaded?.folder ?? "");
+  return Object.keys(drafts.project).length || Object.keys(drafts.global).length || folder
+    ? "Save or discard your edits before you open another project." : "";
+}
+
+// A value in the overview: a list or a record in full, never "[object Object]".
+function plain(value) {
+  return value !== null && typeof value === "object" && !(Array.isArray(value) && value.every((v) => typeof v
+    !== "object")) ? JSON.stringify(value) : shown(value);
+}
+
 function at(value, key) {
   return key.split(".").reduce((o, k) => o?.[k], value);
 }
 
 // Each setting a project sets apart from the global value, with that global value and where it comes from.
 function acrossSection() {
-  if (!state.others.length && !state.unread.length) return nothing;
+  if (!clones()) return nothing;  // a clone's own host serves one project
   const loaded = state.loaded, all = [{ name: named(), config: loaded }, ...state.others];
   const rows = Object.keys(loaded.settings.sources).map((key) => {
     const global = at(loaded.inherited.project, key), set = at(loaded.global, key);
     const from = set !== undefined && set !== null ? "global" : key.startsWith("final_review.") ? "the builder's value"
       : "built-in default";
-    const differ = all.filter((p) => p.config.settings.sources[key] === "project"
-      && JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(global));
+    const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(global));
     return { key, global, from, differ };
   }).filter((r) => r.differ.length);
-  const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${shown(r.global)} (${r.from})`),
-    cell(r.differ.map((p) => `${p.name}: ${shown(at(p.config.settings, r.key))}`).join("; "))));
+  const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${plain(r.global)} (${r.from})`),
+    cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; "))));
   const unread = state.unread.length ? `Not read: ${state.unread.join("; ")}.` : "";
   return html`<section class="panel" aria-labelledby="across-title">
     <p-heading size="lg"><h2 id="across-title">Across projects</h2></p-heading>
@@ -763,8 +776,8 @@ function machineSection() {
   const since = m.resumed_at ? `, resumed ${new Date(m.resumed_at).toLocaleString()}` : "";
   return html`<section class="panel" aria-labelledby="machine-title">
     <p-heading size="lg"><h2 id="machine-title">This machine</h2></p-heading>
-    <p-text id="machine-run">Delivery ${m.paused ? "is paused since OwlBear started: press Resume above" : `runs${since}`}.
-    </p-text>
+    <p-text id="machine-run">Delivery ${m.paused ? "is paused since OwlBear started: press Resume above"
+      : `runs${since}`}.</p-text>
     <p-text id="machine-login">Start at login: ${m.login_item}. Change it in a terminal with
       <code>owlbear autostart on</code> or <code>owlbear autostart off</code>.</p-text>
   </section>`;
@@ -893,6 +906,13 @@ function view() {
     ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}${acrossSection()}${machineSection()}`
       : packSection()}`;
 }
+
+guard(unsaved);
+document.addEventListener("owlbear-machine", async () => {
+  if (!state.machine) return;
+  state.machine = await call("/machine", { machine: true }).catch(() => state.machine);
+  show();
+});
 
 // PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
 state.pds = await designSystem(["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"]);

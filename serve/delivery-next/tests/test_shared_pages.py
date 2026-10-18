@@ -249,10 +249,13 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             expect(scope.locator("option")).to_have_text(
                 ["Project docs-site", "Global (every project)", "Project shop-site (/s)", "Project shop-site (/s2)"]
             )
-            page.get_by_label("Minutes per session, reviewer").fill("25")
+            page.get_by_label("Rounds at most, builder").fill("4")
             scope.select_option(f"go:{SHOP}")  # an unsaved edit keeps the page where it is
             expect(page.locator("#error")).to_contain_text("Save or discard your edits")
             expect(scope).to_have_value("project")
+            page.locator("#machine select").select_option(SHOP)  # so does the project bar
+            expect(page.locator("#machine [role=alert]")).to_contain_text("Save or discard your edits")
+            expect(page).to_have_url(f"{base}/config?project={DOCS}")
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
             docs.update_config(lambda layer: layer.model_copy(update={"explore": True}))  # another page saved first
             page.get_by_role("button", name="Save project settings").click()
@@ -260,6 +263,8 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             page.get_by_role("button", name="Save project settings").click()
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
             expect(across).to_contain_text("docs-site: yes")  # the overview follows the save
+            expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
+            expect(across).to_contain_text("docs-site: 4")
             page.goto(f"{base}/config?project={DOCS}")
             scope.select_option(f"go:{SHOP}")
             expect(page).to_have_url(f"{base}/config?project={SHOP}")

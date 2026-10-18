@@ -113,6 +113,17 @@ export function shown() {
   return bar.data.projects.filter((p) => p.state === "loaded" && (!project || p.id === project));
 }
 
+// What keeps the page from opening another project: a page with unsaved edits registers it, saying why.
+let unsaved = () => "";
+export function guard(why) {
+  unsaved = why;
+}
+
+// The machine's state changed (Resume, a project added or gone): pages that show it read it again.
+function changed() {
+  document.dispatchEvent(new CustomEvent("owlbear-machine", { detail: bar.data }));
+}
+
 // Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
@@ -132,6 +143,7 @@ async function act(name, work) {
   bar.busy = "";
   bar.data = await machine().catch(() => bar.data);
   showBar();
+  changed();
 }
 
 function control(label, onclick, { variant = "secondary", busy = false } = {}) {
@@ -160,7 +172,13 @@ async function remove(p) {
 function view() {
   const { projects, paused, waiting } = bar.data;
   const p = projects.find((o) => o.id === project);
-  const go = (e) => location.assign(here({ project: e.target.value, change: "" }));
+  const go = (e) => {
+    if ((bar.error = unsaved())) {
+      e.target.value = project;  // the page keeps showing the project being edited
+      return showBar();
+    }
+    location.assign(here({ project: e.target.value, change: "" }));
+  };
   const add = () => act("add", async () => {
     const added = await call("/projects", { body: { path: bar.draft.trim() }, machine: true });
     location.assign(here({ project: added.id, change: "" }));
@@ -207,7 +225,9 @@ if (bar.data) {
   showBar();
   setInterval(async () => {
     if (bar.busy || document.activeElement?.closest?.("#machine")) return;  // never under the owner's typing
+    const was = bar.data?.paused;
     bar.data = await machine().catch(() => bar.data);
     showBar();
+    if (bar.data?.paused !== was) changed();
   }, 5000);
 }
