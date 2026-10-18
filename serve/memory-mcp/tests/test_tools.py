@@ -102,3 +102,40 @@ async def test_commit_memory_batch_routes_deletion_refusal_to_tool_error(tmp_pat
     assert "Restore the file from HEAD" in message
     assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
     assert _git(tmp_path, "diff", "--cached", "--name-only") == ""
+
+
+def _approved(engine: MemoryEngine, title: str) -> str:
+    saved = engine.save(
+        title=title,
+        content=f"{title}: what every agent should know.",
+        categories=[MemoryCategory.PROCESS],
+        confidence=0.9,
+        source_agent="*",
+        scope_agents=[],
+    )
+    curated = engine.edit(saved.id, {"scope_agents": ["*"]}, saved.updated_at)
+    return engine.approve(curated.id, curated.updated_at).id
+
+
+@pytest.mark.asyncio
+async def test_agents_read_global_memory_beside_their_projects_and_write_only_their_projects(tmp_path: Path) -> None:
+    """TD-241: the store and Global memory are both read; a save goes to the store."""
+    mine, shared = MemoryEngine(tmp_path / "shop" / "memory"), MemoryEngine(tmp_path / "memory")
+    own, common = _approved(mine, "Run the shop's tests"), _approved(shared, "Every project signs commits")
+    context = SimpleNamespace(
+        request_context=SimpleNamespace(
+            lifespan_context=SimpleNamespace(engine=mine, memory_dir=tmp_path / "shop" / "memory", global_engine=shared)
+        )
+    )
+    listed = {entry["id"] for entry in await tools.list_memories(context)}
+    recalled = await tools.recall_memory(context, agent="*")
+    read = await tools.read_memory(context, entry_id=common)
+    assert (listed, "Every project signs commits" in recalled, read["title"]) == (
+        {own, common}, True, "Every project signs commits"
+    )  # fmt: skip
+    before = sorted(p.name for p in (tmp_path / "memory").iterdir())
+    saved = await tools.save_memory(
+        context, title="New", content="new", categories=["process"], confidence=0.8, source_agent="*"
+    )
+    assert sorted(p.name for p in (tmp_path / "memory").iterdir()) == before
+    assert (tmp_path / "shop" / "memory" / f"{saved['id']}.md").is_file()

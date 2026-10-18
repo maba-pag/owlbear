@@ -88,6 +88,16 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
         raise ToolError(msg) from exc
 
 
+def _readable(ctx: Context) -> list[MemoryEntry]:
+    """The store's entries, then Global memory's ones it does not hold: what agents read (TD-241)."""
+    entries = _engine_from_ctx(ctx).get_entries()
+    shared = getattr(ctx.request_context.lifespan_context, "global_engine", None)
+    if shared is None:
+        return entries
+    mine = {entry.id for entry in entries}
+    return entries + [entry for entry in shared.get_entries() if entry.id not in mine]
+
+
 def _memory_dir_from_ctx(ctx: Context) -> Path:
     try:
         memory_dir = ctx.request_context.lifespan_context.memory_dir
@@ -108,12 +118,12 @@ def _validate_scope(agents: list[str]) -> None:
         raise ToolError(str(exc)) from exc
 
 
-def _recognized_agent_names(engine: MemoryEngine) -> list[str]:
+def _recognized_agent_names(entries: list[MemoryEntry]) -> list[str]:
     """Return sorted non-universal provenance and scope names on live memories."""
     return sorted(
         {
             name
-            for entry in engine.get_entries()
+            for entry in entries
             if entry.state != MemoryState.DELETED
             for name in [entry.source_agent, *entry.scope_agents]
             if name and name != "*"
@@ -334,7 +344,6 @@ async def list_memories(
     scope_agents: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return metadata-only entries with pending-first ordering."""
-    engine = _engine_from_ctx(ctx)
     coerced_states = _coerce_states(states)
     coerced_categories = _coerce_categories(categories)
     allowed_states = (
@@ -353,7 +362,7 @@ async def list_memories(
     scope_filter = set(scope_agents or [])
     _validate_scope(list(scope_filter))
 
-    entries = [entry for entry in engine.get_entries() if entry.state in allowed_states]
+    entries = [entry for entry in _readable(ctx) if entry.state in allowed_states]
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
     if scope_filter:
@@ -377,7 +386,11 @@ async def list_memories(
 async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Return a full entry by ID, excluding deleted state."""
     engine = _engine_from_ctx(ctx)
-    entry = _load_entry_or_raise(engine, entry_id)
+    shared = getattr(ctx.request_context.lifespan_context, "global_engine", None)
+    try:
+        entry = engine.get_entry(entry_id)
+    except NotFoundError:
+        entry = _load_entry_or_raise(shared or engine, entry_id)  # Global memory, read only
     if entry.state == MemoryState.DELETED:
         msg = f"entry is deleted: {entry_id}"
         raise ToolError(msg)
@@ -397,10 +410,10 @@ async def recall_memory(
     followed by the entry ID, revision, and body. Contested entries add a state
     marker and one `Challenge task:` line per record between the revision and body.
     """
-    engine = _engine_from_ctx(ctx)
     category_filter = set(_coerce_categories(categories) or [])
     capped_limit = 20 if limit is None else _validate_limit(limit)
-    known_agents = _recognized_agent_names(engine)
+    readable = _readable(ctx)
+    known_agents = _recognized_agent_names(readable)
     recognized = isinstance(agent, str) and bool(agent.strip()) and agent != "*" and agent in known_agents
 
     state_rank = {
@@ -409,9 +422,7 @@ async def recall_memory(
         MemoryState.CONTESTED: 1,
     }
     entries = [
-        entry
-        for entry in engine.get_entries()
-        if entry.state in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}
+        entry for entry in readable if entry.state in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}
     ]
     if recognized:
         entries = [

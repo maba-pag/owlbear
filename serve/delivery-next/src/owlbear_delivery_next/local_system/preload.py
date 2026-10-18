@@ -34,6 +34,7 @@ JOBS: dict[str, tuple[str, ...]] = dict.fromkeys(
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # run as the workspace's .vscode/mcp.json runs it
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
+MEMORY_GLOBAL = "OWLBEAR_MEMORY_GLOBAL_DIR"  # the shared repository's Global memory, read beside it (TD-241)
 
 
 def front_matter(doc: str) -> tuple[dict[str, Any], str]:
@@ -65,12 +66,14 @@ def tools(role: str) -> list[str]:
 def memory(store: Path | None) -> dict[str, Any] | None:
     """The memory server for the project's memory folder *store* in the shared repository (TD-72).
 
+    The agents read the repository's Global memory beside it, ``<shared>/memory/`` (TD-241), and write only to it.
     None without a shared repository or when the server is not installed: the agents then go on without memory.
     """
     if store is None or find_spec(MEMORY_MODULE) is None:
         return None
     command = {"command": sys.executable, "args": ["-m", MEMORY_MODULE]}
-    return command | {"env": {MEMORY_DIR: str(store)}, "tools": ["*"]}
+    env = {MEMORY_DIR: str(store), MEMORY_GLOBAL: str(store.parent.parent / "memory")}  # store: <shared>/<name>/memory
+    return command | {"env": env, "tools": ["*"]}
 
 
 def directory() -> Path:

@@ -869,3 +869,24 @@ async def test_live_server_uses_an_explicit_store_outside_any_workspace(
     (entry,) = store.iterdir()
     assert "title: Shared store" in entry.read_text(encoding="utf-8")
     assert not (tmp_path / ".owlbear").exists()
+
+
+@pytest.mark.asyncio
+async def test_live_server_reads_global_memory_named_beside_its_store(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``OWLBEAR_MEMORY_GLOBAL_DIR`` names Global memory, read beside the store (TD-241)."""
+    store, shared = tmp_path / "common" / "shop" / "memory", tmp_path / "common" / "memory"
+    common = _create_entry(shared, title="Global habit", state=MemoryState.APPROVED)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
+    monkeypatch.setenv("OWLBEAR_MEMORY_GLOBAL_DIR", str(shared))
+
+    async with mcp.Client(memory_mcp) as client:
+        read = await client.call_tool("read_memory", {"entry_id": common.id})
+        recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
+        approved = await client.call_tool("approve_memory", {"entry_id": common.id, "expected_revision": "x"})
+
+    assert (read.is_error, "Global habit" in _text(read), "Global habit" in _text(recalled)) == (False, True, True)
+    assert approved.is_error  # Global memory is changed on the Memory page, never by an agent

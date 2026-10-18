@@ -45,7 +45,7 @@ def test_recognized_names_derive_from_live_provenance_and_scope(tmp_path: Path) 
     deleted = engine.get_entry(deleted_id)
     engine.delete(deleted_id, expected_updated_at=deleted.updated_at)
 
-    assert _recognized_agent_names(engine) == ["GitHub Copilot", "builder", "verifier"]
+    assert _recognized_agent_names(engine.get_entries()) == ["GitHub Copilot", "builder", "verifier"]
 
 
 @pytest.mark.asyncio

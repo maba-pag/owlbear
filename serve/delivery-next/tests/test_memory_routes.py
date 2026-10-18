@@ -190,6 +190,63 @@ def test_no_agent_can_write_the_memory_until_the_owners_action_is_published(shar
     assert raced == [MemoryBusyError]
 
 
+def test_global_memory_is_listed_and_acted_on_beside_the_projects(shared):
+    """TD-241: ``?where=global`` reads and changes the shared repository's Global memory, committed as Global."""
+    root, remote, repo = shared
+    store = Store.open(repo)
+    common = seed(root / "memory", "Sign every commit", curated=True)
+    seed(root / store.name / "memory", "Run ruff first")
+    c = client(store)
+
+    listed = c.get("/api/next/memory", params={"where": "global"}).json()
+    approved = c.post(
+        f"/api/next/memory/{common.id}/approve", params={"where": "global"}, json={"updated_at": common.updated_at}
+    )
+    elsewhere = c.post(f"/api/next/memory/{common.id}/approve", json={"updated_at": common.updated_at})
+
+    assert ([e["title"] for e in listed["entries"]], listed["project"], listed["repository"]) == (
+        ["Sign every commit"], store.name, str(root)
+    )  # fmt: skip
+    assert (approved.json()["entry"]["state"], elsewhere.status_code) == ("approved", 404)
+    assert git(remote, "log", "-1", "--format=%s", "main") == "memory global: approve Sign every commit"
+
+
+def test_make_global_moves_the_entry_and_publishes_both_folders(shared):
+    root, remote, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    git(root, "add", "--", f"{store.name}/memory/{entry.id}.md")
+    git(root, "commit", "-qm", "seed")
+    git(root, "push", "-q")
+    c = client(store)
+
+    stale = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": "2000-01-01T00:00:00Z"})
+    moved = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+    again = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+
+    assert (stale.status_code, moved.status_code, again.status_code) == (409, 200, 404)
+    assert (not (folder / f"{entry.id}.md").exists(), (root / "memory" / f"{entry.id}.md").is_file()) == (True, True)
+    committed = sorted(git(remote, "show", "--no-renames", "--name-only", "--format=", "main").splitlines())
+    assert committed == sorted([f"{store.name}/memory/{entry.id}.md", f"memory/{entry.id}.md"])
+    assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: make global Pin the runtime"
+    assert [e.id for e in MemoryEngine(root / "memory").get_entries()] == [entry.id]
+
+
+def test_make_global_refuses_an_entry_global_memory_already_holds(shared):
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    (root / "memory").mkdir()
+    (root / "memory" / "copy.md").write_bytes((folder / f"{entry.id}.md").read_bytes())
+
+    refused = client(store).post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+
+    assert (refused.status_code, "already" in refused.json()["detail"]) == (409, True)
+    assert (folder / f"{entry.id}.md").is_file()
+
+
 def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:
     try:
         engine.edit(entry.id, {"title": "an agent's edit"}, expected_revision=entry.revision)
