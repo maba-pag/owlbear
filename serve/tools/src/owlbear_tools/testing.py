@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import fcntl
 import re
 import shutil
 import subprocess
@@ -13,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _COCKPIT_WEB = _REPOSITORY_ROOT / "serve/cockpit/web"
@@ -23,6 +25,10 @@ _INVARIANT_TESTS = (
     "tests/test_package_boundary.py",
     "tests/test_write_guard_hooks.py",
 )
+# Packages whose own tests testmon selects for a Python source change; it needs the classic tracer on 3.14 and
+# --testmon-forceselect, because the configured -m otherwise turns its selection off.
+_TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
+_TESTMON_DATA = ".owlbear/scratch"
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,13 +130,63 @@ def _relative_paths(paths: Iterable[Path]) -> list[str]:
 
 
 def _package_scope(package: _WorkspacePackage) -> list[str]:
+    return _relative_paths([*_package_tests(package), *_neighbour_tests(package)])
+
+
+def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
+    """Root and consumer tests that import the package, and the invariant tests."""
     packages = _workspace_packages()
-    targets = _package_tests(package)
-    targets.extend(_tests_importing(package.namespace, _root_tests()))
+    targets = _tests_importing(package.namespace, _root_tests())
     for consumer in _direct_consumers(package, packages):
         targets.extend(_tests_importing(package.namespace, _package_tests(consumer)))
     targets.extend(_REPOSITORY_ROOT / path for path in _INVARIANT_TESTS)
-    return _relative_paths(targets)
+    return targets
+
+
+def _unseen_by_testmon(path: Path, namespace: str) -> bool:
+    """Whether a test module depends on code testmon cannot trace: the package in a child process, or read as data."""
+    try:
+        nodes = list(ast.walk(ast.parse(path.read_text(encoding="utf-8"))))
+    except OSError, SyntaxError:
+        return True
+
+    def attribute(owner: str, name: str) -> bool:
+        return any(
+            isinstance(node, ast.Attribute)
+            and node.attr == name
+            and isinstance(node.value, ast.Name)
+            and node.value.id == owner
+            for node in nodes
+        )
+
+    texts = [node.value for node in nodes if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+    child = attribute("sys", "executable") and any(namespace in text for text in texts)
+    return child or attribute("ast", "parse") or any(text.endswith("*.py") for text in texts)
+
+
+def _monitored_package(path: str) -> _WorkspacePackage | None:
+    """The testmon package of an existing Python source file; None for anything else."""
+    normalized = path.removeprefix("./")
+    package = _package_for_path(normalized)
+    if package is None or package.namespace not in _TESTMON_NAMESPACES:
+        return None
+    source = normalized.startswith(f"serve/{package.directory.name}/src/") and normalized.endswith(".py")
+    return package if source and (_REPOSITORY_ROOT / normalized).is_file() else None
+
+
+def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -> list[tuple[list[str], Path]]:
+    """One testmon run per package over its tests, after adding to *forced* what must run regardless."""
+    commands: list[tuple[list[str], Path]] = []
+    for package in packages:
+        tests = _package_tests(package)
+        forced.update(_relative_paths(path for path in tests if _unseen_by_testmon(path, package.namespace)))
+        forced.update(_relative_paths(_neighbour_tests(package)))
+        selected = [path for path in _relative_paths(tests) if path not in forced]
+        if selected:
+            data = f"TESTMON_DATAFILE={_TESTMON_DATA}/testmon-{package.directory.name}.db"
+            pytest = ["uv", "run", "--locked", "pytest", *selected, "--testmon", "--testmon-forceselect"]
+            commands.append((["env", "COVERAGE_CORE=ctrace", data, *pytest], _REPOSITORY_ROOT))
+    return commands
 
 
 def _package_for_path(normalized: str) -> _WorkspacePackage | None:
@@ -224,24 +280,34 @@ def _changed_paths(base: str | None) -> list[str]:
     return sorted(paths)
 
 
+def _split_paths(paths: list[str], *, coverage: bool) -> tuple[set[str] | None, list[_WorkspacePackage]]:
+    """The plain pytest scope (None: the full suite) and the packages whose changed sources testmon selects for."""
+    scopes: set[str] = set()
+    monitored: dict[str, _WorkspacePackage] = {}
+    for path in paths:
+        if not coverage and (package := _monitored_package(path)) is not None:
+            monitored[package.namespace] = package
+        elif (scope := _python_scope(path)) is None:
+            return None, []
+        else:
+            scopes.update(scope)
+    return scopes, list(monitored.values())
+
+
 def _commands_for_paths(
     paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool
 ) -> list[tuple[list[str], Path]]:
     commands: list[tuple[list[str], Path]] = []
+    selected: list[tuple[list[str], Path]] = []
     if all_tests:
         python_targets = ["tests", "serve"]
         run_python = not web_only
         run_web = not python_only
     else:
-        scopes: set[str] = set()
-        fallback = False
-        for path in paths:
-            scope = _python_scope(path)
-            if scope is None:
-                fallback = True
-            else:
-                scopes.update(scope)
-        python_targets = ["tests", "serve"] if fallback else sorted(scopes)
+        scopes, monitored = _split_paths(paths, coverage=coverage)
+        if scopes is not None and not web_only:
+            selected = _testmon_commands(monitored, scopes)
+        python_targets = ["tests", "serve"] if scopes is None else sorted(scopes)
         run_python = bool(python_targets) and not web_only
         run_web = any(_is_web_path(path) for path in paths) and not python_only
 
@@ -250,6 +316,7 @@ def _commands_for_paths(
         if coverage:
             command.append("--cov")
         commands.append((command, _REPOSITORY_ROOT))
+    commands.extend(selected)
     if run_web:
         command = ["npm", "test"]
         if coverage:
@@ -258,13 +325,33 @@ def _commands_for_paths(
     return commands
 
 
+@contextlib.contextmanager
+def _testmon_lock(command: list[str]) -> Iterator[dict[str, tuple[int, ...]]]:
+    """Serialize testmon runs sharing one data file: a first run deletes and recreates the database.
+
+    The command inherits the locked descriptor, so the lock lasts as long as its process tree, Ctrl-C included.
+    """
+    data = next((arg.split("=", 1)[1] for arg in command if arg.startswith("TESTMON_DATAFILE=")), None)
+    if data is None:
+        yield {}
+        return
+    with (_REPOSITORY_ROOT / f"{data}.lock").open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Waiting for another testmon run of this checkout to end")  # noqa: T201
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        yield {"pass_fds": (handle.fileno(),)}
+
+
 def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
     failures = 0
     for command, cwd in commands:
         relative_cwd = cwd.relative_to(_REPOSITORY_ROOT)
         location = "." if relative_cwd == Path() else str(relative_cwd)
         print(f"[{location}] {' '.join(command)}")  # noqa: T201
-        failures += int(bool(subprocess.call(command, cwd=cwd)))  # noqa: S603
+        with _testmon_lock(command) as inherited:
+            failures += int(bool(subprocess.call(command, cwd=cwd, **inherited)))  # noqa: S603
     return int(bool(failures))
 
 

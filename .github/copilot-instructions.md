@@ -112,7 +112,7 @@ quality-runner `mode=full` with `changed_paths`.
 | `share/` `.owlbear/` | skip (docs/config only, except executable hooks/scripts) | — |
 | (unsafe or unknown path) | full Python suite fallback | pytest |
 
-`uv run test` remains the complete Python and Cockpit unit-test suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. Unknown or unsafe Git scope falls back to the full Python suite.
+`uv run test` remains the complete Python and Cockpit unit-test suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests that start the package in a child process always run. Other changes there (pages, skills, fixtures) run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
 
 For local development, prefer `uv run test` for the complete Python and frontend suites and
 `uv run test [PATH ...]` to apply this routing table to explicit paths. `uv run test-e2e` runs

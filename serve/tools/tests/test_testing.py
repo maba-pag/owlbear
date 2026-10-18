@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 import sys
+import threading
 from pathlib import Path
 from unittest.mock import patch
 
@@ -48,6 +50,95 @@ def test_package_test_module_routes_to_itself() -> None:
     scope = testing_module._python_scope("serve/tools/tests/test_testing.py")  # noqa: SLF001
 
     assert scope == ["serve/tools/tests/test_testing.py"]
+
+
+_LOOP = "serve/delivery-next/src/owlbear_delivery_next/change_flow/loop.py"
+_PAGE = "serve/delivery-next/src/owlbear_delivery_next/web/config.html"
+
+
+def _routed(*paths: str, coverage: bool = False) -> list[list[str]]:
+    commands = _commands_for_paths(list(paths), all_tests=False, python_only=False, web_only=False, coverage=coverage)
+    return [command for command, _cwd in commands]
+
+
+def test_delivery_next_source_runs_testmon_beside_the_tests_it_cannot_see() -> None:
+    (plain, monitored) = _routed(_LOOP)
+
+    assert "serve/delivery-next/tests/test_dispatch.py" in plain  # runs the package in a child process
+    assert {"serve/delivery-next/tests/test_layers.py", "serve/delivery-next/tests/test_module_rules.py"} <= set(plain)
+    assert "tests/test_package_boundary.py" in plain
+    assert "serve/delivery-next/tests/test_loop.py" not in plain
+    assert monitored[:3] == [
+        "env",
+        "COVERAGE_CORE=ctrace",
+        "TESTMON_DATAFILE=.owlbear/scratch/testmon-delivery-next.db",
+    ]
+    assert monitored[-2:] == ["--testmon", "--testmon-forceselect"]
+    assert "serve/delivery-next/tests/test_loop.py" in monitored
+    assert not set(plain) & {path for path in monitored if path.endswith(".py")}
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [(_PAGE,), (_PAGE, _LOOP), ("serve/delivery-next/tests/conftest.py", _LOOP)],
+    ids=["page", "page-and-source", "fixture-and-source"],
+)
+def test_a_delivery_next_change_testmon_cannot_see_runs_the_whole_package(paths: tuple[str, ...]) -> None:
+    (command,) = _routed(*paths)
+
+    assert "serve/delivery-next/tests/test_loop.py" in command
+    assert "--testmon" not in command
+
+
+@pytest.mark.parametrize(
+    ("paths", "coverage"),
+    [
+        ((_LOOP,), True),
+        ((_LOOP, "setup/init.py"), False),
+        (("serve/delivery-next/src/owlbear_delivery_next/gone.py",), False),
+    ],
+    ids=["coverage", "unknown-path", "deleted-source"],
+)
+def test_coverage_unknown_paths_and_deleted_sources_keep_the_old_scope(
+    paths: tuple[str, ...],
+    coverage: bool,  # noqa: FBT001 - a parametrized case
+) -> None:
+    (command,) = _routed(*paths, coverage=coverage)
+
+    assert "--testmon" not in command
+    assert "serve/delivery-next/tests/test_loop.py" in command or command[4:6] == ["tests", "serve"]
+
+
+def test_testmon_runs_sharing_a_data_file_wait_for_each_other(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(testing_module, "_REPOSITORY_ROOT", tmp_path)
+    lock = tmp_path / "t.db.lock"
+    held = lock.open("a")
+    fcntl.flock(held, fcntl.LOCK_EX)  # another run of this checkout
+    waiting, blocked = threading.Event(), []
+
+    def call(*_args: object, **kwargs: object) -> int:
+        with lock.open("a") as third:  # a third run while this one's command runs
+            try:
+                fcntl.flock(third, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                blocked.append(kwargs["pass_fds"])
+        return 0
+
+    def said(*args: object, **_kwargs: object) -> None:
+        if "Waiting" in str(args[0]):
+            waiting.set()
+
+    with patch("builtins.print", side_effect=said), patch("owlbear_tools.testing.subprocess.call", side_effect=call):
+        command = (["env", "TESTMON_DATAFILE=t.db", "uv"], tmp_path)
+        run = threading.Thread(target=testing_module._run_commands, args=([command],))  # noqa: SLF001
+        run.start()
+        assert waiting.wait(5)
+        assert blocked == []  # nothing ran while the other run held the lock
+        held.close()
+        run.join(5)
+
+    assert len(blocked) == 1  # held while the command ran
+    assert len(blocked[0]) == 1  # and handed to its process tree
 
 
 def test_knowledge_source_routes_importing_root_and_invariant_tests() -> None:
