@@ -42,6 +42,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
           base="$BASE_SHA"
           if [ "$EVENT" = push ]; then base="$(git rev-parse "$HEAD_SHA^1")"; fi  # a merge against its first parent
@@ -77,10 +78,17 @@ jobs:
     if: contains(fromJSON(needs.scope.outputs.suites), 'agent-ecosystem')
     uses: ./.github/workflows/agent-ecosystem.yml
 
+  security:
+    needs: scope
+    if: contains(fromJSON(needs.scope.outputs.suites), 'security')
+    uses: ./.github/workflows/security.yml
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
   ci:
     name: CI
     if: always()
-    needs: [scope, python, python-browser, cockpit, static, tooling, agent-ecosystem]
+    needs: [scope, python, python-browser, cockpit, static, tooling, agent-ecosystem, security]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

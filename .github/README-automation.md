@@ -32,13 +32,16 @@ the latter is a placeholder that `init.py` adapts for a project using OwlBear.
 
 ## Pull-request checks
 
-The [CI](workflows/ci.yml) workflow and the six suites it calls are enabled (TD-278); every other
+The [CI](workflows/ci.yml) workflow and the seven suites it calls are enabled (TD-278), as is the
+[Release](workflows/release.yml) walk; every other
 automatically triggered workflow stays disabled on GitHub (TD-204), and `gh workflow enable <file>`
 restores one. The pre-commit hooks run only by hand (`pre-commit run --hook-stage manual`).
 
 Agents wait for every check on the head commit, so the checks are shaped to finish fast and to
 report few rows. One [CI](workflows/ci.yml) workflow runs on every pull request into `main`,
-including drafts. Its scope job lists the suites the PR touches with
+including drafts, and on every push to `main`: a push run is one per commit, never cancelled, and
+scoped by the merge against its first parent, so each merge has its own CI for the release walk.
+Its scope job lists the suites the PR touches with
 [`ci_scope.py`](scripts/ci_scope.py), which owns the path lists below. CI then calls each touched
 suite as a reusable workflow; a change to the gate itself runs every suite. Its final job, named
 **CI**, passes only when every selected suite passed; it is the one check a ruleset requires (TD-278).
@@ -52,6 +55,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 | [Static checks](workflows/static.yml) | Ruff, repository-wide Biome, HTMLHint | Python, JSON, frontend, lint configuration |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, PDS, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
+| [Security](workflows/security.yml) | Snyk Code and Snyk Open Source tests, high severity and above | Code, manifests, locks, `.snyk` |
 
 The scope evaluates the whole PR diff, so a follow-up push reruns every suite the PR ever
 touched. To avoid repeating identical proofs, each job fingerprints its inputs with
@@ -70,7 +74,27 @@ keep the `CI_SKIPPED_PACKAGES` lists in the Python workflow and Copilot setup id
 Snyk's GitHub integration in the `porsche-ag-fdi3-scanners` org (EU region) tests every pull request
 into `main` and comments on it. The integration imports the repository's default branch, `main`;
 its projects are set never to retest. No ruleset requires its checks.
-Monitoring of `main` runs in Snyk's own UI; no workflow runs Snyk.
+
+The [Security](workflows/security.yml) suite runs the Snyk CLI inside the required CI gate (TD-360),
+only for changes from `maba-pag/owlbear` itself: GitHub gives its token neither to a copy of OwlBear
+nor to a fork's pull request, so their CI never selects the suite, and the push run after a merge
+scans the merged code. Delivery never runs Snyk in other projects (TD-363):
+`snyk code test` and `snyk test --all-projects` at high severity and above, never `monitor` or
+`--report`, so it writes nothing into the org. Each finding prints its rule, file and line, so a
+failing run is fixed like any failing test. A dependency finding fails only when
+Snyk knows an upgrade that fixes it (`--fail-on=upgradable`, TD-362); others print and pass. It
+authenticates with the org service account `owlbear-ci` in the Org Collaborator role (TD-361; a
+read-only CLI tester role replaces it once the Group offers one), whose token is the `SNYK_TOKEN`
+Actions secret. A Snyk Code false positive is ignored by the owner in the Snyk web UI, which the
+CLI honours (Consistent Ignores); a dependency finding accepted on purpose goes into `.snyk` with
+its reason.
+
+## Releases
+
+The [Release](workflows/release.yml) walk tags each merge to `main` whose pull request carries
+`release:minor` or `release:major` once that merge's own push CI passed (TD-302, TD-306); see
+[`release.py`](scripts/release.py). It only reports what it would tag until the repository variable
+`RELEASE_TAGS` is `on` (TD-315).
 
 ## MegaLinter toolchain updates
 
