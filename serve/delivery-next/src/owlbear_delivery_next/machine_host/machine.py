@@ -51,7 +51,10 @@ class Machine:
 
     def _load(self, entry: registry.Project) -> Project:
         p = self.projects[entry.id] = Project(entry)
-        p.load(self.record, lambda: self.paused)
+        try:
+            p.load(self.record, lambda: self.paused)
+        except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
+            p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
         if p.host:
             p.host.peers = lambda: self.sharing(p)
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
@@ -149,11 +152,15 @@ class Machine:
                     continue
         return n
 
-    def stop_all(self) -> None:
-        """Close every gate at once, then stop each project; live runners finish on their own (TD-282)."""
+    def closing(self) -> None:
+        """The machine stops: every gate closes at once, so nothing is admitted or launched from now on."""
         self.stopping.set()
+        for p in list(self.projects.values()):
+            p.gate.close(0)
+
+    def stop_all(self) -> None:
+        """Close every gate, then stop each project; live runners finish on their own (TD-282)."""
+        self.closing()
         with self.lock:
-            for p in self.projects.values():
-                p.gate.close(0)
             for p in self.projects.values():
                 p.stop()

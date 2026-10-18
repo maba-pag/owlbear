@@ -1,17 +1,21 @@
+import json
 import os
+import signal
 import subprocess
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import psutil
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
-from owlbear_delivery_next.commands import mcp_server
+from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.machine_host import app, project, registry
+from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord, RunnerRecord, running
@@ -171,3 +175,39 @@ def test_clones_sharing_a_settings_folder_are_each_others_peers(machine):
     found = (machine.sharing(a), machine.sharing(other))
     machine.projects = {}  # none of them is a loaded project to stop
     assert found == ([b.host], [])
+
+
+def test_a_project_whose_lock_cannot_be_taken_fails_alone(tmp_path, http, machine):
+    bad = registry.register(clone(tmp_path / "bad"))
+    registry.register(clone(tmp_path / "good"))
+    lock = Path(bad.path) / ".git" / "owlbear-delivery" / "host.lock"
+    lock.symlink_to(tmp_path / "elsewhere")
+    machine.load_all()
+    shown = {p["name"]: p for p in http.get("/api/next/projects").json()["projects"]}
+    assert (shown["bad"]["state"], "host lock cannot be taken" in shown["bad"]["reason"]) == ("failed", True)
+    assert shown["good"]["state"] == "loaded"
+
+
+def test_a_stop_waits_for_work_started_in_the_background_and_closing_closes_every_gate(tmp_path, http, machine):
+    p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
+    until = time.monotonic() + 0.5
+    p.app.state.busy = lambda: ["a shaping chat opening"] if time.monotonic() < until else []
+    p.stop(drain=5)
+    assert (time.monotonic() >= until, p.state) == (True, "stopped")
+    q = machine.projects[add(http, clone(tmp_path / "b"))["id"]]
+    server = serve.Server(uvicorn.Config(app.create(machine)), machine)
+    server.handle_exit(signal.SIGTERM, None)
+    assert (q.gate.open, q.host.paused(), server.should_exit) == (False, True, True)
+
+
+def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http):
+    work = clone(tmp_path / "a")
+    listed = add(http, work)
+    assert listed["setup"] == f"owlbear setup --repo {work}"
+    (work / ".mcp.json").write_text(json.dumps(setup.with_server({}, "/py", work)))
+    assert "setup" not in http.get("/api/next/projects").json()["projects"][0]
+    (work / ".mcp.json").unlink()
+    setup.user_mcp(Path.home()).parent.mkdir(parents=True)
+    servers = setup.with_server({}, "/py", work)["mcpServers"]
+    setup.user_mcp(Path.home()).write_text("// mine\n" + json.dumps({"servers": servers}))
+    assert setup.registered(work)

@@ -24,6 +24,8 @@ from owlbear_delivery_next.project_host.api import link
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from owlbear_delivery_next.project_host.host import HostRecord
+
 LABEL = "com.owlbear.host"
 LOG = "host.log"
 WAIT = 20.0  # seconds a start waits for the host's address
@@ -43,32 +45,49 @@ def argv() -> list[str]:
 
 
 def start(say: Say) -> int:
-    """Start the machine host in the background unless it runs; say its address either way."""
+    """Start the machine host in the background unless it runs; say its address once its API answers."""
     if rec := serve.running():
         say(f"OwlBear is running: {link(rec) or '(starting)'}")
         return 0
     home = local_home.root()
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
     with (home / LOG).open("ab") as out:
-        subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
+        child = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
             argv(), cwd=home, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, start_new_session=True
         )
     deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
-        if (rec := serve.running()) and rec.token:
-            say(f"OwlBear started, paused until you press Resume: {link(rec)}")
+        if child.poll() is not None:
+            if rec := serve.running():  # another start won the lock first
+                say(f"OwlBear is running: {link(rec) or '(starting)'}")
+                return 0
+            say(f"OwlBear ended at once (exit {child.returncode}); see `owlbear logs`")
+            return 1
+        if projects() is not None:  # its API answers with the token it wrote
+            say(f"OwlBear started, paused until you press Resume: {link(serve.running())}")
             return 0
         time.sleep(0.2)
     say(f"OwlBear did not answer within {WAIT:.0f} s; see `owlbear logs`")
     return 1
 
 
+def _identified() -> HostRecord | None:
+    """The running host's record once it names its process; a host still starting has none yet."""
+    deadline = time.monotonic() + WAIT
+    while (rec := serve.running()) is not None and rec.pid <= 0 and time.monotonic() < deadline:
+        time.sleep(0.2)
+    return rec
+
+
 def stop(say: Say) -> int:
     """Stop the machine host; steps that run finish on their own (TD-282)."""
-    rec = serve.running()
+    rec = _identified()
     if rec is None:
         say("OwlBear is not running")
         return 0
+    if rec.pid <= 0:  # never a signal to a process group
+        say("OwlBear is still starting and has not said which process it is; try again")
+        return 1
     os.kill(rec.pid, signal.SIGTERM)
     deadline = time.monotonic() + STOPPING
     while time.monotonic() < deadline:

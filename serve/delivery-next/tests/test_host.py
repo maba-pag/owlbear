@@ -768,3 +768,17 @@ def test_a_network_wait_while_paused_never_spins_the_scheduler(store, tmp_path):
     paused(fake, [True])
     fake.host.offline = {"c1"}  # its probe deadline passed long ago; no probe runs while paused
     assert fake.host.interval() == host.TICK
+
+
+def test_no_check_environment_starts_once_the_host_pauses_during_its_pass(store, tmp_path, monkeypatch):
+    fake = Fake(store, tmp_path)
+    calls = environment(store, fake, monkeypatch)
+    asked = [0]
+
+    def paused():  # the pass began before a project's stop closed its gate
+        asked[0] += 1
+        return asked[0] > 2
+
+    fake.host.paused = paused
+    assert fake.host.tick(NOW) == []
+    assert (calls["start"], store.read("c1").env.launched_at, asked[0]) == ([], None, 3)

@@ -80,3 +80,20 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     assert "paused until you press Resume" in (local_home.root() / control.LOG).read_text()
+
+
+def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:
+    said = []
+    starting = control.serve.HostRecord(url="(starting)", token="", pid=0, started_at="2026-10-10T12:00:00Z", code="")
+    monkeypatch.setattr(control.serve, "running", lambda: starting)
+    monkeypatch.setattr(control, "WAIT", 0.3)
+    monkeypatch.setattr(control.os, "kill", lambda *_a: pytest.fail("no signal to process 0's group"))
+    assert control.stop(said.append) == 1
+    assert "still starting" in said[-1]
+
+
+def test_a_host_that_ends_at_once_is_reported_not_started(monkeypatch) -> None:
+    said = []
+    monkeypatch.setattr(control, "argv", lambda: [sys.executable, "-c", "raise SystemExit(3)"])
+    assert control.start(said.append) == 1
+    assert said[-1] == "OwlBear ended at once (exit 3); see `owlbear logs`"

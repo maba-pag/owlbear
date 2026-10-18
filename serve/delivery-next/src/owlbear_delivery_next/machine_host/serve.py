@@ -10,10 +10,12 @@ from __future__ import annotations
 import contextlib
 import os
 import secrets
+import signal
 import socket
 import sys
 import threading
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import uvicorn
 
@@ -23,6 +25,23 @@ from owlbear_delivery_next.machine_host import app, environment
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
+
+if TYPE_CHECKING:
+    from types import FrameType
+
+
+class Server(uvicorn.Server):
+    """Uvicorn, closing every project's gate as soon as a stop is asked for, before requests drain."""
+
+    def __init__(self, config: uvicorn.Config, machine: Machine) -> None:
+        """Serve *config* for *machine*."""
+        super().__init__(config)
+        self.machine = machine
+
+    def handle_exit(self, sig: int, frame: FrameType | None) -> None:
+        """A signal or the stop route: close the gates, then let Uvicorn shut down."""
+        self.machine.closing()
+        super().handle_exit(sig, frame)
 
 
 def running() -> HostRecord | None:
@@ -59,8 +78,8 @@ def serve() -> int:
     machine.say(f"OwlBear {os.getpid()} on {link(record)} · paused until you press Resume")
     machine.load_all()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
-    machine.on_stop = lambda: setattr(server, "should_exit", True)
+    server = Server(uvicorn.Config(app.create(machine), log_level="warning"), machine)
+    machine.on_stop = lambda: server.handle_exit(signal.SIGTERM, None)
     try:
         with contextlib.suppress(KeyboardInterrupt):
             server.run(sockets=[sock])

@@ -167,6 +167,8 @@ function view() {
       </details>
     </div>
     ${p && p.state !== "loaded" ? html`<p role="status">${p.name} is ${p.state}: ${p.reason}</p>` : nothing}
+    ${p?.setup ? html`<p role="status">Setup required: the chats of ${p.name} cannot reach Delivery yet. Run
+      <code>${p.setup}</code> in a terminal, then reload the project's VS Code window.</p>` : nothing}
     ${paused ? html`<p class="paused" role="status">Delivery is paused since it started: ${waiting}
       Change${waiting === 1 ? "" : "s"} would continue.
       ${control("Resume", () => act("resume", () => call("/resume", { method: "POST", machine: true })),

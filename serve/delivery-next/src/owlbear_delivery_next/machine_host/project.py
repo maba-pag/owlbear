@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shlex
 import threading
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.project_host import api
@@ -100,8 +103,19 @@ class Project:
             self.state = "failed"
             self.reason = f"another Delivery host (process {other.pid if other else '?'}) serves it; stop that one"
             return
+        except (OSError, ValueError) as exc:  # a host.lock that is a link or no file
+            self.state, self.reason = "failed", f"its host lock cannot be taken: {exc}"
+            return
         finally:
             os.close(fd)
+        try:
+            self._start(store, record, paused)
+        except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
+            self.stop(drain=0)
+            self.state, self.reason = "failed", f"it could not start: {type(exc).__name__}: {exc}"
+
+    def _start(self, store: Store, record: HostRecord, paused: Callable[[], bool]) -> None:
+        repo = Path(self.entry.path)
         self.store = store
         self.host = Host(store, repo, paused=lambda: paused() or not self.gate.open)
         self.host.record = record.model_copy(update={"pid": os.getpid(), "project": self.entry.id, "ready": None})
@@ -145,33 +159,38 @@ class Project:
     def stop(self, *, drain: float = DRAIN, refuse: bool = False) -> list[str]:
         """Close the gate, wait for admitted work, then stop; with *refuse*, keep running while work is left.
 
-        A runner outlives a machine stop and finishes on its own (TD-282); a removal is refused while one runs.
+        Admitted work is requests in flight and what they started in the background (a shaping chat opening, a
+        design pack update). A runner outlives a machine stop and finishes on its own (TD-282); a removal is
+        refused while one runs.
         """
+        until = time.monotonic() + drain
         self.gate.close(drain)
-        if self.host is None:
-            self.state = "stopped"
-            return []
-        with self.host.launching:  # a launch checks the closed gate under this lock, so none starts after it
-            if refuse and (left := self.working()):
-                self.gate.reopen()
-                return left
-        self.host.stopped.set()
-        self.host.wake.set()
+        while self.app is not None and self.app.state.busy() and time.monotonic() < until:
+            time.sleep(0.2)
+        if self.host is not None:
+            with self.host.launching:  # a launch checks the closed gate under this lock, so none starts after it
+                if refuse and (left := self.working()):
+                    self.gate.reopen()
+                    return left
+            self.host.stopped.set()
+            self.host.wake.set()
         if self.scheduler:
             self.scheduler.join(JOIN)
-        if self.store:
-            (self.store.root / "host.json").unlink(missing_ok=True)
-        if self.lock_fd is not None:
+        if self.lock_fd is not None:  # the discovery file is this host's only while it holds the lock
+            if self.store:
+                (self.store.root / "host.json").unlink(missing_ok=True)
             os.close(self.lock_fd)
             self.lock_fd = None
         self.state = "stopped"
         return []
 
     def info(self) -> dict[str, Any]:
-        """The project as the machine's project list shows it."""
+        """The project as the machine's project list shows it; ``setup`` is the command a clone still needs."""
         out: dict[str, Any] = {"id": self.entry.id, "name": self.name, "path": self.entry.path, "state": self.state}
         if self.reason:
             out["reason"] = self.reason
         if self.host:
             out["ready"] = self.host.record.ready
+        if self.state == "loaded" and not setup.registered(Path(self.entry.path)):
+            out["setup"] = f"owlbear setup --repo {shlex.quote(self.entry.path)}"
         return out

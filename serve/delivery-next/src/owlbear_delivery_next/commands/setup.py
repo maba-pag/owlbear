@@ -110,6 +110,32 @@ def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]
     return {**data, "mcpServers": {**data.get("mcpServers", {}), SERVER: server}}
 
 
+def user_mcp(home: Path) -> Path:
+    """The user's VS Code MCP configuration."""
+    base = home / ("Library/Application Support" if sys.platform == "darwin" else ".config")
+    return base / "Code" / "User" / "mcp.json"
+
+
+def registered(repo: Path, home: Path | None = None) -> bool:
+    """Whether the chat server of *repo* is registered: in its ``.mcp.json`` or the user's MCP configuration."""
+    try:
+        data = json.loads((repo / ".mcp.json").read_text())
+    except OSError, ValueError:
+        data = None
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    if (
+        isinstance(servers, dict)
+        and isinstance(mine := servers.get(SERVER), dict)
+        and str(repo) in mine.get("args", [])
+    ):
+        return True
+    try:  # the user's file may hold comments, so it is searched rather than parsed
+        text = user_mcp(home or Path.home()).read_text()
+    except OSError:
+        return False
+    return "owlbear_delivery_next" in text and json.dumps(str(repo)) in text
+
+
 def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
     repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool
 ) -> str:
