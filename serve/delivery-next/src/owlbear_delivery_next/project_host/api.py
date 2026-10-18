@@ -393,21 +393,22 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         )
 
     def png(shots: VisualResult | None, folder_of: Callable[[str], Path], name: str) -> FileResponse:
-        if not (shots and visual.FILE.fullmatch(name) and name in shots.files):
+        stored = next((f for f in shots.files if f == name), None) if shots else None  # the path takes no request text
+        if not (shots and stored and visual.FILE.fullmatch(stored)):
             raise HTTPException(404, "no such screenshot")
         folder = folder_of(shots.head).resolve()
-        path = (folder / name).resolve()
+        path = (folder / stored).resolve()
         if path.parent != folder or not path.is_file():
             raise HTTPException(404, "no such screenshot")
         return FileResponse(path, media_type="image/png")
 
     @router.get("/changes/{slug}/visual/{name}")
     def screenshot(slug: str, name: str) -> FileResponse:
-        return png(read(slug).visual, lambda head: store.visual_dir(slug, head), name)
+        return png((c := read(slug)).visual, lambda head: store.visual_dir(c.slug, head), name)
 
     @router.get("/changes/{slug}/before/{name}")
     def before_screenshot(slug: str, name: str) -> FileResponse:
-        return png(read(slug).before, lambda base: store.before_dir(slug, base), name)
+        return png((c := read(slug)).before, lambda base: store.before_dir(c.slug, base), name)
 
     @router.post("/changes/{slug}/answers")
     def answer(slug: str, body: AnswerBody) -> dict[str, str]:
