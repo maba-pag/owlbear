@@ -129,7 +129,8 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     paths = subprocess.run(  # noqa: S603
         ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
         cwd=tmp_path,
-        env={**os.environ, "SOURCE_REPOSITORY": ci_scope.HOME},
+        env={k: v for k, v in os.environ.items() if k not in {"EVENT", "SOURCE_REPOSITORY"}}
+        | {"GITHUB_REPOSITORY": ci_scope.HOME},
         capture_output=True,
         text=True,
         check=True,
@@ -138,18 +139,28 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     assert paths == 'suites=["python", "python-browser", "static", "security"]\n'
 
 
-def test_a_copy_or_a_fork_never_selects_the_snyk_suite(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
-    """TD-322: GitHub gives Snyk's token neither to a copy nor to a fork's pull request; CI must not wait for it."""
+@pytest.mark.parametrize(
+    "case",
+    [
+        ("maba-pag/owlbear", "pull_request", "maba-pag/owlbear", True),
+        ("maba-pag/owlbear", "push", "", True),
+        ("maba-pag/owlbear", "pull_request", "someone/owlbear", False),  # a fork's pull request into OwlBear
+        ("maba-pag/owlbear", "pull_request", "", False),  # its fork deleted
+        ("someone/owlbear", "pull_request", "maba-pag/owlbear", False),  # OwlBear's branch into a fork
+        ("someone/owlbear", "push", "", False),  # a copy
+    ],
+)
+def test_only_owlbear_s_own_changes_select_the_snyk_suite(
+    monkeypatch: pytest.MonkeyPatch, capsys, case: tuple[str, str, str, bool]
+) -> None:
+    """TD-322: GitHub gives Snyk's token only to OwlBear's own runs of its own changes; others must not wait for it."""
     step = next(s for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
-    assert step["env"]["SOURCE_REPOSITORY"] == (
-        "${{ github.event.pull_request.head.repo.full_name || github.repository }}"
-    )
-    monkeypatch.setenv("SOURCE_REPOSITORY", "someone/owlbear")
+    assert step["env"]["SOURCE_REPOSITORY"] == "${{ github.event.pull_request.head.repo.full_name }}"
+    *values, selected = case
+    for name, value in zip(("GITHUB_REPOSITORY", "EVENT", "SOURCE_REPOSITORY"), values, strict=True):
+        monkeypatch.setenv(name, value)
     ci_scope.main([])
-    assert "security" not in capsys.readouterr().out
-    monkeypatch.setenv("SOURCE_REPOSITORY", ci_scope.HOME)
-    ci_scope.main([])
-    assert "security" in capsys.readouterr().out
+    assert ("security" in capsys.readouterr().out) is selected
 
 
 def test_the_snyk_suite_only_tests_and_gets_its_token_from_the_gate() -> None:

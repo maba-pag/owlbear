@@ -163,10 +163,17 @@ def changed(base: str, head: str) -> list[str]:
     return [path for path in done.stdout.split("\0") if path]
 
 
+def tokened() -> bool:
+    """Whether GitHub gives this run Snyk's token: OwlBear's own run of a change from OwlBear itself (TD-322)."""
+    if os.environ.get("GITHUB_REPOSITORY", HOME) != HOME:
+        return False
+    return os.environ.get("EVENT") != "pull_request" or os.environ.get("SOURCE_REPOSITORY") == HOME
+
+
 def main(argv: list[str]) -> None:
     """Print the touched suites for a base and head commit; every suite without a base."""
     names = suites(changed(argv[0], argv[1])) if len(argv) == 2 and argv[0] else list(SUITES)  # noqa: PLR2004
-    if os.environ.get("SOURCE_REPOSITORY", HOME) != HOME:  # a copy, or a fork's pull request without secrets
+    if not tokened():
         names = [name for name in names if name != "security"]
     sys.stdout.write(f"suites={json.dumps(names)}\n")
 
