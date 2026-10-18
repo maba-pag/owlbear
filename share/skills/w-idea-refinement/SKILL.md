@@ -151,8 +151,8 @@ batches up to eight questions per `askQuestions` round and gives no recommendati
 
 One decision per question, paraphrased at the level of the user's intent, never quoting the record:
 
-- close variants of the recorded choice, as many as really differ in consequence (one to four),
-  the matching one at a varying position and never verbatim; put a one-line consequence in the
+- three close variants of the recorded choice (fewer only when fewer really differ in consequence,
+  never padded), the matching one at a varying position and never verbatim; put a one-line consequence in the
   option's secondary text where it distinguishes the variants;
 - one or two other directions where real ones exist;
 - then, always in this order: "take your recommendation", "none of these: show me more options",

@@ -35,8 +35,9 @@ decisions TD-41..43, TD-150 and TD-156 in
 [the decision record](../.owlbear/research/delivery-liveness-first-rebuild.md) define:
 
 - The message shows the decision's record (its words and origin) and what changed since.
-- Options: one to four close variants of the decision, the matching one at a varying position and
-  never verbatim; one or two other directions, the opposite among them; then, in this order,
+- Options: three close variants of the decision (fewer only when fewer really differ, never padded),
+  the matching one at a varying position and never verbatim; one or two other directions, the opposite
+  among them; then, in this order,
   "take your recommendation (…)" naming the recommendation in the brackets, "none of these: show me
   more options" and "explain first". No other recommendation mark; free text stays open.
 - "Take your recommendation" is recorded `autonomous` with its reason. "Show me more options" asks

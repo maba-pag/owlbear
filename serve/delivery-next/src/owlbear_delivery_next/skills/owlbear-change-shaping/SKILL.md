@@ -69,8 +69,9 @@ Before saving for approval, play back every choice the owner made and your own c
 one-line consequence). Ask one decision per question, paraphrased at the level of the owner's
 intent, never quoting the record, with the structured question tool when there is one:
 
-- one to four close variants of the recorded choice, as many as really differ in consequence, the
-  matching one at a varying position and never verbatim; a one-line consequence where it helps;
+- three close variants of the recorded choice (fewer only when fewer really differ in consequence,
+  never padded), the matching one at a varying position and never verbatim; a one-line consequence where
+  it helps;
 - one or two other directions where real ones exist, the opposite among them;
 - then, always in this order: "take your recommendation (…)" with your recommendation named in the
   brackets, "none of these: show me more options", "explain first"; no other recommendation mark;
