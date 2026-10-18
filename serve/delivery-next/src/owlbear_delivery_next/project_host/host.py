@@ -195,8 +195,9 @@ class Host:
         self.record = HostRecord(url="", token="", pid=pid, started_at=started, code=codebase.CURRENT)
 
     def say(self, text: str) -> None:
-        """Write one line to the host's log."""
-        sys.stdout.write(f"{datetime.now(UTC):%H:%M:%S} {text}\n")
+        """Write one line to the host's log; under the machine host it names the project first."""
+        who = f"{self.store.name or self.repo.name}: " if self.record.project else ""
+        sys.stdout.write(f"{datetime.now(UTC):%H:%M:%S} {who}{text}\n")
         sys.stdout.flush()
 
     def _path(self, slug: str) -> Path:
