@@ -24,6 +24,9 @@ jobs:
     name: Snyk
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write  # the findings' comments with the owner's box (TD-363)
     steps:
       - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -45,9 +48,19 @@ jobs:
       # Tests only: no monitor and no --report, so nothing is written into the Snyk org (TD-360).
       # Each finding is printed with its rule, file and line, so a failing run becomes a fix task.
       - name: Snyk Code
+        id: code
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk code test --org="$SNYK_ORG" --severity-threshold=high
+        run: snyk code test --org="$SNYK_ORG" --severity-threshold=high --sarif-file-output=snyk-code.sarif
+
+      - name: Comment each Code finding with the owner's box (TD-363)
+        if: >-
+          failure() && steps.code.outcome == 'failure'
+          && github.event_name == 'pull_request' && hashFiles('snyk-code.sarif') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: python3 .github/scripts/snyk_findings.py comment snyk-code.sarif
 
       - name: Snyk Open Source
         if: success() || failure()
