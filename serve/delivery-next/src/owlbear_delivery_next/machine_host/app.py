@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import re
 import secrets
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
+from owlbear_delivery_next.machine_host import control, registry
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import api, pages
 
@@ -136,6 +138,12 @@ def _routes(machine: Machine) -> APIRouter:
     @routes.post("/projects/{pid}/adopt")
     def adopt(pid: str) -> dict[str, Any]:
         return answer(lambda: machine.adopt(pid).info())
+
+    @routes.get("/machine")
+    def values() -> dict[str, Any]:
+        """The machine's own values (TD-243): shown in the Settings page's machine section, changed by `owlbear`."""
+        login = control.autostarts() if sys.platform == "darwin" else "not available on this system"
+        return {"paused": machine.paused, "resumed_at": registry.load().resumed_at, "login_item": login}
 
     @routes.post("/resume")
     def resume() -> dict[str, bool]:

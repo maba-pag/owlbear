@@ -72,7 +72,11 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
     def projects(_request):
         return JSONResponse({"paused": False, "waiting": 0, "projects": listed})
 
-    routes = [Route("/api/next/projects", projects), *(Mount(f"/p/{pid}", app) for pid, app in apps.items())]
+    def values(_request):
+        return JSONResponse({"paused": False, "resumed_at": "2026-10-18T08:00:00Z", "login_item": "off"})
+
+    routes = [Route("/api/next/projects", projects), Route("/api/next/machine", values)]
+    routes += [Mount(f"/p/{pid}", app) for pid, app in apps.items()]
     return Starlette(routes=[*routes, Mount("/", apps[SHOP])]), launches
 
 
@@ -215,3 +219,68 @@ def test_an_older_scope_label_without_its_project_label_means_the_project_it_was
     assert (entry.projects, entry.origin, backlog_issues.labels(entry.model_dump())) == (
         ["docs-site"], "docs-site", ["class:untriaged", "project:docs-site"]
     )  # fmt: skip
+
+
+def unsaved_edits_keep_the_page(page, here: str) -> None:
+    """No project choice, removal or addition leaves a page with unsaved edits."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page.get_by_label("Layer").select_option(f"go:{SHOP}")
+    expect(page.locator("#error")).to_contain_text("Save or discard your edits")
+    expect(page.get_by_label("Layer")).to_have_value("project")
+    page.locator("#machine select").select_option(SHOP)
+    expect(page.locator("#machine [role=alert]")).to_contain_text("Save or discard your edits")
+    page.locator("#machine").get_by_role("button", name="Remove project").click()
+    expect(page.locator("dialog")).to_have_count(0)
+    page.locator("#machine summary").click()
+    page.locator("#machine").get_by_label("Folder").fill("/elsewhere")
+    page.locator("#machine").get_by_role("button", name="Add").click()
+    expect(page).to_have_url(here)
+    expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
+
+
+@pytest.mark.browser
+def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(tmp_path: Path, shared_repo) -> None:
+    """TD-243: the global value and its source beside each project's differing value; the scope names Global and
+    each project; the machine's values in their own section; a save another page overtook is refused."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    shop = Store(tmp_path / SHOP, DataRepo(shared_repo[0]), "shop-site")
+    shop.update_config(lambda layer: layer.model_copy(update={"widths": [1600]}))
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/config?project={DOCS}#token=t")
+            across = page.locator("#across-table")
+            expect(across).to_contain_text("widths")
+            expect(across).to_contain_text("(built-in default)")
+            expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
+            expect(across).not_to_contain_text("docs-site")
+            expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
+            scope = page.get_by_label("Layer")
+            expect(scope.locator("option")).to_have_text(
+                ["Project docs-site", "Global (every project)", "Project shop-site (/s)", "Project shop-site (/s2)"]
+            )
+            page.get_by_label("Rounds at most, builder").fill("4")
+            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}")
+            docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
+            docs.update_config(lambda layer: layer.model_copy(update={"explore": True}))  # another page saved first
+            page.get_by_role("button", name="Save project settings").click()
+            expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
+            page.get_by_role("button", name="Save project settings").click()
+            expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
+            expect(across).to_contain_text("docs-site: yes")  # the overview follows the save
+            expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
+            expect(across).to_contain_text("docs-site: 4")
+            page.goto(f"{base}/config?project={DOCS}")
+            scope.select_option(f"go:{SHOP}")
+            expect(page).to_have_url(f"{base}/config?project={SHOP}")
+            browser.close()
+    finally:
+        server.should_exit = True

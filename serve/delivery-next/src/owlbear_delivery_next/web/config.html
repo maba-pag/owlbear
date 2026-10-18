@@ -48,7 +48,7 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { call, designSystem } from "/assets/ui.mjs";
+import { call, designSystem, guard, here, loaded as clones, project as current } from "/assets/ui.mjs";
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const INHERIT = "inherit";  // the option that clears the layer's own value
@@ -80,6 +80,7 @@ const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "reject
 const state = {
   pds: true, loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
   folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
+  machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
 };
 const drafts = { project: {}, global: {} };
 let polling = null, arrived = null;  // arrived: models read while a setting held the focus, applied once it leaves
@@ -454,11 +455,13 @@ async function save() {
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer) }, timeout: WRITE });
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
-    state.status = `Saved ${layer === "global" ? "the global" : "this project's"} settings. They apply to the next `
-      + "session.";
+    const whose = layer === "global" ? "the global" : named() ? `${named()}'s` : "this project's";
+    state.status = `Saved ${whose} settings. They apply to the next session.`;
+    await readAcross();
   } catch (e) {
     state.status = "";
     if (e.status === 409 && await reload()) {
+      await readAcross();
       state.error = `${e.message}. The page loaded the current settings and kept your unsaved edits; `
         + "check them and save again.";
       state.error = state.error.charAt(0).toUpperCase() + state.error.slice(1);
@@ -686,9 +689,29 @@ function packSection() {
   </section>`;
 }
 
+// The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
+function named(id = current) {
+  return clones()?.find((p) => p.id === id)?.name ?? "";
+}
+
 function scopeSection() {
-  const loaded = state.loaded, options = [["project", "This project"], ["global", "All projects (global)"]];
-  const pick = (v) => { state.layer = v; show(); };
+  const loaded = state.loaded, mine = named();
+  const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && o.name === p.name);
+  const others = all.filter((p) => p.id !== current)
+    .map((p) => [`go:${p.id}`, `Project ${p.name}${twin(p) ? ` (${p.path})` : ""}`]);
+  const options = [["project", mine ? `Project ${mine}` : "This project"], ["global", "Global (every project)"],
+    ...others];
+  const pick = (v) => {
+    if (!v.startsWith("go:")) {
+      state.layer = v;
+      return show();
+    }
+    if (unsaved()) {
+      show();  // the select shows the layer being edited again
+      return notify(unsaved());
+    }
+    location.assign(here({ project: v.slice(3) }));
+  };
   const control = state.pds
     ? html`<p-select id="scope" label="Layer" ?disabled=${state.saving} .value=${live(state.layer)}
         @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<p-select-option value=${v}
@@ -704,6 +727,78 @@ function scopeSection() {
         + "saved, in this clone."}</p-text></div>
     <p-text>A blank project value uses the global one; a blank global value uses the built-in default.</p-text>
   </section>`;
+}
+
+// Why another project may not open now: edits of either layer or a folder name typed and not saved.
+function unsaved() {
+  const folder = state.folder !== null && state.folder.trim() !== (state.loaded?.folder ?? "");
+  return Object.keys(drafts.project).length || Object.keys(drafts.global).length || folder
+    ? "Save or discard your edits before you open another project." : "";
+}
+
+// A value in the overview: a list or a record in full, never "[object Object]".
+function plain(value) {
+  return value !== null && typeof value === "object" && !(Array.isArray(value) && value.every((v) => typeof v
+    !== "object")) ? JSON.stringify(value) : shown(value);
+}
+
+function at(value, key) {
+  return key.split(".").reduce((o, k) => o?.[k], value);
+}
+
+// Each setting a project sets apart from the global value, with that global value and where it comes from.
+function acrossSection() {
+  if (!clones()) return nothing;  // a clone's own host serves one project
+  const loaded = state.loaded, all = [{ name: named(), config: loaded }, ...state.others];
+  const rows = Object.keys(loaded.settings.sources).map((key) => {
+    const global = at(loaded.inherited.project, key), set = at(loaded.global, key);
+    const from = set !== undefined && set !== null ? "global" : key.startsWith("final_review.") ? "the builder's value"
+      : "built-in default";
+    const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(global));
+    return { key, global, from, differ };
+  }).filter((r) => r.differ.length);
+  const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${plain(r.global)} (${r.from})`),
+    cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; "))));
+  const unread = state.unread.length ? `Not read: ${state.unread.join("; ")}.` : "";
+  return html`<section class="panel" aria-labelledby="across-title">
+    <p-heading size="lg"><h2 id="across-title">Across projects</h2></p-heading>
+    ${rows.length ? table("Settings a project sets apart from the global value", ["Setting", "Global", "Projects"],
+      "across", body, { id: "across-table" })
+      : html`<p-text id="across-none">Every project uses the global settings.</p-text>`}
+    ${unread ? html`<p-text id="across-unread" size="xs">${unread}</p-text>` : nothing}
+  </section>`;
+}
+
+// The machine's own values: changed only here, from a terminal, never in a settings layer (TD-243).
+function machineSection() {
+  const m = state.machine;
+  if (!m) return nothing;
+  const since = m.resumed_at ? `, resumed ${new Date(m.resumed_at).toLocaleString()}` : "";
+  return html`<section class="panel" aria-labelledby="machine-title">
+    <p-heading size="lg"><h2 id="machine-title">This machine</h2></p-heading>
+    <p-text id="machine-run">Delivery ${m.paused ? "is paused since OwlBear started: press Resume above"
+      : `runs${since}`}.</p-text>
+    <p-text id="machine-login">Start at login: ${m.login_item}. Change it in a terminal with
+      <code>owlbear autostart on</code> or <code>owlbear autostart off</code>.</p-text>
+  </section>`;
+}
+
+// The machine host's values and every other project's settings, each shared folder once (twin clones share one).
+async function readAcross() {
+  const others = (clones() ?? []).filter((p) => p.id !== current);
+  if (!clones()) return;
+  const [machine, ...read] = await Promise.allSettled([call("/machine", { machine: true }),
+    ...others.map((p) => call("/config", { of: p.id }))]);
+  state.machine = machine.status === "fulfilled" ? machine.value : null;
+  const seen = new Set(state.loaded?.folder ? [state.loaded.folder] : []);
+  state.others = [];
+  state.unread = [];
+  read.forEach((r, i) => {
+    if (r.status === "rejected") return state.unread.push(`${others[i].name}: ${r.reason.message}`);
+    if (r.value.folder && seen.has(r.value.folder)) return null;
+    seen.add(r.value.folder);
+    return state.others.push({ name: others[i].name, config: r.value });
+  });
 }
 
 function folderSection() {
@@ -808,13 +903,23 @@ function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" role=${state.pds ? nothing : "alert"}
       ?hidden=${!state.error}>${state.error}</p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}` : packSection()}`;
+    ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}${acrossSection()}${machineSection()}`
+      : packSection()}`;
 }
+
+guard(unsaved);
+document.addEventListener("owlbear-machine", async () => {
+  if (!state.machine) return;
+  state.machine = await call("/machine", { machine: true }).catch(() => state.machine);
+  show();
+});
 
 // PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
 state.pds = await designSystem(["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"]);
 show();
 await reload();
+show();
+await readAcross();
 show();
 await readPack();
 await readModels();

@@ -245,6 +245,11 @@ Five steps, each its own PR series with Sol review, each leaving Delivery workin
   value; an edit asks its scope (Global or which project) and keeps today's revision-conflict refusal;
   machine values are edited only on the machine section.
 - **Proof:** page tests for source display, scope choice and conflicts.
+- (Revision 3.2: the page's layer choice names the project it edits, Global and each other project, which
+  opens that project's settings once no edit is unsaved; "Across projects" lists each setting some project
+  sets apart, with the global value and its source, each shared folder once. The machine section shows
+  Resume and the login item as launchctl reports it; they change through `owlbear`, never from the page,
+  because unloading the login item from inside the host it started would stop that host.)
 
 ## 9. Outside This Design
 

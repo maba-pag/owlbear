@@ -113,6 +113,17 @@ export function shown() {
   return bar.data.projects.filter((p) => p.state === "loaded" && (!project || p.id === project));
 }
 
+// What keeps the page from opening another project: a page with unsaved edits registers it, saying why.
+let unsaved = () => "";
+export function guard(why) {
+  unsaved = why;
+}
+
+// The machine's state changed (Resume, a project added or gone): pages that show it read it again.
+function changed() {
+  document.dispatchEvent(new CustomEvent("owlbear-machine", { detail: bar.data }));
+}
+
 // Every loaded project, whatever the page shows: where an action may go; null when no machine host serves it.
 export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
@@ -132,6 +143,7 @@ async function act(name, work) {
   bar.busy = "";
   bar.data = await machine().catch(() => bar.data);
   showBar();
+  changed();
 }
 
 function control(label, onclick, { variant = "secondary", busy = false } = {}) {
@@ -146,7 +158,15 @@ function chosen(p, all) {
   return `${p.name}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
 }
 
+// Whether unsaved edits keep the page where it is; the bar says why. Checked before anything changes or opens.
+function held() {
+  if (!(bar.error = unsaved())) return false;
+  showBar();
+  return true;
+}
+
 async function remove(p) {
+  if (held()) return;
   const yes = await window.ask({ title: `Remove ${p.name}?`, now: `OwlBear stops serving ${p.path}.`,
     then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
     after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project" });
@@ -160,8 +180,14 @@ async function remove(p) {
 function view() {
   const { projects, paused, waiting } = bar.data;
   const p = projects.find((o) => o.id === project);
-  const go = (e) => location.assign(here({ project: e.target.value, change: "" }));
-  const add = () => act("add", async () => {
+  const go = (e) => {
+    if (held()) {
+      e.target.value = project;  // the page keeps showing the project being edited
+      return showBar();
+    }
+    location.assign(here({ project: e.target.value, change: "" }));
+  };
+  const add = () => !held() && act("add", async () => {
     const added = await call("/projects", { body: { path: bar.draft.trim() }, machine: true });
     location.assign(here({ project: added.id, change: "" }));
   });
@@ -173,7 +199,7 @@ function view() {
           </option>`)}
       </select></label>` : html`<span>No project yet: add the folder of a clone.</span>`}
       ${p ? control("Remove project", () => remove(p), { busy: bar.busy === "remove" }) : nothing}
-      ${p?.state === "replaced" ? control("Adopt the new clone", () => act("adopt", async () => {
+      ${p?.state === "replaced" ? control("Adopt the new clone", () => !held() && act("adopt", async () => {
         const adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
         location.assign(here({ project: adopted.id }));
       }), { busy: bar.busy === "adopt" }) : nothing}
@@ -207,7 +233,9 @@ if (bar.data) {
   showBar();
   setInterval(async () => {
     if (bar.busy || document.activeElement?.closest?.("#machine")) return;  // never under the owner's typing
+    const was = bar.data?.paused;
     bar.data = await machine().catch(() => bar.data);
     showBar();
+    if (bar.data?.paused !== was) changed();
   }, 5000);
 }
