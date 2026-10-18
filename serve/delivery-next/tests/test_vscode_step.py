@@ -680,9 +680,9 @@ def _host(
     return path, server
 
 
-def _sign_in(conn: socket.socket, *, refuse: bool = False) -> list[tuple[str, str | None]]:
-    """Answer ``initialize`` and ``authenticate``; return the methods and tokens seen."""
-    seen = []
+def _sign_in(conn: socket.socket, *, refuse: bool = False, seen: list | None = None) -> list[tuple[str, str | None]]:
+    """Answer ``initialize`` and ``authenticate``; each method and token is noted before its reply is sent."""
+    seen = [] if seen is None else seen
     for _ in range(2):
         msg = _ws_recv(conn)
         seen.append((msg["method"], msg["params"].get("token")))
@@ -696,7 +696,8 @@ def test_a_reconnect_reaches_the_same_socket_and_signs_in_again() -> None:
     seen: list[list[tuple[str, str | None]]] = []
 
     def serve(conn: socket.socket) -> None:
-        seen.append(_sign_in(conn))
+        seen.append([])
+        _sign_in(conn, seen=seen[-1])  # noted before the reply, so the client cannot return first
         conn.recv(1)
 
     path, server = _host(serve, accepts=2)
