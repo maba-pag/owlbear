@@ -4,6 +4,8 @@
 > **Date:** 2026-10-14
 > **Question:** What exactly does each of Delivery's near-synonyms mean, so that agents, prompts, code
 > and the owner use one meaning per word? Every row is a draft (`autonomous`) until the owner confirms it.
+> **Status 2026-10-19:** design history; the record and the code win where they differ. Intent:
+> [the record](delivery-liveness-first-rebuild.md); status: [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

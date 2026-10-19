@@ -6,6 +6,9 @@
 > four new, 80% with two open and one new; all taken)
 > **Question:** How does Delivery merge through a GitHub merge queue, and how does OwlBear's own `main`
 > move to pull requests with required CI?
+> **Status 2026-10-19:** built: the merge queue as commits before the PR route (`0d4272eef` and its repairs), the PR
+> route and CI in #455 to #458. Of §6, the pack route is self-update step 3c
+> ([the plan](owlbear-plan.md) item 2); the organisation with a merge queue waits (TD-326).
 
 ## 1. Context
 

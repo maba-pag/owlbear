@@ -14,6 +14,8 @@
 > workflow digest, conversation versions, behavioural collisions, retry classes, visual binding.
 > Revision 2026-10-10 for TD-24 to TD-29: "before" screenshots, neutral notes on repository rules,
 > pull-back with replay, role models.
+> **Status 2026-10-19:** design history; the record and the code win where they differ. Intent:
+> [the record](delivery-liveness-first-rebuild.md); status: [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

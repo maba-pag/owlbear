@@ -5,6 +5,10 @@
 > **Question:** How should the watcher read, judge, stop and summarise running steps in both runtimes,
 > within the decided rules? This is a draft for the owner's design session. It builds on the
 > [options research](delivery-next-watcher-options.md) and decides nothing.
+> **Status 2026-10-19:** draft, nothing decided or built (the plan's item 9). It predates TD-320 and TD-365: nothing
+> blocks outside writes any more and the watcher judges each one afterwards, so the TD-45 guard it assumes for SDK
+> steps is gone. Revise it before the owner's session, which comes when window steps are about to return (TD-224,
+> TD-316); TD-27's benchmark runs first (TD-378). See [the plan](owlbear-plan.md) §3.4.
 
 ## 1. Context and Question
 

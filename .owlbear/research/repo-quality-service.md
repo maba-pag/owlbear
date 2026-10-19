@@ -6,6 +6,8 @@
 > formatters, keeps agents from changing lint/format rules and workflows directly, and lets them request
 > exceptions that are judged as legitimate or as workarounds? What should it do, through which interfaces, and
 > where should it sit?
+> **Status 2026-10-19:** the owner decided the service (TD-89, standalone decisions); not built and not yet placed in
+> the order ([the plan](owlbear-plan.md) §2).
 
 ## 1. Context and Question
 

@@ -9,6 +9,11 @@
 > design challenge: separate host app until M6, switch and rollback launchers, lane gate G6,
 > deletion-list corrections, no partial syncs to `main` before cutover. Revised after TD-10: no
 > switch of OwlBear's own development.
+> **Status 2026-10-19:** partly replaced. The one deletion PR became TD-199's batches
+> ([transfer ledger §3.4](delivery-next-transfer-ledger.md)); the `main` sync went with TD-203; OwlBear may build
+> itself through Delivery (TD-319); no real project uses it before the watcher (TD-338); the old live state was
+> deleted (TD-202). Still input to [the plan](owlbear-plan.md)'s item 7: E1 (§3.3), the deletion list (§3.6) and
+> the documentation list (§3.7).
 
 ## 1. Context and Question
 

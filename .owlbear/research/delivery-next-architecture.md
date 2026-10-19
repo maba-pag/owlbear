@@ -17,6 +17,8 @@
 > The agent runtime (SDK sessions outside VS Code) is under review: see
 > [agent runtime research](delivery-next-agent-runtime.md); it was an `autonomous` choice, never the
 > user's decision. Route C (TD-36) has an unwired C+ driver on PR #449; see that document.
+> **Status 2026-10-19:** design history. The package layout is C-22's and the code's (TD-196, TD-274); one host serves
+> the machine (TD-242). Intent: [the record](delivery-liveness-first-rebuild.md); status: [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

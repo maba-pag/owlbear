@@ -7,6 +7,8 @@
 > **Status:** Analysis, corrected after an independent challenge (2026-10-10). Tool-contract rules
 > T1–T8 (§4) are user-decided (2026-10-10). No tool, agent grant or skill was changed. Counts are at
 > `753eb92`; #440 later added two fields (538).
+> **Status 2026-10-19:** research history of the old engine's tools; its rules T1 to T8 live on in C-28 of
+> [the record](delivery-liveness-first-rebuild.md). Status: [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

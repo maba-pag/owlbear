@@ -10,6 +10,10 @@
 > eleven, revision 3 at 86% with five, all taken; three were owner decisions, TD-281..TD-284)
 > **Question:** How does one host process serve every project of the machine, with one UI across them, the
 > Change stores in SQLite and settings in three scopes, built in reviewable steps?
+> **Status 2026-10-19:** built (#461 to #469, #471). Re-decided since: TD-272 by TD-327 (Cyclopts, #489); TD-259 by
+> TD-350 (only login-item and post-crash starts pause) and TD-265's location by TD-334 (databases under
+> `~/.owlbear`), both open ([the plan](owlbear-plan.md) item 1); the scopes by TD-336 ([settings
+> scopes](settings-scopes-build.md)).
 
 ## 1. Context
 

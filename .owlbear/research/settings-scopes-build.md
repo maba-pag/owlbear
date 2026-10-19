@@ -1,6 +1,6 @@
 # Settings Scopes and Session Limits — Build Design (TD-336, TD-105)
 
-Status: design for build, revision 4 (2026-10-19). Sol challenged revision 1 (gates at session start: missing and
+Status: built (part A #496, part B #497); design for build, revision 4 (2026-10-19). Sol challenged revision 1 (gates at session start: missing and
 duplicated gates, slots freed before sessions end, a waiter holding the Change lock, the local save path, the
 overview's sources), the gate at runner launch (an estimate needs an enforced upper bound, reservations must
 survive a host restart, waves must not reuse unconfirmed capacity, the waiting status) and revision 3 (see §7).
