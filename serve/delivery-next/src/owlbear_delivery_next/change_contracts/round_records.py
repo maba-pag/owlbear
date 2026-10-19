@@ -20,6 +20,7 @@ PLAN = "plan"  # the plan challenge's subject (TD-190)
 BRIEF = "brief"  # the brief challenge's subject (TD-221)
 PACK = "pack"  # a design pack update's challenge (TD-220)
 RECHECK = "rejections"  # a review step that judges only the last round's rejections, outside the count (TD-330)
+UNJUDGED = "not judged: the check reported a wrong premise instead"  # so the check never runs again for it
 KEYED = re.compile(r"- (F\d+): (.*)")
 
 

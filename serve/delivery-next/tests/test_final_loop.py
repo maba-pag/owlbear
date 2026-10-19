@@ -302,12 +302,14 @@ def test_the_owner_is_asked_after_the_last_final_round_and_may_accept_it_as_done
     store = stored(tmp_path, RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1)))
     reviewed(store, clone, monkeypatch, range(1, 9))
     built(store, clone, monkeypatch, "c\n", "F8")
+    assert at(store.read("c1")) == (K.REVIEW, None, RECHECK)  # TD-330: its rejection is judged before the owner
+    reviewed(store, clone, monkeypatch, F8=False)
     q = loop.open_question(store.read("c1"))
     assert [o.id for o in q.options] == ["rebuild", "accept", "another", "replan", "clean"]
     assert q.text.startswith("Final review round 1 found 8 new findings, and it was the last allowed round: F1 fixed")
     c = answer(store, "another")
     assert (c.loops[FINAL].extra, c.loops[FINAL].completion, at(c)) == (1, None, FINAL_STEP)
-    reviewed(store, clone, monkeypatch, range(9, 17), F8=False)
+    reviewed(store, clone, monkeypatch, range(9, 17))
     built(store, clone, monkeypatch, "d\n")
     assert "Final review round 2" in loop.open_question(store.read("c1")).text
     c = answer(store, "accept")

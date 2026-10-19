@@ -37,7 +37,12 @@ FINAL_OPTIONS = [  # TD-217: every retry of the final review is a rebuild of tas
     Option(id="replan", label="Plan again from the brief on the existing code", next=RETRY),
     Option(id=CLEAN, label="Plan again from the brief from a clean state", next=RETRY),
 ]
-HOW = {"fixed": "fixed, not re-reviewed", "owner-fix": "you decided to fix it", "owner-drop": "you dropped it"}
+HOW = {
+    "fixed": "fixed, not re-reviewed",
+    "standing": "rejected; the reviewer accepted that",
+    "owner-fix": "you decided to fix it",
+    "owner-drop": "you dropped it",
+}
 TASKS = (
     "Name the plan tasks each finding belongs to in its `tasks`; when no plan task fits, say why in `no_task` instead."
 )
@@ -82,22 +87,32 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
     reviewed = None if final else task.id
     if not lp.last:
         go(c, StepKind.REVIEW, reviewed, "final" if final else None)
-    elif lp.many():  # another round judges the rejections, a retry drops them
-        ask(c, question(lp, task), now)
     elif any(d.upheld is None for d in task.disputes):
-        go(c, StepKind.REVIEW, reviewed, RECHECK)  # TD-330: the last round's rejections are judged
+        go(c, StepKind.REVIEW, reviewed, RECHECK)  # TD-330: the last round's rejections are judged first
+    elif lp.many():
+        ask(c, question(lp, task), now)
     else:
         end(c, lp, task)
 
 
-def passed(c: Change) -> None:
-    """A review passed: its loop ends clean, or as its last round ended when it only judged that round's rejections."""
+def passed(c: Change, now: datetime) -> bool:
+    """A review passed: its loop ends clean, or as its last round ended when it only judged that round's rejections.
+
+    After the check of a last allowed round that found many, the owner chooses instead (TD-208, TD-330).
+
+    Returns:
+        Whether the owner was asked.
+    """
     task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
     if (lp := loop_of(c, task)) is None or lp.ended:
-        return
+        return False
     judged = [task.id] if task else lp.batch
+    if c.step.mode == RECHECK and lp.many() and judged:
+        ask(c, question(lp, next(t for t in c.plan.tasks if t.id == judged[-1])), now)
+        return True
     lp.ended = lp.ending() if judged and judged[-1] in lp.unreviewed else "clean"
     lp.batch = []
+    return False
 
 
 def end(c: Change, lp: RoundLoop, task: Task, ended: Ended = "") -> None:
@@ -139,7 +154,7 @@ def question(lp: RoundLoop, task: Task) -> Question:
 
 
 def _said(f: RoundFinding) -> str:
-    why = f" ({' '.join(f.reason.split())})" if f.state == "rejected" else ""
+    why = f" ({' '.join(f.reason.split())})" if f.state in {"rejected", "standing"} else ""
     return f"{f.id} {HOW.get(f.state, f.state)}{why}: {f.text}"
 
 

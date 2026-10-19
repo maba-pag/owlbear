@@ -198,14 +198,16 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
     built(store, clone, monkeypatch, "b\n")
     reviewed(store, clone, monkeypatch, range(1, 9))
     built(store, clone, monkeypatch, "c\n", "F8")
+    assert at(store.read("c1")) == (K.REVIEW, "t3", RECHECK)  # TD-330: its rejection is judged before the owner
+    reviewed(store, clone, monkeypatch, F8=False)
     q = loop.open_question(store.read("c1"))
     assert [o.label for o in q.options] == ["Another round", "Reject the work and retry it"]
     assert "Review round 1 of task t1 found 8 new findings, and it was the last allowed round: " in q.text
     assert "F1 fixed, not re-reviewed: a.txt:1: problem 1 - fix: fix 1; F2 " in q.text
-    assert "; F8 rejected (F8 is wrong): a.txt:8: problem 8 - fix: fix 8. Another round" in q.text
+    assert "; F8 rejected; the reviewer accepted that (F8 is wrong): a.txt:8: problem 8 - fix: fix 8. Another" in q.text
     c = answer(store, "another")
     assert (c.loops["t1"].extra, at(c)) == (1, (K.REVIEW, "t3", None))
-    reviewed(store, clone, monkeypatch, range(9, 17), F8=False)
+    reviewed(store, clone, monkeypatch, range(9, 17))
     built(store, clone, monkeypatch, "d\n")
     assert "Review round 2 of task t1" in loop.open_question(store.read("c1")).text
     assert at(answer(store, "retry")) == (K.BUILD, "t1", round_flow.RETRY)

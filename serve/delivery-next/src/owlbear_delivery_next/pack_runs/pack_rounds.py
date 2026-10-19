@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
+from owlbear_delivery_next.change_contracts.round_records import UNJUDGED
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -90,8 +92,8 @@ def revised(lp: RoundLoop, rejected: Mapping[str, str], identity: str) -> Revise
     """Record the updater's session against its findings, and what follows it (TD-208, TD-330).
 
     Not the last round: the next challenges it. A last round with rejections: a rejections-only challenge outside the
-    count, unless that round was the last allowed one and found many. Otherwise the owner, on the unreviewed end;
-    with another round when the last allowed round found many.
+    count, first. Otherwise the owner, on the unreviewed end; with another round when the last allowed round found
+    many.
     """
     if not (found := addressing(lp)):
         return "challenge"  # the first update
@@ -102,7 +104,7 @@ def revised(lp: RoundLoop, rejected: Mapping[str, str], identity: str) -> Revise
             f.state, f.repair = "fixed", f"r{lp.round}"
     if not lp.last:
         return "challenge"
-    if not lp.many() and pending(lp):  # another round judges the rejections, a retry drops them
+    if pending(lp):
         return "recheck"
     if identity != lp.head:  # an unchanged resubmission is no repair
         lp.leave(f"r{lp.round}")
@@ -128,6 +130,8 @@ def counted(
     for f in pending(lp):
         if (j := judged.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
+        elif recheck:  # a wrong premise instead: the check never runs again for it
+            f.state, f.judgement = "standing", UNJUDGED
     lp.count(len(lp.raise_findings(found)), recheck=recheck)
     return after(lp)
 

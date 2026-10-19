@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN, UNJUDGED, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.loop import StepResult
@@ -82,6 +82,8 @@ class Sessions:
             self.told.append(("challenge", cfg))
             if (payload := self.reviews.pop(0)) is None:
                 return Run(cfg.session_id, "error", detail="boom", termination=Termination(confirmed=True))
+            if isinstance(payload, tools.WrongPremise):
+                return Run(cfg.session_id, "premise", payload, termination=Termination(confirmed=True))
         return Run(cfg.session_id, "result", payload, termination=Termination(confirmed=True))
 
     def kinds(self) -> list[str]:
@@ -226,22 +228,59 @@ def test_a_plan_resubmitted_unchanged_after_the_last_round_is_no_unreviewed_revi
     )
 
 
+def test_a_wrong_premise_in_the_check_is_revised_for_and_the_check_never_runs_again(store, change_repo, mp):
+    """Sol: a check that reports a wrong premise judges nothing; its rejection stands, said so, and the loop ends."""
+    c = store.read("c1")
+    c.loops[PLAN].policy = RoundPolicy(max_rounds=3, max_findings=5, last_round_at=2, ask_owner_at=3)
+    store.write(Lock("c1"), c)
+    mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
+    mp.reviews += [review("t1"), tools.WrongPremise(stage="plan", reason="AC-1 contradicts AC-2", evidence=["brief"])]
+    step(store, change_repo)
+    step(store, change_repo)
+    c = step(store, change_repo)
+    lp = c.loops[PLAN]
+    assert [(f.state, f.judgement) for f in lp.findings] == [("standing", UNJUDGED), ("fixed", "")]
+    assert (mp.kinds(), lp.round, lp.ended, c.step.kind) == (
+        ["plan", "challenge", "plan", "challenge", "plan"],
+        1,
+        "count",
+        K.BUILD,
+    )
+
+
+def test_a_check_at_the_maximum_whose_upheld_rejection_the_owner_drops_ends_the_loop_at_max(store, change_repo, mp):
+    c = store.read("c1")
+    c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=2)
+    store.write(Lock("c1"), c)
+    mp.plans += [plan(1), plan(2, {"F1": "no"})]
+    mp.reviews += [review("t1"), review(upheld={"F1": True})]
+    step(store, change_repo)
+    step(store, change_repo)
+    answer(store, "drop", "fine as planned")
+    c = step(store, change_repo)
+    lp = c.loops[PLAN]
+    assert (lp.findings[0].state, lp.round, lp.unreviewed, lp.ended, c.step.kind) == (
+        "owner-drop", 1, ["r1"], "max", K.BUILD
+    )  # fmt: skip
+
+
 def test_after_the_last_round_the_owner_has_another_round_or_a_new_plan(store, change_repo, mp):
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
     store.write(Lock("c1"), c)
     mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(3)]
-    mp.reviews += [review("t1"), review(upheld={"F1": False})]
+    mp.reviews += [review("t1"), review(upheld={"F1": False}), review()]
     step(store, change_repo)
     c = step(store, change_repo)
+    assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))  # TD-330: judged before the owner
     q = next(q for q in c.questions if q.answer is None)
     assert [o.id for o in q.options] == ["another", "retry"]
-    assert "F1 rejected (no)" in q.text
+    assert "F1 rejected; the challenger accepted that (no)" in q.text
     c = answer(store, "another")
     assert (c.step.mode, c.loops[PLAN].extra) == ("challenge", 1)
     c = step(store, change_repo)
     assert mp.kinds()[-1] == "challenge"  # no planner session for another round
-    assert (c.loops[PLAN].findings[0].state, c.step.kind) == ("standing", K.BUILD)
+    assert (c.loops[PLAN].findings[0].state, c.loops[PLAN].round, c.step.kind) == ("standing", 2, K.BUILD)
 
 
 def test_plan_again_from_the_brief_is_a_new_attempt_told_why_without_the_old_plan(store, change_repo, mp):

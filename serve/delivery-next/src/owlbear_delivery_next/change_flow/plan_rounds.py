@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Step,
     StepKind,
 )
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, RoundLoop
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, UNJUDGED, RoundLoop
 from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
@@ -46,7 +46,11 @@ LAST = [
 ]
 RETIRED = "retired"  # the answer that retires a question about a plan attempt that ended
 LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mid-sentence
-HOW = {"fixed": "revised for, not challenged again", "owner-fix": "you decided to revise for it"}
+HOW = {
+    "fixed": "revised for, not challenged again",
+    "standing": "rejected; the challenger accepted that",
+    "owner-fix": "you decided to revise for it",
+}
 REJECT = (
     "Revise the plan for each finding that holds. Reject one you judge wrong in `rejected`, by its key, with your "
     "evidence: the next challenger judges whether your rejection is acceptable, so make your case complete. Submit "
@@ -159,8 +163,9 @@ def challenge_lines(c: Change) -> list[str]:
 def revised(c: Change, rejected: Mapping[str, str]) -> Next:
     """Record the planner's accepted plan against its findings, and what follows it (TD-208, TD-330).
 
-    Not the last round: the next challenges it. The last allowed round with many findings: the owner. Any other last
-    round with rejections: a rejections-only challenge outside the count. Otherwise the revision is accepted unreviewed.
+    Not the last round: the next challenges it. A last round with rejections: a rejections-only challenge outside the
+    count, first. Then the last allowed round with many findings: the owner. Otherwise the revision is accepted
+    unreviewed.
     """
     lp = current(c)
     if lp is None or not (found := addressing(c)):
@@ -172,10 +177,10 @@ def revised(c: Change, rejected: Mapping[str, str]) -> Next:
             f.state, f.repair = "fixed", f"r{lp.round}"
     if not lp.last:
         return "challenge"
-    if lp.many():
-        return "ask"
     if pending(lp):
         return "recheck"
+    if lp.many():
+        return "ask"
     if identity(c.plan) != lp.head:  # a plan resubmitted unchanged is no revision
         lp.leave(f"r{lp.round}")
     lp.ended = lp.ending()
@@ -201,11 +206,15 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     for f in pending(lp):
         if (j := judged.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
+        elif recheck:  # a wrong premise instead: the check never runs again for it
+            f.state, f.judgement = "standing", UNJUDGED
     lp.count(len(lp.raise_findings(found)), recheck=recheck)
     if _undecided(lp) is not None:
         return "ask"
     if addressing(c):
         return "revise"
+    if recheck and lp.many():
+        return "ask"  # the owner chooses after the last allowed round, its rejections judged (TD-330)
     lp.ended = (lp.ending() if recheck else "count") if lp.unreviewed else "clean"
     return "done"
 
@@ -247,7 +256,7 @@ def last(lp: RoundLoop) -> Question:
 
 
 def _said(f: RoundFinding) -> str:
-    why = f" ({_flat(f.reason, 500)})" if f.state == "rejected" else ""
+    why = f" ({_flat(f.reason, 500)})" if f.state in {"rejected", "standing"} else ""
     return f"{f.id} {HOW.get(f.state, f.state)}{why}: {_flat(f.text, 600)}"
 
 
@@ -295,6 +304,8 @@ def proceed(c: Change, now: datetime) -> None:
         _mode(c, None)  # the planner revises, as after a challenge: its producer's one repair chance holds (TD-123)
         c.outcome = Outcome(exit=Exit.RETRY, reason="the owner decided the disputed findings", challenged=True, at=now)
         c.budgets.loops[PLAN] = c.budgets.loops.get(PLAN, 0) + 1  # the planning round the owner sees
+    elif lp.last and lp.many():
+        ask(c, last(lp), now)
     else:
         _mode(c, SETTLED)
 
@@ -330,7 +341,7 @@ def accepted(c: Change, now: datetime) -> None:
     lp = c.loops.get(PLAN)
     if lp is None:
         return
-    lp.ended = lp.ended or ("count" if lp.unreviewed else "clean")
+    lp.ended = lp.ended or (lp.ending() if lp.unreviewed else "clean")
     lp.history += [c.loops.pop(k) for k in [k for k in c.loops if k not in {FINAL, PLAN, BRIEF}]]
     retire(c, now)
 

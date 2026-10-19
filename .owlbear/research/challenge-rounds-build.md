@@ -76,8 +76,9 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
   maximum, leaves rejections no round judged, one short session judges only those on the repaired head, without
   new findings; a rejection it does not accept goes to the owner. It counts outside the rounds: the round number,
   that round's finding count and the head its new work is diffed from stay. When the last allowed round found
-  `ask owner at` or more, the owner is asked first and no check runs: another round judges the rejections, a
-  retry drops them. Repairs after one round share its label (`r<round>`), listed once as unreviewed.
+  `ask owner at` or more, the owner chooses after the check and its disputes. A check that reports a wrong premise
+  instead judges nothing: its rejections stand, marked unjudged, and the premise is repaired like a finding.
+  Repairs after one round share its label (`r<round>`), listed once as unreviewed.
 - Completion without a pass: an engine-issued completion record binds the policy, the last verdict, the
   complete repair batch, the criteria and the resulting head. `publish.reviewed` and merge accept it for
   identical content under the same criteria only (TD-237); later changes invalidate it like a review.
@@ -233,10 +234,9 @@ step is built.
   shaper's rejections and look for new findings within the cap; a challenger's wrong premise or a tool no runtime
   provides is its round's finding. A failed session counts none and runs again. Saves are refused while a
   challenge runs or the owner decides.
-- After a request, as in the other loops: not the last round → a challenge; the last allowed round with `ask owner
-  at` or more new findings → the owner on
-  the Changes page: "Another round" or "Shape the brief again" (a new attempt; the shaper is told why); any other
-  last round with rejections → a rejections-only check (TD-330); otherwise no
+- After a request, as in the other loops: not the last round → a challenge; a last round with rejections → a
+  rejections-only check (TD-330); then the last allowed round with `ask owner at` or more new findings → the owner on
+  the Changes page: "Another round" or "Shape the brief again" (a new attempt; the shaper is told why); otherwise no
   session: the requested version is the loop's outcome, unreviewed (`count`/`max`). A verdict with nothing left to
   address, or the owner's decisions leaving none, makes the judged version the outcome (`clean`). An upheld
   rejection asks the owner first, with TD-193's options; a reconsideration runs in the SHAPE step; an upheld
@@ -272,9 +272,8 @@ step is built.
   its result tool. It writes only in its own folder and runs no shell (`Policy.confined`); after each session every
   allowed skill is copied into the candidate, so a skill restored to its start replaces an earlier edit. The replay
   reruns whenever the pack identity changed.
-- After a repair, as in the other loops: not the last round → the next round; any other last round with rejections
-  → a rejections-only check (TD-330), which never reviews the fixes beside them, unless the last allowed round found
-  `ask owner at` or more; otherwise the run stops before
+- After a repair, as in the other loops: not the last round → the next round; a last round with rejections → a
+  rejections-only check (TD-330), which never reviews the fixes beside them; otherwise the run stops before
   activating and asks the owner on the Settings page: "Activate the unreviewed repair" or "Discard the update"
   (TD-256), with "Another round" first when the last allowed round found `ask owner at` or more (TD-208). A full round
   with nothing left to address and no unreviewed repair activates and pushes as before.
