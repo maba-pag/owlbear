@@ -1,4 +1,5 @@
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -238,7 +239,7 @@ def test_round_values_stored_out_of_fit_show_on_the_page_to_be_fixed(store, tmp_
     fixed = {"format": 6, "agents": {"builder": {"ask_owner_at": 9}}}
     saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": fixed}).json()
     assert saved["settings"]["agents"]["builder"]["last_round_at"] == 8
-    assert saved["notice"].startswith("The global challenge-round values do not fit together on their own")
+    assert saved["notice"].startswith("The challenge-round values of the global layer and this machine do not fit")
 
 
 def test_a_global_save_must_suit_every_project_sharing_it(tmp_path):
@@ -328,3 +329,48 @@ def test_unreadable_models_leave_typing_and_are_read_again_next_time(store):
     assert (first["models"], first["error"]) == ([], "OSError: offline in tests: models.list")
     assert c.get("/api/next/config/models").json() == first  # a failure is not kept: read again, still offline
     assert client(store).get("/api/next/config/models").status_code == 401
+
+
+def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(store, shared_repo):
+    """TD-336: built-in → global → machine → project; the machine layer lives in ~/.owlbear, never published."""
+    root, remote = shared_repo
+    store = Store(store.root, data_repo.DataRepo(root), "shop")
+    c = client(store, store.global_path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    assert (got["machine"]["agents"], got["inherited"]["machine"]["agents"]["builder"]["effort"]) == ({}, "medium")
+    glob = {"format": 6, "agents": {"builder": {"effort": "high", "minutes": 50}, "planner": {"effort": "low"}}}
+    got = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": glob}).json()
+    machine = {"format": 6, "agents": {"builder": {"effort": "xhigh", "minutes": 60}}}
+    saved = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": machine})
+    assert saved.status_code == 200
+    s, sources = saved.json()["settings"], saved.json()["settings"]["sources"]
+    assert (s["agents"]["builder"]["effort"], sources["agents.builder.effort"]) == ("xhigh", "machine")
+    assert (s["agents"]["planner"]["effort"], sources["agents.planner.effort"]) == ("low", "global")
+    assert saved.json()["inherited"]["project"]["agents"]["builder"]["minutes"] == 60  # a blank project field
+    assert saved.json()["inherited"]["machine"]["agents"]["builder"]["minutes"] == 50  # a blank machine field
+    project = {"format": 6, "agents": {"builder": {"effort": "low"}}}
+    mine = c.put("/api/next/config/project", json={"rev": saved.json()["project_rev"], "layer": project}).json()
+    assert (mine["settings"]["agents"]["builder"]["effort"], mine["settings"]["sources"]["agents.builder.minutes"]) == (
+        "low", "machine"
+    )  # fmt: skip
+    assert json.loads(store.machine_path.read_text())["agents"]["builder"]["effort"] == "xhigh"
+    assert store.settings().sources["agents.builder.minutes"] == "machine"  # the runners resolve it too
+    shown = subprocess.run(  # noqa: S603
+        ["git", "--git-dir", str(remote), "log", "--format=%s", "main"],  # noqa: S607
+        check=True, capture_output=True, text=True,
+    ).stdout  # fmt: skip
+    assert "machine" not in shown  # never published
+    assert not list(root.glob("**/settings.json"))
+    stale = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": {"format": 6}})
+    assert stale.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "layer",
+    [{"pr_marker": False}, {"data": {}}, {"visible": True}, {"agents": {"builder": {"last_round_at": 8}}}],
+)
+def test_this_machine_s_layer_refuses_project_and_global_settings_and_combinations_that_do_not_fit(store, layer):
+    c = client(store, headers=AUTH)
+    rev = c.get("/api/next/config").json()["machine_rev"]
+    r = c.put("/api/next/config/machine", json={"rev": rev, "layer": {"format": 6, **layer}})
+    assert (r.status_code, store.machine_path.exists()) == (422, False)  # 8 is above the default ask-owner value 7

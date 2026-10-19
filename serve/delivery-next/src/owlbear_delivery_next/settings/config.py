@@ -24,7 +24,7 @@ from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 CONFIG_FORMAT = 6  # 3 renamed the designer to design-judge (TD-169); 4 minutes (TD-286); 5 PR labels; 6 subagents
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
-type Source = Literal["default", "global", "project", "builder"]
+type Source = Literal["default", "global", "machine", "project", "builder"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 DEFAULT_WIDTHS = [1280, 1920, 2400]
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
@@ -118,10 +118,8 @@ class Layer(Record):
         return v
 
 
-class GlobalLayer(Layer):
-    """The global settings; the visibility switch is global only (TD-35), test preparation per project (TD-96)."""
-
-    visible: bool | None = None
+class WideLayer(Layer):
+    """A layer above the project, global or this machine's: project-only settings are refused (TD-96, TD-308)."""
 
     @field_validator("preparations", "data")
     @classmethod
@@ -136,6 +134,16 @@ class GlobalLayer(Layer):
         if v is not None:
             raise ValueError("the pull request marker line is a project setting")  # noqa: EM101, TRY003
         return v
+
+
+class GlobalLayer(WideLayer):
+    """The global settings; the visibility switch is global only (TD-35), test preparation per project (TD-96)."""
+
+    visible: bool | None = None
+
+
+class MachineLayer(WideLayer):
+    """This machine's preferences, local in ``~/.owlbear``, between the global and the project layer (TD-336)."""
 
 
 class Effective(Record):
@@ -205,19 +213,19 @@ def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) 
     raise KeyError(msg)
 
 
-def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
-    """Resolve each field on its own: project, else global, else the built-in default."""
+def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None = None) -> Settings:
+    """Resolve each field on its own: project, else this machine's, else global, else the built-in default (TD-336)."""
     base, glob, sources = _defaults(), glob or GlobalLayer(), dict[str, Source]()
+    here = machine or MachineLayer()
+    layers: list[tuple[Source, Layer]] = [("project", project), ("machine", here), ("global", glob)]
     agents: dict[Role, Effective] = {}
     for role, default in base.agents.items():
-        mine, theirs = project.agents.get(role) or Agent(), glob.agents.get(role) or Agent()
         agents[role] = Effective.model_validate(
             {
                 name: _pick(
                     f"agents.{role}.{name}",
                     sources,
-                    ("project", getattr(mine, name)),
-                    ("global", getattr(theirs, name)),
+                    *((s, getattr(layer.agents.get(role) or Agent(), name)) for s, layer in layers),
                     ("default", getattr(default, name)),
                 )
                 for name in Effective.model_fields
@@ -225,39 +233,27 @@ def resolve(glob: GlobalLayer | None, project: Layer) -> Settings:
         )
     runtimes = {
         name: bool(
-            _pick(
-                f"runtimes.{name}",
-                sources,
-                ("project", project.runtimes.get(name)),
-                ("global", glob.runtimes.get(name)),
-                ("default", on),
-            )
+            _pick(f"runtimes.{name}", sources, *((s, layer.runtimes.get(name)) for s, layer in layers), ("default", on))
         )
         for name, on in base.runtimes.items()
     }
-    widths = _pick("widths", sources, ("project", project.widths), ("global", glob.widths), ("default", base.widths))
+    widths = _pick("widths", sources, *((s, layer.widths) for s, layer in layers), ("default", base.widths))
     visible = _pick("visible", sources, ("global", glob.visible), ("default", base.visible))
     prep = _pick("preparations", sources, ("project", project.preparations), ("default", []))
     data = _pick("data", sources, ("project", project.data), ("default", DataPermissions()))
-    design = _pick(
-        "design_failures",
-        sources,
-        ("project", project.design_failures),
-        ("global", glob.design_failures),
-        ("default", "ask"),  # autonomous default (TD-78)
+    design = _pick(  # autonomous default (TD-78)
+        "design_failures", sources, *((s, layer.design_failures) for s, layer in layers), ("default", "ask")
     )
-    own, theirs = project.final_review or FinalReview(), glob.final_review or FinalReview()
     final = {
         name: _pick(
             f"final_review.{name}",
             sources,
-            ("project", getattr(own, name)),
-            ("global", getattr(theirs, name)),
+            *((s, getattr(layer.final_review or FinalReview(), name)) for s, layer in layers),
             ("builder", getattr(agents["builder"], name)),
         )
         for name in RoundPolicy.model_fields
     }
-    labels = _pick("pr_labels", sources, ("project", project.pr_labels), ("global", glob.pr_labels), ("default", []))
+    labels = _pick("pr_labels", sources, *((s, layer.pr_labels) for s, layer in layers), ("default", []))
     marker = _pick("pr_marker", sources, ("project", project.pr_marker), ("default", True))
     return Settings(
         visible=visible,

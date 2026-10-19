@@ -19,11 +19,11 @@ from owlbear_delivery_next.change_contracts.inbox import InboxItem
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, Settings, resolve
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings, resolve
 from owlbear_delivery_next.state_store import profile_share
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
 STORE_DIR = "owlbear-delivery"
 CONFIG = "config.json"  # the project's settings layer (TD-52)
+MACHINE_SETTINGS = "settings.json"  # this machine's preference layer in ~/.owlbear (TD-336)
 ACTIVITY_LIMIT = 200
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _INBOX: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)
@@ -243,15 +244,20 @@ class Store:
         """The project's settings layer."""
         return read_layer(self.config_path, Layer)
 
+    @property
+    def machine_path(self) -> Path:
+        """This machine's preference layer in ``~/.owlbear``: local, never published (TD-336)."""
+        return local_home.root() / MACHINE_SETTINGS
+
     def update_config(self, change: Callable[[Layer], Layer], what: str = "project layer") -> str:
         """Change and publish the project's settings layer; the publication notice, else nothing."""
         return self.save(self.config_path, Layer, change, f"{self.name or 'the project'}: {what}")
 
     def settings(self) -> Settings:
-        """The resolved settings: the project layer over the global one over the defaults."""
+        """The resolved settings: the project layer over this machine's over the global one over the defaults."""
         glob = read_layer(self.global_path, GlobalLayer) if self.global_path else None
         try:
-            return resolve(glob, self.read_config())
+            return resolve(glob, self.read_config(), read_layer(self.machine_path, MachineLayer))
         except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
             msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
             raise StoreError(msg) from exc
