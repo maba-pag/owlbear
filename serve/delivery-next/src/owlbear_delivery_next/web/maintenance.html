@@ -128,7 +128,8 @@ async function startReview() {
     then: `${runs()} The curator applies only the retire and merge verdicts that hold, measures the suite before `
       + "and after, and its edits go through review, a pull request and CI before they merge. Each session uses "
       + "AI credits.",
-    after: "Pause or abandon it on the Changes page at any step until it merges.",
+    after: "It is a Change like any other: while Delivery is paused its steps wait for Resume. Pause or abandon it on "
+      + "the Changes page at any step until it merges.",
     instead: "Nothing starts.",
   });
   if (!sure) return;

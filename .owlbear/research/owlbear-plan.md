@@ -59,7 +59,7 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest (TD-328, TD-330, TD-334, TD-335, TD-341, TD-345, TD-347's skill, TD-350) and TD-403's small items (TD-396, TD-397, TD-399; TD-392 done) (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | Not started; overdue |
+| 1 | TD-358's rest (TD-330, TD-334, TD-335, TD-345, TD-350); built: TD-328, TD-341, TD-347's skill, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
@@ -98,21 +98,16 @@ of phase 6 the collision rule (C3, TD-12) is built and the change of mind (C5) i
 TD-358 ("All of it now, before self-update step 3b") was recorded after step 3b had merged (#481), so it is read as
 "before the rest of the self-update"; TD-394 confirms it comes first. The audit of §4 found the eight below unbuilt;
 the range's other rows are built, history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). TD-403 adds
-the small items of 2026-10-19. Remaining:
+the small items of 2026-10-19. Built since: TD-392 (#502), TD-328, TD-341, TD-347's skill, TD-396, TD-397 and TD-399,
+with the C-02 catalogue text. Remaining:
 
 | Decision | What is missing |
 | --- | --- |
-| TD-328 | Settings marks the shaper's model and effort as a recommendation, since the owner's typed turns use the chat's picker |
 | TD-330 | Every loop's last round gets one rejections-only check outside the round count; all five loops still follow TD-218 |
 | TD-334 | Each project's live database lives under `~/.owlbear`, one folder per project; it is still in the clone's Git folder |
 | TD-335 | `owlbear install` asks for the `~/.copilot` shaper links and uninstall removes them; neither does today |
-| TD-341 | The "Accept as done" confirmation names the criteria the remaining findings report unmet |
 | TD-345 | Backlog repeats merge only when they name the same projects (or both none); they merge by origin today |
-| TD-347 | Research about a consumer project goes to `owlbear-data`; `w-research` writes `.owlbear/research` in whatever project it runs in (OwlBear's own research moves with item 6) |
 | TD-350 | Only a login-item start and a start after a crash are paused; `owlbear restart` keeps its state; a `--paused` start; every start pauses today |
-| TD-396 | Every Settings save confirms in a dialog naming its layer and changes; project saves do not confirm today |
-| TD-397 | The test review's start dialog says its steps wait for Resume while paused |
-| TD-399 | The pack updater recalls and saves memory; it has neither today (judges keep recall only) |
 
 ### 3.2 Items 2 to 4: the self-update
 
@@ -160,7 +155,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-01 | A question shows the record's words and what changed | The shaping skill and `w-idea-refinement` say never to quote the record | align | — |
 | C-01 | In doubt, ask about the direction first and say why | The shaper does not say why | align | — |
 | C-01 | "Take your recommendation" is recorded `autonomous` with its reason | Brief decisions have no reason field | align | — |
-| C-02 | Nothing blocks writes outside the worktree (TD-320) | The Settings catalogue still says "Delivery's hard guard (TD-45)" | align | — |
 | C-03 | TD-27's benchmark, then the watcher's model | Not run | build | 9 |
 | C-04 | The watcher reads, judges and stops every runtime; it is on the real-use list | Not built | build | 9 |
 | C-04 | Window steps reopen only after the gate | Gate not built, no design | build | 8 |
@@ -168,14 +162,11 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-05 | The repository's instructions apply, Delivery's format wins, a clash asks | Agents are not told which wins | align | — |
 | C-05 | Project agents and skills off in steps after self-update step 5 | Discoverable, allowed until then (TD-329) | build | 5 |
 | C-06, C-08 | The `~/.copilot` shaper links are asked at install and removed at uninstall (TD-335) | Not handled by install or uninstall | align | 1 |
-| C-06 | Settings marks the shaper's model and effort as a recommendation (TD-328) | Missing | align | 1 |
 | C-08, C-19 | Live databases under `~/.owlbear`, one folder per project (TD-334) | In the clone's Git folder | align | 1 |
 | C-09 | `owlbear-data` holds OwlBear's research too; the record, the plan and unbuilt build designs stay (TD-227, TD-395) | Still in this repository | build | 6 |
-| C-09 | Research about a consumer project is never committed into it (TD-347) | `w-research` writes `.owlbear/research` in the current project | align | 1 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
 | C-12, C-15 | Last round's rejections get one rejections-only check outside the count (TD-330) | TD-218's behaviour in all five loops | align | 1 |
-| C-13 | "Accept as done" names the unmet criteria (TD-341) | Only "Accept as done?" | align | 1 |
 | C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | not placed |
 | C-15 | The updater may change its whole candidate; a code change waits for approval (TD-194) | It may edit only skills | align | 2 |
 | C-15 | A change to expected evidence asks the owner (TD-177) | The run ends failed | align | 2 |
@@ -186,7 +177,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-16 | v1.0 after the self-update and the old engine's removal, docs rewritten (TD-393) | Not yet | build | 12 |
 | C-17 | Take the newest version, never backwards, idle updates, Run updates now, back as it was | Steps 4 and 5 | build | 3, 4 |
 | C-18 | Only login and post-crash starts pause; restarts keep their state (TD-350) | Every start pauses | align | 1 |
-| C-18 | A test review is a regular Change; its dialog says its steps wait for Resume while paused (TD-397) | The dialog does not say so | align | 1 |
 | C-18 | Paused pages offer Run updates now; the stop-when-idle choice hides with Update while paused off | Step 4 | build | 3 |
 | C-18 | The Pause tooltip says plain Pause may still update | Missing | align | 3 |
 | C-19 | The maintenance overview includes the engine update | Step 4 | build | 3 |
@@ -194,7 +184,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-20 | OwlBear builds itself through its own Delivery (TD-319) | Developed in chat only | keep | 10 |
 | C-21 | Old engine batches with the tag first; three skills retire with batch 3 | Not started | build | 7 |
 | C-24 | Backlog repeats merge only for the same named projects (TD-345) | Merged by origin | align | 1 |
-| C-25 | Producing roles and the pack updater save lessons; judges only recall (TD-399) | The pack updater neither recalls nor saves | align | 1 |
 | C-25 | The saver recommends a scope (TD-293) | Missing | align | 5 |
 | C-25 | A Global entry can move back to a project (TD-292) | The page says it does not move back | align | 5 |
 | C-25 | Curator modes and the Global threshold, 95% at first (TD-292, TD-400) | Missing | build | 5 |
@@ -203,7 +192,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-28 | Tool use is measured, success rates included (T8) | Success rates are not counted | align | — |
 | C-28 | The 500-line limit covers pages, scripts and styles; tests do not (TD-401) | Only Python sources are checked (`changes.html` has 1517 lines) | align | 11 |
 | C-28 | Default rules guide, never gate | Ruff's complexity rule fails CI; `noqa` is the escape | keep | — |
-| C-29 | Every Settings save confirms, naming its layer and changes (TD-396) | Project saves do not confirm | align | 1 |
 | C-30 | Every role may use built-in subagents | Not in window steps | keep | 8 |
 | S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |
 | S | PDS only from its CDN, no own fallback; browser tests reach the real CDN (TD-39, TD-398) | Pages have a fallback and a notice; the browser tests abort the CDN and run on the fallback | align | 11 |

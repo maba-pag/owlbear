@@ -16,14 +16,14 @@ CATALOGUE: dict[str, Any] = {
             "adds": "nothing beyond the baseline",
             "mcp": "only servers Delivery passes",
             "live_view": "no (VS Code shows a snapshot at most)",
-            "outside_writes": "Delivery's hard guard (TD-45)",
+            "outside_writes": "nothing: the watcher will judge each one afterwards (TD-320, TD-365)",
         },
         {
             "runtime": "window",
             "adds": "the VS Code window's tools: browser, tasks, problems",
             "mcp": "your VS Code mcp.json",
             "live_view": "yes",
-            "outside_writes": "the watcher, once it exists (D6)",
+            "outside_writes": "nothing: the watcher will judge each one afterwards (TD-365)",
         },
     ],
     "categories": {

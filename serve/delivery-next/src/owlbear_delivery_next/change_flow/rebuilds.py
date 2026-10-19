@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoo
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.moves import go, open_task, subject_of
 from owlbear_delivery_next.change_flow.round_flow import PREFIX
-from owlbear_delivery_next.change_flow.round_marks import kind
+from owlbear_delivery_next.change_flow.round_marks import kind, unmet
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -52,7 +52,8 @@ def shown(c: Change, q: Question | None) -> dict[str, object] | None:
         }
         for t in plan
     ]
-    return {"attempt": lp.attempt, "head": head(lp), "tasks": tasks}
+    said = [f"{k.id}: {k.text}" for k in unmet(c, lp)]  # what Accept as done accepts unmet (TD-341)
+    return {"attempt": lp.attempt, "head": head(lp), "tasks": tasks, "unmet": said}
 
 
 def refused(
