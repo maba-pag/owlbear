@@ -29,7 +29,8 @@ against TD-350 (§4).
 
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
 passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Only `v0.1` exists: the first tagging run after #500
-(2026-10-19 16:41Z) failed pushing `v0.2`, and `release.py` hides git's error text (open defect, before item 1).
+(2026-10-19 16:41Z) failed pushing `v0.2`; `release.py` now prints git's error, and a major gets `vN.0` and `vN`
+(TD-392). The cause is open until the next run shows it.
 Renovate's pull requests are left alone until the old engine is gone (owner, 2026-10-19).
 
 **Built, by build document:**
@@ -57,7 +58,7 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest (TD-328, TD-330, TD-334, TD-335, TD-341, TD-345, TD-347's skill, TD-350) and TD-403's small items (TD-392, TD-396, TD-397, TD-399) (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | Not started; overdue |
+| 1 | TD-358's rest (TD-328, TD-330, TD-334, TD-335, TD-341, TD-345, TD-347's skill, TD-350) and TD-403's small items (TD-396, TD-397, TD-399; TD-392 done) (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | Not started; overdue |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
@@ -108,7 +109,6 @@ the small items of 2026-10-19. Remaining:
 | TD-345 | Backlog repeats merge only when they name the same projects (or both none); they merge by origin today |
 | TD-347 | Research about a consumer project goes to `owlbear-data`; `w-research` writes `.owlbear/research` in whatever project it runs in (OwlBear's own research moves with item 6) |
 | TD-350 | Only a login-item start and a start after a crash are paused; `owlbear restart` keeps its state; a `--paused` start; every start pauses today |
-| TD-392 | The release walk gives a major merge two tags, `vN.0` and `vN`; it makes `vN` only today |
 | TD-396 | Every Settings save confirms in a dialog naming its layer and changes; project saves do not confirm today |
 | TD-397 | The test review's start dialog says its steps wait for Resume while paused |
 | TD-399 | The pack updater recalls and saves memory; it has neither today (judges keep recall only) |
@@ -182,7 +182,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-15, C-16 | Every pack update opens a labelled PR, merges on green and becomes a version | Pushes a branch | build | 2 |
 | C-16 | OwlBear's own project sets `release:minor` | OwlBear is not a registered project | keep | 10 |
 | C-16 | Chat-authored PRs get `release:minor` for runtime changes (TD-314) | Written nowhere agents read | align | — |
-| C-16 | A major's commit gets two tags, `vN.0` and `vN` (TD-392) | `release.py` makes `vN` only | align | 1 |
 | C-16 | v1.0 after the self-update and the old engine's removal, docs rewritten (TD-393) | Not yet | build | 12 |
 | C-17 | Take the newest version, never backwards, idle updates, Run updates now, back as it was | Steps 4 and 5 | build | 3, 4 |
 | C-18 | Only login and post-crash starts pause; restarts keep their state (TD-350) | Every start pauses | align | 1 |

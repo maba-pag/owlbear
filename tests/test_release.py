@@ -81,13 +81,16 @@ def test_labelled_merges_become_versions_in_order_and_the_walk_waits_at_one_whos
               e: pr(5, "release:minor"), f: pr(6, "release:minor")}  # fmt: skip
     gh.runs = {a: "success", b: "failure", c: "success", d: "success", f: "success"}  # e's CI still runs
     assert walked(gh, floor) == [
-        (a, "tag", "v0.2"), (b, "pass", ""), (c, "tag", "v1"), (direct, "pass", ""), (d, "pass", ""), (e, "stop", "")
+        (a, "tag", "v0.2"), (b, "pass", ""), (c, "tag", "v1.0"), (direct, "pass", ""), (d, "pass", ""), (e, "stop", "")
     ]  # fmt: skip
     for step in release.plan(gh, floor, "HEAD"):
         if step.action == "tag":
             release.tag(step)
-    assert (git(repo, "cat-file", "-t", "v1"), git(repo, "rev-parse", "v1^{commit}")) == ("tag", c)
-    assert "refs/tags/v0.2" in git(repo, "ls-remote", "--tags", "origin")
+    assert [(git(repo, "cat-file", "-t", n), git(repo, "rev-parse", f"{n}^{{commit}}")) for n in ("v1.0", "v1")] == [
+        ("tag", c), ("tag", c)
+    ]  # fmt: skip
+    remote = git(repo, "ls-remote", "--tags", "origin")
+    assert all(f"refs/tags/{n}\n" in f"{remote}\n" for n in ("v0.2", "v1.0", "v1"))
     assert walked(gh, floor) == [(direct, "pass", ""), (d, "pass", ""), (e, "stop", "")]  # after the frontier only
     gh.runs[e] = "success"
     assert walked(gh, floor) == [(direct, "pass", ""), (d, "pass", ""), (e, "tag", "v1.1"), (f, "tag", "v1.2")]
@@ -101,7 +104,7 @@ def test_a_version_tag_before_the_floor_counts_for_numbering_but_not_as_the_fron
     assert walked(gh, floor) == [(a, "tag", "v0.10")]
 
 
-def test_a_tag_name_taken_meanwhile_fails_the_run_instead_of_moving(repo: Path):
+def test_a_tag_name_taken_meanwhile_fails_the_run_instead_of_moving(repo: Path, capsys: pytest.CaptureFixture[str]):
     floor, gh = git(repo, "rev-parse", "HEAD"), Fake()
     a = merge(repo, "a")
     gh.prs, gh.runs = {a: pr(1, "release:minor")}, {a: "success"}
@@ -109,6 +112,7 @@ def test_a_tag_name_taken_meanwhile_fails_the_run_instead_of_moving(repo: Path):
     git(repo, "tag", "v0.2", "HEAD~1")
     with pytest.raises(subprocess.CalledProcessError):
         release.tag(step)
+    assert "already exists" in capsys.readouterr().err
     assert git(repo, "rev-parse", "v0.2^{commit}") == git(repo, "rev-parse", "HEAD~1")
 
 
