@@ -19,7 +19,8 @@ FINAL = "final"  # the final review's subject
 PLAN = "plan"  # the plan challenge's subject (TD-190)
 BRIEF = "brief"  # the brief challenge's subject (TD-221)
 PACK = "pack"  # a design pack update's challenge (TD-220)
-RECHECK = "rejections"  # a review step that judges only an early last round's rejections (TD-218)
+RECHECK = "rejections"  # a review step that judges only the last round's rejections, outside the count (TD-330)
+UNJUDGED = "not judged: the check reported a wrong premise instead"  # so the check never runs again for it
 KEYED = re.compile(r"- (F\d+): (.*)")
 
 
@@ -108,6 +109,27 @@ class RoundLoop(_Record):
         ]
         self.findings += new
         return new
+
+    def many(self) -> bool:
+        """The last allowed round found `ask owner at` or more: the owner chooses another round or a retry (TD-208)."""
+        return self.round >= self.policy.max_rounds + self.extra and self.found >= self.policy.ask_owner_at
+
+    def ending(self) -> Ended:
+        """How the loop ends after its last round: by that round's count, or at the maximum."""
+        return "count" if self.found <= self.policy.last_round_at else "max"
+
+    def leave(self, repair: str) -> None:
+        """Record *repair* as reviewed by no round, once: repairs after the same round share its label."""
+        if repair not in self.unreviewed:
+            self.unreviewed.append(repair)
+
+    def count(self, new: int, *, recheck: bool) -> None:
+        """Count a verdict with *new* findings; a rejections-only check counts outside the rounds (TD-330)."""
+        if not recheck:
+            self.found = new
+        self.last = (
+            recheck or self.found <= self.policy.last_round_at or self.round >= self.policy.max_rounds + self.extra
+        )
 
 
 def parse(text: str) -> tuple[str, str] | None:

@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Step,
     StepKind,
 )
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, RoundLoop
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, UNJUDGED, RoundLoop
 from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
@@ -46,7 +46,11 @@ LAST = [
 ]
 RETIRED = "retired"  # the answer that retires a question about a plan attempt that ended
 LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mid-sentence
-HOW = {"fixed": "revised for, not challenged again", "owner-fix": "you decided to revise for it"}
+HOW = {
+    "fixed": "revised for, not challenged again",
+    "standing": "rejected; the challenger accepted that",
+    "owner-fix": "you decided to revise for it",
+}
 REJECT = (
     "Revise the plan for each finding that holds. Reject one you judge wrong in `rejected`, by its key, with your "
     "evidence: the next challenger judges whether your rejection is acceptable, so make your case complete. Submit "
@@ -146,7 +150,7 @@ def planner_lines(c: Change) -> list[str]:
 
 
 def challenge_lines(c: Change) -> list[str]:
-    """The planner's rejections this challenge judges; a rejections-only round judges nothing else (TD-218)."""
+    """The planner's rejections this challenge judges; a rejections-only check judges nothing else (TD-330)."""
     lp = current(c)
     if lp is None or not (found := pending(lp)):
         return []
@@ -157,10 +161,11 @@ def challenge_lines(c: Change) -> list[str]:
 
 
 def revised(c: Change, rejected: Mapping[str, str]) -> Next:
-    """Record the planner's accepted plan against its findings, and what follows it (TD-208, TD-218).
+    """Record the planner's accepted plan against its findings, and what follows it (TD-208, TD-330).
 
-    Not the last round: the next challenges it. An early last round with rejections: a rejections-only challenge. The
-    last allowed round with many findings: the owner. Otherwise the revision is accepted unreviewed.
+    Not the last round: the next challenges it. A last round with rejections: a rejections-only challenge outside the
+    count, first. Then the last allowed round with many findings: the owner. Otherwise the revision is accepted
+    unreviewed.
     """
     lp = current(c)
     if lp is None or not (found := addressing(c)):
@@ -170,16 +175,15 @@ def revised(c: Change, rejected: Mapping[str, str]) -> Next:
             f.state, f.reason = "rejected", _flat(rejected[f.id], 1000)
         else:
             f.state, f.repair = "fixed", f"r{lp.round}"
-    limit = lp.policy.max_rounds + lp.extra
     if not lp.last:
         return "challenge"
-    if lp.found <= lp.policy.last_round_at and lp.round < limit and pending(lp):
+    if pending(lp):
         return "recheck"
-    if lp.round >= limit and lp.found >= lp.policy.ask_owner_at:
+    if lp.many():
         return "ask"
     if identity(c.plan) != lp.head:  # a plan resubmitted unchanged is no revision
-        lp.unreviewed.append(f"r{lp.round}")
-    lp.ended = "count" if lp.found <= lp.policy.last_round_at else "max"
+        lp.leave(f"r{lp.round}")
+    lp.ended = lp.ending()
     return "done"
 
 
@@ -195,20 +199,23 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     recheck = c.step.mode == RECHECK
     if recheck:
         if identity(c.plan) != lp.head:  # a revision the check judged the rejections of, never its changes
-            lp.unreviewed.append(f"r{lp.round}")
+            lp.leave(f"r{lp.round}")
     else:
         lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round, lp.head = lp.round + 1, identity(c.plan)
+    lp.round, lp.head = lp.round + (not recheck), identity(c.plan)  # a check counts outside the rounds (TD-330)
     for f in pending(lp):
         if (j := judged.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-    lp.found = len(lp.raise_findings(found))
-    lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
+        elif recheck:  # a wrong premise instead: the check never runs again for it
+            f.state, f.judgement = "standing", UNJUDGED
+    lp.count(len(lp.raise_findings(found)), recheck=recheck)
     if _undecided(lp) is not None:
         return "ask"
     if addressing(c):
         return "revise"
-    lp.ended = "count" if lp.unreviewed else "clean"
+    if recheck and lp.many():
+        return "ask"  # the owner chooses after the last allowed round, its rejections judged (TD-330)
+    lp.ended = (lp.ending() if recheck else "count") if lp.unreviewed else "clean"
     return "done"
 
 
@@ -249,7 +256,7 @@ def last(lp: RoundLoop) -> Question:
 
 
 def _said(f: RoundFinding) -> str:
-    why = f" ({_flat(f.reason, 500)})" if f.state == "rejected" else ""
+    why = f" ({_flat(f.reason, 500)})" if f.state in {"rejected", "standing"} else ""
     return f"{f.id} {HOW.get(f.state, f.state)}{why}: {_flat(f.text, 600)}"
 
 
@@ -297,6 +304,8 @@ def proceed(c: Change, now: datetime) -> None:
         _mode(c, None)  # the planner revises, as after a challenge: its producer's one repair chance holds (TD-123)
         c.outcome = Outcome(exit=Exit.RETRY, reason="the owner decided the disputed findings", challenged=True, at=now)
         c.budgets.loops[PLAN] = c.budgets.loops.get(PLAN, 0) + 1  # the planning round the owner sees
+    elif lp.last and lp.many():
+        ask(c, last(lp), now)
     else:
         _mode(c, SETTLED)
 
@@ -332,7 +341,7 @@ def accepted(c: Change, now: datetime) -> None:
     lp = c.loops.get(PLAN)
     if lp is None:
         return
-    lp.ended = lp.ended or ("count" if lp.unreviewed else "clean")
+    lp.ended = lp.ended or (lp.ending() if lp.unreviewed else "clean")
     lp.history += [c.loops.pop(k) for k in [k for k in c.loops if k not in {FINAL, PLAN, BRIEF}]]
     retire(c, now)
 

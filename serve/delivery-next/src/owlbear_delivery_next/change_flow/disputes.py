@@ -93,7 +93,7 @@ def pending(task: Task | None) -> tuple[str, ...]:
 
 
 def cap(c: Change) -> int:
-    """How many new findings the current review may return: none in a rejections-only check (TD-218)."""
+    """How many new findings the current review may return: none in a rejections-only check (TD-330)."""
     if c.step.mode == RECHECK:
         return 0
     return lp.policy.max_findings if (lp := _looped(c)) else MAX_FINDINGS

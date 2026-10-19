@@ -1,4 +1,4 @@
-"""After a looped repair build (TD-208, TD-218): the next round, a rejections-only check, the owner or the end.
+"""After a looped repair build (TD-208, TD-330): the next round, a rejections-only check, the owner or the end.
 
 The final review's loop also reaches its reviewer's prompt (the plan tasks to name, the focus of a re-entry),
 restarts on the owner's request (TD-215, TD-216) and starts a new attempt when the owner has it planned again (TD-210).
@@ -37,7 +37,12 @@ FINAL_OPTIONS = [  # TD-217: every retry of the final review is a rebuild of tas
     Option(id="replan", label="Plan again from the brief on the existing code", next=RETRY),
     Option(id=CLEAN, label="Plan again from the brief from a clean state", next=RETRY),
 ]
-HOW = {"fixed": "fixed, not re-reviewed", "owner-fix": "you decided to fix it", "owner-drop": "you dropped it"}
+HOW = {
+    "fixed": "fixed, not re-reviewed",
+    "standing": "rejected; the reviewer accepted that",
+    "owner-fix": "you decided to fix it",
+    "owner-drop": "you dropped it",
+}
 TASKS = (
     "Name the plan tasks each finding belongs to in its `tasks`; when no plan task fits, say why in `no_task` instead."
 )
@@ -80,31 +85,40 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
         task.done, lp.batch = True, [task.id]
         lp.completion = Completion(head=r.head or "", criteria=criteria(c)) if lp.last and r else None
     reviewed = None if final else task.id
-    limit = lp.policy.max_rounds + lp.extra
     if not lp.last:
         go(c, StepKind.REVIEW, reviewed, "final" if final else None)
-    elif lp.found <= lp.policy.last_round_at and lp.round < limit and any(d.upheld is None for d in task.disputes):
-        go(c, StepKind.REVIEW, reviewed, RECHECK)  # TD-218: the early last round's rejections are judged
-    elif lp.round >= limit and lp.found >= lp.policy.ask_owner_at:
+    elif any(d.upheld is None for d in task.disputes):
+        go(c, StepKind.REVIEW, reviewed, RECHECK)  # TD-330: the last round's rejections are judged first
+    elif lp.many():
         ask(c, question(lp, task), now)
     else:
         end(c, lp, task)
 
 
-def passed(c: Change) -> None:
-    """A review passed: its loop ends clean, or by count when it only judged an early last round's rejections."""
+def passed(c: Change, now: datetime) -> bool:
+    """A review passed: its loop ends clean, or as its last round ended when it only judged that round's rejections.
+
+    After the check of a last allowed round that found many, the owner chooses instead (TD-208, TD-330).
+
+    Returns:
+        Whether the owner was asked.
+    """
     task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
     if (lp := loop_of(c, task)) is None or lp.ended:
-        return
+        return False
     judged = [task.id] if task else lp.batch
-    lp.ended = "count" if judged and judged[-1] in lp.unreviewed else "clean"
+    if c.step.mode == RECHECK and lp.many() and judged:
+        ask(c, question(lp, next(t for t in c.plan.tasks if t.id == judged[-1])), now)
+        return True
+    lp.ended = lp.ending() if judged and judged[-1] in lp.unreviewed else "clean"
     lp.batch = []
+    return False
 
 
 def end(c: Change, lp: RoundLoop, task: Task, ended: Ended = "") -> None:
     """The loop ends with this repair unreviewed; the Change goes to the next task, the final review or publishing."""
     lp.unreviewed.append(task.id)
-    lp.ended = ended or ("count" if lp.found <= lp.policy.last_round_at else "max")
+    lp.ended = ended or lp.ending()
     if lp.subject == FINAL:
         go(c, StepKind.PUBLISH)  # the batch stays: a round added for new work judges its rejections
         return
@@ -140,7 +154,7 @@ def question(lp: RoundLoop, task: Task) -> Question:
 
 
 def _said(f: RoundFinding) -> str:
-    why = f" ({' '.join(f.reason.split())})" if f.state == "rejected" else ""
+    why = f" ({' '.join(f.reason.split())})" if f.state in {"rejected", "standing"} else ""
     return f"{f.id} {HOW.get(f.state, f.state)}{why}: {f.text}"
 
 

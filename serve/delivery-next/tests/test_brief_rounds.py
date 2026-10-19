@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import mcp_server, runner
@@ -131,7 +131,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     assert shaping.ask_challenge(1, {"F2": "no"}).status_code == 409  # F1 is taken: a revision first
     assert shaping.save(criteria=["farewell('Ada') returns exactly 'Bye, Ada!'"])["version"] == 2
     assert shaping.ask_challenge(2, {"F2": "the scope is the package"}).status_code == 200
-    assert shaping.change().step.mode == "rejections"  # an early last round's rejections only (TD-218)
+    assert shaping.change().step.mode == "rejections"  # a last round's rejections only (TD-330)
     c = shaping.step()
     said = shaping.told[-1].message
     assert ("Shaper's reason: the scope is the package" in said, "Judge only these rejections" in said) == (True, True)
@@ -332,11 +332,15 @@ def test_an_unchanged_version_at_the_round_limit_needs_no_tick(shaping):
         c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=one)
         shaping.store.write(lock, c)
     shaping.ask_challenge(1)
-    shaping.verdicts += [verdict("AC-1")]
+    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": False})]
     shaping.step()
-    assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200  # the last round: no session
+    assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200
+    assert shaping.change().step.mode == RECHECK  # TD-330: the last round's rejection is judged, outside the count
+    shaping.step()
     c = shaping.change()
-    assert (c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (1, "max", [])
+    assert (c.brief.challenged, c.loops[BRIEF].round, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (
+        1, 1, "clean", []
+    )  # fmt: skip
     assert shaping.approve(1).json() == {"accepted": "brief-approval"}
 
 
