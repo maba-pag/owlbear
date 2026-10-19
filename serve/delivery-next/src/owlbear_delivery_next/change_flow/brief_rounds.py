@@ -168,7 +168,7 @@ def request(c: Change, version: int, rejected: Mapping[str, str], policy: RoundP
     else:
         if str(version) != lp.head:  # a revision after the last round; an unchanged version was judged whole
             lp.unreviewed.append(f"v{version}")
-        _ended(c, version, "count" if lp.found <= lp.policy.last_round_at else "max", now)
+        _ended(c, version, lp.ending(), now)
     return ""
 
 
@@ -196,14 +196,11 @@ def _refused(found: list[RoundFinding], rejected: Mapping[str, str]) -> str:
 
 
 def _then(lp: RoundLoop) -> Then:
-    limit = lp.policy.max_rounds + lp.extra
     if lp.round == 0 or not lp.last:  # a reopened loop is not at its last round
         return "challenge"
-    if lp.found <= lp.policy.last_round_at and lp.round < limit and pending(lp):
-        return "recheck"
-    if lp.round >= limit and lp.found >= lp.policy.ask_owner_at:
+    if lp.many():  # another round judges the rejections, a new draft drops them
         return "ask"
-    return "done"
+    return "recheck" if pending(lp) else "done"  # TD-330: every last round's rejections are judged
 
 
 def _mode(c: Change, mode: str | None) -> None:
@@ -235,12 +232,11 @@ def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]],
             lp.unreviewed.append(f"v{version}")
     else:
         lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round += 1
+    lp.round += not recheck  # a rejections-only check counts outside the rounds (TD-330)
     for f in pending(lp):
         if (j := upheld.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-    lp.found = len(lp.raise_findings(found))
-    lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
+    lp.count(len(lp.raise_findings(found)), recheck=recheck)
     lp.head, lp.reentry = str(version), False
     _mode(c, None)
     proceed(c, now)
@@ -260,7 +256,7 @@ def proceed(c: Change, now: datetime) -> None:
     elif found := addressing(c):
         _wait(c, f"the shaper revises brief v{lp.head} for {', '.join(f.id for f in found)}", now)
     else:
-        _ended(c, int(lp.head), "count" if lp.unreviewed else "clean", now)
+        _ended(c, int(lp.head), lp.ending() if lp.unreviewed else "clean", now)
 
 
 def question(lp: RoundLoop, f: RoundFinding) -> Question:

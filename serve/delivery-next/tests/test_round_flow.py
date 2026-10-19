@@ -1,4 +1,4 @@
-"""TD-208, TD-210, TD-218: a task's challenge loop from its first review to its end, the owner's question, a retry."""
+"""TD-208, TD-210, TD-330: a task's challenge loop from its first review to its end, the owner's question, a retry."""
 
 import subprocess
 from datetime import UTC, datetime
@@ -158,9 +158,28 @@ def test_a_task_loop_judges_rejections_counts_rounds_and_ends_early_with_a_rejec
     assert "(rejection accepted by the reviewer)" in disputes.review_lines(store.read("c1"), None)[-1]  # outside
     c = store.read("c1")
     lp = c.loops["t1"]
-    assert (lp.round, lp.ended, lp.unreviewed, at(c)) == (3, "count", ["t4"], (K.BUILD, "t2", None))
+    assert (lp.round, lp.ended, lp.unreviewed, at(c)) == (
+        2,
+        "count",
+        ["t4"],
+        (K.BUILD, "t2", None),
+    )  # TD-330: uncounted
     assert lp.reviewed == ["t3"]  # a rejections-only check reviews no repair
     assert [t.done for t in c.plan.tasks] == [True, False, True, True]
+
+
+def test_a_last_round_at_the_maximum_gets_its_rejections_judged_outside_the_count(tmp_path, clone, monkeypatch):
+    """TD-330: not only a last round ended early by its count; the owner is not asked with fewer than 7 findings."""
+    store = stored(tmp_path, RoundLoop(subject="t1", policy=RoundPolicy(max_rounds=1)))
+    built(store, clone, monkeypatch, "b\n")
+    reviewed(store, clone, monkeypatch, range(1, 6))
+    built(store, clone, monkeypatch, "c\n", "F5")
+    assert at(store.read("c1")) == (K.REVIEW, "t3", RECHECK)
+    cfg = reviewed(store, clone, monkeypatch, F5=False)
+    c = store.read("c1")
+    lp = c.loops["t1"]
+    assert (cfg.cap, lp.round, lp.found, lp.ended, lp.unreviewed) == (0, 1, 5, "max", ["t3"])
+    assert (lp.findings[4].state, at(c)) == ("standing", (K.BUILD, "t2", None))
 
 
 def test_an_early_last_round_without_rejections_leaves_its_repair_unreviewed(tmp_path, clone, monkeypatch):

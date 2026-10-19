@@ -135,13 +135,14 @@ def _head(path: Path) -> str:
 
 def _counted(c: Change, lp: RoundLoop, p: tools.ReviewResult, task: Task | None, head: str) -> list[str]:
     """Count one verdict and give its new findings their IDs; whether this round is the last is decided now."""
-    lp.round += 1
     recheck = c.step.mode == RECHECK
+    lp.round += not recheck  # a rejections-only check counts outside the rounds (TD-330)
     if not recheck:  # a full round reviews every repair that reported a fix so far
         lp.reviewed = sorted({f.repair for f in lp.findings if f.repair})
     new = lp.raise_findings([line.removeprefix("- ") for line in lines(p)], [f.tasks for f in p.findings])
-    lp.found, lp.head, lp.reentry = len(new), head, False
-    lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
+    lp.head = lp.head if recheck else head  # a check never reviewed the repair: new work is diffed from before it
+    lp.reentry = False
+    lp.count(len(new), recheck=recheck)
     if recheck:
         lp.unreviewed += [task.id] if task else lp.batch  # the check judged its rejections, never its fixes
     elif task is None:

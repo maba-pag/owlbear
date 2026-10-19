@@ -146,7 +146,7 @@ def planner_lines(c: Change) -> list[str]:
 
 
 def challenge_lines(c: Change) -> list[str]:
-    """The planner's rejections this challenge judges; a rejections-only round judges nothing else (TD-218)."""
+    """The planner's rejections this challenge judges; a rejections-only check judges nothing else (TD-330)."""
     lp = current(c)
     if lp is None or not (found := pending(lp)):
         return []
@@ -157,10 +157,10 @@ def challenge_lines(c: Change) -> list[str]:
 
 
 def revised(c: Change, rejected: Mapping[str, str]) -> Next:
-    """Record the planner's accepted plan against its findings, and what follows it (TD-208, TD-218).
+    """Record the planner's accepted plan against its findings, and what follows it (TD-208, TD-330).
 
-    Not the last round: the next challenges it. An early last round with rejections: a rejections-only challenge. The
-    last allowed round with many findings: the owner. Otherwise the revision is accepted unreviewed.
+    Not the last round: the next challenges it. The last allowed round with many findings: the owner. Any other last
+    round with rejections: a rejections-only challenge outside the count. Otherwise the revision is accepted unreviewed.
     """
     lp = current(c)
     if lp is None or not (found := addressing(c)):
@@ -170,16 +170,15 @@ def revised(c: Change, rejected: Mapping[str, str]) -> Next:
             f.state, f.reason = "rejected", _flat(rejected[f.id], 1000)
         else:
             f.state, f.repair = "fixed", f"r{lp.round}"
-    limit = lp.policy.max_rounds + lp.extra
     if not lp.last:
         return "challenge"
-    if lp.found <= lp.policy.last_round_at and lp.round < limit and pending(lp):
-        return "recheck"
-    if lp.round >= limit and lp.found >= lp.policy.ask_owner_at:
+    if lp.many():
         return "ask"
+    if pending(lp):
+        return "recheck"
     if identity(c.plan) != lp.head:  # a plan resubmitted unchanged is no revision
-        lp.unreviewed.append(f"r{lp.round}")
-    lp.ended = "count" if lp.found <= lp.policy.last_round_at else "max"
+        lp.leave(f"r{lp.round}")
+    lp.ended = lp.ending()
     return "done"
 
 
@@ -195,20 +194,19 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     recheck = c.step.mode == RECHECK
     if recheck:
         if identity(c.plan) != lp.head:  # a revision the check judged the rejections of, never its changes
-            lp.unreviewed.append(f"r{lp.round}")
+            lp.leave(f"r{lp.round}")
     else:
         lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round, lp.head = lp.round + 1, identity(c.plan)
+    lp.round, lp.head = lp.round + (not recheck), identity(c.plan)  # a check counts outside the rounds (TD-330)
     for f in pending(lp):
         if (j := judged.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-    lp.found = len(lp.raise_findings(found))
-    lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
+    lp.count(len(lp.raise_findings(found)), recheck=recheck)
     if _undecided(lp) is not None:
         return "ask"
     if addressing(c):
         return "revise"
-    lp.ended = "count" if lp.unreviewed else "clean"
+    lp.ended = (lp.ending() if recheck else "count") if lp.unreviewed else "clean"
     return "done"
 
 

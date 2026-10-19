@@ -188,7 +188,9 @@ def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges
 
 
 @pytest.mark.parametrize(("revision", "unreviewed"), [(2, ["r1"]), (1, [])])  # changed, or resubmitted unchanged
-def test_an_early_last_round_with_rejections_gets_a_rejections_only_check(store, change_repo, mp, revision, unreviewed):
+def test_an_early_last_round_with_rejections_gets_a_check_outside_the_count(
+    store, change_repo, mp, revision, unreviewed
+):
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=3, max_findings=5, last_round_at=2, ask_owner_at=3)
     store.write(Lock("c1"), c)
@@ -200,19 +202,28 @@ def test_an_early_last_round_with_rejections_gets_a_rejections_only_check(store,
     assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
     lp = c.loops[PLAN]
     assert (c.step.kind, lp.round, lp.ended, lp.unreviewed, lp.findings[0].state) == (
-        K.BUILD, 2, "count" if unreviewed else "clean", unreviewed, "standing"
+        K.BUILD, 1, "count" if unreviewed else "clean", unreviewed, "standing"
     )  # fmt: skip
 
 
 def test_a_plan_resubmitted_unchanged_after_the_last_round_is_no_unreviewed_revision(store, change_repo, mp):
+    """TD-330: a last round at the maximum gets its rejections judged too; the owner only with many findings."""
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=2)
     store.write(Lock("c1"), c)
     mp.plans += [plan(1), plan(1, {"F1": "no"})]
-    mp.reviews += [review("t1")]
+    mp.reviews += [review("t1"), review(upheld={"F1": False})]
     step(store, change_repo)
     c = step(store, change_repo)
-    assert (c.step.kind, c.loops[PLAN].ended, c.loops[PLAN].unreviewed) == (K.BUILD, "max", [])
+    assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
+    lp = c.loops[PLAN]
+    assert (c.step.kind, lp.round, lp.ended, lp.unreviewed, lp.findings[0].state) == (
+        K.BUILD,
+        1,
+        "clean",
+        [],
+        "standing",
+    )
 
 
 def test_after_the_last_round_the_owner_has_another_round_or_a_new_plan(store, change_repo, mp):

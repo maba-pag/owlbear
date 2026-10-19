@@ -345,7 +345,7 @@ def test_an_accepted_rejection_is_judged_alone_and_the_unchanged_candidate_activ
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    check = fakes.sessions[1]  # an early last round's rejections, judged alone (TD-218)
+    check = fakes.sessions[1]  # a last round's rejections, judged alone (TD-330)
     assert (check.rechecks, check.cap) == (("F1",), 0)
     assert "- F1: owlbear-design-review: p - fix: f\n  The updater's reason: it already holds" in check.message
     assert "Judge only these rejections" in check.message
@@ -438,7 +438,7 @@ def test_the_owners_fix_goes_to_the_updater_and_its_unreviewed_repair_waits_for_
     assert state["state"] == "waiting"  # TD-256: the last repair is unreviewed
     (q,) = state["questions"]
     assert (q["kind"], [o["id"] for o in q["options"]]) == ("end", ["activate", "discard"])
-    assert "The updater's last repair (r2) was not reviewed by a challenger." in q["text"]
+    assert "The updater's last repair (r1) was not reviewed by a challenger." in q["text"]  # after round 1 (TD-330)
     assert snapshot(checkout) == before
 
     state = answered(job, "activate")
@@ -449,7 +449,7 @@ def test_the_owners_fix_goes_to_the_updater_and_its_unreviewed_repair_waits_for_
     )
     assert (checkout / PACKAGED).read_text() == "fixed as you said\n"
     body = git(checkout.parents[1], "log", "-1", "--format=%b")
-    assert "the owner activated it; its last repair (r2) was not reviewed (TD-256)" in body
+    assert "the owner activated it; its last repair (r1) was not reviewed (TD-256)" in body
     assert "The challenger passed." not in body
 
 

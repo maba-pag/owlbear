@@ -87,10 +87,11 @@ def _undecided(lp: RoundLoop) -> list[RoundFinding]:
 
 
 def revised(lp: RoundLoop, rejected: Mapping[str, str], identity: str) -> Revised:
-    """Record the updater's session against its findings, and what follows it (TD-208, TD-218).
+    """Record the updater's session against its findings, and what follows it (TD-208, TD-330).
 
-    Not the last round: the next challenges it. An early last round with rejections: a rejections-only challenge.
-    Otherwise the owner, on the unreviewed end; with another round when the last allowed round found many.
+    Not the last round: the next challenges it. A last round with rejections: a rejections-only challenge outside the
+    count, unless that round was the last allowed one and found many. Otherwise the owner, on the unreviewed end;
+    with another round when the last allowed round found many.
     """
     if not (found := addressing(lp)):
         return "challenge"  # the first update
@@ -99,20 +100,19 @@ def revised(lp: RoundLoop, rejected: Mapping[str, str], identity: str) -> Revise
             f.state, f.reason = "rejected", _flat(rejected[f.id], 1000)
         else:
             f.state, f.repair = "fixed", f"r{lp.round}"
-    limit = lp.policy.max_rounds + lp.extra
     if not lp.last:
         return "challenge"
-    if lp.found <= lp.policy.last_round_at and lp.round < limit and pending(lp):
+    if not lp.many() and pending(lp):  # another round judges the rejections, a retry drops them
         return "recheck"
     if identity != lp.head:  # an unchanged resubmission is no repair
-        lp.unreviewed.append(f"r{lp.round}")
-    lp.ended = "count" if lp.found <= lp.policy.last_round_at else "max"
+        lp.leave(f"r{lp.round}")
+    lp.ended = lp.ending()
     return "end"
 
 
 def many(lp: RoundLoop) -> bool:
     """The last allowed round found `ask owner at` or more: the owner may grant another round (TD-208)."""
-    return lp.round >= lp.policy.max_rounds + lp.extra and lp.found >= lp.policy.ask_owner_at
+    return lp.many()
 
 
 def counted(
@@ -121,15 +121,14 @@ def counted(
     """Count one challenger verdict on the candidate *identity*: its judgements and new findings, then what follows."""
     if recheck:
         if identity != lp.head:  # a repair the check judged the rejections of, never its changes
-            lp.unreviewed.append(f"r{lp.round}")
+            lp.leave(f"r{lp.round}")
     else:
         lp.reviewed, lp.unreviewed = sorted({f.repair for f in lp.findings if f.repair}), []
-    lp.round, lp.head = lp.round + 1, identity
+    lp.round, lp.head = lp.round + (not recheck), identity  # a check counts outside the rounds (TD-330)
     for f in pending(lp):
         if (j := judged.get(f.id)) is not None:
             f.state, f.judgement = ("escalated" if j[0] else "standing"), _flat(j[1], 1000)
-    lp.found = len(lp.raise_findings(found))
-    lp.last = recheck or lp.found <= lp.policy.last_round_at or lp.round >= lp.policy.max_rounds + lp.extra
+    lp.count(len(lp.raise_findings(found)), recheck=recheck)
     return after(lp)
 
 
@@ -145,7 +144,7 @@ def after(lp: RoundLoop) -> Counted:
     if addressing(lp):
         return "update"
     if lp.unreviewed:
-        lp.ended = "count"
+        lp.ended = lp.ending()
         return "end"
     lp.ended = "clean"
     return "pass"

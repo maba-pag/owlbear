@@ -190,7 +190,7 @@ def _replayed(r: Any) -> str:  # noqa: ANN401 - calibration.Replay
 
 
 def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop, *, recheck: bool) -> Action:
-    """One challenger round on the whole candidate, or a check of the updater's rejections only (TD-218)."""
+    """One challenger round on the whole candidate, or a check of the updater's rejections only (TD-330)."""
     keys = tuple(f.id for f in pack_rounds.pending(lp))
     text = pack_candidate.message(
         c, ctx.diff, ctx.golden, ctx.replayed, updated=ctx.summary,
