@@ -101,6 +101,8 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
         expect(message).to_have_text("")
         minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
+        expect(page.get_by_role("dialog")).to_contain_text("These apply to this project only")  # TD-396
+        page.locator("dialog").get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     agents = store.read_config().agents
     assert (agents["builder"].model, agents["reviewer"].model, agents["reviewer"].effort) == (
@@ -137,6 +139,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
         page.get_by_role("button", name="Save project settings").click()
+        page.locator("dialog").get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         page.get_by_label("Layer").select_option("global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
@@ -161,9 +164,11 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
         page.get_by_label("Minutes per session, reviewer").fill("25")
         page.get_by_role("button", name="Save project settings").click()
+        page.locator("dialog").get_by_role("button", name="Save project settings").click()
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         page.get_by_role("button", name="Save project settings").click()
+        page.locator("dialog").get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     saved = json.loads(store.config_path.read_text())
     assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)
@@ -252,6 +257,7 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch) ->
             page.goto(f"{base}/config#token=tok")
             page.get_by_label("Minutes per session, builder").fill("50")
             page.get_by_role("button", name="Save project settings").click()
+            page.locator("dialog").get_by_role("button", name="Save project settings").click()
             expect(page.locator("#status")).to_have_text(
                 "Saved this project's settings. They apply to the next session.", timeout=10_000
             )

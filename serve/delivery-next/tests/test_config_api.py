@@ -77,7 +77,7 @@ def test_get_describes_each_runtime_and_where_a_tool_category_lives(store):
     rows = {r["runtime"]: r for r in got["catalogue"]["runtimes"]}
 
     assert set(rows) == {"sdk", "window"}
-    assert rows["sdk"]["outside_writes"].startswith("Delivery's hard guard")
+    assert rows["sdk"]["outside_writes"].startswith("nothing")  # TD-320: no guard stops them
     assert rows["window"]["live_view"] == "yes"
     browser = got["catalogue"]["categories"]["browser"]
     assert browser["runtime"] == "window"

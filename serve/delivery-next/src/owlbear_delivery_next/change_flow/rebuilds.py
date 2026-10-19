@@ -9,6 +9,7 @@ reverts it twice.
 
 from __future__ import annotations
 
+import re
 import shlex
 from typing import TYPE_CHECKING
 
@@ -52,7 +53,15 @@ def shown(c: Change, q: Question | None) -> dict[str, object] | None:
         }
         for t in plan
     ]
-    return {"attempt": lp.attempt, "head": head(lp), "tasks": tasks}
+    return {"attempt": lp.attempt, "head": head(lp), "tasks": tasks, "unmet": _unmet(c, lp)}
+
+
+def _unmet(c: Change, lp: RoundLoop) -> list[str]:
+    """The brief's criteria an open finding names, as `id: text`: what Accept as done accepts as unmet (TD-341)."""
+    loops = [lp, *(x for k, x in c.loops.items() if k != FINAL)]
+    said = [f.text for x in loops for f in x.findings if kind(x, f) == "open"]
+    named = [k for k in c.brief.criteria if any(re.search(rf"(?<![\w-]){re.escape(k.id)}(?![\w-])", s) for s in said)]
+    return [f"{k.id}: {k.text}" for k in named]
 
 
 def refused(

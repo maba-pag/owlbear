@@ -13,6 +13,7 @@ from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
+    Criterion,
     Exit,
     Inputs,
     MergeConsent,
@@ -194,6 +195,17 @@ def test_the_page_lists_the_plan_tasks_and_a_rebuild_is_bound_to_what_it_showed(
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": ["t2", "t1"]}).status_code == 200
     c, _ = store.fold(Lock("c1"), "c1", NOW)  # the host's own item, as a runner folds it
     assert (c.loops[FINAL].rebuild, at(c)) == (["t1", "t2"], (K.REVIEW, None, round_flow.RETRY))
+
+
+def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet(clone):
+    """TD-341: an open finding naming AC-1 lists it; a fixed one naming AC-2 and the look-alike AC-10 do not."""
+    c = asked(clone)
+    c.brief = Brief(version=1, criteria=[Criterion(id=i, text=f"rule {i}") for i in ("AC-1", "AC-2", "AC-10")])
+    found = c.loops[FINAL].findings
+    found[0].text, found[2].text = "x.txt:1: AC-2 broken - fix: f", "y.txt:2: AC-1 not met - fix: f"
+    assert rebuilds.shown(c, c.questions[0])["unmet"] == ["AC-1: rule AC-1"]
+    found[2].text = "y.txt:2: no criterion - fix: f"
+    assert rebuilds.shown(c, c.questions[0])["unmet"] == []
 
 
 def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_path, clone, monkeypatch):

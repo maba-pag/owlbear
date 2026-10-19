@@ -73,8 +73,10 @@ owns any required challenger review or user decision.
 
 ## Step 6 — Preserve Durable Findings When Useful
 
-Write `.owlbear/research/{slug}.md` only when the evidence has durable value beyond the active shaping
-conversation. Keep it focused and source-grounded:
+Write a research document only when the evidence has durable value beyond the active shaping conversation:
+in OwlBear's own repository to `.owlbear/research/{slug}.md`; for any other project to its folder in the
+shared data repository, `owlbear-data/<folder>/research/{slug}.md`, never into the project itself (TD-347).
+Keep it focused and source-grounded:
 
 ```markdown
 # {Title}

@@ -250,9 +250,12 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page) -> None:
     other = registry.load().settings  # another page saves first
     registry.configure(other.model_copy(update={"update_when_idle": False}), registry.revision(other))
     save.click()
+    expect(page.get_by_role("dialog")).to_contain_text("Versions this machine takes: Every minor version")  # TD-396
+    page.locator("dialog").get_by_role("button", name="Save machine settings").click()
     expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
     expect(page.get_by_label("Versions this machine takes")).to_have_value("major")
     save.click()
+    page.locator("dialog").get_by_role("button", name="Save machine settings").click()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     expected = registry.Settings(channel="major", update_when_idle=False, update_while_paused=False, sessions=3)
     assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
@@ -274,6 +277,7 @@ def a_read_begun_during_a_save_never_undoes_it(page) -> None:
     page.route("**/api/next/machine**", hold)
     page.get_by_label("Update itself when idle").check()
     page.get_by_role("button", name="Save machine settings").click()
+    page.locator("dialog").get_by_role("button", name="Save machine settings").click()
     while not held:
         page.wait_for_timeout(50)
     page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh while the save runs
@@ -313,12 +317,13 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store) -> None:
     page.get_by_label("Built-in subagents, reviewer").select_option("false")
     expect(page.locator("#pending")).to_contain_text("reviewer subagents: inherited → false")
     page.get_by_role("button", name="Save project settings").click()
+    page.locator("dialog").get_by_role("button", name="Save project settings").click()
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
     assert store.read_config().agents["reviewer"].subagents is False
     page.get_by_label("Layer").select_option("machine")  # TD-336: this machine's own preferences, kept local
     page.get_by_label("Minutes per session, builder").fill("55")
     page.locator(".bar").get_by_role("button", name="Save this machine's preferences").click()
-    expect(page.locator("dialog")).to_contain_text("These apply to every project on this machine")
+    expect(page.get_by_role("dialog")).to_contain_text("These apply to every project on this machine")
     page.locator("dialog").get_by_role("button", name="Save this machine's preferences").click()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings. They apply to the next session.")
     assert store.settings().sources["agents.builder.minutes"] == "machine"
@@ -370,8 +375,10 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             off = {"agents": {"planner": Agent(subagents=False)}}
             docs.update_config(lambda layer: layer.model_copy(update=off))  # another page saved first
             page.get_by_role("button", name="Save project settings").click()
+            page.locator("dialog").get_by_role("button", name="Save project settings").click()
             expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
             page.get_by_role("button", name="Save project settings").click()
+            page.locator("dialog").get_by_role("button", name="Save project settings").click()
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
             expect(across).to_contain_text("docs-site: no")  # the overview follows the save
             expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
