@@ -24,8 +24,8 @@ registered: `owlbear-sandbox` and `owlbear-sandbox-protected`. OwlBear itself is
 both), through pull requests to `main` with the required `CI` check, strictly up to date, merged as merge commits.
 
 **Runtime.** `~/.owlbear/runtime` is a clone at `origin/main` (`23bd7c1ab`), deployed by hand after each merge
-(TD-289, TD-309): stop, check out `origin/main`, `uv sync --locked`, start, Resume. Every start is paused today,
-against TD-350 (§4).
+(TD-289, TD-309): stop, check out `origin/main`, `uv sync --locked`, start as it was (`owlbear start`, with
+`--paused` if it was paused; TD-350).
 
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
 passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags `v0.1` to `v0.9` exist (`v0.9` is #499). The
@@ -59,7 +59,7 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest (TD-330, TD-334, TD-335, TD-350); built: TD-328, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
+| 1 | TD-358's rest (TD-330, TD-334, TD-335); built: TD-328, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
@@ -99,14 +99,13 @@ TD-358 ("All of it now, before self-update step 3b") was recorded after step 3b 
 "before the rest of the self-update"; TD-394 confirms it comes first. The audit of §4 found the eight below unbuilt;
 the range's other rows are built, history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). TD-403 adds
 the small items of 2026-10-19. Built since: TD-392 (#502), TD-328, TD-341, TD-347's skill, TD-396, TD-397 and TD-399,
-with the C-02 catalogue text (#506), and TD-345 with TD-405 and TD-406. Remaining:
+with the C-02 catalogue text (#506), TD-345 with TD-405 and TD-406, and TD-350. Remaining:
 
 | Decision | What is missing |
 | --- | --- |
 | TD-330 | Every loop's last round gets one rejections-only check outside the round count; all five loops still follow TD-218 |
 | TD-334 | Each project's live database lives under `~/.owlbear`, one folder per project; it is still in the clone's Git folder |
 | TD-335 | `owlbear install` asks for the `~/.copilot` shaper links and uninstall removes them; neither does today |
-| TD-350 | Only a login-item start and a start after a crash are paused; `owlbear restart` keeps its state; a `--paused` start; every start pauses today |
 
 ### 3.2 Items 2 to 4: the self-update
 
@@ -175,7 +174,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-16 | Chat-authored PRs get `release:minor` for runtime changes (TD-314) | Written nowhere agents read | align | — |
 | C-16 | v1.0 after the self-update and the old engine's removal, docs rewritten (TD-393) | Not yet | build | 12 |
 | C-17 | Take the newest version, never backwards, idle updates, Run updates now, back as it was | Steps 4 and 5 | build | 3, 4 |
-| C-18 | Only login and post-crash starts pause; restarts keep their state (TD-350) | Every start pauses | align | 1 |
 | C-18 | Paused pages offer Run updates now; the stop-when-idle choice hides with Update while paused off | Step 4 | build | 3 |
 | C-18 | The Pause tooltip says plain Pause may still update | Missing | align | 3 |
 | C-19 | The maintenance overview includes the engine update | Step 4 | build | 3 |
@@ -217,7 +215,7 @@ curator's threshold, what the line limit covers and the GitHub account.
 | [Self-update](self-update-build.md) | Build design of items 2 to 4 | Steps 1 to 3b built; 3c planned; 4 and 5 open |
 | [Settings scopes](settings-scopes-build.md) | Machine layer and session limits | Built (#496, #497) |
 | [Test review](test-review-build.md) | C-26's test review | Built (#499) |
-| [Machine host](machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built; TD-334 and TD-350 re-decided parts open (item 1) |
+| [Machine host](machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built; TD-334 re-decided part open (item 1) |
 | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its open pack route is item 2 |
 | [Challenge rounds](challenge-rounds-build.md) | Review and challenge loops | Built; TD-330 open (item 1) |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |

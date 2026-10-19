@@ -39,12 +39,12 @@ def plist_path() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
 
-def argv() -> list[str]:
-    """The machine host's process: this interpreter and the one dispatcher."""
-    return [str(local_home.stable(Path(sys.executable))), "-m", "owlbear_delivery_next", "machine"]
+def argv(*, run: bool = False) -> list[str]:
+    """The machine host's process: this interpreter and the one dispatcher; paused unless *run*."""
+    return [str(local_home.stable(Path(sys.executable))), "-m", "owlbear_delivery_next", "machine"] + ["--run"] * run
 
 
-def start(say: Say) -> int:
+def start(say: Say, *, paused: bool = False) -> int:
     """Start the machine host in the background unless it runs; success only once its API answers."""
     child = None
     if serve.running() is None:
@@ -52,13 +52,15 @@ def start(say: Say) -> int:
         home.mkdir(mode=0o700, parents=True, exist_ok=True)
         with (home / LOG).open("ab") as out:
             child = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
-                argv(), cwd=home, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, start_new_session=True
-            )
+                argv(run=not paused), cwd=home, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )  # fmt: skip
     deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
-        if projects() is not None:  # an API answers with the token its host wrote: this start's or another's
+        if (listed := projects()) is not None:  # an API answers with the token its host wrote: this or another's
             started = child is not None and child.poll() is None
-            said = "OwlBear started, paused until you press Resume" if started else "OwlBear is running"
+            held = "paused until you press Resume" if listed["paused"] else "running"
+            said = f"OwlBear started, {held}" if started else "OwlBear is running"
             say(f"{said}: {link(serve.running())}")
             return 0
         if child is not None and child.poll() is not None and serve.running() is None:
@@ -118,7 +120,7 @@ def status(say: Say) -> int:
     say(f"OwlBear is running: {link(rec)}" if rec else "OwlBear is not running; `owlbear start` starts it")
     if (listed := projects()) is not None:
         if listed["paused"]:
-            say(f"paused since it started: {listed['waiting']} Changes would continue; press Resume on its page")
+            say(f"paused: {listed['waiting']} Changes would continue; press Resume on its page")
         for p in listed["projects"]:
             say(f"  {p['name']}: {p['state']}" + (f" · {p['reason']}" if p.get("reason") else "") + f" · {p['path']}")
     say(f"login item: {autostarts()}")

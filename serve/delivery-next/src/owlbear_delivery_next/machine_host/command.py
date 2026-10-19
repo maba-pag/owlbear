@@ -65,18 +65,22 @@ def say(text: str) -> None:
 # Each command imports its module only when it runs, never for help or a project command.
 @app.default
 def default() -> int:
-    """Start OwlBear if it is stopped, else show its status."""
+    """Start OwlBear running if it is stopped, else show its status."""
     from owlbear_delivery_next.machine_host import control  # noqa: PLC0415
 
     return control.status(say) if control.serve.running() else control.start(say)
 
 
 @app.command
-def start() -> int:
-    """Start OwlBear in the background, paused until you press Resume."""
+def start(*, paused: bool = False) -> int:
+    """Start OwlBear in the background, running.
+
+    Args:
+        paused: Start paused until you press Resume.
+    """
     from owlbear_delivery_next.machine_host import control  # noqa: PLC0415
 
-    return control.start(say)
+    return control.start(say, paused=paused)
 
 
 @app.command
@@ -88,11 +92,17 @@ def stop() -> int:
 
 
 @app.command
-def restart() -> int:
-    """Stop OwlBear, then start it."""
+def restart(*, paused: bool = False) -> int:
+    """Stop OwlBear, then start it running or paused as it was.
+
+    Args:
+        paused: Start paused until you press Resume, even if it ran.
+    """
     from owlbear_delivery_next.machine_host import control  # noqa: PLC0415
 
-    return control.stop(say) or control.start(say)
+    listed = control.projects()  # a host that runs but does not answer may be paused: it starts paused
+    was = listed["paused"] if listed is not None else control.serve.running() is not None
+    return control.stop(say) or control.start(say, paused=paused or was)
 
 
 @app.command
