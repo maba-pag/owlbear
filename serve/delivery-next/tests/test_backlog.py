@@ -111,22 +111,27 @@ def test_a_finding_seen_again_counts_up_its_issue_and_comments_only_new_evidence
     assert (body.count("**Repeats:**"), github.issues[1]["title"]) == (1, "Status line hides the step")
 
 
-def test_a_repeat_counts_up_only_its_own_project_s_entry_and_another_project_s_is_a_new_one_to_link(shared, github):
+def test_a_repeat_merges_only_with_an_entry_naming_the_same_projects_and_is_linked_to_the_others(shared, github):
+    """TD-345, TD-405, TD-406: a finding names its project, an untriaged entry its origin; equal sets merge."""
     root, title = shared[0], "Status line hides the step"
-    shop, docs = view(root), Backlog(DataRepo(root), "docs-site", Clock())
+    shop, docs, anywhere = view(root), Backlog(DataRepo(root), "docs-site", Clock()), Backlog(DataRepo(root), "")
     first = shop.add(title, source="watcher")[0]
 
     elsewhere, new = docs.add(title, source="watcher")
-    assert (new, elsewhere.id, elsewhere.origin, len(github.issues)) == (True, "2", "docs-site", 2)
+    said = (new, elsewhere.id, elsewhere.origin, elsewhere.links, len(github.issues))
+    assert said == (True, "2", "docs-site", ["1"], 2)
+    assert shop.read(fresh=True)[0]["1"].links == ["2"]  # linked both ways at once
     assert [shop.add(title, source="watcher")[0].id, docs.add(title, source="watcher")[0].id] == ["1", "2"]
 
-    shop.update(first.id, {"projects": [], "links": [elsewhere.id]})  # Global: linked as connected entries
-    assert (shop.add(title, source="watcher")[0].count, docs.add(title, source="watcher")[0].count) == (3, 3)
+    shop.update(first.id, {"projects": []})  # Global: it no longer names shop-site
+    third, new = shop.add(title, source="watcher")
+    assert (new, third.id, third.links) == (True, "3", ["1", "2"])
+    assert anywhere.add(title, source="watcher")[0].id == "1"  # found outside any project: none, as Global names
     docs.update(elsewhere.id, {"projects": ["shop-site", "docs-site"]})  # it concerns both; found in docs-site
     assert (docs.add(title, source="watcher")[0].id, names(github.issues[2])[-2:]) == (
-        "2", ["project:shop-site", "project:docs-site"]
+        "4", ["project:shop-site", "project:docs-site"]
     )  # fmt: skip
-    assert docs.read(fresh=True)[0]["1"].links == ["2"]
+    assert docs.read(fresh=True)[0]["2"].links == ["1", "3", "4"]
 
 
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):

@@ -1,8 +1,9 @@
 """Improvement backlog (TD-84, TD-103): what the owner, the watcher, the assistant, reviews and runs found.
 
 Each entry is one GitHub issue in the shared repository (``backlog_issues``); this module is the view over them. A
-finding seen again in the same project counts up its entry instead of adding one; seen in another project it is a new
-entry, which the owner links to the first as a connected entry (TD-126). Untriaged entries form the inbox. Saving is
+finding names the project it was found in, none outside any; an entry names its triaged projects, else its origin. A
+finding that repeats an entry naming the same projects counts it up; otherwise it is a new entry, linked at once to
+every entry with the same finding (TD-345, TD-405, TD-406). Untriaged entries form the inbox. Saving is
 online-only: when GitHub cannot be reached the save fails with GitHub's reason, nothing is kept locally. Reads are
 cached for a few seconds since the page refreshes often; every write reads afresh under the shared repository's lock,
 and reads each issue it changes directly first, so an edit made on GitHub meanwhile is kept.
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 ID = r"^[1-9]\d{0,8}$"  # the issue's number
 EVIDENCE = 50  # references kept per entry, the newest
+LINKS = 50  # connected entries kept per entry, the newest
 READ_SECONDS = 10.0  # how long a listing is reused
 RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later; until then the write's answer counts
 type Source = Literal["owner", "watcher", "assistant", "review", "run"]
@@ -97,9 +99,15 @@ def key(source: str, title: str) -> str:
     return f"{source}:{' '.join(re.findall(r'\w+', title.casefold()))}"
 
 
+def named(entry: Entry) -> frozenset[str]:
+    """The projects an entry names: its triaged ones, else its origin, else none (TD-406)."""
+    return frozenset(entry.projects if entry.projects is not None else [entry.origin] if entry.origin else [])
+
+
 def repeats(entry: Entry, project: str, source: str, title: str) -> bool:
-    """Whether a finding in *project* repeats *entry*: the same key, found in the same project (TD-126)."""
-    return entry.origin == project and key(entry.source, entry.title) == key(source, title)
+    """Whether a finding in *project* (none: outside any) repeats *entry*: the same key, the same projects (TD-345)."""
+    finding = frozenset([project] if project else [])
+    return key(entry.source, entry.title) == key(source, title) and named(entry) == finding
 
 
 def ordered(entries: Iterable[Entry]) -> list[Entry]:
@@ -173,9 +181,14 @@ class Backlog:
         def work(found: dict[str, Entry], now: datetime) -> tuple[Entry, bool]:
             same = next((e for e in found.values() if repeats(e, self.project, source, title)), None)
             if same is None:
+                alike = sorted((e.id for e in found.values() if key(e.source, e.title) == key(source, title)), key=int)
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
-                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project}
-                return self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now})), True
+                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project, "links": alike[-LINKS:]}
+                entry = self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now}))
+                them = [self._get(found, i) for i in entry.links]  # TD-405: linked both ways at once
+                self._save(*(_valid(e.model_dump() | {"links": [*e.links, entry.id][-LINKS:], "updated_at": now})
+                             for e in them))  # fmt: skip
+                return entry, True
             same = self._get(found, same.id)
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}

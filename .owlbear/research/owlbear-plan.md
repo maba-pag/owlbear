@@ -59,7 +59,7 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest (TD-330, TD-334, TD-335, TD-345, TD-350); built: TD-328, TD-341, TD-347's skill, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
+| 1 | TD-358's rest (TD-330, TD-334, TD-335, TD-350); built: TD-328, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
@@ -99,14 +99,13 @@ TD-358 ("All of it now, before self-update step 3b") was recorded after step 3b 
 "before the rest of the self-update"; TD-394 confirms it comes first. The audit of §4 found the eight below unbuilt;
 the range's other rows are built, history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). TD-403 adds
 the small items of 2026-10-19. Built since: TD-392 (#502), TD-328, TD-341, TD-347's skill, TD-396, TD-397 and TD-399,
-with the C-02 catalogue text. Remaining:
+with the C-02 catalogue text (#506), and TD-345 with TD-405 and TD-406. Remaining:
 
 | Decision | What is missing |
 | --- | --- |
 | TD-330 | Every loop's last round gets one rejections-only check outside the round count; all five loops still follow TD-218 |
 | TD-334 | Each project's live database lives under `~/.owlbear`, one folder per project; it is still in the clone's Git folder |
 | TD-335 | `owlbear install` asks for the `~/.copilot` shaper links and uninstall removes them; neither does today |
-| TD-345 | Backlog repeats merge only when they name the same projects (or both none); they merge by origin today |
 | TD-350 | Only a login-item start and a start after a crash are paused; `owlbear restart` keeps its state; a `--paused` start; every start pauses today |
 
 ### 3.2 Items 2 to 4: the self-update
@@ -183,7 +182,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-19 | Linux and Windows stated as not supported yet | `README-consumer.md` and `setup/setup-guide.md` claim Linux support | align | 7 |
 | C-20 | OwlBear builds itself through its own Delivery (TD-319) | Developed in chat only | keep | 10 |
 | C-21 | Old engine batches with the tag first; three skills retire with batch 3 | Not started | build | 7 |
-| C-24 | Backlog repeats merge only for the same named projects (TD-345) | Merged by origin | align | 1 |
 | C-25 | The saver recommends a scope (TD-293) | Missing | align | 5 |
 | C-25 | A Global entry can move back to a project (TD-292) | The page says it does not move back | align | 5 |
 | C-25 | Curator modes and the Global threshold, 95% at first (TD-292, TD-400) | Missing | build | 5 |
