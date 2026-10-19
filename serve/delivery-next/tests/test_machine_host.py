@@ -73,6 +73,7 @@ def test_one_host_serves_each_project_under_its_id_and_each_clone_finds_it(tmp_p
         "failed",
         f"another Delivery host (process {os.getpid()}) serves it; stop that one",
     )
+    assert second.store is not None  # its layer still counts for this machine's settings (TD-336)
 
 
 def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, http, monkeypatch):
