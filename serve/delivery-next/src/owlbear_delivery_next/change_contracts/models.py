@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
 
-FORMAT = 6
+FORMAT = 7
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
@@ -481,6 +481,7 @@ class Change(Record):
     before: VisualResult | None = None  # TD-24: the states at the merge-base, captured once; never gates
     visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round
     owner_criteria: list[OwnerCriterion] = Field(default_factory=list)  # TD-79: checked by every later round
+    waived: dict[str, int] = Field(default_factory=dict)  # TD-341: criteria the owner accepted unmet, by version
     amendments: list[Amendment] = Field(default_factory=list)  # TD-179: proposed brief wording, challenged
     loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
     names: Names = Field(default_factory=Names)

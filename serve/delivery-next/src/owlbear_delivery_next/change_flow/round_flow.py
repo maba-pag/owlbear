@@ -14,6 +14,7 @@ from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, Completion, RoundLoop
 from owlbear_delivery_next.change_flow.moves import ask, go, loop_of, open_task, resolved, subject_of
+from owlbear_delivery_next.change_flow.round_marks import unmet
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -161,6 +162,8 @@ def decided(c: Change, q: Question, target: str) -> None:
         lp.rebuild = [] if said.option == CLEAN else picked(c, said.tasks)
         go(c, StepKind.REVIEW, None, CLEAN if said.option == CLEAN else RETRY)  # the work is undone first
     elif target == "accept":
+        if subject == FINAL:  # TD-341: the criteria its open findings report unmet, accepted as the owner's decision
+            c.waived |= {k.id: k.version for k in unmet(c, lp)}
         if task := next((t for t in c.plan.tasks if t.id == task_id), None) if c.plan else None:
             end(c, lp, task, "accepted")
     else:

@@ -6,7 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.evidence import criteria, review_valid
+from owlbear_delivery_next.change_contracts.evidence import criteria, review_valid, waived
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import FINAL
@@ -80,7 +80,7 @@ def push(path: Path, c: Change, head: str) -> StepResult | None:  # noqa: PLR091
 
 
 def _body(c: Change, *, marker: bool) -> str:
-    criteria = "\n".join(f"- {k.id}: {k.text}" for k in c.brief.criteria)
+    criteria = "\n".join(f"- {k.id}: {k.text}{waived(c, k)}" for k in c.brief.criteria)
     said = f"\n\nOpened by OwlBear Delivery for `{c.slug}`." if marker else ""
     review = f"\n\n{tests}" if (tests := curation_build.body(c)) else ""  # a test review's table (TD-339)
     return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}{review}{said}"

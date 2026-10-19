@@ -24,8 +24,9 @@ than an evidence gap; research must not choose intent on the user's behalf.
 
 Before gathering sources:
 
-1. Search `.owlbear/research/` for the task ID and topic keywords. If a doc references this task, read it first.
-2. Check task body for `See .owlbear/research/` links.
+1. Search the project's research folder (Step 6 names it) for the task ID and topic keywords. If a doc references
+  this task, read it first.
+2. Check task body for links to research documents.
 3. If a complete, recent document exists, validate its load-bearing claims against current source and
   return the still-current findings instead of repeating the investigation.
 
@@ -105,7 +106,7 @@ Return a compact evidence package:
 - Recommendation: {brief recommendation and confidence}
 - Alternatives: {meaningful alternatives, or none}
 - Risks and limits: {remaining uncertainty}
-- Durable artifact: {.owlbear/research/{slug}.md, or none}
+- Durable artifact: {its path from Step 6, or none}
 ```
 
 Do not edit native authority, invoke admission challenge, request approval, or create Delivery work.
