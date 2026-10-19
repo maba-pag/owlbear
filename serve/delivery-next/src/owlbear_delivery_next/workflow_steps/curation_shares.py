@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.curation_records import Share
+from owlbear_delivery_next.change_contracts.curation_tools import is_test
 from owlbear_delivery_next.change_flow.worktree import GIT, git
 
 if TYPE_CHECKING:
@@ -17,9 +17,6 @@ if TYPE_CHECKING:
 
 SHARE = 5_000  # lines a share holds at most, unless one file alone is longer; a heuristic, not a context guarantee
 MANIFESTS = frozenset({"pyproject.toml", "package.json", "Cargo.toml", "go.mod"})  # a package's root
-CODE = frozenset({".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"})
-FOLDERS = frozenset({"tests", "test", "__tests__", "e2e"})
-NAME = re.compile(r"test_.*\.py|.*_test\.py|conftest\.py|.*\.(test|spec)\.(js|jsx|ts|tsx|mjs|cjs)")
 
 
 @dataclass(frozen=True)
@@ -33,12 +30,6 @@ class Package:
     def lines(self) -> int:
         """Its test lines."""
         return sum(self.files.values())
-
-
-def is_test(path: str) -> bool:
-    """A test by its name, or a code file in a test folder; fixtures' data files are not."""
-    p = PurePosixPath(path)
-    return bool(NAME.fullmatch(p.name)) or (p.suffix in CODE and bool(FOLDERS & set(p.parts[:-1])))
 
 
 def packages(repo: Path, commit: str) -> list[Package]:

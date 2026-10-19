@@ -20,7 +20,7 @@ from owlbear_delivery_next.git.remote_git import (
 )
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.workflow_steps import engine
+from owlbear_delivery_next.workflow_steps import curation_build, engine
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -82,7 +82,8 @@ def push(path: Path, c: Change, head: str) -> StepResult | None:  # noqa: PLR091
 def _body(c: Change, *, marker: bool) -> str:
     criteria = "\n".join(f"- {k.id}: {k.text}" for k in c.brief.criteria)
     said = f"\n\nOpened by OwlBear Delivery for `{c.slug}`." if marker else ""
-    return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}{said}"
+    review = f"\n\n{tests}" if (tests := curation_build.body(c)) else ""  # a test review's table (TD-339)
+    return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}{review}{said}"
 
 
 def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:

@@ -31,6 +31,7 @@ from owlbear_delivery_next.workflow_steps import (
     cleanup,
     conversation,
     curation,
+    curation_build,
     design,
     engine,
     follow,
@@ -151,10 +152,13 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             preparing=ctx,
         )
 
-    run = accepted or _kept(store, lock, change, path, config)
+    curated = change.tests is not None and s.kind == StepKind.BUILD  # a test review's build is the curator's (TD-339)
+    made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
+    run = accepted or _kept(store, lock, change, path, made)
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    curation_build.recorded(change, run, path)
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result)
     result = amend.challenge(store, lock, change, path, run, result=result)  # TD-179: judged, never applied here

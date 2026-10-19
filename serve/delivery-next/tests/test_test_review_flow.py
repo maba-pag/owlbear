@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts.curation_tools import TestReviewResult
+from owlbear_delivery_next.change_contracts import curation_tools, tools
+from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION, TestCurationResult, TestReviewResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Exit, Step, StepKind
 from owlbear_delivery_next.change_flow import loop
@@ -23,7 +24,7 @@ from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
-from owlbear_delivery_next.workflow_steps import curation, curation_shares, sessions
+from owlbear_delivery_next.workflow_steps import curation, curation_build, curation_shares, sessions
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -199,3 +200,97 @@ def test_shares_wait_for_the_project_s_slots_like_any_step(review):
         record=SimpleNamespace(project="p"), store=review.store,
     )  # fmt: skip
     assert session_slots.reserve(host, c.slug) == 2  # the project's limit: two shares at once
+
+
+MEASURE = {"command": "uv run pytest -q", "commit": "", "tests": 4, "seconds": 2.0}
+
+
+def verdict(test: str, action: str = "retire") -> dict:
+    return {"test": test, "action": action, "behaviour": "b", "bug": "x", "caught_by": "tests/test_a.py::k"}
+
+
+@pytest.fixture
+def curating(review, monkeypatch):
+    """The review's shares ended with one retire and one rewrite-lower verdict; its curator's session is faked."""
+    review.ends["# Test review: share 1 of 2"] = lambda cfg: Run(
+        cfg.session_id, "result", termination=Termination(confirmed=True),
+        payload=TestReviewResult(verdicts=[verdict("tests/test_a.py::old"), verdict("tests/test_a.py::slow",
+                                 "rewrite-lower")], kept=1, covered_paths=["tests/test_a.py"]),
+    )  # fmt: skip
+    step(review)
+    seen = []
+
+    async def curator(cfg):
+        seen.append(cfg)
+        return review.curate(cfg)
+
+    monkeypatch.setattr(sessions.sdk_adapter, "run", curator)
+    review.seen = seen
+    return review
+
+
+def curated(applied: bool):  # noqa: FBT001 - one switch per test
+    def done(cfg) -> Run:
+        wt = cfg.worktree
+        head = git(wt, "rev-parse", "HEAD")
+        after = None
+        if applied:
+            (wt / "tests" / "test_a.py").write_text("a\n")
+            git(wt, "commit", "-qam", "test review: retire old")
+            head = git(wt, "rev-parse", "HEAD")
+            after = MEASURE | {"commit": head, "tests": 3}
+        payload = TestCurationResult.model_validate({
+            "applied": [{"test": "tests/test_a.py::old", "action": "retire", "change": "removed"}] if applied else [],
+            "refused": [] if applied else [{"test": "tests/test_a.py::old", "reason": "only it covers empty names"}],
+            "before": MEASURE | {"commit": head}, "after": after, "summary": "s",
+        })  # fmt: skip
+        return Run(cfg.session_id, "result", payload=payload, head=head, termination=Termination(confirmed=True))
+
+    return done
+
+
+def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating):
+    curating.curate = curated(applied=True)
+    step(curating)
+    [cfg] = curating.seen
+    assert (cfg.role, cfg.model, cfg.effort, cfg.context, cfg.submit) == (
+        "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
+    )  # fmt: skip
+    assert "tests/test_a.py::old: retire" in cfg.message
+    assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
+    assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
+    c = curating.store.read(curating.slug)
+    assert (c.tests.report.applied[0].test, c.tests.unchanged, c.step.kind) == (
+        "tests/test_a.py::old", False, StepKind.REVIEW
+    )  # fmt: skip
+    text = curation_build.body(c)
+    assert "Before: `uv run pytest -q`" in text
+    assert "- tests/test_a.py::old: retire, removed" in text
+    assert "Rewrite lower, for later (1):\n- tests/test_a.py::slow: b" in text
+
+
+def test_a_curation_that_applies_nothing_ends_without_review_or_pr(curating):
+    curating.curate = curated(applied=False)
+    step(curating)
+    c = curating.store.read(curating.slug)
+    assert (c.tests.unchanged, c.step.kind, c.tests.report.refused[0].reason) == (
+        True, StepKind.CLEANUP, "only it covers empty names"
+    )  # fmt: skip
+
+
+def test_a_curation_result_must_match_what_its_commits_show():
+    payload = TestCurationResult.model_validate({"before": MEASURE | {"commit": "a" * 40}, "summary": "s"})
+    assert curation_tools.check(payload, tools.Worktree("b" * 40, "a" * 40, changed=("tests/test_a.py",))) == [
+        "applied: your commits change files; list each verdict you applied, or undo them"
+    ]
+    applied = TestCurationResult.model_validate({
+        "applied": [{"test": "t", "action": "retire", "change": "c"}], "before": MEASURE | {"commit": "a" * 40},
+        "after": MEASURE | {"commit": "c" * 12}, "summary": "s",
+    })  # fmt: skip
+    tree = tools.Worktree("b" * 40, "a" * 40, dirty=("x.txt",), changed=("src/app.py",))
+    assert curation_tools.check(applied, tree) == [
+        "changes: uncommitted files (x.txt); commit or undo them",
+        "changes: src/app.py is not a test; edit only tests",
+        f"after.commit: measure on your last commit, {'b' * 12}",
+    ]
+    assert curation_tools.check(applied, tools.Worktree("c" * 40, "a" * 40, changed=("tests/data.json",))) == []

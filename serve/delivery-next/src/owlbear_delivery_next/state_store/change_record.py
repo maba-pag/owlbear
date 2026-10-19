@@ -30,7 +30,7 @@ def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
     if not store.shared or c.brief.approved_at is None:
         return ""
     brief = c.brief.approved[-1] if c.brief.approved else c.brief
-    outcome = "merged" if pr and pr.merged else "abandoned"
+    outcome = "merged" if pr and pr.merged else "unchanged" if c.tests and c.tests.unchanged else "abandoned"
     record = {
         "slug": c.slug,
         "handle": c.handle,

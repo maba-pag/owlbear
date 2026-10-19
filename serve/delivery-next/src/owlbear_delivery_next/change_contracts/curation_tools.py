@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import PurePosixPath
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -10,6 +12,20 @@ from owlbear_delivery_next.change_contracts import tools
 
 REVIEW_LABEL = "test-review"  # a share's reviewer session
 CURATION_LABEL = "test-curation"  # the curator's build session
+CODE = frozenset({".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"})
+FOLDERS = frozenset({"tests", "test", "__tests__", "e2e"})
+NAME = re.compile(r"test_.*\.py|.*_test\.py|conftest\.py|.*\.(test|spec)\.(js|jsx|ts|tsx|mjs|cjs)")
+
+
+def is_test(path: str) -> bool:
+    """A test by its name, or a code file in a test folder; fixtures' data files are not."""
+    p = PurePosixPath(path)
+    return bool(NAME.fullmatch(p.name)) or (p.suffix in CODE and bool(FOLDERS & set(p.parts[:-1])))
+
+
+def in_tests(path: str) -> bool:
+    """A test, or any file under a test folder, such as a fixture's data: what the curator may change."""
+    return is_test(path) or bool(FOLDERS & set(PurePosixPath(path).parts[:-1]))
 
 
 class TestVerdict(tools.Args):
@@ -121,3 +137,16 @@ TEST_CURATION = tools.Spec(
     TestCurationResult,
     "result",
 )
+
+
+def check(args: TestCurationResult, tree: tools.Worktree) -> list[str]:
+    """Field errors of a curation against the worktree: what it applied is committed, clean, and only tests."""
+    errors = [f"changes: uncommitted files ({', '.join(tree.dirty[:5])}); commit or undo them"] if tree.dirty else []
+    if args.applied and tree.head == tree.base:
+        errors.append("applied: nothing is committed since the step began; commit what you applied")
+    if not args.applied and tree.head != tree.base:
+        errors.append("applied: your commits change files; list each verdict you applied, or undo them")
+    errors += [f"changes: {p} is not a test; edit only tests" for p in tree.changed if not in_tests(p)][:5]
+    if args.after and not (len(args.after.commit) >= 7 and tree.head.startswith(args.after.commit)):  # noqa: PLR2004
+        errors.append(f"after.commit: measure on your last commit, {tree.head[:12]}")
+    return errors
