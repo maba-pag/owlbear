@@ -45,17 +45,14 @@ Validate the checked-in Node runtime against the Cockpit lower bound.
 
 ## .github/scripts/check_ruff_toolchain.py
 
-Verify exact Ruff version parity across repository tooling and MegaLinter declarations.
+Verify exact Ruff version parity across the workspace pin, the pre-commit hook and the installed Ruff.
 
 ### Imports
 
 - `__future__`
 - `argparse`
-- `json`
-- `owlbear_tools.megalinter`
 - `pathlib`
 - `re`
-- `shutil`
 - `subprocess`
 - `tomllib`
 - `typing`
@@ -70,11 +67,8 @@ Verify exact Ruff version parity across repository tooling and MegaLinter declar
 - `def _load_yaml_mapping(path: Path) -> dict[str, object]`
 - `def _read_standalone_ruff_version(root: Path) -> str`
 - `def _read_pre_commit_ruff_version(root: Path) -> str`
-- `def _read_megalinter_action_version(root: Path) -> tuple[str, str]`
-- `def _fetch_megalinter_versions(url: str) -> object`
-- `def _read_megalinter_declared_ruff_version(version: str, *, json_loader: Callable[[str], object] | None = None) -> str`
 - `def _read_ruff_command_version(command: list[str], source: str) -> str`
-- `def check_ruff_toolchain(root: Path, *, ruff_executable: str = 'ruff', megalinter_versions_loader: Callable[[str], object] | None = None) -> None`
+- `def check_ruff_toolchain(root: Path, *, ruff_executable: str = 'ruff') -> None`
 - `def main() -> int`
 
 ## .github/scripts/check_uv_version.py
@@ -120,37 +114,105 @@ Prove that uv lock regeneration observes workspace-member changes.
 - `def _run_uv(root: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]`
 - `def main() -> int`
 
-## .github/scripts/sync_megalinter_toolchain.py
+## .github/scripts/ci_scope.py
 
-Derive local linter pins from one exact MegaLinter release.
+Which CI suites a pull request touches; the one source of the path lists the suites' workflows held (TD-278).
 
 ### Imports
 
 - `__future__`
-- `argparse`
 - `json`
-- `pathlib`
+- `os`
 - `re`
-- `shutil`
 - `subprocess`
-- `tomllib`
-- `typing`
-- `yaml`
+- `sys`
 
 ### Interfaces
 
-- `def _fail(message: str) -> NoReturn`
-- `def _run(root: Path, command: list[str]) -> str`
-- `def _match(path: str, text: str) -> re.Match[str]`
-- `def _replace_version(path: str, text: str, version: str) -> str`
-- `def _read(root: Path, path: str) -> str`
-- `def _normalise(path: str, text: str) -> str`
-- `def validate_candidate(root: Path, base_ref: str) -> None`
-- `def load_versions(root: Path) -> dict[str, str]`
-- `def _validated_versions(document: object) -> dict[str, str]`
-- `def _lock_matches(root: Path, path: str, version: str) -> bool`
-- `def synchronize(root: Path, metadata: Mapping[str, str], *, check: bool = False) -> None`
+- `def pattern(glob: str) -> re.Pattern[str]`
+- `def suites(paths: list[str]) -> list[str]`
+- `def changed(base: str, head: str) -> list[str]`
+- `def tokened() -> bool`
+- `def main(argv: list[str]) -> None`
+
+## .github/scripts/release.py
+
+Versions from merges (self-update design section 8; TD-302, TD-306, TD-315): tag labelled merges to main.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `json`
+- `os`
+- `re`
+- `subprocess`
+- `sys`
+- `typing`
+- `urllib.error`
+- `urllib.request`
+
+### Interfaces
+
+- `class GitHub(Protocol)`
+  - `def pull(self, sha: str) -> dict | None`
+  - `def ci(self, sha: str) -> str`
+  - `def create(self, name: str, sha: str, message: str) -> None`
+- `class Step`
+- `def git(*args: str) -> str`
+- `def tags() -> dict[str, str]`
+- `def versions() -> list[tuple[str, tuple[int, int]]]`
+- `def unpaired() -> list[tuple[str, str]]`
+- `def merges(floor: str, tip: str) -> list[tuple[str, bool]]`
+- `def following(highest: tuple[int, int], kind: str) -> tuple[str, tuple[int, int]]`
+- `def plan(gh: GitHub, floor: str, tip: str) -> list[Step]`
+- `def tag(gh: GitHub, step: Step) -> None`
+- `class Api`
+  - `def __init__(self, repo: str, token: str, base: str = 'https://api.github.com', writer: str = '') -> None`
+  - `def _call(self, path: str, body: dict | None = None, token: str = '') -> object`
+  - `def create(self, name: str, sha: str, message: str) -> None`
+  - `def pull(self, sha: str) -> dict | None`
+  - `def ci(self, sha: str) -> str`
 - `def main() -> int`
+
+## .github/scripts/snyk_findings.py
+
+Snyk Code findings on a pull request, and the owner's tick that ignores one (TD-363).
+
+### Imports
+
+- `__future__`
+- `json`
+- `os`
+- `pathlib`
+- `re`
+- `sys`
+- `time`
+- `typing`
+- `urllib.error`
+- `urllib.request`
+
+### Interfaces
+
+- `class Http`
+  - `def __init__(self, base: str, auth: str, accept: str, content: str) -> None`
+  - `def call(self, method: str, path: str, body: object | None = None) -> object`
+- `class GitHub`
+  - `def __init__(self, http: Http, repo: str) -> None`
+  - `def comments(self, pr: int) -> list[dict]`
+  - `def create(self, pr: int, body: str) -> None`
+  - `def update(self, comment: int, body: str) -> None`
+  - `def current(self, comment: int) -> str`
+  - `def rerun(self, pr: int, *, tries: int = 40, sleep: Callable[[float], None] = time.sleep) -> str`
+- `class Snyk`
+  - `def __init__(self, http: Http) -> None`
+  - `def ignore(self, finding: str, reason: str, name: str) -> str`
+- `def findings(sarif: dict) -> list[dict]`
+- `def body(finding: dict) -> str`
+- `def comment(gh: GitHub, sarif: dict, pr: int) -> list[str]`
+- `def pending(now: str) -> tuple[str, str] | str`
+- `def ignore(gh: GitHub, snyk: Snyk, pr: int, comment_id: int) -> str`
+- `def main(argv: list[str]) -> int`
 
 ## .github/skills/session-review/scripts/__init__.py
 
@@ -6109,48 +6171,20 @@ Strict MCPServer adapter for the Delivery portfolio application.
 
 OwlBear Delivery-next: one step loop per Change, its state store and status line.
 
-## serve/delivery-next/src/owlbear_delivery_next/ahp.py
+## serve/delivery-next/src/owlbear_delivery_next/__main__.py
 
-Agent Host Protocol 0.10.0 client over the editor's local socket; stdlib only (TD-34, TD-36).
+``python -m owlbear_delivery_next``: every process starts through the one dispatcher (TD-173).
 
 ### Imports
 
-- `__future__`
-- `base64`
-- `hashlib`
-- `itertools`
-- `json`
-- `os`
-- `pathlib`
-- `queue`
-- `socket`
-- `struct`
-- `threading`
-- `typing`
+- `owlbear_delivery_next.commands.dispatch`
+- `sys`
 
-### Interfaces
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/__init__.py
 
-- `class Transport(Protocol)`
-  - `def request(self, method: str, params: Json, timeout: float = 60) -> Json`
-  - `def dispatch(self, channel: str, action: Json) -> None`
-  - `def next_event(self, timeout: float) -> Json | None`
-- `def endpoint(entries: Path = ENTRIES) -> Json | None`
-- `class HostError(RuntimeError)`
-- `class Connection`
-  - `def __init__(self, path: str, token: str, client_id: str) -> None`
-  - `def close(self) -> None`
-  - `def reopen(self, github_token: str) -> Connection`
-  - `def _exact(self, n: int) -> bytes`
-  - `def _frame(self) -> Json`
-  - `def _read(self) -> None`
-  - `def _send(self, obj: Json) -> None`
-  - `def _frame_out(self, op: int, data: bytes) -> None`
-  - `def request(self, method: str, params: Json, timeout: float = 60) -> Json`
-  - `def dispatch(self, channel: str, action: Json) -> None`
-  - `def next_event(self, timeout: float) -> Json | None`
-- `def connect(entry: Json, client_id: str, github_token: str) -> Connection`
+The records a Change is made of and the contracts its sessions answer with.
 
-## serve/delivery-next/src/owlbear_delivery_next/amendment_records.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/amendment_records.py
 
 A worker's proposed change to approved brief wording (TD-179 rules 3-6), its exact candidate and its challenge.
 
@@ -6167,635 +6201,59 @@ A worker's proposed change to approved brief wording (TD-179 rules 3-6), its exa
 - `class AmendedCriterion(_Strict)`
 - `class Amendment(_Strict)`
 
-## serve/delivery-next/src/owlbear_delivery_next/amendments.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/curation_records.py
 
-A worker's proposed new wording for generated criteria (TD-179 rules 3-6): validated, prepared, judged, recorded.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.amendment_records`
-- `typing`
-
-### Interfaces
-
-- `def _flat(text: str, limit: int = 1000) -> str`
-- `def amendable(c: Change) -> tuple[str, ...]`
-- `def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]`
-- `def prepared(c: Change, run: Run, at: datetime) -> Amendment | None`
-- `def prompt(c: Change, a: Amendment, worktree: Path) -> str`
-- `def judged(a: Amendment, run: Run) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/api.py
-
-Status-view HTTP API of the host app: Changes, answers, check results and brief approval (D4 §3.2, §3.6).
+A test review's record on its Change (TD-373, TD-390): the pinned commit, its shares and the curator's report.
 
 ### Imports
 
 - `__future__`
-- `dataclasses`
-- `datetime`
-- `fastapi`
-- `fastapi.responses`
-- `hashlib`
-- `importlib.resources`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.briefs`
-- `owlbear_delivery_next.inbox`
-- `owlbear_delivery_next.launches`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.progress`
-- `owlbear_delivery_next.status`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.store`
-- `owlbear_delivery_next.vscode_adapter`
-- `pydantic`
-- `re`
-- `secrets`
-- `shlex`
-- `shutil`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class Body(BaseModel)`
-- `class AnswerBody(Body)`
-- `def decision_refused(c: Change, body: AnswerBody) -> tuple[int, str] | None`
-- `class CheckBody(Body)`
-- `class ApproveBody(Body)`
-- `class ConsentBody(Body)`
-- `class IntentBody(Body)`
-- `def link(rec: HostRecord | None) -> str | None`
-- `def fixed_page(html: str) -> Callable[[], HTMLResponse]`
-- `def snapshot(inputs: Inputs, person: PersonCheck) -> str`
-- `def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) -> dict[str, Any]`
-- `def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None`
-- `def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, Any]`
-- `def new_chat(repo: Path, shaper: Effective, prompt: str = START_PROMPT, start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat) -> dict[str, str]`
-- `def create_app(store: Store, token: str, host: Host, *, launch: Callable[[Path, Effective, str], dict[str, str]] = new_chat, which: Callable[[str], str | None] = shutil.which, pack: pack_job.Job | None = None) -> FastAPI`
-
-## serve/delivery-next/src/owlbear_delivery_next/backlog.py
-
-Improvement backlog (TD-84, TD-103): what the owner, the watcher, the assistant, reviews and runs found.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.backlog_issues`
-- `owlbear_delivery_next.github.provider`
-- `pydantic`
-- `re`
-- `threading`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class BacklogError(Exception)`
-  - `def __init__(self, status: int, text: str) -> None`
-- `class Entry(BaseModel)`
-- `def key(source: str, title: str) -> str`
-- `def repeats(entry: Entry, project: str, source: str, title: str) -> bool`
-- `def ordered(entries: Iterable[Entry]) -> list[Entry]`
-- `def _valid(fields: dict[str, Any]) -> Entry`
-- `class Backlog`
-  - `def __init__(self, shared: DataRepo, project: str = '', clock: Callable[[], datetime] | None = None) -> None`
-  - `def repository(self) -> str`
-  - `def of(cls, store: Store, clock: Callable[[], datetime] | None = None) -> Backlog`
-  - `def read(self, *, fresh: bool = False) -> tuple[dict[str, Entry], list[str]]`
-  - `def entries(self) -> list[Entry]`
-  - `def add(self, title: str, text: str = '', source: Source = 'owner', evidence: Iterable[str] = ()) -> tuple[Entry, bool]`
-  - `def update(self, entry_id: str, fields: dict[str, Any]) -> Entry`
-  - `def take(self, ids: list[str], launch: str) -> list[Entry]`
-  - `def put(self, entry: Entry, made: Callable[[str], None] = lambda _number: None) -> Entry`
-  - `def _save(self, *entries: Entry) -> None`
-  - `def _remember(self, issue: Json) -> Json`
-  - `def _overlaid(self, listed: list[Json]) -> list[Json]`
-  - `def _body(fields: dict[str, Any]) -> str`
-  - `def _forget(self) -> None`
-  - `def current(self, entry_id: str) -> Entry | None`
-  - `def _get(self, found: dict[str, Entry], entry_id: str) -> Entry`
-  - `def _fetch(self, found: dict[str, Entry], entry_id: str) -> Entry | None`
-  - `def _github(self, what: str, call: Callable[[], T]) -> T`
-  - `def _apply(self, work: Callable[[dict[str, Entry], datetime], T]) -> T`
-
-## serve/delivery-next/src/owlbear_delivery_next/backlog_issues.py
-
-The backlog's GitHub issues (TD-103): one issue per entry in the shared repository, read and written through ``gh``.
-
-### Imports
-
-- `__future__`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.github`
-- `owlbear_delivery_next.github.gh_client`
-- `owlbear_delivery_next.github.provider`
-- `re`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class Issues(GhClient)`
-  - `def __init__(self, shared: DataRepo) -> None`
-  - `def issues(self) -> list[Json]`
-  - `def issue(self, number: int) -> Json | None`
-  - `def private(self) -> None`
-  - `def create(self, title: str, body: str, labels: list[str]) -> Json`
-  - `def edit(self, number: int, fields: dict[str, Any]) -> Json`
-  - `def comment(self, number: int, body: str) -> None`
-  - `def ensure_labels(self, names: list[str]) -> None`
-- `def labels(fields: dict[str, Any]) -> list[str]`
-- `def kept_labels(issue: Json) -> list[str]`
-- `def state(status: str) -> dict[str, str]`
-- `def _when(at: datetime) -> str`
-- `def _line(text: str) -> str`
-- `def _shown(text: str) -> str`
-- `def body(fields: dict[str, Any]) -> str`
-- `def _jsonable(fields: dict[str, Any]) -> dict[str, Any]`
-- `def fields(issue: Json) -> dict[str, Any] | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/backlog_migrate.py
-
-One-time move of the file backlog into GitHub issues (TD-103), run by ``owlbear-next backlog migrate``.
-
-### Imports
-
-- `__future__`
-- `json`
-- `owlbear_delivery_next.backlog`
-- `owlbear_delivery_next.storage_io`
+- `owlbear_delivery_next.change_contracts.curation_tools`
 - `pydantic`
 - `typing`
 
 ### Interfaces
 
-- `class File(NamedTuple)`
-- `def _files(shared: DataRepo, say: Callable[[str], None]) -> dict[str, File] | None`
-- `class Journal`
-  - `def __init__(self, shared: DataRepo) -> None`
-  - `def note(self, legacy: str, number: str) -> None`
-- `def _created(backlog: Backlog, files: dict[str, File], journal: Journal, say: Callable[[str], None]) -> dict[str, str]`
-- `def _wrong(backlog: Backlog, files: dict[str, File], have: dict[str, str]) -> list[str]`
-- `def migrate(shared: DataRepo, say: Callable[[str], None]) -> int`
-- `def _delete(shared: DataRepo, files: dict[str, File], say: Callable[[str], None]) -> tuple[list[Path], str]`
+- `class _Record(BaseModel)`
+- `class Share(_Record)`
+- `class TestReview(_Record)`
 
-## serve/delivery-next/src/owlbear_delivery_next/backlog_routes.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/curation_tools.py
 
-The Backlog page's API (TD-84, TD-103): list the backlog issues, add ideas, triage, and start a Change from them.
+A test review's results (TD-339, TD-390): each reviewer's verdicts on its share, then the curator's report.
 
 ### Imports
 
 - `__future__`
-- `fastapi`
-- `owlbear_delivery_next.backlog`
-- `owlbear_delivery_next.data_repo`
-- `owlbear_delivery_next.prompts`
-- `pydantic`
-- `threading`
-- `typing`
-
-### Interfaces
-
-- `class Body(BaseModel)`
-- `class AddBody(Body)`
-- `class PatchBody(Body)`
-- `class ChangeBody(Body)`
-- `def prompt(chosen: list[Entry], found: dict[str, Entry]) -> str`
-- `def _shown(entry: Entry, raw: dict[str, Any]) -> dict[str, Any]`
-- `def _run(store: Store, work: Callable[[Backlog], T]) -> T`
-- `def _took(store: Store, ids: list[str], launch: str, end: dict[str, str]) -> dict[str, str]`
-- `def router(store: Store, start: Callable[..., dict[str, Any]]) -> APIRouter`
-
-## serve/delivery-next/src/owlbear_delivery_next/brief_tools.py
-
-The owner chat's brief tool: one fixed draft schema and the checks its schema cannot express (D4 §3.3, T3-T5).
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.tools`
+- `owlbear_delivery_next.change_contracts`
 - `pathlib`
 - `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class PersonCheckDraft(Args)`
-- `class VisualStateDraft(Args)`
-- `class VisualStepDraft(Args)`
-- `class DecisionDraft(Args)`
-- `class VisualDraft(Args)`
-- `class BriefDraft(Args)`
-- `def _steps(brief: BriefDraft) -> list[str]`
-- `def check_brief(brief: BriefDraft) -> list[str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/briefs.py
-
-Brief drafts: validate and write a new Change, or a new version of a shaping one, awaiting approval.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.store`
 - `re`
 - `typing`
 
 ### Interfaces
 
-- `def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change`
-- `def new_slug(title: str, taken: list[str]) -> str`
-- `def _handles(store: Store) -> dict[str, str]`
-- `def _visual_of(c: Change) -> dict[str, Any]`
-- `def _kept(store: Store, body: object) -> object`
-- `def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]`
-- `def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]`
-
-## serve/delivery-next/src/owlbear_delivery_next/budgets.py
-
-Retry budgets: count failures by cause, wait out the environment, and ask once a budget is spent (D3 §3.6).
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `typing`
-
-### Interfaces
-
-- `def episode(c: Change) -> Budget | None`
-- `def charge(change: Change, cause: str, now: datetime) -> tuple[Change, bool]`
-- `def effect_observed(change: Change, question_id: str, now: datetime) -> Change`
-- `def recovered(change: Change, kind: ErrorKind) -> Change`
-- `def streaks(c: Change, r: StepResult) -> None`
-- `def _premise(c: Change, cause: str, task_id: str | None) -> str | None`
-- `def _scope(c: Change, task_id: str | None) -> str | None`
-- `def round_key(c: Change) -> str`
-- `def review_round(c: Change) -> int`
-- `def _progress(c: Change, cause: str, score: Score | None) -> bool`
-- `def _count(c: Change, cause: str, now: datetime, score: Score | None = None, reason: str = '') -> int`
-- `def _environment(c: Change, r: StepResult, now: datetime) -> None`
-- `def _defect(c: Change, r: StepResult, now: datetime) -> None`
-- `def _wrong_model(c: Change, r: StepResult, now: datetime) -> None`
-- `def _resolve_or_pause() -> list[Option]`
-- `def _exhausted(c: Change, r: StepResult, now: datetime) -> None`
-- `def _alternative(c: Change, r: StepResult, now: datetime) -> bool`
-- `def _round(c: Change, r: StepResult, now: datetime) -> None`
-- `def retry(c: Change, r: StepResult, now: datetime) -> None`
-- `def back(c: Change, r: StepResult, now: datetime) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/calibration.py
-
-Decided visual review rounds kept for calibration (TD-78, design skill research §3.5).
-
-### Imports
-
-- `__future__`
-- `collections`
-- `dataclasses`
-- `owlbear_delivery_next.storage_io`
-- `owlbear_delivery_next.visual_records`
-- `re`
-- `shutil`
-- `typing`
-
-### Interfaces
-
-- `def folder(shared: DataRepo, name: str) -> Path`
-- `def keep(shared: DataRepo, name: str, slug: str, decided: VisualRound, images: Mapping[str, Path]) -> str`
-- `def cases(shared: DataRepo, name: str, wait: float | None = None) -> list[tuple[VisualRound, list[Path]]]`
-- `def agreement(decided: Sequence[VisualRound]) -> list[dict[str, Any]]`
-- `class Replay`
-  - `def before(self) -> float`
-  - `def after(self) -> float`
-  - `def advisory(self) -> bool`
-  - `def ok(self) -> bool`
-- `def replayed(pairs: Sequence[tuple[VisualRound, Verdict | None]]) -> Replay`
-- `def _cases(shared: DataRepo, name: str) -> list[tuple[VisualRound, list[Path]]]`
-- `def _part(text: str) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/catalogue.py
-
-What each runtime offers beyond the shared baseline (runtime research P15 to P19).
-
-### Imports
-
-- `__future__`
-- `re`
-- `typing`
-
-### Interfaces
-
-- `def _key(name: str) -> str`
-- `def runtime_of(names: set[str]) -> str | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/change_record.py
-
-A finished Change's record in the project's shared folder (TD-148): brief, decisions, outcome, PR and spend.
-
-### Imports
-
-- `__future__`
-- `json`
-- `owlbear_delivery_next.data_repo`
-- `owlbear_delivery_next.storage_io`
-- `typing`
-
-### Interfaces
-
-- `def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/cli.py
-
-Commands: ``setup``, ``host`` starts Delivery, ``status`` reads the state; ``seed``, ``answer``, ``show`` for dev.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.backlog`
-- `owlbear_delivery_next.config`
-- `owlbear_delivery_next.detector`
-- `owlbear_delivery_next.inbox`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.status`
-- `owlbear_delivery_next.store`
-- `pathlib`
-- `subprocess`
-- `sys`
-
-### Interfaces
-
-- `def show_data(path: Path | None) -> str`
-- `def show_home() -> str`
-- `def show_pack(*, install: bool) -> int`
-- `def update_pack(a: argparse.Namespace, repo: Path) -> int`
-- `def _golden() -> int`
-- `def describe(change: Change) -> str`
-- `def seed(store: Store, a: argparse.Namespace) -> None`
-- `def show_status(store: Store, now: datetime) -> str`
-- `def show_profile(store: Store, repo: Path, confirms: list[tuple[str, str]], overrides: list[tuple[Role, RoleModel]] | None = None, runtime: Runtime | None = None) -> str`
-- `def add_backlog(store: Store, a: argparse.Namespace) -> int`
-- `def report(store: Store, a: argparse.Namespace) -> int`
-- `def _overridden(layer: Layer, overrides: list[tuple[Role, RoleModel]]) -> Layer`
-- `def _role(text: str) -> tuple[Role, RoleModel]`
-- `def main(argv: list[str] | None = None) -> int`
-
-## serve/delivery-next/src/owlbear_delivery_next/codebase.py
-
-The identity of the Delivery code a process loaded: a host and the runners it starts must share it (finding 10).
-
-### Imports
-
-- `__future__`
-- `hashlib`
-- `pathlib`
-
-### Interfaces
-
-- `def shipped(root: Path = ROOT) -> list[Path]`
-- `def identity(root: Path = ROOT) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/config.py
-
-Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, resolved field by field.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.preparation`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.roles`
-- `owlbear_delivery_next.round_records`
-- `owlbear_delivery_next.visual_records`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class Agent(Record)`
-  - `def _named(cls, v: str | None) -> str | None`
-- `class FinalReview(Record)`
-- `class Layer(Record)`
-  - `def _current(cls, v: int) -> int`
-  - `def _widths(cls, v: list[int] | None) -> list[int] | None`
-  - `def _distinct(cls, v: list[Preparation] | None) -> list[Preparation] | None`
-- `class GlobalLayer(Layer)`
-  - `def _project_only(cls, v: object) -> object`
-- `class Effective(Record)`
-  - `def _rounds(self) -> Effective`
-- `class Settings(Record)`
-- `def _defaults() -> GlobalLayer`
-- `def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) -> object`
-- `def resolve(glob: GlobalLayer | None, project: Layer) -> Settings`
-
-## serve/delivery-next/src/owlbear_delivery_next/config_routes.py
-
-The settings page's API (§3.13 item 5, TD-52): read both layers and the resolved values, save one layer.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `hashlib`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.catalogue`
-- `owlbear_delivery_next.config`
-- `owlbear_delivery_next.data_repo`
-- `owlbear_delivery_next.store`
-- `pydantic`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class Save(BaseModel)`
-- `class Folder(BaseModel)`
-- `def _rev(path: Path | None) -> str`
-- `def _state(store: Store, notice: str = '') -> dict[str, Any]`
-- `def _agreement(store: Store) -> list[dict[str, Any]]`
-- `def _save(store: Store, path: Path, model: type[T], body: Save, what: str) -> str`
-- `def _working(store: Store, host: Host) -> list[str]`
-- `def _rename(store: Store, host: Host, name: str) -> str`
-- `def router(store: Store, host: Host) -> APIRouter`
-
-## serve/delivery-next/src/owlbear_delivery_next/copilot_cli.py
-
-The installed Copilot CLI that every SDK session and model list runs.
-
-### Imports
-
-- `__future__`
-- `os`
-- `shutil`
-
-### Interfaces
-
-- `def cli_path() -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/data_repo.py
-
-Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, TD-128).
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `dataclasses`
-- `fcntl`
-- `json`
-- `logging`
-- `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.storage_io`
-- `pathlib`
-- `re`
-- `subprocess`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class DataRepoError(ValueError)`
-- `def _held(path: Path) -> str`
-- `def pointer() -> Path`
-- `def _move_old(path: Path) -> None`
-- `def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]`
-- `def _top(root: Path) -> Path | None`
-- `class DataRepo`
-  - `def global_path(self) -> Path`
-  - `def project_path(self, name: str) -> Path`
-  - `def memory_path(self, name: str) -> Path`
-  - `def locked(self, wait: float | None = None) -> Iterator[None]`
-  - `def _exclude(self, admin: Path) -> None`
-  - `def claim(self, name: str, identity: str) -> bool`
-  - `def claimed(self, identity: str) -> str | None`
-  - `def refusal(self, name: str, identity: str) -> str`
-  - `def rename(self, old: str, new: str, until: float | None = None) -> str`
-  - `def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str`
-  - `def _tracked(self, rel: str, until: float) -> bool`
-  - `def _push(self, until: float) -> str`
-  - `def pending(self) -> str`
-- `def locate() -> DataRepo | None`
-- `def point(root: Path) -> DataRepo`
-- `def identity(repo: Path) -> str`
-- `def project_name(repo: Path) -> str`
-- `def folder(shared: DataRepo, repo: Path) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/design_pack.py
-
-The design pack (TD-76): Impeccable's detector, pinned together with the design skills extracted from it.
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `hashlib`
-- `importlib.resources`
-- `json`
-- `os`
-- `owlbear_delivery_next`
-- `pathlib`
-- `platform`
-- `ssl`
-- `tempfile`
-- `truststore`
-- `typing`
-- `urllib.request`
-
-### Interfaces
-
-- `class PackError(RuntimeError)`
-- `class Installed`
-  - `def verified_engine(self) -> Path`
-- `def manifest() -> dict[str, Any]`
-- `def identity(pins_text: str | None = None, skills: Path | None = None) -> str`
-- `def platform_name() -> str`
-- `def folder(pins: dict[str, Any] | None = None) -> Path`
-- `def _sha256(path: Path) -> str`
-- `def _wanted(pins: dict[str, Any] | None = None) -> dict[str, tuple[str, str]]`
-- `def _private(target: Path) -> bool`
-- `def installed(pins: dict[str, Any] | None = None) -> Installed | None`
-- `def fetch(url: str, seconds: float = SECONDS) -> bytes`
-- `def _keep(target: Path, name: str, data: bytes) -> None`
-- `def install(download: Callable[[str], bytes] | None = None, pins: dict[str, Any] | None = None) -> Installed`
-- `def status() -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/design_tools.py
-
-The design judge's result tools (TD-78, design skill research §3.5 slice 5): a first look, then a final verdict.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next.tools`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class DesignFinding(Args)`
-- `class Preference(Args)`
-- `class DesignLook(Args)`
-- `class DesignResult(DesignLook)`
-- `class ScanDesign(Args)`
-- `def pairs(images: Sequence[str]) -> list[str]`
-- `def check(look: DesignLook, tree: Worktree) -> list[str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/detector.py
-
-Impeccable's design detector, run by Delivery (TD-77): its findings are evidence for the judges, never a fail.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `dataclasses`
-- `json`
-- `os`
-- `owlbear_delivery_next.design_pack`
-- `signal`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `class DetectorError(RuntimeError)`
-- `class Finding`
-- `def _from_engine(raw: dict[str, Any], *, by_file: bool) -> Finding`
-- `def _run(command: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, str, str]`
-- `def _engine(pack: Installed, args: Sequence[str], cwd: Path, browser: str | None = None, *, by_file: bool = False) -> list[Finding]`
-- `def scan_source(pack: Installed, paths: Sequence[Path], cwd: Path) -> list[Finding]`
-- `def scan_url(pack: Installed, url: str, width: int, browser: str, cwd: Path) -> list[Finding]`
-- `def scan_page(page: Any, pack: Installed) -> list[Finding]`
-
-## serve/delivery-next/src/owlbear_delivery_next/dispute_tools.py
+- `def is_test(path: str) -> bool`
+- `def in_tests(path: str) -> bool`
+- `class TestVerdict(tools.Args)`
+  - `def _evidence(self) -> Self`
+- `class TestReviewResult(tools.Args)`
+- `class Applied(tools.Args)`
+- `class Refused(tools.Args)`
+- `class Measure(tools.Args)`
+- `class TestCurationResult(tools.Args)`
+  - `def _measured(self) -> Self`
+- `def check(args: TestCurationResult, tree: tools.Worktree) -> list[str]`
+- `def _at(said: str, commit: str) -> bool`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/dispute_tools.py
 
 The reconsideration of findings the owner sent back to a fresh reviewer with a note (TD-193).
 
 ### Imports
 
 - `__future__`
-- `owlbear_delivery_next`
+- `owlbear_delivery_next.change_contracts`
 - `pydantic`
 - `typing`
 
@@ -6804,61 +6262,14 @@ The reconsideration of findings the owner sent back to a fresh reviewer with a n
 - `class Reconsidered(tools.Args)`
 - `class ReconsiderResult(tools.Args)`
 
-## serve/delivery-next/src/owlbear_delivery_next/disputes.py
-
-A worker's reasoned rejection of review findings (TD-124, TD-193, TD-208): judged by the next round, else the owner.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `owlbear_delivery_next.round_records`
-- `typing`
-
-### Interfaces
-
-- `def _flat(text: str, limit: int = 1400) -> str`
-- `def keyed(task: Task) -> dict[str, str]`
-- `def _lines(task: Task) -> list[str]`
-- `def _marked(lines: list[str]) -> bool`
-- `def rejectable(task: Task | None) -> tuple[str, ...]`
-- `def settled(task: Task | None) -> tuple[str, ...]`
-- `def pending(task: Task | None) -> tuple[str, ...]`
-- `def cap(c: Change) -> int`
-- `def challenged(c: Change, task: Task | None) -> bool`
-- `def hidden(q: Question, *, challenged: bool) -> bool`
-- `def check(args: tools.Args, tree: tools.Worktree, allowed: tuple[str, ...], rechecks: tuple[str, ...], *, settled: tuple[str, ...] = (), cap: int = MAX_FINDINGS) -> list[str]`
-- `def _twice(field: str, keys: list[str]) -> list[str]`
-- `def _listed(field: str, keys: list[str], wanted: tuple[str, ...], section: str) -> list[str]`
-- `def _rejections(keys: list[str], tree: tools.Worktree, allowed: tuple[str, ...], settled: tuple[str, ...]) -> list[str]`
-- `def _rechecks(given: list[tools.Recheck], wanted: tuple[str, ...]) -> list[str]`
-- `def _reconsidered(given: list[dispute_tools.Reconsidered], wanted: tuple[str, ...]) -> list[str]`
-- `def processed(c: Change, task: Task | None, session: str, payload: object, result: StepResult) -> StepResult`
-- `def mark(c: Change, task: Task, key: str, state: FindingState, **fields: str) -> None`
-- `def _record(c: Change, task: Task | None, payload: object, result: StepResult) -> None`
-- `def _settle(c: Change, task: Task | None, payload: object, result: StepResult) -> StepResult`
-- `def _open(task: Task) -> Dispute | None`
-- `def question(task: Task, d: Dispute) -> Question`
-- `def decided(c: Change, q: Question, target: str, at: datetime, note: str = '') -> None`
-- `def waiting(task: Task | None) -> list[Dispute]`
-- `def judged(c: Change, task: Task, result: dispute_tools.ReconsiderResult) -> None`
-- `def kept(task: Task | None) -> dict[str, str]`
-- `def authorised(task: Task | None) -> bool`
-- `def build_lines(task: Task) -> list[str]`
-- `def review_lines(c: Change, task: Task | None) -> list[str]`
-- `def _how(d: Dispute) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/evidence.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/evidence.py
 
 Evidence validity: when a recorded review, check or visual answer holds, and what a Change must show (P5, F3).
 
 ### Imports
 
 - `__future__`
-- `owlbear_delivery_next.models`
+- `owlbear_delivery_next.change_contracts.models`
 - `pathlib`
 - `typing`
 
@@ -6872,12 +6283,13 @@ Evidence validity: when a recorded review, check or visual answer holds, and wha
 - `def coverage(c: Change) -> list[str]`
 - `def cover(c: Change) -> None`
 - `def criteria(c: Change) -> dict[str, int]`
+- `def waived(c: Change, k: Criterion) -> str`
 - `def review_valid(c: Change, review: Review, paths: Mapping[str, str], changed: Iterable[str] | None = None) -> bool`
 - `def check_inputs(c: Change, check: PersonCheck, paths: Mapping[str, str]) -> Inputs`
 - `def visual_valid(c: Change, head: str | None, tree: str | None = None) -> bool`
 - `def next_check(c: Change, paths: Mapping[str, str]) -> PersonCheck | None`
 
-## serve/delivery-next/src/owlbear_delivery_next/failures.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/failures.py
 
 Failure identity: cause keys, error classes and the normalised signature budgets count (D3 §3.6).
 
@@ -6885,7 +6297,7 @@ Failure identity: cause keys, error classes and the normalised signature budgets
 
 - `__future__`
 - `hashlib`
-- `owlbear_delivery_next.models`
+- `owlbear_delivery_next.change_contracts.models`
 - `re`
 - `typing`
 
@@ -6897,130 +6309,7 @@ Failure identity: cause keys, error classes and the normalised signature budgets
 - `def kind_of(cause: str | None) -> str`
 - `def cause_key(kind: ErrorKind, step: StepKind, subject: str | Iterable[str] = '') -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/git_files.py
-
-Git facts of a local clone: one bounded command, the common git directory, tracked or not, local excludes.
-
-### Imports
-
-- `__future__`
-- `shutil`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `def probe_in(cwd: Path) -> Probe`
-- `def git_common_dir(cwd: Path) -> Path`
-- `def untracked(repo: Path, path: Path) -> bool`
-- `def exclude(repo: Path, path: Path) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/held.py
-
-TD-56: a session result TD-54 kept unprocessed, and the owner's "accept" of it.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.processes`
-- `owlbear_delivery_next.session_result`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.storage_io`
-- `pathlib`
-- `pydantic`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `class HeldRun(BaseModel)`
-- `class Held(BaseModel)`
-- `def _path(store: Store, slug: str) -> Path`
-- `def _dump(run: Run) -> HeldRun`
-- `def _load(data: HeldRun) -> Run`
-- `def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None`
-- `def _accepted(change: Change, question: str) -> bool`
-- `def head(path: Path) -> str | None`
-- `def _read(store: Store, slug: str) -> Held | None`
-- `def _matches(held: Held, change: Change) -> bool`
-- `def offered(store: Store, change: Change, question: Question) -> list[Option]`
-- `def _visual_holds(store: Store, change: Change, kept: VisualRound, where: Path) -> bool`
-- `def take(store: Store, lock: Lock, change: Change) -> Run | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/host.py
-
-Delivery host: one per clone; scheduler, runner launcher, termination scan and check environments (D4 §3.2).
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `datetime`
-- `fcntl`
-- `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.process_probe`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.status`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.storage_io`
-- `owlbear_delivery_next.store`
-- `pathlib`
-- `psutil`
-- `pydantic`
-- `secrets`
-- `socket`
-- `subprocess`
-- `sys`
-- `threading`
-- `time`
-- `typing`
-- `uvicorn`
-
-### Interfaces
-
-- `class HostRecord(Record)`
-- `class RunnerRecord(Record)`
-- `def running(store: Store) -> HostRecord | None`
-- `def stale(record: HostRecord | None) -> bool`
-- `def offline(c: Change, now: datetime) -> bool`
-- `def activity(store: Store, slug: str, host: HostRecord | None) -> Activity`
-- `def _scan(path: Path, since: datetime) -> Found`
-- `def _block(found: Found | None, now: datetime) -> Stop`
-- `def _unverified(c: Change) -> bool`
-- `def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool`
-- `def gone(kind: StepKind) -> loop.StepResult`
-- `class Host`
-  - `def __init__(self, store: Store, repo: Path, *, spawn: Callable[[str], RunnerRecord] | None = None, scan: Callable[[Path, datetime], Found] = _scan, group: Callable[[int], Found] = check.members, alive: Callable[[int, float | None], bool | None] = processes.alive, code: Callable[[], str] = codebase.identity, reach: Callable[[str], str | None] = lambda name: readiness.reach(name, timeout=PROBE_TIMEOUT)) -> None`
-  - `def say(self, text: str) -> None`
-  - `def _path(self, slug: str) -> Path`
-  - `def runner(self, slug: str) -> RunnerRecord | None`
-  - `def activity(self, slug: str) -> Activity`
-  - `def observe_pr(self, slug: str) -> Seen`
-  - `def tick(self, now: datetime | None = None) -> list[str]`
-  - `def interval(self) -> float`
-  - `def _probe(self, now: datetime) -> None`
-  - `def _woken(self, c: Change, now: datetime) -> Change`
-  - `def _unloadable(self, slug: str, text: str) -> None`
-  - `def _one(self, slug: str, now: datetime) -> bool`
-  - `def _pull(self, lock: Lock, c: Change, now: datetime) -> Change`
-  - `def _mark(self, c: Change, found: Found | None, now: datetime) -> None`
-  - `def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool`
-  - `def _survivors(self, c: Change, rec: RunnerRecord | None) -> Found | None`
-  - `def _env_action(self, c: Change) -> check.Action | None`
-  - `def _clear(self, c: Change, e: Environment) -> Found | None`
-  - `def _environment(self, lock: Lock, c: Change, now: datetime) -> Change`
-  - `def _stale(self) -> bool`
-  - `def _launch(self, slug: str) -> bool`
-  - `def _spawn(self, slug: str) -> RunnerRecord`
-  - `def run(self) -> None`
-- `def serve(repo: Path) -> int`
-
-## serve/delivery-next/src/owlbear_delivery_next/inbox.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/inbox.py
 
 Inbox items: the owner's and Delivery's inputs to one Change, one discriminated union.
 
@@ -7028,7 +6317,7 @@ Inbox items: the owner's and Delivery's inputs to one Change, one discriminated 
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next.models`
+- `owlbear_delivery_next.change_contracts.models`
 - `pydantic`
 - `typing`
 
@@ -7043,303 +6332,27 @@ Inbox items: the owner's and Delivery's inputs to one Change, one discriminated 
 - `class ConsentItem(_Item)`
 - `class IntentItem(_Item)`
 - `class PullItem(_Item)`
+- `class RestartItem(_Item)`
 
-## serve/delivery-next/src/owlbear_delivery_next/launches.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/merge_records.py
 
-New Change launches: the shaping chat opens on a background thread, one at a time per project (TD-83).
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `threading`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class Refused(Exception)`
-  - `def __init__(self, status: int, text: str) -> None`
-- `class Launch`
-- `class Launches`
-  - `def __init__(self, gap: float, clock: Callable[[], float]) -> None`
-  - `def start(self, work: Callable[[], dict[str, str]], command: str = '', done: Ended | None = None) -> str`
-  - `def _run(self, launch: str, work: Callable[[], dict[str, str]], done: Ended | None) -> None`
-  - `def state(self, launch: str) -> dict[str, Any] | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/leftovers.py
-
-Processes a VS Code step left working in its worktree: what the agent's shells started, never the editor's own.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `os`
-- `owlbear_delivery_next.process_probe`
-- `owlbear_delivery_next.processes`
-- `psutil`
-- `signal`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `def _exe(p: psutil.Process) -> str`
-- `def agent_started(pid: int) -> bool`
-- `def _since(pid: int, since: datetime) -> bool`
-- `def scan(root: Path, since: datetime) -> list[int]`
-- `def settle(root: Path, since: datetime, find: Callable[[Path, datetime], list[int]] = scan, wait: Callable[[float], None] = time.sleep) -> Termination`
-
-## serve/delivery-next/src/owlbear_delivery_next/lint.py
-
-The builder's lint (TD-87): fast static linters the repository configures, on the files a build changed.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `dataclasses`
-- `os`
-- `pathlib`
-- `shutil`
-- `signal`
-- `subprocess`
-- `time`
-- `tomllib`
-- `typing`
-
-### Interfaces
-
-- `class Linter`
-- `class Outcome`
-- `def _few(paths: Sequence[str]) -> str`
-- `def _ruff_config(folder: Path) -> bool`
-- `def _ruff(root: Path) -> tuple[str, ...] | None`
-- `def _python(root: Path, files: Sequence[str]) -> tuple[list[Linter], list[str]]`
-- `def _homes(root: Path, files: Sequence[str], configs: Sequence[str]) -> dict[PurePosixPath, list[str]]`
-- `def _binary(root: Path, home: PurePosixPath, name: str) -> Path | str`
-- `def _node(root: Path, files: Sequence[str]) -> tuple[list[Linter], list[str]]`
-- `def plan(root: Path, files: Sequence[str]) -> tuple[list[Linter], list[str]]`
-- `def _arg(path: PurePosixPath) -> str`
-- `def _killed(proc: subprocess.Popen[str]) -> str`
-- `def run(root: Path, linter: Linter, timeout: float = TIMEOUT) -> Outcome`
-- `def _shown(output: str) -> str`
-- `class Lint`
-  - `def __init__(self, log: Callable[..., None]) -> None`
-  - `def check(self, root: Path, changed: Sequence[str]) -> list[str]`
-  - `def _check(self, root: Path, changed: Sequence[str]) -> list[str]`
-  - `def _skip(self, linter: Linter, end: float) -> str`
-  - `def _error(self, linter: Linter, out: Outcome) -> list[str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/local_home.py
-
-OwlBear's one folder on this machine (TD-198): worktrees, snapshots, the data pointer and the design pack.
-
-### Imports
-
-- `__future__`
-- `pathlib`
-
-### Interfaces
-
-- `def root() -> Path`
-
-## serve/delivery-next/src/owlbear_delivery_next/loop.py
-
-Delivery-next step loop: choose the next step and apply exits and the inbox (D3 §3.3, §3.6).
+Merge-side records of a Change: check and lag episodes, the pull-back and Delivery's merge-queue claim.
 
 ### Imports
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.inbox`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `owlbear_delivery_next.visual_records`
 - `pydantic`
 - `typing`
 
 ### Interfaces
 
-- `class StepResult(Record)`
-- `def waiting_consent(c: Change) -> bool`
-- `def consent_moved(c: Change, offered: str | None, head: str, opened: Iterable[str]) -> bool`
-- `def open_question(c: Change) -> Question | None`
-- `def ordinary(q: Question) -> bool`
-- `def usage_gated(c: Change) -> bool`
-- `def owner_gated(c: Change) -> bool`
-- `def brief_ready(c: Change) -> bool`
-- `def brief_due(c: Change) -> bool`
-- `def brief_challenge(change: Change, verdict: StepResult) -> tuple[Change, StepResult]`
-- `def next_step(c: Change, now: datetime) -> Step | None`
-- `def schedule(change: Change, items: Iterable[InboxItem], now: datetime, pr_state: PrState | None = None, *, moved: bool = False, asking: bool = True) -> tuple[Change, Step | None]`
-- `def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change`
-- `def _intent(c: Change, item: IntentItem) -> None`
-- `def _visual_decision(c: Change, decision: str, item: AnswerItem) -> None`
-- `def _target(q: Question, option: str | None) -> str | None`
-- `def _answer(c: Change, item: AnswerItem, now: datetime) -> None`
-- `def _moved(c: Change, q: Question, item: AnswerItem, target: str, now: datetime) -> None`
-- `def _refused(q: Question, target: str | None, text: str) -> bool`
-- `def _entered(c: Change, q: Question, target: str) -> None`
-- `def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: bool) -> None`
-- `def answer_delivered(change: Change, question_id: str, now: datetime) -> Change`
-- `def apply(change: Change, result: StepResult, now: datetime) -> Change`
-- `def _done(c: Change, r: StepResult | None, now: datetime) -> None`
+- `class _Record(BaseModel)`
+- `class Pullback(_Record)`
+- `class QueueClaim(_Record)`
+- `class Episode(_Record)`
 
-## serve/delivery-next/src/owlbear_delivery_next/mask.py
-
-The one sanitiser of command and argument text Delivery shows or persists (now line, denials, status).
-
-### Imports
-
-- `__future__`
-- `re`
-
-### Interfaces
-
-- `def _header(m: re.Match[str]) -> str`
-- `def redact(text: str) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/mcp_server.py
-
-Chat tools: a client of the running host, with a read-only status fallback when it is down (D4 §3.1, §3.3).
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `datetime`
-- `json`
-- `mcp.server`
-- `mcp.types`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.store`
-- `pathlib`
-- `pydantic`
-- `typing`
-- `urllib.error`
-- `urllib.request`
-
-### Interfaces
-
-- `class Chat`
-  - `def __init__(self, repo: Path) -> None`
-  - `def call(self, method: str, path: str, body: object = None) -> tuple[int, Any]`
-  - `def save_brief(self, fields: dict[str, Any], path: str = '/briefs') -> dict[str, Any]`
-  - `def show_status(self, change: str = '') -> dict[str, Any]`
-  - `def brief(self, slug: str) -> dict[str, Any] | None`
-  - `def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]`
-- `def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any`
-- `def save_brief(*, title: Annotated[str, _d('title')] = '', outcome: Annotated[str, _d('outcome')] = '', criteria: Annotated[list[str] | None, _d('criteria')] = None, scope: Annotated[list[str] | None, _d('scope')] = None, non_goals: Annotated[list[str] | None, _d('non_goals')] = None, decisions: Annotated[list[brief_tools.DecisionDraft] | None, _d('decisions')] = None, person_checks: Annotated[list[brief_tools.PersonCheckDraft] | None, _d('person_checks')] = None, specified: Annotated[list[str] | None, _d('specified')] = None, change: Annotated[str, _d('change')] = '') -> dict[str, Any]`
-- `def save_visual_check(change: Annotated[str, _d('change', brief_tools.VisualDraft)], ui: Annotated[bool, _d('ui', brief_tools.VisualDraft)], states: Annotated[list[brief_tools.VisualStateDraft] | None, _d('states', brief_tools.VisualDraft)] = None, steps: Annotated[list[brief_tools.VisualStepDraft] | None, _d('steps', brief_tools.VisualDraft)] = None) -> dict[str, Any]`
-- `def show_status(change: Annotated[str, Field(description='Handle of one Change; empty for all', examples=['c1'])] = '') -> dict[str, Any]`
-- `def answer_question(question: Annotated[str, Field(description='Question id from show_status', examples=['c1.q2'])], option: Annotated[str, Field(description='Chosen option id, if any', examples=['o1'])] = '', text: Annotated[str, Field(description="The owner's answer in words", max_length=2000)] = '') -> dict[str, Any]`
-- `def main(argv: list[str] | None = None) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/memory_routes.py
-
-The Memory page's API (TD-85): the project's agent memory in its shared-repository folder (TD-72).
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `owlbear_delivery_next`
-- `owlbear_memory`
-- `pydantic`
-- `re`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class Shown(BaseModel)`
-- `class EditBody(Shown)`
-- `def _shown(entry: MemoryEntry) -> dict[str, Any]`
-- `def _files(folder: Path) -> dict[Path, bytes]`
-- `def _act(store: Store, entry_id: str, what: str, do: Callable[[MemoryEngine], MemoryEntry]) -> dict[str, Any]`
-- `def router(store: Store) -> APIRouter`
-
-## serve/delivery-next/src/owlbear_delivery_next/migrations.py
-
-Forward migrations of stored records, keyed by the format they upgrade from.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next.config`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `def roles_moved(data: dict[str, Any]) -> dict[str, Any]`
-- `def with_roles(layer: Layer, found: dict[Role, RoleModel]) -> Layer`
-- `def _challenged(brief: object) -> None`
-- `def brief_challenged(data: dict[str, Any]) -> dict[str, Any]`
-- `def visual_decided(data: dict[str, Any]) -> dict[str, Any]`
-- `def seed_dropped(data: dict[str, Any]) -> dict[str, Any]`
-- `def rounds_kept(data: dict[str, Any]) -> dict[str, Any]`
-
-## serve/delivery-next/src/owlbear_delivery_next/missing.py
-
-The missing-tool report's five cases (TD-36), in order.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.catalogue`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `re`
-- `typing`
-
-### Interfaces
-
-- `def names(tool: str) -> set[str]`
-- `def absent(tool: str, error: str) -> bool`
-- `def slug(tool: str) -> str`
-- `def _without(enclosing: StepKind, tool: str) -> list[Option]`
-- `def _ask(enclosing: StepKind, text: str, cause: str, options: list[Option]) -> StepResult`
-- `def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> StepResult`
-- `def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepResult`
-
-## serve/delivery-next/src/owlbear_delivery_next/model_choices.py
-
-The models this machine's Copilot runtime offers, with efforts, context tiers and token rates, for the settings page.
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `contextlib`
-- `copilot`
-- `copilot.generated.rpc`
-- `owlbear_delivery_next.copilot_cli`
-- `owlbear_delivery_next.models`
-- `threading`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `class Offered`
-  - `def __init__(self) -> None`
-  - `def __call__(self) -> dict[str, Any]`
-- `def shown(m: Model) -> dict[str, Any]`
-- `def _rates(p: ModelBillingTokenPrices | ModelBillingTokenPricesLongContext | None) -> dict[str, float | None] | None`
-- `def _value(state: object) -> object`
-- `def _read() -> list[Model]`
-- `async def _listed() -> list[Model]`
-
-## serve/delivery-next/src/owlbear_delivery_next/models.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/models.py
 
 Delivery-next state records for one Change (D3 §3.1 to §3.3).
 
@@ -7348,10 +6361,12 @@ Delivery-next state records for one Change (D3 §3.1 to §3.3).
 - `__future__`
 - `datetime`
 - `enum`
-- `owlbear_delivery_next.amendment_records`
-- `owlbear_delivery_next.round_records`
-- `owlbear_delivery_next.spend`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts.amendment_records`
+- `owlbear_delivery_next.change_contracts.curation_records`
+- `owlbear_delivery_next.change_contracts.merge_records`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_contracts.spend`
+- `owlbear_delivery_next.change_contracts.visual_records`
 - `pydantic`
 - `typing`
 
@@ -7388,8 +6403,6 @@ Delivery-next state records for one Change (D3 §3.1 to §3.3).
 - `class Budget(Record)`
 - `class Budgets(Record)`
 - `class MergeConsent(Record)`
-- `class Pullback(Record)`
-- `class Episode(Record)`
 - `class Stop(Record)`
 - `class Environment(Record)`
 - `class Recipe(Record)`
@@ -7397,308 +6410,7 @@ Delivery-next state records for one Change (D3 §3.1 to §3.3).
 - `class Overlap(Record)`
 - `class Change(Record)`
 
-## serve/delivery-next/src/owlbear_delivery_next/moves.py
-
-Step moves: where a Change goes next, the questions it asks and the tasks it opens (D3 §3.3).
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.evidence`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.round_records`
-- `typing`
-
-### Interfaces
-
-- `def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = None) -> None`
-- `def enter(c: Change, kind: StepKind, task: str | None = None) -> None`
-- `def subject_of(c: Change, task: Task) -> str`
-- `def open_task(c: Change) -> Task | None`
-- `def ask(c: Change, question: Question, now: datetime) -> None`
-- `def resolved(c: Change, task_id: str | None) -> set[str]`
-- `def fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/overlap.py
-
-Paths shared between Changes: recorded as information when planning; asked about only on a collision (D7).
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `fnmatch`
-- `itertools`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.steps.worktree`
-- `owlbear_delivery_next.store`
-- `pathlib`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `class Neighbour(NamedTuple)`
-- `def neighbours(store: Store, slug: str, now: datetime) -> list[Neighbour]`
-- `def generated(repo: Path) -> list[str]`
-- `def incidental(path: str, patterns: Iterable[str] = ()) -> bool`
-- `def _deeper(a: str, b: str) -> str`
-- `def found(plan: Plan, others: Mapping[str, Iterable[str]], patterns: Iterable[str] = ()) -> list[Overlap]`
-- `def record(c: Change, result: StepResult, others: Mapping[str, Iterable[str]], repo: Path) -> None`
-- `def _quiet(path: Path, *args: str) -> str | None`
-- `def _sides(path: Path, since: str | None) -> tuple[str, str] | None`
-- `def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]`
-- `def collision(c: Change, paths: Iterable[str], near: Iterable[Neighbour], said: str = '', patterns: Iterable[str] = ()) -> StepResult | None`
-- `def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, str], result: StepResult) -> StepResult`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_candidate.py
-
-A design pack update's candidate and its challenge (TD-101): detector pins and skills together, judged whole.
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `hashlib`
-- `io`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.permissions`
-- `owlbear_delivery_next.session_result`
-- `pathlib`
-- `re`
-- `subprocess`
-- `tarfile`
-- `tempfile`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class Candidate`
-- `def sync(clone: Path, repository: str) -> None`
-- `def _run(command: list[str]) -> bytes`
-- `def _show(clone: Path, tag: str, path: str) -> bytes`
-- `def prepare(clone: Path, package: Path, tag: str, download: Callable[[str], bytes], skills: Path) -> Candidate`
-- `def _published(download: Callable[[str], bytes], pins: dict[str, Any], platform: str) -> str`
-- `def _moved(text: str, old: dict[str, str], new: dict[str, str]) -> str`
-- `def _relaid(package: Path, old: dict[str, Any], new: dict[str, Any]) -> str`
-- `def message(c: Candidate, diff: str, golden: str, replayed: str, package: Path, *, updated: str = '', rechecks: str = '') -> str`
-- `def challenge(store: Store, c: Candidate, clone: Path, text: str, run: Callable[[Store, sdk_adapter.Session], Run], *, rechecks: tuple[str, ...] = ()) -> Run`
-- `def upstream_skill(clone: Path, tag: str, into: Path) -> None`
-- `def verdict(done: Run) -> tuple[bool, str]`
-- `def said_replay(r: Replay) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_git.py
-
-Activating a design pack update in the package's own checkout (TD-101): one commit, pushed on its branch alone.
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `os`
-- `owlbear_delivery_next`
-- `pathlib`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `def git(cwd: Path, args: list[str]) -> str`
-- `class Checkout`
-- `def checkout(package: Path, run: Git = git) -> Checkout`
-- `def _quiet(run: Git, cwd: Path, args: list[str]) -> str`
-- `def activate(co: Checkout, files: dict[Path, str], message: str, run: Git = git) -> str`
-- `def _rollback(co: Checkout, kept: dict[Path, bytes], before: str, made: str, run: Git) -> str`
-- `def push(co: Checkout, commit: str, run: Git = git) -> str`
-- `def _undo(co: Checkout, commit: str, run: Git) -> bool`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_job.py
-
-The Settings page's design pack update (TD-101): one host job at a time, its stages, and its last run on disk.
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `datetime`
-- `importlib.resources`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.storage_io`
-- `pathlib`
-- `shutil`
-- `tempfile`
-- `threading`
-- `typing`
-
-### Interfaces
-
-- `class Busy(Exception)`
-- `class Stopped(Exception)`
-  - `def __init__(self, reason: str, *, current: bool = False) -> None`
-- `def _upstream() -> Path`
-- `class Live`
-- `def _now() -> str`
-- `def _blank() -> dict[str, Any]`
-- `class Job`
-  - `def __init__(self, store: Store, live: Live | None = None) -> None`
-  - `def path(self) -> Path`
-  - `def _read(self) -> dict[str, Any]`
-  - `def _save(self) -> None`
-  - `def read(self) -> dict[str, Any]`
-  - `def start(self) -> dict[str, Any]`
-  - `def log(self, line: str) -> None`
-  - `def _stage(self, name: str, result: str, detail: str = '') -> None`
-  - `def _end(self, state: str, reason: str) -> None`
-  - `def _run(self) -> None`
-  - `def _do(self, name: str, work: Callable[[], T], said: Callable[[T], str] = str) -> T`
-  - `def _stages(self) -> None`
-  - `def _rounds(self, c: pack_candidate.Candidate, diff: str, golden: str, package: Path) -> str`
-  - `def _replaced(self) -> str`
-  - `def _notice(self) -> str`
-- `def _pack(co: pack_git.Checkout, c: pack_candidate.Candidate) -> str`
-- `def _golden(wrong: dict[str, dict[str, list[str]]]) -> str`
-- `def _replayed(r: Replay) -> str`
-- `def _passed(out: tuple[bool, str]) -> str`
-- `def _skills(package: Path, c: pack_candidate.Candidate, edited: list[str]) -> dict[Path, str]`
-- `def last(store: Store) -> dict[str, Any] | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_replay.py
-
-Calibration replay before a design pack update (design skill research §3.5, step 4 of ``pack_update``).
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `dataclasses`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.permissions`
-- `owlbear_delivery_next.steps`
-- `pathlib`
-- `re`
-- `tempfile`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class ReplayError(RuntimeError)`
-- `def replay(store: Store, candidate: Candidate | None = None, run: Callable[[sdk_adapter.Session], Run] | None = None) -> calibration.Replay`
-- `def _pack(candidate: Candidate | None) -> str`
-- `def _ran(run: Callable[[sdk_adapter.Session], Run], cfgs: list[sdk_adapter.Session]) -> list[Run]`
-- `def _same(kept: VisualRound, role: RoleModel) -> bool`
-- `def _inside(path: Path, root: Path) -> bool`
-- `def _images(kept: VisualRound, kept_files: dict[str, Path]) -> list[judges.Image] | None`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_routes.py
-
-The design pack's Settings section and the Maintenance overview (TD-101, TD-113): reads, and the one update start.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `os`
-- `owlbear_delivery_next`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `def pack(job: pack_job.Job) -> dict[str, Any]`
-- `def memory_last(store: Store) -> dict[str, Any] | None`
-- `def overview(store: Store) -> list[dict[str, Any]]`
-- `def router(store: Store, job: pack_job.Job) -> APIRouter`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_update.py
-
-Updating the design pack (design skill research §3.5, update procedure; TD-76): the tooling before the first update.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `datetime`
-- `http.client`
-- `importlib.resources`
-- `json`
-- `owlbear_delivery_next`
-- `pathlib`
-- `re`
-- `subprocess`
-- `tempfile`
-- `typing`
-
-### Interfaces
-
-- `def _version(tag: str) -> tuple[int, ...]`
-- `def behind(fetch: Callable[[str], bytes] | None = None) -> int | None`
-- `def newer(fetch: Callable[[str], bytes] | None = None) -> list[str] | None`
-- `def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]`
-- `def said(n: dict[str, Any]) -> str`
-- `def _git(clone: Path, *args: str) -> str`
-- `def rules(clone: Path, tag: str) -> dict[str, dict[str, str]]`
-- `def diff(clone: Path, to: str) -> str`
-- `def golden(installed: Installed, *, pages: bool = True) -> dict[str, dict[str, list[str]]]`
-- `def _by_source(installed: Installed, root: Path, names: list[str]) -> dict[str, set[str]]`
-- `def _in_pages(installed: Installed, root: Path, names: list[str]) -> dict[str, set[str]]`
-
-## serve/delivery-next/src/owlbear_delivery_next/pack_updater.py
-
-The design pack's writing updater (TD-125, TD-177): it edits the candidate's skills, then the challenger's findings.
-
-### Imports
-
-- `__future__`
-- `hashlib`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.permissions`
-- `pydantic`
-- `subprocess`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class UpdateResult(tools.Args)`
-- `def new_id() -> str`
-- `def _files(at: Path) -> dict[str, str]`
-- `def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path) -> dict[str, str]`
-- `def skill(c: pack_candidate.Candidate, name: str) -> Path`
-- `def taken(at: Path, start: dict[str, str], c: pack_candidate.Candidate) -> list[str]`
-- `def prompt(c: pack_candidate.Candidate, diff: str, findings: dict[str, str], earlier: str = '') -> str`
-- `def repair(findings: dict[str, str]) -> str`
-- `def config(store: Store, at: Path, sid: str, message: str, *, resume: bool, fresh: str, replaced: Callable[[], str | None]) -> sdk_adapter.Session`
-- `def ended(done: Run) -> UpdateResult`
-- `def rechecks(findings: dict[str, str], rejected: dict[str, str]) -> str`
-- `def judged(done: Run, findings: dict[str, str], rejected: dict[str, str]) -> dict[str, str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/pages.py
-
-The host's pages, their tab bar and the base stylesheet they share (TD-85, TD-113): Changes to Maintenance.
-
-### Imports
-
-- `__future__`
-- `importlib.resources`
-
-### Interfaces
-
-- `def nav(current: int) -> str`
-- `def pages() -> dict[str, str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/permissions.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/permissions.py
 
 Permission decisions for one step's worker session and their reasons (D4 §3.6, TD-82, TD-86).
 
@@ -7706,7 +6418,8 @@ Permission decisions for one step's worker session and their reasons (D4 §3.6, 
 
 - `__future__`
 - `dataclasses`
-- `owlbear_delivery_next`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.local_system`
 - `pathlib`
 - `re`
 - `shlex`
@@ -7733,33 +6446,11 @@ Permission decisions for one step's worker session and their reasons (D4 §3.6, 
 - `def _check(policy: Policy, text: str, depth: int = 0) -> str | None`
 - `def _nested(policy: Policy, text: str, commands: Sequence[Sequence[str]], depth: int) -> str | None`
 - `def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset()) -> str | None`
+- `def _file(policy: Policy, req: Request) -> str | None`
+- `def _outside(policy: Policy, req: Request) -> str | None`
 - `def view(r: Any) -> Request`
 
-## serve/delivery-next/src/owlbear_delivery_next/preload.py
-
-What each worker role starts with: its tools (TD-69), the project's memory (TD-70, TD-72) and preloaded skills.
-
-### Imports
-
-- `__future__`
-- `importlib.resources`
-- `importlib.util`
-- `pathlib`
-- `sys`
-- `typing`
-
-### Interfaces
-
-- `def agent_file(role: str) -> tuple[dict[str, str], str]`
-- `def tools(role: str) -> list[str]`
-- `def memory(store: Path | None) -> dict[str, Any] | None`
-- `def directory() -> Path`
-- `def text(name: str, folder: Path | None = None) -> str`
-- `def _named(name: str, folder: Path | None = None) -> bool`
-- `def required(role: str, *, ui: bool = False) -> tuple[str, ...]`
-- `def missing(role: str, *, ui: bool = False, folder: Path | None = None) -> list[str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/preparation.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/preparation.py
 
 TD-96 test preparation: the options a project declares, the owner's data permissions, and their validation.
 
@@ -7768,8 +6459,8 @@ TD-96 test preparation: the options a project declares, the owner's data permiss
 - `__future__`
 - `dataclasses`
 - `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
 - `pathlib`
 - `posixpath`
 - `pydantic`
@@ -7796,136 +6487,7 @@ TD-96 test preparation: the options a project declares, the owner's data permiss
 - `def setup(path: str, globs: Sequence[str]) -> bool`
 - `def check(recipe: tools.CheckRecipe, tree: tools.Worktree, root: Path, ctx: Preparing) -> list[str]`
 
-## serve/delivery-next/src/owlbear_delivery_next/process_probe.py
-
-Same-user processes still working in a step's worktree; a scan never proves a worker has ended.
-
-### Imports
-
-- `__future__`
-- `os`
-- `pathlib`
-- `sys`
-- `typing`
-
-### Interfaces
-
-- `class ProcessObservationError(RuntimeError)`
-- `class ProcessVanishedError(ProcessObservationError)`
-- `class WorktreeProcessScanError(RuntimeError)`
-- `class ProcessView(Protocol)`
-  - `def pid(self) -> int`
-  - `def name(self) -> str`
-  - `def create_time(self) -> float | None`
-  - `def cwd(self) -> Path | None`
-  - `def open_files(self) -> tuple[Path, ...]`
-  - `def executable(self) -> Path | None`
-  - `def has_live_children(self) -> bool`
-  - `def has_terminal(self) -> bool`
-  - `def cmdline(self) -> tuple[str, ...]`
-- `def _contains(path: Path, roots: tuple[Path, ...]) -> bool`
-- `def _is_interactive_invocation(argv: tuple[str, ...]) -> bool`
-- `def _is_idle_interactive_shell(process: ProcessView) -> bool`
-- `def _worktree_cwd_blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool`
-- `def _is_sealed_system_binary(process: ProcessView) -> bool`
-- `def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool`
-- `def _observation_error(exc: BaseException) -> ProcessObservationError`
-- `class _PsutilProcessView`
-  - `def __init__(self, process: psutil.Process, name: str, create_time: float | None, *, owner_known: bool = True) -> None`
-  - `def pid(self) -> int`
-  - `def name(self) -> str`
-  - `def create_time(self) -> float | None`
-  - `def _read(self, read: Callable[[], T], *, owner: bool = True) -> T`
-  - `def cwd(self) -> Path | None`
-  - `def open_files(self) -> tuple[Path, ...]`
-  - `def executable(self) -> Path | None`
-  - `def has_terminal(self) -> bool`
-  - `def cmdline(self) -> tuple[str, ...]`
-  - `def has_live_children(self) -> bool`
-- `def _still_own_descendant(pid: int, create_time: float | None, own_pid: int) -> bool | None`
-- `def psutil_user_processes() -> Iterator[ProcessView]`
-- `def _may_be_worker_leftover(process: ProcessView, started_after: datetime | None) -> bool`
-- `class ProcessTableWorktreeProbe`
-  - `def __init__(self, source: ProcessSource = psutil_user_processes) -> None`
-  - `def active_processes(self, roots: tuple[Path, ...], *, started_after: datetime | None) -> tuple[tuple[int, str], ...]`
-
-## serve/delivery-next/src/owlbear_delivery_next/processes.py
-
-Recorded step processes: observing them by PID and start time, signalling them, and the termination verdict (F4).
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `dataclasses`
-- `os`
-- `psutil`
-- `typing`
-
-### Interfaces
-
-- `class Termination`
-- `def verdict(recorded: Pids, alive: Observe, problems: Sequence[str] = ()) -> Termination`
-- `def alive(pid: int, created: float | None) -> bool | None`
-- `def started(pid: int) -> float`
-- `def _pgid(pid: int) -> int`
-- `def targets(recorded: Pids, seen: Observe, group: Callable[[int], int], own: int) -> tuple[list[int], list[int]]`
-- `def kill(recorded: Pids, sig: signal.Signals) -> list[int]`
-
-## serve/delivery-next/src/owlbear_delivery_next/profile.py
-
-Detect, confirm and re-read the project profile: GitHub facts, CI, rules and merge settings (D4 §3.2, DR1).
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `fnmatch`
-- `hashlib`
-- `json`
-- `os`
-- `owlbear_delivery_next.git.git_executable`
-- `owlbear_delivery_next.github.gh`
-- `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.profile_record`
-- `pathlib`
-- `subprocess`
-- `typing`
-- `urllib.parse`
-- `yaml`
-
-### Interfaces
-
-- `def _node(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]`
-- `def _python(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]`
-- `def package_entries(repo: Path) -> dict[str, ProfileEntry]`
-- `def _entry(state: str, value: str, evidence: str) -> ProfileEntry`
-- `class Workflow`
-- `def _events(on: object) -> frozenset[str] | None`
-- `def _jobs(jobs: object) -> tuple[str, ...] | None`
-- `def workflow(text: str) -> Workflow`
-- `def workflows(repo: Path) -> dict[str, Workflow]`
-- `def workflow_texts(repo: Path) -> dict[str, str]`
-- `def _git(repo: Path, *args: str) -> str | None`
-- `def workflow_texts_at(repo: Path, rev: str) -> dict[str, str] | None`
-- `def flows_digest(texts: dict[str, str]) -> str`
-- `def digest_of(entry: ProfileEntry | None) -> str`
-- `def ci_entries(flows: dict[str, Workflow], digest: str = '') -> dict[str, ProfileEntry]`
-- `def pre_push_hook(repo: Path) -> tuple[bool, str]`
-- `def _hook(repo: Path) -> ProfileEntry`
-- `def rule_entries(rules: Rules) -> dict[str, ProfileEntry]`
-- `def _ci(repo: Path) -> dict[str, ProfileEntry]`
-- `def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile`
-- `def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile`
-- `def reread(profile: Profile, gh: Provider, branch: str) -> tuple[list[str], Rules]`
-- `def value(profile: Profile, key: str, default: str = '') -> str`
-- `def notes(profile: Profile) -> list[str]`
-- `def names(profile: Profile, key: str) -> tuple[str, ...]`
-- `def listed(entry: ProfileEntry | None) -> tuple[str, ...]`
-- `def known(profile: Profile, key: str) -> bool`
-- `def provider(profile: Profile, repo: Path) -> GhProvider`
-
-## serve/delivery-next/src/owlbear_delivery_next/profile_record.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/profile_record.py
 
 The confirmed project profile and the per-role model settings it carries (DR1, TD-27, TD-32).
 
@@ -7933,7 +6495,7 @@ The confirmed project profile and the per-role model settings it carries (DR1, T
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next.models`
+- `owlbear_delivery_next.change_contracts.models`
 - `pydantic`
 - `typing`
 
@@ -7946,227 +6508,7 @@ The confirmed project profile and the per-role model settings it carries (DR1, T
 - `class Profile(Record)`
 - `def in_window(profile: Profile | None) -> bool`
 
-## serve/delivery-next/src/owlbear_delivery_next/profile_share.py
-
-The confirmed project profile: kept in the project's shared folder, re-checked once in each clone (TD-147).
-
-### Imports
-
-- `__future__`
-- `json`
-- `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.data_repo`
-- `owlbear_delivery_next.detector`
-- `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.storage_io`
-- `typing`
-
-### Interfaces
-
-- `def path(store: Store) -> Path`
-- `def write(store: Store, text: str) -> str`
-- `def adopt(store: Store) -> None`
-- `def checked(store: Store, repo: Path) -> Profile | None`
-- `def _replaced(store: Store, shared: DataRepo, old: Profile, new: Profile) -> bool`
-- `def move_roles(store: Store) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/progress.py
-
-Where a Change stands: its stages in order, the current task and sub-step, and the round of its loop (TD-97).
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `owlbear_delivery_next.budgets`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `typing`
-
-### Interfaces
-
-- `class Stage`
-- `class Progress`
-- `def _kind(c: Change) -> StepKind`
-- `def _current(c: Change) -> str`
-- `def _rounds(c: Change) -> dict[str, int]`
-- `def _task(c: Change) -> Task | None`
-- `def _root(c: Change, task: Task | None) -> Task | None`
-- `def _position(c: Change) -> tuple[int | None, int | None]`
-- `def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]`
-- `def _state(at: int, i: int, *, skipped: bool, finished: bool) -> State`
-- `def progress(c: Change) -> Progress`
-
-## serve/delivery-next/src/owlbear_delivery_next/prompts.py
-
-Bounded context for agent steps; brief and answer text enter as quoted data (D4 §3.3, §3.6).
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.preparation`
-- `owlbear_delivery_next.steps`
-- `shlex`
-- `typing`
-
-### Interfaces
-
-- `def reminder(role: str, *, judging: bool = False) -> str`
-- `def _cut(text: str, limit: int = LIMIT) -> str`
-- `def _quote(text: str, limit: int = LIMIT) -> str`
-- `def _one(text: str, limit: int = 400) -> str`
-- `def answer_text(question: Question) -> str`
-- `def _brief(change: Change, *, challenged: bool = False) -> list[str]`
-- `def brief(change: Change) -> list[str]`
-- `def page_errors(errors: tuple[Sequence[PageError], Sequence[PageError]]) -> list[str]`
-- `def detector(scans: Sequence[DetectorScan], limit: int = 60) -> list[str]`
-- `def _prepare(worktree: Path, installs: Sequence[tuple[str, str]]) -> list[str]`
-- `def build(change: Change, task: Task, worktree: Path, installs: Sequence[tuple[str, str]]) -> str`
-- `def _fixes(change: Change, *, challenged: bool = False) -> list[str]`
-- `def review(change: Change, task: Task | None, worktree: Path, tree: Worktree) -> str`
-- `def _options(ctx: Preparing) -> list[str]`
-- `def check(change: Change, person: PersonCheck, worktree: Path, installs: Sequence[tuple[str, str]], ctx: Preparing | None = None) -> str`
-- `def _visual_check(change: Change) -> PersonCheck`
-- `def visual(change: Change, shots: Sequence[tuple[str, int, str]], errors: tuple[Sequence[PageError], Sequence[PageError]] = ((), ()), scans: Sequence[DetectorScan] = ()) -> str`
-- `def _plan_lines(plan: Plan, limit: int = PLAN_LIMIT) -> list[str]`
-- `def _flat(text: str) -> str`
-- `def _packages(profile: Profile) -> list[str]`
-- `def _others(others: Mapping[str, Sequence[str]]) -> list[str]`
-- `def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str`
-- `def plan_challenge(change: Change, candidate: Plan, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str`
-- `def brief_challenge(change: Change, worktree: Path) -> str`
-- `def answer(question: Question) -> str`
-- `class Parts(NamedTuple)`
-- `def session(change: Change, profile: Profile, path: Path, others: Mapping[str, Sequence[str]], preparing: Preparing | None = None) -> Parts`
-
-## serve/delivery-next/src/owlbear_delivery_next/readiness.py
-
-Readiness: the facts a clone needs before Delivery can run and publish, each ok or with one concrete fix (DR2).
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.copilot_cli`
-- `owlbear_delivery_next.git_files`
-- `owlbear_delivery_next.profile_record`
-- `pathlib`
-- `ssl`
-- `truststore`
-- `typing`
-- `urllib.error`
-- `urllib.request`
-
-### Interfaces
-
-- `class Check`
-- `def reach(host: str, timeout: float = 10) -> str | None`
-- `def _network(host: str, error: str | None) -> Check`
-- `def _sign_in_failure(host: str, text: str) -> Check`
-- `def _github(host: str, probe: Probe) -> list[Check]`
-- `def _ssh(key: str, probe: Probe) -> Check`
-- `def _signing(probe: Probe) -> Check`
-- `def publishing(host: str, probe: Probe, network: str | None) -> list[Check]`
-- `def readiness(host: str, probe: Probe, network: str | None, copilot: str | None) -> list[Check]`
-- `def ready(store: Store, repo: Path) -> list[Check]`
-- `def check(repo: Path, prof: Profile | None) -> list[Check]`
-- `def shaper_path(home: Path) -> Path`
-
-## serve/delivery-next/src/owlbear_delivery_next/repairs.py
-
-Repair chances of the findings loop (TD-123, TD-175): which session repairs, and what a fresh one is told.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `typing`
-
-### Interfaces
-
-- `def _producer(c: Change, fixes: str | None) -> Task | None`
-- `def lineage(c: Change, fixes: str | None, origin: str) -> dict[str, str | None]`
-- `def session(change: Change, task: Task | None) -> str`
-- `def bind(change: Change, task: Task | None, session: str, payload: object, result: StepResult) -> None`
-- `def fallback(task: Task | None) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/results.py
-
-One step's result tools, shared by every runtime: validate each call and accept the first valid ending.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next`
-- `subprocess`
-- `threading`
-- `typing`
-
-### Interfaces
-
-- `class Gate`
-  - `def __init__(self, cfg: Session, run: Run, log: Callable[..., None], ended: Callable[[], None]) -> None`
-  - `def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = '') -> bool`
-  - `def _finish(self, ending: Ending, payload: tools.Args | None, detail: str) -> None`
-  - `def revoke(self, detail: str) -> None`
-  - `def wrong_model(self, detail: str) -> None`
-  - `def specs(self) -> tuple[tools.Spec, ...]`
-  - `def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]`
-  - `def _help(self, spec: tools.Spec, helper: Callable[[tools.Args], str], arguments: Any) -> tuple[str, bool]`
-  - `def _checked(self, spec: tools.Spec, arguments: Any) -> Checked | None`
-  - `def _check(self, spec: tools.Spec, arguments: Any) -> Checked`
-  - `def _late(self, spec: tools.Spec) -> tuple[str, bool]`
-  - `def _settle(self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None) -> tuple[str, bool]`
-  - `def _order(self, spec: tools.Spec) -> list[str]`
-  - `def _check_result(self, args: tools.Args) -> tuple[list[str], tools.Worktree | None]`
-
-## serve/delivery-next/src/owlbear_delivery_next/roles.py
-
-Model and reasoning effort per session role (TD-27): the role of each session, its defaults, the settings table.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `def chosen(settings: Settings, session: str) -> RoleModel`
-- `def parse(text: str) -> tuple[Role, RoleModel]`
-- `def table(settings: Settings) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/round_flow.py
-
-After a looped repair build (TD-208, TD-218): the next round, a rejections-only check, the owner or the end.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `owlbear_delivery_next.round_records`
-- `typing`
-
-### Interfaces
-
-- `def built(c: Change, now: datetime) -> None`
-- `def passed(c: Change) -> None`
-- `def end(c: Change, lp: RoundLoop, task: Task) -> None`
-- `def question(lp: RoundLoop, task: Task) -> Question`
-- `def _said(f: RoundFinding) -> str`
-- `def decided(c: Change, q: Question, target: str) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/round_records.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/round_records.py
 
 Challenge rounds (TD-208, TD-209): a loop's findings with stable IDs, its rounds and the policy it pinned.
 
@@ -8184,334 +6526,16 @@ Challenge rounds (TD-208, TD-209): a loop's findings with stable IDs, its rounds
   - `def _ordered(self) -> Self`
 - `class RoundFinding(_Record)`
   - `def line(self) -> str`
+- `class Completion(_Record)`
 - `class RoundLoop(_Record)`
   - `def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]`
+  - `def many(self) -> bool`
+  - `def ending(self) -> Ended`
+  - `def leave(self, repair: str) -> None`
+  - `def count(self, new: int, *, recheck: bool) -> None`
 - `def parse(text: str) -> tuple[str, str] | None`
 
-## serve/delivery-next/src/owlbear_delivery_next/rounds.py
-
-Challenge loops (TD-208): a subject's loop, with the policy it pins from the settings when it starts.
-
-### Imports
-
-- `__future__`
-- `owlbear_delivery_next.round_records`
-- `typing`
-
-### Interfaces
-
-- `def policy(settings: Settings, subject: str, role: Role = 'builder') -> RoundPolicy`
-- `def loop(c: Change, subject: str, settings: Settings, role: Role = 'builder') -> RoundLoop`
-
-## serve/delivery-next/src/owlbear_delivery_next/runner.py
-
-Process entry for one Change and one step: ``python -m owlbear_delivery_next.runner <change> [--repo PATH]``.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `dataclasses`
-- `datetime`
-- `functools`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.cli`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.git_files`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.sessions`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.store`
-- `pathlib`
-- `sys`
-- `typing`
-
-### Interfaces
-
-- `def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]`
-- `def _previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]`
-- `def _others(store: Store, slug: str) -> dict[str, list[str]]`
-- `def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None`
-- `def _kept(store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]) -> session_result.Run`
-- `def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]`
-- `def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None`
-- `def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None`
-- `def _challenge(store: Store, lock: Lock, change: Change, made: Callable[[Path], sdk_adapter.Session], planned: Result) -> Result`
-- `def _brief_challenge(store: Store, lock: Lock, change: Change, repo: Path) -> None`
-- `def _ready(prof: Profile, path: Path, now: datetime) -> Result | None`
-- `def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None`
-- `def _reused(store: Store, lock: Lock, change: Change) -> bool`
-- `def main(argv: list[str] | None = None) -> int`
-- `def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None`
-- `def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None`
-- `def _unshelved(exc: worktree.ShelveError) -> Result`
-
-## serve/delivery-next/src/owlbear_delivery_next/sdk_adapter.py
-
-One bounded worker session on the installed Copilot CLI; it ends at a result-tool call or deadline (D4 §3.2, P4).
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `contextlib`
-- `copilot`
-- `copilot.rpc`
-- `copilot.tools`
-- `dataclasses`
-- `datetime`
-- `functools`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.copilot_cli`
-- `owlbear_delivery_next.mask`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.permissions`
-- `owlbear_delivery_next.processes`
-- `owlbear_delivery_next.results`
-- `owlbear_delivery_next.sdk_teardown`
-- `owlbear_delivery_next.sdk_usage`
-- `owlbear_delivery_next.session_result`
-- `pathlib`
-- `psutil`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `def agent(kind: StepKind, *, ui: bool = False, role: str = '', judging: bool = False) -> dict[str, Any]`
-- `def role_of(cfg: Session) -> str`
-- `class Journal`
-- `def summary(tool: str, arguments: Any) -> str`
-- `class Session`
-- `def sent(events: Iterable[Any], message: str) -> bool`
-- `class _Step`
-  - `def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None`
-  - `def done(self) -> bool`
-  - `def _wake(self) -> None`
-  - `def log(self, **event: Any) -> None`
-  - `def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = '') -> None`
-  - `def on_event(self, ev: Any) -> None`
-  - `def subagent_seen(self, kind: str, data: Any) -> None`
-  - `def call_seen(self, data: Any) -> None`
-  - `def skill_seen(self, data: Any) -> None`
-  - `def preload_checked(self) -> None`
-  - `def model_seen(self, model: str | None, parent: str | None) -> None`
-  - `def now(self, tool: str, arguments: Any) -> None`
-  - `def permission(self, request: Any, _invocation: Any) -> Any`
-  - `def _handle(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult`
-  - `async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult`
-  - `async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult`
-  - `def tools(self) -> list[Tool]`
-  - `def record(self, *pids: int | None, keep: bool = False) -> None`
-  - `def runtime(self, client: CopilotClient) -> None`
-  - `def record_tree(self) -> None`
-  - `async def snapshot(self, session: CopilotSession) -> None`
-  - `def options(self) -> dict[str, Any]`
-  - `def replace(self) -> str | None`
-  - `async def wait(self, session: CopilotSession) -> None`
-- `async def _efforts(client: CopilotClient, model: str) -> bool`
-- `async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None`
-- `def _memory(store: Path | None) -> dict[str, Any]`
-- `def _refused(cfg: Session) -> str`
-- `async def run(cfg: Session) -> Run`
-- `async def _proven(st: _Step, session: Any) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/sdk_teardown.py
-
-Bounded SDK calls and session teardown: tasks cancelled, session disconnected, runtime stopped, else signalled.
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `contextlib`
-- `copilot.rpc`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.processes`
-- `signal`
-- `time`
-- `typing`
-
-### Interfaces
-
-- `async def call(aw: Awaitable[T], what: str, limit: float = CALL) -> T`
-- `async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination`
-- `async def force(st: _Step, why: str) -> None`
-- `async def teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination`
-
-## serve/delivery-next/src/owlbear_delivery_next/sdk_usage.py
-
-What one SDK session billed, read at the step's start and end: the proof of its model (TD-32, TD-53, TD-94).
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `typing`
-
-### Interfaces
-
-- `def unexpected_models(before: dict[str, Any], after: dict[str, Any], model: str | None) -> list[str]`
-- `async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]`
-- `async def usage_read(session: CopilotSession, requested: str | None) -> dict[str, Any]`
-- `def unread(before: dict[str, Any], after: dict[str, Any]) -> str`
-- `def unproven(before: dict[str, Any], after: dict[str, Any], model: str | None) -> str`
-
-## serve/delivery-next/src/owlbear_delivery_next/session_choice.py
-
-Which agent session a step runs in: the answer's, a repair chance's, a held run's, or a new one.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.profile_record`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `def new_id(change: Change) -> str`
-- `def opening(store: Store, lock: Lock, change: Change, task: Task | None) -> tuple[Question | None, session_result.Run | None, str, bool]`
-- `def replaced(store: Store, lock: Lock, change: Change, repair: str) -> tuple[Change, str | None]`
-
-## serve/delivery-next/src/owlbear_delivery_next/session_result.py
-
-What one worker session produced, and its mapping to the loop's step result (D4 §3.2).
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.processes`
-- `typing`
-
-### Interfaces
-
-- `class Run`
-- `def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult`
-- `def missing_cause(kind: StepKind) -> str`
-- `def effect_seen(run: Run) -> bool`
-- `def limit_reached(run: Run, limit: float | None) -> None`
-- `def note_quota(run: Run, kind: str, data: Any) -> None`
-- `def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | None = None) -> StepResult`
-- `def _exit(run: Run, kind: StepKind, now: datetime, enclosing: StepKind) -> StepResult`
-
-## serve/delivery-next/src/owlbear_delivery_next/sessions.py
-
-One runner's agent sessions: run them in the profile's runtime, log their usage, and run fresh read-only judges.
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `dataclasses`
-- `datetime`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.permissions`
-- `owlbear_delivery_next.processes`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.steps`
-- `sys`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class UsageUnreadError(Exception)`
-  - `def __init__(self, run: session_result.Run) -> None`
-- `def out(text: str) -> None`
-- `def memory(store: Store) -> Path | None`
-- `def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run`
-- `def held(done: session_result.Run) -> bool`
-- `def log_held(store: Store, lock: Lock, labels: list[str], runs: list[session_result.Run]) -> None`
-- `def unread(done: session_result.Run) -> bool`
-- `def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, fields: dict[str, object]) -> None`
-- `def reviewer(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str) -> Result`
-- `def review_run(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str, *, submit: tools.Spec = tools.REVIEW) -> tuple[Result, session_result.Run]`
-- `def judges(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], list[tuple[str, sdk_adapter.Session]]], settings: Settings | None = None, *, hold: bool = False) -> list[tuple[Result, session_result.Run]]`
-- `def isolated(store: Store, lock: Lock, change: Change, source: Path, make: Callable[[Path], list[sdk_adapter.Session]], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]], *, each: bool = False) -> list[session_result.Run]`
-- `def _noted(cfgs: list[sdk_adapter.Session], note: str) -> list[sdk_adapter.Session]`
-- `def _refused(store: Store, lock: Lock, change: Change, why: str, cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]`
-- `def _within(store: Store, lock: Lock, change: Change, copy: disposable.Copy, cfgs: list[sdk_adapter.Session], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]]) -> list[session_result.Run]`
-- `def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run]) -> None`
-- `async def _together(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]`
-
-## serve/delivery-next/src/owlbear_delivery_next/setup.py
-
-Setup: profile confirmation and consented untracked local writes, after readiness (D4 §3.2, DR1, DR2, DR14).
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `importlib.resources`
-- `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.store`
-- `pathlib`
-- `re`
-- `sys`
-- `typing`
-
-### Interfaces
-
-- `def _install(text: str, path: Path, what: str) -> str`
-- `def install_skill(home: Path) -> str`
-- `def install_agent(home: Path) -> str`
-- `def recommendations(prof: Profile) -> list[str]`
-- `def render(prof: Profile) -> str`
-- `def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]`
-- `def with_task(data: dict[str, Any], python: str) -> dict[str, Any]`
-- `def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]`
-- `def consent(repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool) -> str`
-- `def refused(repo: Path, path: Path) -> str | None`
-- `def automatic_tasks() -> str`
-- `def ask_tty(question: str) -> str`
-- `def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], object]) -> bool`
-- `def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, local_files: Choice = 'ask', skill: Choice = 'ask', ask: Ask = ask_tty) -> int`
-
-## serve/delivery-next/src/owlbear_delivery_next/shell_parse.py
-
-Shell text as the permission guard reads it: each command's words, and the commands and scripts they run.
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `pathlib`
-- `re`
-- `typing`
-
-### Interfaces
-
-- `class _Level`
-  - `def add(self, chars: str) -> None`
-  - `def end_word(self) -> None`
-  - `def end_command(self, commands: list[list[str]]) -> None`
-- `class _Lexer`
-  - `def __init__(self, text: str) -> None`
-  - `def level(self, i: int, close: str = '') -> int`
-  - `def _step(self, s: _Level, i: int) -> int`
-  - `def _unquoted(self, s: _Level, i: int) -> int`
-- `def commands(text: str) -> list[list[str]]`
-- `def programs(words: Sequence[str], depth: int = 0) -> list[Sequence[str]]`
-- `def operand(words: Sequence[str], i: int) -> int`
-- `def _shell_script(words: Sequence[str]) -> str | None`
-- `def scripts(words: Sequence[str]) -> list[str]`
-
-## serve/delivery-next/src/owlbear_delivery_next/spend.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/spend.py
 
 What one Change's sessions cost, kept on the Change because the activity log drops old events.
 
@@ -8529,227 +6553,7 @@ What one Change's sessions cost, kept on the Change because the activity log dro
   - `def _failed(self, session: str, unread: list[str]) -> Spend`
   - `def shown(self) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/status.py
-
-The one status line, next action and next actor of a Change (D3 §3.4).
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.budgets`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.mask`
-- `owlbear_delivery_next.models`
-- `typing`
-
-### Interfaces
-
-- `class Activity`
-- `class Status`
-- `def _age(delta: timedelta) -> str`
-- `def stage(c: Change) -> str`
-- `def unloadable(stop: Stop) -> Status`
-- `def _tool_at(c: Change, tool: dict[str, Any] | None) -> datetime | None`
-- `def silent(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> timedelta | None`
-- `def _episode(c: Change, now: datetime) -> tuple[str, bool]`
-- `def card(c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime, tool: dict[str, Any] | None = None) -> dict[str, Any]`
-- `def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status`
-
-## serve/delivery-next/src/owlbear_delivery_next/step_inbox.py
-
-The C+ step's result channel in the runner: a loopback receiver that the step's MCP relay finds through an inbox.
-
-### Imports
-
-- `__future__`
-- `hmac`
-- `http.server`
-- `json`
-- `os`
-- `owlbear_delivery_next`
-- `secrets`
-- `threading`
-- `typing`
-
-### Interfaces
-
-- `class _Server(ThreadingHTTPServer)`
-  - `def __init__(self, gate: Gate, token: str) -> None`
-- `class _Handler(BaseHTTPRequestHandler)`
-  - `def log_message(self, format: str, *args: Any) -> None`
-  - `def _reply(self, code: int, body: object) -> None`
-  - `def _allowed(self) -> bool`
-  - `def do_GET(self) -> None`
-  - `def do_POST(self) -> None`
-- `class Inbox`
-  - `def __init__(self, gate: Gate, path: Path) -> None`
-  - `def __enter__(self) -> Self`
-  - `def __exit__(self, *_exc: object) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/step_mcp.py
-
-The C+ step's MCP relay (TD-36): the window's harness runs it; it forwards the step's tools to the runner.
-
-### Imports
-
-- `__future__`
-- `anyio`
-- `argparse`
-- `json`
-- `mcp`
-- `mcp.server.lowlevel`
-- `mcp.server.stdio`
-- `pathlib`
-- `typing`
-- `urllib.error`
-- `urllib.request`
-
-### Interfaces
-
-- `def forward(inbox: Path, method: str, path: str, body: object = None) -> dict[str, Any] | None`
-- `def relay(inbox: Path) -> Server`
-- `def main(argv: list[str] | None = None) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/storage_io.py
-
-Crash-safe atomic text write and descriptor-backed ``flock`` helpers.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `fcntl`
-- `os`
-- `pathlib`
-- `stat`
-- `tempfile`
-
-### Interfaces
-
-- `def open_lock(root_fd: int, *, blocking: bool, shared: bool = False, name: str = '.storage.lock') -> int`
-- `def atomic_write(target: Path, content: str) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/store.py
-
-Delivery-next state store in ``<git-common-dir>/owlbear-delivery/`` (D4 §3.2).
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `datetime`
-- `fcntl`
-- `json`
-- `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.config`
-- `owlbear_delivery_next.git_files`
-- `owlbear_delivery_next.inbox`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.storage_io`
-- `pydantic`
-- `re`
-- `socket`
-- `time`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class Holder(Record)`
-- `class StoreError(Exception)`
-  - `def stop(self, now: datetime) -> Stop`
-- `class FormatTooNewError(StoreError)`
-- `class SharedError(StoreError)`
-- `class LockHeldError(RuntimeError)`
-  - `def __init__(self, holder: Holder | None) -> None`
-- `class Lock`
-  - `def __init__(self, slug: str) -> None`
-  - `def check(self, slug: str) -> None`
-- `def _load(path: Path, model: type[T], current: int, forward: Migrations) -> T`
-- `def _parse(raw: str, name: str, model: type[T], current: int, forward: Migrations) -> T`
-- `def _first(exc: ValidationError) -> str`
-- `def read_layer(path: Path, model: type[T]) -> T`
-- `def read_layer_bytes(path: Path, model: type[T]) -> tuple[T, bytes]`
-- `def update_layer(path: Path, model: type[T], change: Callable[[T], T]) -> T`
-- `class Store`
-  - `def __init__(self, root: Path, shared: DataRepo | None = None, name: str = '') -> None`
-  - `def config_path(self) -> Path`
-  - `def open(cls, cwd: Path) -> Store`
-  - `def adopt(self, identity: str) -> None`
-  - `def save(self, path: Path, model: type[T], change: Callable[[T], T], what: str) -> str`
-  - `def read_config(self) -> Layer`
-  - `def update_config(self, change: Callable[[Layer], Layer], what: str = 'project layer') -> str`
-  - `def settings(self) -> Settings`
-  - `def _dir(self, slug: str) -> Path`
-  - `def visual_dir(self, slug: str, head: str) -> Path`
-  - `def before_dir(self, slug: str, base: str) -> Path`
-  - `def read(self, slug: str) -> Change`
-  - `def raw_handle(self, slug: str) -> str | None`
-  - `def issued(self) -> int`
-  - `def issue(self, number: int) -> None`
-  - `def read_profile(self) -> Profile | None`
-  - `def write_profile(self, profile: Profile) -> str`
-  - `def write(self, lock: Lock, change: Change) -> None`
-  - `def slugs(self) -> list[str]`
-  - `def restore(self, lock: Lock, slug: str) -> None`
-  - `def lock(self, slug: str) -> Iterator[Lock]`
-  - `def merge_lock(self, target: str) -> Iterator[bool]`
-  - `def holder(self, slug: str) -> Holder | None`
-  - `def put_inbox(self, slug: str, item: InboxItem) -> None`
-  - `def fold(self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None, *, moved: bool = False) -> tuple[Change, Step | None]`
-  - `def events(self, slug: str) -> list[dict[str, Any]]`
-  - `def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None`
-  - `def now(self, slug: str) -> dict[str, Any] | None`
-  - `def write_now(self, lock: Lock, slug: str, data: dict[str, Any]) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/subagents.py
-
-Built-in subagents (TD-129): which one a session may start, and what each did.
-
-### Imports
-
-- `__future__`
-- `dataclasses`
-- `datetime`
-- `owlbear_delivery_next.models`
-- `typing`
-
-### Interfaces
-
-- `class Seen`
-- `def eligible(kind: StepKind, role: str, *, enabled: bool) -> bool`
-- `class Watch`
-  - `def __init__(self, *, allowed: bool) -> None`
-  - `def started(self, data: Any) -> str`
-  - `def owns(self, parent: str | None) -> bool`
-  - `def ended(self, data: Any, outcome: str) -> dict[str, Any] | None`
-  - `def call(self, data: Any) -> bool`
-  - `def child_models(self) -> set[str]`
-  - `def report(self) -> list[dict[str, Any]]`
-
-## serve/delivery-next/src/owlbear_delivery_next/text_files.py
-
-Local text files written safely: never through a symbolic link, always by an atomic rename.
-
-### Imports
-
-- `__future__`
-- `os`
-- `pathlib`
-- `tempfile`
-
-### Interfaces
-
-- `def linked_part(repo: Path, path: Path) -> Path | None`
-- `def replace_text(path: Path, text: str) -> None`
-
-## serve/delivery-next/src/owlbear_delivery_next/tool_schema.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/tool_schema.py
 
 A worker tool's JSON schema and its argument parsing, whose errors name the field with an example (T5).
 
@@ -8767,7 +6571,7 @@ A worker tool's JSON schema and its argument parsing, whose errors name the fiel
 - `def _loc(loc: Sequence[int | str]) -> str`
 - `def parse(model: type[T], arguments: object) -> tuple[T | None, list[str]]`
 
-## serve/delivery-next/src/owlbear_delivery_next/tools.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/tools.py
 
 Worker tools: one fixed schema each, and validators whose errors name the field (D4 §3.3, T3-T5).
 
@@ -8811,12 +6615,13 @@ Worker tools: one fixed schema each, and validators whose errors name the field 
 - `def _few(paths: Sequence[str]) -> str`
 - `def _response(result: BuildResult, item: ItemRef | None) -> list[str]`
 - `def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: ItemRef | None = None) -> list[str]`
+- `def _ran(cmd: str, command: str, checks: Sequence[str]) -> bool`
 - `def check_question(question: AskQuestion) -> list[str]`
 - `def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) -> list[str]`
 - `def check_recipe(recipe: CheckRecipe, tree: Worktree, root: Path, setup: Sequence[str] = ()) -> list[str]`
 - `def check_result(args: Args, tree: Worktree, checks: Sequence[str], root: Path, scope: Sequence[str] = (), item: ItemRef | None = None, *, visual: bool = False) -> list[str]`
 
-## serve/delivery-next/src/owlbear_delivery_next/visual_records.py
+## serve/delivery-next/src/owlbear_delivery_next/change_contracts/visual_records.py
 
 The visual review's records (TD-74, TD-78, TD-79).
 
@@ -8843,188 +6648,896 @@ The visual review's records (TD-74, TD-78, TD-79).
 - `class VisualResult(_Strict)`
   - `def identity(self) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/visual_settled.py
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/__init__.py
 
-A visual round the owner settled: decided on the Changes page (TD-79) or accepted without the model check (TD-94).
+How a Change moves: its steps, budgets, rounds and status.
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/brief_rounds.py
+
+The shaper's brief challenge (TD-221, TD-249, TD-208): rounds on the brief versions the shaper asks to be judged.
 
 ### Imports
 
 - `__future__`
-- `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow.moves`
 - `typing`
 
 ### Interfaces
 
-- `def settled(store: Store, lock: Lock, change: Change, capture: tuple[str, str, list[int]], out: Path) -> bool`
-- `def calibrated(store: Store, change: Change, out: Path) -> None`
+- `def _flat(text: str, limit: int = 1400) -> str`
+- `def current(c: Change) -> RoundLoop | None`
+- `def addressing(c: Change) -> list[RoundFinding]`
+- `def pending(lp: RoundLoop) -> list[RoundFinding]`
+- `def _undecided(lp: RoundLoop) -> RoundFinding | None`
+- `def first(c: Change) -> Question | None`
+- `def due(c: Change) -> list[RoundFinding]`
+- `def owned(q: Question) -> bool`
+- `def approvable(c: Change) -> str`
+- `def unreviewed(c: Change) -> bool`
+- `def owned_open(c: Change) -> bool`
+- `def saving(c: Change) -> str`
+- `def request(c: Change, version: int, rejected: Mapping[str, str], policy: RoundPolicy, now: datetime) -> str`
+- `def _refusal(c: Change, version: int) -> str`
+- `def _refused(found: list[RoundFinding], rejected: Mapping[str, str]) -> str`
+- `def _then(lp: RoundLoop) -> Then`
+- `def _mode(c: Change, mode: str | None) -> None`
+- `def _wait(c: Change, reason: str, now: datetime) -> None`
+- `def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None`
+- `def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]], now: datetime) -> None`
+- `def proceed(c: Change, now: datetime) -> None`
+- `def question(lp: RoundLoop, f: RoundFinding) -> Question`
+- `def last(lp: RoundLoop) -> Question`
+- `def _said(f: RoundFinding) -> str`
+- `def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> None`
+- `def reconsidered(c: Change, verdicts: Mapping[str, tuple[str, str]]) -> None`
+- `def challenge_lines(c: Change) -> list[str]`
+- `def running(c: Change, version: int, attempt: int) -> bool`
+- `def status(c: Change) -> dict[str, object]`
+- `def retire(c: Change, now: datetime) -> None`
 
-## serve/delivery-next/src/owlbear_delivery_next/vscode_adapter.py
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/brief_tools.py
 
-Run one agent session as a C+ VS Code step (TD-35 "all in VS Code"), with the same contract as the SDK path.
+The owner chat's brief tool: one fixed draft schema and the checks its schema cannot express (D4 §3.3, T3-T5).
 
 ### Imports
 
 - `__future__`
-- `contextlib`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.tools`
+- `pathlib`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class PersonCheckDraft(Args)`
+- `class VisualStateDraft(Args)`
+- `class VisualStepDraft(Args)`
+- `class DecisionDraft(Args)`
+- `class VisualDraft(Args)`
+- `class BriefDraft(Args)`
+- `def _steps(brief: BriefDraft) -> list[str]`
+- `def check_brief(brief: BriefDraft) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/budgets.py
+
+Retry budgets: count failures by cause, wait out the environment, and ask once a budget is spent (D3 §3.6).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `typing`
+
+### Interfaces
+
+- `def episode(c: Change) -> Budget | None`
+- `def charge(change: Change, cause: str, now: datetime) -> tuple[Change, bool]`
+- `def effect_observed(change: Change, question_id: str, now: datetime) -> Change`
+- `def recovered(change: Change, kind: ErrorKind) -> Change`
+- `def streaks(c: Change, r: StepResult) -> None`
+- `def _premise(c: Change, cause: str, task_id: str | None) -> str | None`
+- `def _scope(c: Change, task_id: str | None) -> str | None`
+- `def round_key(c: Change) -> str`
+- `def review_round(c: Change) -> int`
+- `def _progress(c: Change, cause: str, score: Score | None) -> bool`
+- `def _count(c: Change, cause: str, now: datetime, score: Score | None = None, reason: str = '') -> int`
+- `def _environment(c: Change, r: StepResult, now: datetime) -> None`
+- `def _defect(c: Change, r: StepResult, now: datetime) -> None`
+- `def _wrong_model(c: Change, r: StepResult, now: datetime) -> None`
+- `def _resolve_or_pause(c: Change) -> list[Option]`
+- `def _exhausted(c: Change, r: StepResult, now: datetime) -> None`
+- `def _alternative(c: Change, r: StepResult, now: datetime) -> bool`
+- `def _round(c: Change, r: StepResult, now: datetime) -> None`
+- `def retry(c: Change, r: StepResult, now: datetime) -> None`
+- `def back(c: Change, r: StepResult, now: datetime) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/curation_flow.py
+
+A test review's moves (TD-373, TD-390): its reviewers' end, the curator's unchanged end, its fixed brief and plan.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.moves`
+- `typing`
+
+### Interfaces
+
+- `def reviewed(c: Change) -> None`
+- `def unchanged(c: Change) -> bool`
+- `def without(c: Change) -> list[Option]`
+- `def options(c: Change) -> list[Option]`
+- `def stop(c: Change, why: str, cause: str | None, now: datetime) -> None`
+- `def fixed(c: Change, before: Step, now: datetime) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/disputes.py
+
+A worker's reasoned rejection of review findings (TD-124, TD-193, TD-208): judged by the next round, else the owner.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `typing`
+
+### Interfaces
+
+- `def _flat(text: str, limit: int = 1400) -> str`
+- `def keyed(task: Task) -> dict[str, str]`
+- `def _lines(task: Task) -> list[str]`
+- `def _marked(lines: list[str]) -> bool`
+- `def rejectable(task: Task | None) -> tuple[str, ...]`
+- `def settled(task: Task | None) -> tuple[str, ...]`
+- `def pending(task: Task | None) -> tuple[str, ...]`
+- `def cap(c: Change) -> int`
+- `def planned(c: Change) -> tuple[str, ...]`
+- `def _looped(c: Change) -> RoundLoop | None`
+- `def target(c: Change, task: Task | None) -> Task | None`
+- `def challenged(c: Change, task: Task | None) -> bool`
+- `def hidden(q: Question, *, challenged: bool, own: str = '') -> bool`
+- `def check(args: tools.Args, tree: tools.Worktree, allowed: tuple[str, ...], rechecks: tuple[str, ...], *, settled: tuple[str, ...] = (), cap: int = MAX_FINDINGS, tasks: tuple[str, ...] = ()) -> list[str]`
+- `def _twice(field: str, keys: list[str]) -> list[str]`
+- `def _listed(field: str, keys: list[str], wanted: tuple[str, ...], section: str) -> list[str]`
+- `def _rejections(keys: list[str], tree: tools.Worktree | None, allowed: tuple[str, ...], settled: tuple[str, ...]) -> list[str]`
+- `def _rechecks(given: list[tools.Recheck], wanted: tuple[str, ...]) -> list[str]`
+- `def _named(findings: list[tools.Finding], tasks: tuple[str, ...]) -> list[str]`
+- `def _reconsidered(given: list[dispute_tools.Reconsidered], wanted: tuple[str, ...]) -> list[str]`
+- `def processed(c: Change, task: Task | None, session: str, payload: object, result: StepResult) -> StepResult`
+- `def mark(c: Change, task: Task, key: str, state: FindingState, **fields: str) -> None`
+- `def _record(c: Change, task: Task | None, payload: object, result: StepResult) -> None`
+- `def _settle(c: Change, task: Task | None, payload: object, result: StepResult) -> StepResult`
+- `def _open(task: Task) -> Dispute | None`
+- `def question(task: Task, d: Dispute) -> Question`
+- `def decided(c: Change, q: Question, target: str, at: datetime, note: str = '') -> None`
+- `def waiting(task: Task | None) -> list[Dispute]`
+- `def judged(c: Change, task: Task, result: dispute_tools.ReconsiderResult) -> None`
+- `def kept(task: Task | None) -> dict[str, str]`
+- `def authorised(task: Task | None) -> bool`
+- `def build_lines(task: Task) -> list[str]`
+- `def review_lines(c: Change, task: Task | None) -> list[str]`
+- `def _how(d: Dispute) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/loop.py
+
+Delivery-next step loop: choose the next step and apply exits and the inbox (D3 §3.3, §3.6).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class StepResult(Record)`
+- `def waiting_consent(c: Change) -> bool`
+- `def consent_moved(c: Change, offered: str | None, head: str, opened: Iterable[str]) -> bool`
+- `def open_question(c: Change) -> Question | None`
+- `def ordinary(q: Question) -> bool`
+- `def usage_gated(c: Change) -> bool`
+- `def owner_gated(c: Change) -> bool`
+- `def brief_ready(c: Change) -> bool`
+- `def next_step(c: Change, now: datetime) -> Step | None`
+- `def schedule(change: Change, items: Iterable[InboxItem], now: datetime, pr_state: PrState | None = None, *, moved: bool = False, asking: bool = True) -> tuple[Change, Step | None]`
+- `def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change`
+- `def _intent(c: Change, item: IntentItem) -> None`
+- `def _visual_decision(c: Change, decision: str, item: AnswerItem) -> None`
+- `def _target(q: Question, option: str | None) -> str | None`
+- `def _answer(c: Change, item: AnswerItem, now: datetime) -> None`
+- `def _moved(c: Change, q: Question, item: AnswerItem, target: str, now: datetime) -> None`
+- `def _refused(q: Question, target: str | None, text: str) -> bool`
+- `def _entered(c: Change, q: Question, target: str) -> None`
+- `def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: bool) -> None`
+- `def answer_delivered(change: Change, question_id: str, now: datetime) -> Change`
+- `def apply(change: Change, result: StepResult, now: datetime) -> Change`
+- `def _done(c: Change, r: StepResult | None, now: datetime) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/moves.py
+
+Step moves: where a Change goes next, the questions it asks and the tasks it opens (D3 §3.3).
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.evidence`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `typing`
+
+### Interfaces
+
+- `def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = None) -> None`
+- `def enter(c: Change, kind: StepKind, task: str | None = None) -> None`
+- `def subject_of(c: Change, task: Task) -> str`
+- `def loop_of(c: Change, task: Task | None) -> RoundLoop | None`
+- `def open_task(c: Change) -> Task | None`
+- `def ask(c: Change, question: Question, now: datetime) -> None`
+- `def resolved(c: Change, task_id: str | None) -> set[str]`
+- `def fix_task(c: Change, r: StepResult, fixes: str | None = None) -> str | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/plan_rounds.py
+
+The planner's challenge rounds (TD-190, TD-208, TD-220): findings by ID, its rejections, the owner, the end.
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `owlbear_delivery_next.change_contracts.evidence`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow.moves`
+- `typing`
+
+### Interfaces
+
+- `def _flat(text: str, limit: int = 1400) -> str`
+- `def lines(plan: Plan, limit: int = LIMIT) -> list[str]`
+- `def current(c: Change) -> RoundLoop | None`
+- `def loop(c: Change, policy: RoundPolicy, now: datetime) -> RoundLoop`
+- `def _rotate(c: Change, lp: RoundLoop, ended: Ended, now: datetime) -> RoundLoop`
+- `def addressing(c: Change) -> list[RoundFinding]`
+- `def rejectable(c: Change) -> tuple[str, ...]`
+- `def settled(c: Change) -> tuple[str, ...]`
+- `def pending(lp: RoundLoop) -> list[RoundFinding]`
+- `def planner_lines(c: Change) -> list[str]`
+- `def challenge_lines(c: Change) -> list[str]`
+- `def revised(c: Change, rejected: Mapping[str, str]) -> Next`
+- `def identity(plan: Plan | None) -> str`
+- `def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]]) -> Next`
+- `def _undecided(lp: RoundLoop) -> RoundFinding | None`
+- `def question(lp: RoundLoop, f: RoundFinding) -> Question`
+- `def first(c: Change) -> Question | None`
+- `def last(lp: RoundLoop) -> Question`
+- `def _said(f: RoundFinding) -> str`
+- `def owned(q: Question) -> bool`
+- `def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> None`
+- `def proceed(c: Change, now: datetime) -> None`
+- `def reconsidered(c: Change, verdicts: Mapping[str, tuple[str, str]]) -> None`
+- `def due(c: Change) -> list[RoundFinding]`
+- `def _mode(c: Change, mode: str | None) -> None`
+- `def accepted(c: Change, now: datetime) -> None`
+- `def retire(c: Change, now: datetime) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/progress.py
+
+Where a Change stands: its stages in order, the current task and sub-step, and the round of its loop (TD-97).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow.brief_rounds`
+- `owlbear_delivery_next.change_flow.budgets`
+- `typing`
+
+### Interfaces
+
+- `class Stage`
+- `class Progress`
+- `def _kind(c: Change) -> StepKind`
+- `def _current(c: Change) -> str`
+- `def _rounds(c: Change) -> dict[str, int]`
+- `def _task(c: Change) -> Task | None`
+- `def _root(c: Change, task: Task | None) -> Task | None`
+- `def _position(c: Change) -> tuple[int | None, int | None]`
+- `def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]`
+- `def _state(at: int, i: int, *, skipped: bool, finished: bool) -> State`
+- `def progress(c: Change) -> Progress`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/rebuilds.py
+
+Rebuilding rejected work (TD-210, TD-217): the owner's task list, which commits an undo takes, the fresh attempts.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.change_flow.round_flow`
+- `owlbear_delivery_next.change_flow.round_marks`
+- `shlex`
+- `typing`
+
+### Interfaces
+
+- `def asking(c: Change, q: Question | None) -> RoundLoop | None`
+- `def head(lp: RoundLoop) -> str`
+- `def shown(c: Change, q: Question | None) -> dict[str, object] | None`
+- `def refused(c: Change, q: Question, option: str | None, tasks: list[str], at: tuple[int | None, str]) -> tuple[int, str] | None`
+- `def _red(c: Change, lp: RoundLoop) -> set[str]`
+- `def _files(c: Change) -> dict[str, set[str]]`
+- `def undoing(c: Change, lp: RoundLoop) -> tuple[list[Task], str]`
+- `def _named(lp: RoundLoop) -> dict[str, set[str]]`
+- `def fresh(c: Change, task: Task) -> None`
+- `def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> None`
+- `def _placed(profile: Profile, tasks: Sequence[Task]) -> list[str]`
+- `def _holds(package: str, scope: Sequence[str]) -> bool`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/repairs.py
+
+Repair chances of the findings loop (TD-123, TD-175): which session repairs, and what a fresh one is told.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `typing`
+
+### Interfaces
+
+- `def _producer(c: Change, fixes: str | None) -> Task | None`
+- `def lineage(c: Change, fixes: str | None, origin: str) -> dict[str, str | None]`
+- `def session(change: Change, task: Task | None) -> str`
+- `def bind(change: Change, task: Task | None, session: str, payload: object, result: StepResult) -> None`
+- `def fallback(task: Task | None) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/round_flow.py
+
+After a looped repair build (TD-208, TD-330): the next round, a rejections-only check, the owner or the end.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.evidence`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.merge_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.change_flow.round_marks`
+- `typing`
+
+### Interfaces
+
+- `def built(c: Change, r: StepResult | None, now: datetime) -> None`
+- `def passed(c: Change, now: datetime) -> bool`
+- `def end(c: Change, lp: RoundLoop, task: Task, ended: Ended = '') -> None`
+- `def question(lp: RoundLoop, task: Task) -> Question`
+- `def _said(f: RoundFinding) -> str`
+- `def decided(c: Change, q: Question, target: str) -> None`
+- `def picked(c: Change, tasks: list[str]) -> list[str]`
+- `def why(lp: RoundLoop, how: str) -> str`
+- `def replan(c: Change, lp: RoundLoop, reason: str, now: datetime) -> None`
+- `def review_lines(c: Change, task: Task | None) -> list[str]`
+- `def restartable(c: Change) -> str`
+- `def restart(c: Change, now: datetime) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/round_marks.py
+
+What the Change page shows of the challenge loops (TD-208, TD-217): a marker per round, its findings, what is left.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `def kind(lp: RoundLoop, f: RoundFinding) -> str`
+- `def unmet(c: Change, lp: RoundLoop) -> list[Criterion]`
+- `def rounds(lp: RoundLoop, findings: list[RoundFinding]) -> list[dict[str, object]]`
+- `def _finding(f: RoundFinding, k: str) -> dict[str, object]`
+- `def shown(c: Change) -> dict[str, object]`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/status.py
+
+The one status line, next action and next actor of a Change (D3 §3.4).
+
+### Imports
+
+- `__future__`
 - `dataclasses`
 - `datetime`
-- `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.processes`
-- `owlbear_delivery_next.results`
-- `owlbear_delivery_next.sdk_adapter`
-- `owlbear_delivery_next.session_result`
-- `owlbear_delivery_next.step_inbox`
-- `owlbear_delivery_next.vscode_contract`
-- `owlbear_delivery_next.vscode_step`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.brief_rounds`
+- `owlbear_delivery_next.change_flow.budgets`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.local_system.mask`
+- `typing`
+
+### Interfaces
+
+- `class Activity`
+- `class Status`
+- `def _age(delta: timedelta) -> str`
+- `def stage(c: Change) -> str`
+- `def unloadable(stop: Stop) -> Status`
+- `def _tool_at(c: Change, tool: dict[str, Any] | None) -> datetime | None`
+- `def silent(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> timedelta | None`
+- `def _episode(c: Change, now: datetime) -> tuple[str, bool]`
+- `def card(c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime, tool: dict[str, Any] | None = None) -> dict[str, Any]`
+- `def _left(events: list[dict[str, Any]], since: datetime | None) -> str`
+- `def passes(c: Change, now: datetime) -> bool`
+- `def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status`
+- `def _status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status`
+
+## serve/delivery-next/src/owlbear_delivery_next/change_flow/worktree.py
+
+The Change worktree under the user data root, its packages' install commands and its observed state (D4 §3.2).
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `owlbear_delivery_next.change_contracts.tools`
+- `owlbear_delivery_next.local_system`
+- `pathlib`
+- `shutil`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `def git(cwd: Path, *args: str) -> str`
+- `def data_root() -> Path`
+- `def path_for(common_dir: Path, slug: str) -> Path`
+- `def ensure(repo: Path, common_dir: Path, slug: str, branch: str, target: str) -> Path`
+- `def tracking(cwd: Path, target: str) -> str`
+- `def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]`
+- `def checks(profile: Profile) -> list[tuple[str, str]]`
+- `def head(path: Path) -> str`
+- `class ShelveError(Exception)`
+- `def shelve(path: Path, message: str) -> bool`
+- `def observe(path: Path, target: str, since: str | None = None) -> Worktree`
+- `def diff(path: Path, base: str, rev: str = 'HEAD') -> list[str]`
+- `def tree(path: Path, rev: str = 'HEAD') -> str`
+- `def known(path: Path, rev: str) -> bool`
+- `def between(path: Path, old: str, new: str) -> list[str]`
+- `def fingerprints(path: Path, paths: Sequence[str], rev: str = 'HEAD') -> dict[str, str]`
+- `def launch_inputs(path: Path, directory: str, rev: str = 'HEAD') -> str | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/commands/__init__.py
+
+Process entries: the dispatcher and the commands it starts.
+
+## serve/delivery-next/src/owlbear_delivery_next/commands/cli.py
+
+Project commands, which `owlbear` runs too: ``setup``, ``status``; ``seed``, ``answer``, ``show`` for dev.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `datetime`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow.status`
+- `owlbear_delivery_next.commands`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.design_packs.detector`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.backlog`
+- `owlbear_delivery_next.state_store.store`
 - `pathlib`
 - `subprocess`
-- `threading`
-- `time`
-- `typing`
-- `uuid`
+- `sys`
 
 ### Interfaces
 
-- `def _token() -> str`
-- `def connect(folder: Path) -> ahp.Connection`
-- `def reopen(conn: ahp.Transport) -> ahp.Transport`
-- `def embedded(attachments: tuple[dict[str, str], ...]) -> tuple[Json, ...]`
-- `class Env`
-- `def _grace(control: Control) -> Callable[[], None]`
-- `class _Driver`
-  - `def __init__(self, cfg: Session, env: Env, run: Run) -> None`
-  - `def log(self, **event: Any) -> None`
-  - `def pin(self, folder: Path, model: str) -> None`
-  - `def deny(self, call: ToolCall) -> bool`
-  - `def drive(self, conn: ahp.Transport) -> Outcome`
-  - `def step(self, inbox: Path) -> Outcome`
-- `def _ending(out: Outcome, gate: Gate) -> None`
-- `def _usage(out: Outcome, model: str | None) -> dict[str, Any]`
-- `def _proven(result: Run, out: Outcome, model: str | None) -> None`
-- `def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termination`
-- `def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run`
-- `def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]`
+- `def show_data(path: Path | None) -> str`
+- `def show_home() -> str`
+- `def show_pack(*, install: bool) -> int`
+- `def update_pack(a: argparse.Namespace, repo: Path) -> int`
+- `def _golden() -> int`
+- `def describe(change: Change) -> str`
+- `def seed(store: Store, a: argparse.Namespace) -> None`
+- `def show_status(store: Store, now: datetime) -> str`
+- `def show_profile(store: Store, repo: Path, confirms: list[tuple[str, str]], overrides: list[tuple[Role, RoleModel]] | None = None, runtime: Runtime | None = None) -> str`
+- `def add_backlog(store: Store, a: argparse.Namespace) -> int`
+- `def report(store: Store, a: argparse.Namespace) -> int`
+- `def _overridden(layer: Layer, overrides: list[tuple[Role, RoleModel]]) -> Layer`
+- `def _role(text: str) -> tuple[Role, RoleModel]`
+- `def main(argv: list[str] | None = None) -> int`
 
-## serve/delivery-next/src/owlbear_delivery_next/vscode_contract.py
+## serve/delivery-next/src/owlbear_delivery_next/commands/dispatch.py
 
-What a VS Code step is given and what it returns (TD-36, TD-48): the spec, the levers, the outcome and the hooks.
+The one entry of every Delivery process (TD-173): it reads the command, then imports only what that command needs.
 
 ### Imports
 
 - `__future__`
-- `dataclasses`
-- `owlbear_delivery_next.window_files`
-- `queue`
-- `subprocess`
-- `threading`
-- `time`
-- `typing`
-- `uuid`
+- `importlib`
+- `sys`
 
 ### Interfaces
 
-- `class StepSpec`
-  - `def marker(self) -> str`
-  - `def bootstrap(self) -> str`
-  - `def agent_uri(self) -> str`
-- `class ToolCall`
-- `class Control`
-- `class Outcome`
-- `def launch_code_chat(args: list[str], cwd: Path) -> None`
-- `class Hooks`
+- `def main(argv: list[str] | None = None) -> int`
 
-## serve/delivery-next/src/owlbear_delivery_next/vscode_step.py
+## serve/delivery-next/src/owlbear_delivery_next/commands/mcp_server.py
 
-Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harness window, then driven over AHP.
+Chat tools: a client of the running host, with a read-only status fallback when it is down (D4 §3.1, §3.3).
 
 ### Imports
 
 - `__future__`
-- `dataclasses`
+- `argparse`
+- `datetime`
 - `json`
-- `owlbear_delivery_next.ahp`
-- `owlbear_delivery_next.vscode_contract`
-- `owlbear_delivery_next.window_files`
+- `mcp.server`
+- `mcp.types`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.state_store.store`
+- `pathlib`
+- `pydantic`
 - `time`
 - `typing`
-- `urllib.parse`
-- `uuid`
+- `urllib.error`
+- `urllib.request`
 
 ### Interfaces
 
-- `def _action_in(ev: Json | None, chat: str) -> Json`
-- `def _ended(out: Outcome, action: Json) -> None`
-- `def _command(tool_input: object) -> str`
-- `def _asks(active: Json, action: Json, boot: str) -> list[tuple[str, object]]`
-- `class _Bound`
-- `class Step`
-  - `def __init__(self, conn: Transport, spec: StepSpec, approve: Callable[[ToolCall], bool], *, hooks: Hooks | None = None) -> None`
-  - `def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome`
-  - `def open(self, control: Control, bind_limit: float = 60) -> Outcome`
-  - `def _close(self) -> None`
-  - `def _began(self, chat: str, turn: str) -> bool`
-  - `def _open(self, control: Control, bind_limit: float, *, exclusive: bool = True) -> tuple[Outcome, _Bound | None]`
-  - `def _ready(self, out: Outcome, bound: _Bound, control: Control) -> bool`
-  - `def _sessions(self) -> list[Json]`
-  - `def _chat(self, chat: str) -> Json`
-  - `def _booted(self, out: Outcome, bound: _Bound) -> bool`
-  - `def _model_listed(self) -> bool`
-  - `def _listed(self, session: str) -> bool`
-  - `def _busy(self, sessions: list[Json]) -> str | None`
-  - `def _bind(self, before: list[Json], deadline: float) -> _Bound | None`
-  - `def _cancel(self, out: Outcome, turn: str) -> bool`
-  - `def _configure(self, session: str) -> bool`
-  - `def _config(self) -> Json`
-  - `def _message(self, text: str, agent: Json | None, attachments: tuple[Json, ...] = ()) -> Json`
-  - `def _start(self, out: Outcome, agent: Json | None, text: str, attachments: tuple[Json, ...] = ()) -> None`
-  - `def _turn(self, out: Outcome, agent: Json | None, control: Control, deadline: float, text: str, *, attachments: tuple[Json, ...] = ()) -> None`
-  - `def _halted(self, out: Outcome, control: Control, deadline: float, *, running: bool) -> bool`
-  - `def _adopt(out: Outcome, action: Json, pending: list[str]) -> bool`
-  - `def _steer(self, chat: str, agent: Json | None, control: Control) -> list[str]`
-  - `def _observe(self, out: Outcome, chat: str, action: Json) -> None`
-  - `def _confirm(self, chat: str, action: Json, *, allowed: bool) -> None`
+- `class Chat`
+  - `def __init__(self, repo: Path) -> None`
+  - `def call(self, method: str, path: str, body: object = None) -> tuple[int, Any]`
+  - `def save_brief(self, fields: dict[str, Any], path: str = '/briefs') -> dict[str, Any]`
+  - `def show_status(self, change: str = '') -> dict[str, Any]`
+  - `def brief(self, slug: str) -> dict[str, Any] | None`
+  - `def challenge_brief(self, change: str, version: int, rejected: list[dict[str, str]]) -> dict[str, Any]`
+  - `def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]`
+- `def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any`
+- `def save_brief(*, title: Annotated[str, _d('title')] = '', outcome: Annotated[str, _d('outcome')] = '', criteria: Annotated[list[str] | None, _d('criteria')] = None, scope: Annotated[list[str] | None, _d('scope')] = None, non_goals: Annotated[list[str] | None, _d('non_goals')] = None, decisions: Annotated[list[brief_tools.DecisionDraft] | None, _d('decisions')] = None, person_checks: Annotated[list[brief_tools.PersonCheckDraft] | None, _d('person_checks')] = None, specified: Annotated[list[str] | None, _d('specified')] = None, change: Annotated[str, _d('change')] = '') -> dict[str, Any]`
+- `def save_visual_check(change: Annotated[str, _d('change', brief_tools.VisualDraft)], ui: Annotated[bool, _d('ui', brief_tools.VisualDraft)], states: Annotated[list[brief_tools.VisualStateDraft] | None, _d('states', brief_tools.VisualDraft)] = None, steps: Annotated[list[brief_tools.VisualStepDraft] | None, _d('steps', brief_tools.VisualDraft)] = None) -> dict[str, Any]`
+- `def challenge_brief(change: Annotated[str, Field(description='Handle of the Change', examples=['c1'])], version: Annotated[int, Field(description='The brief version you saved and ask to be challenged', examples=[2])], rejected: Annotated[list[tools.Rejection] | None, Field(description='Findings of the previous round you do not take, by ID, with your evidence; the next challenger judges each')] = None) -> dict[str, Any]`
+- `def show_status(change: Annotated[str, Field(description='Handle of one Change; empty for all', examples=['c1'])] = '') -> dict[str, Any]`
+- `def answer_question(question: Annotated[str, Field(description='Question id from show_status', examples=['c1.q2'])], option: Annotated[str, Field(description='Chosen option id, if any', examples=['o1'])] = '', text: Annotated[str, Field(description="The owner's answer in words", max_length=2000)] = '') -> dict[str, Any]`
+- `def main(argv: list[str] | None = None) -> None`
 
-## serve/delivery-next/src/owlbear_delivery_next/window_files.py
+## serve/delivery-next/src/owlbear_delivery_next/commands/runner.py
 
-Files a C+ step needs in its worktree: the window's model pin, the step's MCP relay and its agent (TD-36).
+Process entry for one Change and one step: ``python -m owlbear_delivery_next run <change> [--repo PATH]``.
 
 ### Imports
 
 - `__future__`
-- `contextlib`
-- `dataclasses`
+- `argparse`
+- `datetime`
+- `functools`
 - `json`
-- `owlbear_delivery_next`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.curation_flow`
+- `owlbear_delivery_next.commands.cli`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `owlbear_delivery_next.workflow_steps.sessions`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]`
+- `def _previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]`
+- `def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None`
+- `def _kept(store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]) -> session_result.Run`
+- `def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]`
+- `def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None`
+- `def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None`
+- `def _ready(prof: Profile, path: Path, now: datetime) -> Result | None`
+- `def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None`
+- `def _reused(store: Store, lock: Lock, change: Change) -> bool`
+- `def main(argv: list[str] | None = None) -> int`
+- `def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None`
+- `def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None`
+- `def _unshelved(exc: worktree.ShelveError) -> Result`
+
+## serve/delivery-next/src/owlbear_delivery_next/commands/setup.py
+
+Setup: profile confirmation and consented untracked local writes, after readiness (D4 §3.2, DR1, DR2, DR14).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `json`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.store`
+- `pathlib`
 - `re`
 - `sys`
 - `typing`
 
 ### Interfaces
 
-- `def tools_note(role: str, *, ui: bool = False, judging: bool = False) -> str`
-- `class SettingsError(ValueError)`
-- `def _opening(text: str) -> int | None`
-- `def _with_settings(old: str | None, model: str) -> str`
-- `def settings(model: str) -> Render`
-- `def write_window_settings(folder: Path, model: str) -> None`
-- `class Added`
-- `def add_harness(folder: Path) -> Added | None`
-- `def remove_harness(folder: Path, added: Added) -> str`
-- `def mcp(inbox: Path, memory: Path | None = None) -> Render`
-- `def agent_name(role: str) -> str`
-- `def agent_path(role: str) -> str`
-- `def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False) -> Render`
-- `def names(inbox: Path) -> tuple[str, str]`
-- `def skill_path(name: str) -> str`
-- `def skills(role: str, *, ui: bool = False) -> list[tuple[str, Render]]`
-- `class Placed`
-- `def _git(folder: Path, *args: str) -> None`
-- `def _skipped(folder: Path, rel: str) -> bool`
-- `def place(folder: Path, rel: str, render: Render) -> Placed`
-- `def restore(folder: Path, placed: Sequence[Placed]) -> list[str]`
+- `def recommendations(prof: Profile) -> list[str]`
+- `def render(prof: Profile) -> str`
+- `def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]`
+- `def without_task(data: dict[str, Any]) -> dict[str, Any]`
+- `def has_task(path: Path) -> bool`
+- `def with_server(data: dict[str, Any], python: str, repo: Path) -> dict[str, Any]`
+- `def user_mcp(home: Path) -> Path`
+- `def _loose_json(text: str) -> object`
+- `def _serves(servers: object, repo: Path) -> bool`
+- `def registered(repo: Path, home: Path | None = None) -> bool`
+- `def consent(repo: Path, path: Path, merge: Callable[[dict[str, Any]], dict[str, Any]], question: str, ask: Ask, *, yes: bool) -> str`
+- `def refused(repo: Path, path: Path) -> str | None`
+- `def ask_tty(question: str) -> str`
+- `def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], object]) -> bool`
+- `def run(repo: Path, confirms: list[tuple[str, str]], *, yes: bool, local_files: Choice = 'ask', ask: Ask = ask_tty) -> int`
+- `def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/commands/step_mcp.py
+
+The C+ step's MCP relay (TD-36): the window's harness runs it; it forwards the step's tools to the runner.
+
+### Imports
+
+- `__future__`
+- `anyio`
+- `argparse`
+- `json`
+- `mcp`
+- `mcp.server.lowlevel`
+- `mcp.server.stdio`
+- `pathlib`
+- `typing`
+- `urllib.error`
+- `urllib.request`
+
+### Interfaces
+
+- `def forward(inbox: Path, method: str, path: str, body: object = None) -> dict[str, Any] | None`
+- `def relay(inbox: Path) -> Server`
+- `def main(argv: list[str] | None = None) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/__init__.py
+
+The design pack: its pins, detector, calibration and updates.
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/calibration.py
+
+Decided visual review rounds kept for calibration (TD-78, design skill research §3.5).
+
+### Imports
+
+- `__future__`
+- `collections`
+- `dataclasses`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.local_system.storage_io`
+- `re`
+- `shutil`
+- `typing`
+
+### Interfaces
+
+- `def folder(shared: DataRepo, name: str) -> Path`
+- `def keep(shared: DataRepo, name: str, slug: str, decided: VisualRound, images: Mapping[str, Path]) -> str`
+- `def cases(shared: DataRepo, name: str, wait: float | None = None) -> list[tuple[VisualRound, list[Path]]]`
+- `def agreement(decided: Sequence[VisualRound]) -> list[dict[str, Any]]`
+- `class Replay`
+  - `def before(self) -> float`
+  - `def after(self) -> float`
+  - `def advisory(self) -> bool`
+  - `def ok(self) -> bool`
+- `def replayed(pairs: Sequence[tuple[VisualRound, Verdict | None]]) -> Replay`
+- `def _cases(shared: DataRepo, name: str) -> list[tuple[VisualRound, list[Path]]]`
+- `def _part(text: str) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/design_pack.py
+
+The design pack (TD-76): Impeccable's detector, pinned together with the design skills extracted from it.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `hashlib`
+- `importlib.resources`
+- `json`
+- `os`
+- `owlbear_delivery_next.local_system`
+- `pathlib`
+- `platform`
+- `ssl`
+- `tempfile`
+- `truststore`
+- `typing`
+- `urllib.request`
+
+### Interfaces
+
+- `class PackError(RuntimeError)`
+- `class Installed`
+  - `def verified_engine(self) -> Path`
+- `def manifest() -> dict[str, Any]`
+- `def identity(pins_text: str | None = None, skills: Path | None = None) -> str`
+- `def platform_name() -> str`
+- `def folder(pins: dict[str, Any] | None = None) -> Path`
+- `def _sha256(path: Path) -> str`
+- `def _wanted(pins: dict[str, Any] | None = None) -> dict[str, tuple[str, str]]`
+- `def _private(target: Path) -> bool`
+- `def installed(pins: dict[str, Any] | None = None) -> Installed | None`
+- `def fetch(url: str, seconds: float = SECONDS) -> bytes`
+- `def _keep(target: Path, name: str, data: bytes) -> None`
+- `def install(download: Callable[[str], bytes] | None = None, pins: dict[str, Any] | None = None) -> Installed`
+- `def status() -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/design_tools.py
+
+The design judge's result tools (TD-78, design skill research §3.5 slice 5): a first look, then a final verdict.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.tools`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class DesignFinding(Args)`
+- `class Preference(Args)`
+- `class DesignLook(Args)`
+- `class DesignResult(DesignLook)`
+- `class ScanDesign(Args)`
+- `def pairs(images: Sequence[str]) -> list[str]`
+- `def check(look: DesignLook, tree: Worktree) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/detector.py
+
+Impeccable's design detector, run by Delivery (TD-77): its findings are evidence for the judges, never a fail.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `json`
+- `os`
+- `owlbear_delivery_next.design_packs.design_pack`
+- `signal`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class DetectorError(RuntimeError)`
+- `class Finding`
+- `def _from_engine(raw: dict[str, Any], *, by_file: bool) -> Finding`
+- `def _run(command: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, str, str]`
+- `def _engine(pack: Installed, args: Sequence[str], cwd: Path, browser: str | None = None, *, by_file: bool = False) -> list[Finding]`
+- `def scan_source(pack: Installed, paths: Sequence[Path], cwd: Path) -> list[Finding]`
+- `def scan_url(pack: Installed, url: str, width: int, browser: str, cwd: Path) -> list[Finding]`
+- `def scan_page(page: Any, pack: Installed) -> list[Finding]`
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/pack_git.py
+
+Activating a design pack update in the package's own checkout (TD-101): one commit, pushed on its branch alone.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `os`
+- `owlbear_delivery_next.design_packs`
+- `pathlib`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `def git(cwd: Path, args: list[str]) -> str`
+- `class Checkout`
+- `def checkout(package: Path, run: Git = git) -> Checkout`
+- `def _quiet(run: Git, cwd: Path, args: list[str]) -> str`
+- `def activate(co: Checkout, files: dict[Path, str], message: str, run: Git = git) -> str`
+- `def _rollback(co: Checkout, kept: dict[Path, bytes], before: str, made: str, run: Git) -> str`
+- `def push(co: Checkout, commit: str, run: Git = git) -> str`
+- `def _undo(co: Checkout, commit: str, run: Git) -> bool`
+
+## serve/delivery-next/src/owlbear_delivery_next/design_packs/pack_update.py
+
+Updating the design pack (design skill research §3.5, update procedure; TD-76): the tooling before the first update.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `datetime`
+- `http.client`
+- `importlib.resources`
+- `json`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `pathlib`
+- `re`
+- `subprocess`
+- `tempfile`
+- `typing`
+
+### Interfaces
+
+- `def _version(tag: str) -> tuple[int, ...]`
+- `def behind(fetch: Callable[[str], bytes] | None = None) -> int | None`
+- `def newer(fetch: Callable[[str], bytes] | None = None) -> list[str] | None`
+- `def notice(*, refresh: bool, fetch: Callable[[str], bytes] | None = None) -> dict[str, Any]`
+- `def said(n: dict[str, Any]) -> str`
+- `def _git(clone: Path, *args: str) -> str`
+- `def rules(clone: Path, tag: str) -> dict[str, dict[str, str]]`
+- `def diff(clone: Path, to: str) -> str`
+- `def golden(installed: Installed, *, pages: bool = True) -> dict[str, dict[str, list[str]]]`
+- `def _by_source(installed: Installed, root: Path, names: list[str]) -> dict[str, set[str]]`
+- `def _in_pages(installed: Installed, root: Path, names: list[str]) -> dict[str, set[str]]`
 
 ## serve/delivery-next/src/owlbear_delivery_next/git/__init__.py
 
@@ -9092,9 +7605,9 @@ GitHub contract, the ``gh`` provider and the merge decision.
 - `__future__`
 - `json`
 - `owlbear_delivery_next.github`
-- `owlbear_delivery_next.github.gh_checks`
 - `owlbear_delivery_next.github.gh_client`
 - `owlbear_delivery_next.github.gh_conversation`
+- `owlbear_delivery_next.github.gh_queue`
 - `owlbear_delivery_next.github.provider`
 - `pydantic`
 - `subprocess`
@@ -9103,13 +7616,14 @@ GitHub contract, the ``gh`` provider and the merge decision.
 ### Interfaces
 
 - `def _pull(repository: str, p: Json, operation: str) -> PullRequest`
-- `class GhProvider(Checks, Conversation)`
+- `class GhProvider(Queue, Conversation)`
   - `def read_repository(self) -> Repository`
   - `def read_rules(self, repository: str, branch: str) -> Rules`
   - `def find_pull_request(self, repository: str, head: str, base: str) -> PullRequest | None`
   - `def read_pull_request(self, repository: str, number: int) -> PullRequest`
   - `def create_pull_request(self, repository: str, head: str, base: str, title: str, body: str) -> PullRequest`
   - `def mark_ready(self, pr: PullRequest) -> None`
+  - `def add_labels(self, repository: str, number: int, labels: list[str]) -> None`
   - `def close_pull_request(self, repository: str, number: int) -> None`
   - `def reopen_pull_request(self, repository: str, number: int) -> None`
   - `def compare(self, repository: str, base: str, head: str) -> str`
@@ -9191,6 +7705,32 @@ GitHub contract, the ``gh`` provider and the merge decision.
   - `def post_reply(self, repository: str, number: int, item: ConversationItem, body: str) -> str`
   - `def resolve_thread(self, thread_id: str) -> bool`
 
+## serve/delivery-next/src/owlbear_delivery_next/github/gh_queue.py
+
+``gh`` merge queue: membership and queue events of a pull request, enqueue, dequeue and merge-group runs.
+
+### Imports
+
+- `__future__`
+- `json`
+- `owlbear_delivery_next.github.gh_checks`
+- `owlbear_delivery_next.github.gh_client`
+- `owlbear_delivery_next.github.provider`
+- `pydantic`
+- `subprocess`
+- `urllib.parse`
+
+### Interfaces
+
+- `def _event(node: Json) -> QueueEvent`
+- `def _state(pr: Json) -> QueueState`
+- `class Queue(Checks)`
+  - `def read_queue(self, repository: str, number: int) -> QueueState`
+  - `def enqueue(self, pr: PullRequest, expected_head: str) -> EnqueueResult`
+  - `def dequeue(self, pr: PullRequest) -> None`
+  - `def group_runs(self, repository: str, group_sha: str) -> tuple[GroupRun, ...]`
+  - `def group_log(self, repository: str, run_id: int, lines: int = 40) -> str`
+
 ## serve/delivery-next/src/owlbear_delivery_next/github/merge_offer.py
 
 One merge decision from fresh provider facts: block reasons, consent state and attempt readback (D3, D4 §3.2).
@@ -9247,6 +7787,12 @@ Transport-free GitHub contract: pull requests, checks, rules, comments and merge
 - `class MergeStatus(StrEnum)`
 - `class Refusal(StrEnum)`
 - `class MergeResult(_Model)`
+- `class QueueEvent(_Model)`
+- `class QueueEntry(_Model)`
+- `class QueueState(_Model)`
+- `class EnqueueStatus(StrEnum)`
+- `class EnqueueResult(_Model)`
+- `class GroupRun(_Model)`
 - `class CiState`
   - `def expected(self) -> int`
 - `def classify_checks(checks: tuple[Check, ...], declared: tuple[str, ...], required: tuple[str, ...]) -> CiState`
@@ -9257,6 +7803,7 @@ Transport-free GitHub contract: pull requests, checks, rules, comments and merge
   - `def read_pull_request(self, repository: str, number: int) -> PullRequest`
   - `def create_pull_request(self, repository: str, head: str, base: str, title: str, body: str) -> PullRequest`
   - `def mark_ready(self, pr: PullRequest) -> None`
+  - `def add_labels(self, repository: str, number: int, labels: list[str]) -> None`
   - `def close_pull_request(self, repository: str, number: int) -> None`
   - `def reopen_pull_request(self, repository: str, number: int) -> None`
   - `def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]`
@@ -9270,12 +7817,2556 @@ Transport-free GitHub contract: pull requests, checks, rules, comments and merge
   - `def compare(self, repository: str, base: str, head: str) -> str`
   - `def request_merge(self, request: MergeRequest) -> MergeResult`
   - `def delete_branch(self, repository: str, branch: str) -> None`
+  - `def read_queue(self, repository: str, number: int) -> QueueState`
+  - `def enqueue(self, pr: PullRequest, expected_head: str) -> EnqueueResult`
+  - `def dequeue(self, pr: PullRequest) -> None`
+  - `def group_runs(self, repository: str, group_sha: str) -> tuple[GroupRun, ...]`
+  - `def group_log(self, repository: str, run_id: int, lines: int = 40) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/__init__.py
+## serve/delivery-next/src/owlbear_delivery_next/local_system/__init__.py
 
-Engine parts of agent steps.
+This machine: files, processes, shell text, the code identity and the local folders.
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/amend.py
+## serve/delivery-next/src/owlbear_delivery_next/local_system/codebase.py
+
+The identity of the Delivery code a process loaded: a host and the runners it starts must share it (finding 10).
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `pathlib`
+
+### Interfaces
+
+- `def shipped(root: Path = ROOT) -> list[Path]`
+- `def identity(root: Path = ROOT) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/data_repo.py
+
+Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, TD-128).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `fcntl`
+- `json`
+- `logging`
+- `os`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.storage_io`
+- `pathlib`
+- `re`
+- `subprocess`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class DataRepoError(ValueError)`
+- `def _held(path: Path) -> str`
+- `def pointer() -> Path`
+- `def _move_old(path: Path) -> None`
+- `def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]`
+- `def _top(root: Path) -> Path | None`
+- `class DataRepo`
+  - `def global_path(self) -> Path`
+  - `def project_path(self, name: str) -> Path`
+  - `def memory_path(self, name: str) -> Path`
+  - `def locked(self, wait: float | None = None) -> Iterator[None]`
+  - `def _exclude(self, admin: Path) -> None`
+  - `def claim(self, name: str, identity: str) -> bool`
+  - `def claimed(self, identity: str) -> str | None`
+  - `def refusal(self, name: str, identity: str) -> str`
+  - `def rename(self, old: str, new: str, until: float | None = None) -> str`
+  - `def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str`
+  - `def _tracked(self, rel: str, until: float) -> bool`
+  - `def _push(self, until: float) -> str`
+  - `def pending(self) -> str`
+- `def locate() -> DataRepo | None`
+- `def point(root: Path) -> DataRepo`
+- `def identity(repo: Path) -> str`
+- `def project_name(repo: Path) -> str`
+- `def folder(shared: DataRepo, repo: Path) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/git_files.py
+
+Git facts of a local clone: one bounded command, the common git directory, tracked or not, local excludes.
+
+### Imports
+
+- `__future__`
+- `shutil`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `def probe_in(cwd: Path) -> Probe`
+- `def git_common_dir(cwd: Path) -> Path`
+- `def untracked(repo: Path, path: Path) -> bool`
+- `def exclude(repo: Path, path: Path) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/lint.py
+
+The builder's lint (TD-87): fast static linters the repository configures, on the files a build changed.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `os`
+- `pathlib`
+- `shutil`
+- `signal`
+- `subprocess`
+- `time`
+- `tomllib`
+- `typing`
+
+### Interfaces
+
+- `class Linter`
+- `class Outcome`
+- `def _few(paths: Sequence[str]) -> str`
+- `def _ruff_config(folder: Path) -> bool`
+- `def _ruff(root: Path) -> tuple[str, ...] | None`
+- `def _python(root: Path, files: Sequence[str]) -> tuple[list[Linter], list[str]]`
+- `def _homes(root: Path, files: Sequence[str], configs: Sequence[str]) -> dict[PurePosixPath, list[str]]`
+- `def _binary(root: Path, home: PurePosixPath, name: str) -> Path | str`
+- `def _node(root: Path, files: Sequence[str]) -> tuple[list[Linter], list[str]]`
+- `def plan(root: Path, files: Sequence[str]) -> tuple[list[Linter], list[str]]`
+- `def _arg(path: PurePosixPath) -> str`
+- `def _killed(proc: subprocess.Popen[str]) -> str`
+- `def run(root: Path, linter: Linter, timeout: float = TIMEOUT) -> Outcome`
+- `def _shown(output: str) -> str`
+- `class Lint`
+  - `def __init__(self, log: Callable[..., None]) -> None`
+  - `def check(self, root: Path, changed: Sequence[str]) -> list[str]`
+  - `def _check(self, root: Path, changed: Sequence[str]) -> list[str]`
+  - `def _skip(self, linter: Linter, end: float) -> str`
+  - `def _error(self, linter: Linter, out: Outcome) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/local_home.py
+
+OwlBear's one folder on this machine (TD-198): worktrees, snapshots, the data pointer and the design pack.
+
+### Imports
+
+- `__future__`
+- `pathlib`
+
+### Interfaces
+
+- `def root() -> Path`
+- `def stable(path: Path) -> Path`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/mask.py
+
+The one sanitiser of command and argument text Delivery shows or persists (now line, denials, status).
+
+### Imports
+
+- `__future__`
+- `re`
+
+### Interfaces
+
+- `def _header(m: re.Match[str]) -> str`
+- `def redact(text: str) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/preload.py
+
+What each worker role starts with: its tools (TD-69), the project's memory (TD-70, TD-72) and preloaded skills.
+
+### Imports
+
+- `__future__`
+- `importlib.resources`
+- `importlib.util`
+- `pathlib`
+- `sys`
+- `typing`
+- `yaml`
+
+### Interfaces
+
+- `def front_matter(doc: str) -> tuple[dict[str, Any], str]`
+- `def agent_file(role: str) -> tuple[dict[str, Any], str]`
+- `def tools(role: str) -> list[str]`
+- `def memory(store: Path | None) -> dict[str, Any] | None`
+- `def directory() -> Path`
+- `def text(name: str, folder: Path | None = None) -> str`
+- `def _named(name: str, folder: Path | None = None) -> bool`
+- `def required(role: str, *, ui: bool = False, job: str = '') -> tuple[str, ...]`
+- `def folders(role: str, *, ui: bool = False, job: str = '', folder: Path | None = None) -> list[str]`
+- `def missing(role: str, *, ui: bool = False, job: str = '', folder: Path | None = None) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/process_probe.py
+
+Same-user processes still working in a step's worktree; a scan never proves a worker has ended.
+
+### Imports
+
+- `__future__`
+- `os`
+- `pathlib`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `class ProcessObservationError(RuntimeError)`
+- `class ProcessVanishedError(ProcessObservationError)`
+- `class WorktreeProcessScanError(RuntimeError)`
+- `class ProcessView(Protocol)`
+  - `def pid(self) -> int`
+  - `def name(self) -> str`
+  - `def create_time(self) -> float | None`
+  - `def cwd(self) -> Path | None`
+  - `def open_files(self) -> tuple[Path, ...]`
+  - `def executable(self) -> Path | None`
+  - `def has_live_children(self) -> bool`
+  - `def has_terminal(self) -> bool`
+  - `def cmdline(self) -> tuple[str, ...]`
+- `def _contains(path: Path, roots: tuple[Path, ...]) -> bool`
+- `def _is_interactive_invocation(argv: tuple[str, ...]) -> bool`
+- `def _is_idle_interactive_shell(process: ProcessView) -> bool`
+- `def _worktree_cwd_blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool`
+- `def _is_sealed_system_binary(process: ProcessView) -> bool`
+- `def _blocks(process: ProcessView, roots: tuple[Path, ...]) -> bool`
+- `def _observation_error(exc: BaseException) -> ProcessObservationError`
+- `class _PsutilProcessView`
+  - `def __init__(self, process: psutil.Process, name: str, create_time: float | None, *, owner_known: bool = True) -> None`
+  - `def pid(self) -> int`
+  - `def name(self) -> str`
+  - `def create_time(self) -> float | None`
+  - `def _read(self, read: Callable[[], T], *, owner: bool = True) -> T`
+  - `def cwd(self) -> Path | None`
+  - `def open_files(self) -> tuple[Path, ...]`
+  - `def executable(self) -> Path | None`
+  - `def has_terminal(self) -> bool`
+  - `def cmdline(self) -> tuple[str, ...]`
+  - `def has_live_children(self) -> bool`
+- `def _still_own_descendant(pid: int, create_time: float | None, own_pid: int) -> bool | None`
+- `def psutil_user_processes() -> Iterator[ProcessView]`
+- `def _may_be_worker_leftover(process: ProcessView, started_after: datetime | None) -> bool`
+- `class ProcessTableWorktreeProbe`
+  - `def __init__(self, source: ProcessSource = psutil_user_processes) -> None`
+  - `def active_processes(self, roots: tuple[Path, ...], *, started_after: datetime | None) -> tuple[tuple[int, str], ...]`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/processes.py
+
+Recorded step processes: observing them by PID and start time, signalling them, and the termination verdict (F4).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `os`
+- `psutil`
+- `typing`
+
+### Interfaces
+
+- `class Termination`
+- `def verdict(recorded: Pids, alive: Observe, problems: Sequence[str] = ()) -> Termination`
+- `def alive(pid: int, created: float | None) -> bool | None`
+- `def started(pid: int) -> float`
+- `def _pgid(pid: int) -> int`
+- `def targets(recorded: Pids, seen: Observe, group: Callable[[int], int], own: int) -> tuple[list[int], list[int]]`
+- `def kill(recorded: Pids, sig: signal.Signals) -> list[int]`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/shell_parse.py
+
+Shell text as the permission guard reads it: each command's words, and the commands and scripts they run.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `pathlib`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `class _Level`
+  - `def add(self, chars: str) -> None`
+  - `def end_word(self) -> None`
+  - `def end_command(self, commands: list[list[str]]) -> None`
+- `class _Lexer`
+  - `def __init__(self, text: str) -> None`
+  - `def level(self, i: int, close: str = '') -> int`
+  - `def _step(self, s: _Level, i: int) -> int`
+  - `def _unquoted(self, s: _Level, i: int) -> int`
+- `def commands(text: str) -> list[list[str]]`
+- `def programs(words: Sequence[str], depth: int = 0) -> list[Sequence[str]]`
+- `def operand(words: Sequence[str], i: int) -> int`
+- `def _shell_script(words: Sequence[str]) -> str | None`
+- `def scripts(words: Sequence[str]) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/slots.py
+
+Session slots (TD-336, TD-105): how many agent sessions run at once on this machine and in each project.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `itertools`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class _Waiting`
+- `class Slots`
+  - `def __init__(self, total: Callable[[], int], *, closed: bool = False) -> None`
+  - `def open(self) -> None`
+  - `def waker(self, project: str, wake: Callable[[], None]) -> None`
+  - `def take(self, project: str, key: str, want: int, limit: int, wake: Callable[[], None] | None = None) -> int`
+  - `def give(self, project: str, key: str) -> None`
+  - `def cancel(self, project: str, key: str) -> None`
+  - `def restore(self, project: str, held: dict[str, int]) -> None`
+  - `def leave(self, project: str) -> None`
+  - `def keep(self, project: str, keys: set[str]) -> None`
+  - `def counts(self, project: str) -> tuple[int, int, int]`
+  - `def _of(self, project: str) -> int`
+  - `def _turn(self, total: int) -> Key | None`
+  - `def _wake(self, turn: Key | None) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/storage_io.py
+
+Crash-safe atomic text write and descriptor-backed ``flock`` helpers.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `fcntl`
+- `os`
+- `pathlib`
+- `stat`
+- `tempfile`
+
+### Interfaces
+
+- `def open_lock(root_fd: int, *, blocking: bool, shared: bool = False, name: str = '.storage.lock') -> int`
+- `def atomic_write(target: Path, content: str) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/local_system/text_files.py
+
+Local text files written safely: never through a symbolic link, always by an atomic rename.
+
+### Imports
+
+- `__future__`
+- `os`
+- `pathlib`
+- `tempfile`
+
+### Interfaces
+
+- `def linked_part(repo: Path, path: Path) -> Path | None`
+- `def replace_text(path: Path, text: str) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/__init__.py
+
+The machine host (TD-242): one process serving every registered project, and the ``owlbear`` command.
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/app.py
+
+The machine host's HTTP surface (TD-242): pages, machine routes and each project's API by its id.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `fastapi`
+- `fastapi.responses`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.machine_host.machine`
+- `owlbear_delivery_next.project_host`
+- `pathlib`
+- `pydantic`
+- `re`
+- `secrets`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `class RegisterBody(api.Body)`
+- `class SettingsBody(api.Body)`
+- `def _local(host: str) -> bool`
+- `class Dispatcher`
+  - `def __init__(self, app: ASGIApp, machine: Machine, expected: bytes) -> None`
+  - `async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None`
+- `def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIApp`
+- `def _routes(machine: Machine) -> APIRouter`
+- `def _machine_routes(routes: APIRouter, machine: Machine) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/command.py
+
+The ``owlbear`` command (TD-257, TD-327): OwlBear on this Mac, and the project commands under one name.
+
+### Imports
+
+- `cyclopts`
+- `pathlib`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `def forward(argv: list[str]) -> int`
+- `def ask_tty(question: str) -> bool`
+- `def say(text: str) -> None`
+- `def default() -> int`
+- `def start(*, paused: bool = False) -> int`
+- `def stop() -> int`
+- `def restart(*, paused: bool = False) -> int`
+- `def status(*, repo: Path | None = None) -> int`
+- `def logs(*, lines: Annotated[int, Parameter(name=['--lines', '-n'])] = 40) -> int`
+- `def doctor() -> int`
+- `def autostart(state: Literal['on', 'off'], /) -> int`
+- `def install() -> int`
+- `def uninstall() -> int`
+- `def main(argv: list[str] | None = None) -> int`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/control.py
+
+What the ``owlbear`` command does to the machine host: start, stop, status, logs, doctor, login item, install.
+
+### Imports
+
+- `__future__`
+- `json`
+- `os`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.project_host.api`
+- `pathlib`
+- `plistlib`
+- `signal`
+- `subprocess`
+- `sys`
+- `time`
+- `typing`
+- `urllib.request`
+
+### Interfaces
+
+- `def plist_path() -> Path`
+- `def argv(*, run: bool = False) -> list[str]`
+- `def start(say: Say, *, paused: bool = False) -> int`
+- `def _identified() -> HostRecord | None`
+- `def stop(say: Say) -> int`
+- `def projects() -> dict[str, Any] | None`
+- `def status(say: Say) -> int`
+- `def logs(say: Say, lines: int) -> int`
+- `def autostarts() -> str`
+- `def autostart(say: Say, *, on: bool) -> int`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/environment.py
+
+The machine host's own environment (TD-242): no credential or repository selector leaks into a project.
+
+### Imports
+
+- `__future__`
+- `os`
+- `typing`
+
+### Interfaces
+
+- `def scrub(env: MutableMapping[str, str] | None = None) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/install.py
+
+``owlbear install``, ``uninstall`` and ``doctor``: the command, its completion, the shaper and the login item.
+
+### Imports
+
+- `__future__`
+- `importlib.resources`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.runtimes`
+- `pathlib`
+- `shutil`
+- `subprocess`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `def link_path() -> Path`
+- `def runtime() -> Path`
+- `def shaper_links() -> list[tuple[Path, Path]]`
+- `def _link(link: Path, target: Path) -> str`
+- `def install(say: Say, ask: Callable[[str], bool], app: App) -> int`
+- `def uninstall(say: Say) -> int`
+- `def doctor(say: Say, dropped: list[str]) -> int`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/machine.py
+
+The machine host's state (TD-242): its record, the projects it serves and whether Delivery is paused.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `datetime`
+- `owlbear_delivery_next.change_flow.status`
+- `owlbear_delivery_next.local_system.slots`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.machine_host.project`
+- `owlbear_delivery_next.machine_host.registry`
+- `owlbear_delivery_next.project_host.host`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.store`
+- `pathlib`
+- `subprocess`
+- `sys`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class MachineError(Exception)`
+  - `def __init__(self, status: int, text: str) -> None`
+- `def recorded(repo: Path) -> dict[str, int]`
+- `class Machine`
+  - `def __init__(self, record: HostRecord, *, paused: bool = True) -> None`
+  - `def _sessions(self) -> int`
+  - `def say(self, text: str) -> None`
+  - `def _load(self, entry: registry.Project) -> Project`
+  - `def sharing(self, p: Project) -> list[Host]`
+  - `def load_all(self) -> None`
+  - `def retry(self) -> None`
+  - `def retry_loop(self) -> None`
+  - `def get(self, pid: str) -> Project`
+  - `def register(self, path: Path) -> Project`
+  - `def remove(self, pid: str) -> None`
+  - `def adopt(self, pid: str) -> Project`
+  - `def resume(self) -> None`
+  - `def pause(self) -> None`
+  - `def pause_stop(self) -> None`
+  - `def _wake(self) -> None`
+  - `def left(self) -> list[str]`
+  - `def idle_stop(self) -> bool`
+  - `def idle_loop(self) -> None`
+  - `def waiting(self) -> int`
+  - `def closing(self) -> None`
+  - `def stop_all(self) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/project.py
+
+One registered project inside the machine host: its store, scheduler, readiness, API and admission gate.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `os`
+- `owlbear_delivery_next.commands`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.project_host.host`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.state_store.store`
+- `pathlib`
+- `shlex`
+- `threading`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Gate`
+  - `def __init__(self) -> None`
+  - `def enter(self) -> bool`
+  - `def leave(self) -> None`
+  - `def close(self, timeout: float) -> int`
+  - `def reopen(self) -> None`
+- `class ImportWaitingError(Exception)`
+- `class Project`
+  - `def __init__(self, entry: registry.Project) -> None`
+  - `def name(self) -> str`
+  - `def load(self, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None] = lambda _h: None) -> None`
+  - `def _start(self, store: Store, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None]) -> None`
+  - `def import_state(store: Store, host: Host) -> None`
+  - `def _publish(self) -> None`
+  - `def _ready(self) -> None`
+  - `def working(self, *, stopping: bool = False) -> list[str]`
+  - `def stop(self, *, drain: float = DRAIN, refuse: bool = False) -> list[str]`
+  - `def info(self) -> dict[str, Any]`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/registry.py
+
+The machine's registered projects (TD-242): ``~/.owlbear/machine.json``, written under ``machine.lock``.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `datetime`
+- `hashlib`
+- `os`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.database`
+- `pathlib`
+- `pydantic`
+- `shutil`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class RegistryError(Exception)`
+- `class Project(Record)`
+- `class Settings(Record)`
+- `class Machine(Record)`
+- `def _home() -> Path`
+- `def locked() -> Iterator[None]`
+- `def load() -> Machine`
+- `def save(machine: Machine) -> None`
+- `def revision(settings: Settings) -> str`
+- `def configure(settings: Settings, rev: str) -> Settings`
+- `def _git(cwd: Path, *args: str) -> Path`
+- `def _owned(path: Path) -> None`
+- `def store_of(work: Path) -> Path`
+- `def canonical(path: Path) -> tuple[Path, Path]`
+- `def clone_id(store: Path) -> str | None`
+- `def _ensure_id(store: Path) -> str`
+- `def register(path: Path) -> Project`
+- `def replaced(project: Project) -> str | None`
+- `def adopt(pid: str) -> Project`
+- `def remove(pid: str) -> None`
+- `def resumed(at: datetime) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/machine_host/serve.py
+
+The machine host's process (TD-242): one per machine, serving every registered project.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `datetime`
+- `os`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.machine_host`
+- `owlbear_delivery_next.machine_host.machine`
+- `owlbear_delivery_next.project_host.api`
+- `owlbear_delivery_next.project_host.host`
+- `secrets`
+- `socket`
+- `sys`
+- `threading`
+- `typing`
+- `uvicorn`
+
+### Interfaces
+
+- `class Server(uvicorn.Server)`
+  - `def __init__(self, config: uvicorn.Config, machine: Machine) -> None`
+  - `def handle_exit(self, sig: int, frame: FrameType | None) -> None`
+  - `def stop(self) -> None`
+- `def running() -> HostRecord | None`
+- `def main(argv: list[str] | None = None) -> int`
+- `def serve(*, run: bool = False) -> int`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/__init__.py
+
+The design pack update job and its rounds.
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/pack_candidate.py
+
+A design pack update's candidate and its challenge (TD-101): detector pins and skills together, judged whole.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `hashlib`
+- `io`
+- `json`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.runtimes.session_result`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `re`
+- `subprocess`
+- `tarfile`
+- `tempfile`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class Candidate`
+- `def sync(clone: Path, repository: str) -> None`
+- `def _run(command: list[str]) -> bytes`
+- `def _show(clone: Path, tag: str, path: str) -> bytes`
+- `def prepare(clone: Path, package: Path, tag: str, download: Callable[[str], bytes], skills: Path) -> Candidate`
+- `def _published(download: Callable[[str], bytes], pins: dict[str, Any], platform: str) -> str`
+- `def _moved(text: str, old: dict[str, str], new: dict[str, str]) -> str`
+- `def message(c: Candidate, diff: str, golden: str, replayed: str, *, updated: str = '', rounds: list[str] | None = None) -> str`
+- `def _skills(c: Candidate) -> list[str]`
+- `def reconsider_message(c: Candidate, lines: list[str]) -> str`
+- `def challenge(store: Store, c: Candidate, clone: Path, text: str, run: Callable[[Store, sdk_adapter.Session], Run], *, rechecks: tuple[str, ...] = (), cap: int = MAX_FINDINGS, submit: tools.Spec = tools.REVIEW, label: str = LABEL) -> Run`
+- `def upstream_skill(clone: Path, commit: str, into: Path) -> None`
+- `def said_replay(r: Replay) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/pack_job.py
+
+The Settings page's design pack update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `fcntl`
+- `importlib.resources`
+- `json`
+- `os`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.pack_runs.pack_run`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `shutil`
+- `threading`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class Busy(Exception)`
+- `class Stale(Exception)`
+- `class Refused(Exception)`
+- `def _upstream() -> Path`
+- `class Live`
+- `def _now() -> str`
+- `def _blank() -> dict[str, Any]`
+- `class Job`
+  - `def __init__(self, store: Store, live: Live | None = None) -> None`
+  - `def path(self) -> Path`
+  - `def _read(self) -> dict[str, Any]`
+  - `def _save(self) -> None`
+  - `def read(self) -> dict[str, Any]`
+  - `def _copy(self) -> dict[str, Any]`
+  - `def busy(self) -> bool`
+  - `def start(self) -> dict[str, Any]`
+  - `def answer(self, question: str, option: str, note: str = '') -> dict[str, Any]`
+  - `def discard(self) -> dict[str, Any]`
+  - `def log(self, line: str) -> None`
+  - `def _log(self, line: str) -> None`
+  - `def stage(self, name: str, result: str, detail: str = '') -> None`
+  - `def keep(self, ctx: pack_run.Context, lp: RoundLoop) -> None`
+  - `def wait(self, ctx: pack_run.Context, lp: RoundLoop, questions: list[dict[str, Any]]) -> None`
+  - `def pushed(self, commit: str, co: pack_git.Checkout, changed: list[str]) -> None`
+  - `def _end(self, state: str, reason: str) -> None`
+  - `def _finish(self, state: str, reason: str) -> None`
+  - `def _claim(self) -> None`
+  - `def _run(self, work: Callable[[], str | None]) -> None`
+  - `def _steps(self, work: Callable[[], str | None]) -> None`
+  - `def do(self, name: str, work: Callable[[], T], said: Callable[[T], str] = str) -> T`
+  - `def _stages(self) -> str | None`
+  - `def _resume(self) -> str | None`
+  - `def _notice(self) -> str`
+- `def _decided(asked: list[dict[str, Any]], q: dict[str, Any], option: str, *, note: str, ctx: pack_run.Context, lp: RoundLoop) -> list[dict[str, Any]]`
+- `def _pack(co: pack_git.Checkout, c: pack_candidate.Candidate) -> str`
+- `def _golden(wrong: dict[str, dict[str, list[str]]]) -> str`
+- `def last(store: Store) -> dict[str, Any] | None`
+- `def running_for() -> str | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/pack_replay.py
+
+Calibration replay before a design pack update (design skill research §3.5, step 4 of ``pack_update``).
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `dataclasses`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `re`
+- `tempfile`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class ReplayError(RuntimeError)`
+- `def replay(store: Store, candidate: Candidate | None = None, run: Callable[[sdk_adapter.Session], Run] | None = None) -> calibration.Replay`
+- `def _pack(candidate: Candidate | None) -> str`
+- `def _ran(run: Callable[[sdk_adapter.Session], Run], cfgs: list[sdk_adapter.Session]) -> list[Run]`
+- `def _same(kept: VisualRound, role: RoleModel) -> bool`
+- `def _inside(path: Path, root: Path) -> bool`
+- `def _images(kept: VisualRound, kept_files: dict[str, Path]) -> list[judges.Image] | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/pack_rounds.py
+
+The design pack updater's challenge rounds (TD-208, TD-220, TD-256): findings by ID, rejections, the owner, the end.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `typing`
+
+### Interfaces
+
+- `def _flat(text: str, limit: int = 1400) -> str`
+- `def addressing(lp: RoundLoop) -> list[RoundFinding]`
+- `def rejectable(lp: RoundLoop) -> tuple[str, ...]`
+- `def settled(lp: RoundLoop) -> tuple[str, ...]`
+- `def pending(lp: RoundLoop) -> list[RoundFinding]`
+- `def due(lp: RoundLoop) -> list[RoundFinding]`
+- `def _undecided(lp: RoundLoop) -> list[RoundFinding]`
+- `def revised(lp: RoundLoop, rejected: Mapping[str, str], identity: str) -> Revised`
+- `def many(lp: RoundLoop) -> bool`
+- `def counted(lp: RoundLoop, found: list[str], judged: Mapping[str, tuple[bool, str]], identity: str, *, recheck: bool) -> Counted`
+- `def after(lp: RoundLoop) -> Counted`
+- `def decided(lp: RoundLoop, key: str, option: str, note: str) -> None`
+- `def reconsidered(lp: RoundLoop, verdicts: Mapping[str, tuple[str, str]]) -> None`
+- `def questions(lp: RoundLoop, run: str, identity: str) -> list[dict[str, Any]]`
+- `def _dispute(run: str, f: RoundFinding) -> dict[str, Any]`
+- `def _question(qid: str, kind: str, text: str, options: list[str], **more: str) -> dict[str, Any]`
+- `def _said(f: RoundFinding) -> str`
+- `def updater_lines(lp: RoundLoop) -> list[str]`
+- `def challenge_lines(lp: RoundLoop, *, recheck: bool) -> list[str]`
+- `def reconsider_lines(lp: RoundLoop) -> list[str]`
+- `def summary(lp: RoundLoop, *, owner: bool) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/pack_run.py
+
+A design pack update's resumable run (TD-208, TD-220, TD-256): its context, its next action and its sessions.
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.settings`
+- `pathlib`
+- `pydantic`
+- `shutil`
+- `typing`
+
+### Interfaces
+
+- `class Stopped(Exception)`
+  - `def __init__(self, reason: str, *, current: bool = False) -> None`
+- `class Context(BaseModel)`
+- `def _sha(data: bytes) -> str`
+- `def _path(name: str) -> str`
+- `def begin(job: Job, c: pack_candidate.Candidate, co: pack_git.Checkout, *, diff: str, golden: str, why: str) -> str | None`
+- `def rebuilt(job: Job, ctx: Context) -> pack_candidate.Candidate`
+- `def _unchanged(package: Path, ctx: Context) -> None`
+- `def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str | None`
+- `def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> Action`
+- `def _replayed(r: Any) -> str`
+- `def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop, *, recheck: bool) -> Action`
+- `def _verdict(run: Run) -> tuple[list[str], dict[str, tuple[bool, str]]]`
+- `def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action`
+- `def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/pack_updater.py
+
+The design pack's writing updater (TD-125, TD-177): it edits the candidate's skills, then the challenger's findings.
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `pydantic`
+- `subprocess`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class UpdateResult(tools.Args)`
+- `def new_id() -> str`
+- `def _files(at: Path) -> dict[str, str]`
+- `def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path) -> dict[str, str]`
+- `def skill(c: pack_candidate.Candidate, name: str) -> Path`
+- `def taken(at: Path, start: dict[str, str], c: pack_candidate.Candidate) -> list[str]`
+- `def prompt(c: pack_candidate.Candidate, diff: str, lines: list[str], earlier: str = '') -> str`
+- `def repair(lines: list[str]) -> str`
+- `def config(store: Store, at: Path, sid: str, message: str, *, resume: bool, fresh: str, replaced: Callable[[], str | None], keys: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())) -> sdk_adapter.Session`
+- `def ended(done: Run) -> UpdateResult`
+
+## serve/delivery-next/src/owlbear_delivery_next/pack_runs/visual_settled.py
+
+A visual round the owner settled: decided on the Changes page (TD-79) or accepted without the model check (TD-94).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def settled(store: Store, lock: Lock, change: Change, capture: tuple[str, str, list[int]], out: Path) -> bool`
+- `def calibrated(store: Store, change: Change, out: Path) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/__init__.py
+
+The project's host: its HTTP API and pages.
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/admission.py
+
+Admission of a launch the owner starts (a shaping chat, a design pack update) against OwlBear's stop (TD-288).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `fastapi`
+- `owlbear_delivery_next.project_host.host`
+- `typing`
+
+### Interfaces
+
+- `def admitted(host: Host) -> Iterator[None]`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/answers.py
+
+Why the host refuses an answer's selection: a visual round's decision (TD-79) or a final retry's tasks (TD-217).
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def refused(c: Change, q: Question, body: AnswerBody) -> tuple[int, str] | None`
+- `def _visual(c: Change, body: AnswerBody) -> tuple[int, str] | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/api.py
+
+Status-view HTTP API of the host app: Changes, answers, check results and brief approval (D4 §3.2, §3.6).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `fastapi`
+- `fastapi.responses`
+- `hashlib`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.progress`
+- `owlbear_delivery_next.change_flow.status`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.project_host.admission`
+- `owlbear_delivery_next.project_host.launches`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.runtimes.vscode_adapter`
+- `owlbear_delivery_next.runtimes.window_files`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.briefs`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `pydantic`
+- `re`
+- `secrets`
+- `shlex`
+- `shutil`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Body(BaseModel)`
+- `class AnswerBody(Body)`
+- `class CheckBody(Body)`
+- `class ConsentBody(Body)`
+- `class IntentBody(Body)`
+- `def link(rec: HostRecord | None) -> str | None`
+- `def fixed_page(html: str) -> Callable[[], HTMLResponse]`
+- `def snapshot(inputs: Inputs, person: PersonCheck) -> str`
+- `def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) -> dict[str, Any]`
+- `def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None`
+- `def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, Any]`
+- `def new_chat(repo: Path, shaper: Effective, prompt: str = START_PROMPT, start: Callable[[Path, Effective, str], tuple[Outcome, str]] = open_chat) -> dict[str, str]`
+- `def create_app(store: Store, token: str, host: Host, *, launch: Callable[[Path, Effective, str], dict[str, str]] = new_chat, which: Callable[[str], str | None] = shutil.which, pack: pack_job.Job | None = None) -> FastAPI`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/backlog_routes.py
+
+The Backlog page's API (TD-84, TD-103): list the backlog issues, add ideas, triage, and start a Change from them.
+
+### Imports
+
+- `__future__`
+- `fastapi`
+- `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.runtimes.step_input`
+- `owlbear_delivery_next.state_store.backlog`
+- `pydantic`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class Body(BaseModel)`
+- `class AddBody(Body)`
+- `class PatchBody(Body)`
+- `class ChangeBody(Body)`
+- `def prompt(chosen: list[Entry], found: dict[str, Entry]) -> str`
+- `def _shown(entry: Entry, raw: dict[str, Any]) -> dict[str, Any]`
+- `def _run(store: Store, work: Callable[[Backlog], T]) -> T`
+- `def _took(store: Store, ids: list[str], launch: str, end: dict[str, str]) -> dict[str, str]`
+- `def named(store: Store, clone: str, change: str) -> str`
+- `def router(store: Store, start: Callable[..., dict[str, Any]], clone: Callable[[], str] = str) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/brief_routes.py
+
+The shaping chat's request for a brief challenge (TD-249): the version, with the shaper's rejections.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `fastapi`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.store`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class ChallengeBody(BaseModel)`
+- `class ApproveBody(BaseModel)`
+- `def slug_of(store: Store, handle: str) -> str | None`
+- `def refused(store: Store, c: Change, body: ApproveBody) -> str`
+- `def router(store: Store, read: Callable[[str], Change], put: Callable[[str, InboxItem], dict[str, str]], wake: Callable[[], None], held: Callable[[], bool] = lambda: False) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/config_routes.py
+
+The settings page's API (§3.13 item 5, TD-52): read the layers and the resolved values, save one layer.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `fastapi`
+- `hashlib`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.runtimes.catalogue`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store.store`
+- `pydantic`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Save(BaseModel)`
+- `class Folder(BaseModel)`
+- `def _rev(path: Path | None) -> str`
+- `def _state(store: Store, notice: str = '') -> dict[str, Any]`
+- `def _resolved(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None, misfit: list[str]) -> Settings`
+- `def _unrounded(layer: T | None) -> T | None`
+- `def _agreement(store: Store) -> list[dict[str, Any]]`
+- `def _others(store: Store) -> list[Layer]`
+- `def _combined(store: Store, new: Layer, host: Host) -> None`
+- `def _layers(stores: list[Store]) -> list[Layer]`
+- `def _save(store: Store, path: Path, model: type[T], body: Save, what: str, host: Host) -> str`
+- `def _working(store: Store, host: Host) -> list[str]`
+- `def _rename(store: Store, host: Host, name: str) -> str`
+- `def router(store: Store, host: Host) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/curation_routes.py
+
+The test review's Maintenance routes (TD-370, TD-371): what its dialog offers, and the owner's Start.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `fastapi`
+- `owlbear_delivery_next.workflow_steps`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class StartBody(BaseModel)`
+- `def router(store: Store, host: Host) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/environment.py
+
+The host's launch of a person check's environment once its preparing Builder is gone (TD-24, TD-96).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/host.py
+
+Delivery host: one per clone; scheduler, runner launcher, termination scan and check environments (D4 §3.2).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `datetime`
+- `fcntl`
+- `os`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.status`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.process_probe`
+- `owlbear_delivery_next.local_system.slots`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.project_host.runner_end`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `psutil`
+- `pydantic`
+- `subprocess`
+- `sys`
+- `threading`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class HostRecord(Record)`
+- `class RunnerRecord(Record)`
+- `def running(store: Store) -> HostRecord | None`
+- `def running_at(root: Path) -> HostRecord | None`
+- `def stale(record: HostRecord | None) -> bool`
+- `def offline(c: Change, now: datetime) -> bool`
+- `def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool = False, waiting: str = '') -> Activity`
+- `def _scan(path: Path, since: datetime) -> Found`
+- `class Host`
+  - `def __init__(self, store: Store, repo: Path, *, spawn: Callable[[str], RunnerRecord] | None = None, scan: Callable[[Path, datetime], Found] = _scan, group: Callable[[int], Found] = check.members, alive: Callable[[int, float | None], bool | None] = processes.alive, code: Callable[[], str] = codebase.identity, reach: Callable[[str], str | None] = lambda name: readiness.reach(name, timeout=PROBE_TIMEOUT), paused: Callable[[], bool] = lambda: False) -> None`
+  - `def say(self, text: str) -> None`
+  - `def _path(self, slug: str) -> Path`
+  - `def runner(self, slug: str) -> RunnerRecord | None`
+  - `def activity(self, slug: str) -> Activity`
+  - `def observe_pr(self, slug: str) -> Seen`
+  - `def tick(self, now: datetime | None = None) -> list[str]`
+  - `def interval(self) -> float`
+  - `def _probe(self, now: datetime) -> None`
+  - `def _woken(self, c: Change, now: datetime) -> Change`
+  - `def _unloadable(self, slug: str, text: str) -> None`
+  - `def _one(self, slug: str, now: datetime) -> bool`
+  - `def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change`
+  - `def _ended(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool`
+  - `def _gone(self, lock: Lock, c: Change, rec: RunnerRecord | None, now: datetime) -> bool`
+  - `def _pull(self, lock: Lock, c: Change, now: datetime) -> Change`
+  - `def mark(self, c: Change, found: Found | None, now: datetime) -> None`
+  - `def _blocked(self, lock: Lock, c: Change, found: Found | None, now: datetime) -> bool`
+  - `def _survivors(self, c: Change, rec: RunnerRecord | None) -> Found | None`
+  - `def owner_runs(self) -> bool`
+  - `def env_action(self, c: Change) -> check.Action | None`
+  - `def clear(self, c: Change, e: Environment) -> Found | None`
+  - `def _stale(self) -> bool`
+  - `def _launch(self, slug: str) -> bool`
+  - `def _spawn(self, slug: str) -> RunnerRecord`
+  - `def run(self) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/launches.py
+
+New Change launches: the shaping chat opens on a background thread, one at a time per project (TD-83).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `threading`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class Refused(Exception)`
+  - `def __init__(self, status: int, text: str) -> None`
+- `class Launch`
+- `class Launches`
+  - `def __init__(self, gap: float, clock: Callable[[], float]) -> None`
+  - `def start(self, work: Callable[[], dict[str, str]], command: str = '', done: Ended | None = None) -> str`
+  - `def _run(self, launch: str, work: Callable[[], dict[str, str]], done: Ended | None) -> None`
+  - `def state(self, launch: str) -> dict[str, Any] | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/memory_routes.py
+
+The Memory page's API (TD-85): the project's agent memory in its shared-repository folder (TD-72), and Global.
+
+### Imports
+
+- `__future__`
+- `fastapi`
+- `owlbear_delivery_next.local_system`
+- `owlbear_memory`
+- `pydantic`
+- `re`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Shown(BaseModel)`
+- `class EditBody(Shown)`
+- `def _shown(entry: MemoryEntry) -> dict[str, Any]`
+- `def _files(folder: Path) -> dict[Path, bytes]`
+- `def folder_of(store: Store, where: Where) -> Path`
+- `def _refused(exc: Exception) -> HTTPException`
+- `def _act(store: Store, entry_id: str, what: str, do: Callable[[MemoryEngine], MemoryEntry], where: Where = 'project') -> dict[str, Any]`
+- `def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]`
+- `def router(store: Store) -> APIRouter`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/pack_routes.py
+
+The design pack's Settings section and the Maintenance overview (TD-101, TD-113): reads, and the one update start.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `fastapi`
+- `os`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.pack_runs`
+- `owlbear_delivery_next.project_host`
+- `owlbear_delivery_next.settings`
+- `pydantic`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class AnswerBody(BaseModel)`
+- `def pack(job: pack_job.Job) -> dict[str, Any]`
+- `def memory_last(store: Store) -> dict[str, Any] | None`
+- `def overview(store: Store) -> list[dict[str, Any]]`
+- `def _ran(event: dict[str, Any]) -> list[dict[str, Any]]`
+- `def subagent_use(store: Store) -> list[dict[str, Any]]`
+- `def router(store: Store, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]] = contextlib.nullcontext, host: Host | None = None) -> APIRouter`
+- `def _answers(routes: APIRouter, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]]) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/pages.py
+
+The host's pages, their tab bar, the base stylesheet and the scripts they share (TD-85, TD-113, TD-264).
+
+### Imports
+
+- `__future__`
+- `fastapi`
+- `importlib.resources`
+- `typing`
+
+### Interfaces
+
+- `def lit_files() -> dict[str, str]`
+- `def lit_version() -> str`
+- `def assets(app: FastAPI) -> None`
+- `def nav(current: int) -> str`
+- `def pages() -> dict[str, str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/runner_end.py
+
+How a project host judges a runner's end: gone without an exit, or processes left behind (D4 §3.2).
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `typing`
+
+### Interfaces
+
+- `def block(found: Found | None, now: datetime) -> Stop`
+- `def unverified(c: Change) -> bool`
+- `def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool`
+- `def gone(kind: StepKind) -> loop.StepResult`
+
+## serve/delivery-next/src/owlbear_delivery_next/project_host/session_slots.py
+
+A project host's share of the machine's session slots (TD-336, TD-105).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system.slots`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `threading`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `def wanted(c: Change, step: Step | None) -> int`
+- `def project(host: Host) -> str`
+- `def limit(host: Host) -> int`
+- `def reserve(host: Host, slug: str) -> int | None`
+- `def release(host: Host, slug: str) -> None`
+- `def join(host: Host) -> None`
+- `def leave(host: Host) -> None`
+- `def waiting(host: Host, slug: str) -> str`
+- `def one(host: Host, note: Callable[[str], None]) -> Iterator[None]`
+- `def _queued(host: Host, key: str, note: Callable[[str], None]) -> None`
+- `def packed(host: Host, job: Job) -> Job`
+- `def pack_live(host: Host, live: Live, note: Callable[[str], None]) -> Live`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/__init__.py
+
+The runtimes a step's session runs in, and what it is sent.
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/ahp.py
+
+Agent Host Protocol 0.10.0 client over the editor's local socket; stdlib only (TD-34, TD-36).
+
+### Imports
+
+- `__future__`
+- `base64`
+- `contextlib`
+- `hashlib`
+- `itertools`
+- `json`
+- `os`
+- `pathlib`
+- `queue`
+- `socket`
+- `struct`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class Transport(Protocol)`
+  - `def request(self, method: str, params: Json, timeout: float = 60) -> Json`
+  - `def dispatch(self, channel: str, action: Json) -> None`
+  - `def next_event(self, timeout: float) -> Json | None`
+- `def endpoint(entries: Path = ENTRIES) -> Json | None`
+- `class HostError(RuntimeError)`
+- `class Connection`
+  - `def __init__(self, path: str, token: str, client_id: str) -> None`
+  - `def close(self) -> None`
+  - `def reopen(self, github_token: str) -> Connection`
+  - `def _exact(self, n: int) -> bytes`
+  - `def _frame(self) -> Json`
+  - `def _read(self) -> None`
+  - `def _send(self, obj: Json) -> None`
+  - `def _frame_out(self, op: int, data: bytes) -> None`
+  - `def request(self, method: str, params: Json, timeout: float = 60) -> Json`
+  - `def dispatch(self, channel: str, action: Json) -> None`
+  - `def next_event(self, timeout: float) -> Json | None`
+- `def connect(entry: Json, client_id: str, github_token: str) -> Connection`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/amendments.py
+
+A worker's proposed new wording for generated criteria (TD-179 rules 3-6): validated, prepared, judged, recorded.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.amendment_records`
+- `owlbear_delivery_next.runtimes`
+- `typing`
+
+### Interfaces
+
+- `def _flat(text: str, limit: int = 1000) -> str`
+- `def amendable(c: Change) -> tuple[str, ...]`
+- `def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]`
+- `def prepared(c: Change, run: Run, at: datetime) -> Amendment | None`
+- `def prompt(c: Change, a: Amendment, worktree: Path) -> str`
+- `def judged(a: Amendment, run: Run) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/catalogue.py
+
+What each runtime offers beyond the shared baseline (runtime research P15 to P19).
+
+### Imports
+
+- `__future__`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `def _key(name: str) -> str`
+- `def runtime_of(names: set[str]) -> str | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/copilot_cli.py
+
+The installed Copilot CLI that every SDK session and model list runs.
+
+### Imports
+
+- `__future__`
+- `os`
+- `shutil`
+
+### Interfaces
+
+- `def cli_path() -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/leftovers.py
+
+Processes a VS Code step left working in its worktree: what the agent's shells started, never the editor's own.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `os`
+- `owlbear_delivery_next.local_system.process_probe`
+- `owlbear_delivery_next.local_system.processes`
+- `psutil`
+- `signal`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `def _exe(p: psutil.Process) -> str`
+- `def agent_started(pid: int) -> bool`
+- `def _since(pid: int, since: datetime) -> bool`
+- `def scan(root: Path, since: datetime) -> list[int]`
+- `def settle(root: Path, since: datetime, find: Callable[[Path, datetime], list[int]] = scan, wait: Callable[[float], None] = time.sleep) -> Termination`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/missing.py
+
+The missing-tool report's five cases (TD-36), in order.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.runtimes.catalogue`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `def names(tool: str) -> set[str]`
+- `def absent(tool: str, error: str) -> bool`
+- `def slug(tool: str) -> str`
+- `def _without(enclosing: StepKind, tool: str) -> list[Option]`
+- `def _ask(enclosing: StepKind, text: str, cause: str, options: list[Option]) -> StepResult`
+- `def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> StepResult`
+- `def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepResult`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/model_choices.py
+
+The models this machine's Copilot runtime offers, with efforts, context tiers and token rates, for the settings page.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `copilot`
+- `copilot.generated.rpc`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.runtimes.copilot_cli`
+- `threading`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Offered`
+  - `def __init__(self) -> None`
+  - `def __call__(self) -> dict[str, Any]`
+- `def shown(m: Model) -> dict[str, Any]`
+- `def _rates(p: ModelBillingTokenPrices | ModelBillingTokenPricesLongContext | None) -> dict[str, float | None] | None`
+- `def _value(state: object) -> object`
+- `def _read() -> list[Model]`
+- `async def _listed() -> list[Model]`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/readiness.py
+
+Readiness: the facts a clone needs before Delivery can run and publish, each ok or with one concrete fix (DR2).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `json`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.runtimes.copilot_cli`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store`
+- `pathlib`
+- `ssl`
+- `truststore`
+- `typing`
+- `urllib.error`
+- `urllib.request`
+
+### Interfaces
+
+- `class Check`
+- `def reach(host: str, timeout: float = 10) -> str | None`
+- `def _network(host: str, error: str | None) -> Check`
+- `def _sign_in_failure(host: str, text: str) -> Check`
+- `def _github(host: str, probe: Probe) -> list[Check]`
+- `def _ssh(key: str, probe: Probe) -> Check`
+- `def _signing(probe: Probe) -> Check`
+- `def publishing(host: str, probe: Probe, network: str | None) -> list[Check]`
+- `def readiness(host: str, probe: Probe, network: str | None, copilot: str | None) -> list[Check]`
+- `def ready(store: Store, repo: Path) -> list[Check]`
+- `def check(repo: Path, prof: Profile | None) -> list[Check]`
+- `def shaper_path(home: Path) -> Path`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/results.py
+
+One step's result tools, shared by every runtime: validate each call and accept the first valid ending.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.runtimes`
+- `subprocess`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class Gate`
+  - `def __init__(self, cfg: Session, run: Run, log: Callable[..., None], ended: Callable[[], None]) -> None`
+  - `def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = '') -> bool`
+  - `def _finish(self, ending: Ending, payload: tools.Args | None, detail: str) -> None`
+  - `def revoke(self, detail: str) -> None`
+  - `def wrong_model(self, detail: str) -> None`
+  - `def specs(self) -> tuple[tools.Spec, ...]`
+  - `def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]`
+  - `def _help(self, spec: tools.Spec, helper: Callable[[tools.Args], str], arguments: Any) -> tuple[str, bool]`
+  - `def _checked(self, spec: tools.Spec, arguments: Any) -> Checked | None`
+  - `def _check(self, spec: tools.Spec, arguments: Any) -> Checked`
+  - `def _late(self, spec: tools.Spec) -> tuple[str, bool]`
+  - `def _settle(self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None) -> tuple[str, bool]`
+  - `def _order(self, spec: tools.Spec) -> list[str]`
+  - `def _check_result(self, args: tools.Args) -> tuple[list[str], tools.Worktree | None]`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/sdk_adapter.py
+
+One bounded worker session on the installed Copilot CLI; it ends at a result-tool call or deadline (D4 §3.2, P4).
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `copilot`
+- `copilot.rpc`
+- `copilot.tools`
+- `dataclasses`
+- `datetime`
+- `functools`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.mask`
+- `owlbear_delivery_next.local_system.processes`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.runtimes.copilot_cli`
+- `owlbear_delivery_next.runtimes.results`
+- `owlbear_delivery_next.runtimes.sdk_teardown`
+- `owlbear_delivery_next.runtimes.sdk_usage`
+- `owlbear_delivery_next.runtimes.session_result`
+- `pathlib`
+- `psutil`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `def agent(kind: StepKind, *, ui: bool = False, role: str = '', judging: bool = False, job: str = '') -> dict[str, Any]`
+- `def role_of(cfg: Session) -> str`
+- `class Journal`
+- `def summary(tool: str, arguments: Any) -> str`
+- `class Session`
+- `def sent(events: Iterable[Any], message: str) -> bool`
+- `class _Step`
+  - `def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None`
+  - `def done(self) -> bool`
+  - `def _wake(self) -> None`
+  - `def log(self, **event: Any) -> None`
+  - `def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = '') -> None`
+  - `def on_event(self, ev: Any) -> None`
+  - `def subagent_seen(self, kind: str, data: Any) -> None`
+  - `def call_seen(self, data: Any) -> None`
+  - `def skill_seen(self, data: Any) -> None`
+  - `def _required(self) -> tuple[str, ...]`
+  - `def preload_checked(self) -> None`
+  - `def model_seen(self, model: str | None, parent: str | None) -> None`
+  - `def now(self, tool: str, arguments: Any) -> None`
+  - `def permission(self, request: Any, _invocation: Any) -> Any`
+  - `def _handle(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult`
+  - `async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult`
+  - `async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult`
+  - `def tools(self) -> list[Tool]`
+  - `def record(self, *pids: int | None, keep: bool = False) -> None`
+  - `def runtime(self, client: CopilotClient) -> None`
+  - `def record_tree(self) -> None`
+  - `async def snapshot(self, session: CopilotSession) -> None`
+  - `def options(self) -> dict[str, Any]`
+  - `def replace(self) -> str | None`
+  - `async def wait(self, session: CopilotSession) -> None`
+- `async def _efforts(client: CopilotClient, model: str) -> bool`
+- `async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None`
+- `def _memory(store: Path | None) -> dict[str, Any]`
+- `def _refused(cfg: Session) -> str`
+- `async def run(cfg: Session) -> Run`
+- `async def _proven(st: _Step, session: Any) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/sdk_teardown.py
+
+Bounded SDK calls and session teardown: tasks cancelled, session disconnected, runtime stopped, else signalled.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `copilot.rpc`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.processes`
+- `signal`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `async def call(aw: Awaitable[T], what: str, limit: float = CALL) -> T`
+- `async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination`
+- `async def force(st: _Step, why: str) -> None`
+- `async def teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/sdk_usage.py
+
+What one SDK session billed, read at the step's start and end: the proof of its model (TD-32, TD-53, TD-94).
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `typing`
+
+### Interfaces
+
+- `def unexpected_models(before: dict[str, Any], after: dict[str, Any], model: str | None) -> list[str]`
+- `async def _usage(session: CopilotSession, requested: str | None) -> dict[str, Any]`
+- `async def usage_read(session: CopilotSession, requested: str | None) -> dict[str, Any]`
+- `def unread(before: dict[str, Any], after: dict[str, Any]) -> str`
+- `def unproven(before: dict[str, Any], after: dict[str, Any], model: str | None) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/session_result.py
+
+What one worker session produced, and its mapping to the loop's step result (D4 §3.2).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.local_system.processes`
+- `owlbear_delivery_next.runtimes`
+- `typing`
+
+### Interfaces
+
+- `class Run`
+- `def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult`
+- `def missing_cause(kind: StepKind) -> str`
+- `def effect_seen(run: Run) -> bool`
+- `def limit_reached(run: Run, limit: float | None) -> None`
+- `def note_quota(run: Run, kind: str, data: Any) -> None`
+- `def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | None = None) -> StepResult`
+- `def _exit(run: Run, kind: StepKind, now: datetime, enclosing: StepKind) -> StepResult`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/step_inbox.py
+
+The C+ step's result channel in the runner: a loopback receiver that the step's MCP relay finds through an inbox.
+
+### Imports
+
+- `__future__`
+- `hmac`
+- `http.server`
+- `json`
+- `os`
+- `owlbear_delivery_next.change_contracts`
+- `secrets`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class _Server(ThreadingHTTPServer)`
+  - `def __init__(self, gate: Gate, token: str) -> None`
+- `class _Handler(BaseHTTPRequestHandler)`
+  - `def log_message(self, format: str, *args: Any) -> None`
+  - `def _reply(self, code: int, body: object) -> None`
+  - `def _allowed(self) -> bool`
+  - `def do_GET(self) -> None`
+  - `def do_POST(self) -> None`
+- `class Inbox`
+  - `def __init__(self, gate: Gate, path: Path) -> None`
+  - `def __enter__(self) -> Self`
+  - `def __exit__(self, *_exc: object) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/step_input.py
+
+Bounded context for agent steps; brief and answer text enter as quoted data (D4 §3.3, §3.6).
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.preparation`
+- `owlbear_delivery_next.change_flow`
+- `shlex`
+- `typing`
+
+### Interfaces
+
+- `def reminder(role: str, *, judging: bool = False) -> str`
+- `def _cut(text: str, limit: int = LIMIT) -> str`
+- `def _quote(text: str, limit: int = LIMIT) -> str`
+- `def _one(text: str, limit: int = 400) -> str`
+- `def answer_text(question: Question) -> str`
+- `def _brief(change: Change, *, challenged: bool = False, own: str = '') -> list[str]`
+- `def brief(change: Change) -> list[str]`
+- `def page_errors(errors: tuple[Sequence[PageError], Sequence[PageError]]) -> list[str]`
+- `def detector(scans: Sequence[DetectorScan], limit: int = 60) -> list[str]`
+- `def _prepare(worktree: Path, installs: Sequence[tuple[str, str]]) -> list[str]`
+- `def build(change: Change, task: Task, worktree: Path, installs: Sequence[tuple[str, str]]) -> str`
+- `def _fixes(change: Change, *, challenged: bool = False) -> list[str]`
+- `def review(change: Change, task: Task | None, worktree: Path, tree: Worktree) -> str`
+- `def _options(ctx: Preparing) -> list[str]`
+- `def check(change: Change, person: PersonCheck, worktree: Path, installs: Sequence[tuple[str, str]], ctx: Preparing | None = None) -> str`
+- `def _visual_check(change: Change) -> PersonCheck`
+- `def visual(change: Change, shots: Sequence[tuple[str, int, str]], errors: tuple[Sequence[PageError], Sequence[PageError]] = ((), ()), scans: Sequence[DetectorScan] = ()) -> str`
+- `def _flat(text: str) -> str`
+- `def _packages(profile: Profile) -> list[str]`
+- `def _others(others: Mapping[str, Sequence[str]]) -> list[str]`
+- `def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str`
+- `def plan_challenge(change: Change, candidate: Plan, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str`
+- `def brief_challenge(change: Change, worktree: Path) -> str`
+- `def answer(question: Question) -> str`
+- `class Parts(NamedTuple)`
+- `def session(change: Change, profile: Profile, path: Path, others: Mapping[str, Sequence[str]], preparing: Preparing | None = None) -> Parts`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/subagents.py
+
+Built-in subagents (TD-129, TD-374): whether a session may start them, and what each did.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `typing`
+
+### Interfaces
+
+- `class Seen`
+- `class Watch`
+  - `def __init__(self, *, allowed: bool) -> None`
+  - `def started(self, data: Any) -> str`
+  - `def owns(self, parent: str | None) -> bool`
+  - `def ended(self, data: Any, outcome: str) -> dict[str, Any] | None`
+  - `def call(self, data: Any) -> bool`
+  - `def child_models(self) -> set[str]`
+  - `def report(self) -> list[dict[str, Any]]`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/vscode_adapter.py
+
+Run one agent session as a C+ VS Code step (TD-35 "all in VS Code"), with the same contract as the SDK path.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `datetime`
+- `os`
+- `owlbear_delivery_next.local_system.processes`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.runtimes.results`
+- `owlbear_delivery_next.runtimes.sdk_adapter`
+- `owlbear_delivery_next.runtimes.session_result`
+- `owlbear_delivery_next.runtimes.step_inbox`
+- `owlbear_delivery_next.runtimes.vscode_contract`
+- `owlbear_delivery_next.runtimes.vscode_step`
+- `pathlib`
+- `subprocess`
+- `threading`
+- `time`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `def _token() -> str`
+- `def connect(folder: Path) -> ahp.Connection`
+- `def reopen(conn: ahp.Transport) -> ahp.Transport`
+- `def embedded(attachments: tuple[dict[str, str], ...]) -> tuple[Json, ...]`
+- `class Env`
+- `def _grace(control: Control) -> Callable[[], None]`
+- `class _Driver`
+  - `def __init__(self, cfg: Session, env: Env, run: Run) -> None`
+  - `def log(self, **event: Any) -> None`
+  - `def pin(self, folder: Path, model: str) -> None`
+  - `def deny(self, call: ToolCall) -> bool`
+  - `def drive(self, conn: ahp.Transport) -> Outcome`
+  - `def step(self, inbox: Path) -> Outcome`
+- `def _ending(out: Outcome, gate: Gate) -> None`
+- `def _usage(out: Outcome, model: str | None) -> dict[str, Any]`
+- `def _proven(result: Run, out: Outcome, model: str | None) -> None`
+- `def _termination(out: Outcome, scanned: Termination, *, started: bool) -> Termination`
+- `def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run`
+- `def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None) -> tuple[Outcome, str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/vscode_contract.py
+
+What a VS Code step is given and what it returns (TD-36, TD-48): the spec, the levers, the outcome and the hooks.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_delivery_next.runtimes.window_files`
+- `queue`
+- `subprocess`
+- `threading`
+- `time`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class StepSpec`
+  - `def marker(self) -> str`
+  - `def bootstrap(self) -> str`
+  - `def agent_uris(self) -> tuple[str, ...]`
+- `class ToolCall`
+- `class Control`
+- `class Outcome`
+- `def launch_code_chat(args: list[str], cwd: Path) -> None`
+- `class Hooks`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/vscode_step.py
+
+Route C+ (TD-36): a step started by ``code chat`` in its folder's Copilot-harness window, then driven over AHP.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `json`
+- `owlbear_delivery_next.runtimes.ahp`
+- `owlbear_delivery_next.runtimes.vscode_contract`
+- `owlbear_delivery_next.runtimes.window_files`
+- `time`
+- `typing`
+- `urllib.parse`
+- `uuid`
+
+### Interfaces
+
+- `def _action_in(ev: Json | None, chat: str) -> Json`
+- `def _ended(out: Outcome, action: Json) -> None`
+- `def _command(tool_input: object) -> str`
+- `def _asks(active: Json, action: Json, boot: str) -> list[tuple[str, object]]`
+- `class _Bound`
+- `class Step`
+  - `def __init__(self, conn: Transport, spec: StepSpec, approve: Callable[[ToolCall], bool], *, hooks: Hooks | None = None) -> None`
+  - `def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome`
+  - `def open(self, control: Control, bind_limit: float = 60) -> Outcome`
+  - `def _close(self) -> None`
+  - `def _began(self, chat: str, turn: str) -> bool`
+  - `def _open(self, control: Control, bind_limit: float, *, exclusive: bool = True) -> tuple[Outcome, _Bound | None]`
+  - `def _ready(self, out: Outcome, bound: _Bound, control: Control) -> bool`
+  - `def _sessions(self) -> list[Json]`
+  - `def _chat(self, chat: str) -> Json`
+  - `def _booted(self, out: Outcome, bound: _Bound) -> bool`
+  - `def _model_listed(self) -> bool`
+  - `def _listed(self, session: str) -> bool`
+  - `def _busy(self, sessions: list[Json]) -> str | None`
+  - `def _bind(self, before: list[Json], deadline: float) -> _Bound | None`
+  - `def _cancel(self, out: Outcome, turn: str) -> bool`
+  - `def _configure(self, session: str) -> bool`
+  - `def _config(self) -> Json`
+  - `def _message(self, text: str, agent: Json | None, attachments: tuple[Json, ...] = ()) -> Json`
+  - `def _start(self, out: Outcome, agent: Json | None, text: str, attachments: tuple[Json, ...] = ()) -> None`
+  - `def _turn(self, out: Outcome, agent: Json | None, control: Control, deadline: float, text: str, *, attachments: tuple[Json, ...] = ()) -> None`
+  - `def _halted(self, out: Outcome, control: Control, deadline: float, *, running: bool) -> bool`
+  - `def _adopt(out: Outcome, action: Json, pending: list[str]) -> bool`
+  - `def _steer(self, chat: str, agent: Json | None, control: Control) -> list[str]`
+  - `def _observe(self, out: Outcome, chat: str, action: Json) -> None`
+  - `def _confirm(self, chat: str, action: Json, *, allowed: bool) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/runtimes/window_files.py
+
+Files a C+ step needs in its worktree: the window's model pin, the step's MCP relay and its agent (TD-36).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `json`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.local_system`
+- `re`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `def tools_note(role: str, *, ui: bool = False, judging: bool = False) -> str`
+- `class SettingsError(ValueError)`
+- `def _opening(text: str) -> int | None`
+- `def _with_settings(old: str | None, model: str) -> str`
+- `def settings(model: str) -> Render`
+- `def write_window_settings(folder: Path, model: str) -> None`
+- `class Added`
+- `def add_harness(folder: Path) -> Added | None`
+- `def remove_harness(folder: Path, added: Added) -> str`
+- `def mcp(inbox: Path, memory: Path | None = None) -> Render`
+- `def agent_name(role: str) -> str`
+- `def agent_path(role: str) -> str`
+- `def agent(role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False, job: str = '') -> Render`
+- `def names(inbox: Path) -> tuple[str, str]`
+- `def skill_path(name: str) -> str`
+- `def skills(role: str, *, ui: bool = False, job: str = '') -> list[tuple[str, Render]]`
+- `class Placed`
+- `def _git(folder: Path, *args: str) -> None`
+- `def _skipped(folder: Path, rel: str) -> bool`
+- `def place(folder: Path, rel: str, render: Render) -> Placed`
+- `def restore(folder: Path, placed: Sequence[Placed]) -> list[str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/__init__.py
+
+Delivery's settings: layers, roles, round values and the project profile.
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/config.py
+
+Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, resolved field by field.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.preparation`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.settings.roles`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class Agent(Record)`
+  - `def _named(cls, v: str | None) -> str | None`
+  - `def _minutes(cls, v: int | None) -> int | None`
+- `class FinalReview(Record)`
+- `class Layer(Record)`
+  - `def _current(cls, v: int) -> int`
+  - `def _labels(cls, v: list[str] | None) -> list[str] | None`
+  - `def _widths(cls, v: list[int] | None) -> list[int] | None`
+  - `def _distinct(cls, v: list[Preparation] | None) -> list[Preparation] | None`
+- `class WideLayer(Layer)`
+  - `def _project_only(cls, v: object) -> object`
+  - `def _marker(cls, v: bool | None) -> bool | None`
+- `class GlobalLayer(WideLayer)`
+- `class MachineLayer(WideLayer)`
+- `class Effective(Record)`
+  - `def _rounds(self) -> Effective`
+- `class Settings(Record)`
+- `def _defaults() -> GlobalLayer`
+- `def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) -> object`
+- `def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None = None) -> Settings`
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/migrations.py
+
+Forward migrations of stored records, keyed by the format they upgrade from.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.settings.config`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `def roles_moved(data: dict[str, Any]) -> dict[str, Any]`
+- `def with_roles(layer: Layer, found: dict[Role, RoleModel]) -> Layer`
+- `def _challenged(brief: object) -> None`
+- `def brief_challenged(data: dict[str, Any]) -> dict[str, Any]`
+- `def visual_decided(data: dict[str, Any]) -> dict[str, Any]`
+- `def seed_dropped(data: dict[str, Any]) -> dict[str, Any]`
+- `def rounds_kept(data: dict[str, Any]) -> dict[str, Any]`
+- `def judge_renamed(data: dict[str, Any]) -> dict[str, Any]`
+- `def minutes_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def labels_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def labelled_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def subagents_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def sessions_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def test_roles_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def tests_added(data: dict[str, Any]) -> dict[str, Any]`
+- `def waivers_added(data: dict[str, Any]) -> dict[str, Any]`
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/profile.py
+
+Detect, confirm and re-read the project profile: GitHub facts, CI, rules and merge settings (D4 §3.2, DR1).
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `fnmatch`
+- `hashlib`
+- `json`
+- `os`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.git.git_executable`
+- `owlbear_delivery_next.github.gh`
+- `owlbear_delivery_next.github.provider`
+- `pathlib`
+- `subprocess`
+- `typing`
+- `urllib.parse`
+- `yaml`
+
+### Interfaces
+
+- `def _node(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]`
+- `def _python(repo: Path, d: str) -> tuple[ProfileEntry, ProfileEntry]`
+- `def package_entries(repo: Path) -> dict[str, ProfileEntry]`
+- `def _entry(state: str, value: str, evidence: str) -> ProfileEntry`
+- `class Workflow`
+- `def _events(on: object) -> frozenset[str] | None`
+- `def _jobs(jobs: object) -> tuple[str, ...] | None`
+- `def workflow(text: str) -> Workflow`
+- `def workflows(repo: Path) -> dict[str, Workflow]`
+- `def workflow_texts(repo: Path) -> dict[str, str]`
+- `def _git(repo: Path, *args: str) -> str | None`
+- `def workflow_texts_at(repo: Path, rev: str) -> dict[str, str] | None`
+- `def flows_digest(texts: dict[str, str]) -> str`
+- `def digest_of(entry: ProfileEntry | None) -> str`
+- `def ci_entries(flows: dict[str, Workflow], digest: str = '') -> dict[str, ProfileEntry]`
+- `def pre_push_hook(repo: Path) -> tuple[bool, str]`
+- `def _hook(repo: Path) -> ProfileEntry`
+- `def rule_entries(rules: Rules) -> dict[str, ProfileEntry]`
+- `def _ci(repo: Path) -> dict[str, ProfileEntry]`
+- `def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile`
+- `def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile`
+- `def reread(profile: Profile, gh: Provider, branch: str) -> tuple[list[str], Rules]`
+- `def value(profile: Profile, key: str, default: str = '') -> str`
+- `def notes(profile: Profile) -> list[str]`
+- `def names(profile: Profile, key: str) -> tuple[str, ...]`
+- `def listed(entry: ProfileEntry | None) -> tuple[str, ...]`
+- `def known(profile: Profile, key: str) -> bool`
+- `def provider(profile: Profile, repo: Path) -> GhProvider`
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/roles.py
+
+Model and reasoning effort per session role (TD-27): the role of each session, its defaults, the settings table.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `def chosen(settings: Settings, session: str) -> RoleModel`
+- `def limit(settings: Settings, session: str) -> float`
+- `def subagents(settings: Settings, session: str) -> bool`
+- `def parse(text: str) -> tuple[Role, RoleModel]`
+- `def table(settings: Settings) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/settings/rounds.py
+
+Challenge loops (TD-208): a subject's loop, with the policy it pins from the settings when it starts.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `typing`
+
+### Interfaces
+
+- `def policy(settings: Settings, subject: str, role: Role = 'builder') -> RoundPolicy`
+- `def loop(c: Change, subject: str, settings: Settings, role: Role = 'builder') -> RoundLoop`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/__init__.py
+
+The state store: Changes, briefs, records and the backlog.
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/backlog.py
+
+Improvement backlog (TD-84, TD-103): what the owner, the watcher, the assistant, reviews and runs found.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.github.provider`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.backlog_issues`
+- `pydantic`
+- `re`
+- `threading`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class BacklogError(Exception)`
+  - `def __init__(self, status: int, text: str) -> None`
+- `class Entry(BaseModel)`
+  - `def _scoped(cls, data: Any) -> Any`
+- `def key(source: str, title: str) -> str`
+- `def named(entry: Entry) -> frozenset[str]`
+- `def repeats(entry: Entry, project: str, source: str, title: str) -> bool`
+- `def ordered(entries: Iterable[Entry]) -> list[Entry]`
+- `def _valid(fields: dict[str, Any]) -> Entry`
+- `def _linked(entry: Entry, other: str, now: datetime) -> Entry`
+- `class Backlog`
+  - `def __init__(self, shared: DataRepo, project: str = '', clock: Callable[[], datetime] | None = None) -> None`
+  - `def repository(self) -> str`
+  - `def of(cls, store: Store, clock: Callable[[], datetime] | None = None) -> Backlog`
+  - `def read(self, *, fresh: bool = False) -> tuple[dict[str, Entry], list[str]]`
+  - `def entries(self) -> list[Entry]`
+  - `def add(self, title: str, text: str = '', source: Source = 'owner', evidence: Iterable[str] = ()) -> tuple[Entry, bool]`
+  - `def update(self, entry_id: str, fields: dict[str, Any]) -> Entry`
+  - `def take(self, ids: list[str], launch: str) -> list[Entry]`
+  - `def put(self, entry: Entry, made: Callable[[str], None] = lambda _number: None) -> Entry`
+  - `def _save(self, *entries: Entry) -> None`
+  - `def _remember(self, issue: Json) -> Json`
+  - `def _overlaid(self, listed: list[Json]) -> list[Json]`
+  - `def _body(fields: dict[str, Any]) -> str`
+  - `def _forget(self) -> None`
+  - `def current(self, entry_id: str) -> Entry | None`
+  - `def _get(self, found: dict[str, Entry], entry_id: str) -> Entry`
+  - `def _fetch(self, found: dict[str, Entry], entry_id: str) -> Entry | None`
+  - `def _github(self, what: str, call: Callable[[], T]) -> T`
+  - `def _apply(self, work: Callable[[dict[str, Entry], datetime], T]) -> T`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/backlog_issues.py
+
+The backlog's GitHub issues (TD-103): one issue per entry in the shared repository, read and written through ``gh``.
+
+### Imports
+
+- `__future__`
+- `json`
+- `owlbear_delivery_next.github`
+- `owlbear_delivery_next.github.gh_client`
+- `owlbear_delivery_next.github.provider`
+- `owlbear_delivery_next.local_system`
+- `re`
+- `time`
+- `typing`
+
+### Interfaces
+
+- `class Issues(GhClient)`
+  - `def __init__(self, shared: DataRepo) -> None`
+  - `def issues(self) -> list[Json]`
+  - `def issue(self, number: int) -> Json | None`
+  - `def private(self) -> None`
+  - `def create(self, title: str, body: str, labels: list[str]) -> Json`
+  - `def edit(self, number: int, fields: dict[str, Any]) -> Json`
+  - `def comment(self, number: int, body: str) -> None`
+  - `def ensure_labels(self, names: list[str]) -> None`
+- `def labels(fields: dict[str, Any]) -> list[str]`
+- `def kept_labels(issue: Json) -> list[str]`
+- `def state(status: str) -> dict[str, str]`
+- `def _when(at: datetime) -> str`
+- `def _line(text: str) -> str`
+- `def _shown(text: str) -> str`
+- `def body(fields: dict[str, Any]) -> str`
+- `def _jsonable(fields: dict[str, Any]) -> dict[str, Any]`
+- `def _projects(names: list[str], block: dict[str, Any]) -> dict[str, Any]`
+- `def fields(issue: Json) -> dict[str, Any] | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/backlog_migrate.py
+
+One-time move of the file backlog into GitHub issues (TD-103), run by ``owlbear-next backlog migrate``.
+
+### Imports
+
+- `__future__`
+- `json`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.state_store.backlog`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class File(NamedTuple)`
+- `def _files(shared: DataRepo, say: Callable[[str], None]) -> dict[str, File] | None`
+- `class Journal`
+  - `def __init__(self, shared: DataRepo) -> None`
+  - `def note(self, legacy: str, number: str) -> None`
+- `def _created(backlog: Backlog, files: dict[str, File], journal: Journal, say: Callable[[str], None]) -> dict[str, str]`
+- `def _wrong(backlog: Backlog, files: dict[str, File], have: dict[str, str]) -> list[str]`
+- `def migrate(shared: DataRepo, say: Callable[[str], None]) -> int`
+- `def _delete(shared: DataRepo, files: dict[str, File], say: Callable[[str], None]) -> tuple[list[Path], str]`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/briefs.py
+
+Brief drafts: validate and write a new Change, or a new version of a shaping one, awaiting approval.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.store`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: str, prof: Profile) -> Change`
+- `def new_slug(title: str, taken: list[str]) -> str`
+- `def _handles(store: Store) -> dict[str, str]`
+- `def next_number(store: Store, handles: dict[str, str] | None = None) -> int`
+- `def _visual_of(c: Change) -> dict[str, Any]`
+- `def _kept(store: Store, body: object) -> object`
+- `def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]`
+- `def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/change_record.py
+
+A finished Change's record in the project's shared folder (TD-148): brief, decisions, outcome, PR and spend.
+
+### Imports
+
+- `__future__`
+- `json`
+- `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.local_system.storage_io`
+- `typing`
+
+### Interfaces
+
+- `def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/database.py
+
+The project's Delivery database (TD-265): ``delivery.db`` in the store, beside the run locks and artifacts.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `json`
+- `os`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.local_system.storage_io`
+- `sqlite3`
+- `subprocess`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class StoreError(Exception)`
+  - `def stop(self, now: datetime) -> Stop`
+- `class FormatTooNewError(StoreError)`
+- `class NotImportedError(StoreError)`
+- `class LateWriteError(StoreError)`
+- `def _fsync(path: Path) -> None`
+- `def _local(root: Path) -> None`
+- `class Database`
+  - `def __init__(self, root: Path) -> None`
+  - `def marker(self) -> int`
+  - `def legacy_slugs(self) -> list[str]`
+  - `def waiting(self) -> bool`
+  - `def check(self) -> None`
+  - `def fenced(self) -> Iterator[None]`
+  - `def _shared(self) -> Iterator[None]`
+  - `def _lock(self, *, shared: bool) -> int`
+  - `def _connection(self) -> sqlite3.Connection`
+  - `def read(self) -> Iterator[sqlite3.Connection]`
+  - `def write(self) -> Iterator[sqlite3.Connection]`
+  - `def import_files(self) -> None`
+  - `def _build(self, fill: Callable[[sqlite3.Connection], None] | None) -> None`
+  - `def _wal(self) -> None`
+  - `def _fill(self, connection: sqlite3.Connection) -> None`
+  - `def file(self, slug: str, name: str) -> Path`
+  - `def _retire(self, connection: sqlite3.Connection) -> None`
+  - `def ingest(self, slug: str, folder: Path) -> None`
+- `def _text(path: Path) -> str`
+- `def _fill_change(connection: sqlite3.Connection, folder: Path) -> list[tuple[str, str]]`
+- `def put_record(connection: sqlite3.Connection, slug: str, text: str) -> None`
+- `def append_activity(connection: sqlite3.Connection, slug: str, line: str, keep: int | None = None) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/profile_share.py
+
+The confirmed project profile: kept in the project's shared folder, re-checked once in each clone (TD-147).
+
+### Imports
+
+- `__future__`
+- `json`
+- `os`
+- `owlbear_delivery_next.design_packs.detector`
+- `owlbear_delivery_next.github.provider`
+- `owlbear_delivery_next.local_system.data_repo`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.settings`
+- `typing`
+
+### Interfaces
+
+- `def path(store: Store) -> Path`
+- `def write(store: Store, text: str) -> str`
+- `def adopt(store: Store) -> None`
+- `def checked(store: Store, repo: Path) -> Profile | None`
+- `def _replaced(store: Store, shared: DataRepo, old: Profile, new: Profile) -> bool`
+- `def move_roles(store: Store) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/project_home.py
+
+Where a project's live Delivery state lives (TD-334): ``~/.owlbear/projects/<id>/``, one folder per project.
+
+### Imports
+
+- `__future__`
+- `errno`
+- `os`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.state_store.database`
+- `secrets`
+- `shutil`
+- `typing`
+
+### Interfaces
+
+- `def clone_dir(cwd: Path) -> Path`
+- `def clone_id(folder: Path) -> str | None`
+- `def ensure_id(folder: Path) -> str`
+- `def home(pid: str) -> Path`
+- `def _left(folder: Path) -> list[Path]`
+- `def current(cwd: Path) -> Path | None`
+- `def _sync(path: Path) -> None`
+- `def _move(path: Path, to: Path) -> None`
+- `def located(cwd: Path) -> Path`
+
+## serve/delivery-next/src/owlbear_delivery_next/state_store/store.py
+
+Delivery-next state store in ``~/.owlbear/projects/<id>/``, one folder per project (D4 §3.2, TD-334).
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `datetime`
+- `fcntl`
+- `json`
+- `os`
+- `owlbear_delivery_next.change_contracts.inbox`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.settings.config`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.state_store.database`
+- `pydantic`
+- `re`
+- `socket`
+- `time`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class Holder(Record)`
+- `class SharedError(StoreError)`
+- `class LockHeldError(RuntimeError)`
+  - `def __init__(self, holder: Holder | None) -> None`
+- `class Lock`
+  - `def __init__(self, slug: str) -> None`
+  - `def check(self, slug: str) -> None`
+- `def _load(path: Path, model: type[T], current: int, forward: Migrations) -> T`
+- `def _parse(raw: str, name: str, model: type[T], current: int, forward: Migrations) -> T`
+- `def _first(exc: ValidationError) -> str`
+- `def read_layer(path: Path, model: type[T]) -> T`
+- `def read_layer_bytes(path: Path, model: type[T]) -> tuple[T, bytes]`
+- `def update_layer(path: Path, model: type[T], change: Callable[[T], T]) -> T`
+- `class Store`
+  - `def __init__(self, root: Path, shared: DataRepo | None = None, name: str = '') -> None`
+  - `def config_path(self) -> Path`
+  - `def open(cls, cwd: Path) -> Store`
+  - `def adopt(self, identity: str) -> None`
+  - `def save(self, path: Path, model: type[T], change: Callable[[T], T], what: str) -> str`
+  - `def read_config(self) -> Layer`
+  - `def machine_path(self) -> Path`
+  - `def update_config(self, change: Callable[[Layer], Layer], what: str = 'project layer') -> str`
+  - `def settings(self) -> Settings`
+  - `def _dir(self, slug: str) -> Path`
+  - `def visual_dir(self, slug: str, head: str) -> Path`
+  - `def before_dir(self, slug: str, base: str) -> Path`
+  - `def _record(self, slug: str) -> str`
+  - `def read(self, slug: str) -> Change`
+  - `def rev(self, slug: str) -> int | None`
+  - `def raw_handle(self, slug: str) -> str | None`
+  - `def issued(self) -> int`
+  - `def issue(self, number: int) -> None`
+  - `def read_profile(self) -> Profile | None`
+  - `def write_profile(self, profile: Profile) -> str`
+  - `def write(self, lock: Lock, change: Change) -> None`
+  - `def slugs(self) -> list[str]`
+  - `def restore(self, lock: Lock, slug: str) -> None`
+  - `def lock(self, slug: str) -> Iterator[Lock]`
+  - `def merge_lock(self, target: str) -> Iterator[bool]`
+  - `def holder(self, slug: str) -> Holder | None`
+  - `def put_inbox(self, slug: str, item: InboxItem) -> None`
+  - `def fold(self, lock: Lock, slug: str, now: datetime, pr_state: PrState | None = None, *, moved: bool = False, leave: Callable[[Change, Change], Change | None] | None = None) -> tuple[Change, Step | None]`
+  - `def events(self, slug: str) -> list[dict[str, Any]]`
+  - `def log(self, lock: Lock, slug: str, event: dict[str, Any]) -> None`
+  - `def now(self, slug: str) -> dict[str, Any] | None`
+  - `def write_now(self, lock: Lock, slug: str, data: dict[str, Any]) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/__init__.py
+
+The engine's part of each step, and the sessions it runs.
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/amend.py
 
 The fresh read-only challenge of a worker's proposed amendment, run after the step that proposed it (TD-179).
 
@@ -9283,17 +10374,18 @@ The fresh read-only challenge of a worker's proposed amendment, run after the st
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.permissions`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.workflow_steps`
 - `typing`
 
 ### Interfaces
 
 - `def challenge(store: Store, lock: Lock, change: Change, path: Path, run: Run, *, result: StepResult) -> StepResult`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/before.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/before.py
 
 TD-24 "before" screenshots: the brief's states rendered at the merge-base with the visual check's own recipe.
 
@@ -9302,9 +10394,10 @@ TD-24 "before" screenshots: the brief's states rendered at the merge-base with t
 - `__future__`
 - `contextlib`
 - `datetime`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `shlex`
 - `shutil`
@@ -9319,7 +10412,37 @@ TD-24 "before" screenshots: the brief's states rendered at the merge-base with t
 - `def _serve(c: Change, root: Path, out: Path, log: Callable[[dict[str, Any]], None], notes: list[str], *, widths: Sequence[int], prepare: Callable[[Path], dict[str, str]] | None = None) -> list[visual.Shot]`
 - `def capture(c: Change, repo: Path, out_for: Callable[[str], Path], profile: Profile, log: Callable[[dict[str, Any]], None], *, widths: Sequence[int], prepare: Callable[[Path], dict[str, str]] | None = None) -> VisualResult`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/browse.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/brief_round.py
+
+The brief challenge's sessions (TD-221, TD-249): a round, a rejections-only check and a reconsideration.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def _legacy(c: Change) -> bool`
+- `def due(c: Change) -> bool`
+- `def run(store: Store, lock: Lock, change: Change, repo: Path) -> None`
+- `def _made(store: Store, lock: Lock, change: Change, keys: tuple[str, ...], cap: int)`
+- `def judged(change: Change, verdict: loop.StepResult, payload: object, now: datetime) -> loop.StepResult | None`
+- `def _reconsider(store: Store, lock: Lock, change: Change, path: Path) -> None`
+- `def prompt(c: Change, at: Path) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/browse.py
 
 Driving one capture page: its guard off the preview, the brief's steps, and the errors it records (TD-60, R8).
 
@@ -9327,7 +10450,7 @@ Driving one capture page: its guard off the preview, the brief's steps, and the 
 
 - `__future__`
 - `contextlib`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts.visual_records`
 - `typing`
 - `urllib.parse`
 
@@ -9339,7 +10462,7 @@ Driving one capture page: its guard off the preview, the brief's steps, and the 
 - `def _act(page: Page, step: VisualStep, timeout_ms: int) -> str`
 - `def listen(page: Page, s: VisualState, width: int, seen: list[PageError]) -> None`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/check.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/check.py
 
 Person-only check environments: the host launches the Builder's recipe, verifies readiness and disposes of it.
 
@@ -9349,9 +10472,10 @@ Person-only check environments: the host launches the Builder's recipe, verifies
 - `contextlib`
 - `datetime`
 - `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system`
 - `pathlib`
 - `psutil`
 - `shlex`
@@ -9382,7 +10506,7 @@ Person-only check environments: the host launches the Builder's recipe, verifies
 - `def failed(reason: str) -> loop.StepResult`
 - `def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/cleanup.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/cleanup.py
 
 Cleanup: preserve unmerged commits and uncommitted files, verify both, then remove the worktree (D3, D4 §3.2).
 
@@ -9394,12 +10518,14 @@ Cleanup: preserve unmerged commits and uncommitted files, verify both, then remo
 - `hashlib`
 - `io`
 - `json`
-- `owlbear_delivery_next`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.git.remote_git`
 - `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `subprocess`
 - `tarfile`
@@ -9423,7 +10549,7 @@ Cleanup: preserve unmerged commits and uncommitted files, verify both, then remo
 - `def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]`
 - `def _retire(ctx: Ctx, c: Change, path: Path, inv: Inventory) -> tuple[list[Path], StepResult | None]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/conversation.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/conversation.py
 
 Pull-request conversation items: which comments are Delivery's, and which item versions are open or handled.
 
@@ -9433,10 +10559,10 @@ Pull-request conversation items: which comments are Delivery's, and which item v
 - `dataclasses`
 - `hashlib`
 - `json`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.loop`
 - `typing`
 
 ### Interfaces
@@ -9464,19 +10590,106 @@ Pull-request conversation items: which comments are Delivery's, and which item v
 - `def disputed(task: Task | None, payload: object, result: StepResult) -> StepResult`
 - `def summary(item: ConversationItem) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/decision.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/curation.py
+
+A test review (C-26): its start from the Maintenance page, then the TESTS step's parallel reviewers (TD-373).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.curation_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.curation_flow`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.briefs`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `threading`
+- `typing`
+
+### Interfaces
+
+- `class StartError(Exception)`
+  - `def __init__(self, status: int, text: str) -> None`
+- `def open_review(store: Store) -> Change | None`
+- `def _target(store: Store, repo: Path) -> tuple[str, str]`
+- `def offer(store: Store, repo: Path) -> dict[str, Any]`
+- `def start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change`
+- `def _start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change`
+- `def _message(t: TestReview, i: int) -> str`
+- `def _session(store: Store, lock: Lock, t: TestReview, i: int, at: Path) -> sdk_adapter.Session`
+- `def run(store: Store, lock: Lock, change: Change, repo: Path) -> None`
+- `def _kept(store: Store, lock: Lock, left: list[int], runs: list[session_result.Run], *, gated: bool = False) -> sessions.UsageUnreadError | None`
+- `def _exit(shares: int, runs: list[session_result.Run]) -> loop.StepResult`
+- `def _moved(commit: str, head: str) -> loop.StepResult`
+- `def _end(store: Store, lock: Lock, c: Change, result: loop.StepResult) -> None`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/curation_build.py
+
+A test review's curator (TD-339, TD-372): its build session, its recorded report, and the pull request's text.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.settings`
+- `typing`
+
+### Interfaces
+
+- `def verdicts(t: TestReview) -> list[str]`
+- `def message(change: Change, built: str) -> str`
+- `def curator(cfg: sdk_adapter.Session, change: Change, settings: Settings) -> sdk_adapter.Session`
+- `def recorded(change: Change, run: Run, path: Path) -> None`
+- `def body(c: Change) -> str`
+- `def _measure(when: str, m: curation_tools.Measure) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/curation_shares.py
+
+A test review's shares (TD-373): the test files at the pinned commit, by package, in whole-file shares.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_delivery_next.change_contracts.curation_records`
+- `owlbear_delivery_next.change_contracts.curation_tools`
+- `owlbear_delivery_next.change_flow.worktree`
+- `pathlib`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class Package`
+  - `def lines(self) -> int`
+- `def packages(repo: Path, commit: str) -> list[Package]`
+- `def _lines(repo: Path, shas: Sequence[str]) -> list[int]`
+- `def split(chosen: Sequence[Package]) -> list[Share]`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/decision.py
 
 The visual review's routing and the owner's decision (TD-78, TD-79; design skill research §3.5 slice 6).
 
 ### Imports
 
 - `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.workflow_steps`
 - `typing`
 
 ### Interfaces
@@ -9494,7 +10707,7 @@ The visual review's routing and the owner's decision (TD-78, TD-79; design skill
 - `def repair(c: Change, title: str, found: Sequence[str]) -> StepResult`
 - `def decided(c: Change, head: str, tree_id: str) -> tuple[Change, StepResult] | None`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/design.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/design.py
 
 The design detector in the visual check (TD-77, design skill research §3.5 slice 4): evidence, never a fail.
 
@@ -9502,8 +10715,9 @@ The design detector in the visual check (TD-77, design skill research §3.5 slic
 
 - `__future__`
 - `contextlib`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.design_packs`
 - `pathlib`
 - `psutil`
 - `threading`
@@ -9523,7 +10737,7 @@ The design detector in the visual check (TD-77, design skill research §3.5 slic
 - `def _file(f: DetectorFinding) -> str`
 - `def _key(s: DetectorScan, f: DetectorFinding) -> tuple[str, str]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/disposable.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/disposable.py
 
 The Change's read-only worktree ``<slug>.ro`` beside its own under the data root (folder trust).
 
@@ -9533,10 +10747,11 @@ The Change's read-only worktree ``<slug>.ro`` beside its own under the data root
 - `collections`
 - `dataclasses`
 - `hashlib`
-- `owlbear_delivery_next.git_files`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.storage_io`
-- `owlbear_delivery_next.store`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `re`
 - `shutil`
@@ -9565,7 +10780,7 @@ The Change's read-only worktree ``<slug>.ro`` beside its own under the data root
 - `def _dirs(cwd: Path, *first: str) -> list[Path]`
 - `def remove(source: Path, store: Store, slug: str) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/engine.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/engine.py
 
 Engine steps' shared context and exits: Git in the worktree, GitHub through the provider (D3 §3.2, §3.3).
 
@@ -9574,13 +10789,15 @@ Engine steps' shared context and exits: Git in the worktree, GitHub through the 
 - `__future__`
 - `dataclasses`
 - `datetime`
-- `owlbear_delivery_next`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.git.remote_git`
 - `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
 - `subprocess`
 - `typing`
 
@@ -9610,7 +10827,7 @@ Engine steps' shared context and exits: Git in the worktree, GitHub through the 
 - `def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = None) -> Seen`
 - `def observe(store: Store, repo: Path, slug: str) -> Seen`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/follow.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/follow.py
 
 Follow: CI and review comments on the PR's current head against the profile's declared and required checks.
 
@@ -9619,13 +10836,15 @@ Follow: CI and review comments on the PR's current head against the profile's de
 - `__future__`
 - `dataclasses`
 - `datetime`
-- `owlbear_delivery_next`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.git.remote_git`
 - `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.store`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `typing`
 
@@ -9649,7 +10868,44 @@ Follow: CI and review comments on the PR's current head against the profile's de
 - `def reopen(ctx: Ctx, c: Change, pr: PullRequest) -> tuple[Change, PullRequest, StepResult | None]`
 - `def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/judges.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/held.py
+
+TD-56: a session result TD-54 kept unprocessed, and the owner's "accept" of it.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.processes`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.runtimes.session_result`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `pydantic`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class HeldRun(BaseModel)`
+- `class Held(BaseModel)`
+- `def _path(store: Store, slug: str) -> Path`
+- `def _dump(run: Run) -> HeldRun`
+- `def _load(data: HeldRun) -> Run`
+- `def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None`
+- `def _accepted(change: Change, question: str) -> bool`
+- `def head(path: Path) -> str | None`
+- `def _read(store: Store, slug: str) -> Held | None`
+- `def _matches(held: Held, change: Change) -> bool`
+- `def offered(store: Store, change: Change, question: Question) -> list[Option]`
+- `def _visual_holds(store: Store, change: Change, kept: VisualRound, where: Path) -> bool`
+- `def take(store: Store, lock: Lock, change: Change) -> Run | None`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/judges.py
 
 The visual review's two judges (TD-74, TD-78; design skill research §3.5 slice 5).
 
@@ -9658,9 +10914,12 @@ The visual review's two judges (TD-74, TD-78; design skill research §3.5 slice 
 - `__future__`
 - `base64`
 - `dataclasses`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.design_packs`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
 - `random`
 - `typing`
 
@@ -9676,7 +10935,7 @@ The visual review's two judges (TD-74, TD-78; design skill research §3.5 slice 
 - `def sessions(base: Session, c: Change, head: str, images: Sequence[Image], *, errors: Errors, scans: Sequence[DetectorScan]) -> list[Session]`
 - `def given(cfg: Session) -> DesignInput`
 - `def replayed(base: Session, kept: VisualRound, images: Sequence[Image]) -> list[Session]`
-- `def _designer(base: Session, head: str, sent: DesignInput, batch: Sequence[Image]) -> Session`
+- `def _design_judge(base: Session, head: str, sent: DesignInput, batch: Sequence[Image]) -> Session`
 - `def _message(c: Change, images: Sequence[Image], errors: Errors) -> str`
 - `def _reveal(scans: Sequence[DetectorScan], states: set[str]) -> str`
 - `def ended(run: Run | None) -> bool`
@@ -9692,21 +10951,23 @@ The visual review's two judges (TD-74, TD-78; design skill research §3.5 slice 
 - `def _worst(verdicts: Iterable[str]) -> Verdict`
 - `def recorded(c: Change, head: str, tree: str, widths: Sequence[int], *, runs: tuple[Sequence[Run], Sequence[Run]], scans: Sequence[DetectorScan], images: Sequence[Image], settings: Settings, now: datetime, inputs: Sequence[DesignInput] = ()) -> VisualRound`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/merge.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/merge.py
 
 Merge: an automatic gate at the exact PR head, re-checked under a per-target lock, then a guarded merge (TD-15).
 
 ### Imports
 
 - `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.github`
 - `owlbear_delivery_next.github.merge_offer`
 - `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `subprocess`
 - `typing`
@@ -9724,7 +10985,73 @@ Merge: an automatic gate at the exact PR head, re-checked under a per-target loc
 - `def submit(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult`
 - `def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/prepare.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/overlap.py
+
+Paths shared between Changes: recorded as information when planning; asked about only on a collision (D7).
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `fnmatch`
+- `itertools`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.worktree`
+- `owlbear_delivery_next.state_store.store`
+- `owlbear_delivery_next.workflow_steps`
+- `pathlib`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class Neighbour(NamedTuple)`
+- `def neighbours(store: Store, slug: str, now: datetime) -> list[Neighbour]`
+- `def generated(repo: Path) -> list[str]`
+- `def incidental(path: str, patterns: Iterable[str] = ()) -> bool`
+- `def _deeper(a: str, b: str) -> str`
+- `def found(plan: Plan, others: Mapping[str, Iterable[str]], patterns: Iterable[str] = ()) -> list[Overlap]`
+- `def record(c: Change, result: StepResult, others: Mapping[str, Iterable[str]], repo: Path) -> None`
+- `def _quiet(path: Path, *args: str) -> str | None`
+- `def _sides(path: Path, since: str | None) -> tuple[str, str] | None`
+- `def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]`
+- `def collision(c: Change, paths: Iterable[str], near: Iterable[Neighbour], said: str = '', patterns: Iterable[str] = ()) -> StepResult | None`
+- `def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, str], result: StepResult) -> StepResult`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/plan_round.py
+
+The plan challenge's sessions (TD-190, TD-208): a round, a rejections-only check and the owner's reconsideration.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def scopes(store: Store, slug: str) -> dict[str, list[str]]`
+- `def planned(store: Store, lock: Lock, change: Change, path: Path, payload: object, result: Result, profile: Profile, others: Mapping[str, Sequence[str]]) -> Result`
+- `def challenge(store: Store, lock: Lock, change: Change, path: Path, profile: Profile, others: Mapping[str, Sequence[str]]) -> Result`
+- `def judged(change: Change, verdict: Result, payload: object) -> Result`
+- `def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool`
+- `def _reconsider(store: Store, lock: Lock, change: Change, path: Path) -> bool`
+- `def prompt(c: Change, at: Path) -> str`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/prepare.py
 
 TD-96, TD-107: run a check's chosen test preparation and keep the preparer's setup edits as a patch.
 
@@ -9736,12 +11063,13 @@ TD-96, TD-107: run a check's chosen test preparation and keep the preparer's set
 - `hashlib`
 - `json`
 - `os`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.preparation`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.storage_io`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.preparation`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `pydantic`
 - `shlex`
@@ -9788,15 +11116,15 @@ TD-96, TD-107: run a check's chosen test preparation and keep the preparer's set
 - `def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None`
 - `def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> bool`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/preparer.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/preparer.py
 
 TD-107: a preparer session's start, and what each of its endings puts back besides its uncommitted edits.
 
 ### Imports
 
 - `__future__`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_flow`
 - `shutil`
 - `typing`
 
@@ -9807,7 +11135,7 @@ TD-107: a preparer session's start, and what each of its endings puts back besid
 - `def _same(kept: Path, now: Path) -> bool`
 - `def end(root: Path, folder: Path, started: dict[str, Any]) -> dict[str, Any]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/publish.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/publish.py
 
 Publish: integrate check, push the Change branch with hooks, create or reuse the PR and mark it ready (D3).
 
@@ -9815,14 +11143,16 @@ Publish: integrate check, push the Change branch with hooks, create or reuse the
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.evidence`
-- `owlbear_delivery_next.failures`
+- `owlbear_delivery_next.change_contracts.evidence`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
 - `owlbear_delivery_next.git.remote_git`
 - `owlbear_delivery_next.github.provider`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
 - `pathlib`
 - `typing`
 
@@ -9830,14 +11160,16 @@ Publish: integrate check, push the Change branch with hooks, create or reuse the
 
 - `def hook_rejected(returncode: int | None, stderr: bytes, *, hook: bool) -> bool`
 - `def push(path: Path, c: Change, head: str) -> StepResult | None`
-- `def _body(c: Change) -> str`
+- `def _body(c: Change, *, marker: bool) -> str`
+- `def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None`
 - `def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None`
 - `def reviewed(c: Change, path: Path, head: str) -> bool`
+- `def _completed(c: Change, path: Path, head: str) -> bool`
 - `def gate(checks: Sequence[Check], now: datetime) -> StepResult | None`
 - `def lagging(ctx: Ctx, c: Change, pr: PullRequest, head: str) -> StepResult`
 - `def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/pullback.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/pullback.py
 
 Pull-back: bring the local target branch up to the merged remote one without losing local work (TD-26).
 
@@ -9846,10 +11178,10 @@ Pull-back: bring the local target branch up to the merged remote one without los
 - `__future__`
 - `hashlib`
 - `os`
+- `owlbear_delivery_next.change_contracts.models`
 - `owlbear_delivery_next.git.remote_git`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.steps.pullback_replay`
+- `owlbear_delivery_next.workflow_steps`
+- `owlbear_delivery_next.workflow_steps.pullback_replay`
 - `pathlib`
 - `subprocess`
 - `typing`
@@ -9875,7 +11207,7 @@ Pull-back: bring the local target branch up to the merged remote one without los
 - `def _reason(exc: Exception) -> str`
 - `def run(repo: Path, target: str, now: datetime) -> Pullback`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/pullback_replay.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/pullback_replay.py
 
 Pull-back's changes to the local copy: replay local commits and apply one tree update safely (TD-26).
 
@@ -9885,7 +11217,7 @@ Pull-back's changes to the local copy: replay local commits and apply one tree u
 - `contextlib`
 - `logging`
 - `os`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_flow`
 - `pathlib`
 - `shutil`
 - `stat`
@@ -9919,7 +11251,42 @@ Pull-back's changes to the local copy: replay local commits and apply one tree u
 - `def _unapply(wt: Path, ref: str, old: str, new: str, why: str) -> NoReturn`
 - `def apply(wt: Path, ref: str, old: str, new: str, guard: Callable[[list[str]], Local]) -> Local`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/reconsider.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/queue.py
+
+Merging through a GitHub merge queue (TD-226): enqueue once, follow, handle removals, leave before moving on.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.merge_records`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.github.provider`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+
+### Interfaces
+
+- `def _seen(c: Change, q: QueueState) -> None`
+- `def _owner_cleared(c: Change, now: datetime) -> None`
+- `def _merged(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult`
+- `def _group_fix(ctx: Ctx, c: Change, pr: PullRequest, r: QueueEvent) -> StepResult`
+- `def _removed(ctx: Ctx, c: Change, pr: PullRequest, r: QueueEvent) -> StepResult`
+- `def _leave(ctx: Ctx, c: Change, pr: PullRequest, held: StepResult) -> tuple[Change, StepResult]`
+- `def hold(ctx: Ctx, c: Change, held: StepResult) -> tuple[Change, StepResult]`
+- `def _enqueue(ctx: Ctx, c: Change, pr: PullRequest, q: QueueState) -> StepResult`
+- `def _relevant(c: Change, q: QueueState) -> QueueEvent | None`
+- `def _queued(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate, q: QueueState) -> tuple[Change, StepResult]`
+- `def _untraced(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult`
+- `def _locked(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple[Change, StepResult]`
+- `def run(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple[Change, StepResult]`
+- `def leaving(before: Change, after: Change) -> bool`
+- `def _resolved(before: Change, after: Change) -> bool`
+- `def barrier(store: Store, repo: Path) -> Leave`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/reconsider.py
 
 A fresh reviewer reconsiders the findings the owner sent back with a note, before the review completes (TD-193).
 
@@ -9927,12 +11294,14 @@ A fresh reviewer reconsiders the findings the owner sent back with a note, befor
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.git_files`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `owlbear_delivery_next.permissions`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.local_system.git_files`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.workflow_steps`
 - `typing`
 
 ### Interfaces
@@ -9942,7 +11311,7 @@ A fresh reviewer reconsiders the findings the owner sent back with a note, befor
 - `def prompt(c: Change, task: Task, at: Path) -> str`
 - `def _flat(text: str, limit: int = 1400) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/retry.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/retry.py
 
 A rejected task attempt before its fresh build (TD-210, TD-214): archived on a branch, then undone forward.
 
@@ -9951,12 +11320,13 @@ A rejected task attempt before its fresh build (TD-210, TD-214): archived on a b
 - `__future__`
 - `contextlib`
 - `datetime`
-- `owlbear_delivery_next.git_files`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `owlbear_delivery_next.round_flow`
-- `owlbear_delivery_next.round_records`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.change_flow.round_flow`
+- `owlbear_delivery_next.local_system.git_files`
 - `shutil`
 - `subprocess`
 - `typing`
@@ -9965,14 +11335,24 @@ A rejected task attempt before its fresh build (TD-210, TD-214): archived on a b
 
 - `def archive(slug: str, subject: str, attempt: int, head: str) -> str`
 - `def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool`
-- `def _undo(path: Path, c: Change, task: Task, lp: RoundLoop) -> str`
+- `def _failure(exc: OSError | subprocess.SubprocessError) -> str`
+- `def _start(store: Store, lock: Lock, change: Change, lp: RoundLoop, path: Path) -> str`
+- `def _landed(path: Path, start: str, message: str) -> bool | None`
+- `def _ready(path: Path, start: str, message: str) -> str | None`
+- `def _undo(path: Path, c: Change, task: Task, lp: RoundLoop, start: str) -> str`
+- `def _commits(path: Path, tasks: list[Task], head: str) -> tuple[list[str], str]`
+- `def _archived(path: Path, ref: str, head: str, message: str) -> None`
+- `def _range(path: Path, base: str, head: str) -> list[str]`
 - `def _rev(path: Path, ref: str) -> str | None`
 - `def _reverted(path: Path, head: str, commits: list[str], message: str) -> str`
+- `def _scratch(path: Path, head: str, message: str, change: Callable[[Path], object]) -> str`
 - `def _remove(path: Path, scratch: Path) -> None`
 - `def _question(c: Change, task: Task, lp: RoundLoop, why: str) -> Question`
-- `def _rotated(c: Change, task: Task, lp: RoundLoop) -> None`
+- `def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool`
+- `def _taken(path: Path, c: Change, lp: RoundLoop, undo: list[Task], start: str) -> str`
+- `def _cleaned(path: Path, c: Change, lp: RoundLoop, start: str) -> str`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/review.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/review.py
 
 Engine part of the review step: record the verdict with its inputs; findings become a repair task (P5).
 
@@ -9980,30 +11360,35 @@ Engine part of the review step: record the verdict with its inputs; findings bec
 
 - `__future__`
 - `datetime`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.moves`
-- `owlbear_delivery_next.round_records`
-- `owlbear_delivery_next.steps`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.round_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.moves`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `subprocess`
 - `typing`
 
 ### Interfaces
 
 - `def started(c: Change, task: Task | None, path: Path, settings: Settings) -> None`
-- `def _subject(c: Change, task: Task | None) -> str | None`
+- `def _final(c: Change, settings: Settings) -> None`
+- `def _subject(c: Change, task: Task) -> str | None`
 - `def looped(c: Change, task: Task | None) -> RoundLoop | None`
 - `def lines(review: tools.ReviewResult) -> list[str]`
 - `def findings(review: tools.ReviewResult, limit: int = 4000) -> list[str]`
 - `def pack(items: list[str], limit: int = 4000) -> list[str]`
 - `def recorded(change: Change, task: Task | None, run: Run, path: Path, result: StepResult) -> StepResult`
-- `def _counted(c: Change, lp: RoundLoop, found: list[str], task: Task | None) -> list[str]`
+- `def _head(path: Path) -> str`
+- `def _counted(c: Change, lp: RoundLoop, p: tools.ReviewResult, task: Task | None, head: str) -> list[str]`
 - `def score(found: list[str], kind: str) -> Score`
 - `def repair(change: Change, task: Task | None, found: list[str], kept: Mapping[str, str] | None = None) -> list[Task]`
 - `def completed(store: Store, lock: Lock, change: Change, repo: Path) -> bool`
 - `def disputed(change: Change) -> StepResult | None`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/ro_installs.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/ro_installs.py
 
 Dependencies in the Change's read-only worktree: a package's install command runs again when its inputs change.
 
@@ -10013,9 +11398,10 @@ Dependencies in the Change's read-only worktree: a package's install command run
 - `datetime`
 - `hashlib`
 - `json`
-- `owlbear_delivery_next.profile_record`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.storage_io`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.storage_io`
+- `owlbear_delivery_next.workflow_steps`
 - `shlex`
 - `time`
 - `typing`
@@ -10027,7 +11413,79 @@ Dependencies in the Change's read-only worktree: a package's install command run
 - `def _digest(home: Path, command: str) -> str`
 - `def _read(path: Path) -> dict[str, str]`
 
-## serve/delivery-next/src/owlbear_delivery_next/steps/visual.py
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/session_choice.py
+
+Which agent session a step runs in: the answer's, a repair chance's, a held run's, or a new one.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.workflow_steps`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `def new_id(change: Change) -> str`
+- `def opening(store: Store, lock: Lock, change: Change, task: Task | None) -> tuple[Question | None, session_result.Run | None, str, bool]`
+- `def replaced(store: Store, lock: Lock, change: Change, repair: str) -> tuple[Change, str | None]`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/sessions.py
+
+One runner's agent sessions: run them in the profile's runtime, log their usage, and run fresh read-only judges.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `dataclasses`
+- `datetime`
+- `json`
+- `owlbear_delivery_next.change_contracts`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.permissions`
+- `owlbear_delivery_next.change_contracts.profile_record`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.local_system.processes`
+- `owlbear_delivery_next.runtimes`
+- `owlbear_delivery_next.settings`
+- `owlbear_delivery_next.workflow_steps`
+- `sys`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class SessionGrantError(Exception)`
+  - `def __init__(self, label: str) -> None`
+  - `def result(self, now: datetime) -> Result`
+- `def granted(label: str) -> int`
+- `class UsageUnreadError(Exception)`
+  - `def __init__(self, run: session_result.Run, label: str = '') -> None`
+- `def out(text: str) -> None`
+- `def memory(store: Store) -> Path | None`
+- `def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run`
+- `def held(done: session_result.Run) -> bool`
+- `def log_held(store: Store, lock: Lock, labels: list[str], runs: list[session_result.Run]) -> None`
+- `def unread(done: session_result.Run) -> bool`
+- `def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, fields: dict[str, object]) -> None`
+- `def reviewer(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str) -> Result`
+- `def review_run(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], sdk_adapter.Session], label: str, *, submit: tools.Spec = tools.REVIEW) -> tuple[Result, session_result.Run]`
+- `def judges(store: Store, lock: Lock, change: Change, source: Path, made: Callable[[Path], list[tuple[str, sdk_adapter.Session]]], settings: Settings | None = None, *, hold: bool = False) -> list[tuple[Result, session_result.Run]]`
+- `def isolated(store: Store, lock: Lock, change: Change, source: Path, make: Callable[[Path], list[sdk_adapter.Session]], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]], *, each: bool = False) -> list[session_result.Run]`
+- `def _noted(cfgs: list[sdk_adapter.Session], note: str) -> list[sdk_adapter.Session]`
+- `def _refused(store: Store, lock: Lock, change: Change, why: str, cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]`
+- `def _within(store: Store, lock: Lock, change: Change, copy: disposable.Copy, cfgs: list[sdk_adapter.Session], go: Callable[[list[sdk_adapter.Session]], list[session_result.Run]]) -> list[session_result.Run]`
+- `def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run]) -> None`
+- `def _at() -> str`
+- `def _waves(cfgs: list[sdk_adapter.Session], told: Callable[[int], None]) -> list[session_result.Run]`
+- `async def _together(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]`
+
+## serve/delivery-next/src/owlbear_delivery_next/workflow_steps/visual.py
 
 Visual check: render the brief's page states in headless Chromium and judge the screenshots (B23, B24).
 
@@ -10036,12 +11494,13 @@ Visual check: render the brief's page states in headless Chromium and judge the 
 - `__future__`
 - `dataclasses`
 - `hashlib`
-- `owlbear_delivery_next.failures`
-- `owlbear_delivery_next.loop`
-- `owlbear_delivery_next.models`
-- `owlbear_delivery_next.steps`
-- `owlbear_delivery_next.steps.browse`
-- `owlbear_delivery_next.visual_records`
+- `owlbear_delivery_next.change_contracts.failures`
+- `owlbear_delivery_next.change_contracts.models`
+- `owlbear_delivery_next.change_contracts.visual_records`
+- `owlbear_delivery_next.change_flow`
+- `owlbear_delivery_next.change_flow.loop`
+- `owlbear_delivery_next.workflow_steps`
+- `owlbear_delivery_next.workflow_steps.browse`
 - `pathlib`
 - `re`
 - `subprocess`
@@ -10065,41 +11524,6 @@ Visual check: render the brief's page states in headless Chromium and judge the 
 - `def missing_browser(reason: str) -> StepResult`
 - `def broken(reason: str) -> StepResult`
 - `def judged(c: Change, head: str, tree_id: str, shots: Sequence[Shot], *, verdict: tools.ReviewResult | None, now: datetime, scans: Sequence[DetectorScan] = (), kept: VisualRound | None = None) -> tuple[Change, StepResult]`
-
-## serve/delivery-next/src/owlbear_delivery_next/steps/worktree.py
-
-The Change worktree under the user data root, its packages' install commands and its observed state (D4 §3.2).
-
-### Imports
-
-- `__future__`
-- `hashlib`
-- `owlbear_delivery_next`
-- `owlbear_delivery_next.tools`
-- `pathlib`
-- `shutil`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `def git(cwd: Path, *args: str) -> str`
-- `def data_root() -> Path`
-- `def path_for(common_dir: Path, slug: str) -> Path`
-- `def ensure(repo: Path, common_dir: Path, slug: str, branch: str, target: str) -> Path`
-- `def tracking(cwd: Path, target: str) -> str`
-- `def installs(profile: Profile, scope: Sequence[str]) -> list[tuple[str, str]]`
-- `def checks(profile: Profile) -> list[tuple[str, str]]`
-- `def head(path: Path) -> str`
-- `class ShelveError(Exception)`
-- `def shelve(path: Path, message: str) -> bool`
-- `def observe(path: Path, target: str, since: str | None = None) -> Worktree`
-- `def diff(path: Path, base: str, rev: str = 'HEAD') -> list[str]`
-- `def tree(path: Path, rev: str = 'HEAD') -> str`
-- `def known(path: Path, rev: str) -> bool`
-- `def between(path: Path, old: str, new: str) -> list[str]`
-- `def fingerprints(path: Path, paths: Sequence[str], rev: str = 'HEAD') -> dict[str, str]`
-- `def launch_inputs(path: Path, directory: str, rev: str = 'HEAD') -> str | None`
 
 ## serve/knowledge/src/owlbear_knowledge/__init__.py
 
@@ -11374,6 +12798,7 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 
 - `class AppContext`
 - `def memory_dir() -> Path`
+- `def global_dir() -> Path | None`
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
 - `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent) -> dict[str, Any]`
 - `async def list_memories(ctx: Context, *, states: list[MemoryState] | None = None, categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
@@ -11409,9 +12834,11 @@ MCP tool implementations for markdown-backed memory entries.
 - `class _AssessmentBatch(BaseModel)`
   - `def _validate_task_id(cls, value: str) -> str`
 - `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
+- `def _global_engine(ctx: Context) -> MemoryEngine | None`
+- `def _readable(ctx: Context) -> list[MemoryEntry]`
 - `def _memory_dir_from_ctx(ctx: Context) -> Path`
 - `def _validate_scope(agents: list[str]) -> None`
-- `def _recognized_agent_names(engine: MemoryEngine) -> list[str]`
+- `def _recognized_agent_names(entries: list[MemoryEntry]) -> list[str]`
 - `def _recall_fallback(known_agents: list[str]) -> str`
 - `def _recall_block(entry: MemoryEntry) -> str`
 - `def _allowed_category_values() -> str`
@@ -11927,9 +13354,6 @@ Classify dependency-update diffs for focused CI proof.
 - `def _ruff_dependency_values(content: str | None) -> tuple[str, ...] | None`
 - `def _ruff_lock_values(content: str | None) -> tuple[str, ...] | None`
 - `def _ruff_pre_commit_values(content: str | None) -> tuple[str, ...] | None`
-- `def _config_value(content: str, key: str) -> str | None`
-- `def _megalinter_metadata(content: str | None) -> tuple[str, str] | None`
-- `def _megalinter_action_values(content: str | None) -> tuple[str, ...]`
 - `def _changed_snapshot_value(path: str, before_files: Mapping[str, str | None] | None, after_files: Mapping[str, str | None] | None, extractor: Callable[[str | None], object]) -> bool`
 - `def _ruff_toolchain_changed(changed: set[str], before_files: Mapping[str, str | None] | None, after_files: Mapping[str, str | None] | None) -> bool`
 - `def _python_behavior_changed(changed: set[str], before_files: Mapping[str, str | None] | None, after_files: Mapping[str, str | None] | None) -> bool`
@@ -12052,54 +13476,6 @@ Regenerate all OwlBear navigation indexes concurrently.
 - `def generate_indexes(root: Path) -> None`
 - `def main() -> None`
 
-## serve/tools/src/owlbear_tools/megalinter.py
-
-MegaLinter image configuration shared by workspace commands.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `contextlib`
-- `dataclasses`
-- `os`
-- `owlbear_tools.quality_runtime`
-- `pathlib`
-- `re`
-- `shutil`
-- `subprocess`
-- `sys`
-- `time`
-- `typing`
-- `yaml`
-
-### Interfaces
-
-- `class MegaLinterImage`
-  - `def repository(self) -> str`
-  - `def tag(self) -> str`
-  - `def flavor(self) -> str`
-- `class DockerRuntimeApp`
-- `def load_megalinter_image(path: Path = _CONFIG_PATH) -> MegaLinterImage`
-- `def _docker_command(binary: str = 'docker') -> list[str]`
-- `def _configured_ca_path() -> Path | None`
-- `def _run_host(command: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]`
-- `def _find_docker_binary() -> str | None`
-- `def _docker_is_ready(binary: str) -> bool`
-- `def _app_is_installed(app: DockerRuntimeApp) -> bool`
-- `def _installed_docker_apps() -> tuple[DockerRuntimeApp, ...]`
-- `def _app_is_running(app: DockerRuntimeApp) -> bool`
-- `def _start_docker_app(app: DockerRuntimeApp) -> None`
-- `def _stop_docker_app(app: DockerRuntimeApp) -> None`
-- `def _wait_for_docker() -> str | None`
-- `def _stop_runtime_requested() -> bool`
-- `def _acquire_docker_runtime() -> tuple[str, DockerRuntimeApp | None]`
-- `def _docker_runtime() -> Iterator[str]`
-- `def run_megalint(fix_mode: FixMode) -> int`
-- `def megalint() -> None`
-- `def _run(command: list[str]) -> int`
-- `def megalint_clean() -> None`
-
 ## serve/tools/src/owlbear_tools/project.py
 
 Project setup and diagnostic commands.
@@ -12155,7 +13531,6 @@ Workspace lint, formatting, and quality commands.
 - `__future__`
 - `argparse`
 - `json`
-- `owlbear_tools.megalinter`
 - `owlbear_tools.quality_runtime`
 - `owlbear_tools.todo`
 - `pathlib`
@@ -12166,7 +13541,7 @@ Workspace lint, formatting, and quality commands.
 
 ### Interfaces
 
-- `def _precommit_hook(hook: str, *, staged: bool, manual: bool = False) -> int`
+- `def _precommit_hook(hook: str, *, staged: bool) -> int`
 - `def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> int`
 - `def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]`
 - `def _check_text_files(name: str, *, staged: bool) -> int`
@@ -12267,7 +13642,9 @@ Maintained test commands for the OwlBear development checkout.
 - `__future__`
 - `argparse`
 - `ast`
+- `contextlib`
 - `dataclasses`
+- `fcntl`
 - `pathlib`
 - `re`
 - `shutil`
@@ -12290,6 +13667,10 @@ Maintained test commands for the OwlBear development checkout.
 - `def _direct_consumers(package: _WorkspacePackage, packages: tuple[_WorkspacePackage, ...]) -> tuple[_WorkspacePackage, ...]`
 - `def _relative_paths(paths: Iterable[Path]) -> list[str]`
 - `def _package_scope(package: _WorkspacePackage) -> list[str]`
+- `def _neighbour_tests(package: _WorkspacePackage) -> list[Path]`
+- `def _unseen_by_testmon(path: Path, namespace: str) -> bool`
+- `def _monitored_package(path: str) -> _WorkspacePackage | None`
+- `def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -> list[tuple[list[str], Path]]`
 - `def _package_for_path(normalized: str) -> _WorkspacePackage | None`
 - `def _python_scope(path: str) -> list[str] | None`
 - `def _is_web_path(path: str) -> bool`
@@ -12298,7 +13679,9 @@ Maintained test commands for the OwlBear development checkout.
 - `def _git_paths(arguments: list[str]) -> set[str]`
 - `def _default_changed_base() -> str`
 - `def _changed_paths(base: str | None) -> list[str]`
+- `def _split_paths(paths: list[str], *, coverage: bool) -> tuple[set[str] | None, list[_WorkspacePackage]]`
 - `def _commands_for_paths(paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool) -> list[tuple[list[str], Path]]`
+- `def _testmon_lock(command: list[str]) -> Iterator[dict[str, tuple[int, ...]]]`
 - `def _run_commands(commands: list[tuple[list[str], Path]]) -> int`
 - `def test_main() -> None`
 - `def test_e2e_main() -> None`

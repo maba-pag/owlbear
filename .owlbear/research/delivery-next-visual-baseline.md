@@ -29,12 +29,12 @@ Gaps between the approved design and the code at `600636899`, found while ground
 
 | # | Gap | Evidence |
 | --- | --- | --- |
-| G1 | The brief has no render recipe, although shaping must establish it before approval | `models.py:120` `Brief`; [charter §3.10](delivery-next-charter.md#L227); [architecture](delivery-next-architecture.md#L283) |
+| G1 | The brief has no render recipe, although shaping must establish it before approval | `models.py:120` `Brief`; [charter §3.10](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-charter.md#L227); [architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md#L283) |
 | G2 | The chat's `save_brief` tool passes only title, outcome, criteria, scope, person checks and change; `ui` and `visual` never reach a brief shaped in chat, although skill step 4 asks for them and the HTTP endpoint accepts them | `mcp_server.py:111`; `skills/delivery/SKILL.md:19`; `tools.py` `BriefDraft` |
 | G3 | The host's "after" launch does not check that something else already answers at the URL; only the "before" capture does | `host.py:286`, start at `:303`; `steps/before.py` `_serve` |
 | G4 | The visual reviewer receives only the "after" screenshots | `runner.py:237` |
 | G5 | The M4 sandbox preview hard-codes its port (`server.listen(4173, "127.0.0.1")`) | `owlbear-sandbox` `a6eb298`, `packages/app/src/preview.ts` |
-| G6 | An approved brief cannot be changed: saving refuses outside Shape and the API knows only pause, resume and abandon, while the journey's D6 defines a change-of-mind route | `briefs.py:87`; `api.py:84`; [journey D6](delivery-next-journey-and-failure-modes.md#L219) |
+| G6 | An approved brief cannot be changed: saving refuses outside Shape and the API knows only pause, resume and abandon, while the journey's D6 defines a change-of-mind route | `briefs.py:87`; `api.py:84`; [journey D6](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-journey-and-failure-modes.md#L219) |
 
 G2 means no UI Change shaped in chat can have visual states today; slice 3 fixes it. G6 predates
 this plan and stays out of its scope; it is listed because a revised brief after approval is part of
@@ -51,7 +51,7 @@ the owner's journey and has no route yet.
 | S5 | [PDS v4 performance, CDN](https://designsystem.porsche.com/v4/must-know/performance/cdn/) | Components, icons, fonts and styles come from `cdn.ui.porsche.com` (shared cache across Porsche apps); only `cdn: 'auto' \| 'cn'` is configurable |
 | S6 | [PDS v4 components ready](https://designsystem.porsche.com/v4/developing/components-ready/) | `componentsReady()` resolves when all used components are loaded; `whenDefined` proves registration only |
 | S7 | [PDS issue #4730](https://github.com/porsche-design-system/porsche-design-system/issues/4730) | CDN-free local delivery is a goal of an open v5 spike, not a v4 option |
-| S8 | Repo research [1495](1495-pds-v4-local-hosting.md), [1510](1510-pds-asset-sync.md), [1591](1591-pds-global-styles-test-approach.md), [936](936-sidecar-green-gaps.md) | Cockpit mirrors PDS chunks through an internal `cdn` property trap; 936 recommended its strict CSP (0.75); 1591 quotes the owner's D6 approving CDN fonts. The D6 record itself was not located |
+| S8 | Repo research [1495](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/1495-pds-v4-local-hosting.md), [1510](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/1510-pds-asset-sync.md), [1591](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/1591-pds-global-styles-test-approach.md), [936](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/936-sidecar-green-gaps.md) | Cockpit mirrors PDS chunks through an internal `cdn` property trap; 936 recommended its strict CSP (0.75); 1591 quotes the owner's D6 approving CDN fonts. The D6 record itself was not located |
 | S9 | [Vite server options](https://vite.dev/config/server-options#server-strictport), [Vite CLI](https://vite.dev/guide/cli) | `--port`, `--strictPort`; without it Vite moves to the next free port |
 | S10 | [Next.js CLI](https://nextjs.org/docs/app/api-reference/cli/next) | `-p/--port` or `PORT` env; `npm run` needs `--` to forward flags |
 | S11 | [Playwright web server](https://playwright.dev/docs/test-webserver) | Prior art: with `reuseExistingServer: false` it refuses when the URL already answers, then waits for the URL; no ownership check |
@@ -191,10 +191,10 @@ before new files are added.
 | 4 Visual check | §3.4 | Preparation prompt carries the brief's recipe and port; a target whose UI paths changed since shaping gets a retake showing the new target's content, an unchanged one none; reviewer attachments carry labelled before and after; an "unsure" state asks the owner to look at it; an over-budget "before" is downscaled or omitted with a note and never yields a fix task |
 | 5 Live | One UI Change in `owlbear-sandbox` from chat: shaping meets G5 and offers the three choices; the Change fixes the preview in itself; a second Change gets a design reference; its visual check fails once on a deliberately broken layout, returns a fix task and then passes (the M4 proof); an owner's own server on 4173 stays untouched and uncaptured | Card with both sets; page screenshots; activity log |
 
-Docs updated with the slices: the TD-24 sentence of [charter §3.10](delivery-next-charter.md#L227);
-J2, J4, J7, B24, B25 of the [journey](delivery-next-journey-and-failure-modes.md); "Visual check" and
-the "Before" paragraph of the [architecture](delivery-next-architecture.md); the brief row, "Check
-environment" and "Before capture" of [status and exits](delivery-next-status-and-exits.md); the DR3
+Docs updated with the slices: the TD-24 sentence of [charter §3.10](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-charter.md#L227);
+J2, J4, J7, B24, B25 of the [journey](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-journey-and-failure-modes.md); "Visual check" and
+the "Before" paragraph of the [architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md); the brief row, "Check
+environment" and "Before capture" of [status and exits](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-status-and-exits.md); the DR3
 exception of §5.
 
 ## 5. Recorded exception, risks and confidence

@@ -56,7 +56,7 @@ applyTo: "**"
 | --- | --- |
 | memory-mcp `owlbear-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
 | Native changes, jobs, and requests | Change-specific context, blockers, decisions, and actions |
-| `.owlbear/research/` | Research findings and source-grounded analysis |
+| `owlbear-data/<folder>/research/` | Research findings and source-grounded analysis (`w-research`) |
 | Project knowledge MCP | Domain knowledge and external-source knowledge |
 
 The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `owlbear-memory` for institutional memory and normal project artifacts for task context.

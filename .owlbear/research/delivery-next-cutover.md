@@ -32,11 +32,11 @@ every step uses git, setup, the sync workflow or an existing file.
 | ID | Source | Used for | Limits |
 | --- | --- | --- | --- |
 | C01 | [Rebuild research](delivery-liveness-first-rebuild.md) §3.7–§3.9 | M0–M7, E1, TD-1–TD-22, option S3, provenance rule | Only TD-1–TD-22 are user decisions |
-| C02 | [Charter draft](delivery-next-charter.md) §3.4, §3.7, §3.9, §3.11 | Route, Cockpit as status surface, size and style rules, non-goals | Draft, not approved |
-| C03 | [Ownership map](delivery-next-ownership-map.md) §4 | 47 of 55 engine modules unnecessary; agents, skills, prompts and tools dropped | Classified by docstring and purpose |
-| C04 | [Route comparison](delivery-next-route-comparison.md) §3.4 | Eight reuse items, copied not imported | Coupling read statically |
-| C05 | [Distribution research](owlbear-distribution-agent-host.md) F1–F4, §3.5, §5 | `share/` invisible to the harness; plugin content option C3; `.mcp.json` `cwd` follows the session; agent hooks run only in Local | Static reading of VS Code 1.140 |
-| C06 | [Platform probe](delivery-next-platform-probe.md) rows 6–8 | `.github/agents`, `.github/skills` and instructions load in CLI sessions; repo `.mcp.json` needs folder trust per worktree | One laptop, free identity |
+| C02 | [Charter draft](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-charter.md) §3.4, §3.7, §3.9, §3.11 | Route, Cockpit as status surface, size and style rules, non-goals | Draft, not approved |
+| C03 | [Ownership map](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-ownership-map.md) §4 | 47 of 55 engine modules unnecessary; agents, skills, prompts and tools dropped | Classified by docstring and purpose |
+| C04 | [Route comparison](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-route-comparison.md) §3.4 | Eight reuse items, copied not imported | Coupling read statically |
+| C05 | [Distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) F1–F4, §3.5, §5 | `share/` invisible to the harness; plugin content option C3; `.mcp.json` `cwd` follows the session; agent hooks run only in Local | Static reading of VS Code 1.140 |
+| C06 | [Platform probe](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-platform-probe.md) rows 6–8 | `.github/agents`, `.github/skills` and instructions load in CLI sessions; repo `.mcp.json` needs folder trust per worktree | One laptop, free identity |
 | C07 | `git ls-files` and `wc -l` at `dev` on 2026-10-10 | Every count in §3.6 | Lines include blanks and docstrings |
 | C08 | [pyproject.toml](../../pyproject.toml), [sync-manifest.json](../../.github/sync-manifest.json), [.vscode/mcp.json](../../.vscode/mcp.json), [.vscode/settings.json](../../.vscode/settings.json), [seed/.vscode](../../seed/.vscode/), [setup/init.py](../../setup/init.py) L81–L83, L994–L1042 | Loading paths and registration that change | Read, not run |
 | C09 | [delivery_controller.py](../../serve/tools/src/owlbear_tools/delivery_controller.py) L3, L183–L188; [pin.json](../../.owlbear/controller/pin.json) | Releases are `git archive` plus `uv sync --locked --package <controller packages>`; pinned release `43fdf236` | Not executed |

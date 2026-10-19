@@ -1059,4 +1059,4 @@
 
 ### Interfaces
 
-- `function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel" })`
+- `function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "" })`

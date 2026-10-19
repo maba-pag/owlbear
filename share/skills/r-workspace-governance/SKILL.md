@@ -83,7 +83,7 @@ reverting them.
 | --- | --- | --- |
 | Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
-| Durable research findings | OwlBear: `.owlbear/research/{slug}.md`; any other project: `owlbear-data/<folder>/research/{slug}.md` | Tracked; include the task reference; never committed into another project (TD-347). |
+| Durable research findings | `owlbear-data/<folder>/research/{slug}.md` (OwlBear's folder: `owlbear`); OwlBear's record, plan and unbuilt build designs: `.owlbear/research/` | Tracked; include the task reference; never committed into another project (TD-227, TD-347, TD-395). |
 | External source attribution | `.owlbear/sources/overview.md` | Tracked; use the Attribution schema below. |
 | Decision and action requests | `.owlbear/delivery/runtime/changes/{change-id}/frontier.json` | Create through Delivery request tools; requests are embedded in outcome bindings, so do not hand-author the frontier. |
 | Generated navigation indexes | `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md` | Regenerate with `uv run --project {owlbear-root} indexes {project-root}`. |

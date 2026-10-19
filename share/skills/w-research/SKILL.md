@@ -75,8 +75,10 @@ owns any required challenger review or user decision.
 ## Step 6 — Preserve Durable Findings When Useful
 
 Write a research document only when the evidence has durable value beyond the active shaping conversation:
-in OwlBear's own repository to `.owlbear/research/{slug}.md`; for any other project to its folder in the
-shared data repository, `owlbear-data/<folder>/research/{slug}.md`, never into the project itself (TD-347).
+to the project's folder in the shared data repository, `owlbear-data/<folder>/research/{slug}.md` (OwlBear's
+folder is `owlbear`), never into the project itself (TD-227, TD-347). Only OwlBear's decision record, plan and build
+designs of work not yet built stay in its `.owlbear/research/`, which GitHub's agents read; a design moves once built
+(TD-395).
 Keep it focused and source-grounded:
 
 ```markdown

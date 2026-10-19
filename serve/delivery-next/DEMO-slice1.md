@@ -325,7 +325,7 @@ Limits: one run; the visual check, overlap display, "ask before merge" and the N
 ## Visual review, window runtime and G2 failures, 2026-10-13, times UTC
 
 Sandbox `boecht/owlbear-sandbox`, Copilot use on `maba-pag`'s business seat (SDK login `maba-pag`), branch
-`next/m4-slice1`. Details of the visual review: [design skill research §3.8](../../.owlbear/research/delivery-next-design-skill.md).
+`next/m4-slice1`. Details of the visual review: [design skill research §3.8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-design-skill.md).
 
 ### Visual review: `promo-hero` (PR #12)
 

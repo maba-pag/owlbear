@@ -25,7 +25,7 @@ generated consumer branch and no sync workflow (TD-203).
 where the code differs from [the decisions](../.owlbear/research/delivery-liveness-first-rebuild.md). Read it when
 you start or resume work and after a context compaction; a pull request that changes what it says updates it. The
 old Delivery redesign programme and
-[its execution plan](../.owlbear/research/delivery-redesign-execution-plan.md) are superseded history (TD-202).
+[its execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md) are superseded history (TD-202).
 
 ### Asking the Owner
 
