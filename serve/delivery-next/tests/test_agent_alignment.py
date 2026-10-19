@@ -23,7 +23,10 @@ from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Layer, resolve
 from owlbear_delivery_next.workflow_steps import sessions
 
-AGENTS = ("builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater")
+AGENTS = (
+    "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
+    "test-curator",
+)  # fmt: skip
 PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
 SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research P24)
@@ -134,9 +137,9 @@ def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> 
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        assert asks == (role not in {"challenger", "design-judge", "updater"}), (
+        assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer"}), (
             role
-        )  # the updater's stops are the job's
+        )  # the updater's stops are the job's; a test reviewer only reports (TD-339)
         assert (tools.ASK.name in wf.tools_note(role)) == asks
         assert (tools.ASK.name in step_input.reminder(role)) == asks
     for label in tools.VERDICTS:

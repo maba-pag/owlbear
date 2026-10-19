@@ -327,7 +327,7 @@ MISSING = Spec(
 SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
-JUDGES = frozenset({"challenger", "design-judge"})  # they answer with a verdict, never a question (TD-108)
+JUDGES = frozenset({"challenger", "design-judge", "test-reviewer"})  # they answer with a verdict, never a question
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
 VERDICTS = frozenset(
     {"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider"}

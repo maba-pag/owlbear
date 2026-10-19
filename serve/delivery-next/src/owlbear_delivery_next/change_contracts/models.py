@@ -19,7 +19,10 @@ DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings o
 
 type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
-type Role = Literal["planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater"]
+type Role = Literal[
+    "planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater", "test-reviewer",
+    "test-curator",
+]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
 type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild"]
