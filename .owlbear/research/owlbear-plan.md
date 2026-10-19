@@ -23,7 +23,7 @@ The old engine is retired (TD-202) but its source is still in the repository: `s
 registered: `owlbear-sandbox` and `owlbear-sandbox-protected`. OwlBear itself is developed in chat (TD-319 allows
 both), through pull requests to `main` with the required `CI` check, strictly up to date, merged as merge commits.
 
-**Runtime.** `~/.owlbear/runtime` is a clone at `origin/main` (`23bd7c1ab`), deployed by hand after each merge
+**Runtime.** `~/.owlbear/runtime` is a clone at `origin/main` (the latest runtime merge), deployed by hand after each merge
 (TD-289, TD-309): stop, check out `origin/main`, `uv sync --locked`, start as it was (`owlbear start`, with
 `--paused` if it was paused; TD-350).
 
@@ -59,7 +59,7 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest (TD-330, TD-334, TD-335); built: TD-328, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
+| 1 | TD-358's rest (TD-330, TD-334); built: TD-328, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
@@ -99,13 +99,12 @@ TD-358 ("All of it now, before self-update step 3b") was recorded after step 3b 
 "before the rest of the self-update"; TD-394 confirms it comes first. The audit of §4 found the eight below unbuilt;
 the range's other rows are built, history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). TD-403 adds
 the small items of 2026-10-19. Built since: TD-392 (#502), TD-328, TD-341, TD-347's skill, TD-396, TD-397 and TD-399,
-with the C-02 catalogue text (#506), TD-345 with TD-405 and TD-406, and TD-350. Remaining:
+with the C-02 catalogue text (#506), TD-345 with TD-405 and TD-406 (#508), TD-350 (#509) and TD-335. Remaining:
 
 | Decision | What is missing |
 | --- | --- |
 | TD-330 | Every loop's last round gets one rejections-only check outside the round count; all five loops still follow TD-218 |
 | TD-334 | Each project's live database lives under `~/.owlbear`, one folder per project; it is still in the clone's Git folder |
-| TD-335 | `owlbear install` asks for the `~/.copilot` shaper links and uninstall removes them; neither does today |
 
 ### 3.2 Items 2 to 4: the self-update
 
@@ -159,7 +158,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-04 | A missing tool reruns once in a runtime that has it | No other runtime while window steps are paused | keep | 8 |
 | C-05 | The repository's instructions apply, Delivery's format wins, a clash asks | Agents are not told which wins | align | — |
 | C-05 | Project agents and skills off in steps after self-update step 5 | Discoverable, allowed until then (TD-329) | build | 5 |
-| C-06, C-08 | The `~/.copilot` shaper links are asked at install and removed at uninstall (TD-335) | Not handled by install or uninstall | align | 1 |
 | C-08, C-19 | Live databases under `~/.owlbear`, one folder per project (TD-334) | In the clone's Git folder | align | 1 |
 | C-09 | `owlbear-data` holds OwlBear's research too; the record, the plan and unbuilt build designs stay (TD-227, TD-395) | Still in this repository | build | 6 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
