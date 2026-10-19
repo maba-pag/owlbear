@@ -147,6 +147,15 @@ def check(args: TestCurationResult, tree: tools.Worktree) -> list[str]:
     if not args.applied and tree.head != tree.base:
         errors.append("applied: your commits change files; list each verdict you applied, or undo them")
     errors += [f"changes: {p} is not a test; edit only tests" for p in tree.changed if not in_tests(p)][:5]
-    if args.after and not (len(args.after.commit) >= 7 and tree.head.startswith(args.after.commit)):  # noqa: PLR2004
+    if not _at(args.before.commit, tree.base):
+        errors.append(f"before.commit: measure on the commit you started from, {tree.base[:12]}")
+    if args.after and not _at(args.after.commit, tree.head):
         errors.append(f"after.commit: measure on your last commit, {tree.head[:12]}")
+    if args.after and (broke := sorted(set(args.after.failures) - set(args.before.failures))):
+        errors.append(f"after.failures: {', '.join(broke[:5])} passed before; restore what breaks them")
     return errors
+
+
+def _at(said: str, commit: str) -> bool:
+    """*said* names *commit*: its full id or a prefix of at least seven characters."""
+    return len(said) >= 7 and commit.startswith(said)  # noqa: PLR2004 - Git's shortest default abbreviation

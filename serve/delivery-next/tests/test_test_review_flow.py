@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts import curation_tools, tools
 from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION, TestCurationResult, TestReviewResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import Exit, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import Exit, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult, apply, brief_ready
 from owlbear_delivery_next.change_flow.status import Activity, status
@@ -294,3 +294,56 @@ def test_a_curation_result_must_match_what_its_commits_show():
         f"after.commit: measure on your last commit, {'b' * 12}",
     ]
     assert curation_tools.check(applied, tools.Worktree("c" * 40, "a" * 40, changed=("tests/data.json",))) == []
+    broke = applied.model_copy(update={"after": applied.after.model_copy(update={"failures": ["t.py::new"]})})
+    assert curation_tools.check(broke, tools.Worktree("c" * 40, "a" * 40)) == [
+        "after.failures: t.py::new passed before; restore what breaks them"
+    ]
+    elsewhere = applied.model_copy(update={"before": applied.before.model_copy(update={"commit": "d" * 40})})
+    assert curation_tools.check(elsewhere, tools.Worktree("c" * 40, "a" * 40)) == [
+        f"before.commit: measure on the commit you started from, {'a' * 12}"
+    ]
+
+
+def test_a_change_request_or_a_step_back_stops_the_review_and_counts_nothing(review):
+    from owlbear_delivery_next.change_contracts.inbox import IntentItem  # noqa: PLC0415
+
+    c = review.store.read(review.slug).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
+    back = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason="the plan is wrong")
+    for _ in range(4):  # REPLAN_LIMIT and RETRY_LIMIT never reached: nothing is counted
+        c = apply(c.model_copy(update={"outcome": None, "stop": None}), back, NOW)
+    assert (c.step.kind, c.outcome.exit, c.budgets.replans, c.budgets.causes) == (StepKind.BUILD, Exit.STOP, 0, {})
+    c, step_ = loop.schedule(c.model_copy(update={"outcome": None, "stop": None}),
+                             [IntentItem(at=NOW, intent="change", text="also docs")], NOW)  # fmt: skip
+    assert (c.step.kind, c.outcome.exit, step_) == (StepKind.BUILD, Exit.STOP, None)
+
+
+def test_a_round_gated_on_one_share_keeps_the_others_reviews(review, monkeypatch):
+    first = "# Test review: share 1 of 2"
+    review.ends[first] = lambda cfg: Run(
+        cfg.session_id, "error", usage_unread="model unknown", termination=Termination(confirmed=True)
+    )
+    monkeypatch.setattr(sessions, "GRANT", 2)
+    step(review)
+    c = review.store.read(review.slug)
+    assert [s.ended for s in c.tests.shares] == [None, "reviewed"]  # the gated share reruns; the other stays done
+    assert loop.usage_gated(c)
+
+
+def test_only_the_curation_task_is_the_curator_s_and_its_pr_text_fits(curating):
+    c = curating.store.read(curating.slug)
+    c.plan.tasks.append(Task(id="r1", title="fix the review's finding", scope=["."], origin="review", fixes="t1"))
+    c.step = Step(kind=StepKind.BUILD, task="r1")
+    with curating.store.lock(curating.slug) as lock:
+        curating.store.write(lock, c)
+    curating.curate = lambda cfg: Run(cfg.session_id, "error", termination=Termination(confirmed=True))
+    step(curating)
+    [cfg] = curating.seen
+    assert (cfg.role, cfg.submit) == ("", tools.SUBMIT)  # a repair is an ordinary build; the report stays t1's
+    many = [{"test": f"tests/test_{i}.py::" + "x" * 280, "action": "retire", "change": "y" * 480} for i in range(100)]
+    head = "a" * 40
+    c.tests.report = TestCurationResult.model_validate({
+        "applied": many, "before": MEASURE | {"commit": head}, "after": MEASURE | {"commit": head}, "summary": "s"
+    })  # fmt: skip
+    text = curation_build.body(c)
+    assert len(text) <= curation_build.BODY
+    assert text.endswith("- \u2026 the rest is in the Change's record")

@@ -203,6 +203,7 @@ def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent se
             go(c, StepKind.SHAPE)
             c.intent.hold = False
             c.outcome = None
+    curation_flow.fixed(c, change.step, now)  # a test review's change request stops it instead (TD-390)
     return c, next_step(c, now)
 
 

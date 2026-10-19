@@ -54,7 +54,8 @@ One Change carries the whole review, so Changes page, spend, pause, abandon, PR 
   reviewed". An unread usage gates as any judge's (TD-54); a session not confirmed gone stops the Change and no
   further wave starts; a worktree HEAD other than the pinned commit stops it. With every share ended it goes to
   BUILD t1.
-- **The curator:** every BUILD of a test-review Change runs the `test-curator` role. It checks each retire and merge
+- **The curator:** the curation task t1 runs the `test-curator` role; a repair, CI fix or pull-request reply after
+  it is an ordinary build, so its report stays t1's (Sol's build review). It checks each retire and merge
   verdict against the code, applies what holds, keeps what does not, measures the suite before and after with
   identical commands and scope, restores a removal that breaks collection, a fixture or a maintained reference, and
   reports. With changes, ordinary build validation holds (commits on the task base, a clean worktree); then the task
@@ -100,9 +101,10 @@ One Change carries the whole review, so Changes page, spend, pause, abandon, PR 
   unfinished shares under the ordinary budget, never re-planned; the owner's "go on" records "not reviewed"; an
   unconfirmed end stops; a moved HEAD stops; usage per share label.
 - A verdict to retire or merge without bug and still-catching test is refused by the tool's schema.
-- Curator: every BUILD of the Change uses its role; its message holds every retire and merge verdict; nothing
-  applied at the pinned commit goes to CLEANUP and shows and archives "unchanged", while a repair applying nothing
-  after a changing build goes on to review; its report is recorded and the PR text holds the table and measurements.
+- Curator: the curation task uses its role and a repair does not; its message holds every retire and merge verdict;
+  nothing applied at the pinned commit goes to CLEANUP and shows and archives "unchanged", while a repair applying
+  nothing after a changing build goes on to review; its report is recorded and the PR text holds the table and
+  measurements, within GitHub's size limit.
 - A share's wrong premise or missing tool retries it and never enters PLAN.
 - Roles in Settings; the Maintenance dialog, its cost lines and its refusal (page test).
 

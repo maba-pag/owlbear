@@ -320,6 +320,9 @@ def back(c: Change, r: StepResult, now: datetime) -> None:
     if r.cause is None:
         msg = f"{s.kind} back needs a cause"
         raise ValueError(msg)
+    if c.tests is not None and target in curation_flow.FIXED:  # never counted, never a re-plan (TD-390)
+        curation_flow.stop(c, r.reason or f"it would go back to {target}", r.cause, now)
+        return
     if _count(c, r.cause, now, r.score, r.reason) > RETRY_LIMIT:
         _exhausted(c, r, now)
         return

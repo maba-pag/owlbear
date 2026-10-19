@@ -47,13 +47,18 @@ def options(c: Change) -> list[Option]:
     ]
 
 
+def stop(c: Change, why: str, cause: str | None, now: datetime) -> None:
+    """Stop a test review for the owner where it is, instead of shaping or planning it (TD-390)."""
+    reason = f"a test review keeps its fixed brief and plan: {why}"[:300]
+    action = "Abandon the test review, or press Resume to run its step again"
+    c.stop = Stop(kind=ErrorKind.SCOPE, reason=reason, action=action, resume="You pressed Resume", at=now)
+    c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
+
+
 def fixed(c: Change, before: Step, now: datetime) -> None:
     """A test review that would shape or plan stops there for the owner instead, on the step it was on (TD-390)."""
     if c.tests is None or c.step.kind not in FIXED or c.finished_at:
         return
     why = (c.outcome.reason if c.outcome else "") or f"it would go back to {c.step.kind}"
-    reason = f"a test review keeps its fixed brief and plan: {why}"[:300]
-    action = "Abandon the test review, or press Resume to run its step again"
     c.step = before
-    c.stop = Stop(kind=ErrorKind.SCOPE, reason=reason, action=action, resume="You pressed Resume", at=now)
-    c.outcome = Outcome(exit=Exit.STOP, cause=c.outcome.cause if c.outcome else None, reason=reason, who="you", at=now)
+    stop(c, why, c.outcome.cause if c.outcome else None, now)

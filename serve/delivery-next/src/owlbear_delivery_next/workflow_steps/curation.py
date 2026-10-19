@@ -7,6 +7,7 @@ waves of its session grant; a share that submits its verdicts has ended, and the
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -56,6 +57,7 @@ RULES = (
     "Check each retire and merge verdict of the test reviewers against the code; apply what holds and keep what does "
     "not. Edit only tests. Rewrite-lower notes are not applied in this review."
 )
+STARTING = threading.Lock()  # one start at a time in this process, the project's only host
 
 
 class StartError(Exception):
@@ -105,16 +107,26 @@ def offer(store: Store, repo: Path) -> dict[str, Any]:
 def start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change:
     """The owner's Start: one Change with the approved fixed brief and plan, its commit pinned, at TESTS (TD-390).
 
+    Starts run one at a time; each takes its own handle number first, so a start that failed half way never lends
+    its slug, branch or worktree to the next.
+
     Raises:
         StartError: A test review is open, or no chosen package has tests.
     """
+    with STARTING:
+        return _start(store, repo, chosen, now)
+
+
+def _start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change:
     if open_ := open_review(store):
         raise StartError(409, f"the test review {open_.handle} has not finished")
     target, commit = _target(store, repo)
     picked = {p.path: p for p in curation_shares.packages(repo, commit) if p.path in chosen}
     if not picked:
         raise StartError(422, "choose at least one package with tests")
-    slug, number = new_slug(TITLE, store.slugs()), next_number(store)
+    number = next_number(store)
+    store.issue(number)
+    slug = new_slug(f"{TITLE} {number}", store.slugs())
     branch = f"owlbear/{slug}"
     path = worktree.ensure(repo, git_common_dir(repo), slug, branch, target)
     head = worktree.head(path)
@@ -130,7 +142,6 @@ def start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change:
         step=Step(kind=StepKind.TESTS), names=Names(branch=branch, target=target, worktree=str(path)),
         tests=TestReview(commit=head, packages=scope, shares=curation_shares.split(packages)),
     )  # fmt: skip
-    store.issue(number)
     with store.lock(slug) as lock:
         store.write(lock, c)
     return c
@@ -180,17 +191,33 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     def made(at: Path) -> list[tuple[str, sdk_adapter.Session]]:
         return [(curation_tools.REVIEW_LABEL, _session(store, lock, t, i, at)) for i in left]
 
-    ran = sessions.judges(store, lock, change, path, made, store.settings(), hold=True) if left else []
+    try:
+        judged = sessions.judges(store, lock, change, path, made, store.settings(), hold=True) if left else []
+    except sessions.UsageUnreadError as exc:  # what did submit is kept; the owner decides the rest (TD-54)
+        _kept(store, lock, left, exc.runs)  # in the round's order; the gated run itself is neither kept nor held
+        raise
+    ran = [done for _, done in judged]
+    if gate := _kept(store, lock, left, ran):
+        raise gate
+    c = store.read(lock.slug)
+    _end(store, lock, c, _exit(len(c.tests.shares) if c.tests else 0, ran))
+
+
+def _kept(
+    store: Store, lock: Lock, left: list[int], runs: list[session_result.Run]
+) -> sessions.UsageUnreadError | None:
+    """Record each submitted review whose model is known; log every held one's usage but the first, which gates."""
     c = store.read(lock.slug)  # the judges' spend and logs
-    shares, unread = c.tests.shares if c.tests else [], None
-    for i, (_, done) in zip(left, ran, strict=True):
+    shares, held = c.tests.shares if c.tests else [], list[session_result.Run]()
+    for i, done in zip(left, runs, strict=False):
         if isinstance(done.payload, curation_tools.TestReviewResult) and not sessions.unread(done):
             shares[i].review, shares[i].ended = done.payload, "reviewed"
-        unread = unread or (done if sessions.held(done) else None)
+        elif sessions.held(done):
+            held.append(done)
     store.write(lock, c)
-    if unread:
-        raise sessions.UsageUnreadError(unread, curation_tools.REVIEW_LABEL)
-    _end(store, lock, c, _exit(len(shares), [done for _, done in ran]))
+    for done in held[1:]:
+        sessions.logged(store, lock, store.read(lock.slug), done, {"kind": curation_tools.REVIEW_LABEL, "exit": "held"})
+    return sessions.UsageUnreadError(held[0], curation_tools.REVIEW_LABEL) if held else None
 
 
 def _exit(shares: int, runs: list[session_result.Run]) -> loop.StepResult:

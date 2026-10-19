@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 LABEL = curation_tools.CURATION_LABEL
 LISTED = 100  # verdicts a list in the pull request's text shows; the rest are counted
+BODY = 40_000  # characters of the pull request's text the review's part may take: GitHub's limit is 65,536
 FINISH = """\
 ## Finish
 1. Measure the suite on the commit you start from; check each verdict above against the code.
@@ -90,7 +91,14 @@ def body(c: Change) -> str:
         "", f"Refused ({len(r.refused)}):", *(f"- {x.test}: {x.reason}" for x in r.refused[:LISTED]),
         "", f"Rewrite lower, for later ({len(notes)}):", *(f"- {v.test}: {v.behaviour}" for v in notes[:LISTED]),
     ]  # fmt: skip
-    return "\n".join(lines)
+    kept, size = [], 0
+    for line in lines:
+        if size + len(line) + 1 > BODY:
+            kept.append("- … the rest is in the Change's record")
+            break
+        kept.append(line)
+        size += len(line) + 1
+    return "\n".join(kept)
 
 
 def _measure(when: str, m: curation_tools.Measure) -> str:

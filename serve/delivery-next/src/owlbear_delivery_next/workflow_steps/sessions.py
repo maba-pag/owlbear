@@ -66,6 +66,7 @@ class UsageUnreadError(Exception):
         self.run = run
         self.label = label  # a judge's session label, such as brief-challenge; empty for the step's own session
         self.worktree: Path | None = None  # set for an agent step's own session, whose result may be held (TD-56)
+        self.runs: list[session_result.Run] = [run]  # a judges' round: every run, in order, for what the caller keeps
 
 
 def out(text: str) -> None:
@@ -212,7 +213,9 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
         judged.append((verdict, done))
     left = any(not (r.termination and r.termination.confirmed) for r in runs)
     if (first := next((r for r in runs if unread(r) and not (hold and held(r))), None)) and not left:
-        raise UsageUnreadError(first, labels[runs.index(first)])
+        gate = UsageUnreadError(first, labels[runs.index(first)])
+        gate.runs = runs
+        raise gate
     return judged
 
 

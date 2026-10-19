@@ -14,6 +14,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import budgets, disputes, loop, plan_rounds, repairs, worktree
+from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.commands.cli import describe
 from owlbear_delivery_next.design_packs import design_tools
 from owlbear_delivery_next.local_system import git_files
@@ -152,7 +153,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             preparing=ctx,
         )
 
-    curated = change.tests is not None and s.kind == StepKind.BUILD  # a test review's build is the curator's (TD-339)
+    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
     run = accepted or _kept(store, lock, change, path, made)
     end = datetime.now(UTC)
