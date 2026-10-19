@@ -127,7 +127,8 @@ def test_a_major_missing_its_partner_gets_it_on_the_same_commit(repo: Path, monk
     gh.create("v1.0", a, "v1.0")
     monkeypatch.setattr(release, "FLOOR", floor)
     monkeypatch.setattr(release, "Api", lambda *_a: gh)
-    for name, value in (("GITHUB_REPOSITORY", "o/r"), ("GH_TOKEN", "t"), ("RELEASE_TAGS", "on")):
+    env = (("GITHUB_REPOSITORY", "o/r"), ("GH_TOKEN", "t"), ("RELEASE_TAGS", "on"), ("RELEASE_TOKEN", "w"))
+    for name, value in env:
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     assert release.unpaired() == [("v1", a)]
@@ -135,20 +136,30 @@ def test_a_major_missing_its_partner_gets_it_on_the_same_commit(repo: Path, monk
     assert (git(repo, "rev-parse", "v1^{commit}"), release.unpaired()) == (a, [])
 
 
-def test_the_api_makes_the_annotated_tag_object_then_its_ref(monkeypatch):
+def test_the_api_makes_the_annotated_tag_object_then_its_ref_with_the_owners_token(monkeypatch, capsys):
     sent = []
 
     def urlopen(request, timeout):  # noqa: ARG001 - urlopen's signature
-        sent.append((request.get_method(), request.full_url, json.loads(request.data)))
+        auth = request.get_header("Authorization")
+        sent.append((request.get_method(), request.full_url, auth, json.loads(request.data)))
         return io.BytesIO(json.dumps({"sha": "obj"}).encode())
 
     monkeypatch.setattr(release.urllib.request, "urlopen", urlopen)
-    release.Api("o/r", "tok", "https://api.test").create("v0.2", "c0ffee", "v0.2: #1 change")
+    release.Api("o/r", "tok", "https://api.test", "owner").create("v0.2", "c0ffee", "v0.2: #1 change")
     assert sent == [
-        ("POST", "https://api.test/repos/o/r/git/tags",
+        ("POST", "https://api.test/repos/o/r/git/tags", "Bearer owner",
          {"tag": "v0.2", "message": "v0.2: #1 change", "object": "c0ffee", "type": "commit", "tagger": release.TAGGER}),
-        ("POST", "https://api.test/repos/o/r/git/refs", {"ref": "refs/tags/v0.2", "sha": "obj"}),
+        ("POST", "https://api.test/repos/o/r/git/refs", "Bearer owner", {"ref": "refs/tags/v0.2", "sha": "obj"}),
     ]  # fmt: skip
+
+    def refused(request, timeout):  # noqa: ARG001 - urlopen's signature
+        body = io.BytesIO(b'{"message": "Reference already exists"}')
+        raise release.urllib.error.HTTPError(request.full_url, 422, "Unprocessable", {}, body)
+
+    monkeypatch.setattr(release.urllib.request, "urlopen", refused)
+    with pytest.raises(release.urllib.error.HTTPError):
+        release.Api("o/r", "tok", "https://api.test", "owner").create("v0.2", "c0ffee", "v0.2")
+    assert 'POST git/tags: 422 {"message": "Reference already exists"}' in capsys.readouterr().err
 
 
 def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, monkeypatch, tmp_path):
@@ -167,6 +178,9 @@ def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, mo
         True, ""
     )  # fmt: skip
     monkeypatch.setenv("RELEASE_TAGS", "on")
+    assert release.main() == 1  # TD-404: no tag without the owner's token
+    assert git(repo, "tag", "-l", "v0.2") == ""
+    monkeypatch.setenv("RELEASE_TOKEN", "owner")
     release.main()
     assert (f"tagged {a[:9]} as v0.2" in summary.read_text(), git(repo, "rev-parse", "v0.2^{commit}")) == (True, a)
 
@@ -220,10 +234,11 @@ def test_the_workflow_drains_after_ci_on_main_or_a_label_change_and_runs_mains_c
         "pull_request.merged", "label.name, 'release:'",
     ):  # fmt: skip
         assert needed in job["if"]
-    assert job["permissions"] == {"contents": "write", "actions": "read", "pull-requests": "read"}
+    assert job["permissions"] == {"contents": "read", "actions": "read", "pull-requests": "read"}
     checkout, walk = job["steps"]
     assert (checkout["with"]["ref"], checkout["with"]["fetch-depth"]) == ("main", 0)  # never a PR's own code
-    assert (walk["env"]["RELEASE_TAGS"], walk["run"]) == (
+    assert (walk["env"]["RELEASE_TAGS"], walk["env"]["RELEASE_TOKEN"], walk["run"]) == (
         "${{ vars.RELEASE_TAGS }}",
+        "${{ secrets.RELEASE_TOKEN }}",
         "python3 .github/scripts/release.py",
     )

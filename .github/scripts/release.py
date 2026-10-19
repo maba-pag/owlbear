@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Protocol
@@ -135,26 +136,30 @@ def tag(gh: GitHub, step: Step) -> None:
 
 
 class Api:
-    """GitHub's REST API with the workflow's token."""
+    """GitHub's REST API: reads with the workflow's token, tags with the owner's ``RELEASE_TOKEN`` (TD-404)."""
 
-    def __init__(self, repo: str, token: str, base: str = "https://api.github.com") -> None:
-        self.repo, self.token, self.base = repo, token, base
+    def __init__(self, repo: str, token: str, base: str = "https://api.github.com", writer: str = "") -> None:
+        self.repo, self.token, self.base, self.writer = repo, token, base, writer
 
-    def _call(self, path: str, body: dict | None = None) -> object:
+    def _call(self, path: str, body: dict | None = None, token: str = "") -> object:
         request = urllib.request.Request(  # noqa: S310 - the API's own https URL
             f"{self.base}/repos/{self.repo}/{path}",
             data=None if body is None else json.dumps(body).encode(),
-            headers={"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github+json"},
+            headers={"Authorization": f"Bearer {token or self.token}", "Accept": "application/vnd.github+json"},
             method="GET" if body is None else "POST",
         )
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
-            return json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            sys.stderr.write(f"{request.get_method()} {path}: {error.code} {error.read().decode(errors='replace')}\n")
+            raise
 
     def create(self, name: str, sha: str, message: str) -> None:
         """The tag object first, then its ref; GitHub answers 422 for a ref that exists, which fails the run."""
         tag = {"tag": name, "message": message, "object": sha, "type": "commit", "tagger": TAGGER}
-        made = self._call("git/tags", tag)
-        self._call("git/refs", {"ref": f"refs/tags/{name}", "sha": made["sha"]})
+        made = self._call("git/tags", tag, self.writer)
+        self._call("git/refs", {"ref": f"refs/tags/{name}", "sha": made["sha"]}, self.writer)
 
     def pull(self, sha: str) -> dict | None:
         """The pull request merged into main with exactly this merge commit."""
@@ -173,8 +178,12 @@ class Api:
 def main() -> int:
     """Walk, then tag or only report; the report goes to the job summary."""
     api = os.environ.get("GITHUB_API_URL") or "https://api.github.com"
-    gh = Api(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"], api)
     live = os.environ.get("RELEASE_TAGS") == "on"
+    writer = os.environ.get("RELEASE_TOKEN", "")
+    if live and not writer:
+        sys.stderr.write("RELEASE_TOKEN is empty: the owner sets the secret to his fine-grained token (TD-404)\n")
+        return 1
+    gh = Api(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"], api, writer)
     mode = "tagging" if live else "dry run: nothing is tagged"
     lines = [f"Release walk after {FLOOR[:9]} to {git('rev-parse', '--short', 'HEAD')}, {mode}"]
     for name, sha in unpaired():

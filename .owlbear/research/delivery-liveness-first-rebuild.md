@@ -594,7 +594,7 @@ TD-65.
 
 ## C-16 Versions, labels and release
 
-**Rows:** decided TD-298, TD-302, TD-306, TD-307, TD-308, TD-310, TD-354, TD-355, TD-356, TD-392, TD-393;
+**Rows:** decided TD-298, TD-302, TD-306, TD-307, TD-308, TD-310, TD-354, TD-355, TD-356, TD-392, TD-393, TD-404;
   autonomous TD-240, TD-314, TD-315.
 
 - Tags are versions; "stable" means major versions only, the channel for those afraid of a broken build [TD-354].
@@ -604,6 +604,8 @@ TD-65.
 - Only labels on merged OwlBear `main` PRs make versions: `release:minor` the next minor, `release:major` the next
   major; no label, even a forgotten one, makes none; both make a major [TD-306, TD-356].
 - A workflow makes the tag once that merge commit's own CI passes [TD-302, TD-306].
+- Tags are created with a fine-grained token the owner makes (this repository; Contents and Workflows write) and
+  stores as the Actions secret `RELEASE_TOKEN`; it serves only that [TD-404].
 - No label is checked or protected; no CI check asks for or checks a label [TD-306, TD-307].
 - Minors may be unproven. `release:major` alone makes a major version; testing a minor first is the owner's, not
   an enforced gate [TD-302, TD-307, TD-355].
@@ -629,6 +631,7 @@ TD-65.
 - TD-356, 2026-10-18: "Major wins"
 - TD-392, 2026-10-19: "The major commit gets both tags, v1.0 and v1"
 - TD-393, 2026-10-19: "After the self-update and the old engine's removal, with the docs rewritten"
+- TD-404, 2026-10-19: "A fine-grained token you create, secret RELEASE_TOKEN, used only to create tags"
 
 **Replaced:** TD-240 by TD-298, TD-302; TD-298 by TD-302; TD-302 by TD-306, TD-307, TD-355.
 

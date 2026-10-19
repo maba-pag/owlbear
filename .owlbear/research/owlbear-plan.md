@@ -30,8 +30,10 @@ against TD-350 (§4).
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
 passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Only `v0.1` exists: GitHub refused the workflow
 token's git push of `v0.2`, since that commit's workflow files differ from every branch tip ("refusing to allow a
-GitHub App to create or update workflow … without `workflows` permission"). The walk now makes tags through the REST
-API and gives a major `vN.0` and `vN` (TD-392); whether the API path passes shows at the next run.
+GitHub App to create or update workflow … without `workflows` permission"); the REST API refuses it the same way. The
+walk now makes tags through the API with the owner's fine-grained token `RELEASE_TOKEN` (TD-404) and gives a major
+`vN.0` and `vN` (TD-392). **Owner action:** create the token and set the secret; until then a tagging run fails
+naming it.
 Renovate's pull requests are left alone until the old engine is gone (owner, 2026-10-19).
 
 **Built, by build document:**
