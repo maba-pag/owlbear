@@ -84,7 +84,8 @@ def install(say: Say, ask: Callable[[str], bool], app: App) -> int:
 def uninstall(say: Say) -> int:
     """Remove the login item and the links install made; the runtime and every project stay."""
     control.autostart(say, on=False)
-    for target in [link_path(), *(link for link, _to in shaper_links())]:
+    ours = [link for link, to in shaper_links() if link.is_symlink() and link.readlink() == to]  # never the owner's
+    for target in [link_path(), *ours]:
         if target.is_symlink():
             target.unlink()
             say(f"removed {target}")

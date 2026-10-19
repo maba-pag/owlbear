@@ -80,6 +80,9 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
         False,
         True,
     )
+    agent.unlink()
+    agent.symlink_to(Path.home() / "my-checkout" / agent.name)  # the owner's own link, even a dangling one
+    assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
 
 
 def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_said(monkeypatch) -> None:

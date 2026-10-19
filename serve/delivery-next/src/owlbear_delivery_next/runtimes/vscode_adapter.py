@@ -247,7 +247,7 @@ def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None
     env, added, conn = env or Env(), list[wf.Added](), None
     agent = env.shaper
     if agent is not None and not agent.is_file():
-        return Outcome("no-agent", f"the shaper agent is not installed at {agent}; run `owlbear-next setup`"), ""
+        return Outcome("no-agent", f"the shaper agent is not installed at {agent}; run `owlbear install`"), ""
     spec = StepSpec(
         folder=folder, agent=agent, model=role.model, effort=role.effort, prompt=prompt, config=SHAPING,
         context=role.context, picker=agent.name.removesuffix(".agent.md") if agent else "agent",

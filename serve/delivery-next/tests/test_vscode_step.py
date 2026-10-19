@@ -1092,7 +1092,7 @@ def test_without_the_installed_shaper_agent_the_chat_never_opens_with_every_tool
     out, warning = shape(wt, shaping_env(host, shaper=readiness.shaper_path(tmp_path)))
     assert (out.end, warning) == ("no-agent", "")
     assert out.detail.startswith("the shaper agent is not installed at")
-    assert out.detail.endswith("run `owlbear-next setup`")
+    assert out.detail.endswith("run `owlbear install`")
     assert host.actions("chat/turnStarted") == []  # nothing launched: an agentless chat would have every tool
 
 
