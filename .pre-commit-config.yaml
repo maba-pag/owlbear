@@ -72,7 +72,7 @@ repos:
 
   # ── Python (matches CI: PYTHON_RUFF + PYTHON_RUFF_FORMAT) ─
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.5
+    rev: v0.17.1
     hooks:
       - id: ruff
         alias: ruff-fix
@@ -103,7 +103,7 @@ repos:
 
   # ── Shell (matches CI: BASH_SHELLCHECK) ─────────────────
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
 
