@@ -921,7 +921,8 @@ TD-197.
 
 **Open:**
 
-- Sort the existing project memories once by the project/Global rule, after self-update [TD-293, TD-318].
+- After the self-update: the curator's two modes and threshold setting, moving an entry back to its project, the
+  saving agent's pre-set and sorting the existing project memories once by the rule [TD-292, TD-293, TD-318].
 
 ## C-26 Tests
 

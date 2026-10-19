@@ -38,7 +38,8 @@ are left alone until the old engine is gone (owner, 2026-10-19).
 | --- | --- | --- |
 | The engine and the whole journey, shaping to cleanup, visual check, design pack | [architecture](delivery-next-architecture.md), [design skill](delivery-next-design-skill.md) | #449 |
 | Review and challenge rounds for every role (TD-208, steps 1 to 8) | [challenge rounds](challenge-rounds-build.md) | #449; steps 6 to 8 as commits before the PR route |
-| Pull requests with required CI; merge-queue support (TD-226) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | #455 to #458 |
+| Pull requests with required CI (TD-278) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | #455 to #458 |
+| Merge-queue support (TD-226) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | commits before the PR route, `0d4272eef` and its repairs |
 | Per-role session time limits, doubled (TD-286) | — | #460 |
 | Pages on lit-html (TD-264), machine host, one UI, Global memory, SQLite stores, settings across projects | [machine host](machine-host-build.md) | #461 to #469, #471 |
 | Self-update steps 1 to 3b: machine settings, Pause, paused maintenance, PR labels, push CI, release walk | [self-update](self-update-build.md) | #473, #476, #478, #480 to #482 |
@@ -49,20 +50,21 @@ are left alone until the old engine is gone (owner, 2026-10-19).
 
 ## 2. The Plan
 
-The order is the owner's: TD-250 (extending TD-228) puts runtime updates and version tags after the machine host,
-then the research move (TD-227), the window-step gate (TD-223) and the watcher (TD-224); TD-227 puts the research move
-before the old engine's removal; TD-338 puts the watcher before any real project. Items the owner placed nowhere are
-in "Not yet placed"; their position is his decision.
+The order is the owner's where a row decides it: TD-250 (extending TD-228) puts runtime updates and version tags after
+the machine host, then the research move (TD-227), the window-step gate (TD-223) and the watcher (TD-224); TD-318 puts
+the unbuilt memory work after the self-update; TD-338 puts the watcher before any real project. TD-227 puts the
+research move before the old engine's removal, but no row places the removal relative to the gate and the watcher:
+item 7 is numbered for reference only (§5, question 2). Items the owner placed nowhere are in "Not yet placed".
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | The rest of TD-319..TD-357's build work: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345, TD-350 (§3.1) | TD-358 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | Not started; overdue (§3.1) |
+| 1 | The rest of TD-319..TD-357's build work: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345, TD-347's skill, TD-350 (§3.1) | TD-358 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | Not started; overdue (§3.1) |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Not started |
-| 5 | After step 5: project agents and skills off in steps (TD-274's gap); sort existing project memories once | TD-317, TD-329; TD-293, TD-318 | none yet | Not started |
+| 5 | After step 5: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold, moving an entry back, the saver's pre-set, sorting existing project memories once | TD-317, TD-329; TD-292, TD-293, TD-318 | none yet | Not started |
 | 6 | Research move: OwlBear's `.owlbear/research` into `owlbear-data` | TD-227, TD-347 | none yet | Not started |
-| 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Not started; after item 6 |
+| 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Not started; after item 6, its place relative to 8 and 9 open |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | none yet | Not started; no design |
 | 9 | Watcher: TD-27's benchmark, then the design session (O1–O6) with the owner, then the build and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Not started; the draft needs revising (§3.4) |
 | 10 | First real project: two Changes merged in consumer projects; memory publication and curation (F17) fixed before it; OwlBear builds itself through Delivery | TD-338, TD-90, TD-319 | none yet | Waits for item 9 |
@@ -74,7 +76,6 @@ in "Not yet placed"; their position is his decision.
   [Plan](delivery-next-visual-baseline.md), nothing built.
 - The amendment design (TD-185): its design session with the owner comes before any amendment code (C-14).
 - The quality service (TD-89): [research](repo-quality-service.md), not built.
-- Curator modes and the 90% Global threshold (TD-292): no plan; ask first (§5).
 - Contradicting findings of the two visual judges go to the owner ([design skill §3.5](delivery-next-design-skill.md));
   they are not detected (§3.7 there).
 - An organisation with the merge queue for OwlBear's `main`, once someone else contributes or Delivery builds
@@ -95,7 +96,7 @@ of phase 6 the collision rule (C3, TD-12) is built and the change of mind (C5) i
 ### 3.1 Item 1: TD-358's remaining build work
 
 TD-358 ("All of it now, before self-update step 3b") was recorded after step 3b had merged (#481), so it is read as
-"before the rest of the self-update". The audit of §4 found the seven below unbuilt; the range's other rows are built,
+"before the rest of the self-update". The audit of §4 found the eight below unbuilt; the range's other rows are built,
 history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). Remaining:
 
 | Decision | What is missing |
@@ -106,6 +107,7 @@ history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). Remaining:
 | TD-335 | `owlbear install` asks for the `~/.copilot` shaper links and uninstall removes them; neither does today |
 | TD-341 | The "Accept as done" confirmation names the criteria the remaining findings report unmet |
 | TD-345 | Backlog repeats merge only when they name the same projects (or both none); they merge by origin today |
+| TD-347 | Research about a consumer project goes to `owlbear-data`; `w-research` writes `.owlbear/research` in whatever project it runs in (OwlBear's own research moves with item 6) |
 | TD-350 | Only a login-item start and a start after a crash are paused; `owlbear restart` keeps its state; a `--paused` start; every start pauses today |
 
 ### 3.2 Items 2 to 4: the self-update
@@ -155,7 +157,7 @@ reason given. Item: the plan item of §2 that picks it up.
 | C-06 | Settings marks the shaper's model and effort as a recommendation (TD-328) | Missing | align | 1 |
 | C-08, C-19 | Live databases under `~/.owlbear`, one folder per project (TD-334) | In the clone's Git folder | align | 1 |
 | C-09 | `owlbear-data` holds OwlBear's research too (TD-227) | Still in this repository | build | 6 |
-| C-09 | Research about a consumer project is never committed into it | `w-research` writes `.owlbear/research` in the current project | align | 6 |
+| C-09 | Research about a consumer project is never committed into it (TD-347) | `w-research` writes `.owlbear/research` in the current project | align | 1 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
 | C-12, C-15 | Last round's rejections get one rejections-only check outside the count (TD-330) | TD-218's behaviour in all five loops | align | 1 |
@@ -179,9 +181,9 @@ reason given. Item: the plan item of §2 that picks it up.
 | C-21 | Old engine batches with the tag first; three skills retire with batch 3 | Not started | build | 7 |
 | C-24 | Backlog repeats merge only for the same named projects (TD-345) | Merged by origin | align | 1 |
 | C-25 | Agents recall memory at start and save lessons | The pack updater never recalls; four read-only roles cannot save | align, question | §5 |
-| C-25 | The saver recommends a scope (TD-293) | Missing | align | — |
-| C-25 | A Global entry can move back to a project | The page says it does not move back | align | — |
-| C-25 | Curator modes and the 90% Global threshold (TD-292) | Missing, no plan | question | §5 |
+| C-25 | The saver recommends a scope (TD-293) | Missing | align | 5 |
+| C-25 | A Global entry can move back to a project (TD-292) | The page says it does not move back | align | 5 |
+| C-25 | Curator modes and the 90% Global threshold (TD-292) | Missing | build | 5 |
 | C-25, C-27 | The watcher saves lessons and infers stages | Not built | build | 9 |
 | C-26 | Tests do not assert prose wording | Workspace tests assert skill prose (`tests/test_agent_ecosystem_validation.py`) | align | — |
 | C-28 | Tool use is measured, success rates included (T8) | Success rates are not counted | align | — |
@@ -206,7 +208,7 @@ Ask each with the question tool in the owner's format (workspace instructions, "
 3. Machine-layer saves: confirm like Global, since they affect every project of the machine (C-29, TD-154)?
 4. PDS fallback: keep the fallback and offline notice, or remove them as TD-39 says?
 5. An owner-started test review while paused: its steps wait (TD-351) or run (TD-287)?
-6. Memory: which read-only roles may save lessons; is TD-292's Global threshold still wanted (C-25)?
+6. Memory: which read-only roles may save lessons (C-25)?
 7. The line limit: do pages and tests count (C-28)?
 8. When to hold the amendment design session (TD-185)?
 
