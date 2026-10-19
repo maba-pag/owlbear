@@ -21,6 +21,8 @@ DEFAULTS: dict[Role, RoleModel] = {
     "preparer": RoleModel(model="claude-haiku-5.5", effort="low"),  # check prep: finds the launch recipe
     "shaper": RoleModel(model="claude-opus-5.5", effort="medium"),  # the New Change chat (TD-83); owner's effort
     "updater": RoleModel(model="claude-opus-5.5", effort="high"),  # writes the design pack's skills (TD-125)
+    "test-reviewer": RoleModel(model="gpt-6.1-sol", effort="medium"),  # one share of a test review (TD-339)
+    "test-curator": RoleModel(model="claude-opus-5.5", effort="high", context="long"),  # applies what holds
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
 MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the shaper's chat has none (TD-285)
@@ -32,9 +34,12 @@ MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the s
     "preparer": 30,
     "shaper": 40,
     "updater": 40,
+    "test-reviewer": 20,  # the reviewer's
+    "test-curator": 40,  # the builder's
 }
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",
+    StepKind.TESTS: "test-reviewer",  # a test review's shares (TD-373)
     StepKind.BUILD: "builder",
     StepKind.CHECK: "preparer",
     StepKind.REVIEW: "reviewer",  # task and final review
@@ -49,6 +54,8 @@ SESSIONS: dict[str, Role] = {
     "pack-challenge": "challenger",  # a design pack update, before it is activated (TD-101)
     "pack-reconsider": "challenger",  # a pack finding the owner sent back with a note (TD-220)
     "pack-update": "updater",  # the design pack update's writing session (TD-125)
+    "test-review": "test-reviewer",  # one share of a test review (TD-373)
+    "test-curation": "test-curator",  # a test review's build (TD-339)
 }
 
 

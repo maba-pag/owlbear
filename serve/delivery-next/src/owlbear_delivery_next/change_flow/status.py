@@ -23,6 +23,7 @@ _AGENT, _ENGINE = timedelta(minutes=10), timedelta(minutes=2)
 QUIET: dict[StepKind, timedelta] = {
     StepKind.SHAPE: _AGENT,
     StepKind.PLAN: _AGENT,
+    StepKind.TESTS: _AGENT,
     StepKind.BUILD: _AGENT,
     StepKind.REVIEW: _AGENT,
     StepKind.INTEGRATE: _AGENT,
@@ -52,6 +53,7 @@ RESUME = "Resume Delivery"
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
     StepKind.PLAN: ("Plan", "planning", "planner"),
+    StepKind.TESTS: ("Build", "reviewing tests", "test reviewer"),  # TD-373
     StepKind.BUILD: ("Build", "implementing", "builder"),
     StepKind.REVIEW: ("Build", "reviewing", "reviewer"),
     StepKind.INTEGRATE: ("Build", "updating with the target", "builder"),
@@ -204,6 +206,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     if c.finished_at:
         if c.intent.abandoned_at:
             return Status("Abandoned · PR closed, branch kept", None, "delivery")
+        if c.tests and c.tests.unchanged:  # the curator applied nothing: no PR was opened (TD-390)
+            return Status("Done · no test changed", None, "delivery")
         saved = f" · unmerged work saved in {', '.join(c.names.preserved)}" if c.names.preserved else ""
         pr = f" PR #{c.names.pr}" if c.names.pr else ""
         if (p := c.pullback) and p.state == "behind":  # its reason reads "local <target> is behind: <why>"
@@ -247,6 +251,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         line = f"{s} · {verb}: {label or c.brief.title or c.brief.outcome}"
         if items:
             line += f" · {items} open conversation item{'s' if items > 1 else ''}"
+        if c.tests and c.step.kind == StepKind.TESTS:
+            line += f" · {sum(1 for x in c.tests.shares if x.ended)} of {len(c.tests.shares)} shares done"
         last = activity.last_event_at
         if gap := silent(c, activity, now, tool):
             return Status(f"{line} · no activity for {_age(gap)}", None, "delivery")

@@ -489,9 +489,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(brief_routes.router(store, read, put, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
-    job = pack or pack_job.Job(store)
-    job.live = session_slots.pack_live(host, job.live, job.log)  # its sessions count as the project's (TD-336)
-    router.include_router(pack_routes.router(store, job, lambda: admitted(host)))
+    job = session_slots.packed(host, pack or pack_job.Job(store))  # its sessions count as the project's (TD-336)
+    router.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
     app.include_router(router)
     app.state.busy = lambda: [  # work admitted outside a request, which a project's stop waits for (TD-242)
         *(["a shaping chat opening"] if launches.opening else []),

@@ -25,6 +25,8 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "design-judge": ("owlbear-interface-design", "owlbear-design-review"),
     "preparer": (),  # its discovery order lives in its agent file, its only consumer (reuse study v2, 3.3)
     "updater": (),  # it edits the pack's skills as files; preloading their old text would argue with its edits
+    "test-reviewer": ("owlbear-review-judgment",),  # evidence and operating context; no code to design
+    "test-curator": ("owlbear-review-judgment",),
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
 JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)

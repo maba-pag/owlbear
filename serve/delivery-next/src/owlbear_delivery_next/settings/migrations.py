@@ -115,7 +115,17 @@ def sessions_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept, 4: labelled_added}
+def test_roles_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 7 to 8: the test reviewer and curator roles (TD-339); older runtimes refuse format 8."""
+    return data
+
+
+def tests_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
+    return data
+
+
+CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept, 4: labelled_added, 5: tests_added}
 PROFILE: Migrations = {1: roles_moved}
 CONFIG: Migrations = {
     1: seed_dropped,
@@ -124,4 +134,5 @@ CONFIG: Migrations = {
     4: labels_added,
     5: subagents_added,
     6: sessions_added,
+    7: test_roles_added,
 }

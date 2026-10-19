@@ -16,12 +16,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.pack_runs import pack_job
+from owlbear_delivery_next.project_host import curation_routes
 from owlbear_delivery_next.settings import roles
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
+    from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.state_store.store import Store
 
 
@@ -77,8 +79,8 @@ def overview(store: Store) -> list[dict[str, Any]]:
          "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push."},
         {"name": "Engine update", "where": "Settings", "href": None, "built": False, "recorded": False,
          "last": None, "note": "Not built yet."},
-        {"name": "Review Tests", "where": "Project action", "href": None, "built": False, "recorded": False,
-         "last": None, "note": "Not built yet (TD-112)."},
+        {"name": "Review Tests", "where": "Maintenance", "href": "#tests", "built": True, "recorded": False,
+         "last": None, "note": "Reviewers judge shares of the tests; a curator applies what holds in a Change."},
         {"name": "Backlog triage", "where": "Backlog", "href": "/backlog", "built": True, "recorded": False,
          "last": None, "note": "Triage items in the Backlog tab; Delivery keeps no run record for it."},
     ]  # fmt: skip
@@ -123,9 +125,12 @@ def subagent_use(store: Store) -> list[dict[str, Any]]:
 
 
 def router(
-    store: Store, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]] = contextlib.nullcontext
+    store: Store,
+    job: pack_job.Job,
+    admitted: Callable[[], AbstractContextManager[None]] = contextlib.nullcontext,
+    host: Host | None = None,
 ) -> APIRouter:
-    """The design pack and maintenance routes; the caller adds the token check.
+    """The design pack and maintenance routes, with the host's test review; the caller adds the token check.
 
     An update and its answers run while Delivery is paused (TD-287); *admitted* refuses them once OwlBear stops or
     before a stop when idle, and holds the launch lock while one starts.
@@ -162,6 +167,8 @@ def router(
     def subagents() -> list[dict[str, Any]]:
         return subagent_use(store)
 
+    if host is not None:
+        routes.include_router(curation_routes.router(store, host))
     return routes
 
 

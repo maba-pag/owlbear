@@ -951,7 +951,7 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
     assert (got["Design pack update"]["href"], got["Design pack update"]["last"]) == ("/config#pack", None)
     assert (got["Engine update"]["built"], got["Engine update"]["note"]) == (False, "Not built yet.")
-    assert (got["Review Tests"]["built"], got["Review Tests"]["note"]) == (False, "Not built yet (TD-112).")
+    assert (got["Review Tests"]["built"], got["Review Tests"]["href"]) == (True, "#tests")  # started on this page
     assert (got["Backlog triage"]["href"], got["Backlog triage"]["recorded"]) == ("/backlog", False)
     (store.root / pack_job.FILE).write_text(
         json.dumps(pack_job._blank() | {"state": "failed", "started_at": "2026-10-15T10:00:00+00:00",  # noqa: SLF001

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from owlbear_delivery_next.change_contracts import dispute_tools, tools
+from owlbear_delivery_next.change_contracts import curation_tools, dispute_tools, tools
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
@@ -144,7 +144,7 @@ def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | Non
     return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials and not result.denial else result
 
 
-def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
+def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     run: Run, kind: StepKind, now: datetime, enclosing: StepKind
 ) -> StepResult:
     """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
@@ -203,6 +203,14 @@ def _exit(  # noqa: C901, PLR0911, PLR0912 - one case per ending
             return StepResult(exit=Exit.DONE, reason=f"design {p.verdict}: {found or p.doubt or 'no findings'}")
         case "result" if isinstance(p, dispute_tools.ReconsiderResult):  # the disputes record each verdict
             return StepResult(exit=Exit.DONE, reason=f"{len(p.reconsidered)} finding(s) reconsidered")
+        case "result" if isinstance(p, curation_tools.TestReviewResult):  # the share records its verdicts
+            return StepResult(exit=Exit.DONE, reason=f"{len(p.verdicts)} verdict(s), {p.kept} test(s) kept")
+        case "result" if isinstance(p, curation_tools.TestCurationResult):
+            return StepResult(exit=Exit.DONE, reason=p.summary[:200])
+        case "premise" | "missing-tool" if kind == StepKind.TESTS:  # a share retries; its plan is fixed (TD-390)
+            said = p.reason if isinstance(p, tools.WrongPremise) else run.detail
+            said = f"missing {p.tool}: {p.error}" if isinstance(p, tools.MissingTool) else said
+            return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.SCOPE, kind, run.ending), reason=said[:200])
         case "result" if isinstance(p, tools.CheckRecipe):
             reason = f"starting `{p.command}` for the check"
             return StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)

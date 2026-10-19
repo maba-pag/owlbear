@@ -40,7 +40,15 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
-from owlbear_delivery_next.change_flow import brief_rounds, budgets, disputes, plan_rounds, rebuilds, round_flow
+from owlbear_delivery_next.change_flow import (
+    brief_rounds,
+    budgets,
+    curation_flow,
+    disputes,
+    plan_rounds,
+    rebuilds,
+    round_flow,
+)
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved
 
 if TYPE_CHECKING:
@@ -56,6 +64,7 @@ _FIVE = frozenset(Exit) - {Exit.PENDING}
 EXITS: dict[StepKind, frozenset[Exit]] = {
     StepKind.SHAPE: frozenset(Exit) - {Exit.BACK},
     StepKind.PLAN: _FIVE,
+    StepKind.TESTS: _FIVE - {Exit.BACK},  # a test review never goes back: its brief and plan are fixed (TD-390)
     StepKind.BUILD: _FIVE,
     StepKind.REVIEW: _FIVE,
     StepKind.INTEGRATE: _FIVE,
@@ -194,6 +203,7 @@ def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent se
             go(c, StepKind.SHAPE)
             c.intent.hold = False
             c.outcome = None
+    curation_flow.fixed(c, change.step, now)  # a test review's change request stops it instead (TD-390)
     return c, next_step(c, now)
 
 
@@ -239,6 +249,7 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
                         k.withdrawn_at = item.at
             case _:
                 pass
+    curation_flow.fixed(c, change.step, now)
     return c
 
 
@@ -396,10 +407,11 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
         case _:
             msg = f"{result.exit} needs its question, stop or waiting condition"
             raise ValueError(msg)
+    curation_flow.fixed(c, change.step, now)
     return c
 
 
-def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901, PLR0912 - one case per step kind
+def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901, PLR0912, PLR0915 - a case per kind
     s = c.step
     paths = r.paths if r else {}
     match s.kind:
@@ -413,8 +425,10 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
                 plan_rounds.accepted(c, now)  # its loop ends, the replaced plan's loops join it, criteria are covered
             task = open_task(c) if s.kind == StepKind.PLAN else None
             go(c, StepKind.BUILD if s.kind == StepKind.PLAN else StepKind.PLAN, task.id if task else None)
+        case StepKind.TESTS:
+            curation_flow.reviewed(c)
         case StepKind.BUILD:
-            round_flow.built(c, r, now)
+            curation_flow.unchanged(c) or round_flow.built(c, r, now)
         case StepKind.REVIEW:
             if r and r.review:
                 c.reviews.append(r.review)

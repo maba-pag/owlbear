@@ -21,7 +21,8 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.settings.roles import DEFAULTS
 from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 7  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions
+CONFIG_FORMAT = 8  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+# 8 the test reviewer and curator roles
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -192,7 +193,7 @@ def _defaults() -> GlobalLayer:
         role: Agent(
             model=rm.model,
             effort=rm.effort,
-            context="default",
+            context=rm.context,
             runtime="sdk",
             visible=False,
             categories=[],

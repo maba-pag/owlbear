@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 MODELS = {
     "models": [
         {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "medium", "high"], "default_effort": "medium",
-         "context": 200_000, "rates": None, "long": None},
+         "context": 200_000, "rates": None, "long": {"context": 1_000_000, "rates": None}},  # the test curator's
         {"id": "gpt-6.1-sol", "name": "Sol", "efforts": ["low", "medium", "high", "xhigh"], "default_effort": "low",
          "context": 272_000, "rates": None, "long": None},
         {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
