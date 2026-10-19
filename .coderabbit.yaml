@@ -14,11 +14,10 @@ reviews:
   suggested_reviewers: false
   in_progress_fortune: false
   auto_review:
-    # About one free review an hour: only the label starts one, once (TD-412).
+    # About one free review an hour: only the label starts one, once, for any author (TD-412, TD-413).
     enabled: false
     labels: ["coderabbit"]
     auto_incremental_review: false
-    ignore_usernames: ["renovate[bot]"]
   path_filters:
     - "!serve/cockpit/web/public/porsche-design-system/**"
     - "!serve/delivery-next/src/owlbear_delivery_next/web/vendor/**"

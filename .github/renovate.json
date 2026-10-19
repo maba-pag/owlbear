@@ -71,14 +71,12 @@
     {
       "description": "Lint toolchain: every pre-commit hook in one weekly pull request",
       "matchManagers": ["pre-commit"],
-      "matchUpdateTypes": ["minor", "patch"],
       "groupName": "lint toolchain",
       "minimumReleaseAge": "3 days"
     },
     {
       "description": "Lint toolchain: Ruff and Biome join the hooks, so their parity checks see one version",
       "matchPackageNames": ["ruff", "@biomejs/biome"],
-      "matchUpdateTypes": ["minor", "patch"],
       "groupName": "lint toolchain",
       "minimumReleaseAge": "3 days"
     },
