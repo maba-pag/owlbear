@@ -962,7 +962,7 @@ function machineSection() {
   const since = m.resumed_at ? `, resumed ${new Date(m.resumed_at).toLocaleString()}` : "";
   return html`<section class="panel" aria-labelledby="machine-title">
     <p-heading size="lg"><h2 id="machine-title">This machine</h2></p-heading>
-    <p-text id="machine-run">Delivery ${m.paused ? "is paused since OwlBear started: press Resume above"
+    <p-text id="machine-run">Delivery ${m.paused ? "is paused: press Resume above"
       : `runs${since}`}.</p-text>
     <p-text id="machine-login">Start at login: ${m.login_item}. Change it in a terminal with
       <code>owlbear autostart on</code> or <code>owlbear autostart off</code>.</p-text>

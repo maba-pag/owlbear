@@ -1,8 +1,9 @@
 """Improvement backlog (TD-84, TD-103): what the owner, the watcher, the assistant, reviews and runs found.
 
 Each entry is one GitHub issue in the shared repository (``backlog_issues``); this module is the view over them. A
-finding seen again in the same project counts up its entry instead of adding one; seen in another project it is a new
-entry, which the owner links to the first as a connected entry (TD-126). Untriaged entries form the inbox. Saving is
+finding names the project it was found in, none outside any; an entry names its triaged projects, else its origin. A
+finding that repeats an entry naming the same projects counts it up; otherwise it is a new entry, linked at once to
+every entry with the same finding (TD-345, TD-405, TD-406). Untriaged entries form the inbox. Saving is
 online-only: when GitHub cannot be reached the save fails with GitHub's reason, nothing is kept locally. Reads are
 cached for a few seconds since the page refreshes often; every write reads afresh under the shared repository's lock,
 and reads each issue it changes directly first, so an edit made on GitHub meanwhile is kept.
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 ID = r"^[1-9]\d{0,8}$"  # the issue's number
 EVIDENCE = 50  # references kept per entry, the newest
+LINKS = 50  # connected entries kept per entry, the newest
 READ_SECONDS = 10.0  # how long a listing is reused
 RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later; until then the write's answer counts
 type Source = Literal["owner", "watcher", "assistant", "review", "run"]
@@ -97,9 +99,15 @@ def key(source: str, title: str) -> str:
     return f"{source}:{' '.join(re.findall(r'\w+', title.casefold()))}"
 
 
+def named(entry: Entry) -> frozenset[str]:
+    """The projects an entry names: its triaged ones, else its origin, else none (TD-406)."""
+    return frozenset(entry.projects if entry.projects is not None else [entry.origin] if entry.origin else [])
+
+
 def repeats(entry: Entry, project: str, source: str, title: str) -> bool:
-    """Whether a finding in *project* repeats *entry*: the same key, found in the same project (TD-126)."""
-    return entry.origin == project and key(entry.source, entry.title) == key(source, title)
+    """Whether a finding in *project* (none: outside any) repeats *entry*: the same key, the same projects (TD-345)."""
+    finding = frozenset([project] if project else [])
+    return key(entry.source, entry.title) == key(source, title) and named(entry) == finding
 
 
 def ordered(entries: Iterable[Entry]) -> list[Entry]:
@@ -113,6 +121,10 @@ def _valid(fields: dict[str, Any]) -> Entry:
     except ValidationError as exc:
         error = exc.errors(include_url=False)[0]
         raise BacklogError(422, f"{'.'.join(map(str, error['loc']))}: {error['msg']}") from exc
+
+
+def _linked(entry: Entry, other: str, now: datetime) -> Entry:
+    return _valid(entry.model_dump() | {"links": [*entry.links, other], "updated_at": now})
 
 
 class Backlog:
@@ -171,16 +183,23 @@ class Backlog:
         refs = list(dict.fromkeys(r.strip() for r in evidence if r.strip()))
 
         def work(found: dict[str, Entry], now: datetime) -> tuple[Entry, bool]:
-            same = next((e for e in found.values() if repeats(e, self.project, source, title)), None)
-            if same is None:
+            match = key(source, title)
+            listed = [e.id for e in found.values() if key(e.source, e.title) == match]  # read again: the listing lags
+            fresh = [e for e in (self._fetch(found, i) for i in listed) if e and key(e.source, e.title) == match]
+            same = next((e for e in fresh if repeats(e, self.project, source, title)), None)
+            if same is None:  # TD-405: linked both ways at once, to every match with room for one more link
+                alike = sorted((e for e in fresh if len(e.links) < LINKS), key=lambda e: int(e.id))[-LINKS:]
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
-                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project}
-                return self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now})), True
-            same = self._get(found, same.id)
+                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project, "links": [e.id for e in alike]}
+                entry = self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now}))
+                self._save(*(_linked(e, entry.id, now) for e in alike))
+                return entry, True
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}
             entry = _valid(same.model_dump() | seen | {"evidence": (same.evidence + new)[-EVIDENCE:]})
-            self._save(entry)
+            others = [self._fetch(found, i) for i in entry.links]  # a link a failed save left one-sided is completed
+            lacking = [e for e in others if e and entry.id not in e.links and len(e.links) < LINKS]
+            self._save(entry, *(_linked(e, entry.id, now) for e in lacking))
             if new:
                 said = "\n".join(f"- {' '.join(r.split())}" for r in new)
                 self._github("save", lambda: self.issues.comment(int(entry.id), f"New evidence:\n\n{said}"))
@@ -201,10 +220,12 @@ class Backlog:
                 new["links"] = links = list(dict.fromkeys(fields["links"]))
                 if bad := [i for i in links if i == entry_id or (i not in found and self._fetch(found, i) is None)]:
                     raise BacklogError(422, f"links: {', '.join(bad)} is not another entry of this backlog")
-                for other in sorted((set(links) ^ set(old.links)) & found.keys(), key=int):
+                pointing = {i for i, e in found.items() if entry_id in e.links}  # a failed save's side is redone
+                for other in sorted(((set(links) ^ set(old.links)) | (set(links) ^ pointing)) & found.keys(), key=int):
                     them = self._get(found, other)
                     theirs = [i for i in them.links if i != entry_id] + ([entry_id] if other in links else [])
-                    others.append(_valid(them.model_dump() | {"links": theirs, "updated_at": now}))
+                    if set(theirs) != set(them.links):
+                        others.append(_valid(them.model_dump() | {"links": theirs, "updated_at": now}))
             entry = _valid(new)
             self._save(entry, *others)
             return entry

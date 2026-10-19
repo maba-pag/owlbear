@@ -325,30 +325,6 @@ def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):
     assert failed(READY | ssh | {"git config user.signingkey": (0, "key::ssh-ed25519 AAAAkey")}) == []
 
 
-def test_the_chat_skill_installs_user_locally_and_never_over_another_skill(tmp_path):
-    assert setup.install_skill(tmp_path).startswith("chat skill installed for you only (not tracked)")
-    path = tmp_path / ".copilot" / "skills" / "owlbear-change-shaping" / "SKILL.md"
-    assert "save_brief" in path.read_text()
-    path.write_text("---\nname: delivery\n---\nsomeone else's")
-    assert "holds another skill" in setup.install_skill(tmp_path)
-    assert path.read_text().endswith("someone else's")
-
-
-def test_the_shaper_agent_installs_where_the_window_lists_user_agents_idempotently(tmp_path):
-    path = tmp_path / ".copilot" / "agents" / "owlbear-shaper.agent.md"
-    assert readiness.shaper_path(tmp_path) == path
-    assert setup.install_agent(tmp_path) == f"shaper agent installed for you only (not tracked): {path}"
-    shipped = path.read_text()
-    assert setup.install_agent(tmp_path).startswith("shaper agent installed")
-    assert path.read_text() == shipped
-    path.write_text(shipped.replace("Shapes one Change", "Shaped one Change"))  # an older Delivery's file: replaced
-    assert setup.install_agent(tmp_path).startswith("shaper agent installed")
-    assert path.read_text() == shipped
-    path.write_text("---\nname: owlbear-shaper\n---\nsomeone else's")
-    assert "holds another agent of that name" in setup.install_agent(tmp_path)
-    assert path.read_text().endswith("someone else's")
-
-
 def test_no_local_write_without_consent(repo):
     asked = []
     path = repo / ".vscode" / "tasks.json"
@@ -593,30 +569,26 @@ def test_yes_confirms_the_profile_but_never_an_unknown_entry():
     assert confirmed.confirmed_at is not None
 
 
-def test_yes_confirms_only_the_profile_and_local_files_and_the_skill_need_their_own_consent(
-    repo, tmp_path_factory, monkeypatch
+def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
+    repo, tmp_path_factory, monkeypatch, capsys
 ):
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
-    written = [
-        repo / ".mcp.json",
-        repo / ".vscode" / "settings.json",
-        home / ".copilot" / "skills" / "owlbear-change-shaping",
-    ]
-    written.append(readiness.shaper_path(home))
+    written = [repo / ".mcp.json", repo / ".vscode" / "settings.json"]
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
-    assert [p.exists() for p in written] == [False] * 4
-    assert len(asked) == 3  # the two local files and the skill were asked, never assumed; no folder-open task
+    assert [p.exists() for p in written] == [False] * 2
+    assert len(asked) == 2  # the two local files were asked, never assumed; no folder-open task
     assert "chat.defaultToCopilotHarness" in asked[1]
-    assert "Install the Delivery chat skill" in asked[2]
+    assert "run `owlbear install` and let it link the shaper" in capsys.readouterr().out  # TD-335: never copied
     asked.clear()
-    assert setup.run(repo, [], yes=True, local_files="no", skill="no", ask=lambda q: asked.append(q) or "y") == 0
-    assert (asked, [p.exists() for p in written]) == ([], [False] * 4)
-    assert setup.run(repo, [], yes=True, local_files="yes", skill="yes", ask=pytest.fail) == 0
-    assert [p.exists() for p in written] == [True] * 4
+    assert setup.run(repo, [], yes=True, local_files="no", ask=lambda q: asked.append(q) or "y") == 0
+    assert (asked, [p.exists() for p in written]) == ([], [False] * 2)
+    assert setup.run(repo, [], yes=True, local_files="yes", ask=pytest.fail) == 0
+    assert [p.exists() for p in written] == [True] * 2
+    assert not (home / ".copilot").exists()
     assert not (repo / ".vscode" / "tasks.json").exists()  # TD-281: opening a window never starts Delivery
     assert json.loads(written[1].read_text()) == {"chat.defaultToCopilotHarness": True}  # TD-275: read at window start
 
@@ -628,7 +600,7 @@ def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, m
     store = Store.open(repo)
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / "profile.json").write_text('{"format": 1, "models": {}}')
-    assert setup.run(repo, [], yes=True, local_files="no", skill="no") == 0
+    assert setup.run(repo, [], yes=True, local_files="no") == 0
     assert "cannot be read" in capsys.readouterr().out
     assert store.read_profile().confirmed_at is not None
 

@@ -1,7 +1,9 @@
 import os
 import plistlib
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -52,7 +54,7 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert install.install(said.append, pytest.fail, command.app) == 1  # not the installed runtime
     monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
     monkeypatch.setattr(control, "autostart", lambda _say, *, on: items.append(on) or 0)
-    answers = iter([True, False])
+    answers = iter([True, True, False])
     assert install.install(said.append, lambda q: asked.append(q) or next(answers), command.app) == 0
     completion = local_home.root() / install.COMPLETION
     script = completion.read_text()
@@ -62,9 +64,25 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert "__complete" not in script  # static: TAB never starts Python (TD-263)
     assert "\n_cyclopts_owlbear() {" in script  # sourcing registers the function the script defines
     assert script.rstrip().splitlines()[-1].startswith("compdef _cyclopts_owlbear owlbear ")
-    assert (install.link_path().readlink(), items, len(asked)) == (Path(sys.executable).parent / "owlbear", [], 2)
+    assert (install.link_path().readlink(), items, len(asked)) == (Path(sys.executable).parent / "owlbear", [], 3)
+    agent, skill = (
+        Path.home() / ".copilot" / p for p in ("agents/owlbear-shaper.agent.md", "skills/owlbear-change-shaping")
+    )
+    assert ("save_brief" in (skill / "SKILL.md").read_text(), agent.resolve().is_file()) == (True, True)  # TD-335
+    (other := Path.home() / ".copilot" / "agents" / "mine.agent.md").write_text("someone else's")
     assert install.uninstall(said.append) == 0
     assert (install.link_path().is_symlink(), completion.exists(), items) == (False, False, [False])
+    assert (agent.is_symlink(), skill.is_symlink(), other.exists()) == (False, False, True)
+    skill.mkdir(parents=True)
+    assert install.install(said.append, lambda q: "shaper" in q, command.app) == 0
+    assert (said[-1], skill.is_symlink(), agent.is_symlink()) == (
+        f"{skill} exists and is no link; left as it is",
+        False,
+        True,
+    )
+    agent.unlink()
+    agent.symlink_to(Path.home() / "my-checkout" / agent.name)  # the owner's own link, even a dangling one
+    assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
 
 
 def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_said(monkeypatch) -> None:
@@ -79,6 +97,7 @@ def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_sa
     assert control.autostart(said.append, on=True) == 0
     item = plistlib.loads(control.plist_path().read_bytes())
     assert (item["ProgramArguments"], item["EnvironmentVariables"]["PATH"]) == (control.argv(), os.environ["PATH"])
+    assert item["ProgramArguments"][-1] == "machine"  # a login start is paused (TD-350)
     assert (item["RunAtLoad"], calls) == (True, ["bootout", "bootstrap"])
     refuse[0] = 1
     assert control.autostart(said.append, on=True) == 1
@@ -91,16 +110,63 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     said = []
     assert control.start(said.append) == 0
     rec = control.serve.running()
-    assert said[-1] == f"OwlBear started, paused until you press Resume: {rec.url}#token={rec.token}"
-    assert control.start(said.append) == 0
+    assert said[-1] == f"OwlBear started, running: {rec.url}#token={rec.token}"
+    assert control.start(said.append, paused=True) == 0
     assert said[-1].startswith("OwlBear is running")
     assert control.projects() == {
-        "paused": True, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True
+        "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True
     }  # fmt: skip
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     logged = (local_home.root() / control.LOG).read_text()
-    assert ("paused until you press Resume" in logged, "stopped: every project closed" in logged) == (True, True)
+    assert ("· running" in logged, "stopped: every project closed" in logged) == (True, True)
+
+
+def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps_the_state(monkeypatch) -> None:
+    """TD-350: only a login start, a start after a crash and one asked for paused wait for Resume."""
+    said = []
+    monkeypatch.setattr(command, "say", said.append)
+    assert control.start(said.append, paused=True) == 0
+    assert (said[-1].startswith("OwlBear started, paused until you press Resume"), control.projects()["paused"]) == (
+        True, True
+    )  # fmt: skip
+    assert command.restart() == 0
+    assert control.projects()["paused"] is True
+    rec = control.serve.running()
+    os.kill(rec.pid, signal.SIGKILL)
+    while control.serve.running() is not None:
+        time.sleep(0.05)
+    assert control.start(said.append) == 0
+    assert control.projects()["paused"] is True
+    assert "(the last run crashed)" in (local_home.root() / control.LOG).read_text()
+    assert control.stop(said.append) == 0
+    assert (control.start(said.append), control.projects()["paused"]) == (0, False)
+    assert (command.restart(), control.projects()["paused"]) == (0, False)
+    assert (command.restart(paused=True), control.projects()["paused"]) == (0, True)
+    assert control.stop(said.append) == 0
+
+
+def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering_one_is_paused(monkeypatch) -> None:
+    def fail(_self, **_kw):
+        raise RuntimeError
+
+    seen, real = [], control.serve.Machine
+    monkeypatch.setattr(
+        control.serve, "Machine", lambda rec, *, paused: seen.append(paused) or real(rec, paused=paused)
+    )
+    monkeypatch.setattr(control.serve.Server, "run", fail)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            control.serve.serve(run=True)
+    assert (seen, (local_home.root() / "host.json").exists()) == ([False, True], True)
+
+    started, at = [], "2026-10-10T12:00:00Z"
+    up = control.serve.HostRecord(url="http://127.0.0.1:9/", token="t", pid=9, started_at=at, code="")  # noqa: S106
+    monkeypatch.setattr(control.serve, "running", lambda: up)
+    monkeypatch.setattr(control, "projects", lambda: None)
+    monkeypatch.setattr(control, "stop", lambda _say: 0)
+    monkeypatch.setattr(control, "start", lambda _say, *, paused: started.append(paused) or 0)
+    assert (command.restart(), started) == (0, [True])
 
 
 def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:
@@ -115,7 +181,7 @@ def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -
 
 def test_a_host_that_ends_at_once_is_reported_not_started(monkeypatch) -> None:
     said = []
-    monkeypatch.setattr(control, "argv", lambda: [sys.executable, "-c", "raise SystemExit(3)"])
+    monkeypatch.setattr(control, "argv", lambda **_k: [sys.executable, "-c", "raise SystemExit(3)"])
     assert control.start(said.append) == 1
     assert said[-1] == "OwlBear ended at once (exit 3); see `owlbear logs`"
 

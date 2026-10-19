@@ -255,7 +255,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     up.add_argument("--yes", action="store_true", help="confirm the profile (only the profile)")
     choices = ("yes", "no", "ask")
     up.add_argument("--local-files", choices=choices, default="ask", help="write .mcp.json and .vscode/settings.json")
-    up.add_argument("--skill", choices=choices, default="ask", help="install the chat skill in ~/.copilot/skills")
     up.add_argument("--confirm", action="append", default=[], type=lambda v: tuple(v.split("=", 1)), help="KEY=VALUE")
     up.add_argument("--folder", default="", help="the project's folder in the shared settings when its name is taken")
     p = sub.add_parser("profile", help="detect the project profile; --confirm KEY=VALUE records the owner's answer")
@@ -315,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     if a.command == "setup":
         say, repo = lambda t: sys.stdout.write(t + "\n"), a.repo.resolve()
         found = setup.project_folder(repo, a.folder, setup.ask_tty, say)
-        return setup.run(repo, a.confirm, yes=a.yes, local_files=a.local_files, skill=a.skill) if found else 1
+        return setup.run(repo, a.confirm, yes=a.yes, local_files=a.local_files) if found else 1
     store = Store.open(a.repo.resolve())
     if a.command in {"backlog", "status", "profile"}:
         return report(store, a)

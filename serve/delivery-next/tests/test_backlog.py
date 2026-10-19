@@ -111,22 +111,55 @@ def test_a_finding_seen_again_counts_up_its_issue_and_comments_only_new_evidence
     assert (body.count("**Repeats:**"), github.issues[1]["title"]) == (1, "Status line hides the step")
 
 
-def test_a_repeat_counts_up_only_its_own_project_s_entry_and_another_project_s_is_a_new_one_to_link(shared, github):
+def test_a_repeat_merges_only_with_an_entry_naming_the_same_projects_and_is_linked_to_the_others(shared, github):
+    """TD-345, TD-405, TD-406: a finding names its project, an untriaged entry its origin; equal sets merge."""
     root, title = shared[0], "Status line hides the step"
-    shop, docs = view(root), Backlog(DataRepo(root), "docs-site", Clock())
+    shop, docs, anywhere = view(root), Backlog(DataRepo(root), "docs-site", Clock()), Backlog(DataRepo(root), "")
     first = shop.add(title, source="watcher")[0]
 
     elsewhere, new = docs.add(title, source="watcher")
-    assert (new, elsewhere.id, elsewhere.origin, len(github.issues)) == (True, "2", "docs-site", 2)
+    said = (new, elsewhere.id, elsewhere.origin, elsewhere.links, len(github.issues))
+    assert said == (True, "2", "docs-site", ["1"], 2)
+    assert shop.read(fresh=True)[0]["1"].links == ["2"]  # linked both ways at once
     assert [shop.add(title, source="watcher")[0].id, docs.add(title, source="watcher")[0].id] == ["1", "2"]
 
-    shop.update(first.id, {"projects": [], "links": [elsewhere.id]})  # Global: linked as connected entries
-    assert (shop.add(title, source="watcher")[0].count, docs.add(title, source="watcher")[0].count) == (3, 3)
+    shop.update(first.id, {"projects": []})  # Global: it no longer names shop-site
+    third, new = shop.add(title, source="watcher")
+    assert (new, third.id, third.links) == (True, "3", ["1", "2"])
+    assert anywhere.add(title, source="watcher")[0].id == "1"  # found outside any project: none, as Global names
     docs.update(elsewhere.id, {"projects": ["shop-site", "docs-site"]})  # it concerns both; found in docs-site
     assert (docs.add(title, source="watcher")[0].id, names(github.issues[2])[-2:]) == (
-        "2", ["project:shop-site", "project:docs-site"]
+        "4", ["project:shop-site", "project:docs-site"]
     )  # fmt: skip
-    assert docs.read(fresh=True)[0]["1"].links == ["2"]
+    assert docs.read(fresh=True)[0]["2"].links == ["1", "3", "4"]
+
+
+@pytest.mark.usefixtures("github")
+def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_skips_a_full_entry(shared, monkeypatch):
+    """Sol: a lagging listing never merges into an entry the owner re-scoped; a save that failed is completed later."""
+    root, title = shared[0], "Status line hides the step"
+    shop, docs = view(root), Backlog(DataRepo(root), "docs-site", Clock())
+    shop.add(title, source="watcher")
+    docs.add(title, source="watcher")
+    shop._save(shop.current("1").model_copy(update={"links": []}))  # noqa: SLF001 - the reciprocal save failed
+    docs.add(title, source="watcher")
+    assert (shop.current("1").links, shop.current("2").count) == (["2"], 2)
+
+    stale, real = shop.read(fresh=True), Backlog.read
+    shop.update("1", {"projects": []})  # Global, while GitHub's listing still shows it untriaged
+    monkeypatch.setattr(Backlog, "read", lambda _self, *, fresh=False: (dict(stale[0]), []))  # noqa: ARG005
+    third, new = shop.add(title, source="watcher")
+    assert (new, third.id, shop.current("1").count) == (True, "3", 1)
+    monkeypatch.setattr(Backlog, "read", real)
+
+    full = [str(n) for n in range(100, 150)]
+    shop._save(shop.current("2").model_copy(update={"links": full}))  # noqa: SLF001 - fifty connected entries
+    fourth = Backlog(DataRepo(root), "api-site", Clock()).add(title, source="watcher")[0]
+    assert (fourth.links, shop.current("2").links) == (["1", "3"], full)
+
+    shop._save(shop.current("4").model_copy(update={"links": ["3"]}))  # noqa: SLF001 - #1's side of the unlink failed
+    shop.update("4", {"links": ["3"]})  # the owner tries again
+    assert "4" not in shop.current("1").links
 
 
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):
