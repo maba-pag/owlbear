@@ -61,7 +61,7 @@ the table lists the items in their order.
 | --- | --- | --- | --- | --- |
 | 1 | TD-358's rest: none; built: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | TD-330 in [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) §3.4; TD-334 in [machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | Done |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | §3.3 | Done |
-| 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
+| 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Pull request route built; C-15 alignment open |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Not started |
 | 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Not started |
@@ -105,7 +105,10 @@ first open; the clone keeps its id and a format marker that every older runtime 
 
 ### 3.2 Items 2 to 4: the self-update
 
-[Self-update §8](self-update-build.md) "Step 3c build" is the plan for item 2. It also brings the updater and
+[Self-update §8](self-update-build.md) "Step 3c build" is the plan for item 2. Its pull request route is built: a
+pack update commits on `pack/<run>` from a clean checkout of `main`, opens a labelled pull request, waits for the
+required checks, brings the branch up to date and merges it; whatever stops it asks the owner, and a host restart
+during publication waits for him instead of failing. What remains brings the updater and
 challenger in line with C-15: the updater may change its whole candidate in its own folder, a detector code change
 waits for the owner's approval (TD-194); a change to expected evidence asks the owner instead of failing the run
 (TD-177); the challenger checks that each change is needed and lists every changed file (TD-194). Steps 4 and 5 are

@@ -8,7 +8,6 @@ import shutil
 import subprocess
 import threading
 from datetime import UTC, datetime
-from functools import partial
 from importlib.resources import files
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,10 +20,21 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.design_packs import calibration, design_pack, pack_git, pack_update
+from owlbear_delivery_next.github.provider import (
+    Check,
+    FailureCode,
+    MergeMethod,
+    MergeRequest,
+    MergeResult,
+    MergeStatus,
+    ProviderError,
+    PullRequest,
+    Rules,
+)
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.pack_runs import pack_job, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs import pack_job, pack_publish, pack_rounds, pack_updater
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.admission import STOPPING
 from owlbear_delivery_next.project_host.host import ENDING, HostRecord
@@ -36,6 +46,94 @@ PKG = files("owlbear_delivery_next")
 OLD = design_pack.manifest()
 BUNDLE = OLD["bundle"]["path"]
 NAMES = [name for name, _ in pack_job.STAGES]
+GITHUB_URL = "https://github.com/maba-pag/owlbear.git"
+
+
+class FakeGitHub:
+    """OwlBear's repository on GitHub: pull requests over the bare remote, their checks, and merges into main."""
+
+    def __init__(self, remote: Path) -> None:
+        self.remote, self.prs, self.calls = remote, {}, []
+        self.checks = ["success"]  # the conclusion at each look; the last one stays
+        self.behind, self.labels_fail, self.refusal = 0, False, None
+
+    def __call__(self, _root: Path) -> FakeGitHub:
+        return self
+
+    def _head(self, branch: str) -> str:
+        said = git(self.remote, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}")
+        return said or self.prs[next(n for n, p in self.prs.items() if p["branch"] == branch)]["head"]
+
+    def read_pull_request(self, repository: str, number: int) -> PullRequest:
+        p = self.prs[number]
+        if not p["merged"]:
+            p["head"] = self._head(p["branch"])
+        return PullRequest(
+            repository=repository, number=number, node_id=f"N{number}", url=f"https://github.com/{repository}/pull/{number}",
+            head_branch=p["branch"], head_sha=p["head"], base_branch="main", draft=p["draft"], state=p["state"],
+            merged=p["merged"], merge_state="behind" if self.behind else "clean", merge_commit_sha=p["sha"] or None,
+        )  # fmt: skip
+
+    def find_pull_request(self, repository: str, head: str, base: str) -> PullRequest | None:
+        found = [n for n, p in self.prs.items() if p["branch"] == head and p["state"] == "open" and base == "main"]
+        return self.read_pull_request(repository, found[0]) if found else None
+
+    def create_pull_request(self, repository: str, head: str, base: str, title: str, body: str) -> PullRequest:
+        self.calls.append("create")
+        number = len(self.prs) + 1
+        self.prs[number] = {"branch": head, "head": "", "title": title, "body": body, "draft": True, "state": "open",
+                            "merged": False, "sha": "", "labels": []}  # fmt: skip
+        assert base == "main"
+        return self.read_pull_request(repository, number)
+
+    def mark_ready(self, pr: PullRequest) -> None:
+        self.prs[pr.number]["draft"] = False
+
+    def add_labels(self, _repository: str, number: int, labels: list[str]) -> None:
+        if self.labels_fail:
+            raise ProviderError(FailureCode.INVALID_RESPONSE, "add_labels", "no such label", retry_safe=False)
+        self.prs[number]["labels"] += labels
+
+    def read_rules(self, _repository: str, branch: str) -> Rules:
+        assert branch == "main"
+        return Rules(state="known", evidence="rules", required_checks=("CI",))
+
+    def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:
+        said = self.checks.pop(0) if len(self.checks) > 1 else self.checks[0]
+        status = "in_progress" if said == "running" else "completed"
+        return (Check(name="CI", status=status, conclusion=None if said == "running" else said),)
+
+    def update_branch(self, _repository: str, number: int, expected_head: str) -> bool:
+        self.calls.append("update-branch")
+        self.behind -= 1
+        self._merge(self.prs[number]["branch"], into=self.prs[number]["branch"], source="main", at=expected_head)
+        return True
+
+    def request_merge(self, request: MergeRequest) -> MergeResult:
+        self.calls.append("merge")
+        p = self.prs[request.number]
+        if self.refusal:
+            return MergeResult(status=MergeStatus.REFUSED, refusal=self.refusal, message="refused")
+        assert (request.method, request.expected_head_sha) == (MergeMethod.MERGE, self._head(p["branch"]))
+        p["sha"] = self._merge(p["branch"], into="main", source=p["branch"])
+        p["merged"], p["state"] = True, "closed"
+        return MergeResult(status=MergeStatus.MERGED, sha=p["sha"])
+
+    def delete_branch(self, _repository: str, branch: str) -> None:
+        self.calls.append("delete")
+        git(self.remote, "update-ref", "-d", f"refs/heads/{branch}")
+
+    def _merge(self, _branch: str, *, into: str, source: str, at: str = "") -> str:
+        work = self.remote.parent / "merge-work"
+        shutil.rmtree(work, ignore_errors=True)
+        git(self.remote.parent, "clone", "-q", str(self.remote), str(work))
+        for key, value in (("user.name", "gh"), ("user.email", "gh@example.com")):
+            git(work, "config", key, value)
+        git(work, "checkout", "-q", into)
+        assert not at or git(work, "rev-parse", "HEAD") == at
+        git(work, "merge", "-q", "--no-ff", "-m", f"Merge {source} into {into}", f"origin/{source}")
+        git(work, "push", "-q", "origin", into)
+        return git(work, "rev-parse", "HEAD")
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -46,12 +144,13 @@ def git(cwd: Path, *args: str) -> str:
 
 @pytest.fixture
 def checkout(tmp_path: Path) -> Path:
-    """Delivery's package inside a git checkout on branch main, tracking a local bare remote."""
+    """Delivery's package inside a git checkout of main whose origin names OwlBear's repository, a local bare one."""
     remote, root = tmp_path / "remote.git", tmp_path / "checkout"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
     git(tmp_path, "clone", "-q", str(remote), str(root))
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com"), (f"url.{remote}.insteadOf", GITHUB_URL)):
         git(root, "config", key, value)
+    git(root, "remote", "set-url", "origin", GITHUB_URL)
     package = root / "src" / "pkg"
     (package / "skills").mkdir(parents=True)
     shutil.copy(str(PKG.joinpath("design_pack.json")), package / "design_pack.json")
@@ -186,9 +285,11 @@ class Fakes:
         return Run(cfg.session_id, "result", payload=result, termination=Termination(confirmed=True))
 
     def live(self, package: Path) -> pack_job.Live:
+        self.github = getattr(self, "github", None) or FakeGitHub(package.parents[2] / "remote.git")
         return pack_job.Live(
             package=package, clone=self.clone, releases=self.releases, sync=self.sync, download=self.download,
-            golden=self.golden, replay=self.replay, challenge=self.challenge, update=self.update,
+            golden=self.golden, replay=self.replay, challenge=self.challenge, update=self.update, github=self.github,
+            sleep=lambda _s: None, poll=1.0, ci_wait=5.0,
         )  # fmt: skip
 
 
@@ -228,26 +329,49 @@ def results(state: dict) -> dict[str, str]:
     return {s["name"]: s["result"] for s in state["stages"]}
 
 
-def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_pushes_one_commit(
-    tmp_path, checkout, clone
-):
-    fakes = Fakes(clone)
-    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+def landed(package: Path) -> str:
+    """The update's commit as merged into main on the remote: the merge commit's second parent."""
+    root = package.parents[1]
+    git(root, "fetch", "-q", "origin")
+    return git(root, "rev-parse", "origin/main^2")
 
-    assert (state["state"], state["reason"]) == ("passed", "activated, committed and pushed")
+
+def shown(package: Path, path: str) -> str:
+    """A package file as the merged update holds it."""
+    return git(package.parents[1], "show", f"{landed(package)}:src/pkg/{path}") + "\n"
+
+
+def body(package: Path) -> str:
+    return git(package.parents[1], "log", "-1", "--format=%b", landed(package))
+
+
+def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull_request(tmp_path, checkout, clone):
+    """Step 3c: the running checkout never changes; the commit goes on its branch, a pull request takes it to main."""
+    fakes = Fakes(clone)
+    store = Store(tmp_path / "store")
+    (store.root).mkdir(parents=True)
+    (store.root / "config.json").write_text(json.dumps({"format": 4, "pr_labels": ["release:minor"]}))
+    before = snapshot(checkout)
+    state = run(pack_job.Job(store, fakes.live(checkout)))
+
+    pub = state["published"]
+    assert (state["state"], state["reason"]) == (
+        "passed", f"activated: merged into main as {pub['merged'][:12]} through {pub['url']}"
+    )  # fmt: skip
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "replay", "challenger"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
-    assert replayed.manifest == (checkout / "design_pack.json").read_text()  # the pack then activated
+    assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
     cfg = fakes.sessions[0]
     assert (cfg.role, cfg.policy.write, cfg.judging, cfg.submit) == ("challenger", False, True, tools.REVIEW)
     assert "## Rules added\n- glow: Glow" in cfg.message
     assert "## Golden pages\nas expected" in cfg.message
     assert "40 decided rounds" in cfg.message
     assert "# UI Design" in cfg.message  # the candidate skill text
-    pins = json.loads((checkout / "design_pack.json").read_text())
+    written = shown(checkout, "design_pack.json")
+    pins = json.loads(written)
     assert pins["upstream"] | {"commit": "x"} == {
         "repository": "pbakaus/impeccable", "tag": "skill-v4.6.0", "commit": "x", "engine": "0.2.0"
     }  # fmt: skip
@@ -256,25 +380,32 @@ def test_a_passing_update_runs_every_stage_in_order_then_activates_commits_and_p
     assert pins["engine"]["linux-x64"] == hashlib.sha256(engine("linux-x64")).hexdigest()
     assert pins["bundle"]["sha256"] == hashlib.sha256(b"bundle skill-v4.6.0").hexdigest()
     assert (pins["skills"], pins["licence"]) == (OLD["skills"], OLD["licence"])
-    written = (checkout / "design_pack.json").read_text()
     assert written == json.dumps(pins, indent=2, ensure_ascii=False) + "\n"  # TD-270
     assert list(pins) == list(OLD)  # in the old file's key order
-    notice = (checkout / "skills" / "NOTICE.md").read_text()
+    notice = shown(checkout, "skills/NOTICE.md")
     assert "`skill-v4.6.0`" in notice
     assert OLD["upstream"]["commit"] not in notice
-    root = checkout.parents[1]
-    head = git(root, "rev-parse", "HEAD")
-    assert git(root, "ls-remote", "origin", "refs/heads/main").split()[0] == head  # pushed
-    assert git(root, "show", "--name-only", "--format=%s", head).splitlines() == [
+    root, made = checkout.parents[1], landed(checkout)
+    assert git(root, "rev-parse", f"{made}^") == before[2]  # on the base pinned when the candidate was made
+    assert git(root, "show", "--name-only", "--format=%s", made).splitlines() == [
         "design pack: impeccable-4.5.2.1 to impeccable-4.6.0.1 (upstream skill-v4.5.2 to skill-v4.6.0)",
         "",
         "src/pkg/design_pack.json",
         "src/pkg/skills/NOTICE.md",
     ]
-    assert state["pushed"] == {
-        "commit": head, "remote": "origin", "branch": "refs/heads/main",
-        "files": ["src/pkg/design_pack.json", "src/pkg/skills/NOTICE.md"],
-    }  # fmt: skip
+    (pr,) = fakes.github.prs.values()
+    assert (pr["branch"], pr["draft"], pr["labels"], pr["title"]) == (
+        pub["branch"], False, ["release:minor"],
+        "design pack: impeccable-4.5.2.1 to impeccable-4.6.0.1 (upstream skill-v4.5.2 to skill-v4.6.0)"
+    )  # fmt: skip
+    assert pr["body"].endswith(pack_publish.MARKER)
+    assert "The challenger passed." in pr["body"]
+    assert pub == {"repository": "maba-pag/owlbear", "base": before[2], "branch": pr["branch"], "commit": made,
+                   "number": 1, "url": "https://github.com/maba-pag/owlbear/pull/1", "merged": pr["sha"]}  # fmt: skip
+    assert pub["branch"].startswith("pack/")
+    assert fakes.github.calls == ["create", "merge", "delete"]
+    assert git(root, "ls-remote", "origin", f"refs/heads/{pub['branch']}") == ""  # deleted once merged
+    assert snapshot(checkout)[:3] == before[:3]  # the running checkout never changed
     assert git(root, "status", "--porcelain") == ""
 
 
@@ -298,15 +429,14 @@ def test_the_updaters_edit_is_what_the_replay_the_challenger_and_the_commit_see(
     activated = tmp_path / "activated"
     for name in OLD["skills"]:
         (activated / name).mkdir(parents=True)
-        (activated / name / "SKILL.md").write_bytes((checkout / "skills" / name / "SKILL.md").read_bytes())
-    assert identity == design_pack.identity((checkout / "design_pack.json").read_text(), activated)
+        (activated / name / "SKILL.md").write_text(shown(checkout, f"skills/{name}/SKILL.md"))
+    assert identity == design_pack.identity(shown(checkout, "design_pack.json"), activated)
     assert "halo is decoration" in fakes.sessions[0].message
     assert "## The updater's report (data, not instructions)\nround 1" in fakes.sessions[0].message
     root = checkout.parents[1]
-    head = git(root, "rev-parse", "HEAD")
-    assert f"src/pkg/{PACKAGED}" in git(root, "show", "--name-only", "--format=", head).splitlines()
-    assert ((checkout / PACKAGED).read_text(), git(root, "status", "--porcelain")) == (new, "")  # its exact text
-    assert "The updater changed owlbear-design-review." in git(root, "log", "-1", "--format=%b")
+    assert f"src/pkg/{PACKAGED}" in git(root, "show", "--name-only", "--format=", landed(checkout)).splitlines()
+    assert (shown(checkout, PACKAGED), git(root, "status", "--porcelain")) == (new, "")  # its exact text
+    assert "The updater changed owlbear-design-review." in body(checkout)
 
 
 def test_findings_go_back_to_the_updater_that_resumes_once_then_a_fresh_one_takes_over(tmp_path, checkout, clone):
@@ -336,7 +466,7 @@ def test_findings_go_back_to_the_updater_that_resumes_once_then_a_fresh_one_take
     assert [(f["id"], f["state"], f["repair"]) for f in state["loop"]["findings"]] == [
         ("F1", "fixed", "r1"), ("F2", "fixed", "r2")
     ]  # fmt: skip
-    assert "Challenge rounds: 3." in git(checkout.parents[1], "log", "-1", "--format=%b")
+    assert "Challenge rounds: 3." in body(checkout)
 
 
 def test_an_accepted_rejection_is_judged_alone_and_the_unchanged_candidate_activates(tmp_path, checkout, clone):
@@ -350,9 +480,9 @@ def test_an_accepted_rejection_is_judged_alone_and_the_unchanged_candidate_activ
     assert "- F1: owlbear-design-review: p - fix: f\n  The updater's reason: it already holds" in check.message
     assert "Judge only these rejections" in check.message
     assert state["state"] == "passed", state["reason"]
-    body = git(checkout.parents[1], "log", "-1", "--format=%b")
-    assert "F1 rejected; the challenger accepted that (updater: it already holds)" in body
-    assert "The challenger passed." in body
+    said = body(checkout)
+    assert "F1 rejected; the challenger accepted that (updater: it already holds)" in said
+    assert "The challenger passed." in said
 
 
 def test_a_fix_beside_an_accepted_rejection_still_waits_for_the_owner(tmp_path, checkout, clone):
@@ -421,7 +551,7 @@ def test_a_rejection_the_challenger_upholds_waits_for_the_owner_who_drops_it(tmp
 
     assert state["state"] == "passed", state["reason"]
     assert len(fakes.updates) == 2  # nothing left to fix: no updater session
-    assert "F1 you dropped it" in git(checkout.parents[1], "log", "-1", "--format=%b")
+    assert "F1 you dropped it" in body(checkout)
 
 
 def test_the_owners_fix_goes_to_the_updater_and_its_unreviewed_repair_waits_for_activation(tmp_path, checkout, clone):
@@ -443,14 +573,15 @@ def test_the_owners_fix_goes_to_the_updater_and_its_unreviewed_repair_waits_for_
 
     state = answered(job, "activate")
 
+    pub = state["published"]
     assert (state["state"], state["reason"]) == (
         "passed",
-        "activated by you after rounds without a pass, committed and pushed",
+        f"activated by you after rounds without a pass: merged into main as {pub['merged'][:12]} through {pub['url']}",
     )
-    assert (checkout / PACKAGED).read_text() == "fixed as you said\n"
-    body = git(checkout.parents[1], "log", "-1", "--format=%b")
-    assert "the owner activated it; its last repair (r1) was not reviewed (TD-256)" in body
-    assert "The challenger passed." not in body
+    assert shown(checkout, PACKAGED) == "fixed as you said\n"
+    said = body(checkout)
+    assert "the owner activated it; its last repair (r1) was not reviewed (TD-256)" in said
+    assert "The challenger passed." not in said
 
 
 @pytest.mark.parametrize(
@@ -500,7 +631,7 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
     assert (state["questions"], snapshot(checkout)) == ([], before)
     assert not (store.root / "design-pack-updater").exists()
-    assert results(state)["activate"] == "skipped"
+    assert results(state)["commit"] == "skipped"
 
 
 def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_path, checkout, clone):
@@ -513,7 +644,7 @@ def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_p
 
     state = answered(job, "activate")
 
-    assert (state["state"], results(state)["activate"]) == ("failed", "skipped")
+    assert (state["state"], results(state)["commit"]) == ("failed", "skipped")
     assert "is not what the challenger passed or you accepted" in state["reason"]
     assert snapshot(checkout) == before
 
@@ -531,7 +662,7 @@ def test_many_findings_in_the_last_allowed_round_offer_another_round(tmp_path, c
 
     assert state["state"] == "passed", state["reason"]
     assert fakes.calls.count("challenger") == 2  # the extra round reviewed the repair: no question at its end
-    assert "The challenger passed." in git(checkout.parents[1], "log", "-1", "--format=%b")
+    assert "The challenger passed." in body(checkout)
 
 
 def test_few_findings_in_the_last_allowed_round_offer_no_other_round(tmp_path, checkout, clone):
@@ -565,7 +696,7 @@ def test_a_waiting_run_survives_a_host_restart_and_goes_on_from_its_answer(tmp_p
 
     assert again.read() == waiting
     assert answered(again, "activate")["state"] == "passed"
-    assert (checkout / PACKAGED).read_text() == "repaired\n"
+    assert shown(checkout, PACKAGED) == "repaired\n"
 
 
 def test_a_skill_restored_to_its_start_replaces_the_earlier_edit_in_the_candidate(tmp_path, checkout, clone):
@@ -577,7 +708,7 @@ def test_a_skill_restored_to_its_start_replaces_the_earlier_edit_in_the_candidat
 
     assert state["state"] == "passed", state["reason"]
     assert (checkout / PACKAGED).read_text() == original
-    assert "The updater changed no skill." in git(checkout.parents[1], "log", "-1", "--format=%b")
+    assert "The updater changed no skill." in body(checkout)
 
 
 def test_a_challenger_judges_open_rejections_and_sees_what_the_owner_dropped():
@@ -639,7 +770,7 @@ def test_a_skill_changed_in_the_package_meanwhile_stops_activation(tmp_path, che
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["activate"]) == ("failed", "failed")
+    assert (state["state"], results(state)["commit"]) == ("failed", "failed")
     assert "owlbear-design-review changed in the package during the update" in state["reason"]
     assert (checkout / PACKAGED).read_text() == "edited by hand meanwhile\n"  # never overwritten
 
@@ -655,7 +786,7 @@ def test_a_skill_the_owner_commits_after_the_candidate_was_made_is_never_overwri
     fakes.at_golden = committed
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["activate"]) == ("failed", "failed")
+    assert (state["state"], results(state)["commit"]) == ("failed", "failed")
     assert "owlbear-design-review changed in the package during the update" in state["reason"]
     assert (checkout / PACKAGED).read_text() == "the owner's newer text\n"
 
@@ -671,7 +802,7 @@ def test_a_skill_the_updater_left_alone_but_committed_meanwhile_stops_activation
     fakes.during = committed
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["activate"]) == ("failed", "failed")
+    assert (state["state"], results(state)["commit"]) == ("failed", "failed")
     assert "owlbear-interface-design changed in the package during the update" in state["reason"]
 
 
@@ -726,47 +857,89 @@ def test_a_failing_stage_stops_before_activation_and_changes_nothing(  # noqa: P
     assert snapshot(checkout) == before
 
 
-def test_a_rejected_push_takes_the_local_commit_back(tmp_path, checkout, clone):
+def test_a_refused_push_waits_for_the_owner_and_trying_again_reconciles_with_github(tmp_path, checkout, clone):
+    """TD-368: what stops publication asks the owner; trying again neither commits nor opens anything twice."""
     hook = tmp_path / "remote.git" / "hooks" / "pre-receive"
     hook.write_text("#!/bin/sh\necho refused by the remote >&2\nexit 1\n")
     hook.chmod(0o755)
     before = snapshot(checkout)
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
 
-    state = run(pack_job.Job(Store(tmp_path / "store"), Fakes(clone).live(checkout)))
+    state = run(job)
 
-    assert (state["state"], results(state)["push"]) == ("failed", "failed")
-    assert "the local commit was undone" in state["reason"]
-    assert "is protected, the update must reach it through a pull request" in state["reason"]
-    assert snapshot(checkout) == before
-    assert state["pushed"] is None
+    assert (state["state"], results(state)["commit"], results(state)["push"]) == ("waiting", "passed", "waiting")
+    (q,) = state["questions"]
+    assert (q["kind"], [o["id"] for o in q["options"]]) == ("publish", ["retry", "discard"])
+    assert "refused by the remote" in q["text"]
+    assert (snapshot(checkout), fakes.github.prs) == (before, {})
+    made = state["published"]["commit"]
+    hook.unlink()
+    state = answered(job, "retry")
+    assert (state["state"], state["published"]["commit"], landed(checkout)) == ("passed", made, made)
+    assert fakes.github.calls == ["create", "merge", "delete"]
 
 
-def test_a_failed_activation_undoes_only_its_own_commit_never_a_concurrent_one(checkout):
-    root, notice = checkout.parents[1], checkout / "skills" / "NOTICE.md"
-    co, start, old = pack_git.checkout(checkout), git(checkout.parents[1], "rev-parse", "HEAD"), notice.read_bytes()
+def test_a_failed_check_waits_and_a_branch_behind_main_is_brought_up_to_date_first(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.live(checkout)
+    fakes.github.checks = ["running", "failure"]
 
-    def concurrent(cwd: Path, args: list[str], *, fail: bool = False) -> str:
-        if args[0] == "commit":  # another process commits on the branch while the update commits
-            (root / "other.txt").write_text(f"theirs {fail}\n")
-            git(root, "add", "other.txt")
-            git(root, "commit", "-qm", "theirs", "--", "other.txt")
-            if fail:
-                msg = "git commit failed: hook refused"
-                raise design_pack.PackError(msg)
-        return pack_git.git(cwd, args)
+    state = run(job)
 
-    with pytest.raises(design_pack.PackError, match="did not land"):
-        pack_git.activate(co, {notice: "new\n"}, "update", concurrent)
-    theirs = git(root, "rev-parse", "HEAD")
-    assert (git(root, "rev-parse", "HEAD^"), git(root, "log", "-1", "--format=%s")) == (start, "theirs")
-    assert (notice.read_bytes(), git(root, "status", "--porcelain")) == (old, "")
+    (q,) = state["questions"]
+    assert (state["state"], results(state)["merge"], q["kind"]) == ("waiting", "waiting", "publish")
+    assert "CI failed at" in q["text"]
+    assert "https://github.com/maba-pag/owlbear/pull/1" in q["text"]
+    root = checkout.parents[1]
+    (root / "other.txt").write_text("someone else's\n")
+    git(root, "add", "other.txt")
+    git(root, "commit", "-qm", "other")
+    git(root, "push", "-q", "origin", "HEAD:main")  # main moved on meanwhile
+    fakes.github.checks, fakes.github.behind = ["success"], 1
+    state = answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.github.calls == ["create", "update-branch", "merge", "delete"]
+    git(root, "fetch", "-q", "origin")
+    assert git(root, "show", "-s", "--format=%s", "origin/main^1") == "other"  # merged on top of it
 
-    git(root, "push", "-q")
-    co = pack_git.checkout(checkout)
-    with pytest.raises(design_pack.PackError, match=r"HEAD moved to \w+ during the update; nothing was reset"):
-        pack_git.activate(co, {notice: "new\n"}, "update", partial(concurrent, fail=True))
-    assert git(root, "rev-parse", "HEAD^") == theirs  # the second concurrent commit stays
-    assert (notice.read_bytes(), git(root, "status", "--porcelain")) == (old, "")
+
+def test_a_host_stop_during_publication_waits_for_the_owner_instead_of_failing(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    store = Store(tmp_path / "store")
+    job = pack_job.Job(store, fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    assert run(job)["state"] == "waiting"
+    kept = json.loads((store.root / pack_job.FILE).read_text())
+    kept["state"], kept["questions"] = "running", []  # as if the host stopped while CI ran
+    (store.root / pack_job.FILE).write_text(json.dumps(kept))
+
+    again = pack_job.Job(store, fakes.live(checkout))
+
+    state = again.read()
+    (q,) = state["questions"]
+    assert (state["state"], q["kind"]) == ("waiting", "publish")
+    assert "the host stopped while the update was being published" in q["text"]
+    fakes.github.checks = ["success"]
+    assert answered(again, "retry")["state"] == "passed"
+    assert fakes.github.calls == ["create", "merge", "delete"]  # the open pull request was found again
+
+
+def test_the_source_must_be_owlbears_repository_on_main(checkout):
+    root = checkout.parents[1]
+    src = pack_git.source(checkout)
+    assert (src.repository, src.base) == ("maba-pag/owlbear", git(root, "rev-parse", "HEAD"))
+    git(root, "checkout", "-q", "-b", "side")
+    (root / "side.txt").write_text("side\n")
+    git(root, "add", "side.txt")
+    git(root, "commit", "-qm", "side")
+    with pytest.raises(design_pack.PackError, match="not on main"):
+        pack_git.source(checkout)
+    git(root, "checkout", "-q", "main")
+    git(root, "remote", "set-url", "origin", "https://github.com/someone/fork.git")
+    with pytest.raises(design_pack.PackError, match=r"origin https://github\.com/someone/fork\.git"):
+        pack_git.source(checkout)
 
 
 def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout, clone):

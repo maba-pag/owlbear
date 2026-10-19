@@ -67,7 +67,7 @@ const RESULTS = { pending: "not run", running: "running", passed: "passed", fail
   returned: "findings back to the updater", waiting: "waiting for you" };
 const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
   returned: "warning", waiting: "warning" };
-const ENDINGS = { idle: "Never run.", passed: "Last run passed: activated, committed and pushed.",
+const ENDINGS = { idle: "Never run.", passed: "Last run passed: its pull request was merged into main.",
   failed: "Last run failed.", "up-to-date": "Last run: already up to date.",
   waiting: "The update waits for your answers below.", discarded: "Last run discarded: nothing changed." };
 // TD-220: what became of each finding of the update's challenge rounds, in words.
@@ -739,14 +739,15 @@ function packSection() {
   const active = pack ? `Active: ${pack.pack} from upstream ${pack.upstream}, identity ${pack.identity}. `
     + `${plain(pack.status)}.` : "";
   const questions = u?.state === "waiting" ? u.questions : [], found = u?.loop?.findings ?? [];
-  const p = u?.pushed, busy = u?.state === "running" || u?.state === "waiting";
+  const p = u?.published, busy = u?.state === "running" || u?.state === "waiting";
   const elsewhere = !busy && Boolean(pack?.machine);  // TD-290: one update runs at a time on this machine
   return html`<section id="pack" class="panel" aria-labelledby="pack-title">
     <p-heading size="lg"><h2 id="pack-title">Design pack</h2></p-heading>
     <p-text id="pack-active">${active}</p-text>
     <p-text id="pack-notice" size="xs" color="contrast-medium">${pack ? `Last notice: ${pack.notice}.` : ""}</p-text>
-    <p-text>An update takes the newest upstream pack, validates it with model requests, and activates and commits it
-      only if every stage passes, or if you accept it after its challenge rounds end without a pass.</p-text>
+    <p-text>An update takes the newest upstream pack and validates it with model requests. Only if every stage
+      passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own branch,
+      opens a pull request to main and merges it once CI passes.</p-text>
     ${elsewhere ? html`<p-text id="pack-machine" size="sm" role="status">A design pack update runs on this machine
       for ${pack.machine}; one runs at a time, so this one can start once it has ended.</p-text>` : nothing}
     <div class="row">
@@ -758,8 +759,9 @@ function packSection() {
         ?? s.result}</p-tag>${s.detail ? html`<p-text size="xs" color="contrast-medium"> ${s.detail}</p-text>`
         : nothing}</li>`)}</ol>
     <p-text id="pack-reason" size="sm">${u && u.state !== "running" ? u.reason : ""}</p-text>
-    <p-text id="pack-pushed" size="sm">${p ? `Pushed commit ${p.commit.slice(0, 12)} to ${p.remote} ${p.branch}: `
-      + `${p.files.join(", ")}.` : ""}</p-text>
+    <p-text id="pack-pushed" size="sm">${p?.commit ? html`Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
+      ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
+      ? `, merged as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.` : ""}</p-text>
     <div id="pack-ask" ?hidden=${!questions.length}>
       <p-heading size="md"><h3 id="pack-ask-title">The update waits for you</h3></p-heading>
       <div id="pack-questions">${questions.map(packQuestion)}</div>

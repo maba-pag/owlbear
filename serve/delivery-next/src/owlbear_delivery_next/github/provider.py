@@ -363,6 +363,10 @@ class Provider(Protocol):
         """Delete one remote branch."""
         ...
 
+    def update_branch(self, repository: str, number: int, expected_head: str) -> bool:
+        """Merge the base into the pull request's branch at *expected_head*; whether GitHub accepted it."""
+        ...
+
     def read_queue(self, repository: str, number: int) -> QueueState:
         """Read one pull request's merge-queue membership and latest queue events in one query."""
         ...
