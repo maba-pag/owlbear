@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.settings.roles import DEFAULTS
 from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 6  # 3 renamed the designer to design-judge (TD-169); 4 minutes (TD-286); 5 PR labels; 6 subagents
+CONFIG_FORMAT = 7  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -88,6 +88,7 @@ class Layer(Record):
     final_review: FinalReview | None = None  # TD-211
     pr_labels: list[str] | None = None  # TD-308: on every PR OwlBear opens; a project's list replaces the global one
     pr_marker: bool | None = None  # TD-308: the "Opened by OwlBear Delivery" line, switched per project
+    sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once in a project, layered
 
     @field_validator("format")
     @classmethod
@@ -181,6 +182,7 @@ class Settings(Record):
     final_review: RoundPolicy = Field(default_factory=RoundPolicy)
     pr_labels: list[str] = Field(default_factory=list)
     pr_marker: bool = True
+    sessions: int = 2
     sources: dict[str, Source]
 
 
@@ -255,6 +257,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     }
     labels = _pick("pr_labels", sources, *((s, layer.pr_labels) for s, layer in layers), ("default", []))
     marker = _pick("pr_marker", sources, ("project", project.pr_marker), ("default", True))
+    at_once = _pick("sessions", sources, *((s, layer.sessions) for s, layer in layers), ("default", 2))  # TD-336
     return Settings(
         visible=visible,
         agents=agents,
@@ -266,5 +269,6 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         final_review=RoundPolicy.model_validate(final),
         pr_labels=labels,
         pr_marker=bool(marker),
+        sessions=int(at_once),
         sources=sources,
     )

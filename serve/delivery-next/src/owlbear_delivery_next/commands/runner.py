@@ -357,7 +357,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m owlbear_delivery_next run")
     parser.add_argument("change")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--sessions", type=int, default=None)  # its grant (TD-336); unlimited when run by hand
     args = parser.parse_args(argv)
+    sessions.GRANT = args.sessions
     repo = args.repo.resolve()
     if host.stale(host.running(Store(git_common_dir(repo) / STORE_DIR))):  # before Store.open, which may write
         _out(f"{args.change}: {host.RESTART}")
@@ -408,6 +410,9 @@ def _step(  # noqa: C901 - one branch per phase
             _engine(store, lock, change, repo)
     except UsageUnreadError as exc:
         _gate_unread(store, lock, exc)
+    except sessions.SessionGrantError as exc:
+        now = datetime.now(UTC)
+        store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
 

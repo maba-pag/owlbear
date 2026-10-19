@@ -185,7 +185,9 @@ def test_the_experiment_switch_of_format_5_is_dropped_on_read(tmp_path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"format": 5, "explore": True, "agents": {"planner": {"effort": "low"}}}))
     layer = store.read_config()
-    assert (layer.format, layer.agents["planner"].effort, "explore" in layer.model_dump()) == (6, "low", False)
+    assert (layer.format, layer.agents["planner"].effort, "explore" in layer.model_dump()) == (
+        config.CONFIG_FORMAT, "low", False
+    )  # fmt: skip
 
 
 def test_the_breakdown_rides_on_the_step_event_and_never_adds_to_the_spend(tmp_path):

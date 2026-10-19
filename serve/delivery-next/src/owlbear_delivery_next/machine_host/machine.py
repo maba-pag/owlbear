@@ -6,14 +6,17 @@ owner pauses again with Pause, or with Pause and stop when idle (TD-288), which 
 
 from __future__ import annotations
 
+import contextlib
 import sys
 import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import Project
+from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
@@ -46,6 +49,14 @@ class Machine:
         self.lock = threading.RLock()
         self.stopping = threading.Event()
         self.on_stop: Callable[[], None] = lambda: None
+        self.total = Settings().sessions
+        self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
+
+    def _sessions(self) -> int:
+        """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
+        with contextlib.suppress(registry.RegistryError):
+            self.total = registry.load().settings.sessions
+        return self.total
 
     def say(self, text: str) -> None:
         """Write one line to the machine host's log."""
@@ -62,6 +73,7 @@ class Machine:
             h.machine = lambda: [o.store for o in list(self.projects.values()) if o.store]  # a failed host's too
             h.draining = lambda: self.ending
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
+            h.slots = self.slots
 
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
@@ -87,6 +99,7 @@ class Machine:
         with self.lock:
             for entry in registry.load().projects:
                 self._load(entry)
+        self.slots.open()  # a project that failed to load counts its live steps once it loads
 
     def retry(self) -> None:
         """Load again each project that failed or was replaced."""

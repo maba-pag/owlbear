@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.machine_host import registry
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord, running
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
@@ -137,6 +137,7 @@ class Project:
         if store.db.waiting():
             self.import_state(store, self.host)
         self.host.record = record.model_copy(update={"pid": os.getpid(), "project": self.entry.id, "ready": None})
+        session_slots.join(self.host)  # before its first pass: what its live steps hold is counted first
         self._publish()
         self.app = api.create_app(store, record.token, self.host)
         self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
@@ -226,6 +227,7 @@ class Project:
                     return left
             self.host.stopped.set()
             self.host.wake.set()
+            session_slots.leave(self.host)
         try:
             if self.scheduler and self.scheduler.ident is not None:  # one that never started has nothing to join
                 self.scheduler.join(JOIN)

@@ -57,7 +57,7 @@ const SOURCES = { default: "built-in default", global: "global", machine: "this 
 const LAYERS = { project: "This project", machine: "This machine", global: "All projects" };
 const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
-const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes"];  // fields typed as whole numbers (TD-286: minutes)
+const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions"];  // whole numbers (TD-286: minutes; TD-336)
 const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Design pack updates (updater)"]];
@@ -194,7 +194,7 @@ function button(label, onclick, { id, icon, variant, busy = false, disabled = fa
 function saved(layer, key) {
   const loaded = state.loaded;
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (key === "design_failures") return loaded[layer]?.[key] ?? "";
+  if (key === "design_failures" || key === "sessions") return String(loaded[layer]?.[key] ?? "");
   if (key === "pr_labels" || key === "pr_marker") {
     const v = loaded[layer]?.[key];
     if (v === null || v === undefined) return "";
@@ -255,6 +255,14 @@ function widths() {
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
     (v) => edit("widths", v), { key: "widths", placeholder: `inherit (${below})`, disabled: state.saving }),
   source("widths", state.loaded.settings.widths));
+}
+
+// TD-336: how many agent sessions of one project run at once; the machine's total holds as well.
+function sessionsAtOnce() {
+  const key = "sessions", below = inherited()[key];
+  return cell(typed("Agent sessions at once in one project", own(key), (v) => edit(key, v),
+    { key, placeholder: `inherit (${below})`, inputmode: "numeric", disabled: state.saving }),
+  source(key, state.loaded.settings[key]));
 }
 
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
@@ -440,6 +448,10 @@ function edited(layer) {
     }
     if (key === "design_failures") {
       next[key] = value || null;
+      continue;
+    }
+    if (key === "sessions") {
+      next[key] = value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
       continue;
     }
     if (key === "pr_labels") {
@@ -879,8 +891,21 @@ function machineControls() {
       : html`<label><input type="checkbox" .checked=${live(machineValue(key))} ?disabled=${state.machineSaving}
           @change=${flip}> ${label}</label>`;
   };
+  // TD-336: the machine's total of agent sessions at once, across every project it serves.
+  const count = (e) => {
+    const v = (e.target.value ?? "").trim();
+    machineEdit("sessions", /^\d+$/.test(v) ? Number(v) : v);
+  };
+  const label = "Agent sessions at once on this machine, across its projects";
+  const sessions = state.pds
+    ? html`<p-input-text id="machine-sessions" label=${label} inputmode="numeric"
+        .value=${live(String(machineValue("sessions")))} ?disabled=${state.machineSaving} @input=${count}
+        @change=${count}></p-input-text>`
+    : html`<label class="field">${label}<input id="machine-sessions" type="text" inputmode="numeric"
+        .value=${live(String(machineValue("sessions")))} ?disabled=${state.machineSaving} @input=${count}></label>`;
   return html`${channel}${box("update_when_idle", "Update itself when idle")}
     ${box("update_while_paused", "Update itself while paused")}
+    ${sessions}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
       disabled: !state.machineDraft })}</div>`;
 }
@@ -1001,6 +1026,14 @@ function settingsSections() {
         roles.filter((role) => role !== "shaper").map((role) => row(text(role),
           numberCell(role, "minutes", "Minutes per session"))))}
       <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="at-once-title">
+      <p-heading size="lg"><h2 id="at-once-title">Sessions at once</h2></p-heading>
+      <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
+        gets; a design pack update takes one slot per session. This machine's total holds across its projects.</p-text>
+      ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
+        [row(text("Agent sessions at once in one project"), sessionsAtOnce())])}
+      <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
     </section>
     <section class="panel" aria-labelledby="subagents-title">
       <p-heading size="lg"><h2 id="subagents-title">Subagents</h2></p-heading>

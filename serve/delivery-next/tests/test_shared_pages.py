@@ -246,6 +246,7 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page) -> None:
     expect(save).to_be_disabled()
     page.get_by_label("Versions this machine takes").select_option("major")
     page.get_by_label("Update itself while paused").uncheck()
+    page.get_by_label("Agent sessions at once on this machine, across its projects").fill("3")  # TD-336
     other = registry.load().settings  # another page saves first
     registry.configure(other.model_copy(update={"update_when_idle": False}), registry.revision(other))
     save.click()
@@ -253,7 +254,7 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page) -> None:
     expect(page.get_by_label("Versions this machine takes")).to_have_value("major")
     save.click()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
-    expected = registry.Settings(channel="major", update_when_idle=False, update_while_paused=False)
+    expected = registry.Settings(channel="major", update_when_idle=False, update_while_paused=False, sessions=3)
     assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
     a_read_begun_during_a_save_never_undoes_it(page)
 

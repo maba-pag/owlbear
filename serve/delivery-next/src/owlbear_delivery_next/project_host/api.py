@@ -40,6 +40,7 @@ from owlbear_delivery_next.project_host import (
     memory_routes,
     pack_routes,
     pages,
+    session_slots,
 )
 from owlbear_delivery_next.project_host.admission import admitted
 from owlbear_delivery_next.project_host.launches import Launches, Refused
@@ -489,6 +490,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
     job = pack or pack_job.Job(store)
+    job.live = session_slots.pack_live(host, job.live, job.log)  # its sessions count as the project's (TD-336)
     router.include_router(pack_routes.router(store, job, lambda: admitted(host)))
     app.include_router(router)
     app.state.busy = lambda: [  # work admitted outside a request, which a project's stop waits for (TD-242)

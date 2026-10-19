@@ -374,9 +374,10 @@ def test_the_machine_s_own_values_are_read_apart_from_any_settings_layer(http, m
 
 
 def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(http):
-    """TD-288, TD-300: channel and the two update switches, refused when another page saved first."""
+    """TD-288, TD-300, TD-336: channel, the two update switches and the sessions at once, refused when another page
+    saved first."""
     read = http.get("/api/next/machine").json()
-    chosen = {"channel": "major", "update_when_idle": False, "update_while_paused": True}
+    chosen = {"channel": "major", "update_when_idle": False, "update_while_paused": True, "sessions": 3}
     saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     wrong = http.put("/api/next/machine/settings", json={"rev": "x", "settings": {"channel": "nightly"}})
