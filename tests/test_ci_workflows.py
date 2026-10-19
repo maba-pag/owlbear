@@ -92,14 +92,14 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
 @pytest.mark.parametrize(
     ("paths", "touched"),
     [
-        (["README.md"], []),
+        (["README.md"], ["static"]),
         (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static", "security"]),
         (["serve/cockpit/web/src/app.tsx"], ["cockpit", "static", "security"]),
         (["uv.lock"], ["python", "python-browser", "static", "tooling"]),
         ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
         ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),
-        (["share/skills/x/SKILL.md"], ["agent-ecosystem"]),
-        (["serve/a/b/src/x.txt"], []),
+        (["share/skills/x/SKILL.md"], ["static", "agent-ecosystem"]),
+        (["serve/a/b/src/x.txt"], ["static"]),
     ],
 )
 def test_the_scope_follows_github_path_filters(paths: list[str], touched: list[str]) -> None:
@@ -177,7 +177,7 @@ def test_the_snyk_suite_only_tests_code_and_gets_its_token_from_the_gate() -> No
 def test_every_suite_lists_its_own_workflow_and_no_glob_twice() -> None:
     for name, globs in ci_scope.SUITES.items():
         assert len(globs) == len(set(globs)), name
-        assert f".github/workflows/{name}.yml" in globs or ".github/workflows/**" in globs, name
+        assert f".github/workflows/{name}.yml" in globs or {".github/workflows/**", "**"} & set(globs), name
 
 
 @pytest.mark.parametrize("name", ["ci.yml", *SUITE_WORKFLOWS])
@@ -220,7 +220,7 @@ def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) 
     env = {"PATH": os.environ["PATH"], "EVENT": "push", "BASE_SHA": "", "HEAD_SHA": git("rev-parse", "HEAD"),
            "GITHUB_OUTPUT": str(out)}  # fmt: skip
     subprocess.run(["bash", "-c", run], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
-    assert out.read_text() == 'suites=["agent-ecosystem"]\n'  # the merge's own change, not every suite
+    assert out.read_text() == 'suites=["static", "agent-ecosystem"]\n'  # the merge's own change, not every suite
 
 
 @pytest.mark.parametrize("name", sorted(path.name for path in WORKFLOWS.glob("*.yml")))
@@ -329,15 +329,15 @@ def test_cockpit_unit_and_browser_proofs_run_in_parallel() -> None:
     assert upload["if"] == "failure()"
 
 
-def test_static_checks_own_repository_lint() -> None:
+def test_static_runs_the_workspace_lint_on_every_change() -> None:
+    """CI runs what `uv run lint` and `uv run format` run locally; EditorConfig reads every text file (TD-407)."""
     runs = _runs(_jobs("static.yml")["lint"])
 
-    assert {"**/*.py", "**/*.json", "**/*.jsonc", "biome.json", "pyproject.toml"} <= set(ci_scope.SUITES["static"])
-    assert "uv sync --locked --only-group dev" in runs
-    assert "uv run --no-sync ruff check ." in runs
-    assert "uv run --no-sync ruff format --check ." in runs
-    assert "npm run lint:biome:ci" in runs
-    assert "npm run lint:html" in runs
+    assert ci_scope.SUITES["static"] == ("**",)
+    assert "uv sync --locked --package owlbear-tools --group dev" in runs
+    assert "uv run --no-sync lint --no-fix" in runs
+    assert "uv run --no-sync format --no-fix" in runs
+    assert "npm ci --prefix serve/cockpit/web" in runs
 
 
 @pytest.mark.parametrize("name", [*SUITE_WORKFLOWS, "copilot-setup-steps.yml"])

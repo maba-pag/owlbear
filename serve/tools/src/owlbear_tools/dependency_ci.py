@@ -32,8 +32,6 @@ _RUFF_TOOLCHAIN_FILES = {
     ".github/scripts/check_ruff_toolchain.py",
 }
 _RUFF_SNAPSHOT_FILES = {
-    ".github/workflows/megalinter.yml",
-    ".mega-linter.yml",
     ".pre-commit-config.yaml",
     "pyproject.toml",
     "uv.lock",
@@ -45,9 +43,6 @@ _RUFF_PRE_COMMIT_REPOSITORY_BLOCK = re.compile(
     r"(?P<body>.*?)(?=^[ \t]*-[ \t]+repo:|\Z)",
 )
 _RUFF_PRE_COMMIT_REVISION = re.compile(r"(?m)^[ \t]+rev:[ \t]*(?P<revision>\S+)")
-_MEGALINTER_ACTION_REFERENCE = re.compile(
-    r"(?m)^[ \t]*uses:[ \t]*oxsecurity/megalinter(?:/flavors/[a-z0-9-]+)?@[^\s#]+(?:[ \t]+#.*)?$",
-)
 _PDS_PACKAGES = (
     "@porsche-design-system/components-js",
     "@porsche-design-system/components-react",
@@ -196,30 +191,6 @@ def _ruff_pre_commit_values(content: str | None) -> tuple[str, ...] | None:
     return tuple(sorted(revisions))
 
 
-def _config_value(content: str, key: str) -> str | None:
-    """Read one top-level scalar YAML field without requiring third-party parsing."""
-    match = re.search(rf"(?m)^{re.escape(key)}:[ \t]*(?P<value>[^#\r\n]+)", content)
-    if match is None:
-        return None
-    return match.group("value").strip().strip("\"'")
-
-
-def _megalinter_metadata(content: str | None) -> tuple[str, str] | None:
-    """Return the MegaLinter flavor and version that select the runtime image."""
-    if content is None:
-        return None
-    flavor = _config_value(content, "MEGALINTER_FLAVOR") or "all"
-    version = _config_value(content, "MEGALINTER_VERSION")
-    return None if version is None else (flavor, version)
-
-
-def _megalinter_action_values(content: str | None) -> tuple[str, ...]:
-    """Return full MegaLinter action reference lines from one workflow."""
-    if content is None:
-        return ()
-    return tuple(_MEGALINTER_ACTION_REFERENCE.findall(content))
-
-
 def _changed_snapshot_value(
     path: str,
     before_files: Mapping[str, str | None] | None,
@@ -243,7 +214,7 @@ def _ruff_toolchain_changed(
     before_files: Mapping[str, str | None] | None,
     after_files: Mapping[str, str | None] | None,
 ) -> bool:
-    """Return whether a maintained Ruff or MegaLinter version declaration changed."""
+    """Return whether a maintained Ruff version declaration changed."""
     if changed & _RUFF_TOOLCHAIN_FILES:
         return True
     return (
@@ -254,13 +225,6 @@ def _ruff_toolchain_changed(
             before_files,
             after_files,
             _ruff_pre_commit_values,
-        )
-        or _changed_snapshot_value(".mega-linter.yml", before_files, after_files, _megalinter_metadata)
-        or _changed_snapshot_value(
-            ".github/workflows/megalinter.yml",
-            before_files,
-            after_files,
-            _megalinter_action_values,
         )
     )
 
@@ -298,13 +262,12 @@ class DependencyScope:
     precommit: bool
     ruff_toolchain: bool
     workflows: bool
-    megalinter: bool
     renovate: bool
 
     @property
     def compatibility(self) -> bool:
         """Return whether a non-runtime compatibility proof is required."""
-        return self.precommit or self.ruff_toolchain or self.workflows or self.megalinter or self.renovate
+        return self.precommit or self.ruff_toolchain or self.workflows or self.renovate
 
     @property
     def applicable(self) -> bool:
@@ -341,7 +304,6 @@ def classify_dependency_change(
         path.startswith((".owlbear/scripts/diagrams/", "share/diagrams/")) for path in changed
     )
     workflows = any(path.startswith(".github/workflows/") for path in changed)
-    megalinter = ".mega-linter.yml" in changed
     renovate = ".github/renovate.json" in changed
     precommit = ".pre-commit-config.yaml" in changed
     ruff_toolchain = _ruff_toolchain_changed(changed, before_files, after_files)
@@ -356,7 +318,6 @@ def classify_dependency_change(
         precommit=precommit,
         ruff_toolchain=ruff_toolchain,
         workflows=workflows,
-        megalinter=megalinter,
         renovate=renovate,
     )
 

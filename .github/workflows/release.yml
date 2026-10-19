@@ -2,12 +2,12 @@
 name: Release
 
 "on":
-  workflow_run:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] -- guarded to main's push runs; checks out main only
     workflows:
       - CI
     types:
       - completed
-  pull_request_target:
+  pull_request_target:  # zizmor: ignore[dangerous-triggers] -- guarded to merged PRs; checks out main only
     types:
       - labeled
       - unlabeled
@@ -46,6 +46,7 @@ jobs:
           ref: main
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
 
       - name: Tag labelled merges whose CI passed
         env:

@@ -2,7 +2,7 @@
 name: Snyk ignore
 
 "on":
-  issue_comment:
+  issue_comment:  # zizmor: ignore[dangerous-triggers] -- only the owner's tick on the bot's comment; checks out main
     types:
       - edited
 

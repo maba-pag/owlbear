@@ -168,7 +168,8 @@ def autostart(say: Say, *, on: bool) -> int:
         "StandardErrorPath": log,
     }
     path.write_bytes(plistlib.dumps(item))
-    done = subprocess.run(["/bin/launchctl", "bootstrap", domain, str(path)], capture_output=True, check=False)  # noqa: S603
+    command = ["/bin/launchctl", "bootstrap", domain, str(path)]
+    done = subprocess.run(command, capture_output=True, check=False)  # noqa: S603
     if done.returncode:
         said = done.stderr.decode(errors="replace").strip()
         say(f"login item written to {path}, but macOS refused to load it ({said}); `owlbear start` still works")

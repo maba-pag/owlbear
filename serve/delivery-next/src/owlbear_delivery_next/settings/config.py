@@ -102,7 +102,8 @@ class Layer(Record):
     @classmethod
     def _labels(cls, v: list[str] | None) -> list[str] | None:
         if v is not None and (len(set(v)) < len(v) or any(not 0 < len(x) <= LABEL or x != x.strip() for x in v)):
-            raise ValueError(f"labels must be distinct, each 1 to {LABEL} characters without outer spaces")  # noqa: EM102, TRY003
+            msg = f"labels must be distinct, each 1 to {LABEL} characters without outer spaces"
+            raise ValueError(msg)
         return v
 
     @field_validator("widths")

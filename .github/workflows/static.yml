@@ -60,13 +60,7 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         run: |
           uv python install
-          uv sync --locked --only-group dev
-
-      - name: Check Python sources
-        if: steps.reuse.outputs.cache-hit != 'true'
-        run: |
-          uv run --no-sync ruff check .
-          uv run --no-sync ruff format --check .
+          uv sync --locked --package owlbear-tools --group dev
 
       - name: Setup Node.js
         if: steps.reuse.outputs.cache-hit != 'true'
@@ -80,12 +74,18 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         run: npm ci --prefix serve/cockpit/web --engine-strict --no-audit --no-fund
 
-      - name: Check Biome and HTML sources
+      - name: Cache pre-commit hook environments
         if: steps.reuse.outputs.cache-hit != 'true'
-        working-directory: serve/cockpit/web
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-v1-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml', '.python-version') }}
+
+      - name: Lint and format check, as `uv run lint` and `uv run format` locally
+        if: steps.reuse.outputs.cache-hit != 'true'
         run: |
-          npm run lint:biome:ci
-          npm run lint:html
+          uv run --no-sync lint --no-fix
+          uv run --no-sync format --no-fix
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'

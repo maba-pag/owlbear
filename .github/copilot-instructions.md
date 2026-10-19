@@ -96,7 +96,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 ### GitHub Cloud Sessions
 
 Use explicit affected test selections and scoped checks. If scope is unknown, inspect the owning
-tests before choosing a check. Never run the whole-project suite, MegaLinter or `uv run quality`.
+tests before choosing a check. Never run the whole-project suite or `uv run quality`.
 Follow the
 applicable [cloud-agent](instructions/cloud-agent.instructions.md) or
 [code-review](instructions/code-review.instructions.md) instructions. Required external CI gates remain unchanged.

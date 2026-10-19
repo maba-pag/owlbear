@@ -46,7 +46,9 @@ textarea, input, select, button { font: inherit; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 /* The machine host's project bar under the tabs (TD-242): which project the page shows, and Resume. */
 #machine { gap: var(--p-spacing-static-sm); font-size: var(--p-typescale-sm); }
-#machine :is(.projects, .paused) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-md); }
+#machine :is(.projects, .paused) {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-md);
+}
 #machine p { margin: 0; }
 #machine .paused { padding: var(--p-spacing-static-sm) var(--p-spacing-static-md); background: var(--p-color-surface);
   border-radius: var(--p-radius-lg); }
