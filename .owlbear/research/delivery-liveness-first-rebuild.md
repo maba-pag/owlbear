@@ -302,10 +302,12 @@ TD-165; TD-138 by TD-165; TD-164 by TD-244; TD-244 by TD-242, TD-281 and TD-321.
 ## C-09 Data repository and settings
 
 **Rows:** decided TD-7, TD-52, TD-57, TD-59, TD-64, TD-95, TD-98, TD-105, TD-128, TD-227, TD-243, TD-336, TD-347;
-autonomous TD-295.
+autonomous TD-295, TD-395.
 
 - One private repository, `maba-pag/owlbear-data`, holds every project's research and former `.owlbear/` documents
   in a folder per project, OwlBear's own included; consumer projects no longer contain them [TD-7, TD-95].
+- OwlBear's decision record, plan and build designs of unbuilt work stay in its repository, which GitHub's agents
+  and reviewer read; they move once history [TD-395].
 - Research about a consumer project is never committed into that project [TD-7, TD-347].
 - A project's folder name defaults to the repository name; Delivery asks the owner on a collision, and the name can
   be renamed later [TD-98].
@@ -592,10 +594,13 @@ TD-65.
 
 ## C-16 Versions, labels and release
 
-**Rows:** decided TD-298, TD-302, TD-306, TD-307, TD-308, TD-310, TD-354, TD-355, TD-356; autonomous TD-240,
-  TD-314, TD-315.
+**Rows:** decided TD-298, TD-302, TD-306, TD-307, TD-308, TD-310, TD-354, TD-355, TD-356, TD-392, TD-393;
+  autonomous TD-240, TD-314, TD-315.
 
 - Tags are versions; "stable" means major versions only, the channel for those afraid of a broken build [TD-354].
+- A major version's commit gets two tags, `vN.0` and `vN` (the first `v1.0` and `v1`) [TD-392].
+- OwlBear becomes v1.0 after the self-update and the old engine's removal, with its documentation rewritten
+  [TD-393].
 - Only labels on merged OwlBear `main` PRs make versions: `release:minor` the next minor, `release:major` the next
   major; no label, even a forgotten one, makes none; both make a major [TD-306, TD-356].
 - A workflow makes the tag once that merge commit's own CI passes [TD-302, TD-306].
@@ -622,6 +627,8 @@ TD-65.
 - TD-354, 2026-10-18: "Call them versions; 'stable' means major versions only"
 - TD-355, 2026-10-18: "release:major alone makes a major version; testing a minor first is yours, nothing checks it"
 - TD-356, 2026-10-18: "Major wins"
+- TD-392, 2026-10-19: "The major commit gets both tags, v1.0 and v1"
+- TD-393, 2026-10-19: "After the self-update and the old engine's removal, with the docs rewritten"
 
 **Replaced:** TD-240 by TD-298, TD-302; TD-298 by TD-302; TD-302 by TD-306, TD-307, TD-355.
 
@@ -666,8 +673,8 @@ TD-65.
 
 ## C-18 Pause, stop and resume
 
-**Rows:** decided TD-259, TD-287, TD-288, TD-350, TD-351; autonomous TD-282, TD-283, TD-284, TD-303, TD-304,
-  TD-313.
+**Rows:** decided TD-259, TD-287, TD-288, TD-350, TD-351, TD-397; autonomous TD-282, TD-283, TD-284, TD-303,
+  TD-304, TD-313.
 
 - Login and post-crash starts are paused; a start from stopped runs; restarts and updates keep their running or
   paused state; a paused start on purpose remains possible [TD-299, TD-350].
@@ -676,6 +683,8 @@ TD-65.
 - The pause holds Delivery's automatic work on Changes; the owner's own actions and the listed maintenance run
   [TD-287, TD-351].
 - Pause never blocks owner-triggered actions, automatic maintenance, or a new Change's shaping session [TD-287].
+- A test review is a regular Change: the owner may start it while paused, its steps wait for Resume, and its
+  dialog says so [TD-397].
 - Cleanup runs fully while paused, including branch deletion, PR closure and pull-back; automatic Change publishing
   and merging wait for Resume [TD-303, TD-325, TD-351].
 - Answers and approvals take effect and show as answered immediately; resulting automatic Change work waits for
@@ -695,6 +704,7 @@ TD-65.
 - TD-288, 2026-10-18: "option 4, plus a global setting if to update while paused and if to update while idle"
 - TD-350, 2026-10-18: "only a login start and after a crash owlbear is paused"
 - TD-351, 2026-10-18: "The pause holds Delivery's automatic work on Changes"
+- TD-397, 2026-10-19: "You can start it while paused; its dialog says its steps wait for Resume"
 
 **Replaced:** TD-259 by TD-350; TD-282 by TD-350, TD-351; TD-283 by TD-350, TD-351; TD-288 by TD-352; TD-304 by
   TD-352; TD-313 by TD-350.
@@ -894,18 +904,18 @@ TD-197.
 
 ## C-25 Memory
 
-**Rows:** decided TD-70, TD-72, TD-100, TD-292, TD-293; autonomous TD-291, TD-318.
+**Rows:** decided TD-70, TD-72, TD-100, TD-292, TD-293, TD-399, TD-400; autonomous TD-291, TD-318.
 
-- Agents recall owlbear-memory at the start, never pending entries, and save non-obvious lessons for curation
-  [TD-70, TD-293].
+- Agents recall owlbear-memory at the start, never pending entries. Producing roles and the pack updater save
+  non-obvious lessons for curation; judges only recall [TD-70, TD-293, TD-399].
 - Project memory lives in the project's folder of the shared data repository, never in the working repository
   [TD-57, TD-72].
 - Project-specific lessons stay in the project; general ones go to Global. The saving agent recommends the scope;
   the entry waits unused in its project until curated [TD-293].
 - The owner makes a curated or approved entry global on the Memory page; it moves, and can be moved back to its
   project [TD-292].
-- Above one Global confidence threshold (90% at first) the curator decides alone, Make global included; below it,
-  it asks in interactive mode and skips in automatic mode; interactive sessions propose Make global [TD-292, TD-293].
+- Above one Global confidence threshold (95% at first) the curator decides alone, Make global included; below it, it
+  asks (interactive mode) or skips (automatic mode); interactive sessions propose Make global [TD-292, TD-293, TD-400].
 - The watcher may save pending, role-scoped lessons about observed agent behaviour, curated like other memory
   [TD-100].
 
@@ -916,12 +926,14 @@ TD-197.
 - TD-100, 2026-10-14: "plus watcher may write memories from watched actions"
 - TD-292, 2026-10-18: "mem-curator should have 2 ways to work … 2 plus threshold is a setting"
 - TD-293, 2026-10-18: "we should only decide based on the mem … an agent saving can give a recommendation (=pre-set)"
+- TD-399, 2026-10-19: "producers save, judges only recall; the updater gets both"
+- TD-400, 2026-10-19: "Keep it at 95% at first, as one Global setting"
 
-**Replaced:** TD-72 by TD-291, TD-292 and TD-293.
+**Replaced:** TD-72 by TD-291, TD-292 and TD-293; TD-70 by TD-399; TD-292 by TD-400.
 
 **Open:**
 
-- After the self-update: the curator's two modes and threshold setting, moving an entry back to its project, the
+- After v1.0 (TD-394): the curator's two modes and threshold setting, moving an entry back to its project, the
   saving agent's pre-set and sorting the existing project memories once by the rule [TD-292, TD-293, TD-318].
 
 ## C-26 Tests
@@ -983,7 +995,7 @@ TD-197.
 
 ## C-28 Code and tool rules
 
-**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63; autonomous TD-184, TD-391.
+**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63, TD-401; autonomous TD-184, TD-391.
 
 - Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63 [TD-1, TD-63].
 - No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
@@ -992,7 +1004,7 @@ TD-197.
 - No ceilings on agent instructions; use specialist terms without fillers or explanations, but not "caveman" style
   [TD-19].
 - Split oversized code without cutting logic: aim for at most 400 lines per module; a test fails at 500 raw lines,
-  comments and structure included [TD-19, TD-33].
+  comments and structure included; pages, scripts and styles count, tests do not [TD-19, TD-33, TD-401].
 - Delivery keeps at most eleven step kinds, the design's ten and a test review's parallel reviewers, which no other
   step can run with its fixed plan [TD-391].
 - Default size and complexity rules of tools such as SonarQube or Snyk guide splits or rework, with wiggle room,
@@ -1004,12 +1016,13 @@ TD-197.
 - TD-19, 2026-10-10: "strict budgets for agents dont work … for code this does work if the ceiling means splitting"
 - TD-31, 2026-10-11: "take these default rules as an instruction to decide whether something is still acceptable"
 - TD-63, 2026-10-12: "i do not agree with t7, this is far too strict. tools follow process"
+- TD-401, 2026-10-19: "Pages, scripts and styles count like Python; tests don't"
 
 **Replaced:** TD-1 by TD-63; TD-19 by TD-33.
 
 ## C-29 Confirmations and input
 
-**Rows:** decided TD-151, TD-152, TD-153, TD-154.
+**Rows:** decided TD-151, TD-152, TD-153, TD-154, TD-396.
 
 - Consequential buttons confirm what happens now, what Delivery then does by itself, what the owner can do after
   (undo and its limits) and the way forward if he declines, with cost and disruption where they apply; buttons
@@ -1020,7 +1033,8 @@ TD-197.
   consequences move into its dialog; only pure restatement is cut [TD-152].
 - Pass confirms only at the last gate before an automatic merge. Fail always confirms and needs a note, used as
   written for the fix unless it contradicts the approved brief; then it is held for the owner [TD-153, TD-340].
-- Settings Save shows the unsaved changes inline and names the layer; only saving global defaults confirms [TD-154].
+- Settings Save shows the unsaved changes inline and names the layer; every save, global, machine or project,
+  confirms in a dialog naming its layer and changes [TD-154, TD-396].
 
 **Owner's words:**
 
@@ -1028,6 +1042,9 @@ TD-197.
 - TD-152, 2026-10-15: "you removed too much … not over but also not undercompensate"
 - TD-153, 2026-10-15: "Sol's rule; Failed needs a note"
 - TD-154, 2026-10-15: "Sol: inline summary; dialog only for global"
+- TD-396, 2026-10-19: "Every Settings save confirms in a dialog naming its layer and changes"
+
+**Replaced:** TD-154 by TD-396.
 
 ## C-30 Subagents
 
@@ -1063,12 +1080,12 @@ TD-344; TD-344 by TD-374.
   own variant [TD-9, decided].
 - Overlapping parallel Changes show the overlap without asking; integration resolves conflicts and asks only about
   real behavioural collisions; docs, lockfiles and generated files are ignored [TD-12, decided].
-- Copilot runs on `maba-pag`'s business seat; GitHub writes aim for the repository owner's account, else `maba-pag`
-  as collaborator; `maba-pag` does everything until that works [TD-17, decided; TD-266].
+- Copilot runs on `maba-pag`'s business seat. Which account makes a project's GitHub writes is a project setting,
+  by default the repository owner's account when `gh` has it, else `maba-pag` [TD-17, TD-402, decided; TD-266].
 - Charter parts no later decision replaced keep their `approved` origin from the charter and design approval;
   §3.8's allow list was replaced [TD-23, decided, partly; TD-82].
-- The Changes page loads the Porsche Design System only from its documented CDN: no own fallback rendering or load
-  diagnostic [TD-39, decided].
+- The pages load the Porsche Design System only from its documented CDN: no own fallback rendering or load
+  diagnostic; browser tests reach the real CDN [TD-39, TD-398, decided].
 - The builder's code is linted once, at submission, on the changed files with the project's linters; no per-edit
   lint, broad-edit warning or session-start context hook [TD-87, decided].
 - Lint may refuse 5 builder submits per session; later submits pass marked `lint-unresolved` [TD-88, decided].
@@ -1100,8 +1117,10 @@ TD-344; TD-344 by TD-374.
   [TD-285, decided].
 - Agent sessions keep a total running-time limit, by default planner 30, test preparer 30, builder 40 and reviewer
   20 minutes, each a setting (global and per project) [TD-286, decided].
-- After the machine host come runtime updates and version tags, then the research move (TD-227), the window-step
-  gate (TD-223) and the watcher (TD-224) [TD-250, decided; TD-228].
+- Order of the remaining work: TD-358's build work, the research move (TD-227), self-update steps 3c to 5, the old
+  engine's removal, v1.0, TD-318's memory work, the window-step gate, the watcher [TD-394, decided; TD-250, TD-228].
+- Of TD-392..TD-402, the small items come with TD-358's work; the PDS fallback's removal, then the page split,
+  before v1.0; the threshold with TD-318's work; the GitHub account before the first real project [TD-403, decided].
 - The build work of TD-319..TD-357 comes before self-update step 3b; TD-274's gap stays until after self-update
   step 5 [TD-358, decided; TD-329].
 
@@ -1127,6 +1146,12 @@ TD-344; TD-344 by TD-374.
 - TD-285, 2026-10-17: "No deadline: you continue in the same chat or a new one whenever you return"
 - TD-286, 2026-10-17: "those numbers look really low, i would have expected at least double"
 - TD-358, 2026-10-18: "All of it now, before self-update step 3b"
+- TD-394, 2026-10-19: "Item 1 → research move → self-update 3c–5 → old engine removal → v1.0 → item 5 → gate → watcher"
+- TD-398, 2026-10-19: "Remove the fallback and notice; tests reach the real CDN"
+- TD-402, 2026-10-19: "A project setting, defaulting to the owner's account when gh has it, else maba-pag"
+- TD-403, 2026-10-19: "Small ones with item 1; PDS removal, then the page split, before v1.0"
+
+**Replaced:** TD-17 by TD-402; TD-250 by TD-394.
 
 **Spent:** TD-6, TD-8, TD-18, TD-28, TD-37, TD-62, TD-68, TD-141, TD-180, TD-188, TD-206, TD-232, TD-234, TD-248,
 TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.

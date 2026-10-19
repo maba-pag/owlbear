@@ -174,7 +174,8 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   and a removed label no longer holds back the passed merges after it; `workflow_dispatch` starts it by hand.
 - **Allocation:** inside the release group, each tag is decided against freshly read tags: versions are
   compared numerically, `vN` as `(N, 0)`; `release:minor` makes `vX.Y+1` after the highest,
-  `release:major` makes `vX+1` (with both labels, `release:major`); no label makes no tag (TD-306). A
+  `release:major` makes `vX+1` and `vX+1.0` on the same commit (TD-392; with both labels, `release:major`); no label
+  makes no tag (TD-306). A
   machine on the major channel takes only the `vN` tags (TD-300). A tag is an annotated tag object plus a
   non-forced ref
   (`contents: write` on the job alone); a commit that already peels from a version tag is skipped, so a

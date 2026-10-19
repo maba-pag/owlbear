@@ -6,7 +6,7 @@
 > Delivery's own code and from claude-mem, and what must be decided with the owner? Nothing here is
 > decided; it prepares the owner's design session.
 > **Status 2026-10-19:** input to the watcher's design session, the plan's item 9; see
-> [the plan](owlbear-plan.md) §3.4 for what changed since.
+> [the plan](owlbear-plan.md) §3.5 for what changed since.
 
 ## 1. Context and Question
 
