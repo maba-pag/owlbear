@@ -7,12 +7,13 @@ accepted rejection, a finding dropped or withdrawn). Only the current attempt of
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN
 
 if TYPE_CHECKING:
-    from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.change_contracts.models import Change, Criterion
     from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop
 
 KINDS = ("open", "unverified", "settled")  # most urgent first
@@ -36,6 +37,13 @@ def kind(lp: RoundLoop, f: RoundFinding) -> str:
     if f.state == "rejected" or (f.state == "fixed" and f.repair not in lp.reviewed):
         return "unverified"
     return "settled"
+
+
+def unmet(c: Change, lp: RoundLoop) -> list[Criterion]:
+    """The brief's criteria an open finding of the final loop *lp* or a task loop names (TD-341)."""
+    loops = [lp, *(x for k, x in c.loops.items() if k != FINAL)]
+    said = [f.text for x in loops for f in x.findings if kind(x, f) == "open"]
+    return [k for k in c.brief.criteria if any(re.search(rf"(?<![\w-]){re.escape(k.id)}(?![\w-])", s) for s in said)]
 
 
 def rounds(lp: RoundLoop, findings: list[RoundFinding]) -> list[dict[str, object]]:

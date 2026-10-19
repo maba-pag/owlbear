@@ -512,6 +512,14 @@ async function save() {
     after: "Change them back here at any time.",
     instead: "Your edits stay unsaved on this page.",
   }))) return;
+  const project = named() || "this project";
+  if (layer === "project" && !(await ask({
+    title: `Change ${project}'s settings?`, yes: "Save project settings", no: "Keep editing",
+    now: `These apply to ${project} only, on every machine:`, items: changes(layer),
+    then: "Its next session uses them; sessions running now keep theirs.",
+    after: "Change them back here at any time.",
+    instead: "Your edits stay unsaved on this page.",
+  }))) return;
   state.saving = true;
   state.status = "Saving…";
   show();
@@ -861,6 +869,10 @@ function acrossSection() {
 
 // The machine's own values: changed only here, from a terminal, never in a settings layer (TD-243).
 const CHANNELS = [["minor", "Every minor version (v0.1, v0.2 …)"], ["major", "Major versions only (v1, v2 …)"]];
+const MACHINE_LABELS = {
+  channel: "Versions this machine takes", update_when_idle: "Update itself when idle",
+  update_while_paused: "Update itself while paused", sessions: "Agent sessions at once on this machine",
+};
 
 // The machine's settings as shown: each edited one as edited, the others as saved (TD-288, TD-300); a save after
 // another page's lands only the edited ones on top of that page's.
@@ -915,6 +927,16 @@ function machineControls() {
 
 async function saveMachine() {
   if (!state.machineDraft || state.machineSaving) return;
+  const said = (key, v) => (key === "channel" ? CHANNELS.find(([c]) => c === v)?.[1] ?? v : typeof v === "boolean"
+    ? (v ? "on" : "off") : String(v));
+  if (!(await ask({
+    title: "Change this machine's settings?", yes: "Save machine settings", no: "Keep editing",
+    now: "These apply to this machine only:", items: Object.entries(state.machineDraft).map(([key, v]) =>
+      `${MACHINE_LABELS[key] ?? key}: ${said(key, state.machine.settings[key])} → ${said(key, v)}`),
+    then: "Delivery here follows them from now on; other machines keep theirs.",
+    after: "Change them back here at any time.",
+    instead: "Your edits stay unsaved on this page.",
+  }))) return;
   state.machineSaving = true;  // the controls stay disabled until it ends, so no edit is made and lost meanwhile
   state.machineWrites += 1;
   show();
@@ -1006,8 +1028,11 @@ function settingsSections() {
       <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
       ${table("Agents: model, effort and context apply to the next session",
         ["Agent", "Model", "Effort", "Context", "AI credits per 1M tokens"], "agents",
-        roles.map((role) => row(text(role), editable(role, "model"), editable(role, "effort"), contextCell(role),
-          ratesCell(role))))}
+        roles.map((role) => row(text(role === "shaper" ? "shaper (a recommendation)" : role), editable(role, "model"),
+          editable(role, "effort"), contextCell(role), ratesCell(role))))}
+      <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
+        (TD-328): Delivery's own turns in the shaping chat use them; what you type there runs on the chat's model
+        picker, which the chat reminds you of once.</p-text>
       <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite">${state.modelsNote}</p-text>
     </section>
     <section class="panel" aria-labelledby="rounds-title">
@@ -1077,7 +1102,7 @@ function settingsSections() {
         general.map(([label, value, key]) => row(text(label), inactive(label, value, key))))}
       <p-text id="baseline" size="xs" color="contrast-medium">Every runtime has the baseline: ${baseline}.</p-text>
       ${table("What each runtime adds; not used for routing yet", ["Runtime", "Adds over the baseline", "MCP servers",
-        "Live view", "Writes outside the work folder stopped by"], "runtimes", runtimes.map((r) => row(
+        "Live view", "Writes outside the work folder"], "runtimes", runtimes.map((r) => row(
         ...[r.runtime, r.adds, r.mcp, r.live_view, r.outside_writes].map(text))))}
       ${table("Tool categories an agent can ask for; not applied yet", ["Category", "Runtime", "Tools"], "categories",
         Object.entries(categories).map(([name, c]) => row(...[name, c.runtime, c.tools.join(", ")].map(text))))}

@@ -125,7 +125,19 @@ def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept, 4: labelled_added, 5: tests_added}
+def waivers_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 6 to 7: the criteria the owner accepted unmet (TD-341); older runtimes refuse format 7."""
+    return data
+
+
+CHANGE: Migrations = {
+    1: brief_challenged,
+    2: visual_decided,
+    3: rounds_kept,
+    4: labelled_added,
+    5: tests_added,
+    6: waivers_added,
+}
 PROFILE: Migrations = {1: roles_moved}
 CONFIG: Migrations = {
     1: seed_dropped,

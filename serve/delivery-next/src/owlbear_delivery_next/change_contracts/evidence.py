@@ -10,7 +10,7 @@ from owlbear_delivery_next.change_contracts.models import Inputs
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from owlbear_delivery_next.change_contracts.models import Change, PersonCheck, Review
+    from owlbear_delivery_next.change_contracts.models import Change, Criterion, PersonCheck, Review
 
 TREE = ":tree"  # the fingerprint key of a check without declared paths
 type Need = Literal["none", "states", "person", "unmet"]
@@ -70,6 +70,11 @@ def cover(c: Change) -> None:
 def criteria(c: Change) -> dict[str, int]:
     """The current version of each brief criterion."""
     return {k.id: k.version for k in c.brief.criteria}
+
+
+def waived(c: Change, k: Criterion) -> str:
+    """A note on a criterion the owner accepted unmet in this wording (TD-341), else nothing."""
+    return " (the owner accepted it unmet as his decision)" if c.waived.get(k.id) == k.text else ""
 
 
 def review_valid(c: Change, review: Review, paths: Mapping[str, str], changed: Iterable[str] | None = None) -> bool:

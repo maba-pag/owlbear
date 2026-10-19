@@ -21,6 +21,7 @@ from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.pack_runs import pack_candidate
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -131,6 +132,7 @@ def config(  # noqa: PLR0913 - one session: its worktree, id, message, resume, f
         submit=UPDATE, rejectable=keys[0], settled=keys[1], model=role.model, effort=role.effort,
         context=role.context, role="updater", fresh=fresh, journal=sdk_adapter.Journal(replaced=replaced),
         limit=roles.limit(store.settings(), LABEL), subagents=roles.subagents(store.settings(), LABEL),
+        memory=sessions.memory(store),  # TD-399: it recalls and saves like the other producing roles
     )  # fmt: skip
 
 

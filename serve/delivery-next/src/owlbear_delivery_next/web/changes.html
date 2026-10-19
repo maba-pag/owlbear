@@ -383,7 +383,12 @@ function retryForm(q, r, d) {
       instead: "The question stays open.",
     } : {
       title: "Accept as done?", yes: "Accept as done", no: "Back to the tasks",
-      now: "The final review completes; its remaining findings are recorded as accepted by you.",
+      now: r.unmet.length
+        ? "The final review completes. Its remaining findings report these criteria unmet; you accept them as "
+          + "they are, as your decision:"
+        : "The final review completes; its remaining findings are recorded as accepted by you. None of them names "
+          + "an acceptance criterion.",
+      items: r.unmet,
       then: `Delivery publishes the Change. ${merging(d)}.`,
       instead: "The question stays open.",
     });
