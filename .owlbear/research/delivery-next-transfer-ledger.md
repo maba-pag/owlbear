@@ -6,6 +6,10 @@
 > state of the old engine's open Changes; and can D5's single deletion PR become a burndown that deletes each old
 > piece once its replacement is in `dev`?
 > **Status:** research for the owner's morning decision; Sol challenge recorded in §5. Nothing is deleted.
+> **Status 2026-10-19:** decided on 2026-10-16: option C of §3.4 as TD-199, Q1 as TD-200, Q2 as TD-201, Q3 as TD-202.
+> Batch 6 and `dev` are gone (TD-203: one branch, `main`); the old live state was deleted at once (TD-202). Batches
+> 1 to 5 are the plan's item 7, after the research move (TD-227); nothing is deleted yet. See
+> [the plan](owlbear-plan.md) §3.3.
 
 ## 1. Context and Question
 

@@ -5,6 +5,8 @@
 > **Question:** Delivery-next runs planner, builder, reviewer and challenger as Copilot SDK sessions
 > outside VS Code. Which tools and settings does that route lose compared with VS Code chat, and is
 > any other route feasible?
+> **Status 2026-10-19:** research history; window steps are paused until their gate (TD-223). The record and the
+> code win where they differ. Status: [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

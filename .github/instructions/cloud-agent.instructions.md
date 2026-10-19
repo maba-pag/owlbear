@@ -55,6 +55,6 @@ or dispatch. When a user decision or human merge is next, state that next step i
 
 ## Delivery Redesign Tasks
 
-The Delivery redesign programme is no longer executed in cloud sessions. If a task names a
-redesign package or phase, report that it runs in local VS Code chats under
-[the execution plan](../../.owlbear/research/delivery-redesign-execution-plan.md) and stop.
+The Delivery redesign programme is superseded by the new engine (TD-202). If a task names a redesign
+package or phase, report that and stop; current work is in
+[the plan](../../.owlbear/research/owlbear-plan.md).

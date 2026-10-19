@@ -5,6 +5,8 @@
 > **Question:** Which structure, ideas and rules of OwlBear's existing agents, skills, prompts and
 > instructions should delivery-next's builder, planner and reviewer keep, and which belong to the old
 > engine only?
+> **Status 2026-10-19:** research history; the record and the code win where they differ. Status:
+> [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

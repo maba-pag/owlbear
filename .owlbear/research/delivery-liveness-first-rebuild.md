@@ -4,7 +4,8 @@ The owner's decisions for OwlBear and its Delivery, by topic. Each topic lists i
 in force with their rows, the owner's words, what was replaced and what is open. How to record a decision is
 in C-31; who may change one is in the workspace instructions ("Prior decisions by origin"). The full rows
 TD-1..TD-382 as first recorded, and the research report of 2026-10-10..12 this file began as, are at commit
-`04b1d8ec4`: `git show 04b1d8ec4:.owlbear/research/delivery-liveness-first-rebuild.md`.
+`04b1d8ec4`: `git show 04b1d8ec4:.owlbear/research/delivery-liveness-first-rebuild.md`. What is built, the order of
+the remaining work and where the code differs from these decisions are in [the plan](owlbear-plan.md).
 
 ## C-01 Asking the owner
 
@@ -811,6 +812,10 @@ TD-65.
 **Rows:** decided TD-2, TD-183, TD-199, TD-200, TD-201, TD-202, TD-337.
 
 - The Delivery redesign programme is superseded by the new engine [TD-202].
+- The old Delivery leaves in dependency-closed batches, each deleting old paths with their tests and unwiring edits
+  in one revertible commit; tag `delivery-v1-final` before the first; no `main` sync batch [TD-199, TD-203].
+- `h-decision-requests`, `h-process-observations` and `w-deviation-audit` retire with batch 3, once checked that
+  the new engine holds what they offer [TD-201].
 - `interactive-browser-tools` stays in issue #233; its brief is written only when OwlBear develops itself on
   the new engine [TD-200].
 
@@ -1094,6 +1099,10 @@ TD-344; TD-344 by TD-374.
   [TD-285, decided].
 - Agent sessions keep a total running-time limit, by default planner 30, test preparer 30, builder 40 and reviewer
   20 minutes, each a setting (global and per project) [TD-286, decided].
+- After the machine host come runtime updates and version tags, then the research move (TD-227), the window-step
+  gate (TD-223) and the watcher (TD-224) [TD-250, decided; TD-228].
+- The build work of TD-319..TD-357 comes before self-update step 3b; TD-274's gap stays until after self-update
+  step 5 [TD-358, decided; TD-329].
 
 **Owner's words:**
 
@@ -1116,9 +1125,10 @@ TD-344; TD-344 by TD-374.
 - TD-266, 2026-10-17: "Keep gh for good"
 - TD-285, 2026-10-17: "No deadline: you continue in the same chat or a new one whenever you return"
 - TD-286, 2026-10-17: "those numbers look really low, i would have expected at least double"
+- TD-358, 2026-10-18: "All of it now, before self-update step 3b"
 
-**Spent:** TD-6, TD-8, TD-18, TD-28, TD-37, TD-62, TD-68, TD-141, TD-180, TD-188, TD-206, TD-228, TD-232, TD-234,
-TD-248, TD-250, TD-261, TD-264, TD-268, TD-269, TD-271, TD-279, TD-358.
+**Spent:** TD-6, TD-8, TD-18, TD-28, TD-37, TD-62, TD-68, TD-141, TD-180, TD-188, TD-206, TD-232, TD-234, TD-248,
+TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
 
 ## C-31 The decision record
 

@@ -12,6 +12,8 @@
 > follows are TD-2, TD-3 and TD-10 to TD-29 in the
 > [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user);
 > everything else here is `autonomous`.
+> **Status 2026-10-19:** design history; the record and the code win where they differ. Intent:
+> [the record](delivery-liveness-first-rebuild.md); status: [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

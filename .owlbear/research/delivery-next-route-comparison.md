@@ -8,6 +8,8 @@
 > **Status:** Analysis for M1 at `8d07aa9dd`. Uses the user's decisions TD-1 to TD-8 of the
 > [rebuild research](delivery-liveness-first-rebuild.md#38-decisions-reserved-for-the-user); every
 > conclusion here is `autonomous` until the user approves the charter.
+> **Status 2026-10-19:** research history of M1; the record and the code win where they differ. Status:
+> [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

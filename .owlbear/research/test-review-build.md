@@ -9,6 +9,8 @@ reviewer, a pinned commit, a curator role route with an unchanged-suite end, rew
 at the pinned commit, cost shown before the start. The owner decided the admission (TD-390). Sol placed the button
 in the existing "Review Tests" row of each project's Maintenance page (TD-370).
 
+Status: built (#499, 2026-10-19). Order and gaps of the remaining work: [the plan](owlbear-plan.md).
+
 ## 1. Decisions in force
 
 From [the decision record](delivery-liveness-first-rebuild.md), topic C-26:

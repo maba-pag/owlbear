@@ -18,14 +18,17 @@
 > three in §8, all taken)
 > **Question:** How does the machine host pause and stop on the owner's word, update itself to the newest
 > stable version of its channel without moving backwards or losing work, and propose the next version?
+> **Status 2026-10-19:** steps 1 to 3b built (#473, #476, #478, #480 to #482); step 3c planned in §8; steps 4 and 5
+> not built. TD-259 is replaced by TD-350 (only a login-item start and a start after a crash pause). Order and gaps:
+> [the plan](owlbear-plan.md), items 2 to 5.
 
 ## 1. Context
 
 The runtime `~/.owlbear/runtime` is a clone of `github.com/maba-pag/owlbear` with its `.venv` inside, moved by
-hand after each accepted merge (TD-289). Every start is paused (TD-259); there is no Pause button, and a
-design pack update is refused while paused, against TD-287. A design pack update commits into the runtime's
-own checkout and pushes its branch, which a protected `main` refuses and a tagged checkout cannot do. `v0.1`
-marks `8ebc00afe`; the runtime runs a later `main` commit.
+hand after each accepted merge (TD-289, TD-309). Pause and Pause and stop when idle exist (step 2); every start is
+still paused, against TD-350 (plan item 1). A design pack update commits into the runtime's own checkout and pushes
+its branch, which a protected `main` refuses and a tagged checkout cannot do (step 3c). The release walk tags
+labelled merges since 2026-10-19; until its next run only `v0.1` exists, marking `8ebc00afe`.
 
 ## 2. Sources Studied
 
@@ -96,7 +99,7 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
    (0600: port, token, paused, resumed or stopping state). The standby takes the machine lock first, then each
    project's, binds the old port with the old token (open pages keep working) and loads projects as before
    (TD-299); `host.json` is written and removed only by its owner. A start without a handover file is an
-   ordinary start and pauses (TD-259).
+   ordinary start, paused only after a crash or from the login item (TD-350).
 5. **Watch:** the old process waits 60 s for `/api/next/projects` with every previously loaded project
    loaded. Without it the old process starts the new version once more from the alias and tells the owner;
    it never starts the older version after activation, because the loads in step 4 may migrate one way
@@ -115,7 +118,7 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   shows the pause with Resume, Run updates now, and Pause and stop when idle. The Pause tooltip says OwlBear
   may still update itself while Update while paused is on.
 - **Pause and stop when idle** (`POST /pause-stop`): holds a stop intent in the host's memory, never in
-  `machine.json`, so a crash or restart (which pauses anyway, TD-259) never stops OwlBear again; from then no
+  `machine.json`, so a crash (whose next start pauses, TD-350) or a restart never stops OwlBear again; from then no
   launch of any kind starts (update, maintenance, New Change's chat, a brief challenge, a pack update), each
   refused with "OwlBear stops once the running steps end; press Resume to cancel", while input that launches
   nothing is still taken; check environments are disposed (the paused pass does that now); OwlBear stops once
@@ -212,6 +215,11 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
     and show the pull request's link and state.
   - **Taking the version** is step 4's: until it exists no machine takes any version by itself, so the merge becomes a
     version by its labels as every merge does, and step 4 takes it at once when paused (TD-325, TD-368).
+  - **C-15 alignment** (added 2026-10-19 from the decision audit of [the plan](owlbear-plan.md) §4; not yet
+    challenged): the updater may change any file of its candidate in its own folder, and a detector code change waits
+    for the owner's approval before the pull request (TD-194); a change to expected evidence asks the owner instead of
+    ending the run failed (TD-177); the challenger checks that each change is needed by the upgrade, listing every
+    changed file with one line on what changed and why it is suspicious, and asks the owner when unsure (TD-194).
 - **Pull request labels and marker** (TD-308): a global setting `pr_labels` lists the labels OwlBear adds
   to every pull request it opens, Delivery's and the design pack update's; a project's value replaces the
   list whole (TD-243); empty at first. OwlBear's own project sets `release:minor`. A project setting
@@ -243,3 +251,7 @@ the pull request labels and marker settings (TD-308).
 | 3 | `ci.yml` on pushes to `main`, the `release` workflow and its labels, merged in dry run until the owner switches it on after one correct report (TD-315); the `pr_labels` and `pr_marker` settings in Delivery's publish; design pack updates through a pull request (§8) | workflow tests on a disposable repository, a label added after the drain and a removed label on a merge whose CI failed among them; publish tests with labels and without the marker; one real minor tag from a labelled merge |
 | 4 | `repo.git`, versions, leases, never backwards, selfcheck, standby, fence, alias activation with first migration, handover, watch, Run updates now (§3–§5) | disposable macOS processes with two local tags: success, selfcheck and standby failure, a crash injected at each ownership step and around the alias rename, an open page and a chat server across it, a second update, disk refusal |
 | 5 | Idle, use, announcement, automatic updates (§7) | clock-driven tests: polls never count, Postpone, cancel, sleep |
+
+Status 2026-10-19: step 1 #473; step 2 #476 and #478; step 3 #480 to #482, except design pack updates through a pull
+request (3c, §8); steps 4 and 5 not built. After step 5, steps run with the project's agents and skills switched off
+(TD-274's gap, TD-317, TD-329), the plan's item 5.

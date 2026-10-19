@@ -11,7 +11,7 @@
 > **Status:** approved by the user on 2026-10-02 after the plan gate (`plan-sound` in round 7 of
 > fresh GPT-6.1 Sol challenges). Revised the same day for the support baseline (N00-C; `plan-sound`
 > in revision round 2) and for the start report and model split (`plan-sound`). Revised on 2026-10-03
-> for pinned Node and Chromium-only Cockpit (`plan-sound` in revision round 2). This is the
+> for pinned Node and Chromium-only Cockpit (`plan-sound` in revision round 2). This was the
 > execution authority; on `dev` since N00-B. **Simplified on 2026-10-04** by the lead under the
 > user's authorization ([7](#7-decisions)): every remaining phase works in the
 > [operating context](#19-operating-context); V17, V22 and V23 are dropped from the programme, N06 and
@@ -19,6 +19,8 @@
 > **Complete on 2026-10-06** with N10-M: live Delivery runs the final release `d25349567` (format 3), the
 > pre-redesign Changes are disposed of, and the programme issues are closed with evidence (#225 stays open,
 > N05-D not built). N10-N follow-ups (H9, H14) completed the same day; M1 and M2 run as ordinary Changes.
+> **Status 2026-10-19:** superseded by the new engine (TD-202); history only, an authority for nothing. The old engine
+> it built leaves with [the plan](owlbear-plan.md)'s item 7.
 
 | Document | Role once this plan is approved |
 | --- | --- |

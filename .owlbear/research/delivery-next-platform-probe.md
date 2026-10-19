@@ -6,6 +6,8 @@
 > this machine for a code-run Delivery loop — structured results, questions, resume, termination,
 > unattended permissions, agents, skills, MCP, worktree PR flow — and what does one Change cost?
 > **Status:** results of a live probe; conclusions `autonomous`
+> **Status 2026-10-19:** research history; the record and the code win where they differ. Status:
+> [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

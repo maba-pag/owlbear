@@ -17,15 +17,13 @@ integration target in its per-change coordination record; never substitute `main
 Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
 generated consumer branch and no sync workflow (TD-203).
 
-### Direct Delivery Redesign
+### Plan and Status
 
-Superseded by the new Delivery engine (TD-202, 2026-10-16): start no new programme work. For
-history, the programme ran in local VS Code chats under
-[the execution plan](../.owlbear/research/delivery-redesign-execution-plan.md). Start at its
-section 0; its section 1 holds the working rules: lanes, worktrees, the main-checkout freeze, live
-state protection, proof and review gates. Never use Delivery to implement Delivery. Product
-requirements stay in
-[the programme](../.owlbear/research/change-continuation-delivery-redesign.md).
+[The plan](../.owlbear/research/owlbear-plan.md) holds where OwlBear stands, the order of the remaining work and
+where the code differs from [the decisions](../.owlbear/research/delivery-liveness-first-rebuild.md). Read it when
+you start or resume work and after a context compaction; a pull request that changes what it says updates it. The
+old Delivery redesign programme and
+[its execution plan](../.owlbear/research/delivery-redesign-execution-plan.md) are superseded history (TD-202).
 
 ### Asking the Owner
 

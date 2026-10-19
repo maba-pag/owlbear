@@ -7,6 +7,9 @@
 > **Status:** Approved by the user on the basis of nine cornerstones (TD-23), with amendments TD-24
 > to TD-29 in the rebuild research §3.8. TD-1 to TD-29 are the user's decisions; everything else
 > here is `autonomous` design.
+> **Status 2026-10-19:** in force only where no later decision replaced it (TD-23 in the standalone decisions of
+> [the record](delivery-liveness-first-rebuild.md)); the record's topics win. Status and order:
+> [the plan](owlbear-plan.md).
 
 ## 1. Context and Question
 

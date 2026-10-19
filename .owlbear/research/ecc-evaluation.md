@@ -7,6 +7,8 @@
 > **Status:** Sol challenged this report ("After fixes", 85 %); section 8 lists the corrections,
 > which are applied in place. The owner then decided TD-111 (subagents) and TD-115 (adoptions 1-9)
 > in `delivery-liveness-first-rebuild.md`.
+> **Status 2026-10-19:** research history; TD-115's adoptions stand as standalone decisions of
+> [the record](delivery-liveness-first-rebuild.md). Status: [the plan](owlbear-plan.md).
 
 Path shorthand: `E:` = `.owlbear/scratch/ecc-study/ecc/`; `N:` =
 `owlbear-dev-next/serve/delivery-next/src/owlbear_delivery_next/`; `S:` =

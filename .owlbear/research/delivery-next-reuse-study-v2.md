@@ -5,6 +5,8 @@
 > **Question:** Which old OwlBear agents, skills, instructions, prompts and Cockpit features become
 > the base of delivery-next's next work (the challenger, preparer and shaper agent files of TD-106,
 > the TD-99 alignment test, per-role preloads, the host pages), and which belong to the old engine?
+> **Status 2026-10-19:** research history; the record and the code win where they differ. Status:
+> [the plan](owlbear-plan.md).
 
 Path shorthand: `O:` = `owlbear-dev/` at `80e0fa975`; `N:` =
 `owlbear-dev-next/serve/delivery-next/src/owlbear_delivery_next/` at `448c758bc`. "Inference" marks

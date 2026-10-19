@@ -3,6 +3,8 @@
 > **Owning task:** TD-213 — TD-208 for the builder's task and final reviews, one shared round module
 > **Date:** 2026-10-17
 > **Question:** How does the engine implement the owner's challenge-round rule for the builder's reviews?
+> **Status 2026-10-19:** steps 1 to 8 built. TD-330 replaced TD-218: every loop's last round, ended early or at the
+> maximum, gets one rejections-only check outside the round count; not built ([the plan](owlbear-plan.md) item 1).
 
 ## 1. Context and Question
 
