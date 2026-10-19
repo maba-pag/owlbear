@@ -38,7 +38,7 @@ Renovate's pull requests are left alone until the old engine is gone (owner, 202
 
 | Area | Build document | Pull requests |
 | --- | --- | --- |
-| The engine and the whole journey, shaping to cleanup, visual check, design pack | [architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md), [design skill](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-design-skill.md) | #449 |
+| The engine and the whole journey, shaping to cleanup, visual check, design pack | [architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md), [design skill](delivery-next-design-skill.md) | #449 |
 | Review and challenge rounds for every role (TD-208, steps 1 to 8) | [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | #449; steps 6 to 8 as commits before the PR route |
 | Pull requests with required CI (TD-278) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | #455 to #458 |
 | Merge-queue support (TD-226) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | commits before the PR route, `0d4272eef` and its repairs |
@@ -79,7 +79,7 @@ the table lists the items in their order.
   [Plan](delivery-next-visual-baseline.md), nothing built.
 - The amendment design (TD-185): its design session with the owner comes before any amendment code (C-14).
 - The quality service (TD-89): [research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md), not built.
-- Contradicting findings of the two visual judges go to the owner ([design skill §3.5](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-design-skill.md));
+- Contradicting findings of the two visual judges go to the owner ([design skill §3.5](delivery-next-design-skill.md));
   they are not detected (§3.7 there).
 - An organisation with the merge queue for OwlBear's `main`, once someone else contributes or Delivery builds
   OwlBear (TD-326).
@@ -113,9 +113,10 @@ waits for the owner's approval (TD-194); a change to expected evidence asks the 
 
 ### 3.3 Items 6 and 7: research moved, then (after the self-update) the old engine
 
-The research moved on 2026-10-20: 1,157 documents went to `owlbear-data/owlbear/research/`, with a README there that
+The research moved on 2026-10-20: 1,156 documents went to `owlbear-data/owlbear/research/`, with a README there that
 says how their relative links resolve. Here stay the decision record, this plan and the build designs of work not
-yet built (TD-395): self-update, PR/CI/merge queue (its pack route), visual baseline, watcher design and options,
+yet built (TD-395): self-update, PR/CI/merge queue (its pack route), design skill (judge conflicts), visual
+baseline, watcher design and options,
 transfer ledger and cutover. A design moves there once its work is built. Links from what stays point at the moved
 documents' GitHub pages. Agents write research to the project's folder in the data repository (`w-research` Step 6,
 `r-workspace-governance`), OwlBear's included; `.owlbear/research/` takes only the record, the plan and new build
@@ -218,7 +219,7 @@ since item 6; the others are in this folder.
 | [Machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built |
 | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its open pack route is item 2 |
 | [Challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | Review and challenge loops | Built |
-| [Design skill](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
+| [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
 | [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; not built; its PDS part is item 11, the rest not placed |
 | [Watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | The watcher | Draft for the owner's session; to revise (§3.5) |
 | [Transfer ledger](delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Decided as TD-199 to TD-201; plan of item 7 |

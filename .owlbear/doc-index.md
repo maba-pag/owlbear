@@ -461,7 +461,7 @@
 - ### `New findings`
 
 ### Outbound links
-- [design skill research §3.8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-design-skill.md)
+- [design skill research §3.8](research/delivery-next-design-skill.md)
 - [owner session](../serve/delivery-next/DEMO-slice1.md#owner-session-new-change-sleep-and-overlap-2026-10-13-times-utc)
 
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-builder.agent.md
