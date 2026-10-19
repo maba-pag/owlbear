@@ -753,7 +753,7 @@ TD-65.
 
 **Rows:** decided TD-10, TD-15, TD-16, TD-25, TD-26, TD-30, TD-155, TD-203, TD-204, TD-222, TD-226, TD-229, TD-230,
   TD-231, TD-238, TD-251, TD-319, TD-326, TD-362, TD-363, TD-379, TD-382, TD-407, TD-408, TD-409, TD-410, TD-411,
-  TD-412; approved TD-280; autonomous TD-22, TD-278, TD-360, TD-361.
+  TD-412, TD-413; approved TD-280; autonomous TD-22, TD-278, TD-360, TD-361.
 
 - One long-lived default branch, `main`, holds all source; consumers clone it and versions are tags
   [TD-203, TD-231].
@@ -782,8 +782,8 @@ TD-65.
   and Renovate updates the linters together in one weekly pull request [TD-409].
 - pre-commit.ci is not installed: its hook updates cannot be switched off and would compete with Renovate [TD-410].
 - CodeRabbit reviews quietly as `.coderabbit.yaml` sets, the review brief its guideline, early access off [TD-411].
-- CodeRabbit reviews a PR once, when it gets the `coderabbit` label; agents or workflows add it to code or CI PRs
-  whose CI passed, docs-only PRs get it by hand; CodeRabbit never replies on its own [TD-412].
+- CodeRabbit reviews a PR once, when it gets the `coderabbit` label, whoever opened it; agents or workflows add it to
+  code or CI PRs whose CI passed, docs-only PRs get it by hand; CodeRabbit never replies on its own [TD-412, TD-413].
 - Snyk is required CI for OwlBear only, never consumer projects: only Snyk Code, high severity and above, no
   monitor or report writes, findings logged actionably [TD-360, TD-363, TD-382].
 - Snyk does only what it specialises in or what is free: no dependency scan; Renovate alone updates dependencies,
@@ -823,6 +823,7 @@ TD-65.
 - TD-410, 2026-10-19: "p1" (uninstall pre-commit.ci)
 - TD-411, 2026-10-19: "coderabbit config looks good … early access off, good call"
 - TD-412, 2026-10-19: "agents or workflows may set the tag" (on code or CI PRs once CI passes; no auto-reply)
+- TD-413, 2026-10-20: "Remove the exclusion, so the label alone decides for every author"
 
 **Replaced:** TD-10 by TD-238, TD-319, TD-337; TD-16 by TD-379; TD-22 by TD-226; TD-204 by TD-230, TD-280, TD-360;
   TD-222 by TD-360; TD-230 by TD-360; TD-238 by TD-278, TD-326; TD-251 by TD-280; TD-278 by TD-326;
