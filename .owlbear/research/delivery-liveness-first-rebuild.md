@@ -886,7 +886,7 @@ TD-197.
 
 ## C-24 Backlog
 
-**Rows:** decided TD-84, TD-103, TD-126, TD-345.
+**Rows:** decided TD-84, TD-103, TD-126, TD-345, TD-405, TD-406.
 
 - Collect potential changes in an evidence-linked inbox; the owner classifies them, adds context, connects several
   and creates linked Changes [TD-84].
@@ -895,6 +895,9 @@ TD-197.
 - Repeats are counted in a summary in the issue, comments only for new evidence [TD-103].
 - Entries may name several projects or none. Repeats merge only when they name the same projects (or both none);
   otherwise they are linked [TD-126, TD-241, TD-345].
+- A finding names the project it was found in, none outside any; an untriaged entry names its origin; they merge
+  only on equal sets [TD-406].
+- A repeat that does not merge is linked to every matching entry at once; the owner can unlink it [TD-405].
 
 **Owner's words:**
 
@@ -902,6 +905,8 @@ TD-197.
 - TD-103, 2026-10-14: "i think we should drop public altogether … offline = no agents = no work possible"
 - TD-126, 2026-10-15: "Merge only within a project"
 - TD-345, 2026-10-18: "Repeats merge only when they name the same projects (or both none); otherwise they are linked"
+- TD-405, 2026-10-19: "Delivery links the new entry to every matching entry at once; you can unlink"
+- TD-406, 2026-10-19: "A finding names its project (none outside any); an untriaged entry names its origin"
 
 **Replaced:** TD-84 by TD-103; TD-126 by TD-345.
 
