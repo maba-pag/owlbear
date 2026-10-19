@@ -329,6 +329,21 @@ def test_a_round_gated_on_one_share_keeps_the_others_reviews(review, monkeypatch
     assert loop.usage_gated(c)
 
 
+def test_a_held_review_s_usage_is_logged_when_another_share_gates_the_round(review, monkeypatch):
+    unread, done = "model unknown", Termination(confirmed=True)
+    review.ends["# Test review: share 1 of 2"] = lambda cfg: Run(cfg.session_id, "error", usage_unread=unread,
+                                                                 termination=done)  # fmt: skip
+    review.ends["# Test review: share 2 of 2"] = lambda cfg: Run(
+        cfg.session_id, "result", usage_unread=unread, termination=done,
+        payload=TestReviewResult(verdicts=[], kept=1, covered_paths=["web/src/b.test.ts"]),
+    )  # fmt: skip
+    monkeypatch.setattr(sessions, "GRANT", 2)
+    step(review)
+    c = review.store.read(review.slug)
+    held = [e for e in review.store.events(review.slug) if e.get("exit") == "held"]
+    assert (len(held), [s.ended for s in c.tests.shares], loop.usage_gated(c)) == (1, [None, None], True)
+
+
 def test_only_the_curation_task_is_the_curator_s_and_its_pr_text_fits(curating):
     c = curating.store.read(curating.slug)
     c.plan.tasks.append(Task(id="r1", title="fix the review's finding", scope=["."], origin="review", fixes="t1"))

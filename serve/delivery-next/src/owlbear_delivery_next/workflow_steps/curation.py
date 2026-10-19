@@ -194,7 +194,7 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     try:
         judged = sessions.judges(store, lock, change, path, made, store.settings(), hold=True) if left else []
     except sessions.UsageUnreadError as exc:  # what did submit is kept; the owner decides the rest (TD-54)
-        _kept(store, lock, left, exc.runs)  # in the round's order; the gated run itself is neither kept nor held
+        _kept(store, lock, left, exc.runs, gated=True)  # in the round's order; the gated run is neither kept nor held
         raise
     ran = [done for _, done in judged]
     if gate := _kept(store, lock, left, ran):
@@ -204,9 +204,12 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
 
 def _kept(
-    store: Store, lock: Lock, left: list[int], runs: list[session_result.Run]
+    store: Store, lock: Lock, left: list[int], runs: list[session_result.Run], *, gated: bool = False
 ) -> sessions.UsageUnreadError | None:
-    """Record each submitted review whose model is known; log every held one's usage but the first, which gates."""
+    """Record each submitted review whose model is known; log each held one's usage but the one that gates.
+
+    *gated*: another run of the round gates it already, so every held run's usage is logged here.
+    """
     c = store.read(lock.slug)  # the judges' spend and logs
     shares, held = c.tests.shares if c.tests else [], list[session_result.Run]()
     for i, done in zip(left, runs, strict=False):
@@ -215,9 +218,9 @@ def _kept(
         elif sessions.held(done):
             held.append(done)
     store.write(lock, c)
-    for done in held[1:]:
+    for done in held if gated else held[1:]:
         sessions.logged(store, lock, store.read(lock.slug), done, {"kind": curation_tools.REVIEW_LABEL, "exit": "held"})
-    return sessions.UsageUnreadError(held[0], curation_tools.REVIEW_LABEL) if held else None
+    return sessions.UsageUnreadError(held[0], curation_tools.REVIEW_LABEL) if held and not gated else None
 
 
 def _exit(shares: int, runs: list[session_result.Run]) -> loop.StepResult:
