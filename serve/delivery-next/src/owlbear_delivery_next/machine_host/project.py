@@ -105,6 +105,7 @@ class Project:
         except (StoreError, OSError) as exc:
             self.state, self.reason = "failed", f"its Delivery state cannot be opened: {exc}"
             return
+        self.store = store  # readable even when another host serves it: this machine's layer must fit it (TD-336)
         try:
             self.lock_fd = open_lock(fd, blocking=False, name="host.lock")
         except BlockingIOError:

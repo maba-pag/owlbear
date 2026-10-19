@@ -1,9 +1,10 @@
-"""The settings page's API (§3.13 item 5, TD-52): read both layers and the resolved values, save one layer.
+"""The settings page's API (§3.13 item 5, TD-52): read the layers and the resolved values, save one layer.
 
-A save names the revision it was based on, so a page opened earlier never overwrites a newer save. Both layers live
-where the store says: in the shared repository once its pointer exists (TD-57), where each save is committed and
-pushed (TD-64); without it, only the project layer, in the clone. Only model, effort and widths are applied. The
-project's folder there can be renamed (TD-98) while none of its runners runs.
+A save names the revision it was based on, so a page opened earlier never overwrites a newer save. The global and
+project layers live where the store says: in the shared repository once its pointer exists (TD-57), where each save
+is committed and pushed (TD-64); without it, only the project layer, in the clone. This machine's layer lives in
+``~/.owlbear`` and is never published (TD-336). The project's folder in the shared repository can be renamed (TD-98)
+while none of its runners runs.
 """
 
 from __future__ import annotations
@@ -22,8 +23,8 @@ from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.catalogue import CATALOGUE
-from owlbear_delivery_next.settings.config import GlobalLayer, Layer, resolve
-from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes
+from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
+from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -85,27 +86,30 @@ def _rev(path: Path | None) -> str:
 
 
 def _state(store: Store, notice: str = "") -> dict[str, Any]:
-    """Both layers with their revisions, the resolved settings with their sources, and what is applied."""
+    """The layers with their revisions, the resolved settings with their sources, and what is applied."""
     global_path = store.global_path
     try:
         glob, glob_raw = read_layer_bytes(global_path, GlobalLayer) if global_path else (None, b"")
+        machine, machine_raw = read_layer_bytes(store.machine_path, MachineLayer)
         project, project_raw = read_layer_bytes(store.config_path, Layer)
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
     here, alone = list[str](), list[str]()
-    settings, below = _resolved(glob, project, here), _resolved(glob, Layer(), alone)
+    settings, below = _resolved(glob, project, machine, here), _resolved(glob, Layer(), machine, alone)
     if here:
         notice = (
             f"The challenge-round values in use here do not fit together ({here[0]}); steps stop until you fix them"
         )
     elif alone:
         notice = (
-            f"The global challenge-round values do not fit together on their own ({alone[0]}); a project without its "
-            "own values stops until you fix them in the global layer"
+            f"The challenge-round values of the global layer and this machine do not fit together on their own "
+            f"({alone[0]}); a project without its own values stops until you fix them there"
         )
     return {
         "project": project.model_dump(mode="json"),
         "project_rev": hashlib.sha256(project_raw).hexdigest(),
+        "machine": machine.model_dump(mode="json"),
+        "machine_rev": hashlib.sha256(machine_raw).hexdigest(),
         "global": glob.model_dump(mode="json") if glob else None,
         "global_rev": hashlib.sha256(glob_raw).hexdigest(),
         "global_location": global_path is not None,
@@ -114,6 +118,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "settings": settings.model_dump(mode="json"),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only
             "project": below.model_dump(mode="json"),
+            "machine": _resolved(glob, Layer(), None, []).model_dump(mode="json"),
             "global": resolve(None, Layer()).model_dump(mode="json"),
         },
         "applied": APPLIED,
@@ -123,17 +128,17 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
     }
 
 
-def _resolved(glob: GlobalLayer | None, project: Layer, misfit: list[str]) -> Settings:
+def _resolved(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None, misfit: list[str]) -> Settings:
     """The settings; when stored round values do not fit together, those without them, the problem in *misfit*.
 
     A hand edit, two saves at once or another machine's save can store such a combination; the page shows it so the
     owner can fix it, while runners stop on it.
     """
     try:
-        return resolve(glob, project)
+        return resolve(glob, project, machine)
     except ValidationError as exc:
         misfit.append("; ".join(e["msg"] for e in exc.errors(include_url=False)))
-        return resolve(_unrounded(glob), _unrounded(project))
+        return resolve(_unrounded(glob), _unrounded(project), _unrounded(machine))
 
 
 def _unrounded[T: Layer](layer: T | None) -> T | None:
@@ -163,15 +168,55 @@ def _others(store: Store) -> list[Layer]:
     return layers
 
 
-def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: str) -> str:
-    """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice."""
+def _combined(store: Store, new: Layer, host: Host) -> None:
+    """Resolve *new* with the other layers wherever it applies; a ValidationError says it does not fit (TD-209).
+
+    The global layer applies to every project in the shared repository and to a project without values of its own,
+    with this machine's layer for this machine's projects; this machine's layer to every project on this machine.
+
+    Raises:
+        HTTPException: This machine's layer does not fit one of its projects, which is named.
+    """
+    glob = read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None
+    machine = read_layer_bytes(store.machine_path, MachineLayer)[0]
+    here = [store, *(s for s in getattr(host, "machine", list)() if s is not store)]  # no host: this one
+    if isinstance(new, GlobalLayer):
+        for layer in [store.read_config(), *_others(store), Layer()]:
+            resolve(new, layer)  # on a machine without its own values
+        for layer in [*_layers(here), Layer()]:
+            resolve(new, layer, machine)
+    elif isinstance(new, MachineLayer):
+        resolve(glob, Layer(), new)
+        for s in here:
+            with contextlib.suppress(StoreError):  # a project whose layer does not read is that project's to fix
+                try:
+                    resolve(glob, s.read_config(), new)
+                except ValidationError as exc:
+                    why = "; ".join(e["msg"] for e in exc.errors(include_url=False))
+                    raise HTTPException(422, f"it does not fit the project {s.name or s.root}: {why}") from exc
+    else:
+        resolve(glob, new, machine)
+
+
+def _layers(stores: list[Store]) -> list[Layer]:
+    """The project layers of *stores*; one that does not read is that project's to fix."""
+    layers = []
+    for s in stores:
+        with contextlib.suppress(StoreError):
+            layers.append(s.read_config())
+    return layers
+
+
+def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's projects for its layer
+    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host
+) -> str:
+    """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice.
+
+    This machine's layer is written in place and never published (TD-336).
+    """
     try:
         new = model.model_validate(body.layer)
-        if isinstance(new, GlobalLayer):
-            for layer in [store.read_config(), *_others(store), Layer()]:  # every project it applies to (TD-209)
-                resolve(new, layer)
-        else:
-            resolve(read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None, new)
+        _combined(store, new, host)
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
     except StoreError as exc:
@@ -183,6 +228,9 @@ def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: 
         return new
 
     try:
+        if isinstance(new, MachineLayer):
+            update_layer(path, model, change)
+            return ""
         return store.save(path, model, change, what)
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -244,14 +292,18 @@ def router(store: Store, host: Host) -> APIRouter:
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
-        notice = _save(store, store.config_path, Layer, body, f"{store.name or 'the project'}: from the settings page")
-        return _state(store, notice)
+        what = f"{store.name or 'the project'}: from the settings page"
+        return _state(store, _save(store, store.config_path, Layer, body, what, host))
 
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page"))
+        return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page", host))
+
+    @routes.put("/config/machine")
+    def put_machine(body: Save) -> dict[str, Any]:
+        return _state(store, _save(store, store.machine_path, MachineLayer, body, "this machine", host))
 
     @routes.put("/config/folder")
     def put_folder(body: Folder) -> dict[str, Any]:

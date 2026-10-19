@@ -314,6 +314,18 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store) -> None:
     page.get_by_role("button", name="Save project settings").click()
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
     assert store.read_config().agents["reviewer"].subagents is False
+    page.get_by_label("Layer").select_option("machine")  # TD-336: this machine's own preferences, kept local
+    page.get_by_label("Minutes per session, builder").fill("55")
+    page.locator(".bar").get_by_role("button", name="Save this machine's preferences").click()
+    expect(page.locator("dialog")).to_contain_text("These apply to every project on this machine")
+    page.locator("dialog").get_by_role("button", name="Save this machine's preferences").click()
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings. They apply to the next session.")
+    assert store.settings().sources["agents.builder.minutes"] == "machine"
+    minutes = page.locator("#across-table tr", has_text="agents · builder · minutes")  # both baselines, apart
+    expect(minutes.locator("td")).to_have_text(["agents · builder · minutes", "40 (built-in default)", "55", "none"])
+    rounds = page.locator("#across-table tr", has_text="final_review · max_rounds")  # derived from the builder's
+    expect(rounds.locator("td").nth(2)).to_have_text("same")
+    page.get_by_label("Layer").select_option("project")
 
 
 @pytest.mark.browser
@@ -348,8 +360,9 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             machine_settings_are_saved_and_a_stale_save_is_refused(page)
             scope = page.get_by_label("Layer")
             expect(scope.locator("option")).to_have_text(
-                ["Project docs-site", "Global (every project)", "Project shop-site (/s)", "Project shop-site (/s2)"]
-            )
+                ["Project docs-site", "This machine (its projects)", "Global (every project)", "Project shop-site (/s)",
+                 "Project shop-site (/s2)"]
+            )  # fmt: skip
             page.get_by_label("Rounds at most, builder").fill("4")
             unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}")
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")

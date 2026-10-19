@@ -52,9 +52,9 @@ import { call, designSystem, guard, here, loaded as clones, project as current }
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const INHERIT = "inherit";  // the option that clears the layer's own value
-const SOURCES = { default: "built-in default", global: "global", project: "this project",
+const SOURCES = { default: "built-in default", global: "global", machine: "this machine", project: "this project",
   builder: "the builder's value" };
-const LAYERS = { project: "This project", global: "All projects" };
+const LAYERS = { project: "This project", machine: "This machine", global: "All projects" };
 const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
 const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes"];  // fields typed as whole numbers (TD-286: minutes)
@@ -85,7 +85,7 @@ const state = {
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineWrites: 0,  // counts machine saves, so a read that started before one never shows older values
 };
-const drafts = { project: {}, global: {} };
+const drafts = { project: {}, machine: {}, global: {} };
 let polling = null, arrived = null;  // arrived: models read while a setting held the focus, applied once it leaves
 
 function show() {
@@ -236,8 +236,9 @@ function numberCell(owner, field, label) {
 
 // What a blank final-review value takes: the global one when editing this project, else the builder's as edited.
 function finalBelow(field) {
-  const above = state.layer === "project" ? state.loaded.global?.final_review?.[field] : null;
-  if (above !== null && above !== undefined) return above;
+  const wide = { project: [state.loaded.machine, state.loaded.global], machine: [state.loaded.global] }[state.layer];
+  const above = (wide ?? []).map((l) => l?.final_review?.[field]).find((v) => v !== null && v !== undefined);
+  if (above !== undefined) return above;
   return own(`builder.${field}`).trim() || inherited().agents.builder[field];
 }
 
@@ -266,7 +267,7 @@ function prLabels() {
 // TD-308: the line "Opened by OwlBear Delivery for …" at the end of a pull request's text, switched per project.
 function prMarker() {
   const key = "pr_marker";
-  if (state.layer === "global") return cell(html`<p-text>Set in each project</p-text>`, source(key, state.loaded.settings[key]));
+  if (state.layer !== "project") return cell(html`<p-text>Set in each project</p-text>`, source(key, state.loaded.settings[key]));
   return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, "inherit (on)"], ["on", "on: end with the line"],
     ["off", "off: leave it out"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
   source(key, state.loaded.settings[key]));
@@ -423,9 +424,9 @@ function changes(layer) {
 }
 
 function pendingLine() {
-  const other = state.layer === "global" ? "project" : "global", count = dirty(other).length;
+  const others = Object.keys(drafts).filter((l) => l !== state.layer && dirty(l).length);
   const mine = changes(state.layer), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
-  if (count) parts.push(`${LAYERS[other]}: ${count} more unsaved.`);
+  for (const other of others) parts.push(`${LAYERS[other]}: ${dirty(other).length} more unsaved.`);
   return parts.join(" ");
 }
 
@@ -484,8 +485,16 @@ async function save() {
   if (layer === "global" && !(await ask({
     title: "Change the defaults for all projects?", yes: "Save global defaults", no: "Keep editing",
     now: "These become the defaults for every project:", items: changes(layer),
-    then: "Each project's next session uses them, unless the project sets its own value; sessions running now keep "
-      + "theirs.",
+    then: "Each project's next session uses them, unless this machine or the project sets its own value; sessions "
+      + "running now keep theirs.",
+    after: "Change them back here at any time.",
+    instead: "Your edits stay unsaved on this page.",
+  }))) return;
+  if (layer === "machine" && !(await ask({
+    title: "Change this machine's preferences?", yes: "Save this machine's preferences", no: "Keep editing",
+    now: "These apply to every project on this machine:", items: changes(layer),
+    then: "Each project's next session here uses them, unless the project sets its own value; other machines and "
+      + "sessions running now keep theirs.",
     after: "Change them back here at any time.",
     instead: "Your edits stay unsaved on this page.",
   }))) return;
@@ -497,7 +506,8 @@ async function save() {
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer) }, timeout: WRITE });
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
-    const whose = layer === "global" ? "the global" : named() ? `${named()}'s` : "this project's";
+    const whose = { global: "the global", machine: "this machine's" }[layer]
+      ?? (named() ? `${named()}'s` : "this project's");
     state.status = `Saved ${whose} settings. They apply to the next session.`;
     await readAcross();
   } catch (e) {
@@ -754,8 +764,8 @@ function scopeSection() {
   const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && o.name === p.name);
   const others = all.filter((p) => p.id !== current)
     .map((p) => [`go:${p.id}`, `Project ${p.name}${twin(p) ? ` (${p.path})` : ""}`]);
-  const options = [["project", mine ? `Project ${mine}` : "This project"], ["global", "Global (every project)"],
-    ...others];
+  const options = [["project", mine ? `Project ${mine}` : "This project"], ["machine", "This machine (its projects)"],
+    ["global", "Global (every project)"], ...others];
   const pick = (v) => {
     if (!v.startsWith("go:")) {
       state.layer = v;
@@ -778,16 +788,17 @@ function scopeSection() {
   return html`<section class="panel" aria-labelledby="scope-title">
     <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
     <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
-      : "No shared settings location is set up (run owlbear-next data PATH), so only this project's settings can be "
-        + "saved, in this clone."}</p-text></div>
-    <p-text>A blank project value uses the global one; a blank global value uses the built-in default.</p-text>
+      : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
+        + "machine's settings can be saved, locally."}</p-text></div>
+    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one; a blank
+      global value uses the built-in default.</p-text>
   </section>`;
 }
 
 // Why another project may not open now: edits of either layer or a folder name typed and not saved.
 function unsaved() {
   const folder = state.folder !== null && state.folder.trim() !== (state.loaded?.folder ?? "");
-  return Object.keys(drafts.project).length || Object.keys(drafts.global).length || folder || state.machineDraft
+  return Object.values(drafts).some((d) => Object.keys(d).length) || folder || state.machineDraft
     ? "Save or discard your edits before you open another project." : "";
 }
 
@@ -806,14 +817,14 @@ function acrossSection() {
   if (!clones()) return nothing;  // a clone's own host serves one project
   const loaded = state.loaded, all = [{ name: named(), config: loaded }, ...state.others];
   const rows = Object.keys(loaded.settings.sources).map((key) => {
-    const global = at(loaded.inherited.project, key), set = at(loaded.global, key);
-    const from = set !== undefined && set !== null ? "global" : key.startsWith("final_review.") ? "the builder's value"
-      : "built-in default";
-    const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(global));
-    return { key, global, from, differ };
-  }).filter((r) => state.everything || r.differ.length);
+    const below = loaded.inherited.project, wide = loaded.inherited.machine, source = wide.sources[key];
+    const global = at(wide, key), from = SOURCES[source] ?? source;  // global, built-in or the builder's
+    const here = at(below, key), apart = JSON.stringify(here) !== JSON.stringify(global);  // derived values too
+    const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(here));
+    return { key, global, from, machine: apart ? plain(here) : "same", differ, apart };
+  }).filter((r) => state.everything || r.differ.length || r.apart);
   const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${plain(r.global)} (${r.from})`),
-    cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
+    cell(r.machine), cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
   const flip = (e) => { state.everything = e.target.checked === true; show(); };
   const showAll = state.pds
     ? html`<p-checkbox id="across-all" label="Show all settings" .checked=${live(state.everything)}
@@ -825,7 +836,8 @@ function acrossSection() {
     <p-heading size="lg"><h2 id="across-title">Across projects</h2></p-heading>
     ${showAll}
     ${rows.length ? table(state.everything ? "Every setting, with the projects that set it apart"
-      : "Settings a project sets apart from the global value", ["Setting", "Global", "Projects"],
+      : "Settings a project or this machine sets apart from the global value",
+      ["Setting", "Global", "This machine", "Projects"],
       "across", body, { id: "across-table" })
       : html`<p-text id="across-none">Every project uses the global settings.</p-text>`}
     ${unread ? html`<p-text id="across-unread" size="xs">${unread}</p-text>` : nothing}
@@ -1035,7 +1047,8 @@ function settingsSections() {
         Object.entries(categories).map(([name, c]) => row(...[name, c.runtime, c.tools.join(", ")].map(text))))}
     </details>
     <div class="bar" role="region" aria-label="Save settings">
-      ${button(state.layer === "global" ? "Save global defaults" : "Save project settings", save,
+      ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
+        ?? "Save project settings", save,
         { id: "save", icon: "check", busy: state.saving })}
       <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
     </div>`;

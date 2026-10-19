@@ -183,6 +183,7 @@ class Host:
         self.store, self.repo, self.scan, self.group, self.alive = store, repo, scan, group, alive
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
+        self.machine: Callable[[], list[Store]] = lambda: [self.store]  # every project store on this machine (TD-336)
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
         self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
         self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
