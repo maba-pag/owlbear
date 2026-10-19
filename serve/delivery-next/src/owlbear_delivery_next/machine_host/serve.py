@@ -97,11 +97,14 @@ def serve(*, run: bool = False) -> int:
 
     server = Server(uvicorn.Config(app.create(machine, ended), log_level="warning"), machine)
     machine.on_stop = server.stop
+    clean = False
     try:
         with contextlib.suppress(KeyboardInterrupt):
             server.run(sockets=[sock])
+        clean = True
     finally:
         machine.stop_all()
-        ended()
+        if clean:  # an exception leaves the record behind: the next start is after a crash
+            ended()
         os.close(lock_fd)
     return 0

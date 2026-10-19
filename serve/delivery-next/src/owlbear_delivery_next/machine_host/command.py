@@ -100,8 +100,9 @@ def restart(*, paused: bool = False) -> int:
     """
     from owlbear_delivery_next.machine_host import control  # noqa: PLC0415
 
-    listed = control.projects()
-    return control.stop(say) or control.start(say, paused=paused or bool(listed and listed["paused"]))
+    listed = control.projects()  # a host that runs but does not answer may be paused: it starts paused
+    was = listed["paused"] if listed is not None else control.serve.running() is not None
+    return control.stop(say) or control.start(say, paused=paused or was)
 
 
 @app.command

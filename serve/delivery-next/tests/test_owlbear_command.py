@@ -130,6 +130,29 @@ def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps
     assert control.stop(said.append) == 0
 
 
+def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering_one_is_paused(monkeypatch) -> None:
+    def fail(_self, **_kw):
+        raise RuntimeError
+
+    seen, real = [], control.serve.Machine
+    monkeypatch.setattr(
+        control.serve, "Machine", lambda rec, *, paused: seen.append(paused) or real(rec, paused=paused)
+    )
+    monkeypatch.setattr(control.serve.Server, "run", fail)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            control.serve.serve(run=True)
+    assert (seen, (local_home.root() / "host.json").exists()) == ([False, True], True)
+
+    started, at = [], "2026-10-10T12:00:00Z"
+    up = control.serve.HostRecord(url="http://127.0.0.1:9/", token="t", pid=9, started_at=at, code="")  # noqa: S106
+    monkeypatch.setattr(control.serve, "running", lambda: up)
+    monkeypatch.setattr(control, "projects", lambda: None)
+    monkeypatch.setattr(control, "stop", lambda _say: 0)
+    monkeypatch.setattr(control, "start", lambda _say, *, paused: started.append(paused) or 0)
+    assert (command.restart(), started) == (0, [True])
+
+
 def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:
     said = []
     starting = control.serve.HostRecord(url="(starting)", token="", pid=0, started_at="2026-10-10T12:00:00Z", code="")
