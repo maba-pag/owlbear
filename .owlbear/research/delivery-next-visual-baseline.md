@@ -6,9 +6,9 @@
 > code and docs, and in what order is it built and proven?
 > **Status:** plan, revised after Sol challenges (§6) and the retrospective review of 2026-10-11
 > (§7); nothing built
-> **Status 2026-10-19:** still not built; decided (TD-38 to TD-40) but not yet placed in the order
-> ([the plan](owlbear-plan.md) §2). The pages moved to lit-html with PDS (#461) and keep a fallback TD-39 rules out
-> (plan §5). Slices now reach `main` as pull requests, not as commits on `next/m4-slice1`.
+> **Status 2026-10-19:** still not built. The PDS part (§3.6) is [the plan](owlbear-plan.md)'s item 11, with browser
+> tests on the real CDN (TD-398); the rest is decided (TD-38, TD-40) but not yet placed in the order. Slices now reach
+> `main` as pull requests, not as commits on `next/m4-slice1`.
 
 ## 1. Context, decisions and gaps
 
