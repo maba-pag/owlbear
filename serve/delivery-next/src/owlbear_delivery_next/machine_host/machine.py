@@ -176,9 +176,10 @@ class Machine:
             except registry.RegistryError as exc:
                 raise MachineError(409, str(exc)) from exc
             del self.projects[pid]
-            self.slots.leave(pid)  # the clone now at its path counts its own runners as it loads
+            p = self._load(entry)
+            self.slots.leave(pid)  # only once the clone now at its path counts its own runners: never a gap
             self.slots.restore(pid, {})
-            return self._load(entry)
+            return p
 
     def resume(self) -> None:
         """The owner's Resume: work starts again in every project; a stop when idle is cancelled."""
