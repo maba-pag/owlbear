@@ -12,7 +12,9 @@ OwlBear is a laptop-resident AI development system built around VS Code and GitH
 
 Uncoordinated repository maintenance reaches `main` through a pull request: its required `CI`
 check must pass on a branch that is up to date with `main`, and it merges with a merge commit
-(TD-278). Target delivery uses the branch, worktree, and
+(TD-278). Once its CI passes, a pull request that changes code or CI gets the `coderabbit` label, which buys one
+CodeRabbit review from a free allowance of about one an hour; a docs-only one goes without (TD-412). Target delivery
+uses the branch, worktree, and
 integration target in its per-change coordination record; never substitute `main` by convention.
 Consumers clone the same branch ("clone = install"); versions will be git tags. There is no
 generated consumer branch and no sync workflow (TD-203).

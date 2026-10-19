@@ -771,7 +771,7 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
 
 
 def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:
-    """Ruff's pin and every hook move together, so `check_ruff_toolchain.py` sees one version (TD-407)."""
+    """Ruff's pin and every hook move together, so `check_ruff_toolchain.py` sees one version (TD-409)."""
     renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
     rules = renovate["packageRules"]
     lint = [rule for rule in rules if rule.get("groupName") == "lint toolchain"]

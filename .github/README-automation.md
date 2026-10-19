@@ -36,7 +36,7 @@ The [CI](workflows/ci.yml) workflow and the seven suites it calls are enabled (T
 [Release](workflows/release.yml) walk; every other
 automatically triggered workflow stays disabled on GitHub (TD-204), and `gh workflow enable <file>`
 restores one. The pre-commit hooks never run on commit (`pre-commit run --hook-stage manual` runs them);
-CI's Static suite runs them on every change through `uv run lint --no-fix` (TD-407).
+CI's Static suite runs them on every change through `uv run lint --no-fix` (TD-409).
 
 Agents wait for every check on the head commit, so the checks are shaped to finish fast and to
 report few rows. One [CI](workflows/ci.yml) workflow runs on every pull request into `main`,
@@ -111,17 +111,20 @@ workflow token a tag on a commit whose workflow files differ from every branch t
 
 ## Dependency updates
 
-[Renovate](renovate.json) is the only updater (TD-382, TD-406): routine updates arrive grouped per ecosystem on
+[Renovate](renovate.json) is the only updater (TD-382, TD-408): routine updates arrive grouped per ecosystem on
 Friday, majors on Sunday after 72 hours. Ruff, Biome and every pre-commit hook share one weekly **lint toolchain**
 pull request with a three-day minimum age, so the Ruff pin, its hook and the installed Ruff that
-[`check_ruff_toolchain.py`](scripts/check_ruff_toolchain.py) compares move together (TD-407). The schema URL in
+[`check_ruff_toolchain.py`](scripts/check_ruff_toolchain.py) compares move together (TD-409). The schema URL in
 [`biome.json`](../biome.json) follows Biome through the `customManagers:biomeVersions` preset.
 
 GitHub's Dependabot alerts are on and feed Renovate's security pull requests, which open at once, grouped per
 ecosystem. Dependabot opens no pull requests itself: there is no `dependabot.yml` and its security updates stay
-off (TD-406). pre-commit.ci is not installed, since its hook updates cannot be switched off (TD-408).
+off (TD-408). pre-commit.ci is not installed, since its hook updates cannot be switched off (TD-410).
 
 ## Reviews
 
-CodeRabbit reviews pull requests quietly as [`.coderabbit.yaml`](../.coderabbit.yaml) sets, with the
-[review brief](instructions/code-review.instructions.md) as its guideline, and skips Renovate's (TD-409).
+CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, as
+[`.coderabbit.yaml`](../.coderabbit.yaml) sets, with the [review brief](instructions/code-review.instructions.md)
+as its guideline (TD-411). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
+pull requests, so agents or workflows add the label only to a code or CI pull request whose CI passed; a
+docs-only one gets it by hand. `@coderabbitai review` asks again; CodeRabbit never replies on its own (TD-412).

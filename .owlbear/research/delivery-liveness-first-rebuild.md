@@ -752,8 +752,8 @@ TD-65.
 ## C-20 Repository policy
 
 **Rows:** decided TD-10, TD-15, TD-16, TD-25, TD-26, TD-30, TD-155, TD-203, TD-204, TD-222, TD-226, TD-229, TD-230,
-  TD-231, TD-238, TD-251, TD-319, TD-326, TD-362, TD-363, TD-379, TD-382, TD-405, TD-406, TD-407, TD-408, TD-409;
-  approved TD-280; autonomous TD-22, TD-278, TD-360, TD-361.
+  TD-231, TD-238, TD-251, TD-319, TD-326, TD-362, TD-363, TD-379, TD-382, TD-407, TD-408, TD-409, TD-410, TD-411,
+  TD-412; approved TD-280; autonomous TD-22, TD-278, TD-360, TD-361.
 
 - One long-lived default branch, `main`, holds all source; consumers clone it and versions are tags
   [TD-203, TD-231].
@@ -777,15 +777,17 @@ TD-65.
   needed" for notices); no `@owlbear` mention gate [TD-30].
 - Keep CI and Renovate enabled, other automatic workflows disabled, and pre-commit hooks manual [TD-204, TD-280].
 - Keeping disabled workflows' files only eased building Delivery-next; it binds nothing, so retired tooling may be
-  deleted [TD-405].
+  deleted [TD-407].
 - The pre-commit config is the one linter list: CI runs `uv run lint --no-fix` on every change, MegaLinter is retired,
-  and Renovate updates the linters together in one weekly pull request [TD-407].
-- pre-commit.ci is not installed: its hook updates cannot be switched off and would compete with Renovate [TD-408].
-- CodeRabbit reviews quietly as `.coderabbit.yaml` sets, the review brief its guideline, early access off [TD-409].
+  and Renovate updates the linters together in one weekly pull request [TD-409].
+- pre-commit.ci is not installed: its hook updates cannot be switched off and would compete with Renovate [TD-410].
+- CodeRabbit reviews quietly as `.coderabbit.yaml` sets, the review brief its guideline, early access off [TD-411].
+- CodeRabbit reviews a PR once, when it gets the `coderabbit` label; agents or workflows add it to code or CI PRs
+  whose CI passed, docs-only PRs get it by hand; CodeRabbit never replies on its own [TD-412].
 - Snyk is required CI for OwlBear only, never consumer projects: only Snyk Code, high severity and above, no
   monitor or report writes, findings logged actionably [TD-360, TD-363, TD-382].
 - Snyk does only what it specialises in or what is free: no dependency scan; Renovate alone updates dependencies,
-  fed by Dependabot alerts, and Dependabot opens no PRs; the Snyk app's PR checks are off [TD-382, TD-406].
+  fed by Dependabot alerts, and Dependabot opens no PRs; the Snyk app's PR checks are off [TD-382, TD-408].
 - Snyk uses the least service-account role until a read-only tester role exists; only the owner creates and sets
   its secret; scans change ignores only via the owner-checkbox handler [TD-360, TD-361, TD-363].
 - Owner ticks mark Snyk Code false positives "Not vulnerable" and rerun CI; the lead chat may tick too. The
@@ -815,11 +817,12 @@ TD-65.
 - TD-363, 2026-10-18: "this is only for owlbear, not for consumer projects"
 - TD-382, 2026-10-18: "Renovate is first. we dont use dependabot … we dont pay for what renovate gives us free"
 - TD-379, 2026-10-18: "Also when a CI check keeps failing after the fix retries"
-- TD-405, 2026-10-19: "it was an instruction for the easier implementation of delivery next for now, nothing more"
-- TD-406, 2026-10-19: "turn on dependabot alerts, with no dependabot i meant no dep updating by dependabot"
-- TD-407, 2026-10-19: "m2" (retire MegaLinter; the pre-commit config is the one linter list, run in CI)
-- TD-408, 2026-10-19: "p1" (uninstall pre-commit.ci)
-- TD-409, 2026-10-19: "coderabbit config looks good … early access off, good call"
+- TD-407, 2026-10-19: "it was an instruction for the easier implementation of delivery next for now, nothing more"
+- TD-408, 2026-10-19: "turn on dependabot alerts, with no dependabot i meant no dep updating by dependabot"
+- TD-409, 2026-10-19: "m2" (retire MegaLinter; the pre-commit config is the one linter list, run in CI)
+- TD-410, 2026-10-19: "p1" (uninstall pre-commit.ci)
+- TD-411, 2026-10-19: "coderabbit config looks good … early access off, good call"
+- TD-412, 2026-10-19: "agents or workflows may set the tag" (on code or CI PRs once CI passes; no auto-reply)
 
 **Replaced:** TD-10 by TD-238, TD-319, TD-337; TD-16 by TD-379; TD-22 by TD-226; TD-204 by TD-230, TD-280, TD-360;
   TD-222 by TD-360; TD-230 by TD-360; TD-238 by TD-278, TD-326; TD-251 by TD-280; TD-278 by TD-326;

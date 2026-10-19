@@ -330,7 +330,7 @@ def test_cockpit_unit_and_browser_proofs_run_in_parallel() -> None:
 
 
 def test_static_runs_the_workspace_lint_on_every_change() -> None:
-    """CI runs what `uv run lint` and `uv run format` run locally; EditorConfig reads every text file (TD-407)."""
+    """CI runs what `uv run lint` and `uv run format` run locally; EditorConfig reads every text file (TD-409)."""
     runs = _runs(_jobs("static.yml")["lint"])
 
     assert ci_scope.SUITES["static"] == ("**",)
