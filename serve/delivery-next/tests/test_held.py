@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -219,3 +219,28 @@ def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypat
     with pytest.raises(sessions.UsageUnreadError) as caught:
         sessions.review_run(store, Lock("c1"), change, clone, lambda _at: cfg, "plan-challenge")
     assert caught.value.worktree is None  # so the gate offers only to run the step again
+
+
+def test_an_unread_judge_is_logged_with_its_label_so_its_subagents_count_for_its_role(tmp_path, clone, monkeypatch):
+    store = Store(tmp_path / "store")
+    change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.SHAPE))  # a brief challenge runs in shaping
+    store.write(Lock("c1"), change)
+    ran = [{"agent": "explore", "credits": 0.5, "credits_known": True}]
+    run = Run("r1", ending="result", usage_unread=UNREAD, termination=Termination(confirmed=True), subagents=ran)
+
+    async def unread(_cfg):
+        return run
+
+    monkeypatch.setattr(sessions.sdk_adapter, "run", unread)
+    monkeypatch.setattr(sessions, "in_window", lambda _profile: False)
+    cfg = runner.sdk_adapter.Session(
+        kind=K.REVIEW, worktree=clone, session_id="", message="challenge the brief", resume=False,
+        policy=Policy(clone), observe=tools.Worktree, checks=(),
+    )  # fmt: skip
+    with pytest.raises(sessions.UsageUnreadError) as caught:
+        sessions.review_run(store, Lock("c1"), change, clone, lambda _at: cfg, "brief-challenge")
+    assert caught.value.label == "brief-challenge"
+    runner._gate_unread(store, Lock("c1"), caught.value)  # noqa: SLF001
+    (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
+    assert (step["kind"], step["label"], step["subagents"]) == ("shape", "brief-challenge", ran)
+    assert [(u["role"], u["runs"]) for u in pack_routes.subagent_use(store)] == [("challenger", 1)]

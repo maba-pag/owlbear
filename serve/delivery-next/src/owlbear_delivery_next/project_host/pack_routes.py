@@ -93,17 +93,21 @@ def _ran(event: dict[str, Any]) -> list[dict[str, Any]]:
 def subagent_use(store: Store) -> list[dict[str, Any]]:
     """Per role, its steps and the built-in subagents they started, from the step events each Change keeps (TD-376).
 
-    A step logged twice (held, then decided) counts once: its kind as last logged, its subagents from the last event
-    that recorded any, since a decided held result is logged again without them.
+    A step logged twice (held, then decided) counts once: as the last agent's kind or label logged for it, with its
+    subagents from the last event that recorded any, since a decided held result is logged again without them. Only
+    an agent's steps count; a merge or cleanup runs none, and kinds since renamed are left out.
     """
     steps: dict[tuple[str, str], tuple[str, list[dict[str, Any]]]] = {}
     for slug in store.slugs():
         for e in (e for e in store.events(slug) if e.get("event") == "step"):
-            key = slug, str(e.get("session") or id(e))
-            steps[key] = str(e.get("kind", "")), _ran(e) or steps.get(key, ("", []))[1]
+            key, kind = (slug, str(e.get("session") or id(e))), str(e.get("label") or e.get("kind", ""))
+            before = steps.get(key, ("", []))
+            steps[key] = kind if kind in roles.SESSIONS else before[0], _ran(e) or before[1]
     use: dict[str, dict[str, Any]] = {}
     for kind, ran in steps.values():
-        role = roles.SESSIONS.get(kind, kind)
+        if kind not in roles.SESSIONS:
+            continue
+        role = roles.SESSIONS[kind]
         r = use.setdefault(role, {"role": role, "steps": 0, "with": 0, "runs": 0, "credits": 0.0, "unknown": 0,
                                   "agents": {}})  # fmt: skip
         r["steps"], r["with"], r["runs"] = r["steps"] + 1, r["with"] + bool(ran), r["runs"] + len(ran)

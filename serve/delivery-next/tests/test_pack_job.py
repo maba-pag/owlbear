@@ -973,9 +973,12 @@ def test_maintenance_sums_each_role_s_subagents_once_per_step(tmp_path):
         ("b", {"event": "step", "session": "s3", "kind": "plan", "subagents": "odd"}),  # never a list: none
         ("b", {"event": "step", "session": "s4", "kind": "plan-challenge", "subagents": odd}),
         ("b", {"event": "subagent", "agent": "explore"}),  # its own event; the step carries the record
+        ("b", {"event": "step", "kind": "merge"}),  # no agent's step
+        ("b", {"event": "step", "session": "s5", "kind": "plan-review"}),  # a kind since renamed
     ]:
         store.log(Lock(slug), slug, event)
     got = {u["role"]: u for u in c.get("/api/next/maintenance/subagents").json()}
+    assert set(got) == {"planner", "challenger"}
     assert got["planner"] == {"role": "planner", "steps": 2, "with": 1, "runs": 1, "credits": 1.5, "unknown": 0,
                               "agents": {"explore": 1}}  # fmt: skip
     assert got["challenger"] == {"role": "challenger", "steps": 2, "with": 2, "runs": 4, "credits": 3.0,
