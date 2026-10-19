@@ -270,23 +270,34 @@ def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop
     root = Path(ctx.checkout["root"]).resolve()
     if ctx.publication is None:  # the edited skills join the one commit, checked against the package just before
         job.do("commit", lambda: _unchanged(package, ctx), lambda _o: "the package's skills are as the update found")
+        edited = [n for n in c.pins["skills"] if _sha(pack_updater.skill(c, n).read_bytes()) != ctx.baseline[_path(n)]]
+        said = f"The updater changed {', '.join(edited)}." if edited else "The updater changed no skill."
+        passed = "" if ctx.accepted else " The challenger passed."
+        rounds_ = pack_rounds.summary(lp, owner=bool(ctx.accepted))
         ctx.publication = pack_publish.Publication(
             root=str(root), repository=ctx.checkout["repository"], base=ctx.checkout["base"],
             branch=f"pack/{job.state['run'][:12]}",
+            body=f"Golden pages as expected. Calibration replay: {ctx.replayed}. {said}{passed} {rounds_}",
         )  # fmt: skip
         job.keep(ctx, lp)
     edited = [n for n in c.pins["skills"] if _sha(pack_updater.skill(c, n).read_bytes()) != ctx.baseline[_path(n)]]
-    said = f"The updater changed {', '.join(edited)}." if edited else "The updater changed no skill."
-    passed = "" if ctx.accepted else " The challenger passed."
-    rounds_ = pack_rounds.summary(lp, owner=bool(ctx.accepted))
-    body = f"Golden pages as expected. Calibration replay: {ctx.replayed}. {said}{passed} {rounds_}"
     files = {str((package / pack_candidate.MANIFEST).relative_to(root)): c.manifest,
              str((package / pack_candidate.NOTICE).relative_to(root)): c.notice}  # fmt: skip
     files |= {str((package / _path(n)).relative_to(root)): pack_updater.skill(c, n).read_text("utf-8") for n in edited}
+    return _published(job, ctx, files)
+
+
+def republish(job: Job, ctx: Context) -> str | None:
+    """Go on with a publication whose commit exists: GitHub first, never the candidate again (its base moved on)."""
+    return _published(job, ctx, {})
+
+
+def _published(job: Job, ctx: Context, files: dict[str, str]) -> str | None:
+    pub = ctx.publication
     try:
-        merged = pack_publish.publish(job, ctx.publication, files, ctx.why, body)
+        merged = pack_publish.publish(job, pub, files, ctx.why)
     except pack_publish.Held as exc:
         job.hold(ctx, str(exc))
         return None
     by = " by you after rounds without a pass" if ctx.accepted else ""
-    return f"activated{by}: merged into main as {merged[:12]} through {ctx.publication.url}"
+    return f"activated{by}: merged into main as {merged[:12]} through {pub.url}"

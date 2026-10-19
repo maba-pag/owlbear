@@ -29,6 +29,7 @@ from owlbear_delivery_next.github.provider import (
     MergeStatus,
     ProviderError,
     PullRequest,
+    Repository,
     Rules,
 )
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -56,6 +57,13 @@ class FakeGitHub:
         self.remote, self.prs, self.calls = remote, {}, []
         self.checks = ["success"]  # the conclusion at each look; the last one stays
         self.behind, self.labels_fail, self.refusal = 0, False, None
+        self.can_push, self.lose_create = True, False
+
+    def read_repository(self) -> Repository:
+        return Repository(
+            repository="maba-pag/owlbear", url="https://github.com/maba-pag/owlbear", default_branch="main",
+            methods=(MergeMethod.MERGE,), can_push=self.can_push, delete_branch_on_merge=True,
+        )  # fmt: skip
 
     def __call__(self, _root: Path) -> FakeGitHub:
         return self
@@ -84,6 +92,9 @@ class FakeGitHub:
         self.prs[number] = {"branch": head, "head": "", "title": title, "body": body, "draft": True, "state": "open",
                             "merged": False, "sha": "", "labels": []}  # fmt: skip
         assert base == "main"
+        if self.lose_create:
+            self.lose_create = False
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "create_pull_request", "timed out", retry_safe=False)
         return self.read_pull_request(repository, number)
 
     def mark_ready(self, pr: PullRequest) -> None:
@@ -924,6 +935,57 @@ def test_a_host_stop_during_publication_waits_for_the_owner_instead_of_failing(t
     fakes.github.checks = ["success"]
     assert answered(again, "retry")["state"] == "passed"
     assert fakes.github.calls == ["create", "merge", "delete"]  # the open pull request was found again
+
+
+def test_a_retry_after_update_branch_goes_on_and_a_lost_create_answer_still_gets_its_labels(tmp_path, checkout, clone):
+    """Sol: the branch GitHub updated still holds the commit; a pull request found again gets the labels too."""
+    fakes = Fakes(clone)
+    store = Store(tmp_path / "store")
+    store.root.mkdir(parents=True)
+    (store.root / "config.json").write_text(json.dumps({"format": 4, "pr_labels": ["release:minor"]}))
+    job = pack_job.Job(store, fakes.live(checkout))
+    fakes.github.lose_create = True
+    state = run(job)
+    assert (state["state"], results(state)["pull-request"]) == ("waiting", "waiting")
+    fakes.github.behind, fakes.github.checks = 1, ["success", "failure"]
+    state = answered(job, "retry")
+    assert (state["state"], fakes.github.calls) == ("waiting", ["create", "update-branch"])
+    assert fakes.github.prs[1]["labels"] == ["release:minor"]  # found again, labelled all the same
+    fakes.github.checks = ["success"]
+    state = answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.github.calls == ["create", "update-branch", "merge", "delete"]
+
+
+def test_a_merge_that_landed_before_the_retry_is_read_back_and_nothing_is_pushed_again(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    assert run(job)["state"] == "waiting"
+    pr = fakes.github.read_pull_request("maba-pag/owlbear", 1)
+    fakes.github.refusal = None
+    fakes.github.request_merge(MergeRequest(repository="maba-pag/owlbear", number=1, expected_head_sha=pr.head_sha,
+                                            method=MergeMethod.MERGE))  # fmt: skip
+    fakes.github.delete_branch("maba-pag/owlbear", pr.head_branch)  # GitHub deletes it after the merge
+    (checkout / "skills" / "NOTICE.md").write_text("the merged version, deployed meanwhile\n")  # never re-checked
+
+    state = answered(job, "retry")
+
+    assert state["state"] == "passed", state["reason"]
+    assert state["published"]["merged"] == fakes.github.prs[1]["sha"]
+    assert git(checkout.parents[1], "ls-remote", "origin", f"refs/heads/{pr.head_branch}") == ""  # not pushed again
+
+
+def test_gh_that_cannot_push_stops_the_run_before_any_download(tmp_path, checkout, clone):
+    fakes = Fakes(clone)
+    live = fakes.live(checkout)
+    fakes.github.can_push = False
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), live))
+
+    assert (state["state"], results(state)["candidate"]) == ("failed", "failed")
+    assert "cannot push to maba-pag/owlbear" in state["reason"]
+    assert fakes.calls == ["releases"]
 
 
 def test_the_source_must_be_owlbears_repository_on_main(checkout):

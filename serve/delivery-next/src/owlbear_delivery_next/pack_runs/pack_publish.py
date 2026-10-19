@@ -52,36 +52,61 @@ class Publication(BaseModel):
     repository: str
     base: str  # the commit pinned when the candidate was made
     branch: str
+    body: str = ""  # the pull request's text, kept so a retry opens the same one
     commit: str = ""
     number: int = 0
     url: str = ""
     merged: str = ""  # the merge commit on main
 
 
-def publish(job: Job, pub: Publication, files: dict[str, str], title: str, body: str) -> str:
+def publish(job: Job, pub: Publication, files: dict[str, str], title: str) -> str:
     """Take the update into ``main``; the merge commit.
 
     Raises:
         Held: The owner decides: a refused push, a failed check, a conflict, a closed pull request, rules that
             cannot be read, CI that does not finish, or the update-branch rounds running out.
     """
-    live = job.live
+    live, body = job.live, pub.body
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
+    gh = live.github(src.root)
+    if pub.number and (pr := gh.read_pull_request(pub.repository, pub.number)).merged:  # a lost answer, read back first
+        return _done(job, gh, pub, pr.merge_commit_sha or "")
     if not pub.commit:
         at = job.store.root / WORKTREE
         pub.commit = _held(job, "commit", lambda: pack_git.commit(src, files, f"{title}\n\n{body}", at, live.git),
                            lambda c: f"{c[:12]} on {pub.branch}")  # fmt: skip
         job.published(pub)
     _held(job, "push", lambda: pack_git.push(src, pub.commit, pub.branch, live.git), lambda _o: pub.branch)
-    gh = live.github(src.root)
     pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url)
     pub.number, pub.url = pr.number, pr.url
     job.published(pub)
-    pub.merged = _held(job, "merge", lambda: _merged(job, gh, pub), lambda sha: f"merged as {sha[:12]}")
+    merged = _held(job, "merge", lambda: _merged(job, gh, pub), lambda sha: f"merged as {sha[:12]}")
+    return _done(job, gh, pub, merged)
+
+
+def _done(job: Job, gh: Provider, pub: Publication, merged: str) -> str:
+    pub.merged = merged
     job.published(pub)
     with contextlib.suppress(ProviderError):
         gh.delete_branch(pub.repository, pub.branch)
-    return pub.merged
+    return merged
+
+
+def preflight(gh: Provider, repository: str) -> str:
+    """Whether ``gh`` on this machine may push to *repository*: checked before any download or session.
+
+    Raises:
+        Held: It may not, with what to do.
+    """
+    try:
+        found = gh.read_repository()
+    except ProviderError as exc:
+        msg = f"gh cannot read {repository} ({exc}); sign in with `gh auth login` and run the update again"
+        raise Held(msg) from exc
+    if found.repository.casefold() != repository.casefold() or not found.can_push:
+        msg = f"gh on this machine cannot push to {repository}; sign in as an account that can, then run it again"
+        raise Held(msg)
+    return f"gh may push to {found.repository}"
 
 
 def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str]) -> T:
@@ -105,15 +130,15 @@ def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> 
     if pr is not None and pr.state == "closed" and not pr.merged:
         msg = f"the pull request {pr.url} was closed; reopen it and try again, or discard"
         raise Held(msg)
+    settings = job.store.settings()
     if pr is None:
-        settings = job.store.settings()
         text = f"{body}\n\n{MARKER}" if settings.pr_marker else body
         pr = gh.create_pull_request(pub.repository, pub.branch, pack_git.BASE, title, text)
-        try:
-            if settings.pr_labels:
-                gh.add_labels(pub.repository, pr.number, list(settings.pr_labels))
-        except ProviderError as exc:  # a label never holds the update (TD-308)
-            job.log(f"the labels {', '.join(settings.pr_labels)} were not added: {exc}")
+    try:  # on a pull request found again too: its creation's answer may have been lost before its labels
+        if settings.pr_labels:
+            gh.add_labels(pub.repository, pr.number, list(settings.pr_labels))
+    except ProviderError as exc:  # a label never holds the update (TD-308)
+        job.log(f"the labels {', '.join(settings.pr_labels)} were not added: {exc}")
     if pr.draft:
         gh.mark_ready(pr)
     return pr

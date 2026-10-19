@@ -286,7 +286,7 @@ class Job:
     def published(self, pub: pack_publish.Publication) -> None:
         """Record how far the update got on its way into ``main``, with the run's context, so a retry goes on."""
         with self.lock:
-            self.state["published"] = pub.model_dump(exclude={"root"})
+            self.state["published"] = pub.model_dump(exclude={"root", "body"})
             if self.state.get("context"):
                 self.state["context"]["publication"] = pub.model_dump(mode="json")
             self._save()
@@ -377,6 +377,7 @@ class Job:
 
         def candidate() -> tuple[pack_git.Source, pack_candidate.Candidate]:
             src = pack_git.source(package, live.git)  # before any download: a checkout that cannot publish stops
+            pack_publish.preflight(live.github(src.root), src.repository)
             live.sync(live.clone, old["upstream"]["repository"])
             folder = store.root / CANDIDATE  # kept after the run, so the owner can read what was judged
             shutil.rmtree(folder, ignore_errors=True)
@@ -392,6 +393,8 @@ class Job:
         with self.lock:
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
+        if ctx.publication and ctx.publication.commit:  # GitHub first: the package may have moved on meanwhile
+            return pack_run.republish(self, ctx)
         return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:

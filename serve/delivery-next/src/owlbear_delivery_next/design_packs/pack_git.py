@@ -73,18 +73,10 @@ def source(package: Path, run: Git = git, repository: str = REPOSITORY) -> Sourc
         raise design_pack.PackError(msg)
     run(top, ["fetch", "--quiet", "origin", BASE])
     head = run(top, ["rev-parse", "HEAD"])
-    if not _on(run, top, head):
+    if not _holds(run, top, head, f"origin/{BASE}"):
         msg = f"the checkout {top} is at {head[:12]}, which is not on {BASE}; check out {BASE} or a commit on it"
         raise design_pack.PackError(msg)
     return Source(top, repository, head)
-
-
-def _on(run: Git, top: Path, head: str) -> bool:
-    try:
-        run(top, ["merge-base", "--is-ancestor", head, f"origin/{BASE}"])
-    except design_pack.PackError:
-        return False
-    return True
 
 
 def _quiet(run: Git, cwd: Path, args: list[str]) -> str:
@@ -119,13 +111,27 @@ def remote_head(src: Source, branch: str, run: Git = git) -> str:
 def push(src: Source, made: str, branch: str, run: Git = git) -> None:
     """Push exactly *made* to its own branch on ``origin``, never forced; a branch already holding it is fine.
 
+    A branch GitHub brought up to date holds it below its head.
+
     Raises:
-        design_pack.PackError: The branch holds another commit, or the push was refused.
+        design_pack.PackError: The branch holds other work, or the push was refused.
     """
     there = remote_head(src, branch, run)
     if there == made:
         return
     if there:
-        msg = f"the branch {branch} on {src.repository} holds {there[:12]}, not the update's {made[:12]}"
+        run(src.root, ["fetch", "--quiet", "origin", f"refs/heads/{branch}"])
+        if _holds(run, src.root, made, there):
+            return
+        msg = f"the branch {branch} on {src.repository} holds {there[:12]}, without the update's {made[:12]}"
         raise design_pack.PackError(msg)
     run(src.root, ["push", "--quiet", "origin", f"{made}:refs/heads/{branch}"])
+
+
+def _holds(run: Git, root: Path, made: str, there: str) -> bool:
+    """Whether *there* holds *made*: the same commit or one after it."""
+    try:
+        run(root, ["merge-base", "--is-ancestor", made, there])
+    except design_pack.PackError:
+        return False
+    return True
