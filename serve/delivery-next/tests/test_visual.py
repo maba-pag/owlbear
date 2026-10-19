@@ -669,6 +669,9 @@ def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criteri
     assert (back.step.kind, back.visual_rounds[-1].outcome) == (StepKind.BUILD, "back")
     assert (back.visual.doubts, "owner: More air" in back.visual.findings) == ([], True)  # decided: nothing open
     assert ("cramped card" in fix.detail, "owner: More air" in fix.detail) == (True, True)
+    planned = next(t for t in back.plan.tasks if t.origin != "review")
+    told, plain = (step_input.build(back, t, flow.clone, []) for t in (fix, planned))
+    assert (step_input.OWNER_NOTE in told, step_input.OWNER_NOTE in plain) == (True, False)  # TD-340: or held
     [criterion] = back.owner_criteria
     assert (criterion.id, criterion.text, criterion.round) == ("owner-1", "More air", kept.number)
     assert "owner-1: More air" in step_input.visual(
@@ -682,6 +685,13 @@ def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criteri
     assert withdrawn.owner_criteria[0].withdrawn_at is not None
     assert "owner-1" not in step_input.visual(withdrawn, [("home", 1280, "home-1280.png")])
     assert client.post("/api/next/changes/c1/criteria/owner-9/withdraw").status_code == 404
+
+
+def test_a_failed_check_s_note_is_used_as_written_unless_it_contradicts_the_brief(tmp_path):
+    change = Change(slug="c1", brief=Brief(version=1))
+    fix = Task(id="t2", title="Fix: the check p1 failed for the owner: the logo is blue", origin="person-check")
+    told = [step_input.build(change, t, tmp_path, []) for t in (fix, Task(id="t1", title="Add the logo"))]
+    assert [step_input.OWNER_NOTE in t for t in told] == [True, False]  # TD-153, TD-340
 
 
 def test_a_decision_never_passes_a_capture_of_another_head(flow):
