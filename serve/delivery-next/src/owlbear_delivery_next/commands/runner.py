@@ -141,8 +141,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             cap=disputes.cap(change),
             plan_tasks=disputes.planned(change),
             amendable=amendments.amendable(change),
-            explore=s.kind == StepKind.PLAN
-            and store.settings().explore,  # TD-129: the SDK planner only, off by default
+            subagents=roles.subagents(store.settings(), s.kind),  # TD-374, TD-376: the role's setting
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=((design_tools.SCAN, partial(design.builder_scan, at)),)

@@ -10,7 +10,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system import preload
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, subagents
 from owlbear_delivery_next.runtimes import window_files as wf
 
 ROLES = ("builder", "planner", "reviewer", "challenger", "design-judge")
@@ -117,9 +117,12 @@ def test_a_window_without_a_memory_folder_gets_no_memory_server_and_no_memory_to
         assert [n for n in window_names(role) if "/" not in n] == [n for n in preload.tools(role) if "/" not in n]
 
 
-def test_each_role_is_offered_only_its_own_agent_and_every_builtin_agent_is_excluded() -> None:
+def test_each_role_is_offered_only_its_own_agent_and_the_builtins_follow_its_setting() -> None:
     for kind, role in sdk_adapter.ROLES.items():
-        offered = options(kind=kind)
-        assert [(a["name"], a["infer"]) for a in offered["custom_agents"]] == [(f"owlbear-{role}", False)]
-        assert offered["excluded_builtin_agents"] == list(sdk_adapter.BUILTINS)
-    assert "general-purpose" in sdk_adapter.BUILTINS
+        off, on = options(kind=kind), options(kind=kind, subagents=True)
+        for offered in (off, on):
+            assert [(a["name"], a["infer"]) for a in offered["custom_agents"]] == [(f"owlbear-{role}", False)]
+        assert (off["excluded_builtin_agents"], on["excluded_builtin_agents"]) == (list(subagents.BUILTINS), [])
+        granted = [o["custom_agents"][0]["tools"] for o in (off, on)]
+        assert [subagents.LAUNCHER in g for g in granted] == [False, True]
+    assert "general-purpose" in subagents.BUILTINS

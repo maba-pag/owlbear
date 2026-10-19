@@ -22,6 +22,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.settings.config import Agent
 from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
 from owlbear_delivery_next.state_store.store import Store
@@ -304,6 +305,17 @@ def unsaved_edits_keep_the_page(page, here: str) -> None:
     expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
 
 
+def a_role_s_subagents_are_switched_off_and_saved(page, store: Store) -> None:
+    """TD-376: the per-role choice is saved as a switch, not as its text."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page.get_by_label("Built-in subagents, reviewer").select_option("false")
+    expect(page.locator("#pending")).to_contain_text("reviewer subagents: inherited → false")
+    page.get_by_role("button", name="Save project settings").click()
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+    assert store.read_config().agents["reviewer"].subagents is False
+
+
 @pytest.mark.browser
 def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(tmp_path: Path, shared_repo) -> None:
     """TD-243: the global value and its source beside each project's differing value; the scope names Global and
@@ -327,11 +339,11 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             expect(across).to_contain_text("(built-in default)")
             expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
             expect(across).not_to_contain_text("docs-site")
-            expect(across).not_to_contain_text("explore")
+            expect(across).not_to_contain_text("planner · subagents")
             page.get_by_label("Show all settings").check()  # every setting, those nobody sets apart too (TD-295)
-            expect(across.get_by_text("explore", exact=True)).to_have_count(1)
+            expect(across.get_by_text("agents · planner · subagents", exact=True)).to_have_count(1)
             page.get_by_label("Show all settings").uncheck()
-            expect(across).not_to_contain_text("explore")
+            expect(across).not_to_contain_text("planner · subagents")
             expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
             machine_settings_are_saved_and_a_stale_save_is_refused(page)
             scope = page.get_by_label("Layer")
@@ -341,14 +353,16 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(t
             page.get_by_label("Rounds at most, builder").fill("4")
             unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}")
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
-            docs.update_config(lambda layer: layer.model_copy(update={"explore": True}))  # another page saved first
+            off = {"agents": {"planner": Agent(subagents=False)}}
+            docs.update_config(lambda layer: layer.model_copy(update=off))  # another page saved first
             page.get_by_role("button", name="Save project settings").click()
             expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
             page.get_by_role("button", name="Save project settings").click()
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
-            expect(across).to_contain_text("docs-site: yes")  # the overview follows the save
+            expect(across).to_contain_text("docs-site: no")  # the overview follows the save
             expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
             expect(across).to_contain_text("docs-site: 4")
+            a_role_s_subagents_are_switched_off_and_saved(page, docs)
             page.goto(f"{base}/config?project={DOCS}")
             scope.select_option(f"go:{SHOP}")
             expect(page).to_have_url(f"{base}/config?project={SHOP}")

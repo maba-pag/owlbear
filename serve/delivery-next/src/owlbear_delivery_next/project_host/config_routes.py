@@ -58,6 +58,9 @@ APPLIED = [
     "agents.updater.minutes",
     "pr_labels",
     "pr_marker",
+    *(f"agents.{role}.subagents" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
+    "agents.preparer.subagents",
+    "agents.updater.subagents",  # TD-376; the shaper's chat runs in VS Code, not as a step
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end
 

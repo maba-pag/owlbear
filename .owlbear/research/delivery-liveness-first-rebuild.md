@@ -1021,10 +1021,10 @@ TD-197.
 
 **Rows:** decided TD-53, TD-111, TD-116, TD-129, TD-178, TD-195, TD-344, TD-374, TD-375, TD-377; autonomous TD-376.
 
-- Every role may start any built-in subagent, in read-only steps too under the same read-only guard; that the guard
-  reaches subagents is proven when built [TD-82, TD-374, TD-375].
-- Each subagent stays monitored (agent, model, tokens, credits, duration) and use is measured per role
-  [TD-129, TD-195, TD-344, TD-374, TD-376].
+- Every role may start any built-in subagent, in read-only steps too under the same read-only guard, which a live run
+  proved reaches a subagent's writes (2026-10-19) [TD-82, TD-374, TD-375].
+- Each subagent stays monitored (agent, model, tokens, credits, duration) and use is measured per role on the
+  Maintenance page; Settings switch it per role, on by default [TD-129, TD-195, TD-344, TD-374, TD-376].
 - A subagent may use any named model; one on Auto voids the step; other models are logged. The main agent is
   checked against its own model [TD-53, TD-377].
 

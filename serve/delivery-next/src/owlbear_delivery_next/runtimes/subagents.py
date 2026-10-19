@@ -1,8 +1,9 @@
-"""Built-in subagents (TD-129): which one a session may start, and what each did.
+"""Built-in subagents (TD-129, TD-374): whether a session may start them, and what each did.
 
 Every SDK session is watched: agent, model, tokens, tool calls, credits and duration per subagent, unknown kept apart
-from zero. Only an SDK planner session with the experiment enabled may start a subagent, and then only one genuine
-built-in `explore` at a time; any other start voids the step, and Auto stays a wrong model (TD-53).
+from zero. A session whose role's setting is on (the default) may start any built-in subagent the runtime offers, in
+read-only steps too, under the step's own permission check (TD-375, TD-376); any other start voids the step, and Auto
+stays a wrong model (TD-53).
 """
 
 from __future__ import annotations
@@ -11,10 +12,11 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from owlbear_delivery_next.change_contracts.models import StepKind
-
-ALLOWED = "explore"  # the one built-in the experiment admits (TD-129)
-LAUNCHER = "task"  # the runtime tool that starts a subagent; without it an admitted explore cannot start (live)
+BUILTINS = (  # the runtime's own subagents (benchmark 2026-10-15); a role whose setting is off excludes them all
+    *("explore", "task", "code-review", "rubber-duck", "research", "rem-agent", "security-review"),
+    "general-purpose",
+)
+LAUNCHER = "task"  # the runtime tool that starts a subagent; without it none can start (live, TD-129)
 
 
 @dataclass
@@ -35,31 +37,25 @@ class Seen:
     models: list[str] = field(default_factory=list)  # the models its calls billed
 
 
-def eligible(kind: StepKind, role: str, *, enabled: bool) -> bool:
-    """Whether a session may start the allowed built-in: an enabled SDK planner, never a judge or builder."""
-    return enabled and kind == StepKind.PLAN and role == "planner"
-
-
 class Watch:
     """The subagents of one SDK session, keyed by the tool call that started each."""
 
     def __init__(self, *, allowed: bool) -> None:
-        """*allowed*: this session may start one ``explore`` at a time."""
-        self.allowed, self.seen, self.active = allowed, dict[str, Seen](), set[str]()
+        """*allowed*: this session may start built-in subagents, several at once."""
+        self.allowed, self.seen = allowed, dict[str, Seen]()
 
     def started(self, data: Any) -> str:  # noqa: ANN401 - SDK subagent event data
         """Register a start; why it voids the step ("auto" for a wrong model), or "" when it is allowed."""
         cid, name = getattr(data, "tool_call_id", "") or "", getattr(data, "agent_name", "") or ""
         model = getattr(data, "model", None)
-        ok = self.allowed and name == ALLOWED and not self.active and bool(cid)
+        ok = self.allowed and name in BUILTINS and bool(cid)
         self.seen[cid] = Seen(name, model, datetime.now(UTC).isoformat(timespec="seconds"), ok)
         if model and model.lower() == "auto":
             return "auto"
         if ok:
-            self.active.add(cid)
             return ""
-        if self.allowed and name == ALLOWED and self.active:
-            return f"{name} started while another runs; one at a time"
+        if self.allowed:
+            return f"a subagent started: {name or 'unnamed'}; only a built-in with a call id may run"
         return f"a subagent started: {name}; no subagent may run"
 
     def owns(self, parent: str | None) -> bool:
@@ -76,7 +72,6 @@ class Watch:
         s.tokens, s.tool_calls = getattr(data, "total_tokens", None), getattr(data, "total_tool_calls", None)
         took = getattr(data, "duration", None)
         s.seconds = took.total_seconds() if took is not None else None
-        self.active.discard(cid)
         return {"call": cid, **asdict(s)}
 
     def call(self, data: Any) -> bool:  # noqa: ANN401 - SDK usage event data

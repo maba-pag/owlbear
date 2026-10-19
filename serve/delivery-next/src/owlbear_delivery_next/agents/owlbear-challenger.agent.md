@@ -51,6 +51,9 @@ tool, go on without it.
 - Reading: `view`, `glob`, `grep`: open files, find paths and search the code the brief or plan cites.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`): lessons for agent `challenger`, before you start.
 - Results: `submit_result`, `report_wrong_premise`, `report_missing_tool`: how you end, under Output format.
+- `task`, while your role's subagent setting is on (the default): start a built-in subagent, such as explore,
+  research or code-review, for a bounded side question and wait for its answer. It works under your step's
+  read-only permissions, and Delivery records what it did.
 - Not granted: `ask_question`, `save_memory`. You answer with your verdict, never with a question.
 
 </tools>

@@ -63,6 +63,11 @@ def limit(settings: Settings, session: str) -> float:
     return settings.agents[SESSIONS[session]].minutes * 60.0
 
 
+def subagents(settings: Settings, session: str) -> bool:
+    """Whether a session of this kind or reviewer label may start built-in subagents (TD-374, TD-376)."""
+    return settings.agents[SESSIONS[session]].subagents
+
+
 def parse(text: str) -> tuple[Role, RoleModel]:
     """``ROLE=MODEL:EFFORT``.
 

@@ -1,6 +1,7 @@
-"""Built-in subagents (TD-129): monitoring per subagent and the experiment's one allowed `explore`, by event replay."""
+"""Built-in subagents (TD-129, TD-374..TD-377): monitoring per subagent and each role's switch, by event replay."""
 
 import dataclasses
+import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -10,9 +11,9 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKi
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, session_result
+from owlbear_delivery_next.runtimes import sdk_adapter, sdk_usage, session_result, subagents
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import config, roles
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -20,12 +21,12 @@ PLANNER, HELPER = "claude-opus-5.5", "claude-haiku-5.5"
 
 
 def step(
-    tmp_path, *, kind: StepKind = StepKind.PLAN, explore: bool = True, role: str = "", limit: float | None = None
+    tmp_path, *, kind: StepKind = StepKind.PLAN, allowed: bool = True, role: str = "", limit: float | None = None
 ) -> sdk_adapter._Step:
     log: list[dict] = []
     cfg = sdk_adapter.Session(
         kind, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path), observe=lambda: Worktree("a", "a"),
-        checks=(), model=PLANNER, explore=explore, role=role, journal=sdk_adapter.Journal(event=log.append),
+        checks=(), model=PLANNER, subagents=allowed, role=role, journal=sdk_adapter.Journal(event=log.append),
         credit_limit=limit,
     )  # fmt: skip
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
@@ -46,10 +47,10 @@ def usage(parent: str | None, nano: float | None, model: str = HELPER) -> Simple
     return event("assistant.usage", model=model, parent_tool_call_id=parent, is_auto=False, copilot_usage=billed)
 
 
-def test_an_enabled_planner_runs_one_explore_and_each_of_its_calls_is_counted(tmp_path):
+def test_an_allowed_role_runs_a_builtin_and_each_of_its_calls_is_counted(tmp_path):
     st = step(tmp_path)
-    assert "explore" not in st.options()["excluded_builtin_agents"]
-    assert "task" in st.options()["custom_agents"][0]["tools"]  # the launcher, or explore can never start (live)
+    assert st.options()["excluded_builtin_agents"] == []
+    assert "task" in st.options()["custom_agents"][0]["tools"]  # the launcher, or none can ever start (live)
     for ev in (
         started("c1"),
         event("assistant.message", content="", model=HELPER, parent_tool_call_id="c1"),
@@ -84,17 +85,32 @@ def test_a_call_whose_credits_are_not_reported_is_unknown_not_zero(tmp_path):
     assert (seen["credits"], seen["credits_known"], seen["outcome"]) == (0.0, False, "unfinished")
 
 
+def test_several_builtins_may_run_at_once_each_counted_as_its_own(tmp_path):
+    st = step(tmp_path, kind=StepKind.REVIEW, role="challenger")  # a read-only judge too (TD-375)
+    luna = "gpt-6-luna"
+    for ev in (
+        started("c1", "code-review"), started("c2", "general-purpose", luna), usage("c1", 1e9), usage("c2", 2e9, luna)
+    ):  # fmt: skip
+        st.on_event(ev)
+    assert st.gate.done is False
+    assert [(s["agent"], s["allowed"], s["credits"]) for s in st.watch.report()] == [
+        ("code-review", True, 1.0), ("general-purpose", True, 2.0)
+    ]  # fmt: skip
+    billed = {"models": {m: {"tokens": 1} for m in (PLANNER, HELPER, luna, "claude-sonnet-5")}}
+    unexpected = set(sdk_usage.unexpected_models({"models": {}}, billed, PLANNER)) - st.watch.child_models()
+    assert unexpected == {"claude-sonnet-5"}  # TD-377: each subagent's own model is logged, any other still found
+
+
 @pytest.mark.parametrize(
     ("events", "detail"),
     [
-        ([started("c1"), started("c2")], "explore started while another runs; one at a time"),
-        ([started("c1", "general-purpose")], "a subagent started: general-purpose; no subagent may run"),
-        ([started("c1", "research")], "a subagent started: research; no subagent may run"),
+        ([started("c1", "my-agent")], "a subagent started: my-agent; only a built-in with a call id may run"),
+        ([started("", "explore")], "a subagent started: explore; only a built-in with a call id may run"),
         ([started("c1", model="auto")], "wrong model: a subagent ran on auto"),
-        ([usage("c9", 1e9, PLANNER)], "a subagent ran; no subagent may run"),  # a parent nobody started
+        ([usage("c9", 1e9, PLANNER)], "a subagent ran; no allowed start announced it"),  # a parent nobody started
     ],
 )
-def test_anything_beyond_one_explore_still_voids_the_step(tmp_path, events, detail):
+def test_anything_but_a_builtin_still_voids_the_step(tmp_path, events, detail):
     st = step(tmp_path)
     for ev in events:
         st.on_event(ev)
@@ -102,18 +118,19 @@ def test_anything_beyond_one_explore_still_voids_the_step(tmp_path, events, deta
 
 
 @pytest.mark.parametrize(
-    ("kind", "role", "explore"),
+    ("kind", "role"),
     [
-        (StepKind.PLAN, "", False),  # the setting is off
-        (StepKind.BUILD, "", True),  # never a builder
-        (StepKind.REVIEW, "", True),
-        (StepKind.REVIEW, "challenger", True),  # nor a judge
-        (StepKind.PLAN, "challenger", True),  # a plan challenge runs with the planner's step kind
+        (StepKind.PLAN, ""),
+        (StepKind.BUILD, ""),
+        (StepKind.REVIEW, ""),
+        (StepKind.REVIEW, "challenger"),
+        (StepKind.CHECK, ""),
+        (StepKind.BUILD, "updater"),
     ],
 )
-def test_only_an_enabled_planner_may_start_one(tmp_path, kind, role, explore):
-    st = step(tmp_path, kind=kind, explore=explore, role=role)
-    assert "explore" in st.options()["excluded_builtin_agents"]
+def test_a_role_whose_setting_is_off_may_start_none(tmp_path, kind, role):
+    st = step(tmp_path, kind=kind, allowed=False, role=role)
+    assert st.options()["excluded_builtin_agents"] == list(subagents.BUILTINS)
     assert "task" not in st.options()["custom_agents"][0]["tools"]
     st.on_event(started("c1"))
     assert (st.run.ending, st.run.detail) == ("error", "a subagent started: explore; no subagent may run")
@@ -151,12 +168,24 @@ def test_a_reached_limit_stops_for_the_owner_and_is_never_waited_out_as_a_quota(
     )  # fmt: skip
 
 
-def test_the_experiment_is_off_by_default_and_a_project_off_overrides_a_global_on():
-    assert config.resolve(None, config.Layer()).explore is False
-    on = config.GlobalLayer(explore=True)
-    assert config.resolve(on, config.Layer()).explore is True
-    resolved = config.resolve(on, config.Layer(explore=False))
-    assert (resolved.explore, resolved.sources["explore"]) == (False, "project")
+def test_every_role_s_switch_is_on_by_default_and_a_project_off_overrides_a_global_on():
+    settings = config.resolve(None, config.Layer())
+    assert all(roles.subagents(settings, label) for label in roles.SESSIONS)
+    on = config.GlobalLayer(agents={"builder": config.Agent(subagents=True)})
+    resolved = config.resolve(on, config.Layer(agents={"builder": config.Agent(subagents=False)}))
+    assert (roles.subagents(resolved, StepKind.BUILD), resolved.sources["agents.builder.subagents"]) == (
+        False, "project"
+    )  # fmt: skip
+    assert roles.subagents(resolved, "pack-update")  # another role keeps its own value
+
+
+def test_the_experiment_switch_of_format_5_is_dropped_on_read(tmp_path):
+    store = Store(tmp_path / "store")
+    path = store.config_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"format": 5, "explore": True, "agents": {"planner": {"effort": "low"}}}))
+    layer = store.read_config()
+    assert (layer.format, layer.agents["planner"].effort, "explore" in layer.model_dump()) == (6, "low", False)
 
 
 def test_the_breakdown_rides_on_the_step_event_and_never_adds_to_the_spend(tmp_path):

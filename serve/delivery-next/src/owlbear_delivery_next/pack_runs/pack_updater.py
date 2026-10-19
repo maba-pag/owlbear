@@ -130,7 +130,7 @@ def config(  # noqa: PLR0913 - one session: its worktree, id, message, resume, f
         policy=Policy(at, write=True, confined=True), observe=lambda: tools.Worktree("", ""), checks=(),
         submit=UPDATE, rejectable=keys[0], settled=keys[1], model=role.model, effort=role.effort,
         context=role.context, role="updater", fresh=fresh, journal=sdk_adapter.Journal(replaced=replaced),
-        limit=roles.limit(store.settings(), LABEL),
+        limit=roles.limit(store.settings(), LABEL), subagents=roles.subagents(store.settings(), LABEL),
     )  # fmt: skip
 
 
