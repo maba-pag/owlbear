@@ -672,11 +672,13 @@ def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criteri
     planned = next(t for t in back.plan.tasks if t.origin != "review")
     told, plain = (step_input.build(back, t, flow.clone, []) for t in (fix, planned))
     assert (step_input.OWNER_NOTE in told, step_input.OWNER_NOTE in plain) == (True, False)  # TD-340: or held
+    assert "unless it contradicts a criterion or non-goal of the approved brief" in step_input.OWNER_NOTE
+    assert "`ask_question`" in step_input.OWNER_NOTE
     [criterion] = back.owner_criteria
     assert (criterion.id, criterion.text, criterion.round) == ("owner-1", "More air", kept.number)
-    assert "owner-1: More air" in step_input.visual(
-        back, [("home", 1280, "home-1280.png")]
-    )  # every later review checks it
+    later = step_input.visual(back, [("home", 1280, "home-1280.png")])
+    assert "owner-1: More air" in later  # every later review checks it
+    assert "An owner's criterion that contradicts the brief or a state's expectation is no finding" in later
     client = TestClient(
         api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
     )

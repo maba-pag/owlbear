@@ -335,7 +335,9 @@ def visual(
                 "doubt. Do not invent requirements the expectation does not state. "
                 "Findings also for a layout that is "
                 "broken at that width (overlap, cut-off or unreadable content), or one that misses an owner's "
-                "criterion. Place: the screenshot file name. "
+                "criterion. An owner's criterion that contradicts the brief or a state's expectation is no finding: "
+                "use verdict unsure with a doubt naming both, so the owner decides (TD-340). Place: the screenshot "
+                "file name. "
                 "covered_paths: every screenshot file name you looked at. If only the owner can decide whether a "
                 "screenshot is right, use verdict unsure with a doubt per screenshot instead of guessing."
             ),
