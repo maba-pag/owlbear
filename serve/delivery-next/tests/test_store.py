@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 import subprocess
@@ -110,6 +111,32 @@ def test_a_store_in_the_clone_moves_to_its_folder_once_and_older_runtimes_refuse
     (folder / "late.json").write_text("{}")
     with pytest.raises(StoreError, match="both exist"):
         Store.open(repo)
+
+
+def test_a_move_across_volumes_copies_first_and_old_locks_and_racing_ids_never_split_the_store(repo, monkeypatch):
+    """Sol: a stale lock an older process made is dropped; an id another opener created first is the one used."""
+    folder = repo / ".git" / "owlbear-delivery"
+    (folder / "changes" / "c1").mkdir(parents=True)
+    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
+    (folder / "delivery.db").write_text("db")
+    real = os.rename
+
+    def across(src, dst):
+        if str(src).startswith(str(folder)):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        real(src, dst)
+
+    monkeypatch.setattr(project_home.os, "rename", across)
+    monkeypatch.setattr(project_home.secrets, "token_hex", lambda _n: "mine")
+    (folder / "clone-id").write_text("theirs\n")  # another opener linked its id first
+    root = Store.open(repo).root
+    assert (root.name, (root / "delivery.db").read_text(), (root / "changes" / "c1" / "runner.log").read_text()) == (
+        "theirs", "db", "ran\n"
+    )  # fmt: skip
+    assert sorted(p.name for p in folder.iterdir() if p.name != "move.lock") == ["clone-id", "format"]
+    (root / "migrate.lock").touch()
+    (folder / "migrate.lock").write_text("")  # an older chat server's fallback made it again
+    assert (Store.open(repo).root, (folder / "migrate.lock").exists()) == (root, False)
 
 
 @pytest.mark.parametrize(("marker", "action"), [("99\n", "Upgrade OwlBear"), ("x\n", "Restore the previous state")])

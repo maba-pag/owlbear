@@ -7,6 +7,7 @@ A store still in the clone moves to its folder once, on first open; a move cut s
 
 from __future__ import annotations
 
+import errno
 import os
 import secrets
 import shutil
@@ -44,20 +45,23 @@ def clone_id(folder: Path) -> str | None:
 
 
 def ensure_id(folder: Path) -> str:
-    """The clone's id: reused when present, else created once with ``O_EXCL``; never rewritten."""
+    """The clone's id: reused when present, else created once, whole, by a hard link; never rewritten."""
     folder.mkdir(mode=0o700, exist_ok=True)
     if found := clone_id(folder):
         return found
     new = secrets.token_hex(8)
+    draft = folder / f".tmp-{CLONE_ID}-{new}"
+    atomic_write(draft, new + "\n")
     try:
-        fd = os.open(folder / CLONE_ID, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    except FileExistsError:  # another process created it first
-        return clone_id(folder) or new
-    with os.fdopen(fd, "w") as out:
-        out.write(new + "\n")
-        out.flush()
-        os.fsync(out.fileno())
-    return new
+        os.link(draft, folder / CLONE_ID)  # appears with its content, or not at all
+    except FileExistsError:
+        pass  # another opener's id came first
+    finally:
+        draft.unlink()
+    if found := clone_id(folder):
+        return found
+    msg = f"{folder / CLONE_ID} is empty: remove it, then start again"
+    raise StoreError(msg)
 
 
 def home(pid: str) -> Path:
@@ -79,6 +83,44 @@ def current(cwd: Path) -> Path | None:
         return folder  # not moved yet: an older host may run on it
     pid = clone_id(folder)
     return home(pid) if pid else None
+
+
+def _sync(path: Path) -> None:
+    """Flush *path* to disk: a file, or a folder with everything in it."""
+    paths = [path] if not path.is_dir() else [path, *path.rglob("*")]
+    for p in paths:
+        if p.is_symlink():
+            continue
+        fd = os.open(p, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def _move(path: Path, to: Path) -> None:
+    """Move *path* to *to*: a rename on one volume; across volumes a flushed copy first, then the source goes."""
+    try:
+        path.rename(to)
+    except OSError as exc:
+        if exc.errno != errno.EXDEV:
+            raise
+        part = to.with_name(f"{to.name}.partial")
+        if part.is_dir():
+            shutil.rmtree(part)
+        part.unlink(missing_ok=True)
+        if path.is_dir():
+            shutil.copytree(path, part, symlinks=True)
+        else:
+            shutil.copy2(path, part)
+        _sync(part)
+        part.rename(to)
+        _sync(to.parent)
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    _sync(to.parent)
 
 
 def located(cwd: Path) -> Path:
@@ -106,10 +148,16 @@ def located(cwd: Path) -> Path:
     try:
         target.mkdir(mode=0o700, parents=True, exist_ok=True)
         for path in _left(folder):
-            if (target / path.name).exists():
-                msg = f"{path} and {target / path.name} both exist: move one away, then start again"
+            if path.name.endswith(".lock") and path.is_file():
+                path.unlink()  # a lock holds no state; an older process may have made it again
+            elif (target / path.name).exists():
+                msg = (
+                    f"{path} and {target / path.name} both exist: an older OwlBear process may still use the clone; "
+                    "reload its VS Code windows, move one of them away, then start again"
+                )
                 raise StoreError(msg)
-            shutil.move(path, target / path.name)
+            else:
+                _move(path, target / path.name)
         if (folder / MARKER).exists() and not (target / MARKER).exists():
             shutil.copy2(folder / MARKER, target / MARKER)
         atomic_write(folder / MARKER, f"{STORE_FORMAT}\n")  # an older runtime refuses the clone's folder
