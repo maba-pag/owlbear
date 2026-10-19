@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval, IntentItem
-from owlbear_delivery_next.change_contracts.models import FORMAT, Brief, Change
+from owlbear_delivery_next.change_contracts.models import Brief, Change
 from owlbear_delivery_next.commands.mcp_server import Chat
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import ImportWaitingError, Project
@@ -41,7 +41,7 @@ def legacy(root: Path, *, acked: bool = False) -> Path:
     """A store as the file format left it: a Change with its previous record, an inbox, activity and handles."""
     folder = root / "changes" / "c1"
     (folder / "inbox").mkdir(parents=True)
-    (root / "format").write_text(f"{FORMAT}\n")
+    (root / "format").write_text(f"{FILE_ERA}\n")
     old = Change(slug="c1", brief=Brief(version=1, challenged=1))
     item = BriefApproval(at=NOW, version=1).model_dump_json()
     (folder / "inbox" / "00000000000000000001-aaaaaaaa.json").write_text(item)
@@ -214,7 +214,7 @@ def test_a_store_on_a_network_disk_is_refused_before_anything_is_written(tmp_pat
     with pytest.raises(StoreError, match="not on a local disk"):
         Store(tmp_path / "old").db.import_files()
     assert ((tmp_path / "old" / "format").read_text(), (tmp_path / "fresh" / database.DB).exists()) == (
-        f"{FORMAT}\n", False
+        f"{FILE_ERA}\n", False
     )  # fmt: skip
 
 
