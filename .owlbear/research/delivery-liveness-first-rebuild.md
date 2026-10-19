@@ -704,7 +704,7 @@ TD-65.
 - TD-288, 2026-10-18: "option 4, plus a global setting if to update while paused and if to update while idle"
 - TD-350, 2026-10-18: "only a login start and after a crash owlbear is paused"
 - TD-351, 2026-10-18: "The pause holds Delivery's automatic work on Changes"
-- TD-397, 2026-10-19: "its a regular change, therefore it doesnt run"
+- TD-397, 2026-10-19: "You can start it while paused; its dialog says its steps wait for Resume"
 
 **Replaced:** TD-259 by TD-350; TD-282 by TD-350, TD-351; TD-283 by TD-350, TD-351; TD-288 by TD-352; TD-304 by
   TD-352; TD-313 by TD-350.
@@ -914,9 +914,8 @@ TD-197.
   the entry waits unused in its project until curated [TD-293].
 - The owner makes a curated or approved entry global on the Memory page; it moves, and can be moved back to its
   project [TD-292].
-- Above one Global confidence threshold (95% at first) the curator decides alone, Make global included; below it,
-  it asks in interactive mode and skips in automatic mode; interactive sessions propose Make global
-  [TD-292, TD-293, TD-400].
+- Above one Global confidence threshold (95% at first) the curator decides alone, Make global included; below it, it
+  asks (interactive mode) or skips (automatic mode); interactive sessions propose Make global [TD-292, TD-293, TD-400].
 - The watcher may save pending, role-scoped lessons about observed agent behaviour, curated like other memory
   [TD-100].
 
@@ -1043,7 +1042,7 @@ TD-197.
 - TD-152, 2026-10-15: "you removed too much … not over but also not undercompensate"
 - TD-153, 2026-10-15: "Sol's rule; Failed needs a note"
 - TD-154, 2026-10-15: "Sol: inline summary; dialog only for global"
-- TD-396, 2026-10-19: "all saves confirm, yes"
+- TD-396, 2026-10-19: "Every Settings save confirms in a dialog naming its layer and changes"
 
 **Replaced:** TD-154 by TD-396.
 

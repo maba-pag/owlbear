@@ -64,7 +64,7 @@ the table lists the items in their order.
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Not started |
 | 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Not started |
 | 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Not started; any time before item 12 |
-| 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](self-update-build.md) | After items 1 to 7 and 11 |
+| 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](self-update-build.md) | After items 1, 6, 2, 3, 4, 7 and 11 |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | none yet | Not started; no design |
 | 9 | Watcher: TD-27's benchmark, then the design session (O1–O6) with the owner, then the build and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Not started; the draft needs revising (§3.5) |
@@ -137,7 +137,7 @@ The PDS fallback goes as the [visual-baseline plan §3.6](delivery-next-visual-b
 decision, the `pds` flag, every native-control branch, the `.no-pds` CSS and its notice; the browser tests let
 `cdn.ui.porsche.com` through instead of aborting it (TD-398). Then the module test covers pages, scripts and styles
 and the large pages split by section (TD-401): `changes.html` 1517 lines, `config.html` 1121, `backlog.html` 544.
-v1.0 is the first merge labelled `release:major` after items 1 to 7 and 11; it is tagged `v1.0` and `v1`.
+v1.0 is the first merge labelled `release:major` after items 1, 6, 2, 3, 4, 7 and 11; it is tagged `v1.0` and `v1`.
 
 ### 3.5 Items 8 and 9: gate, then watcher
 
