@@ -32,7 +32,6 @@ _QUALITY_TREE = (
     "      lint-cockpit",
     "        lint-cockpit-biome",
     "        lint-cockpit-html",
-    "    megalint",
     "    typecheck-cockpit",
     "    todo",
 )
@@ -119,7 +118,6 @@ def test_consumer_help_hides_development_commands(tmp_path: object, monkeypatch:
     assert any(line.startswith("  lint ") for line in output.splitlines())
     assert "format" not in output
     assert not any(line.startswith("  quality") for line in output.splitlines())
-    assert "megalint" not in output
     assert "Tests:" not in output
     assert "Topics: w (workspace), q (quality)." in output
     assert "maintenance (m)" not in output

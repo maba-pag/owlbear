@@ -1,13 +1,13 @@
 ---
-description: "Review criteria for GitHub's built-in Copilot pull-request reviewer"
+description: "Review criteria for GitHub's built-in Copilot pull-request reviewer and CodeRabbit"
 applyTo: "**"
 excludeAgent: "cloud-agent"
 ---
 
 # GitHub Copilot Code Review
 
-Scope: GitHub's built-in pull-request reviewer. In other environments, follow that environment's
-review or implementation instructions.
+Scope: GitHub's built-in pull-request reviewer and CodeRabbit, which `.coderabbit.yaml` points here. In
+other environments, follow that environment's review or implementation instructions.
 
 - Evaluate the changed behavior against the requested outcome and relevant acceptance criteria.
   Use plans referenced by the task to establish its scope. Read the owning implementation and
@@ -22,7 +22,7 @@ review or implementation instructions.
   is not proof of a bug; request additional evidence only for a concrete unresolved claim.
 - Recheck earlier findings against the current code before retaining or dismissing them.
 - If execution is available and needed, use the smallest affected check. Never run the whole
-  OwlBear suite, MegaLinter, `uv run megalint`, `uv run quality`, or heavy aggregate wrappers.
+  OwlBear suite, `uv run quality`, or heavy aggregate wrappers.
 - Use available source and in-process test evidence. Record unavailable checks and their limits;
   fixture results establish only the behavior and environment they exercise. Keep credentials,
   live services and permissions unchanged.

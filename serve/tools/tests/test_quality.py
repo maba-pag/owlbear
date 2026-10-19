@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_tools.megalinter import MegaLinterImage, megalint
 from owlbear_tools.quality import (
     FixMode,
     _consumer_lint,
@@ -25,8 +24,6 @@ from owlbear_tools.quality import (
 )
 from owlbear_tools.quality_runtime import _call
 
-_TEST_IMAGE = MegaLinterImage(reference="registry.example/megalinter-main:v-current")
-
 
 def test_lint_runs_the_normal_local_suite() -> None:
     with (
@@ -37,13 +34,15 @@ def test_lint_runs_the_normal_local_suite() -> None:
         lint()
 
     commands = [item.args[0] for item in call.call_args_list]
+    manual = ["--hook-stage", "manual", "--all-files"]
     assert commands == [
-        ["pre-commit", "run", "ruff-fix", "--all-files"],
-        ["pre-commit", "run", "markdownlint-fix", "--all-files"],
-        ["pre-commit", "run", "yamllint", "--all-files"],
-        ["pre-commit", "run", "shellcheck", "--all-files"],
-        ["pre-commit", "run", "actionlint", "--all-files"],
-        ["pre-commit", "run", "editorconfig-checker", "--all-files"],
+        ["pre-commit", "run", "ruff-fix", *manual],
+        ["pre-commit", "run", "markdownlint-fix", *manual],
+        ["pre-commit", "run", "yamllint", *manual],
+        ["pre-commit", "run", "shellcheck", *manual],
+        ["pre-commit", "run", "actionlint", *manual],
+        ["pre-commit", "run", "zizmor", *manual],
+        ["pre-commit", "run", "editorconfig-checker", *manual],
         ["node", "serve/cockpit/web/scripts/run-biome-check.mjs", "check", ".", "--write"],
         ["npm", "run", "lint:html"],
     ]
@@ -85,11 +84,7 @@ def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
 
 
 def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
-    for option, hook, manual in (
-        ([], "ruff-fix", False),
-        (["--no-fix"], "ruff-check", True),
-        (["--unsafe-fix"], "ruff-unsafe-fix", True),
-    ):
+    for option, hook in (([], "ruff-fix"), (["--no-fix"], "ruff-check"), (["--unsafe-fix"], "ruff-unsafe-fix")):
         with (
             patch.object(sys, "argv", ["lint-python", *option]),
             patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
@@ -97,13 +92,7 @@ def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
         ):
             lint_python()
 
-        command = call.call_args.args[0]
-        assert command[:3] == ["pre-commit", "run", hook]
-        if manual:
-            assert "--hook-stage" in command
-            assert "manual" in command
-        else:
-            assert "--all-files" in command
+        assert call.call_args.args[0] == ["pre-commit", "run", hook, "--hook-stage", "manual", "--all-files"]
 
 
 @pytest.mark.parametrize(
@@ -135,34 +124,10 @@ def test_biome_formatter_preserves_selection_without_lint_fixes(*, staged: bool)
     assert call.call_args.args[0][2:] == ["format", *selection, "--write"]
 
 
-def test_megalint_runs_as_a_direct_workspace_engine() -> None:
-    with (
-        patch.object(sys, "argv", ["megalint", "--unsafe-fix"]),
-        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
-        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", None)),
-        patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        megalint()
-
-    command = call.call_args.args[0]
-    assert command[:6] == ["docker", "run", "--rm", "--platform", "linux/amd64", "-v"]
-    assert "registry.example/megalinter-main:v-current" in command
-    assert "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" in command
-    assert all(
-        f"{descriptor}_BIOME_ARGUMENTS=--unsafe" in command
-        for descriptor in ("CSS", "JAVASCRIPT", "JSON", "JSX", "TYPESCRIPT")
-    )
-    assert "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix" in command
-    assert "ACTION_ZIZMOR_ARGUMENTS=--fix=all" in command
-
-
-def test_quality_runs_local_lint_then_megalint() -> None:
+def test_quality_runs_format_then_lint_checks() -> None:
     with (
         patch.object(sys, "argv", ["quality", "--no-fix"]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
-        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
-        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", None)),
         pytest.raises(SystemExit, match="0"),
     ):
         quality()
@@ -170,8 +135,6 @@ def test_quality_runs_local_lint_then_megalint() -> None:
     commands = [item.args[0] for item in call.call_args_list]
     assert commands[0][:3] == ["pre-commit", "run", "ruff-format-check"]
     assert ["pre-commit", "run", "ruff-check"] in [command[:3] for command in commands]
-    megalint_command = next(command for command in commands if _TEST_IMAGE.reference in command)
-    assert "APPLY_FIXES=none" in megalint_command
 
 
 def test_quality_executes_todo_last() -> None:
@@ -194,11 +157,11 @@ def test_quality_executes_todo_last() -> None:
         "lint-markdown",
         "lint-yaml",
         "lint-shell",
-        "lint-actions",
+        "lint-actionlint",
+        "lint-zizmor",
         "lint-editorconfig",
         "lint-cockpit-biome",
         "lint-cockpit-html",
-        "megalint",
         "typecheck-cockpit",
         "todo",
     ]
@@ -388,17 +351,6 @@ def test_typecheck_reports_missing_runtime(capsys: pytest.CaptureFixture[str]) -
     assert "Error: npx unavailable" in capsys.readouterr().err
 
 
-def test_megalint_reports_invalid_configuration(capsys: pytest.CaptureFixture[str]) -> None:
-    with (
-        patch.object(sys, "argv", ["megalint", "--no-fix"]),
-        patch("owlbear_tools.megalinter.load_megalinter_image", side_effect=ValueError("invalid image")),
-        pytest.raises(SystemExit, match="2"),
-    ):
-        megalint()
-
-    assert "Error: invalid image" in capsys.readouterr().err
-
-
 def test_text_check_reports_malformed_precommit_config(capsys: pytest.CaptureFixture[str]) -> None:
     with (
         patch.object(sys, "argv", ["format-eof", "--no-fix"]),
@@ -410,7 +362,7 @@ def test_text_check_reports_malformed_precommit_config(capsys: pytest.CaptureFix
     assert "Error: invalid YAML" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", [lint, megalint, quality])
+@pytest.mark.parametrize("command", [lint, quality])
 def test_unsafe_and_no_fix_are_mutually_exclusive(command: object) -> None:
     with (
         patch.object(sys, "argv", ["command", "--no-fix", "--unsafe-fix"]),

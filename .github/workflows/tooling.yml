@@ -28,12 +28,11 @@ jobs:
       - name: Fingerprint inputs
         id: fingerprint
         run: |
-          value="$(git ls-files -s -- .github .mega-linter.yml .pre-commit-config.yaml .python-version \
+          value="$(git ls-files -s -- .github .pre-commit-config.yaml .python-version \
             .owlbear/scripts/diagrams share/diagrams biome.json package.json package-lock.json \
             pyproject.toml ':(glob)serve/*/pyproject.toml' serve/cockpit/web/.nvmrc \
             serve/cockpit/web/package.json serve/cockpit/web/package-lock.json \
-            serve/tools/src/owlbear_tools/dependency_ci.py serve/tools/src/owlbear_tools/megalinter.py \
-            serve/tools/tests/test_megalinter.py tests/test_archify_diagrams.py \
+            serve/tools/src/owlbear_tools/dependency_ci.py tests/test_archify_diagrams.py \
             tests/test_dependency_verification_workflow.py uv.lock | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
@@ -62,12 +61,13 @@ jobs:
             : > "$RUNNER_TEMP/tooling-paths"
             for output in \
               python node shared_node_runtime root_node diagrams pds precommit \
-              ruff_toolchain workflows megalinter renovate applicable compatibility
+              ruff_toolchain workflows renovate applicable compatibility
             do
               echo "$output=true" >> "$GITHUB_OUTPUT"
             done
           else
-            if [[ "$EVENT_NAME" == "push" ]]; then BASE_SHA="$(git rev-parse "$HEAD_SHA^1")"; fi  # a merge against its first parent
+            # a push is scoped by its merge against the first parent
+            if [[ "$EVENT_NAME" == "push" ]]; then BASE_SHA="$(git rev-parse "$HEAD_SHA^1")"; fi
             MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
             git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/tooling-paths"
             git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/tooling.diff"
@@ -103,12 +103,10 @@ jobs:
               .github/workflows/*|\
               .github/renovate.json|\
               .github/scripts/check_ruff_toolchain.py|\
-              .github/scripts/sync_megalinter_toolchain.py|\
               biome.json|\
               serve/cockpit/web/package.json|\
               serve/cockpit/web/package-lock.json|\
               serve/tools/src/owlbear_tools/dependency_ci.py|\
-              serve/tools/src/owlbear_tools/megalinter.py|\
               tests/test_dependency_verification_workflow.py)
                 proof_tooling=true
                 ;;
@@ -144,30 +142,22 @@ jobs:
 
       - name: Exercise dependency proof tooling
         if: steps.reuse.outputs.cache-hit != 'true' && steps.proof_tooling.outputs.proof_tooling == 'true'
-        run: uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py
+        run: uv run pytest -q tests/test_dependency_verification_workflow.py
 
       - name: Verify Ruff toolchain parity
         if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.ruff_toolchain == 'true'
         run: uv run python .github/scripts/check_ruff_toolchain.py
 
-      - name: Verify MegaLinter derived pins and locks
-        if: steps.reuse.outputs.cache-hit != 'true'
-        run: uv run --locked python .github/scripts/sync_megalinter_toolchain.py --check
-
       - name: Validate Renovate policy JSON
         if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.renovate == 'true'
         run: python3 -m json.tool .github/renovate.json >/dev/null
-
-      - name: Validate GitHub Actions workflows
-        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.workflows == 'true'
-        run: uv run pre-commit run actionlint --hook-stage manual --all-files
 
       - name: Setup Node.js
         if: >-
           steps.reuse.outputs.cache-hit != 'true' &&
           (steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true' ||
           steps.scope.outputs.root_node == 'true' || steps.scope.outputs.diagrams == 'true' ||
-          steps.scope.outputs.pds == 'true' || steps.scope.outputs.precommit == 'true')
+          steps.scope.outputs.pds == 'true')
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
@@ -243,9 +233,7 @@ jobs:
           done < "$RUNNER_TEMP/archify-diagrams.tsv"
 
       - name: Install locked Cockpit dependencies
-        if: >-
-          steps.reuse.outputs.cache-hit != 'true' &&
-          (steps.scope.outputs.pds == 'true' || steps.scope.outputs.precommit == 'true')
+        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.pds == 'true'
         run: npm ci --prefix serve/cockpit/web --engine-strict --no-audit --no-fund
 
       - name: Verify generated PDS assets
@@ -256,10 +244,6 @@ jobs:
           git status --porcelain --untracked-files=all -- public/porsche-design-system \
             | tee "$RUNNER_TEMP/pds-status"
           test ! -s "$RUNNER_TEMP/pds-status"
-
-      - name: Exercise updated pre-commit hooks
-        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.precommit == 'true'
-        run: uv run lint --no-fix
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'

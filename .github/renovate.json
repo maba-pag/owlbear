@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices", "security:minimumReleaseAgeNpm", "security:minimumReleaseAgePypi"],
+  "extends": ["config:best-practices", "security:minimumReleaseAgePypi", "customManagers:biomeVersions"],
   "baseBranchPatterns": ["main"],
   "timezone": "Europe/Berlin",
   "prConcurrentLimit": 0,
@@ -12,7 +12,6 @@
   "vulnerabilityAlerts": {
     "enabled": true,
     "groupName": "{{datasource}} security updates",
-    "schedule": ["* 9-12 * * 1,5"],
     "minimumReleaseAge": "6 hours",
     "prCreation": "immediate",
     "vulnerabilityFixStrategy": "highest",
@@ -70,12 +69,18 @@
       "minimumReleaseAge": "24 hours"
     },
     {
-      "description": "Give MegaLinter routine updates a one-day maturity floor",
-      "matchManagers": ["custom.regex", "github-actions"],
-      "matchDatasources": ["github-tags"],
-      "matchPackageNames": ["oxsecurity/megalinter"],
+      "description": "Lint toolchain: every pre-commit hook in one weekly pull request",
+      "matchManagers": ["pre-commit"],
       "matchUpdateTypes": ["minor", "patch"],
-      "minimumReleaseAge": "24 hours"
+      "groupName": "lint toolchain",
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Lint toolchain: Ruff and Biome join the hooks, so their parity checks see one version",
+      "matchPackageNames": ["ruff", "@biomejs/biome"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "lint toolchain",
+      "minimumReleaseAge": "3 days"
     },
     {
       "description": "Group integrity updates by ecosystem on Friday",
@@ -83,18 +88,6 @@
       "groupName": "{{datasource}} integrity updates",
       "schedule": ["* 9-12 * * 5"],
       "automerge": false
-    },
-    {
-      "description": "Derive Ruff and Biome pins from the proposed MegaLinter release in CI",
-      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit", "@biomejs/biome"],
-      "enabled": false
-    },
-    {
-      "description": "Keep native and action MegaLinter versions coupled",
-      "matchManagers": ["custom.regex", "github-actions"],
-      "matchDatasources": ["github-tags"],
-      "matchPackageNames": ["oxsecurity/megalinter"],
-      "groupName": "MegaLinter toolchain"
     },
     {
       "description": "Review Porsche Design System updates with refreshed self-hosted assets",
@@ -138,20 +131,6 @@
     "enabled": true
   },
   "customManagers": [
-    {
-      "customType": "regex",
-      "description": "MegaLinter native version; keep version match last for combination write-back",
-      "managerFilePatterns": ["/^\\.mega-linter\\.yml$/"],
-      "matchStringsStrategy": "combination",
-      "matchStrings": [
-        "MEGALINTER_FLAVOR:[ \\t]*[\\x22']?(?:all|(?<flavor>[a-z0-9_-]+))[\\x22']?[ \\t]*(?:#.*)?(?:\\r?\\n|$)",
-        "MEGALINTER_VERSION:[ \\t]*(?:\\x22|')?v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)(?:\\x22|')?"
-      ],
-      "extractVersionTemplate": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
-      "depNameTemplate": "oxsecurity/megalinter",
-      "datasourceTemplate": "github-tags",
-      "versioningTemplate": "semver"
-    },
     {
       "customType": "regex",
       "description": "Archify release asset and SHA-256 pin",
