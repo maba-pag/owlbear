@@ -73,8 +73,8 @@ def criteria(c: Change) -> dict[str, int]:
 
 
 def waived(c: Change, k: Criterion) -> str:
-    """A note on a criterion whose current version the owner accepted unmet (TD-341), else nothing."""
-    return " (the owner accepted it unmet as his decision)" if c.waived.get(k.id) == k.version else ""
+    """A note on a criterion the owner accepted unmet in this wording (TD-341), else nothing."""
+    return " (the owner accepted it unmet as his decision)" if c.waived.get(k.id) == k.text else ""
 
 
 def review_valid(c: Change, review: Review, paths: Mapping[str, str], changed: Iterable[str] | None = None) -> bool:

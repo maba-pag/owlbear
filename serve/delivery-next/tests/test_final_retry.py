@@ -216,13 +216,13 @@ def test_accepting_as_done_keeps_the_unmet_criteria_as_the_owners_decision(tmp_p
     c.loops[FINAL].findings[2].text = "y.txt:2: AC-1 not met - fix: f"
     store.write(Lock("c1"), c)
     done = answered(store, "accept")
-    assert done.waived == {"AC-1": 1}
+    assert done.waived == {"AC-1": "greets"}
     note = " (the owner accepted it unmet as his decision)"
     said = step_input.brief(done)
     assert (f"- AC-1: greets{note}" in said, "- AC-2: waves" in said) == (True, True)
     assert f"- AC-1: greets{note}\n- AC-2: waves" in publish._body(done, marker=False)  # noqa: SLF001
-    done.brief.criteria[0].version = 2  # an amended criterion is a requirement again
-    assert "- AC-1: greets" in step_input.brief(done)
+    done.brief.criteria[0].text = "greets twice"  # amended, or removed and added again in other words
+    assert "- AC-1: greets twice" in step_input.brief(done)
 
 
 def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_path, clone, monkeypatch):

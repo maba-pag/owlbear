@@ -163,7 +163,7 @@ def decided(c: Change, q: Question, target: str) -> None:
         go(c, StepKind.REVIEW, None, CLEAN if said.option == CLEAN else RETRY)  # the work is undone first
     elif target == "accept":
         if subject == FINAL:  # TD-341: the criteria its open findings report unmet, accepted as the owner's decision
-            c.waived |= {k.id: k.version for k in unmet(c, lp)}
+            c.waived |= {k.id: k.text for k in unmet(c, lp)}
         if task := next((t for t in c.plan.tasks if t.id == task_id), None) if c.plan else None:
             end(c, lp, task, "accepted")
     else:
