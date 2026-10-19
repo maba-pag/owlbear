@@ -1,8 +1,8 @@
 """The machine's registered projects (TD-242): ``~/.owlbear/machine.json``, written under ``machine.lock``.
 
-A project is a clone. Registering one writes only two things into it: its store directory and the store's
-``clone-id``, the project's id. Loading checks the id again, so a re-clone at the same path shows as replaced
-(Remove or Adopt) and never inherits the old registration.
+A project is a clone. Registering one writes only its Delivery folder into it, holding ``clone-id``, the project's id;
+the store itself lives in ``~/.owlbear/projects/<id>`` (TD-334). Loading checks the id again, so a re-clone at the
+same path shows as replaced (Remove or Adopt) and never inherits the old registration.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
-import secrets
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -22,13 +21,13 @@ from pydantic import Field, ValidationError
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.state_store.database import STORE_FORMAT
-from owlbear_delivery_next.state_store.store import STORE_DIR
+from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-MACHINE, LOCK, CLONE_ID = "machine.json", "machine.lock", "clone-id"
+MACHINE, LOCK = "machine.json", "machine.lock"
 MACHINE_FORMAT = 3  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions at once (TD-336)
 STALE = "the machine settings changed since this page loaded them"
 
@@ -147,8 +146,8 @@ def _owned(path: Path) -> None:
 
 
 def store_of(work: Path) -> Path:
-    """The store directory of the clone at *work*: ``<git common dir>/owlbear-delivery``."""
-    return _git(work, "rev-parse", "--git-common-dir") / STORE_DIR
+    """The clone's own Delivery folder at *work*: ``<git common dir>/owlbear-delivery``, its id and format marker."""
+    return _git(work, "rev-parse", "--git-common-dir") / project_home.STORE_DIR
 
 
 def canonical(path: Path) -> tuple[Path, Path]:
@@ -174,28 +173,19 @@ def canonical(path: Path) -> tuple[Path, Path]:
 
 
 def clone_id(store: Path) -> str | None:
-    """The id written into the clone's store, or None when there is none."""
+    """The id written into the clone's folder, or None when there is none."""
     try:
-        return (store / CLONE_ID).read_text().strip() or None
-    except FileNotFoundError:
-        return None
-    except (OSError, ValueError) as exc:
-        msg = f"{store / CLONE_ID} is unreadable"
-        raise RegistryError(msg) from exc
+        return project_home.clone_id(store)
+    except StoreError as exc:
+        raise RegistryError(str(exc)) from exc
 
 
 def _ensure_id(store: Path) -> str:
-    """The clone's id: reused when present, else created once with ``O_EXCL``; never rewritten."""
-    store.mkdir(mode=0o700, exist_ok=True)
-    if found := clone_id(store):
-        return found
-    new = secrets.token_hex(8)
-    fd = os.open(store / CLONE_ID, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w") as out:
-        out.write(new + "\n")
-        out.flush()
-        os.fsync(out.fileno())
-    return new
+    """The clone's id: reused when present, else created once; never rewritten."""
+    try:
+        return project_home.ensure_id(store)
+    except StoreError as exc:
+        raise RegistryError(str(exc)) from exc
 
 
 def register(path: Path) -> Project:

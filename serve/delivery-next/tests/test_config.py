@@ -195,6 +195,7 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     old = {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}}
     _old_profile(root, old, fmt)
     store = Store.open(repo)
+    root = store.root  # moved into ~/.owlbear (TD-334)
 
     assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="m-1", effort="low")
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")

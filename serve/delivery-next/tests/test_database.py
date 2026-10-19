@@ -18,7 +18,7 @@ from owlbear_delivery_next.commands.mcp_server import Chat
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import ImportWaitingError, Project
 from owlbear_delivery_next.project_host import config_routes
-from owlbear_delivery_next.state_store import database
+from owlbear_delivery_next.state_store import database, project_home
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, LateWriteError, NotImportedError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
@@ -156,7 +156,7 @@ def test_a_chat_server_open_across_the_import_reads_the_database_after_it(tmp_pa
     chat = Chat(tmp_path)  # opened while the files were current
     with pytest.raises(NotImportedError):
         chat.show_status()
-    root_store = Store(root)
+    root_store = Store(project_home.current(tmp_path))  # moved into ~/.owlbear when the chat opened it (TD-334)
     root_store.db.import_files()
     assert [row["slug"] for row in chat.show_status()["changes"]] == ["c1"]
 

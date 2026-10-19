@@ -16,13 +16,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
-from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.project_host.host import RunnerRecord
-from owlbear_delivery_next.state_store.store import STORE_DIR, StoreError
+from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,8 +49,9 @@ def recorded(repo: Path) -> dict[str, int]:
     records cannot be read counts none.
     """
     held = {}
-    with contextlib.suppress(OSError, subprocess.CalledProcessError):
-        for path in (git_common_dir(repo) / STORE_DIR / "changes").glob("*/runner.json"):
+    with contextlib.suppress(OSError, subprocess.CalledProcessError, StoreError):
+        found = project_home.current(repo)
+        for path in (found / "changes").glob("*/runner.json") if found else []:
             with contextlib.suppress(OSError, ValueError):
                 if sessions := RunnerRecord.model_validate_json(path.read_text()).sessions:
                     held[path.parent.name] = sessions
