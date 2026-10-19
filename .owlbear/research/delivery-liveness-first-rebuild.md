@@ -920,7 +920,7 @@ TD-197.
 
 ## C-26 Tests
 
-**Rows:** decided TD-3, TD-112, TD-311, TD-312, TD-339, TD-370, TD-371, TD-372, TD-373.
+**Rows:** decided TD-3, TD-112, TD-311, TD-312, TD-339, TD-370, TD-371, TD-372, TD-373, TD-390.
 
 - Proof over test volume: automated tests are build artifacts and stay minimal; test agent structure, never prose
   wording [TD-3].
@@ -928,6 +928,8 @@ TD-197.
   code, applies what holds in a reviewed Change the owner can still stop, then measures again [TD-311, TD-339, TD-372].
 - A test review starts only on the owner's request, for each registered project from its own Maintenance page; a
   Sol challenge settles the button's place when built [TD-370, TD-371].
+- A test review's brief and one-task plan are fixed; the owner's Start in its dialog approves both, so no brief
+  challenge or planner runs [TD-390].
 - Reviewers run in parallel as Delivery steps of their own, each with its role's values, credits and retry; the
   curator step then checks their verdicts [TD-373].
 - Reviewers default to Sol, medium effort, default context; the curator to Opus 5.5, high effort, long context; both
@@ -946,6 +948,8 @@ TD-197.
 - TD-371, 2026-10-18: "Every registered project, each from its own Maintenance page"
 - TD-372, 2026-10-18: "No: the curator applies what holds in a reviewed Change you can still stop"
 - TD-373, 2026-10-18: "Delivery starts each reviewer as its own step in parallel, then the curator step"
+- TD-390, 2026-10-19: "Your Start click in the dialog approves the fixed brief and plan; no brief challenge and no
+  planner run"
 
 **Replaced:** TD-112 by TD-339 and TD-372; TD-311 by TD-339, TD-371 and TD-373.
 
