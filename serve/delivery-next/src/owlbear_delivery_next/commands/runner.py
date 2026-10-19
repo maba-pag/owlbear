@@ -421,7 +421,8 @@ def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
     store.write(lock, gated)
     if head:  # after its question exists: a hold no question offers is never taken
         held.keep(store, lock, gated, exc.run, head)
-    sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK})
+    label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
+    sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

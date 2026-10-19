@@ -34,9 +34,10 @@ type Result = loop.StepResult
 class UsageUnreadError(Exception):
     """A session whose model check could not run; its run is never processed unless the owner accepts it."""
 
-    def __init__(self, run: session_result.Run) -> None:
+    def __init__(self, run: session_result.Run, label: str = "") -> None:
         super().__init__(run.usage_unread)
         self.run = run
+        self.label = label  # a judge's session label, such as brief-challenge; empty for the step's own session
         self.worktree: Path | None = None  # set for an agent step's own session, whose result may be held (TD-56)
 
 
@@ -65,7 +66,7 @@ def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> sessio
     else:
         done = asyncio.run(sdk_adapter.run(cfg))
     if unread(done) and not (hold and held(done)):
-        raise UsageUnreadError(done)
+        raise UsageUnreadError(done, cfg.job)
     return done
 
 
@@ -181,7 +182,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
         judged.append((verdict, done))
     left = any(not (r.termination and r.termination.confirmed) for r in runs)
     if (first := next((r for r in runs if unread(r) and not (hold and held(r))), None)) and not left:
-        raise UsageUnreadError(first)
+        raise UsageUnreadError(first, labels[runs.index(first)])
     return judged
 
 
