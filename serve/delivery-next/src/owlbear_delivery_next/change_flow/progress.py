@@ -34,6 +34,7 @@ STAGES = {
 _STAGE = {
     StepKind.SHAPE: "shape",
     StepKind.PLAN: "plan",
+    StepKind.TESTS: "build",  # a test review's reviewers come before its curator's build (TD-373)
     StepKind.BUILD: "build",
     StepKind.REVIEW: "build",
     StepKind.INTEGRATE: "build",

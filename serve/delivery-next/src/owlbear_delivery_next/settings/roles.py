@@ -39,6 +39,7 @@ MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the s
 }
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",
+    StepKind.TESTS: "test-reviewer",  # a test review's shares (TD-373)
     StepKind.BUILD: "builder",
     StepKind.CHECK: "preparer",
     StepKind.REVIEW: "reviewer",  # task and final review

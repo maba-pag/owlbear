@@ -9,12 +9,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
+from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
 
-FORMAT = 5
+FORMAT = 6
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
@@ -29,10 +30,11 @@ type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "re
 
 
 class StepKind(StrEnum):
-    """The ten step kinds."""
+    """The eleven step kinds; TESTS is a test review's parallel reviewers (TD-373)."""
 
     SHAPE = "shape"
     PLAN = "plan"
+    TESTS = "tests"
     BUILD = "build"
     REVIEW = "review"
     INTEGRATE = "integrate"
@@ -488,3 +490,4 @@ class Change(Record):
     pull_requested: datetime | None = None  # the owner asked to pull the target again
     inbox_acked: list[str] = Field(default_factory=list)
     handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
+    tests: TestReview | None = None  # a test review's shares and report (TD-373)

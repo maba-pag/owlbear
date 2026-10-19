@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.round_records import FINAL
+from owlbear_delivery_next.change_flow import curation_flow
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go
 
 if TYPE_CHECKING:
@@ -168,7 +169,7 @@ def _environment(c: Change, r: StepResult, now: datetime) -> None:
     if not quota and now - (b.since or now) >= EPISODE_ASK:
         last = r.detail or r.reason
         text = f"{kind} keeps failing for {c.step.kind} since {b.since:%Y-%m-%d %H:%M}; last error: {last}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(), cause=cause), now)
+        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
         return
     if kind == ErrorKind.CAPACITY and r.wake_at and r.wake_at > now:
         wake = r.wake_at  # a quota or rate limit resets at its own time
@@ -190,7 +191,7 @@ def _defect(c: Change, r: StepResult, now: datetime) -> None:
     c.budgets.causes[cause] = Budget(count=count, signature=sig, task=c.step.task, at=now)
     if count >= DEFECT_LIMIT:
         text = f"Delivery failed the same way {count} times ({cause}): {r.reason}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(), cause=cause), now)
+        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
     else:
         c.step.attempt += 1
 
@@ -203,13 +204,14 @@ def _wrong_model(c: Change, r: StepResult, now: datetime) -> None:
     c.budgets.causes[cause] = Budget(count=count, task=c.step.task, at=now)
     if count >= WRONG_MODEL_LIMIT:
         text = f"The step ran on the wrong model again after one rerun: {r.reason}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(), cause=cause), now)
+        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
     else:
         c.step.attempt += 1
 
 
-def _resolve_or_pause() -> list[Option]:
-    return [Option(id="done", label="Done, continue"), Option(id="pause", label="Pause", next="pause")]
+def _resolve_or_pause(c: Change) -> list[Option]:
+    resolved = [Option(id="done", label="Done, continue"), Option(id="pause", label="Pause", next="pause")]
+    return [*resolved, *curation_flow.without(c)]
 
 
 def _exhausted(c: Change, r: StepResult, now: datetime) -> None:
@@ -224,13 +226,14 @@ def _exhausted(c: Change, r: StepResult, now: datetime) -> None:
         )
         c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=r.reason, who="you", at=now)
         return
-    if _alternative(c, r, now):
+    if c.tests is None and _alternative(c, r, now):
         return
     options = [
         Option(id="revise", label="Revise the requirement", next=StepKind.SHAPE),
         Option(id="narrow", label="Narrow the scope", next=StepKind.PLAN),
         Option(id="pause", label="Pause this Change", next="pause"),
     ]
+    options = curation_flow.options(c) if c.tests else options  # a test review is never revised or re-planned
     ask(c, Question(step=c.step.kind, text=f"{r.reason} keeps failing ({cause})", options=options, cause=cause), now)
 
 

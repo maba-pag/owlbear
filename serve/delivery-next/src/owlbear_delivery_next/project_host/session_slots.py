@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
-    from owlbear_delivery_next.pack_runs.pack_job import Live
+    from owlbear_delivery_next.pack_runs.pack_job import Job, Live
     from owlbear_delivery_next.project_host.host import Host
 
 NO_AGENT = frozenset({StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE, StepKind.CLEANUP})
@@ -34,10 +34,10 @@ WAIT = 2.0  # seconds between a pack session's checks for a stop while it waits
 
 
 def wanted(c: Change, step: Step | None) -> int:
-    """The sessions a runner for *step* may run at once: 0 without an agent, all a visual check may use, else 1."""
+    """The sessions a runner for *step* may run at once: 0 without an agent, all its judges may use, else 1."""
     if step is None or step.kind in NO_AGENT:
         return 0
-    return ALL if check.capturing(c) else 1
+    return ALL if check.capturing(c) or step.kind == StepKind.TESTS else 1
 
 
 def project(host: Host) -> str:
@@ -113,6 +113,12 @@ def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
             said = True
         turn.wait(WAIT)
         turn.clear()
+
+
+def packed(host: Host, job: Job) -> Job:
+    """*job* whose updater, challenger and replay sessions each hold one of the project's slots; its wait is logged."""
+    job.live = pack_live(host, job.live, job.log)
+    return job
 
 
 def pack_live(host: Host, live: Live, note: Callable[[str], None]) -> Live:

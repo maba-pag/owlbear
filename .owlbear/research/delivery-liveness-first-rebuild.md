@@ -977,7 +977,7 @@ TD-197.
 
 ## C-28 Code and tool rules
 
-**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63; autonomous TD-184.
+**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63; autonomous TD-184, TD-391.
 
 - Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63 [TD-1, TD-63].
 - No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
@@ -987,6 +987,8 @@ TD-197.
   [TD-19].
 - Split oversized code without cutting logic: aim for at most 400 lines per module; a test fails at 500 raw lines,
   comments and structure included [TD-19, TD-33].
+- Delivery keeps at most eleven step kinds, the design's ten and a test review's parallel reviewers, which no other
+  step can run with its fixed plan [TD-391].
 - Default size and complexity rules of tools such as SonarQube or Snyk guide splits or rework, with wiggle room,
   never as a hard gate; SonarQube itself is not used (licence) [TD-31].
 

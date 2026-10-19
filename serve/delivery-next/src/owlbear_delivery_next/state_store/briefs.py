@@ -96,6 +96,12 @@ def _handles(store: Store) -> dict[str, str]:
     return handles
 
 
+def next_number(store: Store, handles: dict[str, str] | None = None) -> int:
+    """The next handle number: above every handle held and every number ever issued."""
+    held = _handles(store) if handles is None else handles
+    return max(max((int(h[1:]) for h in held if HANDLE.fullmatch(h)), default=0), store.issued()) + 1
+
+
 def _visual_of(c: Change) -> dict[str, Any]:
     """A Change's visual check as draft fields."""
     states = [{"name": s.name, "path": s.path, "expect": s.expect, "owner": f"screen:{s.name}" in c.brief.specified}
@@ -125,8 +131,7 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
     if slug is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
-    number = max((int(h[1:]) for h in handles if HANDLE.fullmatch(h)), default=0)
-    number = max(number, store.issued()) + 1
+    number = next_number(store, handles)
     try:
         with store.lock(slug) as lock:
             old = store.read(slug) if draft.change else None

@@ -30,6 +30,7 @@ from owlbear_delivery_next.workflow_steps import (
     check,
     cleanup,
     conversation,
+    curation,
     design,
     engine,
     follow,
@@ -377,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _step(  # noqa: C901 - one branch per phase
+def _step(  # noqa: C901, PLR0912 - one branch per phase
     store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
 ) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
@@ -398,6 +399,8 @@ def _step(  # noqa: C901 - one branch per phase
             _before(store, lock, change, repo)
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
+        elif step.kind == StepKind.TESTS:  # a test review's reviewers (TD-373)
+            curation.run(store, lock, change, repo)
         elif step.kind in AGENT:
             agent = _reused(store, lock, change) or prepare.refused(store, lock, change)
             agent = (

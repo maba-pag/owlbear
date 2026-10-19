@@ -23,6 +23,7 @@ from owlbear_delivery_next.state_store.database import STORE_FORMAT, LateWriteEr
 from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 18, 12, tzinfo=UTC)
+FILE_ERA = 5  # the last Change format a runtime that reads Change files knew (TD-265)
 WRITER = """
 import sys
 from pathlib import Path
@@ -100,7 +101,7 @@ def test_a_crash_at_each_import_boundary_resumes_without_loss_or_repeat(tmp_path
         with pytest.raises((OSError, StoreError), match="crashed"):
             Store(tmp_path).db.import_files()
     if boundary == "fill":  # the fence: an older runtime refuses a marker above its format before reading a file
-        assert int((tmp_path / "format").read_text()) > FORMAT  # what the older Store.open compares
+        assert int((tmp_path / "format").read_text()) > FILE_ERA  # what the older Store.open compares
         assert ((tmp_path / database.DB).exists(), (tmp_path / "changes" / "c1" / "change.json").exists()) == (
             False,
             True,
