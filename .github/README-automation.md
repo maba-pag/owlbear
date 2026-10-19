@@ -103,7 +103,10 @@ the owner's by agreement, not proof (TD-363); an ignore can also be set in the S
 The [Release](workflows/release.yml) walk tags each merge to `main` whose pull request carries
 `release:minor` or `release:major` once that merge's own push CI passed (TD-302, TD-306); see
 [`release.py`](scripts/release.py). It only reports what it would tag until the repository variable
-`RELEASE_TAGS` is `on` (TD-315).
+`RELEASE_TAGS` is `on` (TD-315). Tags are created through the REST API with the owner's fine-grained token in the
+Actions secret `RELEASE_TOKEN` (this repository only; Contents and Workflows write; TD-404), since GitHub refuses the
+workflow token a tag on a commit whose workflow files differ from every branch tip. A major gets `vN.0` and `vN`
+(TD-392).
 
 ## MegaLinter toolchain updates
 

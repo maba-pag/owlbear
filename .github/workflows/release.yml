@@ -36,7 +36,7 @@ jobs:
       group: release
       cancel-in-progress: false
     permissions:
-      contents: write
+      contents: read
       actions: read
       pull-requests: read
     steps:
@@ -50,5 +50,6 @@ jobs:
       - name: Tag labelled merges whose CI passed
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}  # the owner's fine-grained token, used only to create tags
           RELEASE_TAGS: ${{ vars.RELEASE_TAGS }}
         run: python3 .github/scripts/release.py
