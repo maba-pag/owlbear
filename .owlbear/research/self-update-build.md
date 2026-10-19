@@ -188,6 +188,30 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   are kept in the update's state, so a retry reuses them. Its merge, brought up to date with `main` as any
   pull request and checked by CI, becomes a version as its labels say; machines take it at their next idle
   time.
+- **Step 3c build (before step 4's `repo.git`), after Sol's challenge (REVISE, 96%):**
+  - **Source:** the package's own Git checkout stands in for `repo.git`: its `origin` must be `maba-pag/owlbear`,
+    its tracked files clean, and its `HEAD`, pinned at the candidate stage as the running version, an ancestor of
+    the freshly fetched `origin/main`; anything else is refused before any session, with what to do. The machine's
+    `gh` must be able to push there, checked at the same stage; no credential reaches an agent.
+  - **Commit and branch:** in a disposable worktree of that checkout at the pinned commit, so the running checkout is
+    never touched, one commit of the pack's files on `pack/<run id>`, pushed to `origin` never forced; a pull request
+    to `main`, marked ready, with the starting project's effective labels and marker (TD-308; a label failure is
+    logged and never holds it).
+  - **CI and merge:** the target's rules name the required checks (unknown rules ask the owner); each must pass at the
+    pull request's current head, and an empty or pending observation is never green. Behind `main`, the branch is
+    brought up to date by GitHub's update-branch at the expected head and CI is awaited again; the merge is a merge
+    commit at the expected head, and a refusal because `main` moved goes round again, a few times at most. A merge
+    whose answer is lost is read back before anything is repeated; the branch is deleted once merged.
+  - **State and restart:** the run keeps its publication phase with the repository, base, branch, commit and pull
+    request; a host restart during publication leaves the run waiting for the owner instead of failed, and going on
+    reconciles with GitHub first: a pushed branch is not pushed again, an open pull request not opened again.
+  - **Failure asks the owner** (TD-368): a failed check, a conflict, a refused or closed pull request, or the rounds
+    of update-branch running out leave the run waiting with the reason and the pull request's link: try again after
+    fixing it, or discard (the pull request stays for the owner to close).
+  - **Settings page:** its texts say commit, pull request, CI and merge instead of a push to the checkout's branch,
+    and show the pull request's link and state.
+  - **Taking the version** is step 4's: until it exists no machine takes any version by itself, so the merge becomes a
+    version by its labels as every merge does, and step 4 takes it at once when paused (TD-325, TD-368).
 - **Pull request labels and marker** (TD-308): a global setting `pr_labels` lists the labels OwlBear adds
   to every pull request it opens, Delivery's and the design pack update's; a project's value replaces the
   list whole (TD-243); empty at first. OwlBear's own project sets `release:minor`. A project setting
