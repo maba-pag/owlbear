@@ -6,13 +6,12 @@ import json
 import re
 import sys
 from datetime import UTC, datetime
-from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.design_packs import design_pack
-from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
+from owlbear_delivery_next.local_system import data_repo, git_files, local_home, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -25,32 +24,6 @@ type Choice = Literal["yes", "no", "ask"]
 TASK = "OwlBear Delivery host"
 SERVER = "owlbear-delivery"
 ASKS = 3  # folder names setup asks for before it stops
-
-
-def _install(text: str, path: Path, what: str) -> str:
-    """Write *text* to the user-level *path*; never over another file of that name (one without ``save_brief``)."""
-    try:
-        old = path.read_text(encoding="utf-8") if path.exists() else text
-        if old != text and "save_brief" not in old:
-            kind = what.rsplit(maxsplit=1)[-1]
-            return f"{what} not installed: {path} holds another {kind} of that name; move it, then run setup again"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        return f"{what} not installed: {path}: {exc}"
-    return f"{what} installed for you only (not tracked): {path}"
-
-
-def install_skill(home: Path) -> str:
-    """Install the chat skill where Copilot loads personal skills."""
-    text = files("owlbear_delivery_next").joinpath("skills", preload.CHAT, "SKILL.md").read_text(encoding="utf-8")
-    return _install(text, home / ".copilot" / "skills" / preload.CHAT / "SKILL.md", "chat skill")
-
-
-def install_agent(home: Path) -> str:
-    """Install the shaping chat's agent file for this user only; Delivery selects it by its URI."""
-    text = files("owlbear_delivery_next").joinpath("agents", readiness.SHAPER).read_text(encoding="utf-8")
-    return _install(text, readiness.shaper_path(home), "shaper agent")
 
 
 def recommendations(prof: Profile) -> list[str]:
@@ -222,20 +195,19 @@ def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], objec
     return False
 
 
-def run(  # noqa: PLR0913 - one answer per consent
+def run(
     repo: Path,
     confirms: list[tuple[str, str]],
     *,
     yes: bool,
     local_files: Choice = "ask",
-    skill: Choice = "ask",
     ask: Ask = ask_tty,
 ) -> int:
     """Readiness, profile, consented writes; print each result and the start action.
 
-    ``yes`` confirms the profile only (TD-11): the local files and the user-level skill each need their own
-    answer, given by flag or asked; without a terminal an unasked answer is no. The command line claims the
-    project's shared folder first (``project_folder``).
+    ``yes`` confirms the profile only (TD-11): the local files need their own answer, given by flag or asked;
+    without a terminal an unasked answer is no. The command line claims the project's shared folder first
+    (``project_folder``).
     """
     store, python, say = (
         Store.open(repo),
@@ -272,15 +244,8 @@ def run(  # noqa: PLR0913 - one answer per consent
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
     given, local_ask = local_files == "yes", ask if local_files == "ask" else lambda _q: ""
     write_project_files(repo, python, local_ask, say, given=given)
-    path, agent = Path.home() / ".copilot" / "skills" / preload.CHAT / "SKILL.md", readiness.shaper_path(Path.home())
-    question = f"Install the Delivery chat skill at {path} and its shaper agent at {agent}, for you only? [y/N] "
-    if not (skill == "yes" or (skill == "ask" and ask(question).strip().lower().startswith("y"))):
-        say(f"chat skill and shaper agent not installed (no consent): {path}, {agent}")
-        say("Run setup with --skill yes to install them.")
-        return 0
-    say(install_skill(Path.home()))
-    say(install_agent(Path.home()))
-    say(f"To share it with this repository, copy that folder to .github/skills/{preload.CHAT}/ and commit it yourself.")
+    if not readiness.shaper_path(Path.home()).exists():
+        say("New Change needs the shaper in ~/.copilot: run `owlbear install` and let it link the shaper (TD-335).")
     return 0
 
 

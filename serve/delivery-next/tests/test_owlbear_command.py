@@ -54,7 +54,7 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert install.install(said.append, pytest.fail, command.app) == 1  # not the installed runtime
     monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
     monkeypatch.setattr(control, "autostart", lambda _say, *, on: items.append(on) or 0)
-    answers = iter([True, False])
+    answers = iter([True, True, False])
     assert install.install(said.append, lambda q: asked.append(q) or next(answers), command.app) == 0
     completion = local_home.root() / install.COMPLETION
     script = completion.read_text()
@@ -64,9 +64,25 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert "__complete" not in script  # static: TAB never starts Python (TD-263)
     assert "\n_cyclopts_owlbear() {" in script  # sourcing registers the function the script defines
     assert script.rstrip().splitlines()[-1].startswith("compdef _cyclopts_owlbear owlbear ")
-    assert (install.link_path().readlink(), items, len(asked)) == (Path(sys.executable).parent / "owlbear", [], 2)
+    assert (install.link_path().readlink(), items, len(asked)) == (Path(sys.executable).parent / "owlbear", [], 3)
+    agent, skill = (
+        Path.home() / ".copilot" / p for p in ("agents/owlbear-shaper.agent.md", "skills/owlbear-change-shaping")
+    )
+    assert ("save_brief" in (skill / "SKILL.md").read_text(), agent.resolve().is_file()) == (True, True)  # TD-335
+    (other := Path.home() / ".copilot" / "agents" / "mine.agent.md").write_text("someone else's")
     assert install.uninstall(said.append) == 0
     assert (install.link_path().is_symlink(), completion.exists(), items) == (False, False, [False])
+    assert (agent.is_symlink(), skill.is_symlink(), other.exists()) == (False, False, True)
+    skill.mkdir(parents=True)
+    assert install.install(said.append, lambda q: "shaper" in q, command.app) == 0
+    assert (said[-1], skill.is_symlink(), agent.is_symlink()) == (
+        f"{skill} exists and is no link; left as it is",
+        False,
+        True,
+    )
+    agent.unlink()
+    agent.symlink_to(Path.home() / "my-checkout" / agent.name)  # the owner's own link, even a dangling one
+    assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
 
 
 def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_said(monkeypatch) -> None:
