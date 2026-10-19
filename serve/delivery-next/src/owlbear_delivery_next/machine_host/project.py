@@ -199,7 +199,7 @@ class Project:
             rec = self.host.runner(slug)
             if rec and self.host.alive(rec.pid, rec.created) is not False:
                 left.append(f"{slug}: a running step (process {rec.pid})")
-            elif stopping and rec:
+            elif rec and (stopping or rec.sessions):  # its sessions count until the host confirms them gone
                 left.append(f"{slug}: the processes of its ended step")
             with contextlib.suppress(StoreError):
                 c = self.store.read(slug)

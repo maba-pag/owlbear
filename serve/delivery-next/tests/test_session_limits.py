@@ -91,6 +91,19 @@ def test_a_change_waits_for_its_projects_slot_without_launching_and_owner_input_
     assert (fake.host.runner("c1"), fake.host.runner("c2").sessions) == (None, 1)  # c1's slot went to c2
 
 
+def test_waiters_of_one_project_keep_their_order_while_the_host_confirms_ended_runners(store, tmp_path):
+    fake = Fake(store, tmp_path, Slots(lambda: 4))
+    store.update_config(lambda cur: cur.model_copy(update={"sessions": 1}))
+    for slug in ("c1", "c2", "c3"):
+        fake.ready(slug)
+    assert fake.host.tick(NOW) == ["c1"]
+    assert fake.host.tick(NOW) == []  # c2 and c3 wait; each pass confirms them without a runner
+    fake.asks("c1")
+    assert fake.host.tick(NOW) == ["c2"]  # Sol: a release never requeues a waiter behind another
+    fake.asks("c2")
+    assert fake.host.tick(NOW) == ["c3"]
+
+
 def test_a_freed_slot_wakes_the_next_project_and_goes_round_robin(tmp_path):
     slots = Slots(lambda: 1)
     a = Fake(repo(tmp_path / "a"), tmp_path / "a", slots, "a")

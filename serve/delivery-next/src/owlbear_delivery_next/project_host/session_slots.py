@@ -90,20 +90,29 @@ def waiting(host: Host, slug: str) -> str:
 @contextlib.contextmanager
 def one(host: Host, note: Callable[[str], None]) -> Iterator[None]:
     """Hold one slot of the project for a pack update's session, waiting for it in the job's thread."""
-    key, said, turn = f"{PACK}{uuid.uuid4().hex[:8]}", False, threading.Event()
+    key = f"{PACK}{uuid.uuid4().hex[:8]}"
     try:
-        while not host.slots.take(project(host), key, 1, limit(host), turn.set):
-            if host.closed() or host.stopped.is_set():
-                msg = "OwlBear stops; the update did not get a session slot"
-                raise design_pack.PackError(msg)
-            if not said:
-                note("waiting for a session slot")
-                said = True
-            turn.wait(WAIT)
-            turn.clear()
+        _queued(host, key, note)
+    except BaseException:
+        host.slots.cancel(project(host), key)
+        raise
+    try:
         yield
     finally:
-        host.slots.give(project(host), key)  # its slot, or its place in the queue
+        host.slots.give(project(host), key)
+
+
+def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
+    said, turn = False, threading.Event()
+    while not host.slots.take(project(host), key, 1, limit(host), turn.set):
+        if host.closed() or host.stopped.is_set():
+            msg = "OwlBear stops; the update did not get a session slot"
+            raise design_pack.PackError(msg)
+        if not said:
+            note("waiting for a session slot")
+            said = True
+        turn.wait(WAIT)
+        turn.clear()
 
 
 def pack_live(host: Host, live: Live, note: Callable[[str], None]) -> Live:

@@ -72,8 +72,19 @@ def test_a_waiter_with_its_own_wake_is_woken_itself_and_a_slot_left_free_goes_on
     assert s.take("b", f"{PACK}x", 1, 2) == 1
     assert woken[-1] == "host a"  # the other free slot goes on to a
     s.give("b", f"{PACK}x")
-    s.give("b", f"{PACK}never")  # a wait that ended without a slot is harmless
+    s.cancel("b", f"{PACK}never")  # a wait that ended without a slot is harmless
     assert s.counts("b") == (0, 2, 0)
+
+
+def test_giving_back_what_a_key_never_held_keeps_its_wait_and_only_cancel_ends_it():
+    s = Slots(lambda: 1)
+    assert (s.take("a", "a1", 1, 1), s.take("a", "a2", 1, 1), s.take("a", "a3", 1, 1)) == (1, 0, 0)
+    s.give("a", "a2")  # the host confirms a2 has no runner: its place stays
+    s.give("a", "a1")
+    assert (s.take("a", "a3", 1, 1), s.take("a", "a2", 1, 1)) == (0, 1)
+    s.give("a", "a2")
+    s.cancel("a", "a3")
+    assert s.waiting == {}
 
 
 def test_changes_no_longer_ready_stop_waiting_but_a_pack_update_keeps_its_place():

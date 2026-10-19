@@ -74,11 +74,19 @@ class Slots:
         return granted
 
     def give(self, project: str, key: str) -> None:
-        """Give back what *key* holds, or stop its wait; the next turn is woken."""
+        """Give back what *key* holds; the next turn is woken. A wait of *key* keeps its place."""
         with self.lock:
-            self.waiting.pop((project, key), None)
+            if self.held.pop((project, key), None) is None:
+                return
+            turn = self._turn(self.total())
+        self._wake(turn)
+
+    def cancel(self, project: str, key: str) -> None:
+        """Stop *key*'s wait; the next turn is woken."""
+        with self.lock:
             self.own.pop((project, key), None)
-            self.held.pop((project, key), None)
+            if self.waiting.pop((project, key), None) is None:
+                return
             turn = self._turn(self.total())
         self._wake(turn)
 

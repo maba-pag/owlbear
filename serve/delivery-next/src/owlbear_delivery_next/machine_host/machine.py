@@ -7,21 +7,25 @@ owner pauses again with Pause, or with Pause and stop when idle (TD-288), which 
 from __future__ import annotations
 
 import contextlib
+import subprocess
 import sys
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
+from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.registry import Settings
-from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.project_host.host import RunnerRecord
+from owlbear_delivery_next.state_store.store import STORE_DIR, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.project_host.host import Host, HostRecord
 
@@ -36,6 +40,21 @@ class MachineError(Exception):
         """Keep the answer's status and words."""
         super().__init__(text)
         self.status, self.text = status, text
+
+
+def recorded(repo: Path) -> dict[str, int]:
+    """The sessions a project's runners hold, read from their records while no host serves it (TD-336).
+
+    A runner counts unless it is known to have ended; a project whose records cannot be read counts none.
+    """
+    held = {}
+    with contextlib.suppress(OSError, subprocess.CalledProcessError):
+        for path in (git_common_dir(repo) / STORE_DIR / "changes").glob("*/runner.json"):
+            with contextlib.suppress(OSError, ValueError):
+                rec = RunnerRecord.model_validate_json(path.read_text())
+                if rec.sessions and processes.alive(rec.pid, rec.created) is not False:
+                    held[path.parent.name] = rec.sessions
+    return held
 
 
 class Machine:
@@ -79,6 +98,8 @@ class Machine:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
+        if p.state == "failed":
+            self.slots.restore(entry.id, recorded(Path(entry.path)))  # its runners may live on without a host
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 
@@ -135,10 +156,13 @@ class Machine:
         """Stop and forget a project; refused, naming them, while its steps or admitted work still run."""
         with self.lock:
             p = self.get(pid)
+            if p.state == "failed" and (live := recorded(Path(p.entry.path))):  # no host confirms them gone (TD-336)
+                raise MachineError(409, f"{p.name} still runs steps of {', '.join(live)}; remove it once they end")
             if left := p.stop(refuse=True):
                 raise MachineError(409, f"{p.name} still runs {', '.join(left)}; remove it once they end")
             registry.remove(pid)
             del self.projects[pid]
+            self.slots.restore(pid, {})
             self.say(f"{p.name}: removed")
 
     def adopt(self, pid: str) -> Project:
