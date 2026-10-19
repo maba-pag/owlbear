@@ -196,8 +196,8 @@ reason given. Item: the plan item of §2 that picks it up.
 | S | A quality service runs linters and judges exceptions (TD-89) | Not built | build | not placed |
 | C-31 | In-force lines at most two lines; quotes one line | Seven lines and six quotes are longer | align | — |
 
-Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent and
-dropped C-21's lines for TD-199 and TD-201; they are back in force.
+Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent,
+dropped C-21's lines for TD-199 and TD-201 and cut TD-318's schedule to one of its four parts; they are back in force.
 
 ## 5. Open Questions for the Owner
 
@@ -230,7 +230,8 @@ Ask each with the question tool in the owner's format (workspace instructions, "
 | [Transfer ledger](delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Decided as TD-199 to TD-201; plan of item 7 |
 | [Cutover](delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Partly replaced by TD-199 and TD-203; input to item 7 |
 | [Quality service](repo-quality-service.md) | TD-89's service | Research; not built |
-| [Charter](delivery-next-charter.md), [architecture](delivery-next-architecture.md), [status and exits](delivery-next-status-and-exits.md), [journey](delivery-next-journey-and-failure-modes.md), [glossary](delivery-next-glossary.md) | The approved design of 2026-10-10..14 | History; the record and the code win |
+| [Charter](delivery-next-charter.md) | The approved charter of 2026-10-10 | In force only where no later decision replaced it (TD-23); the record wins |
+| [Architecture](delivery-next-architecture.md), [status and exits](delivery-next-status-and-exits.md), [journey](delivery-next-journey-and-failure-modes.md), [glossary](delivery-next-glossary.md) | The design of 2026-10-10..14 | History; the record and the code win |
 | [Ownership map](delivery-next-ownership-map.md), [route comparison](delivery-next-route-comparison.md), [platform probe](delivery-next-platform-probe.md), [agent runtime](delivery-next-agent-runtime.md), [tool surface](delivery-tool-surface-audit.md), [reuse study](delivery-next-reuse-study-v2.md), [agents from old](delivery-next-agents-from-old.md), [ECC](ecc-evaluation.md) | Research behind the design | History |
 | [Redesign execution plan](delivery-redesign-execution-plan.md) | The old engine's programme | Superseded (TD-202); history |
 | Old record at `04b1d8ec4` | Every decision row as first recorded; roadmap M0–M7; repair plan | History: `git show 04b1d8ec4:.owlbear/research/delivery-liveness-first-rebuild.md` |
