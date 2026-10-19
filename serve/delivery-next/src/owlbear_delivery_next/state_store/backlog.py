@@ -220,10 +220,12 @@ class Backlog:
                 new["links"] = links = list(dict.fromkeys(fields["links"]))
                 if bad := [i for i in links if i == entry_id or (i not in found and self._fetch(found, i) is None)]:
                     raise BacklogError(422, f"links: {', '.join(bad)} is not another entry of this backlog")
-                for other in sorted((set(links) ^ set(old.links)) & found.keys(), key=int):
+                pointing = {i for i, e in found.items() if entry_id in e.links}  # a failed save's side is redone
+                for other in sorted(((set(links) ^ set(old.links)) | (set(links) ^ pointing)) & found.keys(), key=int):
                     them = self._get(found, other)
                     theirs = [i for i in them.links if i != entry_id] + ([entry_id] if other in links else [])
-                    others.append(_valid(them.model_dump() | {"links": theirs, "updated_at": now}))
+                    if set(theirs) != set(them.links):
+                        others.append(_valid(them.model_dump() | {"links": theirs, "updated_at": now}))
             entry = _valid(new)
             self._save(entry, *others)
             return entry

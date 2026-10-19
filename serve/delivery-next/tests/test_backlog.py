@@ -157,6 +157,10 @@ def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_skips_
     fourth = Backlog(DataRepo(root), "api-site", Clock()).add(title, source="watcher")[0]
     assert (fourth.links, shop.current("2").links) == (["1", "3"], full)
 
+    shop._save(shop.current("4").model_copy(update={"links": ["3"]}))  # noqa: SLF001 - #1's side of the unlink failed
+    shop.update("4", {"links": ["3"]})  # the owner tries again
+    assert "4" not in shop.current("1").links
+
 
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):
     root, _ = shared
