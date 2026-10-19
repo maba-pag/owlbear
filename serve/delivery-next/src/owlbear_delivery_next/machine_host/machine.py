@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
-from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
@@ -45,15 +44,15 @@ class MachineError(Exception):
 def recorded(repo: Path) -> dict[str, int]:
     """The sessions a project's runners hold, read from their records while no host serves it (TD-336).
 
-    A runner counts unless it is known to have ended; a project whose records cannot be read counts none.
+    A record goes only once a host confirms its runner and processes gone, so each one counts; a project whose
+    records cannot be read counts none.
     """
     held = {}
     with contextlib.suppress(OSError, subprocess.CalledProcessError):
         for path in (git_common_dir(repo) / STORE_DIR / "changes").glob("*/runner.json"):
             with contextlib.suppress(OSError, ValueError):
-                rec = RunnerRecord.model_validate_json(path.read_text())
-                if rec.sessions and processes.alive(rec.pid, rec.created) is not False:
-                    held[path.parent.name] = rec.sessions
+                if sessions := RunnerRecord.model_validate_json(path.read_text()).sessions:
+                    held[path.parent.name] = sessions
     return held
 
 
@@ -157,7 +156,8 @@ class Machine:
         with self.lock:
             p = self.get(pid)
             if p.state == "failed" and (live := recorded(Path(p.entry.path))):  # no host confirms them gone (TD-336)
-                raise MachineError(409, f"{p.name} still runs steps of {', '.join(live)}; remove it once they end")
+                msg = f"{p.name} has steps of {', '.join(live)} not confirmed ended; it must load again to check them"
+                raise MachineError(409, msg)
             if left := p.stop(refuse=True):
                 raise MachineError(409, f"{p.name} still runs {', '.join(left)}; remove it once they end")
             registry.remove(pid)
@@ -176,6 +176,8 @@ class Machine:
             except registry.RegistryError as exc:
                 raise MachineError(409, str(exc)) from exc
             del self.projects[pid]
+            self.slots.leave(pid)  # the clone now at its path counts its own runners as it loads
+            self.slots.restore(pid, {})
             return self._load(entry)
 
     def resume(self) -> None:

@@ -116,8 +116,8 @@ def running_step(path: Path, sessions: int = 0) -> Path:
     return path
 
 
-def test_a_project_that_did_not_load_counts_its_live_runners_and_stays_until_they_end(tmp_path, http, machine):
-    """TD-336, Sol: no host confirms them gone, so their sessions count and removal waits."""
+def test_a_project_that_did_not_load_counts_its_runners_until_a_host_confirms_them(tmp_path, http, machine):
+    """TD-336, Sol: no host confirms them gone, so their sessions count, even a dead runner's, and removal waits."""
     bad = registry.register(clone(tmp_path / "bad"))
     runner = running_step(Path(bad.path), sessions=2)
     (Path(bad.path) / ".git" / "owlbear-delivery" / "format").write_text("99\n")
@@ -125,9 +125,9 @@ def test_a_project_that_did_not_load_counts_its_live_runners_and_stays_until_the
     assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 2)
     refused = http.delete(f"/api/next/projects/{bad.id}")
     assert (refused.status_code, refused.json()["detail"]) == (
-        409, "bad still runs steps of c1; remove it once they end"
+        409, "bad has steps of c1 not confirmed ended; it must load again to check them"
     )  # fmt: skip
-    runner.unlink()
+    runner.unlink()  # as a host's check of its processes does
     assert http.delete(f"/api/next/projects/{bad.id}").json() == {"removed": bad.id}
     assert machine.slots.counts(bad.id)[2] == 0
 
@@ -275,8 +275,10 @@ def test_a_reclone_is_shown_replaced_until_adopted(tmp_path, http, machine):
     machine.load_all()
     pid = registry.load().projects[0].id
     assert http.get("/api/next/projects").json()["projects"][0]["state"] == "replaced"
+    machine.slots.restore(pid, {"c1": 2})  # counted while it failed to load (TD-336)
     adopted = http.post(f"/api/next/projects/{pid}/adopt").json()
     assert (adopted["state"], adopted["id"] != pid) == ("loaded", True)
+    assert machine.slots.counts(pid)[2] == 0  # Sol: the old id holds nothing once the new clone takes its place
 
 
 def test_clones_sharing_a_settings_folder_are_each_others_peers(machine):

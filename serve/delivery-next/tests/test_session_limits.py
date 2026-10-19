@@ -104,6 +104,23 @@ def test_waiters_of_one_project_keep_their_order_while_the_host_confirms_ended_r
     assert fake.host.tick(NOW) == ["c3"]
 
 
+def test_a_pass_that_fails_still_forgets_the_waits_it_did_not_ask(store, tmp_path, monkeypatch):
+    slots = Slots(lambda: 1)
+    fake = Fake(store, tmp_path, slots)
+    fake.ready("c1")
+    fake.ready("c2")
+    assert fake.host.tick(NOW) == ["c1"]
+    assert set(slots.waiting) == {("p", "c2")}
+    fake.asks("c1")
+    monkeypatch.setattr(fake.host, "_one", lambda *_a: (_ for _ in ()).throw(PermissionError("settled")))
+    with pytest.raises(PermissionError):
+        fake.host.tick(NOW)
+    assert slots.waiting == {}
+    assert slots.take("q", "q1", 1, 1) == 0  # c1's ended runner still holds its slot
+    slots.give("p", "c1")
+    assert slots.take("q", "q1", 1, 1) == 1  # Sol: no stale wait of p owns the turn
+
+
 def test_a_freed_slot_wakes_the_next_project_and_goes_round_robin(tmp_path):
     slots = Slots(lambda: 1)
     a = Fake(repo(tmp_path / "a"), tmp_path / "a", slots, "a")

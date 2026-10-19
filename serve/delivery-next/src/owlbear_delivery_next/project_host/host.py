@@ -207,16 +207,18 @@ class Host:
         slugs = self.store.slugs()
         self.offline &= set(slugs)
         self.back = {s: t for s, t in self.back.items() if s in slugs}
-        for slug in slugs:
-            try:
-                if self._one(slug, now or datetime.now(UTC)) and self._launch(slug):
-                    launched.append(slug)
-            except LockHeldError:
-                continue
-            except StoreError as exc:
-                self._unloadable(slug, str(exc))
-        self.waiting, self.asked = self.asked, set()  # who waits for a slot after this pass
-        self.slots.keep(session_slots.project(self), self.waiting)
+        try:
+            for slug in slugs:
+                try:
+                    if self._one(slug, now or datetime.now(UTC)) and self._launch(slug):
+                        launched.append(slug)
+                except LockHeldError:
+                    continue
+                except StoreError as exc:
+                    self._unloadable(slug, str(exc))
+        finally:  # who waits for a slot after this pass, even one that failed: no wait outlives its asking
+            self.waiting, self.asked = self.asked, set()
+            self.slots.keep(session_slots.project(self), self.waiting)
         return launched
 
     def interval(self) -> float:
