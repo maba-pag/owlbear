@@ -1,7 +1,8 @@
 """The machine host's state (TD-242): its record, the projects it serves and whether Delivery is paused.
 
-Every start is paused (TD-259); only the owner's Resume in the UI unpauses it, and the Resume is recorded. The
-owner pauses again with Pause, or with Pause and stop when idle (TD-288), which stops OwlBear once nothing runs.
+A login start, a start after a crash and a start asked for paused are paused; any other start runs, and a restart
+keeps the state it had (TD-350). The owner's Resume in the UI unpauses it and is recorded. The owner pauses again with
+Pause, or with Pause and stop when idle (TD-288), which stops OwlBear once nothing runs.
 """
 
 from __future__ import annotations
@@ -59,9 +60,9 @@ def recorded(repo: Path) -> dict[str, int]:
 class Machine:
     """Every registered project, loaded once; requests about them are serialized by ``lock``."""
 
-    def __init__(self, record: HostRecord) -> None:
-        """Start paused, with no project loaded yet."""
-        self.record, self.paused = record, True
+    def __init__(self, record: HostRecord, *, paused: bool = True) -> None:
+        """Start paused or running, with no project loaded yet."""
+        self.record, self.paused = record, paused
         self.ending = False  # the owner's stop when idle; held in memory, so a restart never stops again
         self.projects: dict[str, Project] = {}
         self.lock = threading.RLock()

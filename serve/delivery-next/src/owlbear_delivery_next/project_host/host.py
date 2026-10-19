@@ -129,7 +129,7 @@ def _scan(path: Path, since: datetime) -> Found:
 class Host:
     """The scheduler: observes every Change, folds inboxes and starts at most one runner per Change.
 
-    While ``paused`` says so (every machine start until Resume, TD-259) it applies the owner's input at once
+    While ``paused`` says so (a login, post-crash or paused start until Resume, TD-350) it applies the owner's input
     (TD-283) and records ended runners, but reads no PR, runs no Pull and launches no runner or environment;
     the fold's queue barrier still takes a queued PR out when a Change leaves its merge step (TD-284).
     """

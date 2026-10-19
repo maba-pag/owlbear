@@ -1,7 +1,9 @@
 import os
 import plistlib
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -79,6 +81,7 @@ def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_sa
     assert control.autostart(said.append, on=True) == 0
     item = plistlib.loads(control.plist_path().read_bytes())
     assert (item["ProgramArguments"], item["EnvironmentVariables"]["PATH"]) == (control.argv(), os.environ["PATH"])
+    assert item["ProgramArguments"][-1] == "machine"  # a login start is paused (TD-350)
     assert (item["RunAtLoad"], calls) == (True, ["bootout", "bootstrap"])
     refuse[0] = 1
     assert control.autostart(said.append, on=True) == 1
@@ -91,16 +94,40 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     said = []
     assert control.start(said.append) == 0
     rec = control.serve.running()
-    assert said[-1] == f"OwlBear started, paused until you press Resume: {rec.url}#token={rec.token}"
-    assert control.start(said.append) == 0
+    assert said[-1] == f"OwlBear started, running: {rec.url}#token={rec.token}"
+    assert control.start(said.append, paused=True) == 0
     assert said[-1].startswith("OwlBear is running")
     assert control.projects() == {
-        "paused": True, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True
+        "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True
     }  # fmt: skip
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     logged = (local_home.root() / control.LOG).read_text()
-    assert ("paused until you press Resume" in logged, "stopped: every project closed" in logged) == (True, True)
+    assert ("· running" in logged, "stopped: every project closed" in logged) == (True, True)
+
+
+def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps_the_state(monkeypatch) -> None:
+    """TD-350: only a login start, a start after a crash and one asked for paused wait for Resume."""
+    said = []
+    monkeypatch.setattr(command, "say", said.append)
+    assert control.start(said.append, paused=True) == 0
+    assert (said[-1].startswith("OwlBear started, paused until you press Resume"), control.projects()["paused"]) == (
+        True, True
+    )  # fmt: skip
+    assert command.restart() == 0
+    assert control.projects()["paused"] is True
+    rec = control.serve.running()
+    os.kill(rec.pid, signal.SIGKILL)
+    while control.serve.running() is not None:
+        time.sleep(0.05)
+    assert control.start(said.append) == 0
+    assert control.projects()["paused"] is True
+    assert "(the last run crashed)" in (local_home.root() / control.LOG).read_text()
+    assert control.stop(said.append) == 0
+    assert (control.start(said.append), control.projects()["paused"]) == (0, False)
+    assert (command.restart(), control.projects()["paused"]) == (0, False)
+    assert (command.restart(paused=True), control.projects()["paused"]) == (0, True)
+    assert control.stop(said.append) == 0
 
 
 def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -> None:
@@ -115,7 +142,7 @@ def test_stop_never_signals_a_host_that_has_not_named_its_process(monkeypatch) -
 
 def test_a_host_that_ends_at_once_is_reported_not_started(monkeypatch) -> None:
     said = []
-    monkeypatch.setattr(control, "argv", lambda: [sys.executable, "-c", "raise SystemExit(3)"])
+    monkeypatch.setattr(control, "argv", lambda **_k: [sys.executable, "-c", "raise SystemExit(3)"])
     assert control.start(said.append) == 1
     assert said[-1] == "OwlBear ended at once (exit 3); see `owlbear logs`"
 
