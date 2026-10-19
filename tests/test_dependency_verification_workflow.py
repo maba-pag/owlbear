@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
-import shutil
 import stat
 import subprocess
 import sys
@@ -21,7 +20,6 @@ VERIFY_PATH = ROOT / ".github/workflows/tooling.yml"
 COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
 COPILOT_SETUP_PATH = ROOT / ".github/workflows/copilot-setup-steps.yml"
-MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
 UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
@@ -34,135 +32,6 @@ COPILOT_UV_SYNC = (
     'for package in $CI_SKIPPED_PACKAGES; do skipped+=(--no-install-package "$package"); done\n'
     'uv sync --locked --all-packages --group dev "${skipped[@]}"\n'
 )
-
-
-@pytest.fixture
-def toolchain_sync_module():
-    spec = importlib.util.spec_from_file_location(
-        "sync_megalinter_toolchain_test", ROOT / ".github/scripts/sync_megalinter_toolchain.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def _toolchain_fixture(root, module, *, ruff="0.16.2", biome="2.5.11"):
-    files = {
-        module.MANIFEST: f'[dependency-groups]\ndev = ["ruff=={ruff}"]\n',
-        module.PRE_COMMIT: f"repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    rev: v{ruff}\n",
-        module.BIOME_CONFIG: json.dumps({"$schema": f"https://biomejs.dev/schemas/{biome}/schema.json"}),
-        module.NPM_MANIFEST: json.dumps({"devDependencies": {"@biomejs/biome": biome}}),
-        "uv.lock": f'[[package]]\nname = "ruff"\nversion = "{ruff}"\n',
-        module.NPM_LOCK: json.dumps(
-            {
-                "packages": {
-                    "": {"devDependencies": {"@biomejs/biome": biome}},
-                    "node_modules/@biomejs/biome": {"version": biome},
-                }
-            }
-        ),
-        module.MEGALINTER_CONFIG: "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.1.0\n",
-        module.MEGALINTER_WORKFLOW: f"uses: oxsecurity/megalinter/flavors/cupcake@{'a' * 40}  # v10.1.0\n",
-    }
-    for path, text in files.items():
-        target = root / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-
-
-def test_toolchain_sync_uses_bundled_release_and_is_idempotent(tmp_path, toolchain_sync_module, monkeypatch):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    commands = []
-
-    def resolve(root, command):
-        commands.append(command)
-        if command[0] == "git":
-            return "present"
-        if command[0] == "uv":
-            (tmp_path / "uv.lock").write_text('[[package]]\nname = "ruff"\nversion = "0.16.4"\n')
-        else:
-            lock = root / "package-lock.json"
-            lock.write_text(lock.read_text().replace("2.5.11", "2.5.12"))
-        return ""
-
-    monkeypatch.setattr(module, "_run", resolve)
-    versions = {"ruff": "0.16.4", "ruff-format": "0.16.4", "biome": "2.5.12"}
-    module.synchronize(tmp_path, versions)
-    module.synchronize(tmp_path, versions)
-    assert "ruff==0.16.4" in (tmp_path / module.MANIFEST).read_text()
-    assert "rev: v0.16.4" in (tmp_path / module.PRE_COMMIT).read_text()
-    assert "/2.5.12/schema.json" in (tmp_path / module.BIOME_CONFIG).read_text()
-    assert len(commands) == 3
-    assert commands[0][-1] == "refs/tags/v0.16.4"
-    assert "--no-build" in commands[1]
-    assert "--ignore-scripts" in commands[2]
-
-
-def test_toolchain_check_reports_drift_without_writing(tmp_path, toolchain_sync_module):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    before = {path: (tmp_path / path).read_bytes() for path in module.OUTPUT_PATHS}
-    with pytest.raises(ValueError, match="MegaLinter toolchain drift"):
-        module.synchronize(tmp_path, {"ruff": "0.16.4", "ruff-format": "0.16.4", "biome": "2.5.11"}, check=True)
-    assert before == {path: (tmp_path / path).read_bytes() for path in module.OUTPUT_PATHS}
-
-
-def test_toolchain_sync_rejects_unavailable_hook_before_writing(tmp_path, toolchain_sync_module, monkeypatch):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    before = {path: (tmp_path / path).read_bytes() for path in module.OUTPUT_PATHS}
-
-    def missing(_root, command):
-        raise subprocess.CalledProcessError(2, command)
-
-    monkeypatch.setattr(module, "_run", missing)
-    with pytest.raises(subprocess.CalledProcessError):
-        module.synchronize(tmp_path, {"ruff": "0.16.4", "ruff-format": "0.16.4", "biome": "2.5.11"})
-    assert before == {path: (tmp_path / path).read_bytes() for path in module.OUTPUT_PATHS}
-
-
-@pytest.mark.parametrize("current", ["0.16.5", "0.16.4"])
-def test_toolchain_sync_repairs_downgrade_and_lock_only_drift(tmp_path, toolchain_sync_module, monkeypatch, current):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module, ruff=current)
-    lock = tmp_path / "uv.lock"
-    lock.write_text('[[package]]\nname = "ruff"\nversion = "0.16.5"\n')
-
-    def resolve(_root, command):
-        if command[0] == "uv":
-            lock.write_text('[[package]]\nname = "ruff"\nversion = "0.16.4"\n')
-        return ""
-
-    monkeypatch.setattr(module, "_run", resolve)
-    module.synchronize(tmp_path, {"ruff": "0.16.4", "ruff-format": "0.16.4", "biome": "2.5.11"})
-    assert "ruff==0.16.4" in (tmp_path / module.MANIFEST).read_text()
-    assert tomllib.loads(lock.read_text())["package"][0]["version"] == "0.16.4"
-
-
-@pytest.mark.parametrize(
-    "metadata", [None, {}, {"ruff": "latest"}, {"ruff": "0.16.4", "ruff-format": "0.16.5", "biome": "2.5.11"}]
-)
-def test_toolchain_sync_rejects_invalid_metadata_before_writes(tmp_path, toolchain_sync_module, metadata):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    before = (tmp_path / module.MANIFEST).read_bytes()
-    with pytest.raises(ValueError, match="MegaLinter"):
-        module.synchronize(tmp_path, metadata)
-    assert (tmp_path / module.MANIFEST).read_bytes() == before
-
-
-def test_toolchain_metadata_follows_candidate_tag(tmp_path, toolchain_sync_module, monkeypatch):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    commands = []
-    metadata = {"ruff": "0.16.4", "ruff-format": "0.16.4", "biome": "2.5.11"}
-    monkeypatch.setattr(module, "_run", lambda _root, command: commands.append(command) or json.dumps(metadata))
-    assert module.load_versions(tmp_path) == metadata
-    assert (
-        commands[0][-1]
-        == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.1.0/.automation/generated/linter-versions.json"
-    )
 
 
 def _workflow(path: Path) -> dict[str, object]:
@@ -251,7 +120,6 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".github/renovate.json",
         ".github/scripts/**",
         ".github/workflows/**",
-        ".mega-linter.yml",
         ".pre-commit-config.yaml",
         ".python-version",
         ".owlbear/scripts/diagrams/**",
@@ -265,7 +133,6 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "serve/cockpit/web/package.json",
         "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
-        "serve/tools/src/owlbear_tools/megalinter.py",
         "tests/test_archify_diagrams.py",
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
@@ -322,7 +189,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "git apply" not in text
     assert "Check Node runtime declaration" in text
     node_setup = next(step for step in verify["steps"] if step.get("name") == "Setup Node.js")
-    for surface in ("node", "shared_node_runtime", "root_node", "diagrams", "pds", "precommit"):
+    for surface in ("node", "shared_node_runtime", "root_node", "diagrams", "pds"):
         assert f"steps.scope.outputs.{surface} == 'true'" in node_setup["if"]
     archify_steps = [
         step for step in verify["steps"] if step.get("name") == "Verify pinned Archify release and static render"
@@ -374,14 +241,6 @@ def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
     ]
 
 
-def test_dependency_workflow_does_not_download_megalinter_image() -> None:
-    verify = _job(_workflow(VERIFY_PATH), "verify")
-    text = VERIFY_PATH.read_text(encoding="utf-8")
-
-    assert not [step for step in verify["steps"] if step.get("name") == "Exercise updated MegaLinter image"]
-    assert "megalint --no-fix" not in text
-
-
 def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
     verify = _job(_workflow(VERIFY_PATH), "verify")
     text = VERIFY_PATH.read_text(encoding="utf-8")
@@ -393,11 +252,10 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
     assert steps["Exercise dependency proof tooling"] == {
         "name": "Exercise dependency proof tooling",
         "if": "steps.reuse.outputs.cache-hit != 'true' && steps.proof_tooling.outputs.proof_tooling == 'true'",
-        "run": "uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py",
+        "run": "uv run pytest -q tests/test_dependency_verification_workflow.py",
     }
     assert ".github/scripts/check_uv_workspace_lock.py)" in text
     assert ".github/workflows/*|" in text
-    assert "serve/tools/src/owlbear_tools/megalinter.py|" in text
     assert "tests/test_dependency_verification_workflow.py)" in text
 
 
@@ -495,24 +353,7 @@ def test_ruff_toolchain_proof_accepts_aligned_repository_versions(
     ruff_toolchain_module: ModuleType,
 ) -> None:
     version = _workspace_ruff_version()
-    ruff_toolchain_module.check_ruff_toolchain(
-        ROOT,
-        ruff_executable=str(_fake_ruff(tmp_path, version)),
-        megalinter_versions_loader=lambda _: {"ruff": version},
-    )
-
-
-def test_megalinter_metadata_url_uses_requested_version(ruff_toolchain_module: ModuleType) -> None:
-    urls: list[str] = []
-
-    metadata_version = ruff_toolchain_module._read_megalinter_declared_ruff_version(  # noqa: SLF001
-        "v9.9.9",
-        json_loader=lambda url: urls.append(url) or {"ruff": "0.16.5"},
-    )
-    assert metadata_version == "0.16.5"
-    assert urls == [
-        ("https://raw.githubusercontent.com/oxsecurity/megalinter/v9.9.9/.automation/generated/linter-versions.json")
-    ]
+    ruff_toolchain_module.check_ruff_toolchain(ROOT, ruff_executable=str(_fake_ruff(tmp_path, version)))
 
 
 def test_ruff_toolchain_proof_rejects_installed_version_drift(
@@ -520,11 +361,7 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
     ruff_toolchain_module: ModuleType,
 ) -> None:
     with pytest.raises(ValueError, match=r"installed Ruff=0\.16\.1"):
-        ruff_toolchain_module.check_ruff_toolchain(
-            ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")),
-            megalinter_versions_loader=lambda _: {"ruff": _workspace_ruff_version()},
-        )
+        ruff_toolchain_module.check_ruff_toolchain(ROOT, ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")))
 
 
 def test_renovate_archify_match_spans_version_and_digest() -> None:
@@ -567,7 +404,6 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
         (".pre-commit-config.yaml", "precommit"),
         (".github/workflows/python.yml", "workflows"),
         (".github/renovate.json", "renovate"),
-        (".mega-linter.yml", "megalinter"),
     ],
 )
 def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> None:
@@ -662,30 +498,6 @@ def test_unrelated_precommit_changes_use_compatibility_proof_without_python_suit
             ),
             False,
         ),
-        (
-            ".mega-linter.yml",
-            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: []\n",
-            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.1.0\nENABLE_LINTERS: []\n",
-            True,
-        ),
-        (
-            ".mega-linter.yml",
-            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: []\n",
-            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: [PYTHON_RUFF]\n",
-            False,
-        ),
-        (
-            ".github/workflows/megalinter.yml",
-            "      uses: oxsecurity/megalinter/flavors/cupcake@oldsha  # v10.0.0\n",
-            "      uses: oxsecurity/megalinter/flavors/cupcake@newsha  # v10.0.0\n",
-            True,
-        ),
-        (
-            ".github/workflows/megalinter.yml",
-            "      uses: oxsecurity/megalinter/flavors/cupcake@sha  # v10.0.0\n      timeout-minutes: 15\n",
-            "      uses: oxsecurity/megalinter/flavors/cupcake@sha  # v10.0.0\n      timeout-minutes: 20\n",
-            False,
-        ),
     ],
 )
 def test_ruff_toolchain_classification_uses_relevant_snapshot_values(
@@ -703,9 +515,7 @@ def test_ruff_toolchain_classification_uses_relevant_snapshot_values(
     )
 
     assert scope.ruff_toolchain is ruff_toolchain
-    assert scope.compatibility is (
-        ruff_toolchain or path in {".pre-commit-config.yaml", ".mega-linter.yml", ".github/workflows/megalinter.yml"}
-    )
+    assert scope.compatibility is (ruff_toolchain or path == ".pre-commit-config.yaml")
 
 
 @pytest.mark.parametrize(
@@ -940,39 +750,17 @@ def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_megalinter_native_and_action_versions_stay_aligned() -> None:
-    config = (ROOT / ".mega-linter.yml").read_text(encoding="utf-8")
-    workflow = MEGALINTER_PATH.read_text(encoding="utf-8")
-    flavor_match = re.search(r"^MEGALINTER_FLAVOR:\s*(?P<flavor>[a-z0-9-]+)", config, re.MULTILINE)
-    config_match = re.search(r"^MEGALINTER_VERSION:\s*v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)", config, re.MULTILINE)
-    action_match = re.search(
-        r"uses:\s*oxsecurity/megalinter/flavors/(?P<flavor>[a-z0-9-]+)@[^\s]+\s+#\s*v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
-        workflow,
-    )
-
-    assert flavor_match is not None
-    assert config_match is not None
-    assert action_match is not None
-    assert flavor_match.group("flavor") == action_match.group("flavor")
-    assert config_match.group("version") == action_match.group("version")
-
-
 def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
     renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
 
     assert "dependencies" in renovate["labels"]
-    assert "security:minimumReleaseAgeNpm" in renovate["extends"]
+    assert renovate["extends"][0] == "config:best-practices"  # it brings security:minimumReleaseAgeNpm
     assert "security:minimumReleaseAgePypi" in renovate["extends"]
     assert renovate["lockFileMaintenance"]["automerge"] is False
     assert renovate["vulnerabilityAlerts"]["minimumReleaseAge"] == "6 hours"
+    assert "schedule" not in renovate["vulnerabilityAlerts"]  # Renovate ignores schedules for security fixes
     assert any(
         rule.get("minimumReleaseAge") == "24 hours" and rule.get("matchDatasources") == ["docker"]
-        for rule in renovate["packageRules"]
-    )
-    assert any(
-        rule.get("minimumReleaseAge") == "24 hours"
-        and rule.get("matchDatasources") == ["github-tags"]
-        and rule.get("matchPackageNames") == ["oxsecurity/megalinter"]
         for rule in renovate["packageRules"]
     )
     assert any(
@@ -982,87 +770,15 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
     assert all("Renovate CLI" not in manager.get("description", "") for manager in renovate["customManagers"])
 
 
-def test_renovate_derives_linter_updates_from_megalinter() -> None:
+def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:
+    """Ruff's pin and every hook move together, so `check_ruff_toolchain.py` sees one version (TD-409)."""
     renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
-    for package in ("ruff", "astral-sh/ruff-pre-commit", "@biomejs/biome"):
-        rules = [rule for rule in renovate["packageRules"] if package in rule.get("matchPackageNames", [])]
-        assert rules[-1]["enabled"] is False
-        assert all("allowedVersions" not in rule for rule in rules)
-    rules = [rule for rule in renovate["packageRules"] if "oxsecurity/megalinter" in rule.get("matchPackageNames", [])]
-    assert rules[-1]["groupName"] == "MegaLinter toolchain"
-    assert all(rule.get("enabled", True) and "minimumGroupSize" not in rule for rule in rules)
+    rules = renovate["packageRules"]
+    lint = [rule for rule in rules if rule.get("groupName") == "lint toolchain"]
+    weekly = [rule.get("groupName") for rule in rules].index("{{datasource}} minor/patch updates")
 
-
-def _git_fixture(root, *arguments):
-    executable = shutil.which("git")
-    assert executable is not None
-    return subprocess.run(  # noqa: S603
-        [executable, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", *arguments],
-        cwd=root,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-
-def _commit_fixture(root):
-    _git_fixture(root, "add", ".")
-    _git_fixture(root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "fixture")
-    return _git_fixture(root, "rev-parse", "HEAD")
-
-
-@pytest.mark.parametrize("attack", ["unexpected-file", "npm-script", "symlink"])
-def test_toolchain_candidate_rejects_unsafe_pr_changes(tmp_path, toolchain_sync_module, attack):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    _git_fixture(tmp_path, "init")
-    base = _commit_fixture(tmp_path)
-    if attack == "unexpected-file":
-        (tmp_path / "malicious.py").write_text("print('untrusted')\n")
-    elif attack == "npm-script":
-        manifest = tmp_path / module.NPM_MANIFEST
-        document = json.loads(manifest.read_text())
-        document["scripts"] = {"postinstall": "untrusted"}
-        manifest.write_text(json.dumps(document))
-    else:
-        target = tmp_path / module.MANIFEST
-        target.unlink()
-        target.symlink_to("uv.lock")
-    _commit_fixture(tmp_path)
-    with pytest.raises(ValueError, match=r"Unexpected change|Non-version edits|symlink"):
-        module.validate_candidate(tmp_path, base)
-
-
-def test_toolchain_candidate_accepts_version_changes_and_discards_pr_locks(tmp_path, toolchain_sync_module):
-    module = toolchain_sync_module
-    _toolchain_fixture(tmp_path, module)
-    _git_fixture(tmp_path, "init")
-    base = _commit_fixture(tmp_path)
-    for path in (module.MEGALINTER_CONFIG, module.MEGALINTER_WORKFLOW):
-        target = tmp_path / path
-        target.write_text(target.read_text().replace("v10.1.0", "v10.2.0"))
-    lock = tmp_path / "uv.lock"
-    original = lock.read_text()
-    lock.write_text("untrusted lockfile contents")
-    _commit_fixture(tmp_path)
-    module.validate_candidate(tmp_path, base)
-    assert lock.read_text() == original
-    assert "v10.2.0" in (tmp_path / module.MEGALINTER_CONFIG).read_text()
-
-
-def test_toolchain_writer_preserves_trust_and_publication_boundaries():
-    workflow = _workflow(ROOT / ".github/workflows/sync-megalinter-toolchain.yml")
-    job = _job(workflow, "sync")
-    assert "github.event.pull_request.user.login == 'renovate[bot]'" in job["if"]
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in job["if"]
-    steps = {step["name"]: step for step in job["steps"]}
-    checkout = steps["Checkout trusted base code"]
-    assert checkout["with"]["ref"] == "${{ github.event.pull_request.base.sha }}"
-    assert checkout["with"]["persist-credentials"] is False
-    sync = steps["Validate candidate and synchronize exact versions"]
-    assert '--base-ref "$BASE_SHA"' in sync["run"]
-    publish = steps["Publish alignment commit on unchanged PR head"]
-    assert "secrets.PAT" in publish["env"]["GH_TOKEN"]
-    assert '--force-with-lease="refs/heads/$HEAD_BRANCH:$HEAD_SHA"' in publish["run"]
-    assert "core.hooksPath=/dev/null" in publish["run"]
-    assert "41898282+github-actions[bot]@users.noreply.github.com" in publish["run"]
+    assert "customManagers:biomeVersions" in renovate["extends"]
+    assert [rule.get("matchManagers") for rule in lint] == [["pre-commit"], None]
+    assert lint[1]["matchPackageNames"] == ["ruff", "@biomejs/biome"]
+    assert all(rules.index(rule) > weekly for rule in lint)
+    assert all(rule.get("enabled", True) for rule in rules)

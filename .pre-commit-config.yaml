@@ -1,26 +1,20 @@
 ---
-# Pre-commit config — aligned with CI (MegaLinter v10)
+# The workspace's one linter registry; CI's Static suite runs `uv run lint --no-fix`.
 #
 # Commands:
 #   uv run lint [--staged] [--no-fix | --unsafe-fix]
 #                     Workspace files by default; staged files with --staged
 #   uv run lint-cockpit [--staged] [--no-fix | --unsafe-fix]
 #                     Cockpit frontend lint aggregate
-#   uv run megalint [--no-fix | --unsafe-fix]
-#                     MegaLinter only
 #   uv run format [--staged] [--no-fix]
 #                     Python, Biome, whitespace, and final-newline formatters
 #   uv run quality [--no-fix | --unsafe-fix]
 #                     Full format, lint, typecheck, and advisory checks
-#
-# Auto-fix on commit: Ruff, trailing-whitespace, end-of-file-fixer, and
-# markdownlint.
 
-# Deactivated: no hook runs on commit; run them with `pre-commit run --hook-stage manual`.
+# Deactivated: no hook runs on commit; run them with `pre-commit run --hook-stage manual` (TD-204).
 default_stages: [manual]
 
-# Exclude the same generated, archived, and third-party paths as MegaLinter
-# where pre-commit's path matching can express them.
+# Exclude generated, archived, and third-party paths.
 exclude: |
   (?x)(^|/)(
     [^/]*\.egg-info/
@@ -70,7 +64,7 @@ repos:
       - id: check-added-large-files
         stages: [manual]
 
-  # ── Python (matches CI: PYTHON_RUFF + PYTHON_RUFF_FORMAT) ─
+  # ── Python ──────────────────────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.5
     hooks:
@@ -94,26 +88,32 @@ repos:
         args: [--fix, --unsafe-fixes]
         stages: [manual]
 
-  # ── YAML (matches CI: YAML_YAMLLINT) ────────────────────
+  # ── YAML ────────────────────────────────────────────────
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
       - id: yamllint
         args: [--strict]
 
-  # ── Shell (matches CI: BASH_SHELLCHECK) ─────────────────
+  # ── Shell ───────────────────────────────────────────────
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
 
-  # ── Actions (matches CI: ACTION_ACTIONLINT) ─────────────
+  # ── GitHub Actions ──────────────────────────────────────
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
       - id: actionlint
 
-  # ── Markdown (matches CI: MARKDOWN_MARKDOWNLINT) ────────
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.31.1
+    hooks:
+      - id: zizmor
+        args: [--no-progress, --offline, --min-severity=medium]
+
+  # ── Markdown ────────────────────────────────────────────
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.23.3
     hooks:
@@ -125,7 +125,7 @@ repos:
         name: markdownlint-cli2 (no fix)
         stages: [manual]
 
-  # ── EditorConfig (matches CI: EDITORCONFIG_EDITORCONFIG_CHECKER) ──
+  # ── EditorConfig ────────────────────────────────────────
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
     rev: "3.11.1"
     hooks:
@@ -138,7 +138,7 @@ repos:
     hooks:
       - id: biome-frontend-check
         name: Biome (Cockpit frontend and repository JSON)
-        language: system
+        language: unsupported
         entry: node serve/cockpit/web/scripts/run-biome-check.mjs check --write --no-errors-on-unmatched
         files: ^(serve/cockpit/web/.*\.(css|js|mjs|ts|tsx)|.*\.(json|jsonc))$
       # Frontend — extra (no CI equivalent, catches type errors early)
@@ -146,7 +146,7 @@ repos:
       # staged files. Run explicitly: uv run pre-commit run typecheck-frontend --all-files --hook-stage manual
       - id: typecheck-frontend
         name: TypeScript (Cockpit frontend)
-        language: system
+        language: unsupported
         entry: npx --prefix serve/cockpit/web tsc --noEmit --project serve/cockpit/web/tsconfig.json
         files: ^serve/cockpit/web/(src/.*\.(ts|tsx)|vite\.config\.ts|vitest\.setup\.ts)$
         pass_filenames: false
@@ -154,7 +154,7 @@ repos:
       # Project-specific validators
       - id: validate-skills
         name: Validate Agent Skills
-        language: system
+        language: unsupported
         entry: uv run --frozen python .owlbear/scripts/validate_skills.py
         files: >-
           (?x)
@@ -163,7 +163,7 @@ repos:
         pass_filenames: false
       - id: validate-agents
         name: Validate Agent Tool Names
-        language: system
+        language: unsupported
         entry: uv run --frozen python .owlbear/scripts/validate_agents.py
         files: >-
           (?x)
@@ -176,27 +176,15 @@ repos:
         pass_filenames: false
       - id: validate-prompts
         name: Validate Agent Prompts
-        language: system
+        language: unsupported
         entry: uv run --frozen python .owlbear/scripts/validate_prompts.py
         files: '^(?:share|\.owlbear)/(?:agents|prompts|skills)/.*|^\.owlbear/scripts/validate_prompts\.py$'
         pass_filenames: false
       # TODO marker scan — warning only (always exit 0, output always shown)
       - id: todo-check
         name: TODO marker scan
-        language: system
+        language: unsupported
         entry: uv run --frozen todo
         pass_filenames: false
         always_run: true
         verbose: true
-
-  # ── MegaLinter (manual-only) ────────────────────────────
-  # Usage: uv run pre-commit run megalinter --all-files --hook-stage manual
-  - repo: local
-    hooks:
-      - id: megalinter
-        name: MegaLinter
-        language: system
-        entry: uv run --frozen megalint
-        pass_filenames: false
-        always_run: true
-        stages: [manual]

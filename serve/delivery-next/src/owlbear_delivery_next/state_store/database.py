@@ -91,7 +91,8 @@ def _local(root: Path) -> None:
     device = root.stat().st_dev
     if device in _local_devices:
         return
-    said = subprocess.run(["df", "-l", str(root)], capture_output=True, text=True, check=False, timeout=30)  # noqa: S603, S607
+    command = ["df", "-l", str(root)]
+    said = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)  # noqa: S603
     if said.returncode or len(said.stdout.splitlines()) < 2:  # noqa: PLR2004 - the header and the file system
         msg = f"{root} is not on a local disk, so Delivery cannot keep its database there"
         raise StoreError(msg)

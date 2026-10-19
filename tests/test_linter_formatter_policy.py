@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from owlbear_tools import quality
+
 _ROOT = Path(__file__).resolve().parents[1]
 _JSONC_LINE_COMMENT = re.compile(r"(?m)^\s*//.*$")
 _SEED_ONLY_CLI2_IGNORES = frozenset({".owlbear/hooks"})
@@ -62,16 +64,6 @@ _P08_JSON_SCOPE_SAMPLES = (
     (".markdownlint-cli2.jsonc", True),
     ("serve/cockpit/web/src/App.tsx", False),
 )
-_BIOME_DESCRIPTORS = {
-    "JAVASCRIPT_BIOME": (r"^serve/cockpit/web/(?!public/).*\.(js|mjs)$", [".js", ".mjs"]),
-    "TYPESCRIPT_BIOME": (r"^serve/cockpit/web/(?!public/).*\.ts$", None),
-    "JSX_BIOME": (r"^serve/cockpit/web/(?!public/).*\.tsx$", [".tsx"]),
-    "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", None),
-    "JSON_BIOME": (
-        None,
-        [".json", ".jsonc"],
-    ),
-}
 _M04_ALLOWED_ELEMENTS = [
     "agents",
     "boundaries",
@@ -196,32 +188,28 @@ def _read_precommit_hook(config: dict[str, object], hook_id: str) -> dict[str, o
     raise AssertionError(message)
 
 
-def _read_megalinter_excludes(config: dict[str, object]) -> tuple[re.Pattern[str], frozenset[str]]:
-    pattern = config.get("FILTER_REGEX_EXCLUDE")
-    directories = config.get("ADDITIONAL_EXCLUDED_DIRECTORIES")
-    assert isinstance(pattern, str)
-    assert isinstance(directories, list)
-    assert all(isinstance(directory, str) for directory in directories)
-    return re.compile(pattern), frozenset(directories)
+def test_every_hook_the_lint_runner_calls_runs_in_the_manual_stage() -> None:
+    """The runner passes `--hook-stage manual`; a hook absent from that stage fails `uv run lint` (TD-204)."""
+    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
+    default_stages = config.get("default_stages")
+    hooks = [hook for repository in config["repos"] for hook in repository["hooks"]]
+    called = {*quality._PRECOMMIT_CHECK_HOOKS.values()}  # noqa: SLF001
+    called |= {name for names in quality._PRECOMMIT_FIX_HOOKS.values() for name in names if name}  # noqa: SLF001
 
-
-def _is_megalinter_excluded(
-    path: str,
-    pattern: re.Pattern[str],
-    directories: frozenset[str],
-) -> bool:
-    return pattern.search(path) is not None or any(directory in Path(path).parts for directory in directories)
+    for name in sorted(called):
+        matches = [hook for hook in hooks if name in {hook.get("id"), hook.get("alias")}]
+        assert matches, name
+        assert all("manual" in hook.get("stages", default_stages) for hook in matches), name
 
 
 def test_markdownlint_ignore_authorities_share_normalized_policy() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
-    assert root_bare == root_cli2
-    assert seed_bare == root_bare
-    assert seed_cli2 | _SEED_ONLY_CLI2_IGNORES == root_bare | _SEED_ONLY_CLI2_IGNORES
+    assert not (_ROOT / ".markdownlintignore").exists()  # markdownlint-cli2 does not read it
+    assert seed_bare == root_cli2
+    assert seed_cli2 | _SEED_ONLY_CLI2_IGNORES == root_cli2 | _SEED_ONLY_CLI2_IGNORES
 
 
 def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
@@ -249,199 +237,116 @@ def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() 
 
 
 def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
     category = ".owlbear/delivery/packages"
 
-    assert category in root_bare
     assert category in root_cli2
     assert category in seed_bare
     assert category in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert precommit_exclude.search(_M09_PACKAGE_MARKDOWN_PATH) is not None
-    assert _is_megalinter_excluded(
-        _M09_PACKAGE_MARKDOWN_PATH,
-        megalinter_exclude,
-        megalinter_directories,
-    )
 
 
 def test_delivery_runtime_remains_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
     category = ".owlbear/delivery/runtime"
 
-    assert category in root_bare
     assert category in root_cli2
     assert category in seed_bare
     assert category in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert precommit_exclude.search(_M09_RUNTIME_MARKDOWN_PATH) is not None
-    assert _is_megalinter_excluded(
-        _M09_RUNTIME_MARKDOWN_PATH,
-        megalinter_exclude,
-        megalinter_directories,
-    )
 
 
 def test_broad_worktree_ignore_covers_delivery_worktrees() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
     scoped_category = ".owlbear/delivery/worktrees"
 
-    assert "worktrees" in root_bare
     assert "worktrees" in root_cli2
     assert "worktrees" in seed_bare
     assert "worktrees" in seed_cli2
-    assert scoped_category not in root_bare | root_cli2 | seed_bare | seed_cli2
+    assert scoped_category not in root_cli2 | seed_bare | seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert precommit_exclude.search(_M09_WORKTREE_MARKDOWN_PATH) is not None
-    assert _is_megalinter_excluded(
-        _M09_WORKTREE_MARKDOWN_PATH,
-        megalinter_exclude,
-        megalinter_directories,
-    )
 
 
 def test_generated_indexes_remain_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
     for path in _M09_GENERATED_INDEX_MARKDOWN_PATHS:
-        assert path in root_bare
         assert path in root_cli2
         assert path in seed_bare
         assert path in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert all(precommit_exclude.search(path) is not None for path in _M09_GENERATED_INDEX_MARKDOWN_PATHS)
-    assert all(
-        _is_megalinter_excluded(path, megalinter_exclude, megalinter_directories)
-        for path in _M09_GENERATED_INDEX_MARKDOWN_PATHS
-    )
 
 
 def test_memory_store_remains_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
-    assert ".owlbear/memory" in root_bare
     assert ".owlbear/memory" in root_cli2
     assert ".owlbear/memory" in seed_bare
     assert ".owlbear/memory" in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert all(precommit_exclude.search(path) is not None for path in _M09_MEMORY_MARKDOWN_PATHS)
-    assert all(
-        _is_megalinter_excluded(path, megalinter_exclude, megalinter_directories) for path in _M09_MEMORY_MARKDOWN_PATHS
-    )
 
 
 def test_research_archive_remains_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
-    assert ".owlbear/research" in root_bare
     assert ".owlbear/research" in root_cli2
     assert ".owlbear/research" in seed_bare
     assert ".owlbear/research" in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert all(precommit_exclude.search(path) is not None for path in _M09_RESEARCH_MARKDOWN_PATHS)
-    assert all(
-        _is_megalinter_excluded(path, megalinter_exclude, megalinter_directories)
-        for path in _M09_RESEARCH_MARKDOWN_PATHS
-    )
 
 
 def test_sources_document_is_included_in_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
-    assert ".owlbear/sources" not in root_bare
     assert ".owlbear/sources" not in root_cli2
     assert ".owlbear/sources" not in seed_bare
     assert ".owlbear/sources" not in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
     assert precommit_exclude.search(_M09_SOURCES_MARKDOWN_PATH) is None
-    assert not _is_megalinter_excluded(_M09_SOURCES_MARKDOWN_PATH, megalinter_exclude, megalinter_directories)
 
 
-def test_precommit_and_megalinter_share_exclusion_taxonomy() -> None:
+def test_precommit_exclusion_taxonomy() -> None:
     precommit_pattern = _read_precommit_exclude(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    megalinter_pattern, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
-
-    for path in (*_P01_SHARED_EXCLUDED_PATHS, *_P01_SHARED_INCLUDED_PATHS):
-        precommit_excluded = precommit_pattern.search(path) is not None
-        megalinter_excluded = _is_megalinter_excluded(path, megalinter_pattern, megalinter_directories)
-        assert precommit_excluded == megalinter_excluded, path
 
     assert all(precommit_pattern.search(path) is not None for path in _P01_SHARED_EXCLUDED_PATHS)
     assert all(precommit_pattern.search(path) is None for path in _P01_SHARED_INCLUDED_PATHS)
 
 
 def test_biome_replaces_frontend_and_json_scanners() -> None:
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    enabled = megalinter.get("ENABLE_LINTERS")
-    assert isinstance(enabled, list)
-    assert "JSON_JSONLINT" not in enabled
-    assert "JAVASCRIPT_ES" not in enabled
-    assert "TYPESCRIPT_ES" not in enabled
-    assert "CSS_STYLELINT" not in enabled
-    assert "JAVASCRIPT_BIOME" in enabled
-    assert "TYPESCRIPT_BIOME" in enabled
-    assert "CSS_BIOME" in enabled
-    assert "JSON_BIOME" in enabled
-    assert megalinter.get("JSON_BIOME_FILE_EXTENSIONS") == [".json", ".jsonc"]
-
     root_package = json.loads((_ROOT / "package.json").read_text(encoding="utf-8"))
     assert isinstance(root_package, dict)
     root_scripts = root_package.get("scripts")
@@ -468,7 +373,7 @@ def test_biome_replaces_frontend_and_json_scanners() -> None:
     assert "check --write" in biome_hook.get("entry", "")
 
     workflow = (_ROOT / ".github/workflows/static.yml").read_text(encoding="utf-8")
-    assert "npm run lint:biome:ci\n" in workflow
+    assert "uv run --no-sync lint --no-fix\n" in workflow
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:
         assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path
@@ -587,22 +492,7 @@ def test_biome_precommit_fixes_only_selected_files(biome_workspace: Path) -> Non
     assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value = 1;\n"
 
 
-def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    enabled = megalinter.get("ENABLE_LINTERS")
-    assert isinstance(enabled, list)
-
-    for descriptor, (scope, extensions) in _BIOME_DESCRIPTORS.items():
-        assert descriptor in enabled
-        assert megalinter.get(f"{descriptor}_CLI_LINT_MODE") == "list_of_files"
-        assert megalinter.get(f"{descriptor}_FILTER_REGEX_INCLUDE") == scope
-        assert megalinter.get(f"{descriptor}_FILE_EXTENSIONS") == extensions
-
-
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    assert megalinter.get("EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS") == ("-f github-actions --disable-indent-size")
-
     precommit_config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     editorconfig_hook = _read_precommit_hook(
         precommit_config,

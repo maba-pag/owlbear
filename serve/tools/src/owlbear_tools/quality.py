@@ -11,7 +11,6 @@ from pathlib import Path
 
 import yaml
 
-from owlbear_tools.megalinter import run_megalint
 from owlbear_tools.quality_runtime import (
     FixMode,
     _add_fix_mode,
@@ -40,7 +39,8 @@ _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
 _PRECOMMIT_CHECK_HOOKS = {
     "lint-yaml": "yamllint",
     "lint-shell": "shellcheck",
-    "lint-actions": "actionlint",
+    "lint-actionlint": "actionlint",
+    "lint-zizmor": "zizmor",
     "lint-editorconfig": "editorconfig-checker",
 }
 _AGGREGATES: dict[str, tuple[str, ...]] = {
@@ -53,20 +53,19 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
         "lint-editorconfig",
         "lint-cockpit",
     ),
+    "lint-actions": ("lint-actionlint", "lint-zizmor"),
     "lint-cockpit": ("lint-cockpit-biome", "lint-cockpit-html"),
     "format": ("format-python", "format-biome", "format-whitespace", "format-eof"),
-    "quality": ("format", "lint", "megalint", "typecheck-cockpit", "todo"),
+    "quality": ("format", "lint", "typecheck-cockpit", "todo"),
 }
 
 
-def _precommit_hook(hook: str, *, staged: bool, manual: bool = False) -> int:
+def _precommit_hook(hook: str, *, staged: bool) -> int:
     if staged:
         paths = _git_paths(staged=True)
         if not paths:
             return 0
-    command = ["pre-commit", "run", hook]
-    if manual:
-        command.extend(["--hook-stage", "manual"])
+    command = ["pre-commit", "run", hook, "--hook-stage", "manual"]  # every hook is manual-only (TD-204)
     if staged:
         command.extend(["--files", *paths])
     else:
@@ -79,9 +78,9 @@ def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> in
     if fix_mode is FixMode.NONE:
         if not check_hook:
             return _check_text_files(name, staged=staged)
-        return _precommit_hook(check_hook, staged=staged, manual=True)
+        return _precommit_hook(check_hook, staged=staged)
     if fix_mode is FixMode.UNSAFE and unsafe_hook is not None:
-        return _precommit_hook(unsafe_hook, staged=staged, manual=True)
+        return _precommit_hook(unsafe_hook, staged=staged)
     return _precommit_hook(safe_hook, staged=staged)
 
 
@@ -193,8 +192,6 @@ def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
         result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
     elif name == "lint-cockpit-html":
         result = _run_cockpit_html(staged=staged)
-    elif name == "megalint":
-        result = run_megalint(fix_mode)
     elif name == "typecheck-cockpit":
         result = _run_typecheck_cockpit()
     elif name == "todo":
@@ -337,7 +334,7 @@ def lint_shell() -> None:
 
 
 def lint_actions() -> None:
-    """Run Actionlint on GitHub workflows."""
+    """Run Actionlint and zizmor on GitHub workflows."""
     _run_public_leaf("lint-actions", fixes=False, allow_unsafe=False, staged=True)
 
 

@@ -24,9 +24,9 @@ In other environments, follow that environment's review or implementation instru
 - Use disposable state and synthetic inputs. No live OwlBear MCP startup, production-state changes,
   company authentication or real provider mutations for testing.
 - Run the smallest affected test/check after substantive edits. Widen only for concrete consumer
-  risks. Never run the whole OwlBear suite, MegaLinter, `uv run megalint`, `uv run quality` or heavy
-  aggregate wrappers. Use locked toolchains and existing in-process tests; avoid repeated installs,
-  builds and tests on unchanged inputs. Missing capabilities must not halt other supported work.
+  risks. Never run the whole OwlBear suite, `uv run quality` or heavy aggregate wrappers. Use locked
+  toolchains and existing in-process tests; avoid repeated installs, builds and tests on unchanged
+  inputs. Missing capabilities must not halt other supported work.
 - Record unrun checks and their limits; fix real failures instead of adding skips or relaxing tests.
   Preserve existing work and publish coherent checkpoints before the session limit. A timeout does
   not require starting over, escalating models or repeating completed effects.

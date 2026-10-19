@@ -44,7 +44,6 @@ lint-actions = "owlbear_tools.quality:lint_actions"
 lint-editorconfig = "owlbear_tools.quality:lint_editorconfig"
 lint-cockpit-biome = "owlbear_tools.quality:lint_cockpit_biome"
 lint-cockpit-html = "owlbear_tools.quality:lint_cockpit_html"
-megalint = "owlbear_tools.megalinter:megalint"
 format = "owlbear_tools.quality:format_commands"
 format-python = "owlbear_tools.quality:format_python"
 format-biome = "owlbear_tools.quality:format_biome"
@@ -60,7 +59,6 @@ doctor = "owlbear_tools.project:doctor"
 target-branch = "owlbear_tools.delivery_config:target_branch"
 dep-status = "owlbear_tools.dependency_environment:dep_status"
 dep-sync = "owlbear_tools.dependency_environment:dep_sync"
-megalint-clean = "owlbear_tools.megalinter:megalint_clean"
 
 [tool.uv.sources]
 owlbear-delivery = { workspace = true }

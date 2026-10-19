@@ -275,7 +275,9 @@ function prLabels() {
 // TD-308: the line "Opened by OwlBear Delivery for …" at the end of a pull request's text, switched per project.
 function prMarker() {
   const key = "pr_marker";
-  if (state.layer !== "project") return cell(html`<p-text>Set in each project</p-text>`, source(key, state.loaded.settings[key]));
+  if (state.layer !== "project") {
+    return cell(html`<p-text>Set in each project</p-text>`, source(key, state.loaded.settings[key]));
+  }
   return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, "inherit (on)"], ["on", "on: end with the line"],
     ["off", "off: leave it out"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
   source(key, state.loaded.settings[key]));
@@ -844,7 +846,8 @@ function acrossSection() {
     return { key, global, from, machine: apart ? plain(here) : "same", differ, apart };
   }).filter((r) => state.everything || r.differ.length || r.apart);
   const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${plain(r.global)} (${r.from})`),
-    cell(r.machine), cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
+    cell(r.machine),
+    cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
   const flip = (e) => { state.everything = e.target.checked === true; show(); };
   const showAll = state.pds
     ? html`<p-checkbox id="across-all" label="Show all settings" .checked=${live(state.everything)}
