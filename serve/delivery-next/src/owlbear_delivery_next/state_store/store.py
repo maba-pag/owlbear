@@ -1,4 +1,4 @@
-"""Delivery-next state store in ``<git-common-dir>/owlbear-delivery/`` (D4 §3.2)."""
+"""Delivery-next state store in ``~/.owlbear/projects/<id>/``, one folder per project (D4 §3.2, TD-334)."""
 
 from __future__ import annotations
 
@@ -20,11 +20,10 @@ from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system import data_repo, local_home
-from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings, resolve
-from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store import profile_share, project_home
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
     Database,
@@ -44,7 +43,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.settings.migrations import Migrations
 
-STORE_DIR = "owlbear-delivery"
 CONFIG = "config.json"  # the project's settings layer (TD-52)
 MACHINE_SETTINGS = "settings.json"  # this machine's preference layer in ~/.owlbear (TD-336)
 ACTIVITY_LIMIT = 200
@@ -193,8 +191,7 @@ class Store:
             name = data_repo.folder(shared, cwd) if shared else ""
         except data_repo.DataRepoError as exc:
             raise StoreError(str(exc)) from exc
-        store = cls(git_common_dir(cwd) / STORE_DIR, shared, name)
-        store.root.mkdir(mode=0o700, exist_ok=True)
+        store = cls(project_home.located(cwd), shared, name)
         if (found := store.db.marker()) > STORE_FORMAT:  # the database itself opens with the first operation
             msg = f"store format {found} is newer than {STORE_FORMAT}"
             raise FormatTooNewError(msg)

@@ -23,7 +23,8 @@ from owlbear_delivery_next.pack_runs import visual_settled
 from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.runtimes import amendments, readiness, sdk_adapter, session_result, step_input
 from owlbear_delivery_next.settings import profile, roles
-from owlbear_delivery_next.state_store.store import STORE_DIR, LockHeldError, Store, StoreError
+from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
     amend,
     before,
@@ -367,7 +368,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     sessions.GRANT = args.sessions
     repo = args.repo.resolve()
-    if host.stale(host.running(Store(git_common_dir(repo) / STORE_DIR))):  # before Store.open, which may write
+    found = project_home.current(repo)  # before Store.open, which may write or move it
+    if found and host.stale(host.running(Store(found))):
         _out(f"{args.change}: {host.RESTART}")
         return 1
     store = Store.open(repo)

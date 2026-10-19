@@ -23,8 +23,11 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import loop, status
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings import migrations
+from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store import store as store_mod
+from owlbear_delivery_next.state_store.database import STORE_FORMAT
 from owlbear_delivery_next.state_store.store import FormatTooNewError, LockHeldError, Store, StoreError
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -82,9 +85,31 @@ def overwrite(store, slug, text):
         db.execute("UPDATE changes SET record = ? WHERE slug = ?", (text, slug))
 
 
-def test_every_worktree_opens_the_same_store_in_the_common_git_dir(repo, store):
+def test_every_worktree_opens_the_same_store_in_the_projects_folder(repo, store):
+    """TD-334: one folder per project in ~/.owlbear; the clone keeps only its id and the format marker."""
     git(repo, "worktree", "add", "-q", str(repo.parent / "wt"))
-    assert Store.open(repo.parent / "wt").root == store.root == (repo / ".git" / "owlbear-delivery").resolve()
+    folder = repo / ".git" / "owlbear-delivery"
+    pid = (folder / "clone-id").read_text().strip()
+    assert Store.open(repo.parent / "wt").root == store.root == local_home.root() / "projects" / pid
+    assert sorted(p.name for p in folder.iterdir() if p.name != "move.lock") == ["clone-id", "format"]
+
+
+def test_a_store_in_the_clone_moves_to_its_folder_once_and_older_runtimes_refuse_the_clone(repo):
+    folder = repo / ".git" / "owlbear-delivery"
+    (folder / "changes" / "c1").mkdir(parents=True)
+    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
+    (folder / "clone-id").write_text("abc123\n")
+    (folder / "format").write_text("6\n")
+    assert project_home.current(repo) == folder  # an older host may still run on it: nothing moves
+    store = Store.open(repo)
+    assert (store.root, project_home.current(repo)) == ((local_home.root() / "projects" / "abc123"),) * 2
+    assert (store.root / "changes" / "c1" / "runner.log").read_text() == "ran\n"
+    assert ((store.root / "format").read_text(), (folder / "format").read_text()) == ("6\n", f"{STORE_FORMAT}\n")
+    (folder / "late.json").write_text("{}")  # what a move cut short left behind
+    assert (Store.open(repo).root / "late.json").exists()
+    (folder / "late.json").write_text("{}")
+    with pytest.raises(StoreError, match="both exist"):
+        Store.open(repo)
 
 
 @pytest.mark.parametrize(("marker", "action"), [("99\n", "Upgrade OwlBear"), ("x\n", "Restore the previous state")])

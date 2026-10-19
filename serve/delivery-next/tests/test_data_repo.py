@@ -20,7 +20,8 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import change_record, profile_share
 from owlbear_delivery_next.state_store.database import put_record
-from owlbear_delivery_next.state_store.store import STORE_DIR, Store, StoreError
+from owlbear_delivery_next.state_store.project_home import STORE_DIR
+from owlbear_delivery_next.state_store.store import Store, StoreError
 from owlbear_delivery_next.workflow_steps import sessions
 
 AUTH = {"authorization": "Bearer t"}
@@ -133,10 +134,11 @@ def test_a_clones_own_settings_move_into_the_shared_repository_once(shared, repo
     local.parent.mkdir(parents=True)
     local.write_text(json.dumps({"format": 1, "widths": [1600]}))
 
-    assert Store.open(repo).settings().widths == [1600]
+    store = Store.open(repo)
+    assert store.settings().widths == [1600]
     assert json.loads((root / "shop-site" / "config.json").read_text())["widths"] == [1600]
     assert not local.exists()
-    assert local.with_name("config.json.moved").exists()  # the recovery copy stays
+    assert (store.root / "config.json.moved").exists()  # moved with the store (TD-334); the recovery copy stays
     assert pushed(remote, "shop-site/config.json")
 
 
@@ -165,8 +167,9 @@ def test_an_unchanged_save_pushes_what_an_earlier_save_could_not(shared, repo) -
 
 def test_old_role_overrides_reach_the_shared_layer_without_replacing_its_values(shared, repo) -> None:
     root, _ = shared
-    Store.open(repo).update_config(lambda cur: cur.model_copy(update={"widths": [1440]}))
-    old = repo / ".git" / STORE_DIR / "profile.json"
+    store = Store.open(repo)
+    store.update_config(lambda cur: cur.model_copy(update={"widths": [1440]}))
+    old = store.root / "profile.json"
     old.write_text(json.dumps({"format": 1, "roles": {"builder": {"model": "m-old", "effort": "low"}}}))
 
     layer = json.loads((root / "shop-site" / "config.json").read_text())
@@ -269,7 +272,7 @@ def test_the_old_common_pointer_moves_to_data_once_and_a_data_pointer_wins(share
         assert Store.open(repo).shared == data_repo.DataRepo(root)
         assert Store.open(repo).shared == data_repo.DataRepo(root)
     assert ((home / "data.json").read_text(), (home / "common.json").exists()) == (said, False)
-    assert sorted(p.name for p in home.iterdir()) == ["data.json"]  # no temporary file left
+    assert sorted(p.name for p in home.iterdir()) == ["data.json", "projects"]  # no temporary file left
     assert [r.getMessage() for r in caplog.records] == [
         f"moved the shared repository's pointer {home / 'common.json'} to {home / 'data.json'}"
     ]

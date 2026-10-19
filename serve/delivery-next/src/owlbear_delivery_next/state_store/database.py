@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from datetime import datetime
     from pathlib import Path
 
-STORE_FORMAT = 6  # above every file-format marker, so an older runtime refuses the store (TD-265)
+STORE_FORMAT = 7  # above every file-format marker (TD-265); 7: the store lives in ~/.owlbear (TD-334)
 DB, TMP, MARKER, MIGRATE, RETIRED = "delivery.db", "delivery.db.tmp", "format", "migrate.lock", ".imported"
 BUSY_MS = 10_000
 NOT_IMPORTED = "this clone's Delivery state moves to its database when OwlBear loads it; run `owlbear start`"
