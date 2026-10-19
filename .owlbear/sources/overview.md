@@ -19,7 +19,7 @@ External repos and resources studied during OwlBear development.
 | Dynamic workflows changelog | <https://github.blog/changelog/2026-10-01-dynamic-workflows-in-copilot-cli-and-the-copilot-app> | Code-defined multi-agent orchestration in Copilot CLI, the Copilot app and the SDK | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
 | Dynamic workflows concept | <https://docs.github.com/copilot/concepts/agents/dynamic-workflows> | Structured results, pause/resume, limits, availability, permissions | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
 | Using dynamic workflows | <https://docs.github.com/copilot/how-tos/use-copilot-agents/use-dynamic-workflows> | Extension-based definition, CLI runs, sharing, resume | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-09 |
-| Anthropic: Writing effective tools for agents | <https://www.anthropic.com/engineering/writing-tools-for-agents> | Tool selection, consolidation, semantic identifiers, parameter naming, actionable errors, evaluation-driven design | [tool-surface audit](../research/delivery-tool-surface-audit.md) | 2026-10-10 |
+| Anthropic: Writing effective tools for agents | <https://www.anthropic.com/engineering/writing-tools-for-agents> | Tool selection, consolidation, semantic identifiers, parameter naming, actionable errors, evaluation-driven design | [tool-surface audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-tool-surface-audit.md) | 2026-10-10 |
 | GitHub supported models per client | <https://docs.github.com/en/copilot/reference/ai-models/supported-models> | First-party Copilot client list | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
 | T3 Code | <https://github.com/pingdotgg/t3code> | Open-source agent control surface; supported providers; maturity | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
 | Copilot CLI ACP server | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server> | GitHub-documented route for custom front-ends to drive Copilot | [rebuild research](../research/delivery-liveness-first-rebuild.md) | 2026-10-10 |
@@ -32,34 +32,34 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code agent plugins | <https://code.visualstudio.com/docs/copilot/customization/agent-plugins> | Plugin components, install sources, `chat.pluginLocations`, update behavior | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| VS Code Agent Host | <https://code.visualstudio.com/docs/agents/concepts/agent-host> | Agent Host MCP and customization sources | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| VS Code customization overview | <https://code.visualstudio.com/docs/agent-customization/overview> | Deprecated location settings and migrations | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| VS Code prompt files | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | Prompt files not loaded by Agent Host | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| VS Code MCP servers and configuration | <https://code.visualstudio.com/docs/agents/reference/mcp-configuration> | Portable `.mcp.json`, `cwd` default, forwarding | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| VS Code agent harnesses | <https://code.visualstudio.com/docs/agents/concepts/agent-harnesses> | Folder versus worktree isolation | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| VS Code hooks | <https://code.visualstudio.com/docs/agent-customization/hooks> | Harness-specific hooks; agent-scoped hooks Local only | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| Agent Plugins spec 1.0.0 | <https://github.com/agentplugins/agent-plugins-spec/blob/main/spec/1.0.0.md> | MCP `cwd` rules, placeholders, `PLUGIN_DATA` | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| Copilot CLI plugin reference | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference> | Marketplace `ref`/`sha` pins, auto-update, precedence | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
-| GitHub custom agents configuration | <https://docs.github.com/en/copilot/reference/custom-agents-configuration> | Agent frontmatter without `hooks` | [distribution research](../research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code agent plugins | <https://code.visualstudio.com/docs/copilot/customization/agent-plugins> | Plugin components, install sources, `chat.pluginLocations`, update behavior | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code Agent Host | <https://code.visualstudio.com/docs/agents/concepts/agent-host> | Agent Host MCP and customization sources | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code customization overview | <https://code.visualstudio.com/docs/agent-customization/overview> | Deprecated location settings and migrations | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code prompt files | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | Prompt files not loaded by Agent Host | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code MCP servers and configuration | <https://code.visualstudio.com/docs/agents/reference/mcp-configuration> | Portable `.mcp.json`, `cwd` default, forwarding | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code agent harnesses | <https://code.visualstudio.com/docs/agents/concepts/agent-harnesses> | Folder versus worktree isolation | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| VS Code hooks | <https://code.visualstudio.com/docs/agent-customization/hooks> | Harness-specific hooks; agent-scoped hooks Local only | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| Agent Plugins spec 1.0.0 | <https://github.com/agentplugins/agent-plugins-spec/blob/main/spec/1.0.0.md> | MCP `cwd` rules, placeholders, `PLUGIN_DATA` | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| Copilot CLI plugin reference | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference> | Marketplace `ref`/`sha` pins, auto-update, precedence | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
+| GitHub custom agents configuration | <https://docs.github.com/en/copilot/reference/custom-agents-configuration> | Agent frontmatter without `hooks` | [distribution research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/owlbear-distribution-agent-host.md) | 2026-10-07 |
 
 ## GitHub Review and Cloud Instructions
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | GitHub repository instructions | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions> | Automatic path-scoped loading, `excludeAgent` feature targeting and PR head-branch context | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md` | 2026-09-21 |
-| GitHub instruction support matrix | <https://docs.github.com/en/copilot/reference/custom-instructions-support> | Path-specific instruction eligibility in GitHub and IDE features; explicit applicability avoids imposing cloud procedures on local sessions | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
-| GitHub code review customization | <https://docs.github.com/en/copilot/tutorials/customize-code-review> | Concise review criteria and unsupported comment-format/overview customization | `.github/instructions/code-review.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
-| GitHub code review usage | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review> | Native review versus Fix with Copilot, effort controls, re-review, thread reply and optional approval limits | [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub instruction support matrix | <https://docs.github.com/en/copilot/reference/custom-instructions-support> | Path-specific instruction eligibility in GitHub and IDE features; explicit applicability avoids imposing cloud procedures on local sessions | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md`; [cloud guide](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review customization | <https://docs.github.com/en/copilot/tutorials/customize-code-review> | Concise review criteria and unsupported comment-format/overview customization | `.github/instructions/code-review.instructions.md`; [cloud guide](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review usage | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review> | Native review versus Fix with Copilot, effort controls, re-review, thread reply and optional approval limits | [cloud guide](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
 
 ## Copilot Cloud Dependency Setup
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GitHub cloud environment setup | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Single setup job, supported settings, default-branch discovery and setup-failure behavior | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
-| GitHub parallel steps | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsparallel> | Same-job independent step execution with implicit wait and failure propagation, without custom process management | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub cloud environment setup | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Single setup job, supported settings, default-branch discovery and setup-failure behavior | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
+| GitHub parallel steps | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsparallel> | Same-job independent step execution with implicit wait and failure propagation, without custom process management | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
 | Astral setup-uv | <https://github.com/astral-sh/setup-uv> | Version selection, managed Python installation and dependency caching | `.github/workflows/copilot-setup-steps.yml` | 2026-09-18 |
-| Renovate GitHub Actions manager | <https://docs.renovatebot.com/modules/manager/github-actions/> | Native workflow discovery, action SHA/tag updates and `astral-sh/setup-uv` version input extraction | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
+| Renovate GitHub Actions manager | <https://docs.renovatebot.com/modules/manager/github-actions/> | Native workflow discovery, action SHA/tag updates and `astral-sh/setup-uv` version input extraction | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
 
 ## MegaLinter Toolchain Synchronization
 
@@ -85,46 +85,46 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GitHub cloud agent | <https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent> | Background execution, one-branch/PR scope, hard 59-minute limit and usage costs | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub cloud planning | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/research-plan-iterate> | Separate planning and implementation with durable PR context | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub model selection | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model> | User-selected model/reasoning controls, supported entry points and Auto fallback | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub cloud PR controls | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github> | Base branch, follow-up PR comments, model choice and workflow approval | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub session management | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents> | Persisted logs and pushed checkpoints, not ephemeral workspace assumptions | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub cloud environment | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Default-branch setup discovery, failed setup behavior and runner OS limits | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub repository MCP configuration | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers> | Repository-configured MCP access differs from local VS Code tools; in-process project tests do not require that access | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub security controls | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations> | Branch publication, human approval and workflow constraints | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub alternative agents | <https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents> | Claude/Codex alternatives and shared platform limitations | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
-| GitHub automations | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-automations> | Private/internal availability, permissions, triggers and billing | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud agent | <https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent> | Background execution, one-branch/PR scope, hard 59-minute limit and usage costs | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud planning | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/research-plan-iterate> | Separate planning and implementation with durable PR context | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub model selection | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model> | User-selected model/reasoning controls, supported entry points and Auto fallback | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud PR controls | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github> | Base branch, follow-up PR comments, model choice and workflow approval | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub session management | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents> | Persisted logs and pushed checkpoints, not ephemeral workspace assumptions | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud environment | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Default-branch setup discovery, failed setup behavior and runner OS limits | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub repository MCP configuration | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers> | Repository-configured MCP access differs from local VS Code tools; in-process project tests do not require that access | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub security controls | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations> | Branch publication, human approval and workflow constraints | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub alternative agents | <https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents> | Claude/Codex alternatives and shared platform limitations | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub automations | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-automations> | Private/internal availability, permissions, triggers and billing | [Flight handoff](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
 
 ## Memory System End-to-End Audit
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Git commit reference | <https://git-scm.com/docs/git-commit> | Explicit-path commit semantics and the distinction between validated snapshots, staged content, and current worktree bytes | [Memory system audit](../research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
-| SQLite atomic commit | <https://sqlite.org/atomiccommit.html> | Locking, atomic transactions, crash recovery, and failure-test principles for comparison with Markdown-backed memory | [Memory system audit](../research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
-| OWASP LLM Prompt Injection Prevention Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Persistent memory poisoning threat model, retrieved-data authority separation, and layered defenses; no example code adopted | [Memory system audit](../research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
+| Git commit reference | <https://git-scm.com/docs/git-commit> | Explicit-path commit semantics and the distinction between validated snapshots, staged content, and current worktree bytes | [Memory system audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
+| SQLite atomic commit | <https://sqlite.org/atomiccommit.html> | Locking, atomic transactions, crash recovery, and failure-test principles for comparison with Markdown-backed memory | [Memory system audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
+| OWASP LLM Prompt Injection Prevention Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Persistent memory poisoning threat model, retrieved-data authority separation, and layered defenses; no example code adopted | [Memory system audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
 
 ## Browser Package and Knowledge Integration Audit
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Microsoft Enterprise SSO plug-in for Apple devices | <https://learn.microsoft.com/en-us/entra/identity-platform/apple-sso-plugin> | macOS Company Portal and MDM prerequisites, browser-specific SSO integration, and limits of extension-only discovery | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
-| Playwright BrowserType API | <https://playwright.dev/python/docs/api/class-browsertype> | Edge channel selection, persistent-profile ownership constraints, context defaults and lower-fidelity CDP attachment | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
-| Playwright Chrome extensions guide | <https://playwright.dev/python/docs/chrome-extensions> | Persistent Chromium extension loading and removal of extension sideload flags from branded Chrome and Edge | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
-| Microsoft Edge DevTools Protocol | <https://learn.microsoft.com/en-us/microsoft-edge/devtools/protocol/> | Explicit remote-debugging setup and CDP endpoints; protocol capability distinguished from implemented OwlBear attachment | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Microsoft Enterprise SSO plug-in for Apple devices | <https://learn.microsoft.com/en-us/entra/identity-platform/apple-sso-plugin> | macOS Company Portal and MDM prerequisites, browser-specific SSO integration, and limits of extension-only discovery | [Browser audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Playwright BrowserType API | <https://playwright.dev/python/docs/api/class-browsertype> | Edge channel selection, persistent-profile ownership constraints, context defaults and lower-fidelity CDP attachment | [Browser audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Playwright Chrome extensions guide | <https://playwright.dev/python/docs/chrome-extensions> | Persistent Chromium extension loading and removal of extension sideload flags from branded Chrome and Edge | [Browser audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Microsoft Edge DevTools Protocol | <https://learn.microsoft.com/en-us/microsoft-edge/devtools/protocol/> | Explicit remote-debugging setup and CDP endpoints; protocol capability distinguished from implemented OwlBear attachment | [Browser audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
 
 ## Delivery Proposal Acceptance Redesign
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------|------|
-| GitHub REST API — Create a pull request | <https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request> | PR creation is a pull-request write operation; used to reject runtime PR-write capability and make creation user-owned | `.owlbear/research/delivery-proposal-acceptance-redesign.md` | 2026-08-09 |
-| GitHub REST API — Merge a pull request | <https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request> | The same pull-request API surface includes target-writing merge operations; no PR-creation-only runtime permission is available | `.owlbear/research/delivery-proposal-acceptance-redesign.md` | 2026-08-09 |
+| GitHub REST API — Create a pull request | <https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request> | PR creation is a pull-request write operation; used to reject runtime PR-write capability and make creation user-owned | `owlbear-data/owlbear/research/delivery-proposal-acceptance-redesign.md` | 2026-08-09 |
+| GitHub REST API — Merge a pull request | <https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request> | The same pull-request API surface includes target-writing merge operations; no PR-creation-only runtime permission is available | `owlbear-data/owlbear/research/delivery-proposal-acceptance-redesign.md` | 2026-08-09 |
 | GitHub REST API — Breaking changes | <https://docs.github.com/en/rest/about-the-rest-api/breaking-changes> | GitHub REST API version `2026-03-10` removes `merge_commit_sha` from pull-request responses; the package README documents open-read omission and merged-read enrichment | `serve/delivery-github/README.md` | 2026-08-22 |
 | GitHub GraphQL API — PullRequest object | <https://docs.github.com/en/graphql/reference/objects#pullrequest> | `mergeCommit.oid`, `mergedAt`, `headRefOid`, and `baseRefName` provide exact merged pull-request evidence after the REST field removal; `headRefOid` remains available after head-ref deletion | `serve/delivery-github/src/owlbear_delivery_github/github.py`; `serve/delivery-github/README.md` | 2026-08-22 |
-| GitHub REST API — Pull requests | <https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request> | Fixed PR read response, documented merged timestamp/actor/commit fields, absence of a completed historical merge-method field, and provider test-merge SHA semantics | `serve/delivery-github/src/owlbear_delivery_github/github.py`; `.owlbear/research/delivery-change-worktree-authority.md` | 2026-08-11 |
-| GitHub REST API — Breaking changes | <https://docs.github.com/en/rest/about-the-rest-api/breaking-changes> | API version `2026-03-10` removes `merge_commit_sha` from pull-request responses, requiring integrations to adapt their response contracts | `.owlbear/research/github-merged-pr-acceptance-evidence.md` | 2026-08-22 |
+| GitHub REST API — Pull requests | <https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request> | Fixed PR read response, documented merged timestamp/actor/commit fields, absence of a completed historical merge-method field, and provider test-merge SHA semantics | `serve/delivery-github/src/owlbear_delivery_github/github.py`; `owlbear-data/owlbear/research/delivery-change-worktree-authority.md` | 2026-08-11 |
+| GitHub REST API — Breaking changes | <https://docs.github.com/en/rest/about-the-rest-api/breaking-changes> | API version `2026-03-10` removes `merge_commit_sha` from pull-request responses, requiring integrations to adapt their response contracts | `owlbear-data/owlbear/research/github-merged-pr-acceptance-evidence.md` | 2026-08-22 |
 | GitHub CLI — `gh api` | <https://cli.github.com/manual/gh_api> | Authenticated fixed endpoint calls, JSON stdin bodies, and GraphQL variable transport | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
-| GitHub GraphQL API — PullRequest object | <https://docs.github.com/en/graphql/reference/objects#pullrequest> | `mergeCommit.oid`, `mergedAt`, `headRefOid`, and `baseRefName` provide exact merged pull-request evidence after the REST field removal; `headRefOid` remains available after head-ref deletion | `serve/delivery-github/src/owlbear_delivery_github/github.py`; `.owlbear/research/github-merged-pr-acceptance-evidence.md` | 2026-08-22 |
+| GitHub GraphQL API — PullRequest object | <https://docs.github.com/en/graphql/reference/objects#pullrequest> | `mergeCommit.oid`, `mergedAt`, `headRefOid`, and `baseRefName` provide exact merged pull-request evidence after the REST field removal; `headRefOid` remains available after head-ref deletion | `serve/delivery-github/src/owlbear_delivery_github/github.py`; `owlbear-data/owlbear/research/github-merged-pr-acceptance-evidence.md` | 2026-08-22 |
 | GitHub GraphQL API — Mutations | <https://docs.github.com/en/graphql/reference/mutations> | Named draft and ready-state pull-request mutations used by the fixed publication adapter | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 | GitHub GraphQL API — Checks and commits | <https://docs.github.com/en/graphql/reference/checks#checkrun> | Paginated check-run and status-context rollups, exact-PR required flags, and provider timing fields used by the read-only check observer | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 
@@ -132,13 +132,13 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Fission-AI/OpenSpec | <https://github.com/Fission-AI/OpenSpec/tree/0a99f410457271aa773d8b106f03f637f7c6b3c0> | Delta requirements, declarative artifact graphs, custom schemas, and machine-readable diagnostic contracts | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
-| open-gsd/gsd-core | <https://github.com/open-gsd/gsd-core/tree/30feeaa8be86b71616dd7d47bbd157d4ee0d2736> | Current/Target/Acceptance requirements, negative coverage, traceability, validation maps, and fresh-context orchestration | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
-| github/spec-kit | <https://github.com/github/spec-kit/tree/1be42992e64b08ff0dce3d7a914eaabf04284ffb> | User-journey specifications, bounded clarification, and cross-artifact consistency analysis | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
-| changkun/wallfacer | <https://github.com/changkun/wallfacer/tree/fa6616e82d20901fc4e666a333da006113732bad> | Spec lifecycle, stale/drift semantics, reality-grounded design records, and spec/task graphs | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
-| rpamis/comet | <https://github.com/rpamis/comet/tree/a2b804d575bc99574b245fd52b45fa42016a130c> | Typed phase guards, evidence codes, checkpoints, recovery, and mandatory decision points | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
-| mattpocock/skills | <https://github.com/mattpocock/skills> | Composable `grill-me`, `grill-with-docs`, and `to-spec` interaction and artifact boundaries | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-12 |
-| Matt Pocock, "5 Agent Skills I Use Every Day" | <https://www.aihero.dev/5-agent-skills-i-use-every-day> | Rationale and practical usage for conversation-first grilling before artifact generation | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-12 |
+| Fission-AI/OpenSpec | <https://github.com/Fission-AI/OpenSpec/tree/0a99f410457271aa773d8b106f03f637f7c6b3c0> | Delta requirements, declarative artifact graphs, custom schemas, and machine-readable diagnostic contracts | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| open-gsd/gsd-core | <https://github.com/open-gsd/gsd-core/tree/30feeaa8be86b71616dd7d47bbd157d4ee0d2736> | Current/Target/Acceptance requirements, negative coverage, traceability, validation maps, and fresh-context orchestration | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| github/spec-kit | <https://github.com/github/spec-kit/tree/1be42992e64b08ff0dce3d7a914eaabf04284ffb> | User-journey specifications, bounded clarification, and cross-artifact consistency analysis | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| changkun/wallfacer | <https://github.com/changkun/wallfacer/tree/fa6616e82d20901fc4e666a333da006113732bad> | Spec lifecycle, stale/drift semantics, reality-grounded design records, and spec/task graphs | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| rpamis/comet | <https://github.com/rpamis/comet/tree/a2b804d575bc99574b245fd52b45fa42016a130c> | Typed phase guards, evidence codes, checkpoints, recovery, and mandatory decision points | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| mattpocock/skills | <https://github.com/mattpocock/skills> | Composable `grill-me`, `grill-with-docs`, and `to-spec` interaction and artifact boundaries | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-12 |
+| Matt Pocock, "5 Agent Skills I Use Every Day" | <https://www.aihero.dev/5-agent-skills-i-use-every-day> | Rationale and practical usage for conversation-first grilling before artifact generation | `owlbear-data/owlbear/research/sdd-framework-comparison.md` | 2026-07-12 |
 
 ## Agent Workflow Patterns
 
@@ -150,76 +150,76 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| coleam00/skills | <https://github.com/coleam00/skills/tree/ecef6ffd4caa0b23a8c79601c1215b1e2908ac72> | Comparative review of exactly 33 Claude-oriented skills; retained concepts include report-only AI-layer ablation, rules drift detection, opportunity scanning, post-result system review, positive validation markers, non-empty proof, evaluator independence, protected governance, and selective holdout or mutation checks. Direct PIV, worktree, GitHub mutation, sample-project, and dark-factory autonomy workflows were rejected or marked already stronger in native Delivery. | `.owlbear/research/coleam00-skills-reuse.md` | 2026-08-16 |
+| coleam00/skills | <https://github.com/coleam00/skills/tree/ecef6ffd4caa0b23a8c79601c1215b1e2908ac72> | Comparative review of exactly 33 Claude-oriented skills; retained concepts include report-only AI-layer ablation, rules drift detection, opportunity scanning, post-result system review, positive validation markers, non-empty proof, evaluator independence, protected governance, and selective holdout or mutation checks. Direct PIV, worktree, GitHub mutation, sample-project, and dark-factory autonomy workflows were rejected or marked already stronger in native Delivery. | `owlbear-data/owlbear/research/coleam00-skills-reuse.md` | 2026-08-16 |
 
 ## EnrichmentStore — Extractions & Purge (Task #1876)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| microsoft/graphrag | <https://github.com/microsoft/graphrag> | Entity extraction workflow, name-based dedup, co-occurrence patterns across text units | `.owlbear/research/1876-enrichmentstore-extractions-purge.md` | 2026-05-26 |
+| microsoft/graphrag | <https://github.com/microsoft/graphrag> | Entity extraction workflow, name-based dedup, co-occurrence patterns across text units | `owlbear-data/owlbear/research/1876-enrichmentstore-extractions-purge.md` | 2026-05-26 |
 
 ## GraphStore — Entities & Edges (Task #1873)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| SQLite UPSERT docs | <https://www.sqlite.org/lang_upsert.html> | ON CONFLICT DO UPDATE syntax, excluded.* references, uniqueness constraint requirements | `.owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
-| LightRAG graph storage | <https://github.com/HKUDS/LightRAG> | Entity upsert patterns across SQLite/Postgres/Neo4j backends, compute_mdhash_id for deterministic IDs, MERGE semantics | `.owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
-| Claude Cookbook KG guide | <https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide> | Canonical name → alias resolution pattern, entity deduplication via canonical identity | `.owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
+| SQLite UPSERT docs | <https://www.sqlite.org/lang_upsert.html> | ON CONFLICT DO UPDATE syntax, excluded.* references, uniqueness constraint requirements | `owlbear-data/owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
+| LightRAG graph storage | <https://github.com/HKUDS/LightRAG> | Entity upsert patterns across SQLite/Postgres/Neo4j backends, compute_mdhash_id for deterministic IDs, MERGE semantics | `owlbear-data/owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
+| Claude Cookbook KG guide | <https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide> | Canonical name → alias resolution pattern, entity deduplication via canonical identity | `owlbear-data/owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
 
 ## EnrichmentStore — Queue State Machine (Task #1875)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| litements/litequeue | <https://github.com/litements/litequeue> | SQLite queue with IMMEDIATE transactions for atomic claim, UPDATE...RETURNING, WAL mode, MessageStatus state machine | `.owlbear/research/1875-enrichmentstore-queue-state-machine.md` | 2026-05-25 |
-| rails/solid_queue | <https://github.com/rails/solid_queue> | DB-backed job queue with separate claimed_executions table, batch semaphore claiming, expiry patterns | `.owlbear/research/1875-enrichmentstore-queue-state-machine.md` | 2026-05-25 |
+| litements/litequeue | <https://github.com/litements/litequeue> | SQLite queue with IMMEDIATE transactions for atomic claim, UPDATE...RETURNING, WAL mode, MessageStatus state machine | `owlbear-data/owlbear/research/1875-enrichmentstore-queue-state-machine.md` | 2026-05-25 |
+| rails/solid_queue | <https://github.com/rails/solid_queue> | DB-backed job queue with separate claimed_executions table, batch semaphore claiming, expiry patterns | `owlbear-data/owlbear/research/1875-enrichmentstore-queue-state-machine.md` | 2026-05-25 |
 
 ## ContentStore — Ingest & Dedup (Task #1871)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Qdrant Points API | <https://qdrant.tech/documentation/manage-data/points/> | Batch upsert, filter-based deletion, idempotent point operations, UUID point IDs | `.owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
-| LangChain Indexing API | <https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/indexing/api.py> | Content+metadata dual hash, RecordManager, cleanup modes | `.owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
-| LightRAG | <https://github.com/HKUDS/LightRAG/blob/main/lightrag/lightrag.py> | MD5 content-addressed doc IDs (compute_mdhash_id), DocStatusStorage, comprehensive delete cascades | `.owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
+| Qdrant Points API | <https://qdrant.tech/documentation/manage-data/points/> | Batch upsert, filter-based deletion, idempotent point operations, UUID point IDs | `owlbear-data/owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
+| LangChain Indexing API | <https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/indexing/api.py> | Content+metadata dual hash, RecordManager, cleanup modes | `owlbear-data/owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
+| LightRAG | <https://github.com/HKUDS/LightRAG/blob/main/lightrag/lightrag.py> | MD5 content-addressed doc IDs (compute_mdhash_id), DocStatusStorage, comprehensive delete cascades | `owlbear-data/owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
 
 ## Slot-Efficiency Auto-Stale Transition (Task #1844)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Wikipedia — Cache replacement policies (LFU, SIEVE) | <https://en.wikipedia.org/wiki/Cache_replacement_policies> | LFU ratio-based eviction and SIEVE quick-demotion patterns — validated proportional threshold approach for stale detection | `.owlbear/research/slot-efficiency-auto-stale-transition.md` | 2026-05-25 |
-| Redis LFU eviction policy | <https://redis.io/blog/lfu-vs-lru-how-to-choose-the-right-cache-eviction-policy/> | Frequency-counter-based demotion — confirmed ratio of engagement counters to non-use is standard cache pattern | `.owlbear/research/slot-efficiency-auto-stale-transition.md` | 2026-05-25 |
+| Wikipedia — Cache replacement policies (LFU, SIEVE) | <https://en.wikipedia.org/wiki/Cache_replacement_policies> | LFU ratio-based eviction and SIEVE quick-demotion patterns — validated proportional threshold approach for stale detection | `owlbear-data/owlbear/research/slot-efficiency-auto-stale-transition.md` | 2026-05-25 |
+| Redis LFU eviction policy | <https://redis.io/blog/lfu-vs-lru-how-to-choose-the-right-cache-eviction-policy/> | Frequency-counter-based demotion — confirmed ratio of engagement counters to non-use is standard cache pattern | `owlbear-data/owlbear/research/slot-efficiency-auto-stale-transition.md` | 2026-05-25 |
 
 ## Recall Explore/Challenge Slots (Task #1843)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Milvus — exploration vs exploitation in recommendations | <https://milvus.io/ai-quick-reference/how-do-you-balance-exploration-and-exploitation-in-recommendations> | Epsilon-greedy fixed-fraction exploration — validated fixed-slot allocation design over probabilistic approaches | `.owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
-| Shaped.ai — Explore vs Exploit | <https://www.shaped.ai/blog/explore-vs-exploit> | Diversity slot reservation in recommendation systems — confirmed value of deterministic exploration allocation | `.owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
+| Milvus — exploration vs exploitation in recommendations | <https://milvus.io/ai-quick-reference/how-do-you-balance-exploration-and-exploitation-in-recommendations> | Epsilon-greedy fixed-fraction exploration — validated fixed-slot allocation design over probabilistic approaches | `owlbear-data/owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
+| Shaped.ai — Explore vs Exploit | <https://www.shaped.ai/blog/explore-vs-exploit> | Diversity slot reservation in recommendation systems — confirmed value of deterministic exploration allocation | `owlbear-data/owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
 
 ## Score Migration — Initialization from Confidence (Task #1842)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Sanity.io — General migration principles | <https://www.sanity.io/learn/course/refactoring-content/general-migration-principles> | Idempotent migration script design — incremental complexity, error handling | `.owlbear/research/memory-score-migration-1842.md` | 2026-05-25 |
-| editfrontmatter (PyPI) | <https://pypi.org/project/editfrontmatter/> | Batch YAML frontmatter update patterns — field-presence detection approach | `.owlbear/research/memory-score-migration-1842.md` | 2026-05-25 |
+| Sanity.io — General migration principles | <https://www.sanity.io/learn/course/refactoring-content/general-migration-principles> | Idempotent migration script design — incremental complexity, error handling | `owlbear-data/owlbear/research/memory-score-migration-1842.md` | 2026-05-25 |
+| editfrontmatter (PyPI) | <https://pypi.org/project/editfrontmatter/> | Batch YAML frontmatter update patterns — field-presence detection approach | `owlbear-data/owlbear/research/memory-score-migration-1842.md` | 2026-05-25 |
 
 ## Memory Assessment Counters and Score Computation (Task #1841)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Stack Overflow reputation system | <https://stackoverflow.com/help/whats-reputation> | Asymmetric +10/−2 additive scoring model — validated 10:1 ratio for outstanding/unremarkable counters | `.owlbear/research/memory-assessment-counters-score.md` | 2026-05-24 |
-| Reddit hot ranking (Wilson score) | <https://medium.com/hacking-and-gonzo/how-reddit-ranking-algorithms-work-ef111e33d0d9> | Confidence-based community ranking — validated conservative confidence-anchored scoring approach | `.owlbear/research/memory-assessment-counters-score.md` | 2026-05-24 |
+| Stack Overflow reputation system | <https://stackoverflow.com/help/whats-reputation> | Asymmetric +10/−2 additive scoring model — validated 10:1 ratio for outstanding/unremarkable counters | `owlbear-data/owlbear/research/memory-assessment-counters-score.md` | 2026-05-24 |
+| Reddit hot ranking (Wilson score) | <https://medium.com/hacking-and-gonzo/how-reddit-ranking-algorithms-work-ef111e33d0d9> | Confidence-based community ranking — validated conservative confidence-anchored scoring approach | `owlbear-data/owlbear/research/memory-assessment-counters-score.md` | 2026-05-24 |
 
 ## Remove Source MCP Tool (Task #1652)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MCP Python SDK — ToolAnnotations | <https://github.com/modelcontextprotocol/python-sdk> | `destructive_hint` field semantics, FastMCP tool registration patterns | `.owlbear/research/1652-remove-source-mcp-tool.md` | 2026-05-18 |
+| MCP Python SDK — ToolAnnotations | <https://github.com/modelcontextprotocol/python-sdk> | `destructive_hint` field semantics, FastMCP tool registration patterns | `owlbear-data/owlbear/research/1652-remove-source-mcp-tool.md` | 2026-05-18 |
 
 ## SourceStore Implementation (Task #1870)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Pydantic TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/unions/> | Discriminated union serialization via `TypeAdapter`, `validate_json`/`dump_json` round-trip | `.owlbear/research/1870-sourcestore-implementation.md` | 2026-05-25 |
+| Pydantic TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/unions/> | Discriminated union serialization via `TypeAdapter`, `validate_json`/`dump_json` round-trip | `owlbear-data/owlbear/research/1870-sourcestore-implementation.md` | 2026-05-25 |
 
 ## URL_LIST Handler Equivalence (Task #1653)
 
@@ -229,347 +229,347 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React docs — useState lazy initializer | <https://react.dev/reference/react/useState> | `useState(() => initialValue)` pattern — captures prop at mount, ignores subsequent prop changes | `.owlbear/research/resolve-modal-snapshot-guard.md` | 2026-05-20 |
-| Stack Overflow — modal data via State Hook | <https://stackoverflow.com/questions/74123582> | Community corroboration of useState initializer for modal snapshot isolation | `.owlbear/research/resolve-modal-snapshot-guard.md` | 2026-05-20 |
+| React docs — useState lazy initializer | <https://react.dev/reference/react/useState> | `useState(() => initialValue)` pattern — captures prop at mount, ignores subsequent prop changes | `owlbear-data/owlbear/research/resolve-modal-snapshot-guard.md` | 2026-05-20 |
+| Stack Overflow — modal data via State Hook | <https://stackoverflow.com/questions/74123582> | Community corroboration of useState initializer for modal snapshot isolation | `owlbear-data/owlbear/research/resolve-modal-snapshot-guard.md` | 2026-05-20 |
 
 ## Cockpit Visual Audit (Task #1534)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Available UI components for action, form, overlay, navigation, text, and data display surfaces | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
-| PDS v4 Select docs | <https://designsystem.porsche.com/v4/components/select/> | Select composition uses PDS select-option components, not native option children | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
-| PDS v4 Popover docs | <https://designsystem.porsche.com/v4/components/popover/> | Popover/top-layer behavior for floating disclosure instead of in-flow status-bar panels | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
-| PDS v4 Tabs docs | <https://designsystem.porsche.com/v4/components/tabs/> | Tab component expectations for styled sidecar tab navigation | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Available UI components for action, form, overlay, navigation, text, and data display surfaces | `owlbear-data/owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 Select docs | <https://designsystem.porsche.com/v4/components/select/> | Select composition uses PDS select-option components, not native option children | `owlbear-data/owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 Popover docs | <https://designsystem.porsche.com/v4/components/popover/> | Popover/top-layer behavior for floating disclosure instead of in-flow status-bar panels | `owlbear-data/owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 Tabs docs | <https://designsystem.porsche.com/v4/components/tabs/> | Tab component expectations for styled sidecar tab navigation | `owlbear-data/owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
 
 ## Token Migration Provenance (Task #1603)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 color-scheme.css | (local: node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css) | 33 `--p-color-*` tokens with light/dark variants via `.scheme-*` classes | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
-| PDS v4 variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Spacing, radius, shadow, motion, typography tokens | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
-| PDS v4 design system docs | <https://designsystem.porsche.com/v4/> | Token naming conventions and theming approach | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
+| PDS v4 color-scheme.css | (local: node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css) | 33 `--p-color-*` tokens with light/dark variants via `.scheme-*` classes | `owlbear-data/owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
+| PDS v4 variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Spacing, radius, shadow, motion, typography tokens | `owlbear-data/owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
+| PDS v4 design system docs | <https://designsystem.porsche.com/v4/> | Token naming conventions and theming approach | `owlbear-data/owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
 
 ## Accessibility Sweep Research (Task #1628)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright accessibility testing | <https://playwright.dev/docs/accessibility-testing> | @axe-core/playwright API, withTags WCAG scope, fixture pattern | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
-| PDS v4 component accessibility | <https://designsystem.porsche.com/v3/components/button/accessibility/> | PDS components tested against axe-core WCAG 2.2 AA | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
-| axe-core rule documentation | <https://www.deque.com/axe/core-documentation/api-documentation/> | WCAG tag mapping for withTags configuration | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
+| Playwright accessibility testing | <https://playwright.dev/docs/accessibility-testing> | @axe-core/playwright API, withTags WCAG scope, fixture pattern | `owlbear-data/owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
+| PDS v4 component accessibility | <https://designsystem.porsche.com/v3/components/button/accessibility/> | PDS components tested against axe-core WCAG 2.2 AA | `owlbear-data/owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
+| axe-core rule documentation | <https://www.deque.com/axe/core-documentation/api-documentation/> | WCAG tag mapping for withTags configuration | `owlbear-data/owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
 
 ## Motion/Transition Token Migration (Task #1627)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Motion tokens docs | <https://designsystem.porsche.com/v4/tokens/motion/> | Duration (sm/md/lg/xl) and easing (in-out/in/out) token definitions | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
-| PDS v4 CSS Variables docs | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | `--p-duration-*` and `--p-ease-*` custom property API | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
-| PDS v4 Tailwind motion docs | <https://designsystem.porsche.com/v4/tailwindcss/motion/examples/> | Tailwind `.duration-*` and `.ease-*` class mapping | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
-| PDS GitHub common-styles.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/styles/common-styles.ts> | `getTransition()` internal override mechanism (`--p-transition-duration`) | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
-| PDS v4 global-styles/variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Token value verification: sm=0.25s, md=0.4s, ease-in-out=cubic-bezier(0.25,0.1,0.25,1) | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 Motion tokens docs | <https://designsystem.porsche.com/v4/tokens/motion/> | Duration (sm/md/lg/xl) and easing (in-out/in/out) token definitions | `owlbear-data/owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 CSS Variables docs | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | `--p-duration-*` and `--p-ease-*` custom property API | `owlbear-data/owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 Tailwind motion docs | <https://designsystem.porsche.com/v4/tailwindcss/motion/examples/> | Tailwind `.duration-*` and `.ease-*` class mapping | `owlbear-data/owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS GitHub common-styles.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/styles/common-styles.ts> | `getTransition()` internal override mechanism (`--p-transition-duration`) | `owlbear-data/owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 global-styles/variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Token value verification: sm=0.25s, md=0.4s, ease-in-out=cubic-bezier(0.25,0.1,0.25,1) | `owlbear-data/owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
 
 ## Sidecar Structure Research (Task #1607)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Spacing styles | <https://designsystem.porsche.com/v3/styles/spacing/> | Fluid/static spacing token names and values | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
-| PDS v4 Typography styles | <https://designsystem.porsche.com/v3/styles/typography/> | Heading scale, pairing guidance | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
-| PDS PHeading API | <https://designsystem.porsche.com/v3/components/heading/api/> | size prop values (small–xx-large), tag prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
-| PDS PDivider API | <https://designsystem.porsche.com/v3/components/divider/api/> | Self-closing divider, orientation prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS v4 Spacing styles | <https://designsystem.porsche.com/v3/styles/spacing/> | Fluid/static spacing token names and values | `owlbear-data/owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS v4 Typography styles | <https://designsystem.porsche.com/v3/styles/typography/> | Heading scale, pairing guidance | `owlbear-data/owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS PHeading API | <https://designsystem.porsche.com/v3/components/heading/api/> | size prop values (small–xx-large), tag prop | `owlbear-data/owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS PDivider API | <https://designsystem.porsche.com/v3/components/divider/api/> | Self-closing divider, orientation prop | `owlbear-data/owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
 
 ## Sidecar Information Architecture (Task #1616)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS Accordion API | <https://designsystem.porsche.com/v3/components/accordion/api/> | Props: heading, heading-tag, open, size, compact, update event | `.owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
-| PDS Accordion Usage | <https://designsystem.porsche.com/v3/components/accordion/usage/> | Usage guidelines: when to use/avoid accordions | `.owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
-| Jira Cloud: Configure work item details | <https://support.atlassian.com/jira-software-cloud/docs/configure-the-issue-detail-view/> | Field layout configuration, section ordering patterns | `.owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
+| PDS Accordion API | <https://designsystem.porsche.com/v3/components/accordion/api/> | Props: heading, heading-tag, open, size, compact, update event | `owlbear-data/owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
+| PDS Accordion Usage | <https://designsystem.porsche.com/v3/components/accordion/usage/> | Usage guidelines: when to use/avoid accordions | `owlbear-data/owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
+| Jira Cloud: Configure work item details | <https://support.atlassian.com/jira-software-cloud/docs/configure-the-issue-detail-view/> | Field layout configuration, section ordering patterns | `owlbear-data/owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
 
 ## Filter Panel PDS Controls (Task #1617)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v3 component nav (deprecation markers) | <https://designsystem.porsche.com/v3/components/checkbox-wrapper/examples/> | Confirms CheckboxWrapper 🚫 deprecated, replaced by Checkbox | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
-| PDS GitHub CheckboxExampleControlled.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/CheckboxExampleControlled.tsx> | Canonical React controlled PCheckbox pattern | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
-| PDS GitHub CheckboxExampleForm.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/CheckboxExampleForm.tsx> | Form integration with onChange and CheckboxChangeEventDetail | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
-| PDS GitHub checkbox.tsx (Stencil source) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/checkbox/checkbox.tsx> | Props (name, label, checked, value, disabled), events (change, blur) | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
-| PDS v3 migration guide | <https://designsystem.porsche.com/v3/news/migration-guide/porsche-design-system/> | Wrapper → standalone component deprecation rationale | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS v3 component nav (deprecation markers) | <https://designsystem.porsche.com/v3/components/checkbox-wrapper/examples/> | Confirms CheckboxWrapper 🚫 deprecated, replaced by Checkbox | `owlbear-data/owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS GitHub CheckboxExampleControlled.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/CheckboxExampleControlled.tsx> | Canonical React controlled PCheckbox pattern | `owlbear-data/owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS GitHub CheckboxExampleForm.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/CheckboxExampleForm.tsx> | Form integration with onChange and CheckboxChangeEventDetail | `owlbear-data/owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS GitHub checkbox.tsx (Stencil source) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/checkbox/checkbox.tsx> | Props (name, label, checked, value, disabled), events (change, blur) | `owlbear-data/owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS v3 migration guide | <https://designsystem.porsche.com/v3/news/migration-guide/porsche-design-system/> | Wrapper → standalone component deprecation rationale | `owlbear-data/owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
 
 ## Simple Component Swaps (Task #1614)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Button API | <https://designsystem.porsche.com/v4/components/button/api/> | PButton props (variant, type, onClick) | `.owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
-| PDS v4 Heading API | <https://designsystem.porsche.com/v4/components/heading/api/> | PHeading props (tag, size) | `.owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
-| PDS GitHub — PTabs React wrapper | <https://github.com/porsche-design-system/porsche-design-system> | PTabs onUpdate vs deprecated tabChange event contract | `.owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
+| PDS v4 Button API | <https://designsystem.porsche.com/v4/components/button/api/> | PButton props (variant, type, onClick) | `owlbear-data/owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
+| PDS v4 Heading API | <https://designsystem.porsche.com/v4/components/heading/api/> | PHeading props (tag, size) | `owlbear-data/owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
+| PDS GitHub — PTabs React wrapper | <https://github.com/porsche-design-system/porsche-design-system> | PTabs onUpdate vs deprecated tabChange event contract | `owlbear-data/owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
 
 ## CockpitProvider Extraction Research (Task #1491)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React createContext docs | <https://react.dev/reference/react/createContext> | Context provider pattern, consumer re-render semantics | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
-| React Compiler intro | <https://react.dev/learn/react-compiler/introduction> | Auto-memoization behavior, useMemo escape hatch | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
-| wisp.blog Nest/Merge Providers | <https://www.wisp.blog/blog/should-i-nest-or-merge-multiple-context-providers-in-react> | Single vs split provider trade-offs, hybrid pattern | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
-| LogRocket Context Pitfalls | <https://blog.logrocket.com/pitfalls-of-overusing-react-context/> | Split context recommendation, consumer re-render risks | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| React createContext docs | <https://react.dev/reference/react/createContext> | Context provider pattern, consumer re-render semantics | `owlbear-data/owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| React Compiler intro | <https://react.dev/learn/react-compiler/introduction> | Auto-memoization behavior, useMemo escape hatch | `owlbear-data/owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| wisp.blog Nest/Merge Providers | <https://www.wisp.blog/blog/should-i-nest-or-merge-multiple-context-providers-in-react> | Single vs split provider trade-offs, hybrid pattern | `owlbear-data/owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| LogRocket Context Pitfalls | <https://blog.logrocket.com/pitfalls-of-overusing-react-context/> | Split context recommendation, consumer re-render risks | `owlbear-data/owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
 
 ## PDS Mutation Error Banner Research (Task #1494)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS Banner API (v3) | <https://designsystem.porsche.com/v3/components/banner/api> | Props, events, slots, CSS vars for PBanner component | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
-| PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api> | Props, events including actionLabel/actionIcon for retry | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
-| PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
-| PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Banner API (v3) | <https://designsystem.porsche.com/v3/components/banner/api> | Props, events, slots, CSS vars for PBanner component | `owlbear-data/owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api> | Props, events including actionLabel/actionIcon for retry | `owlbear-data/owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `owlbear-data/owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `owlbear-data/owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 
 ## PToast Success Feedback (Task #1624)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS Toast Configurator (v3) | <https://designsystem.porsche.com/v3/components/toast/configurator/> | PToast singleton pattern, addMessage API, queue behavior | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
-| PDS Toast API (v3) | <https://designsystem.porsche.com/v3/components/toast/api/> | Props (theme), CSS vars (--p-toast-position-bottom) | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
-| PDS Toast Accessibility | <https://designsystem.porsche.com/v3/components/toast/accessibility/> | role="status" ARIA live, keyboard support, AXE compliance | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
-| PDS GitHub ToastExample.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/ToastExample.tsx> | Canonical React PToast + useToastManager pattern | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
-| PDS GitHub toast-manager.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/toast/toast/toast-manager.ts> | Internal ToastManager: 6s timeout, message queue, singleton guard | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
-| PDS GitHub toast.e2e.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/tests/e2e/specs/toast.e2e.ts> | E2E test patterns: --p-temporary-toast-timeout CSS var override | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS Toast Configurator (v3) | <https://designsystem.porsche.com/v3/components/toast/configurator/> | PToast singleton pattern, addMessage API, queue behavior | `owlbear-data/owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS Toast API (v3) | <https://designsystem.porsche.com/v3/components/toast/api/> | Props (theme), CSS vars (--p-toast-position-bottom) | `owlbear-data/owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS Toast Accessibility | <https://designsystem.porsche.com/v3/components/toast/accessibility/> | role="status" ARIA live, keyboard support, AXE compliance | `owlbear-data/owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS GitHub ToastExample.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/ToastExample.tsx> | Canonical React PToast + useToastManager pattern | `owlbear-data/owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS GitHub toast-manager.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/toast/toast/toast-manager.ts> | Internal ToastManager: 6s timeout, message queue, singleton guard | `owlbear-data/owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS GitHub toast.e2e.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/tests/e2e/specs/toast.e2e.ts> | E2E test patterns: --p-temporary-toast-timeout CSS var override | `owlbear-data/owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
 
 ## Dark Mode Border Audit (Task #1625)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Color Tokens | <https://designsystem.porsche.com/v4/tokens/color/> | Color token names, descriptions, `light-dark()` values for all contrast/notification/canvas/surface tokens | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
-| PDS v4 CSS Variables stylesheet | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full `:root` variable definitions with `light-dark()`, spacing, radius, motion tokens | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 Color Tokens | <https://designsystem.porsche.com/v4/tokens/color/> | Color token names, descriptions, `light-dark()` values for all contrast/notification/canvas/surface tokens | `owlbear-data/owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 CSS Variables stylesheet | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full `:root` variable definitions with `light-dark()`, spacing, radius, motion tokens | `owlbear-data/owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
 
 ## Focus-Visible PDS Styling (Task #1626)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Tailwind Focus examples | <https://designsystem.porsche.com/v4/tailwindcss/focus/examples/> | Canonical Tailwind classes for focus-visible: `focus-visible:outline outline-focus outline-offset-2` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS GitHub TailwindFocusVisible.tsx | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/src/app/tailwindcss/TailwindFocusVisible.tsx> | Reference React component showing focus-visible Tailwind pattern | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS GitHub getFocusVisibleStyle.ts | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/emotion/src/focus/getFocusVisibleStyle.ts> | JS/Emotion implementation: `outline: 2px solid colorFocus, outlineOffset: offset` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS GitHub common-styles.ts | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/styles/common-styles.ts> | Internal component focus: `getFocusBaseStyles()` → `outline: 2px solid var(--p-color-focus)` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS Storefront AGENTS.md (focus section) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/storefront/AGENTS.md> | Canonical CSS pattern: `button:focus-visible { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS Tailwind @theme (local) | (local: node_modules/@porsche-design-system/components-react/tailwindcss/index.css) | `--color-focus: light-dark(#1a44ea, #1a44ea)` and `--default-outline-width: 2px` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS SCSS _focus.scss | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/scss/src/_focus.scss> | SCSS mixin `focus-visible($offset)` generating `:focus-visible { outline: 2px solid $color-focus }` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
-| PDS v4 Color Scheme docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | `.scheme-dark`/`.scheme-light` classes, polyfill fallback, Lightning CSS bug workaround | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
-| PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Border tokens cover only `border-radius` — no border-color tokens exist | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
-| PDS Admin Panel template | <https://github.com/porsche-design-system/examples/tree/v4/templates/src/admin-panel/1> | Tailwind `border-contrast-low` pattern, `p-canvas` for layout, `bg-surface`/`bg-canvas` differentiation | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 Tailwind Focus examples | <https://designsystem.porsche.com/v4/tailwindcss/focus/examples/> | Canonical Tailwind classes for focus-visible: `focus-visible:outline outline-focus outline-offset-2` | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS GitHub TailwindFocusVisible.tsx | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/src/app/tailwindcss/TailwindFocusVisible.tsx> | Reference React component showing focus-visible Tailwind pattern | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS GitHub getFocusVisibleStyle.ts | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/emotion/src/focus/getFocusVisibleStyle.ts> | JS/Emotion implementation: `outline: 2px solid colorFocus, outlineOffset: offset` | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS GitHub common-styles.ts | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/styles/common-styles.ts> | Internal component focus: `getFocusBaseStyles()` → `outline: 2px solid var(--p-color-focus)` | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS Storefront AGENTS.md (focus section) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/storefront/AGENTS.md> | Canonical CSS pattern: `button:focus-visible { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }` | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS Tailwind @theme (local) | (local: node_modules/@porsche-design-system/components-react/tailwindcss/index.css) | `--color-focus: light-dark(#1a44ea, #1a44ea)` and `--default-outline-width: 2px` | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS SCSS _focus.scss | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/scss/src/_focus.scss> | SCSS mixin `focus-visible($offset)` generating `:focus-visible { outline: 2px solid $color-focus }` | `owlbear-data/owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS v4 Color Scheme docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | `.scheme-dark`/`.scheme-light` classes, polyfill fallback, Lightning CSS bug workaround | `owlbear-data/owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Border tokens cover only `border-radius` — no border-color tokens exist | `owlbear-data/owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS Admin Panel template | <https://github.com/porsche-design-system/examples/tree/v4/templates/src/admin-panel/1> | Tailwind `border-contrast-low` pattern, `p-canvas` for layout, `bg-surface`/`bg-canvas` differentiation | `owlbear-data/owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
 
 ## Shell Layout Research (Task #1606)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 component introduction | <https://designsystem.porsche.com/v4/components/introduction/> | p-canvas (🧪 experimental) sidebar/shell component, full component catalog | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
-| PDS v4 Tailwind Grid docs | <https://designsystem.porsche.com/v4/tailwindcss/grid/examples/> | Porsche Grid utilities (grid-template, col-*), confirmed as content-page grid not app shell | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
-| Tailwind CSS v4 position docs | <https://tailwindcss.com/docs/position> | sticky/fixed/relative utilities and responsive variants | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
-| Tailwind CSS v4 grid-template-columns | <https://tailwindcss.com/docs/grid-template-columns> | grid-cols-[arbitrary] syntax for custom column definitions | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| PDS v4 component introduction | <https://designsystem.porsche.com/v4/components/introduction/> | p-canvas (🧪 experimental) sidebar/shell component, full component catalog | `owlbear-data/owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| PDS v4 Tailwind Grid docs | <https://designsystem.porsche.com/v4/tailwindcss/grid/examples/> | Porsche Grid utilities (grid-template, col-*), confirmed as content-page grid not app shell | `owlbear-data/owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| Tailwind CSS v4 position docs | <https://tailwindcss.com/docs/position> | sticky/fixed/relative utilities and responsive variants | `owlbear-data/owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| Tailwind CSS v4 grid-template-columns | <https://tailwindcss.com/docs/grid-template-columns> | grid-cols-[arbitrary] syntax for custom column definitions | `owlbear-data/owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
 
 ## PDS Dark-Mode Compatibility Research (Task #1553)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Migration Guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | color-scheme mechanism, theme prop removal, .scheme-* classes | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
-| PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme foundation, light-dark() CSS function | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
-| PDS v4 Color Scheme stylesheet | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | .scheme-* utility classes, polyfill setup | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
-| PDS GitHub color-scheme build | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/global-styles/scripts/buildColorSchemeCss.ts> | .scheme-* → color-scheme mapping, light-dark() polyfill | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
-| PDS GitHub Issue #1185 | <https://github.com/porsche-design-system/porsche-design-system/issues/1185> | Provider-level theme prop history (closed, shipped in v3) | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
-| PDS CHANGELOG v4.0.0-beta.0 | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/CHANGELOG.md#L765> | Theme prop removal confirmation | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS v4 Migration Guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | color-scheme mechanism, theme prop removal, .scheme-* classes | `owlbear-data/owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme foundation, light-dark() CSS function | `owlbear-data/owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS v4 Color Scheme stylesheet | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | .scheme-* utility classes, polyfill setup | `owlbear-data/owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS GitHub color-scheme build | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/global-styles/scripts/buildColorSchemeCss.ts> | .scheme-* → color-scheme mapping, light-dark() polyfill | `owlbear-data/owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS GitHub Issue #1185 | <https://github.com/porsche-design-system/porsche-design-system/issues/1185> | Provider-level theme prop history (closed, shipped in v3) | `owlbear-data/owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS CHANGELOG v4.0.0-beta.0 | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/CHANGELOG.md#L765> | Theme prop removal confirmation | `owlbear-data/owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
 
 ## Card Visual Treatment Research (Task #1615)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 PTag source (tag-utils.ts, tag.tsx) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/tag/> | TagVariant type: 10 variants; props: variant, icon, iconSource, compact | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
-| PDS v4 PTag examples | <https://designsystem.porsche.com/v4/components/tag/examples/> | Confirmed v4.1.0 API, button/link slot patterns, icon integration | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
-| PDS v4 PIcon source (icon.tsx, icon-utils.ts) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/icon/> | IconColor type (11 values), IconSize type, icon names from manifest | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
-| PDS v4 tag-styles.ts color maps | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/tag/tag-styles.ts> | VARIANT_TO_COLOR_MAP, colorTextMap, colorBackgroundMap per variant | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 PTag source (tag-utils.ts, tag.tsx) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/tag/> | TagVariant type: 10 variants; props: variant, icon, iconSource, compact | `owlbear-data/owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 PTag examples | <https://designsystem.porsche.com/v4/components/tag/examples/> | Confirmed v4.1.0 API, button/link slot patterns, icon integration | `owlbear-data/owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 PIcon source (icon.tsx, icon-utils.ts) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/icon/> | IconColor type (11 values), IconSize type, icon names from manifest | `owlbear-data/owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 tag-styles.ts color maps | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/tag/tag-styles.ts> | VARIANT_TO_COLOR_MAP, colorTextMap, colorBackgroundMap per variant | `owlbear-data/owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
 
 ## PBanner Shell Wiring Research (Task #1498)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS Banner examples (v3) | <https://designsystem.porsche.com/v3/components/banner/examples/> | Usage patterns, slot-based heading/description, CSS custom properties | `.owlbear/research/cockpit-wire-pbanner-shell.md` | 2026-05-12 |
+| PDS Banner examples (v3) | <https://designsystem.porsche.com/v3/components/banner/examples/> | Usage patterns, slot-based heading/description, CSS custom properties | `owlbear-data/owlbear/research/cockpit-wire-pbanner-shell.md` | 2026-05-12 |
 
 ## Token Architecture Test Research (Task #1535)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Migration Guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | PDS v4 theme system: light-dark() CSS function, color-scheme property, scheme-* classes | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
-| PDS v4 CSS Variables | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full CSS variable reference: --p-color-*, --p-shadow-*, --p-radius-*, --p-spacing-* | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
-| PDS v4 Shadow Tokens | <https://designsystem.porsche.com/v4/tokens/shadow/> | Shadow token values: sm, md, lg | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
-| PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Radius token values: xs through 4xl + full | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
-| PDS v4 Spacing Tokens | <https://designsystem.porsche.com/v4/tokens/spacing/> | Spacing token values: fluid and static families | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Migration Guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | PDS v4 theme system: light-dark() CSS function, color-scheme property, scheme-* classes | `owlbear-data/owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 CSS Variables | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full CSS variable reference: --p-color-*, --p-shadow-*, --p-radius-*, --p-spacing-* | `owlbear-data/owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Shadow Tokens | <https://designsystem.porsche.com/v4/tokens/shadow/> | Shadow token values: sm, md, lg | `owlbear-data/owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Radius token values: xs through 4xl + full | `owlbear-data/owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Spacing Tokens | <https://designsystem.porsche.com/v4/tokens/spacing/> | Spacing token values: fluid and static families | `owlbear-data/owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 
 ## Token Architecture Impl Research (Task #1543)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MDN prefers-color-scheme | <https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-color-scheme> | CSS spec: media query for OS dark mode detection | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
-| PDS v4 themeDark export | `@porsche-design-system/components-react/styles` (npm) | Authoritative dark HSL values for all color tokens | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
-| PDS v4 shadow/radius/spacing exports | `@porsche-design-system/components-react/styles` (npm) | Non-color token reference values | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
-| PDS v4 colorSchemeStyles | `@porsche-design-system/components-react/styles` (npm) | PDS native theme switching CSS structure, confirms dark values | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| MDN prefers-color-scheme | <https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-color-scheme> | CSS spec: media query for OS dark mode detection | `owlbear-data/owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| PDS v4 themeDark export | `@porsche-design-system/components-react/styles` (npm) | Authoritative dark HSL values for all color tokens | `owlbear-data/owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| PDS v4 shadow/radius/spacing exports | `@porsche-design-system/components-react/styles` (npm) | Non-color token reference values | `owlbear-data/owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| PDS v4 colorSchemeStyles | `@porsche-design-system/components-react/styles` (npm) | PDS native theme switching CSS structure, confirms dark values | `owlbear-data/owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
 
 ## Column CSS Test Research (Task #1539)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| SO: vitest CSS styling test | <https://stackoverflow.com/questions/76571158/vitest-cannot-test-for-presence-of-specific-styling> | jsdom CSS cascade not implemented; use class presence or E2E | `.owlbear/research/1539-column-css-test-approach.md` | 2026-05-13 |
-| jsdom CSS cascade PR | <https://github.com/jsdom/jsdom/pull/2690> | CSS cascade implementation status in jsdom | `.owlbear/research/1539-column-css-test-approach.md` | 2026-05-13 |
+| SO: vitest CSS styling test | <https://stackoverflow.com/questions/76571158/vitest-cannot-test-for-presence-of-specific-styling> | jsdom CSS cascade not implemented; use class presence or E2E | `owlbear-data/owlbear/research/1539-column-css-test-approach.md` | 2026-05-13 |
+| jsdom CSS cascade PR | <https://github.com/jsdom/jsdom/pull/2690> | CSS cascade implementation status in jsdom | `owlbear-data/owlbear/research/1539-column-css-test-approach.md` | 2026-05-13 |
 
 ## Sidecar Collapse Toggle Test Research (Task #1541)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| WAI-ARIA aria-expanded guide | <https://www.webability.io/glossary/aria-expanded> | Disclosure widget pattern: aria-expanded + CSS state synchronization | `.owlbear/research/1541-sidecar-collapse-toggle-test-approach.md` | 2026-05-13 |
+| WAI-ARIA aria-expanded guide | <https://www.webability.io/glossary/aria-expanded> | Disclosure widget pattern: aria-expanded + CSS state synchronization | `owlbear-data/owlbear/research/1541-sidecar-collapse-toggle-test-approach.md` | 2026-05-13 |
 
 ## Card Component CSS Test Research (Task #1538)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Vitest issue #1689 (getComputedStyle) | <https://github.com/vitest-dev/vitest/issues/1689> | Confirms JSDOM doesn't apply imported CSS to getComputedStyle | `.owlbear/research/1538-card-css-test-approach.md` | 2026-05-13 |
-| SO: vitest cannot test for specific styling | <https://stackoverflow.com/questions/76571158/vitest-cannot-test-for-presence-of-specific-styling> | Community consensus: use E2E for computed styles, not jsdom | `.owlbear/research/1538-card-css-test-approach.md` | 2026-05-13 |
+| Vitest issue #1689 (getComputedStyle) | <https://github.com/vitest-dev/vitest/issues/1689> | Confirms JSDOM doesn't apply imported CSS to getComputedStyle | `owlbear-data/owlbear/research/1538-card-css-test-approach.md` | 2026-05-13 |
+| SO: vitest cannot test for specific styling | <https://stackoverflow.com/questions/76571158/vitest-cannot-test-for-presence-of-specific-styling> | Community consensus: use E2E for computed styles, not jsdom | `owlbear-data/owlbear/research/1538-card-css-test-approach.md` | 2026-05-13 |
 
 ## PInlineNotification Modal Error Research (Task #1499)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS Inline Notification examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Usage patterns for actionLabel/actionIcon retry affordance and onDismiss binding | `.owlbear/research/cockpit-inline-notification-modal.md` | 2026-05-12 |
+| PDS Inline Notification examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Usage patterns for actionLabel/actionIcon retry affordance and onDismiss binding | `owlbear-data/owlbear/research/cockpit-inline-notification-modal.md` | 2026-05-12 |
 
 ## Board Horizontal Scroll Fix Research (Task #1596)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| CSS-Tricks: auto-fill vs auto-fit | <https://css-tricks.com/auto-sizing-columns-css-grid-auto-fill-vs-auto-fit/> | auto-fit collapses empty tracks; auto-fill preserves them — neither overflows | `.owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
-| MDN: repeat() CSS function | <https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/repeat> | `repeat(<integer>, ...)` creates exactly N tracks — forces overflow when total > container | `.owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
-| SO: CSS grid no-wrap with auto-fill | <https://stackoverflow.com/questions/65844797/css-grid-only-columns-no-wrap-and-with-auto-fill-covering-end-gap> | Confirms auto-fill/auto-fit never overflow; integer count is the solution | `.owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
+| CSS-Tricks: auto-fill vs auto-fit | <https://css-tricks.com/auto-sizing-columns-css-grid-auto-fill-vs-auto-fit/> | auto-fit collapses empty tracks; auto-fill preserves them — neither overflows | `owlbear-data/owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
+| MDN: repeat() CSS function | <https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/repeat> | `repeat(<integer>, ...)` creates exactly N tracks — forces overflow when total > container | `owlbear-data/owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
+| SO: CSS grid no-wrap with auto-fill | <https://stackoverflow.com/questions/65844797/css-grid-only-columns-no-wrap-and-with-auto-fill-covering-end-gap> | Confirms auto-fill/auto-fit never overflow; integer count is the solution | `owlbear-data/owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
 
 ## PDS v4 Local Hosting Research (Task #1495)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 CDN docs | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | CDN architecture, China CDN config — confirms only `auto`/`cn` options | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
-| PDS v4 migration guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | Breaking changes in v4: removed `getInitialStyles()`, mandatory global styles | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| PDS v4 CDN docs | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | CDN architecture, China CDN config — confirms only `auto`/`cn` options | `owlbear-data/owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| PDS v4 migration guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | Breaking changes in v4: removed `getInitialStyles()`, mandatory global styles | `owlbear-data/owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
 ## Shell + Secondary CSS Test Research (Task #1542)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Vitest issue #1689 (getComputedStyle) | <https://github.com/vitest-dev/vitest/issues/1689> | Confirms jsdom doesn't apply imported CSS; file-based testing required | `.owlbear/research/1542-shell-secondary-css-test-approach.md` | 2026-05-13 |
-| PDS GitHub `load()` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/projects/components-manager-cli/library-entry/with-prefix.ts> | Load function internals: hardcoded CDN URLs, cdn.url assignment | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
-| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
-| PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| Vitest issue #1689 (getComputedStyle) | <https://github.com/vitest-dev/vitest/issues/1689> | Confirms jsdom doesn't apply imported CSS; file-based testing required | `owlbear-data/owlbear/research/1542-shell-secondary-css-test-approach.md` | 2026-05-13 |
+| PDS GitHub `load()` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/projects/components-manager-cli/library-entry/with-prefix.ts> | Load function internals: hardcoded CDN URLs, cdn.url assignment | `owlbear-data/owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `owlbear-data/owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `owlbear-data/owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
 ## Theme Toggle Button Research (Task #1548)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| web.dev — Building a theme switch component | <https://web.dev/articles/building/a-theme-switch-component> | Canonical button + SVG + aria-label pattern, accessibility (aria-live), sun/moon animation | `.owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
-| next-themes (pacocoursey) | <https://github.com/pacocoursey/next-themes> | aria-label set to current theme value, 3-state toggle patterns | `.owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
+| web.dev — Building a theme switch component | <https://web.dev/articles/building/a-theme-switch-component> | Canonical button + SVG + aria-label pattern, accessibility (aria-live), sun/moon animation | `owlbear-data/owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
+| next-themes (pacocoursey) | <https://github.com/pacocoursey/next-themes> | aria-label set to current theme value, 3-state toggle patterns | `owlbear-data/owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
 
 ## PDS Global-Styles Import Research (Task #1594)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 React Getting Started | <https://designsystem.porsche.com/v4/developing/react/getting-started/> | Recommended `@import` path, Vite config, lightningcss exclusion | `.owlbear/research/1594-pds-global-styles-import.md` | 2026-05-16 |
+| PDS v4 React Getting Started | <https://designsystem.porsche.com/v4/developing/react/getting-started/> | Recommended `@import` path, Vite config, lightningcss exclusion | `owlbear-data/owlbear/research/1594-pds-global-styles-import.md` | 2026-05-16 |
 
 ## Empty State Illustration Prompts Research (Task #1551)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| UX Planet — Empty State Design Guide | <https://uxplanet.org/empty-state-design-a-practical-guide-94ad0adbda45> | Empty state patterns, structure, and design best practices | `.owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
-| Mockplus — 25 Best Empty State Examples | <https://www.mockplus.com/blog/post/empty-state-ui-design> | Inspiring empty state UI examples and templates | `.owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
+| UX Planet — Empty State Design Guide | <https://uxplanet.org/empty-state-design-a-practical-guide-94ad0adbda45> | Empty state patterns, structure, and design best practices | `owlbear-data/owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
+| Mockplus — 25 Best Empty State Examples | <https://www.mockplus.com/blog/post/empty-state-ui-design> | Inspiring empty state UI examples and templates | `owlbear-data/owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
 
 ## Card CSS Implementation Research (Task #1546)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MDN: Kanban board with drag and drop | <https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/Kanban_board> | Drag opacity pattern: `opacity: 0.2` on original element during drag | `.owlbear/research/card-css-impl-1546.md` | 2026-05-14 |
-| Penpot: Design tokens and CSS variables guide | <https://penpot.app/blog/the-developers-guide-to-design-tokens-and-css-variables/> | `:root` token architecture pattern, custom property inheritance | `.owlbear/research/card-css-impl-1546.md` | 2026-05-14 |
+| MDN: Kanban board with drag and drop | <https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/Kanban_board> | Drag opacity pattern: `opacity: 0.2` on original element during drag | `owlbear-data/owlbear/research/card-css-impl-1546.md` | 2026-05-14 |
+| Penpot: Design tokens and CSS variables guide | <https://penpot.app/blog/the-developers-guide-to-design-tokens-and-css-variables/> | `:root` token architecture pattern, custom property inheritance | `owlbear-data/owlbear/research/card-css-impl-1546.md` | 2026-05-14 |
 
 ## Cockpit API Client Centralization Research (Task #1493)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Kent C. Dodds — Replace axios with a simple custom fetch wrapper | <https://kentcdodds.com/blog/replace-axios-with-a-simple-custom-fetch-wrapper> | Validates plain async function wrappers for same-origin SPAs | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
-| dev.to — Building a Type-Safe API Client in TypeScript | <https://dev.to/limacodes/building-a-type-safe-api-client-in-typescript-beyond-axios-vs-fetch-4a3i> | Typed wrapper functions eliminate fetch duplication | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
+| Kent C. Dodds — Replace axios with a simple custom fetch wrapper | <https://kentcdodds.com/blog/replace-axios-with-a-simple-custom-fetch-wrapper> | Validates plain async function wrappers for same-origin SPAs | `owlbear-data/owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
+| dev.to — Building a Type-Safe API Client in TypeScript | <https://dev.to/limacodes/building-a-type-safe-api-client-in-typescript-beyond-axios-vs-fetch-4a3i> | Typed wrapper functions eliminate fetch duplication | `owlbear-data/owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
 
 ## PDS Asset Sync Research (Task #1510)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS CDN core chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js` | Webpack chunk mapping (58 component → filename entries), Stencil lazy-load architecture | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
-| PDS icon component chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.icon.a77dc30fd842f982a230.js` | Icon name → filename mapping (290 entries) | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
-| PDS vue-offline sample repo | <https://github.com/porsche-design-system/sample-integration-vue-offline> | Official offline hosting pattern (v3): patched npm package + `public/assets/` + postinstall; v4 offline support not yet available | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
+| PDS CDN core chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js` | Webpack chunk mapping (58 component → filename entries), Stencil lazy-load architecture | `owlbear-data/owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
+| PDS icon component chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.icon.a77dc30fd842f982a230.js` | Icon name → filename mapping (290 entries) | `owlbear-data/owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
+| PDS vue-offline sample repo | <https://github.com/porsche-design-system/sample-integration-vue-offline> | Official offline hosting pattern (v3): patched npm package + `public/assets/` + postinstall; v4 offline support not yet available | `owlbear-data/owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
 
 ## Playwright Mutation Error Banner E2E Research (Task #1509)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS `banner.tsx` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/banner/banner.tsx> | Shadow DOM structure, dismiss event, open prop | `.owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
-| PDS `banner.e2e.ts` | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/tests/e2e/specs/banner.e2e.ts> | Playwright selectors for dismiss button, event testing patterns | `.owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
-| PDS Banner configurator (v3) | <https://designsystem.porsche.com/v3/components/banner/configurator/> | open/dismiss controlled pattern, dismiss event listener | `.owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
+| PDS `banner.tsx` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/banner/banner.tsx> | Shadow DOM structure, dismiss event, open prop | `owlbear-data/owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
+| PDS `banner.e2e.ts` | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/tests/e2e/specs/banner.e2e.ts> | Playwright selectors for dismiss button, event testing patterns | `owlbear-data/owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
+| PDS Banner configurator (v3) | <https://designsystem.porsche.com/v3/components/banner/configurator/> | open/dismiss controlled pattern, dismiss event listener | `owlbear-data/owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
 
 ## PDS Property Trap Validation (Task #1496)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | Still "to be refined" — no native self-hosting config coming | `.owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
-| MDN Object.defineProperty | <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty> | Getter/setter descriptor spec, configurable flag behavior | `.owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
-| MDN Reflect.set | <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/set> | Reflect.set respects target's defineProperty setters | `.owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
+| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | Still "to be refined" — no native self-hosting config coming | `owlbear-data/owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
+| MDN Object.defineProperty | <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty> | Getter/setter descriptor spec, configurable flag behavior | `owlbear-data/owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
+| MDN Reflect.set | <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/set> | Reflect.set respects target's defineProperty setters | `owlbear-data/owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
 
 ## CI/SAST Baseline Research (Task #1413)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Ruff S-rules / flake8-bandit | <https://pydevtools.com/handbook/how-to/how-to-enable-ruff-security-rules/> | S-rule coverage list; confirmed Ruff S-rules equivalent to Bandit | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+| Ruff S-rules / flake8-bandit | <https://pydevtools.com/handbook/how-to/how-to-enable-ruff-security-rules/> | S-rule coverage list; confirmed Ruff S-rules equivalent to Bandit | `owlbear-data/owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
 
 ## PDS Asset Version Check Research (Task #1512)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Vite Plugin API docs | <https://vite.dev/guide/api-plugin.html> | buildStart hook fires on both dev server start and build; inline plugin pattern | `.owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
-| Vite buildStart behavior (issue) | <https://github.com/vitejs/vite/issues/19607> | Confirms buildStart called for client env during dev; backward-compat behavior | `.owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
-| npm scripts docs | <https://docs.npmjs.com/cli/v11/using-npm/scripts/> | Pre/post hooks, script chaining options for standalone check approach | `.owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
-| Best SAST Tools for Python 2026 | <https://appsecsanta.com/sast-tools/sast-tools-for-python> | Tool comparison matrix; evaluated Semgrep, Bandit, CodeQL against existing stack | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
-| Semgrep vs Bandit comparison | <https://dev.to/rahulxsingh/semgrep-vs-bandit-python-security-scanning-compared-2026-5e5j> | Taint-analysis trade-offs; basis for "defer Semgrep" decision | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+| Vite Plugin API docs | <https://vite.dev/guide/api-plugin.html> | buildStart hook fires on both dev server start and build; inline plugin pattern | `owlbear-data/owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
+| Vite buildStart behavior (issue) | <https://github.com/vitejs/vite/issues/19607> | Confirms buildStart called for client env during dev; backward-compat behavior | `owlbear-data/owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
+| npm scripts docs | <https://docs.npmjs.com/cli/v11/using-npm/scripts/> | Pre/post hooks, script chaining options for standalone check approach | `owlbear-data/owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
+| Best SAST Tools for Python 2026 | <https://appsecsanta.com/sast-tools/sast-tools-for-python> | Tool comparison matrix; evaluated Semgrep, Bandit, CodeQL against existing stack | `owlbear-data/owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+| Semgrep vs Bandit comparison | <https://dev.to/rahulxsingh/semgrep-vs-bandit-python-security-scanning-compared-2026-5e5j> | Taint-analysis trade-offs; basis for "defer Semgrep" decision | `owlbear-data/owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
 
 ## SARIF Upload to GitHub Code Scanning (Task #1417)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MegaLinter SARIF Reporter docs | <https://megalinter.io/latest/reporters/SarifReporter/> | Canonical upload step template, SARIF file path `megalinter-report.sarif` | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
-| GitHub docs — Uploading a SARIF file | <https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github> | Permissions (`security-events: write`, `actions: read`), category input, GHAS requirement | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
-| github/codeql-action upload-sarif action.yml | <https://github.com/github/codeql-action/blob/main/upload-sarif/action.yml> | Action input parameters: sarif_file, category, wait-for-processing, token | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
-| oxsecurity/megalinter SarifReporter.md | <https://github.com/oxsecurity/megalinter/blob/main/docs/reporters/SarifReporter.md> | Confirms file path and recommended workflow step | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| MegaLinter SARIF Reporter docs | <https://megalinter.io/latest/reporters/SarifReporter/> | Canonical upload step template, SARIF file path `megalinter-report.sarif` | `owlbear-data/owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| GitHub docs — Uploading a SARIF file | <https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github> | Permissions (`security-events: write`, `actions: read`), category input, GHAS requirement | `owlbear-data/owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| github/codeql-action upload-sarif action.yml | <https://github.com/github/codeql-action/blob/main/upload-sarif/action.yml> | Action input parameters: sarif_file, category, wait-for-processing, token | `owlbear-data/owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| oxsecurity/megalinter SarifReporter.md | <https://github.com/oxsecurity/megalinter/blob/main/docs/reporters/SarifReporter.md> | Confirms file path and recommended workflow step | `owlbear-data/owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
 
 ## Unowned Simple Swaps Research (Task #1634)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v3 link-pure examples | <https://designsystem.porsche.com/v3/components/link-pure/examples/> | PLinkPure props and host-href pattern, `icon` prop values, slot usage | `.owlbear/research/1634-unowned-simple-swaps.md` | 2026-05-17 |
+| PDS v3 link-pure examples | <https://designsystem.porsche.com/v3/components/link-pure/examples/> | PLinkPure props and host-href pattern, `icon` prop values, slot usage | `owlbear-data/owlbear/research/1634-unowned-simple-swaps.md` | 2026-05-17 |
 
 ## Legacy Audit Prompt (Task #1414)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Vulture — Python dead code finder | <https://github.com/jendrikseipp/vulture> | Detects unused functions, imports, unreachable code; structural inspiration for zero-caller heuristic | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
-| Knip — JS/TS unused code finder | <https://github.com/webpro-nl/knip> | Finds unused files, dependencies, exports; category-based scan structure | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
-| Ruff F401 — unused import rule | <https://github.com/astral-sh/ruff/issues/872> | Discussion of vulture-like dead code detection in ruff; confirms F401 covers imports | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
+| Vulture — Python dead code finder | <https://github.com/jendrikseipp/vulture> | Detects unused functions, imports, unreachable code; structural inspiration for zero-caller heuristic | `owlbear-data/owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
+| Knip — JS/TS unused code finder | <https://github.com/webpro-nl/knip> | Finds unused files, dependencies, exports; category-based scan structure | `owlbear-data/owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
+| Ruff F401 — unused import rule | <https://github.com/astral-sh/ruff/issues/872> | Discussion of vulture-like dead code detection in ruff; confirms F401 covers imports | `owlbear-data/owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
 
 ## Theme Toggle UI Test Research (Task #1540)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| OneUptime — Unit Test React with Vitest | <https://oneuptime.com/blog/post/2026-01-15-unit-test-react-vitest-testing-library/view> | ThemeToggle test example: vi.mock Context, click toggle, assert text reflects state | `.owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
-| next-themes issue #21 — testing implementations | <https://github.com/pacocoursey/next-themes/issues/21> | ThemeSpy pattern, data-testid convention, fireEvent on toggle | `.owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
-| Stack Overflow — test theme toggler with RTL | <https://stackoverflow.com/questions/72561602> | userEvent.click toggle, assert visual state change | `.owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
+| OneUptime — Unit Test React with Vitest | <https://oneuptime.com/blog/post/2026-01-15-unit-test-react-vitest-testing-library/view> | ThemeToggle test example: vi.mock Context, click toggle, assert text reflects state | `owlbear-data/owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
+| next-themes issue #21 — testing implementations | <https://github.com/pacocoursey/next-themes/issues/21> | ThemeSpy pattern, data-testid convention, fireEvent on toggle | `owlbear-data/owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
+| Stack Overflow — test theme toggler with RTL | <https://stackoverflow.com/questions/72561602> | userEvent.click toggle, assert visual state change | `owlbear-data/owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
 
 ## Theme Bootstrap + useTheme Hook Testing Research (Task #1537)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| next-themes test suite | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/__tests__/index.test.tsx> | localStorage mock, matchMedia mock, data-theme assertions, renderHook patterns | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
-| next-themes inline script | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/script.ts> | Canonical bootstrap pattern: localStorage → validate → OS fallback → set attribute | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
-| tanstack-themes FOUC prevention | <https://deepwiki.com/juliusmarminge/tanstack-themes/3.3-theme-detection-and-fouc-prevention> | Synchronous script injection architecture, mode resolution logic | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
-| vitest-matchmedia-mock | <https://www.npmjs.com/package/vitest-matchmedia-mock> | Alternative matchMedia mock library; evaluated but not recommended (adds dependency) | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| next-themes test suite | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/__tests__/index.test.tsx> | localStorage mock, matchMedia mock, data-theme assertions, renderHook patterns | `owlbear-data/owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| next-themes inline script | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/script.ts> | Canonical bootstrap pattern: localStorage → validate → OS fallback → set attribute | `owlbear-data/owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| tanstack-themes FOUC prevention | <https://deepwiki.com/juliusmarminge/tanstack-themes/3.3-theme-detection-and-fouc-prevention> | Synchronous script injection architecture, mode resolution logic | `owlbear-data/owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| vitest-matchmedia-mock | <https://www.npmjs.com/package/vitest-matchmedia-mock> | Alternative matchMedia mock library; evaluated but not recommended (adds dependency) | `owlbear-data/owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
 
 ## MegaLinter uv.lock Exclusion & Ruff Src Fix (Task #1418)
 
@@ -583,104 +583,104 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MegaLinter — Markdownlint descriptor v10.0.0 | <https://megalinter.io/10.0.0/descriptors/markdown_markdownlint/> | Markdownlint defaults to `list_of_files`; pinned binary is v0.49.1 | `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
-| MegaLinter — CLI lint mode v10.0.0 | <https://megalinter.io/10.0.0/config-cli-lint-mode/> | `project` mode bypasses MegaLinter include/exclude filters | `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
-| ESLint JSON language plugin | <https://github.com/eslint/json> | Official `@eslint/json` language-plugin configuration for strict JSON and JSONC, including the `json/json`, `json/jsonc`, and duplicate-key rule surfaces | `eslint-json.config.cjs`, `serve/cockpit/web/package.json`, `serve/tools/src/owlbear_tools/quality.py`, `.pre-commit-config.yaml`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
-| MegaLinter JavaScript ESLint descriptor | <https://megalinter.io/latest/descriptors/javascript_es/> | Configurable file extensions, include filters, flat config path, rules path, and project-local ESLint executable for the replacement descriptor | `.mega-linter.yml`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| MegaLinter — Markdownlint descriptor v10.0.0 | <https://megalinter.io/10.0.0/descriptors/markdown_markdownlint/> | Markdownlint defaults to `list_of_files`; pinned binary is v0.49.1 | `owlbear-data/owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| MegaLinter — CLI lint mode v10.0.0 | <https://megalinter.io/10.0.0/config-cli-lint-mode/> | `project` mode bypasses MegaLinter include/exclude filters | `owlbear-data/owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| ESLint JSON language plugin | <https://github.com/eslint/json> | Official `@eslint/json` language-plugin configuration for strict JSON and JSONC, including the `json/json`, `json/jsonc`, and duplicate-key rule surfaces | `eslint-json.config.cjs`, `serve/cockpit/web/package.json`, `serve/tools/src/owlbear_tools/quality.py`, `.pre-commit-config.yaml`, `owlbear-data/owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| MegaLinter JavaScript ESLint descriptor | <https://megalinter.io/latest/descriptors/javascript_es/> | Configurable file extensions, include filters, flat config path, rules path, and project-local ESLint executable for the replacement descriptor | `.mega-linter.yml`, `owlbear-data/owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
 
 ## Theme Bootstrap Script Implementation Research (Task #1545)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Static Signal — Dark Mode Without the Flash | <https://staticsignal.io/posts/dark-mode-without-the-flash/> | Canonical inline blocking script pattern, 3-piece architecture (vars + script + toggle) | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
-| dev.to (gaisdav) — Prevent Theme Flash in React | <https://dev.to/gaisdav/how-to-prevent-theme-flash-in-a-react-instant-dark-mode-switching-o20> | Vite/React implementation, localStorage + matchMedia + data-theme inline script | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
-| next-themes script.ts | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/script.ts> | Production bootstrap: localStorage → validate → system fallback → updateDOM | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
-| next-themes index.tsx (ThemeScript injection) | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/index.tsx#L165-L215> | Injection mechanism: dangerouslySetInnerHTML IIFE, nonce support | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| Static Signal — Dark Mode Without the Flash | <https://staticsignal.io/posts/dark-mode-without-the-flash/> | Canonical inline blocking script pattern, 3-piece architecture (vars + script + toggle) | `owlbear-data/owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| dev.to (gaisdav) — Prevent Theme Flash in React | <https://dev.to/gaisdav/how-to-prevent-theme-flash-in-a-react-instant-dark-mode-switching-o20> | Vite/React implementation, localStorage + matchMedia + data-theme inline script | `owlbear-data/owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| next-themes script.ts | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/script.ts> | Production bootstrap: localStorage → validate → system fallback → updateDOM | `owlbear-data/owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| next-themes index.tsx (ThemeScript injection) | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/index.tsx#L165-L215> | Injection mechanism: dangerouslySetInnerHTML IIFE, nonce support | `owlbear-data/owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
 
 ## Pre-end_work Scoped Commit Check (Task #1412)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Git documentation — git-status | <https://git-scm.com/docs/git-status> | `--porcelain` output format and pathspec filtering semantics | `.owlbear/research/1412-pre-end-work-scoped-commit-check.md` | 2026-05-08 |
+| Git documentation — git-status | <https://git-scm.com/docs/git-status> | `--porcelain` output format and pathspec filtering semantics | `owlbear-data/owlbear/research/1412-pre-end-work-scoped-commit-check.md` | 2026-05-08 |
 
 ## AC Quality Skill Schema (Task #1404)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| NextGenAnalysts — AC best practices | <https://nextgenanalysts.co.uk/how-to-write-clear-and-concise-acceptance-criteria-with-practical-examples/> | 5 AC quality components: specific/measurable, testable, independent, user-focused, clear DoD; banned vague terms | `.owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
-| Atlassian — Acceptance Criteria | <https://www.atlassian.com/work-management/project-management/acceptance-criteria> | AC as "testable statements focused on positive customer results" | `.owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
-| AltexSoft — AC Purposes, Formats, Best Practices | <https://www.altexsoft.com/blog/acceptance-criteria-purposes-formats-and-best-practices/> | "Each AC must be independently testable with clear pass/fail scenarios" | `.owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
+| NextGenAnalysts — AC best practices | <https://nextgenanalysts.co.uk/how-to-write-clear-and-concise-acceptance-criteria-with-practical-examples/> | 5 AC quality components: specific/measurable, testable, independent, user-focused, clear DoD; banned vague terms | `owlbear-data/owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
+| Atlassian — Acceptance Criteria | <https://www.atlassian.com/work-management/project-management/acceptance-criteria> | AC as "testable statements focused on positive customer results" | `owlbear-data/owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
+| AltexSoft — AC Purposes, Formats, Best Practices | <https://www.altexsoft.com/blog/acceptance-criteria-purposes-formats-and-best-practices/> | "Each AC must be independently testable with clear pass/fail scenarios" | `owlbear-data/owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
 
 ## Qdrant Persistence + Source Identity (Task #1320)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Qdrant local mode docs | <https://qdrant.tech/documentation/guides/installation/#local-mode> | `QdrantClient(path=...)` filesystem persistence without server | `.owlbear/research/1320-qdrant-persistence-source-identity-impl.md` | 2026-05-04 |
+| Qdrant local mode docs | <https://qdrant.tech/documentation/guides/installation/#local-mode> | `QdrantClient(path=...)` filesystem persistence without server | `owlbear-data/owlbear/research/1320-qdrant-persistence-source-identity-impl.md` | 2026-05-04 |
 
 ## Filter Accessibility Tests (Task #1254)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| WAI-ARIA APG Disclosure (Show/Hide) Pattern | <https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/> | `aria-expanded` + `aria-controls` on toggle button, panel `id`/`role="region"`/`aria-label` semantics, focus management on expand/collapse | `.owlbear/research/filter-accessibility-tests-1254.md` | 2026-05-03 |
+| WAI-ARIA APG Disclosure (Show/Hide) Pattern | <https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/> | `aria-expanded` + `aria-controls` on toggle button, panel `id`/`role="region"`/`aria-label` semantics, focus management on expand/collapse | `owlbear-data/owlbear/research/filter-accessibility-tests-1254.md` | 2026-05-03 |
 
 ## Real-Time Cockpit Updates (Task #1233)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| germano.dev — SSE vs WebSockets (2022, 263 HN comments) | <https://germano.dev/sse-websockets> | Technical deep-dive + live demo comparing SSE and WebSocket; confirmed SSE fits server→client-only push | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
-| digitalbiztalk.com — SSE vs WebSockets 2026 | `https://www.digitalbiztalk.com/` (exact article path unverified — domain unresolvable at 2026-05-01 validation) | Comparison article cited in original research; URL could not be independently confirmed | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
-| Medium — FastAPI SSE implementation (2025) | <https://mahdijafaridev.medium.com/implementing-server-sent-events-sse-with-fastapi-real-time-updates-made-simple-6492f8bfc154> | FastAPI-specific SSE howto; StreamingResponse + async generator pattern | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
-| sysid/sse-starlette (GitHub) | <https://github.com/sysid/sse-starlette> | Battle-tested SSE library for Starlette/FastAPI; EventSourceResponse, reconnect handling | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
-| samuelcolvin/watchfiles (GitHub) | <https://github.com/samuelcolvin/watchfiles> | Rust-backed async file watcher (Pydantic author); OS-native FSEvents/inotify, async-friendly API | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
-| uvicorn.org — Settings (concurrency limits) | <https://www.uvicorn.org/settings/> | Worker count, connection limits, async model reference for SSE deployment impact assessment | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| germano.dev — SSE vs WebSockets (2022, 263 HN comments) | <https://germano.dev/sse-websockets> | Technical deep-dive + live demo comparing SSE and WebSocket; confirmed SSE fits server→client-only push | `owlbear-data/owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| digitalbiztalk.com — SSE vs WebSockets 2026 | `https://www.digitalbiztalk.com/` (exact article path unverified — domain unresolvable at 2026-05-01 validation) | Comparison article cited in original research; URL could not be independently confirmed | `owlbear-data/owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| Medium — FastAPI SSE implementation (2025) | <https://mahdijafaridev.medium.com/implementing-server-sent-events-sse-with-fastapi-real-time-updates-made-simple-6492f8bfc154> | FastAPI-specific SSE howto; StreamingResponse + async generator pattern | `owlbear-data/owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| sysid/sse-starlette (GitHub) | <https://github.com/sysid/sse-starlette> | Battle-tested SSE library for Starlette/FastAPI; EventSourceResponse, reconnect handling | `owlbear-data/owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| samuelcolvin/watchfiles (GitHub) | <https://github.com/samuelcolvin/watchfiles> | Rust-backed async file watcher (Pydantic author); OS-native FSEvents/inotify, async-friendly API | `owlbear-data/owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| uvicorn.org — Settings (concurrency limits) | <https://www.uvicorn.org/settings/> | Worker count, connection limits, async model reference for SSE deployment impact assessment | `owlbear-data/owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
 
 ## EventSource Client Implementation (Task #1235)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| WHATWG HTML Spec §9.2 — Server-sent events | <https://html.spec.whatwg.org/multipage/server-sent-events.html> | Normative EventSource API: readyState semantics (CONNECTING/OPEN/CLOSED), auto-reconnect behavior, connection failure rules, event parsing | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
-| reactuse.com — useEventSource hook | <https://reactuse.com/browser/useeventsource/> | React hook pattern for EventSource: status tracking, open/close control, data extraction | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
-| suqingdong/useEventSource (GitHub) | <https://github.com/suqingdong/useEventSource> | React SSE hook library: reconnect, terminate, data state management pattern | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
+| WHATWG HTML Spec §9.2 — Server-sent events | <https://html.spec.whatwg.org/multipage/server-sent-events.html> | Normative EventSource API: readyState semantics (CONNECTING/OPEN/CLOSED), auto-reconnect behavior, connection failure rules, event parsing | `owlbear-data/owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
+| reactuse.com — useEventSource hook | <https://reactuse.com/browser/useeventsource/> | React hook pattern for EventSource: status tracking, open/close control, data extraction | `owlbear-data/owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
+| suqingdong/useEventSource (GitHub) | <https://github.com/suqingdong/useEventSource> | React SSE hook library: reconnect, terminate, data state management pattern | `owlbear-data/owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
 
 ## useEventSource Hook (Task #1260)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| ReactUse — useEventSource | <https://reactuse.com/browser/useeventsource/> | React hook API pattern: status types (CONNECTING/CONNECTED/DISCONNECTED), autoReconnect options, open/close methods | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
-| NepeinAV/react-sse-hooks (GitHub) | <https://github.com/NepeinAV/react-sse-hooks> | Provider-based SSE hook library: EventSourceProvider, useEventSource, useEventSourceListener patterns | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
+| ReactUse — useEventSource | <https://reactuse.com/browser/useeventsource/> | React hook API pattern: status types (CONNECTING/CONNECTED/DISCONNECTED), autoReconnect options, open/close methods | `owlbear-data/owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
+| NepeinAV/react-sse-hooks (GitHub) | <https://github.com/NepeinAV/react-sse-hooks> | Provider-based SSE hook library: EventSourceProvider, useEventSource, useEventSourceListener patterns | `owlbear-data/owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
 
 ## EventSourceProvider Context and useSSEEvent Hook (Task #1276)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| samouss/react-hooks-sse (GitHub) | <https://github.com/samouss/react-hooks-sse> | Prior art for React SSE context provider pattern (SSEProvider + useSSE); validated fixed-type-list + single-connection architecture | `.owlbear/research/1276-eventsource-provider-hook.md` | 2026-05-02 |
+| samouss/react-hooks-sse (GitHub) | <https://github.com/samouss/react-hooks-sse> | Prior art for React SSE context provider pattern (SSEProvider + useSSE); validated fixed-type-list + single-connection architecture | `owlbear-data/owlbear/research/1276-eventsource-provider-hook.md` | 2026-05-02 |
 
 ## Paused Polling Option (Task #1259)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Dan Abramov — Making setInterval Declarative with React Hooks | <https://overreacted.io/making-setinterval-declarative-with-react-hooks/> | Canonical `delay: null` pause pattern for React interval hooks; ref-based callback approach | `.owlbear/research/1259-paused-option-usepollingfetch.md` | 2026-05-01 |
-| TanStack Query — `enabled` option | <https://tanstack.com/query/latest/docs/framework/react/guides/disabling-queries> | Industry-standard boolean pause pattern for React data-fetching hooks | `.owlbear/research/1259-paused-option-usepollingfetch.md` | 2026-05-01 |
+| Dan Abramov — Making setInterval Declarative with React Hooks | <https://overreacted.io/making-setinterval-declarative-with-react-hooks/> | Canonical `delay: null` pause pattern for React interval hooks; ref-based callback approach | `owlbear-data/owlbear/research/1259-paused-option-usepollingfetch.md` | 2026-05-01 |
+| TanStack Query — `enabled` option | <https://tanstack.com/query/latest/docs/framework/react/guides/disabling-queries> | Industry-standard boolean pause pattern for React data-fetching hooks | `owlbear-data/owlbear/research/1259-paused-option-usepollingfetch.md` | 2026-05-01 |
 
 ## SSE Endpoint Implementation (Task #1234)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| sse-starlette v3.4.1 (PyPI) | <https://pypi.org/project/sse-starlette/> | EventSourceResponse API, configuration options, shutdown handling, test patterns | `.owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
-| watchfiles v1.1.1 — awatch API docs | <https://watchfiles.helpmanual.io/api/watch/> | Async file watcher API: awatch signature, stop_event, debounce, filter, recursive params | `.owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
+| sse-starlette v3.4.1 (PyPI) | <https://pypi.org/project/sse-starlette/> | EventSourceResponse API, configuration options, shutdown handling, test patterns | `owlbear-data/owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
+| watchfiles v1.1.1 — awatch API docs | <https://watchfiles.helpmanual.io/api/watch/> | Async file watcher API: awatch signature, stop_event, debounce, filter, recursive params | `owlbear-data/owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
 
 ## Extend SSE to Decisions and Activity (Task #1236)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| watchfiles — awatch multi-path + recursive docs | <https://watchfiles.helpmanual.io/api/watch/> | Confirmed awatch(*paths) supports multiple dirs/files; recursive=True catches new subdirs | `.owlbear/research/1236-extend-sse-decisions-activity.md` | 2026-05-01 |
-| sysid/sse-starlette — typed events (README v3.4.1) | <https://github.com/sysid/sse-starlette> | yield dict with "event" key for typed SSE events; EventSourceResponse configuration | `.owlbear/research/1236-extend-sse-decisions-activity.md` | 2026-05-01 |
+| watchfiles — awatch multi-path + recursive docs | <https://watchfiles.helpmanual.io/api/watch/> | Confirmed awatch(*paths) supports multiple dirs/files; recursive=True catches new subdirs | `owlbear-data/owlbear/research/1236-extend-sse-decisions-activity.md` | 2026-05-01 |
+| sysid/sse-starlette — typed events (README v3.4.1) | <https://github.com/sysid/sse-starlette> | yield dict with "event" key for typed SSE events; EventSourceResponse configuration | `owlbear-data/owlbear/research/1236-extend-sse-decisions-activity.md` | 2026-05-01 |
 
 ## Version Field Semantics (Task #1170)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Docker Compose Spec — Version top-level element (obsolete) | <https://docs.docker.com/reference/compose-file/version-and-name/> | Precedent for deprecating config version field in favor of structure-based detection | `.owlbear/research/1170-version-field-semantics.md` | 2026-04-29 |
+| Docker Compose Spec — Version top-level element (obsolete) | <https://docs.docker.com/reference/compose-file/version-and-name/> | Precedent for deprecating config version field in favor of structure-based detection | `owlbear-data/owlbear/research/1170-version-field-semantics.md` | 2026-04-29 |
 
 ## Arch-Audit Prompt (Task #1150)
 
@@ -692,358 +692,358 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Ousterhout "Design It Twice" (A Philosophy of Software Design, Ch.11) | <https://thedeployguy.com/2019-06-16-a-philosophy-of-software-design-summary-part-2-cp10-end/> | Generate ≥2 radically different approaches, comparison reveals priorities | `.owlbear/research/1148-m3-5-proposal-round.md` | 2026-04-27 |
-| mattpocock/skills design-an-interface | <https://github.com/mattpocock/skills/blob/main/design-an-interface/SKILL.md> | Parallel sub-agent design generation with constraint directives | `.owlbear/research/1148-m3-5-proposal-round.md` | 2026-04-27 |
+| Ousterhout "Design It Twice" (A Philosophy of Software Design, Ch.11) | <https://thedeployguy.com/2019-06-16-a-philosophy-of-software-design-summary-part-2-cp10-end/> | Generate ≥2 radically different approaches, comparison reveals priorities | `owlbear-data/owlbear/research/1148-m3-5-proposal-round.md` | 2026-04-27 |
+| mattpocock/skills design-an-interface | <https://github.com/mattpocock/skills/blob/main/design-an-interface/SKILL.md> | Parallel sub-agent design generation with constraint directives | `owlbear-data/owlbear/research/1148-m3-5-proposal-round.md` | 2026-04-27 |
 
 ## Kanban Board GREEN Phase (Task #933)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| @dnd-kit/react (npm) | <https://www.npmjs.com/package/@dnd-kit/react> | v0.4.0 pre-release, React 19 native, useDraggable/useDroppable/useSortable hooks | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
-| @dnd-kit/core (npm) | <https://www.npmjs.com/package/@dnd-kit/core> | v6.3.1 stable, 13M/week, React 19 issues reported (#1654, #1747) | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
-| @atlaskit/pragmatic-drag-and-drop (npm) | <https://www.npmjs.com/package/@atlaskit/pragmatic-drag-and-drop> | v1.8.0, framework-agnostic, Apache-2.0, 970K/week | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
-| dnd-kit React 19 issues | <https://github.com/clauderic/dnd-kit/issues?q=react+19> | Open issues: #1654 use-client, #1747 removeChild, #1940 sortable lists | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| @dnd-kit/react (npm) | <https://www.npmjs.com/package/@dnd-kit/react> | v0.4.0 pre-release, React 19 native, useDraggable/useDroppable/useSortable hooks | `owlbear-data/owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| @dnd-kit/core (npm) | <https://www.npmjs.com/package/@dnd-kit/core> | v6.3.1 stable, 13M/week, React 19 issues reported (#1654, #1747) | `owlbear-data/owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| @atlaskit/pragmatic-drag-and-drop (npm) | <https://www.npmjs.com/package/@atlaskit/pragmatic-drag-and-drop> | v1.8.0, framework-agnostic, Apache-2.0, 970K/week | `owlbear-data/owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| dnd-kit React 19 issues | <https://github.com/clauderic/dnd-kit/issues?q=react+19> | Open issues: #1654 use-client, #1747 removeChild, #1940 sortable lists | `owlbear-data/owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
 
 ## CI Sync SPA Bundle (Task #938)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| actions/setup-node docs | <https://github.com/actions/setup-node> | node-version-file, cache options, v4 API | `.owlbear/research/938-ci-sync-spa-bundle.md` | 2026-04-19 |
+| actions/setup-node docs | <https://github.com/actions/setup-node> | node-version-file, cache options, v4 API | `owlbear-data/owlbear/research/938-ci-sync-spa-bundle.md` | 2026-04-19 |
 
 ## Kanban Board RED Tests (Task #931)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| RTL Example + MSW recommendation | <https://testing-library.com/docs/react-testing-library/example-intro> | MSW for API mocking, fetch-level mock pattern, async test patterns | `.owlbear/research/931-kanban-board-tests.md` | 2026-04-18 |
-| RTL user-event setup | <https://testing-library.com/docs/user-event/setup> | userEvent.setup() session pattern, DnD limitations in jsdom | `.owlbear/research/931-kanban-board-tests.md` | 2026-04-18 |
+| RTL Example + MSW recommendation | <https://testing-library.com/docs/react-testing-library/example-intro> | MSW for API mocking, fetch-level mock pattern, async test patterns | `owlbear-data/owlbear/research/931-kanban-board-tests.md` | 2026-04-18 |
+| RTL user-event setup | <https://testing-library.com/docs/user-event/setup> | userEvent.setup() session pattern, DnD limitations in jsdom | `owlbear-data/owlbear/research/931-kanban-board-tests.md` | 2026-04-18 |
 
 ## App Shell RED Phase — Test Strategy (Task #927)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
-| React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+| React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `owlbear-data/owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+| React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `owlbear-data/owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 
 ## Cockpit Launch Command (Task #937)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastAPI StaticFiles docs | <https://fastapi.tiangolo.com/tutorial/static-files/> | StaticFiles mount pattern, constructor args | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
-| Starlette StaticFiles source | <https://github.com/encode/starlette/blob/master/starlette/staticfiles.py> | html=True behavior — does NOT fallback to root index.html for deep routes | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
-| Starlette StaticFiles docs | <https://starlette.dev/staticfiles/> | html parameter, check_dir parameter | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
-| FastAPI Lifespan Events | <https://fastapi.tiangolo.com/advanced/events/> | asynccontextmanager lifespan pattern | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| FastAPI StaticFiles docs | <https://fastapi.tiangolo.com/tutorial/static-files/> | StaticFiles mount pattern, constructor args | `owlbear-data/owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| Starlette StaticFiles source | <https://github.com/encode/starlette/blob/master/starlette/staticfiles.py> | html=True behavior — does NOT fallback to root index.html for deep routes | `owlbear-data/owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| Starlette StaticFiles docs | <https://starlette.dev/staticfiles/> | html parameter, check_dir parameter | `owlbear-data/owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| FastAPI Lifespan Events | <https://fastapi.tiangolo.com/advanced/events/> | asynccontextmanager lifespan pattern | `owlbear-data/owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
 
 ## Planner askQuestions Approval (Task #998)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | Handoffs, tool lists, user-invocable/disable-model-invocation flags, agent file structure | `.owlbear/research/998-planner-askquestions-approval.md` | 2026-04-18 |
-| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | Subagent isolation model, coordinator patterns, custom agent as subagent, tool inheritance | `.owlbear/research/998-planner-askquestions-approval.md` | 2026-04-18 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | Handoffs, tool lists, user-invocable/disable-model-invocation flags, agent file structure | `owlbear-data/owlbear/research/998-planner-askquestions-approval.md` | 2026-04-18 |
+| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | Subagent isolation model, coordinator patterns, custom agent as subagent, tool inheritance | `owlbear-data/owlbear/research/998-planner-askquestions-approval.md` | 2026-04-18 |
 
 ## Shell Traffic-Light State Wiring (Task #966)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React docs: Passing Data Deeply with Context | <https://react.dev/learn/passing-data-deeply-with-context> | createContext/useContext pattern, when to use context vs props | `.owlbear/research/966-shell-traffic-light-wiring.md` | 2026-04-18 |
+| React docs: Passing Data Deeply with Context | <https://react.dev/learn/passing-data-deeply-with-context> | createContext/useContext pattern, when to use context vs props | `owlbear-data/owlbear/research/966-shell-traffic-light-wiring.md` | 2026-04-18 |
 
 ## E2E Kanban Board Tests: DnD, Density, Scroll (Task #957)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright Mouse API | <https://playwright.dev/docs/api/class-mouse> | `mouse.down()`, `mouse.move()`, `mouse.up()`, `mouse.wheel()` for DnD and scroll testing | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+| Playwright Mouse API | <https://playwright.dev/docs/api/class-mouse> | `mouse.down()`, `mouse.move()`, `mouse.up()`, `mouse.wheel()` for DnD and scroll testing | `owlbear-data/owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
 
 ## React Compiler Enablement (Tasks #970, #971, #1015)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability, scope, and opt-out strategy | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config: `react({ babel: { plugins: ['babel-plugin-react-compiler'] } })` | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, `"use no memo"` escape hatch | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | `"use memo"`/`"use no memo"` per-component opt-out | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | `compilationMode`, per-file overrides | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | `panicThreshold: 'none'`, silent skip behavior | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| Playwright Locator.boundingBox() | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | Returns `{x, y, width, height}` for card density measurement | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
-| Playwright DnD + Scrolling guide | <https://playwright.dev/docs/input#drag-and-drop> | Manual drag pattern, double mouse-move requirement for dragover, `mouse.wheel()` scroll pattern | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability, scope, and opt-out strategy | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config: `react({ babel: { plugins: ['babel-plugin-react-compiler'] } })` | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, `"use no memo"` escape hatch | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | `"use memo"`/`"use no memo"` per-component opt-out | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | `compilationMode`, per-file overrides | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | `panicThreshold: 'none'`, silent skip behavior | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Playwright Locator.boundingBox() | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | Returns `{x, y, width, height}` for card density measurement | `owlbear-data/owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+| Playwright DnD + Scrolling guide | <https://playwright.dev/docs/input#drag-and-drop> | Manual drag pattern, double mouse-move requirement for dragover, `mouse.wheel()` scroll pattern | `owlbear-data/owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
 
 ## Cockpit Read API GREEN Phase (Task #930)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastAPI Dependency Injection | <https://fastapi.tiangolo.com/tutorial/dependencies/> | `Depends()` pattern for `get_engine` DI callable, `dependency_overrides` in tests | `.owlbear/research/930-cockpit-read-api-green.md` | 2026-04-18 |
-| PDS v3.34 Tabs examples + API | <https://designsystem.porsche.com/v3> | PTabs/PTabsItem custom element tags, `activeTabIndex` prop, `label` prop, jsdom tab-switch event behaviour | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+| FastAPI Dependency Injection | <https://fastapi.tiangolo.com/tutorial/dependencies/> | `Depends()` pattern for `get_engine` DI callable, `dependency_overrides` in tests | `owlbear-data/owlbear/research/930-cockpit-read-api-green.md` | 2026-04-18 |
+| PDS v3.34 Tabs examples + API | <https://designsystem.porsche.com/v3> | PTabs/PTabsItem custom element tags, `activeTabIndex` prop, `label` prop, jsdom tab-switch event behaviour | `owlbear-data/owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 
 ## KanbanBoard Memoization (Task #963)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React.memo API reference | <https://react.dev/reference/react/memo> | Shallow prop comparison, React Compiler note, custom comparator API | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
-| useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
-| useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
+| React.memo API reference | <https://react.dev/reference/react/memo> | Shallow prop comparison, React Compiler note, custom comparator API | `owlbear-data/owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
+| useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `owlbear-data/owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
+| useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `owlbear-data/owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 
 ## React Compiler Trigger Reassessment (Task #971)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Compiler installation docs | <https://react.dev/learn/react-compiler/installation> | Install steps (`babel-plugin-react-compiler`), vite.config.ts plugin wiring, `"use no memo"` opt-out directive | `.owlbear/research/971-react-compiler-trigger-reassessment.md` | 2026-04-19 |
+| React Compiler installation docs | <https://react.dev/learn/react-compiler/installation> | Install steps (`babel-plugin-react-compiler`), vite.config.ts plugin wiring, `"use no memo"` opt-out directive | `owlbear-data/owlbear/research/971-react-compiler-trigger-reassessment.md` | 2026-04-19 |
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Compiler installation docs | <https://react.dev/learn/react-compiler/installation> | babel-plugin-react-compiler, Vite config, React 19 support, ESLint integration | `.owlbear/research/971-react-compiler-trigger-reassessment.md` | 2026-04-19 |
+| React Compiler installation docs | <https://react.dev/learn/react-compiler/installation> | babel-plugin-react-compiler, Vite config, React 19 support, ESLint integration | `owlbear-data/owlbear/research/971-react-compiler-trigger-reassessment.md` | 2026-04-19 |
 
 ## Sidecar GREEN Gaps (Task #936)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| react-markdown npm (v10.1.0) | <https://www.npmjs.com/package/react-markdown> | Safe by default, no dSIH, HTML escaped; rehypeSanitize is no-op without rehypeRaw | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
-| remark-gfm npm (v4.0.1) | <https://www.npmjs.com/package/remark-gfm> | GFM plugin for remark — tables, strikethrough, task lists; required for task body rendering | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
-| rehype-sanitize npm (v6.0.0) | <https://www.npmjs.com/package/rehype-sanitize> | Sanitizes HTML in hast tree; defaultSchema follows GitHub-style sanitation | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
+| react-markdown npm (v10.1.0) | <https://www.npmjs.com/package/react-markdown> | Safe by default, no dSIH, HTML escaped; rehypeSanitize is no-op without rehypeRaw | `owlbear-data/owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
+| remark-gfm npm (v4.0.1) | <https://www.npmjs.com/package/remark-gfm> | GFM plugin for remark — tables, strikethrough, task lists; required for task body rendering | `owlbear-data/owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
+| rehype-sanitize npm (v6.0.0) | <https://www.npmjs.com/package/rehype-sanitize> | Sanitizes HTML in hast tree; defaultSchema follows GitHub-style sanitation | `owlbear-data/owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
 
 ## React Compiler Evaluation (Task #969)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability statement, 1.0.0 stable, supported React versions | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
-| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config (3 LOC), babel plugin setup, devDep | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
-| babel-plugin-react-compiler (npm) | <https://www.npmjs.com/package/babel-plugin-react-compiler> | v1.0.0, 7.6M weekly downloads, integration LOC | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
-| react-compiler-runtime (npm) | <https://www.npmjs.com/package/react-compiler-runtime> | v1.0.0, 0 dependencies, runtime companion | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability statement, 1.0.0 stable, supported React versions | `owlbear-data/owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config (3 LOC), babel plugin setup, devDep | `owlbear-data/owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| babel-plugin-react-compiler (npm) | <https://www.npmjs.com/package/babel-plugin-react-compiler> | v1.0.0, 7.6M weekly downloads, integration LOC | `owlbear-data/owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| react-compiler-runtime (npm) | <https://www.npmjs.com/package/react-compiler-runtime> | v1.0.0, 0 dependencies, runtime companion | `owlbear-data/owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
 
 ## React Compiler + PDS Interop (Task #970)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability, scope, what the compiler does | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config, babel plugin setup | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, "use no memo" directive | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | "use memo"/"use no memo" opt-in/out | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | Annotation mode, overrides for gradual rollout | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | compilationMode, panicThreshold settings | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| Rules of React | <https://react.dev/reference/rules> | Purity, side effects, immutability — compiler contract | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| Vitest coverage drop — reactwg/react-compiler#78 | <https://github.com/reactwg/react-compiler/discussions/78> | Compiler-generated branches inflate coverage branch count | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability, scope, what the compiler does | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config, babel plugin setup | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, "use no memo" directive | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | "use memo"/"use no memo" opt-in/out | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | Annotation mode, overrides for gradual rollout | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | compilationMode, panicThreshold settings | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Rules of React | <https://react.dev/reference/rules> | Purity, side effects, immutability — compiler contract | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Vitest coverage drop — reactwg/react-compiler#78 | <https://github.com/reactwg/react-compiler/discussions/78> | Compiler-generated branches inflate coverage branch count | `owlbear-data/owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
 
 ## useBoard Polling GREEN Implementation (Task #967)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React docs: useEffect | <https://react.dev/reference/react/useEffect> | Cleanup, setInterval pattern, fetch-in-effect, StrictMode double-mount | `.owlbear/research/967-useboard-polling-green.md` | 2026-04-18 |
-| MDN: AbortController | <https://developer.mozilla.org/en-US/docs/Web/API/AbortController> | Signal/abort API, fetch cancellation, browser compat | `.owlbear/research/967-useboard-polling-green.md` | 2026-04-18 |
+| React docs: useEffect | <https://react.dev/reference/react/useEffect> | Cleanup, setInterval pattern, fetch-in-effect, StrictMode double-mount | `owlbear-data/owlbear/research/967-useboard-polling-green.md` | 2026-04-18 |
+| MDN: AbortController | <https://developer.mozilla.org/en-US/docs/Web/API/AbortController> | Signal/abort API, fetch cancellation, browser compat | `owlbear-data/owlbear/research/967-useboard-polling-green.md` | 2026-04-18 |
 
 ## TanStack Query vs Plain Polling Research (Task #960)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| TanStack Query v5 docs — overview | <https://tanstack.com/query/latest/docs/framework/react/overview> | Architecture, QueryClient, structural sharing, stale-while-revalidate semantics | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| TanStack Query — polling guide | <https://tanstack.com/query/latest/docs/framework/react/guides/polling> | `refetchInterval`, `refetchIntervalInBackground`, polling lifecycle | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| TanStack Query — testing guide | <https://tanstack.com/query/latest/docs/framework/react/guides/testing> | QueryClientProvider wrapper pattern, test isolation with createQueryClient | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| TanStack Query — important defaults | <https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults> | 3-retry default, staleTime=0, gcTime semantics | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| @tanstack/react-query (npm) | <https://www.npmjs.com/package/@tanstack/react-query> | v5.x bundle size (~15-20 KB gzip), peer deps, changelog | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query v5 docs — overview | <https://tanstack.com/query/latest/docs/framework/react/overview> | Architecture, QueryClient, structural sharing, stale-while-revalidate semantics | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — polling guide | <https://tanstack.com/query/latest/docs/framework/react/guides/polling> | `refetchInterval`, `refetchIntervalInBackground`, polling lifecycle | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — testing guide | <https://tanstack.com/query/latest/docs/framework/react/guides/testing> | QueryClientProvider wrapper pattern, test isolation with createQueryClient | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — important defaults | <https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults> | 3-retry default, staleTime=0, gcTime semantics | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| @tanstack/react-query (npm) | <https://www.npmjs.com/package/@tanstack/react-query> | v5.x bundle size (~15-20 KB gzip), peer deps, changelog | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
 
 ## Sidecar + Polling RED Tests (Task #935)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| react-markdown npm docs | <https://www.npmjs.com/package/react-markdown> | v10.1.0, safe by default (no dangerouslySetInnerHTML), skipHtml option, rehype-sanitize for strict mode | `.owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
-| Vitest mocking guide | <https://vitest.dev/guide/mocking.html> | vi.useFakeTimers, vi.stubGlobal, vi.mock factory patterns for polling and module mocking | `.owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
-| RTL introduction | <https://testing-library.com/docs/react-testing-library/intro> | renderHook API in v16, data-testid pattern, user-behavior-first testing philosophy | `.owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
+| react-markdown npm docs | <https://www.npmjs.com/package/react-markdown> | v10.1.0, safe by default (no dangerouslySetInnerHTML), skipHtml option, rehype-sanitize for strict mode | `owlbear-data/owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
+| Vitest mocking guide | <https://vitest.dev/guide/mocking.html> | vi.useFakeTimers, vi.stubGlobal, vi.mock factory patterns for polling and module mocking | `owlbear-data/owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
+| RTL introduction | <https://testing-library.com/docs/react-testing-library/intro> | renderHook API in v16, data-testid pattern, user-behavior-first testing philosophy | `owlbear-data/owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
 
 ## Frontend Scaffold Feasibility (Task #925)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS React wrapper (npm) | <https://www.npmjs.com/package/@porsche-design-system/components-react> | Peer deps (React >=19), exports map, single JS dependency | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
-| PDS React getting-started | <https://designsystem.porsche.com/v3/developing/react/getting-started> | Vite integration steps, PorscheDesignSystemProvider, partials plugin, Tailwind theme | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
-| PDS React testing | <https://designsystem.porsche.com/v3/developing/react/testing> | jsdom polyfill, componentsReady, shadow DOM query utilities, CDN request suppression | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
-| PDS License | <https://github.com/porsche-design-system/porsche-design-system/blob/main/LICENSE.md> | Dual license: Apache 2.0 source code + custom restrictive design assets license | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
-| PDS Theme styles | <https://designsystem.porsche.com/v3/styles/theme> | Design token exports: JS, SCSS, vanilla-extract, Tailwind CSS theme | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS React wrapper (npm) | <https://www.npmjs.com/package/@porsche-design-system/components-react> | Peer deps (React >=19), exports map, single JS dependency | `owlbear-data/owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS React getting-started | <https://designsystem.porsche.com/v3/developing/react/getting-started> | Vite integration steps, PorscheDesignSystemProvider, partials plugin, Tailwind theme | `owlbear-data/owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS React testing | <https://designsystem.porsche.com/v3/developing/react/testing> | jsdom polyfill, componentsReady, shadow DOM query utilities, CDN request suppression | `owlbear-data/owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS License | <https://github.com/porsche-design-system/porsche-design-system/blob/main/LICENSE.md> | Dual license: Apache 2.0 source code + custom restrictive design assets license | `owlbear-data/owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS Theme styles | <https://designsystem.porsche.com/v3/styles/theme> | Design token exports: JS, SCSS, vanilla-extract, Tailwind CSS theme | `owlbear-data/owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
 
 ## Context Menu Dismiss + A11y RED Tests (Task #962)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| WAI-ARIA APG Menu Pattern | <https://www.w3.org/WAI/ARIA/apg/patterns/menu/> | `role="menu"` + `role="menuitem"` requirements, Escape closes menu, keyboard interaction spec | `.owlbear/research/962-context-menu-dismiss-a11y.md` | 2026-04-18 |
-| RTL fireEvent API | <https://testing-library.com/docs/dom-testing-library/api-events> | `fireEvent.keyDown(node, {key:'Escape'})`, `fireEvent.mouseDown(node)` patterns for dismiss testing | `.owlbear/research/962-context-menu-dismiss-a11y.md` | 2026-04-18 |
+| WAI-ARIA APG Menu Pattern | <https://www.w3.org/WAI/ARIA/apg/patterns/menu/> | `role="menu"` + `role="menuitem"` requirements, Escape closes menu, keyboard interaction spec | `owlbear-data/owlbear/research/962-context-menu-dismiss-a11y.md` | 2026-04-18 |
+| RTL fireEvent API | <https://testing-library.com/docs/dom-testing-library/api-events> | `fireEvent.keyDown(node, {key:'Escape'})`, `fireEvent.mouseDown(node)` patterns for dismiss testing | `owlbear-data/owlbear/research/962-context-menu-dismiss-a11y.md` | 2026-04-18 |
 
 ## Frontend Perf Benchmark + Virtualization (Task #959)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| react-virtuoso (npm) | <https://www.npmjs.com/package/react-virtuoso> | v4.18.5, 57KB min / 18.4KB gzip, 0 deps, 2.5M/wk, built-in DnD scroll support | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
-| react-window (npm) | <https://www.npmjs.com/package/react-window> | v2.2.7, 12.5KB min / 6.5KB gzip, 0 deps, 5.4M/wk, fixed-height List/Grid | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
-| Bundlephobia: react-virtuoso | <https://bundlephobia.com/package/react-virtuoso@4.18.5> | Bundle composition: 100% self, tree-shakeable, side-effect free | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
-| Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
-| Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| react-virtuoso (npm) | <https://www.npmjs.com/package/react-virtuoso> | v4.18.5, 57KB min / 18.4KB gzip, 0 deps, 2.5M/wk, built-in DnD scroll support | `owlbear-data/owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| react-window (npm) | <https://www.npmjs.com/package/react-window> | v2.2.7, 12.5KB min / 6.5KB gzip, 0 deps, 5.4M/wk, fixed-height List/Grid | `owlbear-data/owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| Bundlephobia: react-virtuoso | <https://bundlephobia.com/package/react-virtuoso@4.18.5> | Bundle composition: 100% self, tree-shakeable, side-effect free | `owlbear-data/owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `owlbear-data/owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `owlbear-data/owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 
 ## TanStack Query vs Plain Polling (Task #960)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| TanStack Query v5 — overview | <https://tanstack.com/query/latest/docs/framework/react/overview> | Core concepts: server state caching, dedup, structural sharing, stale-while-revalidate | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| TanStack Query — polling guide | <https://tanstack.com/query/latest/docs/framework/react/guides/polling> | `refetchInterval` API, conditional polling via function, background polling, dedup semantics | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| TanStack Query — testing guide | <https://tanstack.com/query/latest/docs/framework/react/guides/testing> | QueryClientProvider wrapper, retry:false, gcTime:Infinity for test isolation | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| TanStack Query — important defaults | <https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults> | staleTime, structuralSharing, refetchOnWindowFocus, retry defaults | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
-| @tanstack/react-query (npm) | <https://www.npmjs.com/package/@tanstack/react-query> | v5.99.0, 1 dep, 47M/wk, MIT, ~15-20KB gzipped total | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query v5 — overview | <https://tanstack.com/query/latest/docs/framework/react/overview> | Core concepts: server state caching, dedup, structural sharing, stale-while-revalidate | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — polling guide | <https://tanstack.com/query/latest/docs/framework/react/guides/polling> | `refetchInterval` API, conditional polling via function, background polling, dedup semantics | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — testing guide | <https://tanstack.com/query/latest/docs/framework/react/guides/testing> | QueryClientProvider wrapper, retry:false, gcTime:Infinity for test isolation | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — important defaults | <https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults> | staleTime, structuralSharing, refetchOnWindowFocus, retry defaults | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| @tanstack/react-query (npm) | <https://www.npmjs.com/package/@tanstack/react-query> | v5.99.0, 1 dep, 47M/wk, MIT, ~15-20KB gzipped total | `owlbear-data/owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
 
 ## Mtime Cache for list_tasks() (Task #941)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Python os.scandir/DirEntry docs | <https://docs.python.org/3/library/os.html#os.scandir> | DirEntry.stat() behavior on Unix (requires syscall), st_mtime_ns type (int, nanoseconds) | `.owlbear/research/mtime-cache-941.md` | 2026-04-17 |
+| Python os.scandir/DirEntry docs | <https://docs.python.org/3/library/os.html#os.scandir> | DirEntry.stat() behavior on Unix (requires syscall), st_mtime_ns type (int, nanoseconds) | `owlbear-data/owlbear/research/mtime-cache-941.md` | 2026-04-17 |
 
 ## Cockpit Layout Validation (Task #922)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Porsche DS Grid styles | <https://designsystem.porsche.com/v3/styles/grid> | Grid primitives, spacing tokens, fluid column system | `.owlbear/research/922-cockpit-layout-mockup.md` | 2026-04-17 |
-| Pragmatic Drag-and-Drop | <https://github.com/atlassian/pragmatic-drag-and-drop> | Atlassian kanban board drag patterns (Trello/Jira reference) | `.owlbear/research/922-cockpit-layout-mockup.md` | 2026-04-17 |
+| Porsche DS Grid styles | <https://designsystem.porsche.com/v3/styles/grid> | Grid primitives, spacing tokens, fluid column system | `owlbear-data/owlbear/research/922-cockpit-layout-mockup.md` | 2026-04-17 |
+| Pragmatic Drag-and-Drop | <https://github.com/atlassian/pragmatic-drag-and-drop> | Atlassian kanban board drag patterns (Trello/Jira reference) | `owlbear-data/owlbear/research/922-cockpit-layout-mockup.md` | 2026-04-17 |
 
 ## PreToolUse Guard Hooks Test Approach (Task #891)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse hook I/O contract: stdin JSON schema, stdout allow/deny format, exit code semantics, fail-open spec | `.owlbear/research/891-pretooluse-hooks-test-approach.md` | 2026-04-17 |
+| VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse hook I/O contract: stdin JSON schema, stdout allow/deny format, exit code semantics, fail-open spec | `owlbear-data/owlbear/research/891-pretooluse-hooks-test-approach.md` | 2026-04-17 |
 
 ## E2E Kanban Board Tests (Task #955)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright intro + installation | <https://playwright.dev/docs/intro> | Setup, webServer config, headless/headed modes, CI story | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
-| Playwright DnD + scrolling | <https://playwright.dev/docs/input#drag-and-drop> | `locator.dragTo()`, manual drag via `mouse.down()/move()/up()`, `mouse.wheel()`, `scrollIntoViewIfNeeded()` | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
-| Playwright Locator API — boundingBox | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | `boundingBox()` returns `{x,y,width,height}` for layout measurement | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
-| Vitest Browser Mode | <https://vitest.dev/guide/browser/> | Browser mode setup, Playwright provider, projects config, limitations | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
-| Vitest Component Testing | <https://vitest.dev/guide/browser/component-testing> | Component testing patterns, `vitest-browser-react`, Testing Library integration | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Playwright intro + installation | <https://playwright.dev/docs/intro> | Setup, webServer config, headless/headed modes, CI story | `owlbear-data/owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Playwright DnD + scrolling | <https://playwright.dev/docs/input#drag-and-drop> | `locator.dragTo()`, manual drag via `mouse.down()/move()/up()`, `mouse.wheel()`, `scrollIntoViewIfNeeded()` | `owlbear-data/owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Playwright Locator API — boundingBox | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | `boundingBox()` returns `{x,y,width,height}` for layout measurement | `owlbear-data/owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Vitest Browser Mode | <https://vitest.dev/guide/browser/> | Browser mode setup, Playwright provider, projects config, limitations | `owlbear-data/owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Vitest Component Testing | <https://vitest.dev/guide/browser/component-testing> | Component testing patterns, `vitest-browser-react`, Testing Library integration | `owlbear-data/owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
 
 ## SSRF Surface in BrowserContentFetcher (Task #949)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; follows redirects by default; URL string only | `.owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
-| Playwright browser_context.route() docs | <https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route> | Route interception pattern for blocking requests by URL/predicate | `.owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
-| Playwright Network docs | <https://playwright.dev/python/docs/network> | Request interception, modification, and abort patterns | `.owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
+| Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; follows redirects by default; URL string only | `owlbear-data/owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
+| Playwright browser_context.route() docs | <https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route> | Route interception pattern for blocking requests by URL/predicate | `owlbear-data/owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
+| Playwright Network docs | <https://playwright.dev/python/docs/network> | Request interception, modification, and abort patterns | `owlbear-data/owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
 
 ## SSRF Pre-Flight Check for navigate() (Task #950)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; Playwright constraint on TOCTOU mitigation | `.owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
-| OwlBear #946 `_is_blocked_ip` implementation | Internal: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` L156-175 | Proven SSRF IP blocklist pattern for duplication | `.owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
+| Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; Playwright constraint on TOCTOU mitigation | `owlbear-data/owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
+| OwlBear #946 `_is_blocked_ip` implementation | Internal: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` L156-175 | Proven SSRF IP blocklist pattern for duplication | `owlbear-data/owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
 
 ## App Shell GREEN Phase (Task #929)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Router v7 library routing docs | <https://reactrouter.com/start/library/routing> | BrowserRouter, layout routes, Outlet pattern, nested route config | `.owlbear/research/929-app-shell-green.md` | 2026-04-18 |
-| React Router v7 installation guide | <https://reactrouter.com/start/library/installation> | BrowserRouter wrapper pattern for Vite/React apps | `.owlbear/research/929-app-shell-green.md` | 2026-04-18 |
+| React Router v7 library routing docs | <https://reactrouter.com/start/library/routing> | BrowserRouter, layout routes, Outlet pattern, nested route config | `owlbear-data/owlbear/research/929-app-shell-green.md` | 2026-04-18 |
+| React Router v7 installation guide | <https://reactrouter.com/start/library/installation> | BrowserRouter wrapper pattern for Vite/React apps | `owlbear-data/owlbear/research/929-app-shell-green.md` | 2026-04-18 |
 
 ## Copilot SDK vs OpenAI-Compat Endpoint Research (Task #887)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| github-copilot-sdk PyPI | <https://pypi.org/project/github-copilot-sdk/> | MIT | SDK API surface (v0.2.2): session-based event-driven chat, no `response_format` support, BYOK, auth methods, tool definitions | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
-| GitHub Copilot SDK repo | <https://github.com/github/copilot-sdk> | MIT | Architecture (JSON-RPC ↔ Copilot CLI), models, FAQ (auth, billing, BYOK), getting-started guide | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
-| copilot-api (ericc-ch) | <https://github.com/ericc-ch/copilot-api> | MIT | Reverse-engineered OpenAI-compat proxy for Copilot: endpoints (`/v1/chat/completions`, `/v1/models`), auth flow, rate-limit controls, GitHub ToS/abuse-detection warnings | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
-| GitHub Copilot Requests docs | <https://docs.github.com/en/copilot/concepts/billing/copilot-requests> | N/A | Premium request model, model multipliers (GPT-4.1 = 0×, GPT-5 mini = 0× on paid plans), rate limits, quota behavior | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| github-copilot-sdk PyPI | <https://pypi.org/project/github-copilot-sdk/> | MIT | SDK API surface (v0.2.2): session-based event-driven chat, no `response_format` support, BYOK, auth methods, tool definitions | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| GitHub Copilot SDK repo | <https://github.com/github/copilot-sdk> | MIT | Architecture (JSON-RPC ↔ Copilot CLI), models, FAQ (auth, billing, BYOK), getting-started guide | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| copilot-api (ericc-ch) | <https://github.com/ericc-ch/copilot-api> | MIT | Reverse-engineered OpenAI-compat proxy for Copilot: endpoints (`/v1/chat/completions`, `/v1/models`), auth flow, rate-limit controls, GitHub ToS/abuse-detection warnings | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| GitHub Copilot Requests docs | <https://docs.github.com/en/copilot/concepts/billing/copilot-requests> | N/A | Premium request model, model multipliers (GPT-4.1 = 0×, GPT-5 mini = 0× on paid plans), rate limits, quota behavior | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
 
 ## Copilot SDK Monitoring Check (Task #889)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Copilot SDK CHANGELOG.md | <https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md> | v0.2.0–v0.2.2 changelog: confirmed no `response_format` or completions API added | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
-| Copilot SDK Issue #857 | <https://github.com/github/copilot-sdk/issues/857> | "Force structured output" — open feature request, no milestone | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
-| PyPI github-copilot-sdk v0.2.2 | <https://pypi.org/project/github-copilot-sdk/> | SDK API surface: session-based, no `response_format`, BYOK `wire_api` field (custom providers only) | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| Copilot SDK CHANGELOG.md | <https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md> | v0.2.0–v0.2.2 changelog: confirmed no `response_format` or completions API added | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| Copilot SDK Issue #857 | <https://github.com/github/copilot-sdk/issues/857> | "Force structured output" — open feature request, no milestone | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| PyPI github-copilot-sdk v0.2.2 | <https://pypi.org/project/github-copilot-sdk/> | SDK API surface: session-based, no `response_format`, BYOK `wire_api` field (custom providers only) | `owlbear-data/owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
 
 ## Session-Context Python Port (Task #896)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Hooks docs — SessionStart I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | SessionStart hook stdin/stdout JSON contract, fail-open spec | `.owlbear/research/896-session-context-py-port.md` | 2026-04-17 |
+| VS Code Hooks docs — SessionStart I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | SessionStart hook stdin/stdout JSON contract, fail-open spec | `owlbear-data/owlbear/research/896-session-context-py-port.md` | 2026-04-17 |
 
 ## Copilot Auth Port Feasibility (Task #888)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| github-copilot-sdk PyPI (v0.2.2 recheck) | <https://pypi.org/project/github-copilot-sdk/> | Confirmed: still no `response_format`, BYOK routes through CLI subprocess, session/event API only | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
-| copilot-api proxy (ericc-ch, recheck) | <https://github.com/ericc-ch/copilot-api> | 3.7k stars, explicit abuse-detection warnings added, confirms risk is actively enforced | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+| github-copilot-sdk PyPI (v0.2.2 recheck) | <https://pypi.org/project/github-copilot-sdk/> | Confirmed: still no `response_format`, BYOK routes through CLI subprocess, session/event API only | `owlbear-data/owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+| copilot-api proxy (ericc-ch, recheck) | <https://github.com/ericc-ch/copilot-api> | 3.7k stars, explicit abuse-detection warnings added, confirms risk is actively enforced | `owlbear-data/owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
 | Graphicator | `C:\Users\p362329\OneDrive\Coding\Projects\tool.graphicator` | (own project) \ Device-flow OAuth implementation ported to `copilot_auth.py`: `request_device_code`, `poll_for_access_token`, `exchange_for_copilot_token`, token cache, editor headers | `serve/knowledge/src/owlbear_knowledge/copilot_auth.py` | 2026-04-15 |
 
 ## Entity Name Canonicalization (Task #865)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| ScrapingAnt: Deduplication & Canonicalization in Scraped KGs | <https://scrapingant.com/blog/data-deduplication-and-canonicalization-in-scraped> | Blocking/candidate generation pipeline; canonical_name as blocking key; rule-based vs ML vs hybrid approaches | .owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
-| SpotIntelligence: Entity Resolution Techniques | <https://spotintelligence.com/2024/01/22/entity-resolution/> | Rule-based matching, string similarity measures, clustering approaches for entity deduplication | .owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
+| ScrapingAnt: Deduplication & Canonicalization in Scraped KGs | <https://scrapingant.com/blog/data-deduplication-and-canonicalization-in-scraped> | Blocking/candidate generation pipeline; canonical_name as blocking key; rule-based vs ML vs hybrid approaches | owlbear-data/owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
+| SpotIntelligence: Entity Resolution Techniques | <https://spotintelligence.com/2024/01/22/entity-resolution/> | Rule-based matching, string similarity measures, clustering approaches for entity deduplication | owlbear-data/owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
 
 ## StructuredExtractor Replacement Research (Task #874)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| OpenAI Python SDK — Structured Outputs | <https://developers.openai.com/api/docs/guides/structured-outputs> | Native `response_format` with Pydantic JSON schema, `AsyncOpenAI` async client | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
-| LiteLLM — Structured Outputs (JSON Mode) | <https://docs.litellm.ai/docs/completion/json_mode> | `response_format` with Pydantic models, multi-provider support, dep count analysis | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
-| Instructor — Structured LLM Outputs | <https://python.useinstructor.com/> | `response_model` abstraction, retry/validation, Pydantic integration | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
-| Kuboid — LiteLLM Supply Chain Attack March 2026 | <https://www.kuboid.in/blog/litellm-supply-chain-attack-march-2026-explained> | TeamPCP/LAPSUS$ credential stealer in v1.82.7-8, releases paused | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| OpenAI Python SDK — Structured Outputs | <https://developers.openai.com/api/docs/guides/structured-outputs> | Native `response_format` with Pydantic JSON schema, `AsyncOpenAI` async client | owlbear-data/owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| LiteLLM — Structured Outputs (JSON Mode) | <https://docs.litellm.ai/docs/completion/json_mode> | `response_format` with Pydantic models, multi-provider support, dep count analysis | owlbear-data/owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| Instructor — Structured LLM Outputs | <https://python.useinstructor.com/> | `response_model` abstraction, retry/validation, Pydantic integration | owlbear-data/owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| Kuboid — LiteLLM Supply Chain Attack March 2026 | <https://www.kuboid.in/blog/litellm-supply-chain-attack-march-2026-explained> | TeamPCP/LAPSUS$ credential stealer in v1.82.7-8, releases paused | owlbear-data/owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
 
 ## LLMExtractor Implementation Research (Task #875)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| OpenAI Structured Outputs guide | <https://developers.openai.com/api/docs/guides/structured-outputs> | Strict JSON schema, `response_format`, Pydantic support, refusal handling | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
-| openai-python SDK helpers.md | <https://github.com/openai/openai-python/blob/main/helpers.md> | `chat.completions.parse()` API, auto-schema from Pydantic, `ParsedChatCompletion` | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+| OpenAI Structured Outputs guide | <https://developers.openai.com/api/docs/guides/structured-outputs> | Strict JSON schema, `response_format`, Pydantic support, refusal handling | owlbear-data/owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+| openai-python SDK helpers.md | <https://github.com/openai/openai-python/blob/main/helpers.md> | `chat.completions.parse()` API, auto-schema from Pydantic, `ParsedChatCompletion` | owlbear-data/owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
 
 ## SharePoint REST API Parallel Path Research (Task #773)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Microsoft Graph SharePoint API overview | <https://learn.microsoft.com/en-us/graph/api/resources/sharepoint?view=graph-rest-1.0> | Site/list/drive API surface, URL addressing patterns | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
-| Graph API sitePage + canvasLayout | <https://learn.microsoft.com/en-us/graph/api/sitepage-get?view=graph-rest-1.0> | Page content extraction via $expand=canvasLayout, web part innerHtml, permissions (Sites.Read.All) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
-| Sites.Selected delegated auth announcement | <https://devblogs.microsoft.com/microsoft365dev/sharepoint-now-supports-delegated-sites-selected-authentication/> | Granular per-site delegated permission scope (Feb 2024) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
-| Office365-REST-Python-Client (vgrem) | <https://pypi.org/project/Office365-REST-Python-Client/> | Python library for SharePoint REST + Graph API, MSAL integration, dep analysis | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
-| MSAL Python docs | <https://msal-python.readthedocs.io/en/latest/> | Auth library for Azure AD token acquisition (device-code, interactive, client-credentials) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Microsoft Graph SharePoint API overview | <https://learn.microsoft.com/en-us/graph/api/resources/sharepoint?view=graph-rest-1.0> | Site/list/drive API surface, URL addressing patterns | owlbear-data/owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Graph API sitePage + canvasLayout | <https://learn.microsoft.com/en-us/graph/api/sitepage-get?view=graph-rest-1.0> | Page content extraction via $expand=canvasLayout, web part innerHtml, permissions (Sites.Read.All) | owlbear-data/owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Sites.Selected delegated auth announcement | <https://devblogs.microsoft.com/microsoft365dev/sharepoint-now-supports-delegated-sites-selected-authentication/> | Granular per-site delegated permission scope (Feb 2024) | owlbear-data/owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Office365-REST-Python-Client (vgrem) | <https://pypi.org/project/Office365-REST-Python-Client/> | Python library for SharePoint REST + Graph API, MSAL integration, dep analysis | owlbear-data/owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| MSAL Python docs | <https://msal-python.readthedocs.io/en/latest/> | Auth library for Azure AD token acquisition (device-code, interactive, client-credentials) | owlbear-data/owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
 
 ## GraphContentFetcher Implementation Research (Task #879)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| canvasLayout v1.0 API reference | <https://learn.microsoft.com/en-us/graph/api/resources/canvaslayout?view=graph-rest-1.0> | canvasLayout resource structure, horizontalSections/verticalSection relationships | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
-| SE: retrieve modern SP page content | <https://sharepoint.stackexchange.com/questions/307632> | Community confirmation that $expand=canvasLayout works in v1.0 for modern pages | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
-| msgraph-sdk-python (v1.55.0) | <https://github.com/microsoftgraph/msgraph-sdk-python> | SDK dep analysis: kiota-*, azure-core, 15+ transitive deps — confirms Option A preferred | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
-| azure-identity vs msal comparison | <https://www.datalineo.com/post/power-bi-rest-api-with-python-part-iii-azure-identity> | azure-identity wraps msal, adds azure-core layer; raw msal is lighter | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| canvasLayout v1.0 API reference | <https://learn.microsoft.com/en-us/graph/api/resources/canvaslayout?view=graph-rest-1.0> | canvasLayout resource structure, horizontalSections/verticalSection relationships | owlbear-data/owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| SE: retrieve modern SP page content | <https://sharepoint.stackexchange.com/questions/307632> | Community confirmation that $expand=canvasLayout works in v1.0 for modern pages | owlbear-data/owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| msgraph-sdk-python (v1.55.0) | <https://github.com/microsoftgraph/msgraph-sdk-python> | SDK dep analysis: kiota-*, azure-core, 15+ transitive deps — confirms Option A preferred | owlbear-data/owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| azure-identity vs msal comparison | <https://www.datalineo.com/post/power-bi-rest-api-with-python-part-iii-azure-identity> | azure-identity wraps msal, adds azure-core layer; raw msal is lighter | owlbear-data/owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
 
 ## Edge CDP Validation Spike (Task #752)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local param, default context access | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
-| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Critical: `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local param, default context access | owlbear-data/owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Critical: `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | owlbear-data/owlbear/research/cdp-spike-752.md | 2026-04-10 |
 
 ## Migrate task_io.py from PyYAML to ruamel.yaml (Task #827)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| ruamel.yaml Basic Usage | <https://yaml.dev/doc/ruamel.yaml/basicuse/> | safe/rt modes, StringIO dump pattern, YAML instance API | .owlbear/research/migrate-task-io-pyyaml-to-ruamel-827.md | 2026-04-12 |
-| ruamel.yaml Differences with PyYAML | <https://yaml.dev/doc/ruamel.yaml/pyyaml/> | YAML 1.1→1.2 behavioral changes: booleans, octals, sexagesimals | .owlbear/research/migrate-task-io-pyyaml-to-ruamel-827.md | 2026-04-12 |
-| Playwright `launch_persistent_context` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context> | Alternative approach: Playwright-managed Edge lifecycle with channel="msedge" | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
-| Playwright Chrome Extensions docs | <https://playwright.dev/python/docs/chrome-extensions> | Confirms Edge removed `--load-extension` flags; `--remote-debugging-port` still usable | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| ruamel.yaml Basic Usage | <https://yaml.dev/doc/ruamel.yaml/basicuse/> | safe/rt modes, StringIO dump pattern, YAML instance API | owlbear-data/owlbear/research/migrate-task-io-pyyaml-to-ruamel-827.md | 2026-04-12 |
+| ruamel.yaml Differences with PyYAML | <https://yaml.dev/doc/ruamel.yaml/pyyaml/> | YAML 1.1→1.2 behavioral changes: booleans, octals, sexagesimals | owlbear-data/owlbear/research/migrate-task-io-pyyaml-to-ruamel-827.md | 2026-04-12 |
+| Playwright `launch_persistent_context` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context> | Alternative approach: Playwright-managed Edge lifecycle with channel="msedge" | owlbear-data/owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| Playwright Chrome Extensions docs | <https://playwright.dev/python/docs/chrome-extensions> | Confirms Edge removed `--load-extension` flags; `--remote-debugging-port` still usable | owlbear-data/owlbear/research/cdp-spike-752.md | 2026-04-10 |
 
 ## Actor Field in Activity Log Tests (Task #811)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PocketPaw Audit Log docs | <https://pocketpaw.xyz/security/audit-log/> | JSONL audit log with `session_id`+`channel` fields for consumer identity; append-only semantics | .owlbear/research/811-actor-field-activity-log-tests.md | 2026-04-12 |
-| tundere-ledger (PyPI) | <https://pypi.org/project/tundere-ledger/> | Python JSONL audit log decorator with `actor_name` parameter for attribution | .owlbear/research/811-actor-field-activity-log-tests.md | 2026-04-12 |
+| PocketPaw Audit Log docs | <https://pocketpaw.xyz/security/audit-log/> | JSONL audit log with `session_id`+`channel` fields for consumer identity; append-only semantics | owlbear-data/owlbear/research/811-actor-field-activity-log-tests.md | 2026-04-12 |
+| tundere-ledger (PyPI) | <https://pypi.org/project/tundere-ledger/> | Python JSONL audit log decorator with `actor_name` parameter for attribution | owlbear-data/owlbear/research/811-actor-field-activity-log-tests.md | 2026-04-12 |
 
 ## Fix Timestamp Sort (Task #816)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Python datetime docs — fromisoformat | <https://docs.python.org/3/library/datetime.html> | fromisoformat() handles arbitrary fractional digits (truncated to 6); aware comparison normalizes to UTC | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
-| DEV Community — Sorting ISO 8601 timestamps | <https://dev.to/adnauseum/sorting-iso-8601-timestamps-5am2> | Confirms ISO 8601 string sort fails across different timezone offsets | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
+| Python datetime docs — fromisoformat | <https://docs.python.org/3/library/datetime.html> | fromisoformat() handles arbitrary fractional digits (truncated to 6); aware comparison normalizes to UTC | owlbear-data/owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
+| DEV Community — Sorting ISO 8601 timestamps | <https://dev.to/adnauseum/sorting-iso-8601-timestamps-5am2> | Confirms ISO 8601 string sort fails across different timezone offsets | owlbear-data/owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
 
 ## Source-Aware Candidate Filtering (Task #863)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Kumar et al. (2025) — Enterprise KG multi-source integration | <https://arxiv.org/abs/2503.07993> | Cross-source entity matching via embedding + LLM mapper; context for sort-first prioritization approach | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
-| Saeedi et al. (2020) — Incremental multi-source entity resolution | ESWC 2020 proceedings (no URL in research doc) | Multi-source entity resolution for KG completion; context for cross-source bucket strategy | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
-| Kumar et al. (2025) — LLM-Powered KGs for Enterprise Intelligence | <https://arxiv.org/html/2503.07993v1> | Enterprise KG integrating multiple data sources via LLM entity extraction and embedding-based matching | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
-| Saeedi et al. (2020) — Incremental Multi-source Entity Resolution | <https://dbs.uni-leipzig.de/index.php/research/publications/incremental-multi-source-entity-resolution-for-knowledge-graph-completion> | Multi-source entity clustering for KG completion; source-order-independent resolution | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Kumar et al. (2025) — Enterprise KG multi-source integration | <https://arxiv.org/abs/2503.07993> | Cross-source entity matching via embedding + LLM mapper; context for sort-first prioritization approach | owlbear-data/owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Saeedi et al. (2020) — Incremental multi-source entity resolution | ESWC 2020 proceedings (no URL in research doc) | Multi-source entity resolution for KG completion; context for cross-source bucket strategy | owlbear-data/owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Kumar et al. (2025) — LLM-Powered KGs for Enterprise Intelligence | <https://arxiv.org/html/2503.07993v1> | Enterprise KG integrating multiple data sources via LLM entity extraction and embedding-based matching | owlbear-data/owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Saeedi et al. (2020) — Incremental Multi-source Entity Resolution | <https://dbs.uni-leipzig.de/index.php/research/publications/incremental-multi-source-entity-resolution-for-knowledge-graph-completion> | Multi-source entity clustering for KG completion; source-order-independent resolution | owlbear-data/owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 
 ## MCP Browser Session Management (Task #837)
 
@@ -1055,189 +1055,189 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | ToolAnnotations API, Context access, error handling patterns, tool decorator args | .owlbear/research/771-mcp-browser-server.md | 2026-04-11 |
+| FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | ToolAnnotations API, Context access, error handling patterns, tool decorator args | owlbear-data/owlbear/research/771-mcp-browser-server.md | 2026-04-11 |
 
 ## MCP Browser ctx Refactor (Task #836)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastMCP Dependency Injection Documentation | <https://gofastmcp.com/servers/dependency-injection> | `ctx: Context` auto-injection pattern, `request_context.lifespan_context` access for tools | .owlbear/research/836-mcp-browser-ctx-refactor.md | 2026-04-12 |
+| FastMCP Dependency Injection Documentation | <https://gofastmcp.com/servers/dependency-injection> | `ctx: Context` auto-injection pattern, `request_context.lifespan_context` access for tools | owlbear-data/owlbear/research/836-mcp-browser-ctx-refactor.md | 2026-04-12 |
 
 ## Playwright Dep Bump for aria_snapshot (Task #855)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright Python Release Notes | <https://playwright.dev/python/docs/release-notes> | `page.aria_snapshot()` introduced in v1.59; `locator.aria_snapshot()` in v1.49 | .owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
-| PyPI playwright Release History | <https://pypi.org/project/playwright/#history> | Latest Python release is 1.58.0 (2026-01-30); v1.59 not yet published | .owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
+| Playwright Python Release Notes | <https://playwright.dev/python/docs/release-notes> | `page.aria_snapshot()` introduced in v1.59; `locator.aria_snapshot()` in v1.49 | owlbear-data/owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
+| PyPI playwright Release History | <https://pypi.org/project/playwright/#history> | Latest Python release is 1.58.0 (2026-01-30); v1.59 not yet published | owlbear-data/owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
 
 ## Excalidraw Skill Expansion (Task #743)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | Visual Pattern Library (9 patterns), Shape Meaning table, Large Diagram Strategy, Container vs Text rules, ID conventions | .owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
-| Wikipedia: Entity-relationship model | <https://en.wikipedia.org/wiki/Entity-relationship_model> | Chen notation conventions: rectangles=entities, diamonds=relationships, ellipses=attributes | .owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
+| coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | Visual Pattern Library (9 patterns), Shape Meaning table, Large Diagram Strategy, Container vs Text rules, ID conventions | owlbear-data/owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
+| Wikipedia: Entity-relationship model | <https://en.wikipedia.org/wiki/Entity-relationship_model> | Chen notation conventions: rectangles=entities, diamonds=relationships, ellipses=attributes | owlbear-data/owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
 
 ## Authenticated Content Pipeline (Task #751)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright connect_over_cdp docs | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API, is_local flag, Edge support confirmation | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
-| trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library — Apache 2.0, benchmark-proven, markdown output | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
-| markdownify (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown conversion — MIT license, BeautifulSoup-based, customizable | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
-| browser-use project | <https://github.com/browser-use/browser-use> | CDP automation prior art — 80K stars, DomService pattern, AX tree usage | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| Playwright connect_over_cdp docs | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API, is_local flag, Edge support confirmation | owlbear-data/owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library — Apache 2.0, benchmark-proven, markdown output | owlbear-data/owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| markdownify (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown conversion — MIT license, BeautifulSoup-based, customizable | owlbear-data/owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| browser-use project | <https://github.com/browser-use/browser-use> | CDP automation prior art — 80K stars, DomService pattern, AX tree usage | owlbear-data/owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
 
 ## Edge Launcher + CDP Implementation (Task #758)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local (v1.58+), 30s default timeout | .owlbear/research/edge-launcher-cdp-impl-758.md | 2026-04-10 |
-| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | `--remote-debugging-port` + `--user-data-dir` mandatory from Chrome/Edge 136+ | .owlbear/research/edge-launcher-cdp-impl-758.md | 2026-04-10 |
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local (v1.58+), 30s default timeout | owlbear-data/owlbear/research/edge-launcher-cdp-impl-758.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | `--remote-debugging-port` + `--user-data-dir` mandatory from Chrome/Edge 136+ | owlbear-data/owlbear/research/edge-launcher-cdp-impl-758.md | 2026-04-10 |
 
 ## CDP Spike Implementation Validation (Task #776)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | API verification: is_local (v1.58+), 30s timeout, default context pattern | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
-| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Verification: `--user-data-dir` to non-default dir mandatory from Chrome 136+ | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
-| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | API verification: is_local (v1.58+), 30s timeout, default context pattern | owlbear-data/owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Verification: `--user-data-dir` to non-default dir mandatory from Chrome 136+ | owlbear-data/owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | owlbear-data/owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
 
 ## Phase 0 CDP Spike Research (Task #774)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Chrome 136 remote-debugging-port blog | <https://developer.chrome.com/blog/remote-debugging-port> | `--user-data-dir` mandatory for `--remote-debugging-port` from Chrome/Edge 136+ | .owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
-| trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) — benchmark on news/blog, NOT corporate intranet | .owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
-| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links | .owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port blog | <https://developer.chrome.com/blog/remote-debugging-port> | `--user-data-dir` mandatory for `--remote-debugging-port` from Chrome/Edge 136+ | owlbear-data/owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
+| trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) — benchmark on news/blog, NOT corporate intranet | owlbear-data/owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
+| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links | owlbear-data/owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
 
 ## Phase 1 Browser Package + Pipeline Quality + Schema (Task #775)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library (Apache 2.0) — evaluated as dependency for owlbear_browser content extractor | .owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
-| Playwright CDP API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API patterns — is_local (v1.58+), 30s default timeout, default context access | .owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
+| trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library (Apache 2.0) — evaluated as dependency for owlbear_browser content extractor | owlbear-data/owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
+| Playwright CDP API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API patterns — is_local (v1.58+), 30s default timeout, default context access | owlbear-data/owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
 
 ## HTML→Markdown Cleaner (Task #759)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links — evaluated as primary implementation approach (superseded by lxml custom) | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
-| trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) on news/blog; corporate intranet quality predicted .65 — informed decision to use lxml custom converter instead | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
-| markdownify 1.2.2 (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown converter (MIT, BeautifulSoup-based) — evaluated as alternative; rejected: 3-4x more LOC vs trafilatura, no general boilerplate removal | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
+| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links — evaluated as primary implementation approach (superseded by lxml custom) | owlbear-data/owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
+| trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) on news/blog; corporate intranet quality predicted .65 — informed decision to use lxml custom converter instead | owlbear-data/owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
+| markdownify 1.2.2 (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown converter (MIT, BeautifulSoup-based) — evaluated as alternative; rejected: 3-4x more LOC vs trafilatura, no general boilerplate removal | owlbear-data/owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
 
 ## Hash Stability Validation Protocol (Task #778)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | `extract()` params: `output_format`, `prune_xpath`, `include_links`, `include_tables`, `url` — hash stability loop calls `extract()` with these params for cleaned-content hashing | .owlbear/research/778-hash-stability-protocol.md | 2026-04-11 |
+| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | `extract()` params: `output_format`, `prune_xpath`, `include_links`, `include_tables`, `url` — hash stability loop calls `extract()` with these params for cleaned-content hashing | owlbear-data/owlbear/research/778-hash-stability-protocol.md | 2026-04-11 |
 
 ## board_config() Implementation (Task #806)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Pydantic v2 docs — Models | <https://docs.pydantic.dev/latest/concepts/models/> | `model_copy()` returns "a copy (by default, shallow copy)" — confirms deep=True needed for isolation | .owlbear/research/board-config-impl-806.md | 2026-04-11 |
+| Pydantic v2 docs — Models | <https://docs.pydantic.dev/latest/concepts/models/> | `model_copy()` returns "a copy (by default, shallow copy)" — confirms deep=True needed for isolation | owlbear-data/owlbear/research/board-config-impl-806.md | 2026-04-11 |
 
 ## Edge Launcher + CDP Tests (Task #755)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local, timeout, default context access | .owlbear/research/edge-launcher-cdp-tests-755.md | 2026-04-10 |
-| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | .owlbear/research/edge-launcher-cdp-tests-755.md | 2026-04-10 |
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local, timeout, default context access | owlbear-data/owlbear/research/edge-launcher-cdp-tests-755.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | owlbear-data/owlbear/research/edge-launcher-cdp-tests-755.md | 2026-04-10 |
 
 ## Excalidraw Reference Files (Task #742)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| coleam00 element-templates.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/element-templates.md> | JSON templates for 6 element types (rectangle, text×2, arrow, line, dot) — validated for adaptation | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
-| coleam00 json-schema.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/json-schema.md> | Element types table, common/text/arrow properties, binding format | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
-| coleam00 color-palette.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/color-palette.md> | Semantic fill/stroke pairs, text hierarchy, evidence artifact colors | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
-| Excalidraw API updateScene docs | <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/excalidraw-api#elements> | Element structure confirmation (type, version, versionNonce, seed fields) | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| coleam00 element-templates.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/element-templates.md> | JSON templates for 6 element types (rectangle, text×2, arrow, line, dot) — validated for adaptation | owlbear-data/owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| coleam00 json-schema.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/json-schema.md> | Element types table, common/text/arrow properties, binding format | owlbear-data/owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| coleam00 color-palette.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/color-palette.md> | Semantic fill/stroke pairs, text hierarchy, evidence artifact colors | owlbear-data/owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| Excalidraw API updateScene docs | <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/excalidraw-api#elements> | Element structure confirmation (type, version, versionNonce, seed fields) | owlbear-data/owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
 
 ## Excalidraw Skill Reliability (Task #736)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | 450-line skill with design process, 9 visual patterns, mandatory render loop — compared vs OwlBear's 106-line adaptation | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
-| coleam00 element-templates.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/element-templates.md> | JSON templates for rectangle, text, arrow (with bindings), line, dot — all required fields shown | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
-| coleam00 json-schema.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/json-schema.md> | Element types, common properties, text-specific, arrow-specific, binding format | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
-| coleam00 color-palette.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/color-palette.md> | Semantic fill/stroke pairs, text hierarchy, evidence artifact colors | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | 450-line skill with design process, 9 visual patterns, mandatory render loop — compared vs OwlBear's 106-line adaptation | owlbear-data/owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00 element-templates.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/element-templates.md> | JSON templates for rectangle, text, arrow (with bindings), line, dot — all required fields shown | owlbear-data/owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00 json-schema.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/json-schema.md> | Element types, common properties, text-specific, arrow-specific, binding format | owlbear-data/owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00 color-palette.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/color-palette.md> | Semantic fill/stroke pairs, text hierarchy, evidence artifact colors | owlbear-data/owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
 
 ## Wire PydanticAI Evaluate Callable (Task #701)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PydanticAI docs — Agents (output_type, system_prompt, run) | <https://ai.pydantic.dev/agents/> | `Agent(model, output_type=EvaluationResult, system_prompt=...)`, `await agent.run(prompt)` → `result.output` — confirmed API for factory pattern | .owlbear/research/wire-pydanticai-evaluate-callable.md | 2026-04-09 |
+| PydanticAI docs — Agents (output_type, system_prompt, run) | <https://ai.pydantic.dev/agents/> | `Agent(model, output_type=EvaluationResult, system_prompt=...)`, `await agent.run(prompt)` → `result.output` — confirmed API for factory pattern | owlbear-data/owlbear/research/wire-pydanticai-evaluate-callable.md | 2026-04-09 |
 
 ## Async StructuredExtractor Protocol (Task #687)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PEP 544 — Protocols: Structural subtyping | <https://peps.python.org/pep-0544/> | `@runtime_checkable` checks attribute existence only, not sync/async | .owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
-| Python docs — `typing.Protocol` | <https://docs.python.org/3/library/typing.html#typing.Protocol> | Protocols support `async def` methods since Python 3.8 | .owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
-| Python docs — `unittest.mock.AsyncMock` | <https://docs.python.org/3/library/unittest.mock.html#unittest.mock.AsyncMock> | Auto-promotes async spec methods; MagicMock does not | .owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
+| PEP 544 — Protocols: Structural subtyping | <https://peps.python.org/pep-0544/> | `@runtime_checkable` checks attribute existence only, not sync/async | owlbear-data/owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
+| Python docs — `typing.Protocol` | <https://docs.python.org/3/library/typing.html#typing.Protocol> | Protocols support `async def` methods since Python 3.8 | owlbear-data/owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
+| Python docs — `unittest.mock.AsyncMock` | <https://docs.python.org/3/library/unittest.mock.html#unittest.mock.AsyncMock> | Auto-promotes async spec methods; MagicMock does not | owlbear-data/owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
 
 ## ddgs MCP Integration (Task #686)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| ddgs v9.13 README | <https://github.com/deedy5/ddgs> | MCP server command (`ddgs mcp`), 6 available tools, stdio client config JSON example | .owlbear/research/ddgs-mcp-integration.md | 2026-04-09 |
-| ddgs PyPI v9.13 | <https://pypi.org/project/ddgs/> | Install command `pip install ddgs[mcp]`, release date Apr 6 2026, `[mcp]` extra definition | .owlbear/research/ddgs-mcp-integration.md | 2026-04-09 |
+| ddgs v9.13 README | <https://github.com/deedy5/ddgs> | MCP server command (`ddgs mcp`), 6 available tools, stdio client config JSON example | owlbear-data/owlbear/research/ddgs-mcp-integration.md | 2026-04-09 |
+| ddgs PyPI v9.13 | <https://pypi.org/project/ddgs/> | Install command `pip install ddgs[mcp]`, release date Apr 6 2026, `[mcp]` extra definition | owlbear-data/owlbear/research/ddgs-mcp-integration.md | 2026-04-09 |
 
 ## ddgs[mcp] Dependency Compatibility (Task #706)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PyPI JSON API — ddgs 9.13.0 | <https://pypi.org/pypi/ddgs/json> | `requires_dist` for `[mcp]` extra: `mcp>=1.26.0` — confirmed compatibility with workspace `mcp[cli]>=1.26` | .owlbear/research/ddgs-mcp-dependency-compat.md | 2026-04-09 |
-| PyPI JSON API — primp 1.2.2 | <https://pypi.org/pypi/primp/json> | Rust-based HTTP client, zero Python runtime deps — validated transitive dependency footprint | .owlbear/research/ddgs-mcp-dependency-compat.md | 2026-04-09 |
+| PyPI JSON API — ddgs 9.13.0 | <https://pypi.org/pypi/ddgs/json> | `requires_dist` for `[mcp]` extra: `mcp>=1.26.0` — confirmed compatibility with workspace `mcp[cli]>=1.26` | owlbear-data/owlbear/research/ddgs-mcp-dependency-compat.md | 2026-04-09 |
+| PyPI JSON API — primp 1.2.2 | <https://pypi.org/pypi/primp/json> | Rust-based HTTP client, zero Python runtime deps — validated transitive dependency footprint | owlbear-data/owlbear/research/ddgs-mcp-dependency-compat.md | 2026-04-09 |
 
 ## Native Kanban Engine (Task #712)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PyPI — ruamel.yaml 0.19.1 | <https://pypi.org/project/ruamel.yaml/> | Round-trip YAML parser, comment/order preservation, 0.5M daily downloads — confirmed as only viable option for lossless YAML round-trip | .owlbear/research/native-kanban-engine.md | 2026-04-09 |
-| GitHub — kanban-md v0.33.0 | <https://github.com/antopolskiy/kanban-md> | Current Go binary dependency — file format, CLI surface, behavioral contracts used as baseline | .owlbear/research/native-kanban-engine.md | 2026-04-09 |
+| PyPI — ruamel.yaml 0.19.1 | <https://pypi.org/project/ruamel.yaml/> | Round-trip YAML parser, comment/order preservation, 0.5M daily downloads — confirmed as only viable option for lossless YAML round-trip | owlbear-data/owlbear/research/native-kanban-engine.md | 2026-04-09 |
+| GitHub — kanban-md v0.33.0 | <https://github.com/antopolskiy/kanban-md> | Current Go binary dependency — file format, CLI surface, behavioral contracts used as baseline | owlbear-data/owlbear/research/native-kanban-engine.md | 2026-04-09 |
 
 ## Diagram Rendering Tool for v2 Agents (Task #683)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| VS Code built-in tools list | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features#_chat-tools> | N/A (docs) | Complete list of VS Code Copilot built-in tools — confirmed `renderMermaidDiagram` does NOT exist | `.owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
-| VS Code Mermaid in chat | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | N/A (docs) | `mermaid-chat.enabled` setting renders Mermaid diagrams inline in chat responses | `.owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
+| VS Code built-in tools list | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features#_chat-tools> | N/A (docs) | Complete list of VS Code Copilot built-in tools — confirmed `renderMermaidDiagram` does NOT exist | `owlbear-data/owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
+| VS Code Mermaid in chat | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | N/A (docs) | `mermaid-chat.enabled` setting renders Mermaid diagrams inline in chat responses | `owlbear-data/owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
 
 ## MCP Tool Error Signaling Research (Task #680)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| MCP Spec §6 Error Handling (2025-11-25) | <https://modelcontextprotocol.io/specification/2025-11-25/server/tools> | Open Spec | Tool execution errors vs protocol errors; `isError: true` for input validation, business logic, API failures | `.owlbear/research/mcp-tool-error-signaling-680.md` | 2026-04-08 |
-| MCP Spec §6 Error Handling (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | Open Spec | Earlier spec version; same two error mechanisms documented | `.owlbear/research/mcp-tool-error-signaling-680.md` | 2026-04-08 |
-| bierner/markdown-mermaid | <https://github.com/mjbvz/vscode-markdown-mermaid> | MIT | Mermaid rendering in Markdown Preview panel, 906 stars, extension already installed in OwlBear profile | `.owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
+| MCP Spec §6 Error Handling (2025-11-25) | <https://modelcontextprotocol.io/specification/2025-11-25/server/tools> | Open Spec | Tool execution errors vs protocol errors; `isError: true` for input validation, business logic, API failures | `owlbear-data/owlbear/research/mcp-tool-error-signaling-680.md` | 2026-04-08 |
+| MCP Spec §6 Error Handling (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | Open Spec | Earlier spec version; same two error mechanisms documented | `owlbear-data/owlbear/research/mcp-tool-error-signaling-680.md` | 2026-04-08 |
+| bierner/markdown-mermaid | <https://github.com/mjbvz/vscode-markdown-mermaid> | MIT | Mermaid rendering in Markdown Preview panel, 906 stars, extension already installed in OwlBear profile | `owlbear-data/owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
 
 ## StructuredExtractor Knowledge Graph Wiring (Task #676)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PydanticAI docs — run_sync behavior | <https://ai.pydantic.dev/api/agent/#pydantic_ai.Agent.run_sync> | `run_sync()` uses `loop.run_until_complete()` — incompatible with running event loop | .owlbear/research/wire-structuredextractor-knowledge-graph.md | 2026-04-08 |
+| PydanticAI docs — run_sync behavior | <https://ai.pydantic.dev/api/agent/#pydantic_ai.Agent.run_sync> | `run_sync()` uses `loop.run_until_complete()` — incompatible with running event loop | owlbear-data/owlbear/research/wire-structuredextractor-knowledge-graph.md | 2026-04-08 |
 
 ## LLMExtractor PydanticAI Implementation (Task #689)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PydanticAI docs — Agents (output_type, system_prompt, run) | <https://pydantic.dev/docs/ai/core-concepts/agent/> | Agent constructor API: `output_type=`, `system_prompt=`, `await agent.run()` → `result.output` | .owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
-| PydanticAI docs — Structured Output | <https://pydantic.dev/docs/ai/core-concepts/output/> | `output_type=BaseModel` forces tool-based structured output with Pydantic validation | .owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
-| PydanticAI docs — Testing (TestModel, FunctionModel, override) | <https://pydantic.dev/docs/ai/guides/testing/> | `TestModel`, `agent.override(model=TestModel())`, `ALLOW_MODEL_REQUESTS = False` | .owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
+| PydanticAI docs — Agents (output_type, system_prompt, run) | <https://pydantic.dev/docs/ai/core-concepts/agent/> | Agent constructor API: `output_type=`, `system_prompt=`, `await agent.run()` → `result.output` | owlbear-data/owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
+| PydanticAI docs — Structured Output | <https://pydantic.dev/docs/ai/core-concepts/output/> | `output_type=BaseModel` forces tool-based structured output with Pydantic validation | owlbear-data/owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
+| PydanticAI docs — Testing (TestModel, FunctionModel, override) | <https://pydantic.dev/docs/ai/guides/testing/> | `TestModel`, `agent.override(model=TestModel())`, `ALLOW_MODEL_REQUESTS = False` | owlbear-data/owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
 
 ## Playwright Browser Integration for v2 (Task #684)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright PyPI | <https://pypi.org/project/playwright/> | v1.58.0 — install footprint, transitive deps (greenlet, pyee), browser binary size (~300-500 MB) | .owlbear/research/playwright-browser-integration-v2.md | 2026-04-08 |
-| Prior research #264 | `.owlbear/research/browser-automation.md` | Keep-custom decision (.90 confidence), OSS alternative evaluation, Edge CDP constraint analysis | .owlbear/research/playwright-browser-integration-v2.md | 2026-04-08 |
+| Playwright PyPI | <https://pypi.org/project/playwright/> | v1.58.0 — install footprint, transitive deps (greenlet, pyee), browser binary size (~300-500 MB) | owlbear-data/owlbear/research/playwright-browser-integration-v2.md | 2026-04-08 |
+| Prior research #264 | `owlbear-data/owlbear/research/browser-automation.md` | Keep-custom decision (.90 confidence), OSS alternative evaluation, Edge CDP constraint analysis | owlbear-data/owlbear/research/playwright-browser-integration-v2.md | 2026-04-08 |
 
 ## Analysis Detector Wiring (Task #682)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| v1 improvement_proposals.py | `v1/src/owlbear/core/improvement_proposals.py` | Prior art: descriptive-only proposals from EventStore metrics, never consumed automatically | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
-| #31 research: self-improvement analysis pipeline | `.owlbear/research/self-improvement-analysis-pipeline.md` | Original design: 4 detectors, AnalysisProposal schema, CLI entrypoint | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
+| v1 improvement_proposals.py | `v1/src/owlbear/core/improvement_proposals.py` | Prior art: descriptive-only proposals from EventStore metrics, never consumed automatically | owlbear-data/owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
+| #31 research: self-improvement analysis pipeline | `owlbear-data/owlbear/research/self-improvement-analysis-pipeline.md` | Original design: 4 detectors, AnalysisProposal schema, CLI entrypoint | owlbear-data/owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
 
 ## Ideation Panel Handbook (Task #652)
 
@@ -1250,29 +1250,29 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Blackboard design pattern | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Blackboard pattern: structured global memory + knowledge sources + control component (Lalanda 1997) | .owlbear/research/briefs-directory-structure.md | 2026-04-06 |
+| Blackboard design pattern | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Blackboard pattern: structured global memory + knowledge sources + control component (Lalanda 1997) | owlbear-data/owlbear/research/briefs-directory-structure.md | 2026-04-06 |
 
 ## editFiles Schema Verification (Task #638)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Agent Hooks docs — PreToolUse input (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | `editFiles` tool_input schema: `{ "files": ["path"] }` — array of strings | .owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
-| VS Code Cheat Sheet — built-in tools | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | `#edit/editFiles` — "Apply edits to files in the workspace" confirms tool exists as built-in | .owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
+| VS Code Agent Hooks docs — PreToolUse input (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | `editFiles` tool_input schema: `{ "files": ["path"] }` — array of strings | owlbear-data/owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
+| VS Code Cheat Sheet — built-in tools | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | `#edit/editFiles` — "Apply edits to files in the workspace" confirms tool exists as built-in | owlbear-data/owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
 
 ## Web Search MCP Options (Task #681)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| ddgs (deedy5/ddgs) v9.13 | <https://github.com/deedy5/ddgs> | Metasearch library with built-in MCP server, 9 backends, extract(), MIT license | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
-| Brave Search MCP (official) | <https://github.com/brave/brave-search-mcp-server> | Official Brave MCP server, Node.js/TS, 6 tools, API key required, 880 stars | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
-| Tavily MCP | <https://github.com/tavily-ai/tavily-mcp> | Node.js MCP server, search+extract+map+crawl, API key required, 1.7k stars | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
-| MCP servers registry | <https://github.com/modelcontextprotocol/servers> | Reference and community MCP servers list, Brave Search archived to official repo | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| ddgs (deedy5/ddgs) v9.13 | <https://github.com/deedy5/ddgs> | Metasearch library with built-in MCP server, 9 backends, extract(), MIT license | owlbear-data/owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| Brave Search MCP (official) | <https://github.com/brave/brave-search-mcp-server> | Official Brave MCP server, Node.js/TS, 6 tools, API key required, 880 stars | owlbear-data/owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| Tavily MCP | <https://github.com/tavily-ai/tavily-mcp> | Node.js MCP server, search+extract+map+crawl, API key required, 1.7k stars | owlbear-data/owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| MCP servers registry | <https://github.com/modelcontextprotocol/servers> | Reference and community MCP servers list, Brave Search archived to official repo | owlbear-data/owlbear/research/web-search-mcp-options.md | 2026-04-08 |
 
 ## Deny-Code-Writes AC Validation (Task #637)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Agent Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse input schema: `editFiles` tool_name with `files[]` array, `permissionDecision` output | .owlbear/research/deny-code-writes-ac-validation-637.md | 2026-04-06 |
+| VS Code Agent Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse input schema: `editFiles` tool_name with `files[]` array, `permissionDecision` output | owlbear-data/owlbear/research/deny-code-writes-ac-validation-637.md | 2026-04-06 |
 
 ## Pragmatist Voice Agent (Task #646)
 
@@ -1305,15 +1305,15 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| (validation pass — no new external sources) | — | All sources from #348 and #592 research; codebase-only validation | .owlbear/research/revisit-blocked-task-dr-scan-notification.md | 2026-04-05 |
+| (validation pass — no new external sources) | — | All sources from #348 and #592 research; codebase-only validation | owlbear-data/owlbear/research/revisit-blocked-task-dr-scan-notification.md | 2026-04-05 |
 
 ## Import/Export Knowledge Snapshots (Task #618)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Python sqlite3 docs — Connection.backup | <https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup> | Python backup API, read-only URI mode (`?mode=ro`), transaction context manager | .owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
-| SQLite ATTACH DATABASE | <https://sqlite.org/lang_attach.html> | Cross-DB queries via qualified table names — evaluated as alternative approach (rejected: less dedup control) | .owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
-| SQLite Online Backup API | <https://sqlite.org/backup.html> | Online backup API for live DB snapshots — evaluated, not needed (row-level approach preferred) | .owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
+| Python sqlite3 docs — Connection.backup | <https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup> | Python backup API, read-only URI mode (`?mode=ro`), transaction context manager | owlbear-data/owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
+| SQLite ATTACH DATABASE | <https://sqlite.org/lang_attach.html> | Cross-DB queries via qualified table names — evaluated as alternative approach (rejected: less dedup control) | owlbear-data/owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
+| SQLite Online Backup API | <https://sqlite.org/backup.html> | Online backup API for live DB snapshots — evaluated, not needed (row-level approach preferred) | owlbear-data/owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
 
 ## Power Automate Workflows for Teams Notifications (Task #592)
 
@@ -4508,8 +4508,8 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| PinchTab idpishield `patterns/builtin.go` | <https://github.com/pinchtab/idpishield/blob/main/patterns/builtin.go> | Apache-2.0 | 100+ regex patterns across 12 categories — adapted to ~40 substring patterns for knowledge guard | `.owlbear/research/834-contentinjectionguard-green-impl.md` | 2026-04-12 |
-| OWASP LLM01:2025 Prompt Injection | <https://genai.owasp.org/llmrisk/llm01-prompt-injection/> | CC-BY-SA-4.0 | Strategy #3 (string-checking) and #6 (segregate content) as authoritative mitigation guidance | `.owlbear/research/834-contentinjectionguard-green-impl.md` | 2026-04-12 |
+| PinchTab idpishield `patterns/builtin.go` | <https://github.com/pinchtab/idpishield/blob/main/patterns/builtin.go> | Apache-2.0 | 100+ regex patterns across 12 categories — adapted to ~40 substring patterns for knowledge guard | `owlbear-data/owlbear/research/834-contentinjectionguard-green-impl.md` | 2026-04-12 |
+| OWASP LLM01:2025 Prompt Injection | <https://genai.owasp.org/llmrisk/llm01-prompt-injection/> | CC-BY-SA-4.0 | Strategy #3 (string-checking) and #6 (segregate content) as authoritative mitigation guidance | `owlbear-data/owlbear/research/834-contentinjectionguard-green-impl.md` | 2026-04-12 |
 
 ## claude-context-mode Evaluation (Task #745)
 
@@ -4938,7 +4938,7 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| MCP Spec — Tools (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | MIT | readOnlyHint, outputSchema, ToolAnnotations for computed tools, error handling conventions | `.owlbear/research/migrate-dispatcher-to-pick-tasks.md` | 2026-04-05 |
+| MCP Spec — Tools (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | MIT | readOnlyHint, outputSchema, ToolAnnotations for computed tools, error handling conventions | `owlbear-data/owlbear/research/migrate-dispatcher-to-pick-tasks.md` | 2026-04-05 |
 
 ## Implement Voice Process Manager (Task #62)
 
@@ -4951,136 +4951,136 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| sp-dev-docs#6380 — CSS class instability | <https://github.com/SharePoint/sp-dev-docs/issues/6380> | SharePoint replacing semantic CSS classes (`CanvasZone`, `ControlZone`) with hashed names; confirms `ms-` prefix classes from Fluent UI more stable | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
-| Fluent UI v8 CSS class catalog | <https://github.com/Zerg00s/sp-modern-classes> | Community-maintained list of reusable SharePoint Online CSS classes — `ms-Breadcrumb`, `ms-Persona`, `ms-DateTimeField` patterns identified | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
-| trafilatura core functions docs | <https://trafilatura.readthedocs.io/en/latest/corefunctions.html> | `prune_xpath` parameter — supports custom XPath for pre-extraction element removal (evaluated as alternative approach, not adopted) | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+| sp-dev-docs#6380 — CSS class instability | <https://github.com/SharePoint/sp-dev-docs/issues/6380> | SharePoint replacing semantic CSS classes (`CanvasZone`, `ControlZone`) with hashed names; confirms `ms-` prefix classes from Fluent UI more stable | owlbear-data/owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+| Fluent UI v8 CSS class catalog | <https://github.com/Zerg00s/sp-modern-classes> | Community-maintained list of reusable SharePoint Online CSS classes — `ms-Breadcrumb`, `ms-Persona`, `ms-DateTimeField` patterns identified | owlbear-data/owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+| trafilatura core functions docs | <https://trafilatura.readthedocs.io/en/latest/corefunctions.html> | `prune_xpath` parameter — supports custom XPath for pre-extraction element removal (evaluated as alternative approach, not adopted) | owlbear-data/owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
 
 ## Azure AD App Registration Request (Task #878)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Graph API `sitePage.Get` permissions | <https://learn.microsoft.com/en-us/graph/api/sitepage-get> | Confirmed `Sites.Read.All` (delegated) as least privileged permission for sitePage read; verified `$expand=canvasLayout` query parameter | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
-| Entra ID app registration quickstart | <https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app> | App registration steps, supported account types, admin consent process | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
-| OAuth 2.0 device authorization grant | <https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code> | Device-code flow protocol: `/devicecode` endpoint, polling, token response format, Conditional Access considerations | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| Graph API `sitePage.Get` permissions | <https://learn.microsoft.com/en-us/graph/api/sitepage-get> | Confirmed `Sites.Read.All` (delegated) as least privileged permission for sitePage read; verified `$expand=canvasLayout` query parameter | owlbear-data/owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| Entra ID app registration quickstart | <https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app> | App registration steps, supported account types, admin consent process | owlbear-data/owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| OAuth 2.0 device authorization grant | <https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code> | Device-code flow protocol: `/devicecode` endpoint, polling, token response format, Conditional Access considerations | owlbear-data/owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
 
 ## PreToolUse Guard Hooks Test Approach (Task #891) — Supplement
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse stdin/stdout JSON contract, permissionDecision output format, exit codes, editFiles tool_input schema | .owlbear/research/891-pretooluse-hooks-test-approach.md | 2026-04-17 |
-| VS Code Hooks docs — PostToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PostToolUse stdin/stdout JSON contract, additionalContext output, decision: block, exit codes, tool_input formats | .owlbear/research/892-lint-changed-hook-test-approach.md | 2026-04-17 |
-| VS Code Hooks docs — SessionStart I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | SessionStart I/O contract: stdin `{source: "new"}`, stdout `{hookSpecificOutput: {hookEventName, additionalContext}}`, fail-open exit 0 semantics | .owlbear/research/session-context-py-test-strategy.md | 2026-04-17 |
+| VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse stdin/stdout JSON contract, permissionDecision output format, exit codes, editFiles tool_input schema | owlbear-data/owlbear/research/891-pretooluse-hooks-test-approach.md | 2026-04-17 |
+| VS Code Hooks docs — PostToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PostToolUse stdin/stdout JSON contract, additionalContext output, decision: block, exit codes, tool_input formats | owlbear-data/owlbear/research/892-lint-changed-hook-test-approach.md | 2026-04-17 |
+| VS Code Hooks docs — SessionStart I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | SessionStart I/O contract: stdin `{source: "new"}`, stdout `{hookSpecificOutput: {hookEventName, additionalContext}}`, fail-open exit 0 semantics | owlbear-data/owlbear/research/session-context-py-test-strategy.md | 2026-04-17 |
 
 ## App Shell Test Strategy (Task #927)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| React Router v7 API reference | <https://api.reactrouter.com/v7/modules/react-router.html> | MemoryRouter, Routes, Route, Outlet — unified `react-router` package in v7 | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
-| React Router v7 library install + routing docs | <https://reactrouter.com/start/library/installation> | Declarative routing: BrowserRouter, nested Routes, layout routes, Outlet pattern | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
-| PDS v3.34 Tabs examples | <https://designsystem.porsche.com/v3/components/tabs/examples/> | PTabs + PTabsItem API: `label` prop, `activeTabIndex`, tab content pattern | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
+| React Router v7 API reference | <https://api.reactrouter.com/v7/modules/react-router.html> | MemoryRouter, Routes, Route, Outlet — unified `react-router` package in v7 | owlbear-data/owlbear/research/927-app-shell-tests.md | 2026-04-18 |
+| React Router v7 library install + routing docs | <https://reactrouter.com/start/library/installation> | Declarative routing: BrowserRouter, nested Routes, layout routes, Outlet pattern | owlbear-data/owlbear/research/927-app-shell-tests.md | 2026-04-18 |
+| PDS v3.34 Tabs examples | <https://designsystem.porsche.com/v3/components/tabs/examples/> | PTabs + PTabsItem API: `label` prop, `activeTabIndex`, tab content pattern | owlbear-data/owlbear/research/927-app-shell-tests.md | 2026-04-18 |
 
 ## Playwright E2E Infrastructure (Task #956)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Playwright webServer docs | <https://playwright.dev/docs/test-webserver> | webServer config: command, url, reuseExistingServer, timeout, auto-start dev server | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
-| Playwright config reference | <https://playwright.dev/docs/test-configuration> | testDir, projects, reporters, fullyParallel, forbidOnly, workers | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
-| Vite preview options | <https://vite.dev/config/preview-options.html> | Default port 4173, strictPort, host options for vite preview | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+| Playwright webServer docs | <https://playwright.dev/docs/test-webserver> | webServer config: command, url, reuseExistingServer, timeout, auto-start dev server | owlbear-data/owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+| Playwright config reference | <https://playwright.dev/docs/test-configuration> | testDir, projects, reporters, fullyParallel, forbidOnly, workers | owlbear-data/owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+| Vite preview options | <https://vite.dev/config/preview-options.html> | Default port 4173, strictPort, host options for vite preview | owlbear-data/owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 
 ## Arch Review Design-Diverge (Task #1149)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Ousterhout — Philosophy of Software Design (Pragmatic Engineer) | <https://newsletter.pragmaticengineer.com/p/the-philosophy-of-software-design> | "Design It Twice" concept — generate multiple radically different designs, compare | .owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
-| mattpocock/design-an-interface (SkillsMP) | <https://skillsmp.com/skills/mattpocock-skills-design-an-interface-skill-md> | VS Code skill: 3+ parallel sub-agents with constraint-driven design prompts, 17.6K stars | .owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
+| Ousterhout — Philosophy of Software Design (Pragmatic Engineer) | <https://newsletter.pragmaticengineer.com/p/the-philosophy-of-software-design> | "Design It Twice" concept — generate multiple radically different designs, compare | owlbear-data/owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
+| mattpocock/design-an-interface (SkillsMP) | <https://skillsmp.com/skills/mattpocock-skills-design-an-interface-skill-md> | VS Code skill: 3+ parallel sub-agents with constraint-driven design prompts, 17.6K stars | owlbear-data/owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
 
 ## Init.py Consumer Scaffold (Task #1284)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GitHub Blog — 5 Tips for Custom Instructions | <https://github.blog/ai-and-ml/github-copilot/5-tips-for-writing-better-custom-instructions-for-copilot/> | Recommended sections: project overview, tech stack, guidelines, project structure, resources | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
-| VS Code Docs — Custom Instructions | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | File format, auto-detection, priority rules, `copilot-instructions.md` usage patterns | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
-| Graham Knapp — My Copilot Instructions File | <https://grahamknapp.com/blog/my-copilot-instructions-file/> | Real-world copilot-instructions.md as "project map, not rulebook"; contextual, project-specific | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
+| GitHub Blog — 5 Tips for Custom Instructions | <https://github.blog/ai-and-ml/github-copilot/5-tips-for-writing-better-custom-instructions-for-copilot/> | Recommended sections: project overview, tech stack, guidelines, project structure, resources | owlbear-data/owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
+| VS Code Docs — Custom Instructions | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | File format, auto-detection, priority rules, `copilot-instructions.md` usage patterns | owlbear-data/owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
+| Graham Knapp — My Copilot Instructions File | <https://grahamknapp.com/blog/my-copilot-instructions-file/> | Real-world copilot-instructions.md as "project map, not rulebook"; contextual, project-specific | owlbear-data/owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
 
 ## Reviewer Rewrite Research (Task #1407)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Google Eng Practices — Review Standard | <https://google.github.io/eng-practices/review/reviewer/standard.html> | "Nit:" prefix for non-blocking; approve when code health improves; batch feedback | .owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
-| Conventional Comments | <https://conventionalcomments.org/> | Formal label taxonomy: issue vs suggestion vs nitpick; blocking vs non-blocking | .owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
+| Google Eng Practices — Review Standard | <https://google.github.io/eng-practices/review/reviewer/standard.html> | "Nit:" prefix for non-blocking; approve when code health improves; batch feedback | owlbear-data/owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
+| Conventional Comments | <https://conventionalcomments.org/> | Formal label taxonomy: issue vs suggestion vs nitpick; blocking vs non-blocking | owlbear-data/owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
 
 ## Sync-to-Main TODO Warning Research (Task #1426)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GitHub Actions Workflow Commands | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands> | `::warning title=TITLE::message` annotation syntax | .owlbear/research/sync-todo-marker-warning.md | 2026-05-09 |
+| GitHub Actions Workflow Commands | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands> | `::warning title=TITLE::message` annotation syntax | owlbear-data/owlbear/research/sync-todo-marker-warning.md | 2026-05-09 |
 
 ## Modal PInlineNotification Research (Task #1499)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api/> | Full prop/event/slot reference for PInlineNotification | .owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
-| PDS Inline Notification Examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Event handling and action button patterns | .owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
+| PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api/> | Full prop/event/slot reference for PInlineNotification | owlbear-data/owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
+| PDS Inline Notification Examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Event handling and action button patterns | owlbear-data/owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
 
 ## Column CSS Implementation Research (Task #1547)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| SO: Scrolling a flexbox with overflowing content | <https://stackoverflow.com/questions/21515042> | Fixed-header scrollable-body pattern: flex-direction column + min-height 0 + overflow-y auto | .owlbear/research/1547-column-css-impl.md | 2026-05-14 |
-| PDS v4 SCSS Introduction | <https://designsystem.porsche.com/v4/scss/introduction/> | PDS design token naming conventions and usage patterns | .owlbear/research/1547-column-css-impl.md | 2026-05-14 |
+| SO: Scrolling a flexbox with overflowing content | <https://stackoverflow.com/questions/21515042> | Fixed-header scrollable-body pattern: flex-direction column + min-height 0 + overflow-y auto | owlbear-data/owlbear/research/1547-column-css-impl.md | 2026-05-14 |
+| PDS v4 SCSS Introduction | <https://designsystem.porsche.com/v4/scss/introduction/> | PDS design token naming conventions and usage patterns | owlbear-data/owlbear/research/1547-column-css-impl.md | 2026-05-14 |
 
 ## Sidecar Collapse Toggle Implementation Research (Task #1549)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| CSS-Tricks: Animating CSS Grid | <https://css-tricks.com/animating-css-grid-how-to-examples/> | Grid column animation technique, `0fr` collapse pattern, `:has()` parent selector | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
-| CanIUse: grid-template-columns animation | <https://caniuse.com/mdn-css_properties_grid-template-columns_animation> | Browser support: 93%+ global, all major browsers since Chrome 107, Firefox 66, Safari 16 | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
-| CodePen: CSS Grid sidebar expand | <https://codepen.io/mrdanielschwarz/pen/BaPjKrP> | Working demo of `transition: 300ms` on `grid-template-columns` for sidebar | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
-| Codidact: CSS grid with expanding cells | <https://software.codidact.com/posts/287970> | Animated grid cells via dynamic `grid-template-columns`/`rows` with transition | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| CSS-Tricks: Animating CSS Grid | <https://css-tricks.com/animating-css-grid-how-to-examples/> | Grid column animation technique, `0fr` collapse pattern, `:has()` parent selector | owlbear-data/owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| CanIUse: grid-template-columns animation | <https://caniuse.com/mdn-css_properties_grid-template-columns_animation> | Browser support: 93%+ global, all major browsers since Chrome 107, Firefox 66, Safari 16 | owlbear-data/owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| CodePen: CSS Grid sidebar expand | <https://codepen.io/mrdanielschwarz/pen/BaPjKrP> | Working demo of `transition: 300ms` on `grid-template-columns` for sidebar | owlbear-data/owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| Codidact: CSS grid with expanding cells | <https://software.codidact.com/posts/287970> | Animated grid cells via dynamic `grid-template-columns`/`rows` with transition | owlbear-data/owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
 
 ## PDS Color-Scheme Bridge Research (Task #1555)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme classes on `<html>`, hierarchical scoping | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
-| PDS v4 Color Scheme Stylesheet docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | Import path, lightningcss exclusion requirement, polyfill setup | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
-| PDS GitHub Issue #4257 | <https://github.com/porsche-design-system/porsche-design-system/issues/4257> | lightningcss broken `light-dark()` polyfill in Vite 8 | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
+| PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme classes on `<html>`, hierarchical scoping | `owlbear-data/owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
+| PDS v4 Color Scheme Stylesheet docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | Import path, lightningcss exclusion requirement, polyfill setup | `owlbear-data/owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
+| PDS GitHub Issue #4257 | <https://github.com/porsche-design-system/porsche-design-system/issues/4257> | lightningcss broken `light-dark()` polyfill in Vite 8 | `owlbear-data/owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
 
 ## Modal → PModal Migration Research (Task #1618)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Modal source (GitHub) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/modal/modal.tsx> | PModal props, slots, events, native dialog usage | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
-| PDS v4 Modal examples page | <https://designsystem.porsche.com/v4/components/modal/examples/> | Alert dialog pattern with `disableBackdropClick` + `role: alertdialog` | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
-| MDN `<dialog>` element reference | <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog> | Native focus trap, Escape dismiss, focus return on `close()`, top-layer rendering | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
-| Stefan Judis — dialog element super powers | <https://www.stefanjudis.com/blog/a-look-at-the-dialog-elements-super-powers/> | Focus return confirmation: "focus will be moved back to the previously focused element" | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
-| Sam Hermes — giving the dialog element a whirl | <https://samhermes.com/posts/giving-the-dialog-element-a-whirl/> | Focus return confirmation: "focus will be returned to the element used to open the dialog" | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| PDS v4 Modal source (GitHub) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/modal/modal.tsx> | PModal props, slots, events, native dialog usage | `owlbear-data/owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| PDS v4 Modal examples page | <https://designsystem.porsche.com/v4/components/modal/examples/> | Alert dialog pattern with `disableBackdropClick` + `role: alertdialog` | `owlbear-data/owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| MDN `<dialog>` element reference | <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog> | Native focus trap, Escape dismiss, focus return on `close()`, top-layer rendering | `owlbear-data/owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| Stefan Judis — dialog element super powers | <https://www.stefanjudis.com/blog/a-look-at-the-dialog-elements-super-powers/> | Focus return confirmation: "focus will be moved back to the previously focused element" | `owlbear-data/owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| Sam Hermes — giving the dialog element a whirl | <https://samhermes.com/posts/giving-the-dialog-element-a-whirl/> | Focus return confirmation: "focus will be returned to the element used to open the dialog" | `owlbear-data/owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 Tailwind Introduction | <https://designsystem.porsche.com/v4/tailwindcss/introduction/> | Tailwind v4 setup, PDS theme import, color-scheme utilities | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| PDS v4 Tailwind Color Examples | <https://designsystem.porsche.com/v4/tailwindcss/color/examples/> | PDS color utility classes (bg-canvas, text-contrast-high, etc.) | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| PDS v4 Tailwind Spacing Examples | <https://designsystem.porsche.com/v4/tailwindcss/spacing/examples/> | PDS spacing utilities (gap-fluid-md, gap-static-md), NOT gap-md | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| PDS v4 Migration Guide (Tailwind) | <https://designsystem.porsche.com/v4/news/migration-guide/tailwindcss/> | Breaking changes: `scheme-*` classes, `--color-*` reset | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| PDS tailwindcss theme source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/styles/projects/tailwindcss/src/index.ts> | @theme variable definitions, @utility rules, light-dark() usage | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| Tailwind CSS v4 Vite Install | <https://tailwindcss.com/docs> | @tailwindcss/vite plugin setup, @import "tailwindcss" | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| stylelint-config-tailwindcss | <https://github.com/zhilidali/stylelint-config-tailwindcss> | Stylelint config extending at-rule-no-unknown for Tailwind | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| @tailwindcss/vite Vite 8 discussion | <https://github.com/tailwindlabs/tailwindcss/discussions/19624> | Vite 8 support timeline for @tailwindcss/vite | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Tailwind Introduction | <https://designsystem.porsche.com/v4/tailwindcss/introduction/> | Tailwind v4 setup, PDS theme import, color-scheme utilities | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Tailwind Color Examples | <https://designsystem.porsche.com/v4/tailwindcss/color/examples/> | PDS color utility classes (bg-canvas, text-contrast-high, etc.) | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Tailwind Spacing Examples | <https://designsystem.porsche.com/v4/tailwindcss/spacing/examples/> | PDS spacing utilities (gap-fluid-md, gap-static-md), NOT gap-md | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Migration Guide (Tailwind) | <https://designsystem.porsche.com/v4/news/migration-guide/tailwindcss/> | Breaking changes: `scheme-*` classes, `--color-*` reset | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS tailwindcss theme source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/styles/projects/tailwindcss/src/index.ts> | @theme variable definitions, @utility rules, light-dark() usage | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| Tailwind CSS v4 Vite Install | <https://tailwindcss.com/docs> | @tailwindcss/vite plugin setup, @import "tailwindcss" | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| stylelint-config-tailwindcss | <https://github.com/zhilidali/stylelint-config-tailwindcss> | Stylelint config extending at-rule-no-unknown for Tailwind | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| @tailwindcss/vite Vite 8 discussion | <https://github.com/tailwindlabs/tailwindcss/discussions/19624> | Vite 8 support timeline for @tailwindcss/vite | `owlbear-data/owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 
 ## Component Complexity Inventory (Task #1608)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v4 React wrapper exports | (local: node_modules/@porsche-design-system/components-react/) | Available React wrappers: PTabs, PTabsItem, PSheet, PAccordion, PIcon, PRadioGroup, PRadioGroupOption, PLinkPure; absent: PList/PListItem | `.owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
-| PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Component availability and API surface for migration classification | `.owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
+| PDS v4 React wrapper exports | (local: node_modules/@porsche-design-system/components-react/) | Available React wrappers: PTabs, PTabsItem, PSheet, PAccordion, PIcon, PRadioGroup, PRadioGroupOption, PLinkPure; absent: PList/PListItem | `owlbear-data/owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
+| PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Component availability and API surface for migration classification | `owlbear-data/owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
 
 ## CleanupPanel/RepairPanel PModal Migration (Task #1635)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| PDS v3 Modal configurator docs | <https://designsystem.porsche.com/v3/components/modal/configurator/> | PModal component behavior: native dialog, focus trap, top-layer, dismiss event, controlled open prop | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
-| PDS v3 Modal accessibility docs | <https://designsystem.porsche.com/v3/components/modal/accessibility/> | ARIA support: aria-label, role (dialog/alertdialog), keyboard behavior (Tab trap, Escape), focus return | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
-| RFC 9110 §8.8.2 Last-Modified | <https://httpwg.org/specs/rfc9110.html#field.last-modified> | Prior art for two-field timestamp model (Last-Modified vs Date semantics) | `.owlbear/research/refresh-honesty-two-field-timestamps.md` | 2026-05-18 |
+| PDS v3 Modal configurator docs | <https://designsystem.porsche.com/v3/components/modal/configurator/> | PModal component behavior: native dialog, focus trap, top-layer, dismiss event, controlled open prop | `owlbear-data/owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
+| PDS v3 Modal accessibility docs | <https://designsystem.porsche.com/v3/components/modal/accessibility/> | ARIA support: aria-label, role (dialog/alertdialog), keyboard behavior (Tab trap, Escape), focus return | `owlbear-data/owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
+| RFC 9110 §8.8.2 Last-Modified | <https://httpwg.org/specs/rfc9110.html#field.last-modified> | Prior art for two-field timestamp model (Last-Modified vs Date semantics) | `owlbear-data/owlbear/research/refresh-honesty-two-field-timestamps.md` | 2026-05-18 |
 
 ## Delivery-next Visual Baseline, PDS Loading and Preview Ports
 
@@ -5100,12 +5100,12 @@ No external sources — analysis based entirely on codebase static analysis of `
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MegaLinter coding agents | <https://megalinter.io/latest/coding-agents/> | Agent skills; rule disables need human confirmation | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| Trunk ignoring issues | <https://docs.trunk.io/code-quality/linters/ignoring-issues-and-files> | Ignore comments, unused-ignore reports | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| qlty | <https://docs.qlty.sh/> | One CLI for many linters; argues MCP is unnecessary for agents | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| eslint-comments require-description | <https://eslint-community.github.io/eslint-plugin-eslint-comments/rules/require-description.html> | Reason required on disable comments | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| Biome suppressions | <https://biomejs.dev/analyzer/suppressions/> | Suppression syntax with explanation, unused suppressions | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| MCP sampling (latest) | <https://modelcontextprotocol.io/specification/latest/client/sampling> | Sampling deprecated 2026-07-28 (SEP-2577) | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| OWASP LLM prompt injection cheat sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Code comments as injection channel | [quality service research](../research/repo-quality-service.md) | 2026-10-14 |
-| ECC (affaan-m/ECC) at b92f181 | <https://github.com/affaan-m/ECC> | Agents, skills, subagent guidance (MIT); adoptions TD-115 | [ECC evaluation](../research/ecc-evaluation.md) | 2026-10-15 |
-| WCAG 2.2 target size minimum | <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html> | 24×24 CSS px with spacing and other exceptions | [ECC evaluation](../research/ecc-evaluation.md) | 2026-10-15 |
+| MegaLinter coding agents | <https://megalinter.io/latest/coding-agents/> | Agent skills; rule disables need human confirmation | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| Trunk ignoring issues | <https://docs.trunk.io/code-quality/linters/ignoring-issues-and-files> | Ignore comments, unused-ignore reports | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| qlty | <https://docs.qlty.sh/> | One CLI for many linters; argues MCP is unnecessary for agents | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| eslint-comments require-description | <https://eslint-community.github.io/eslint-plugin-eslint-comments/rules/require-description.html> | Reason required on disable comments | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| Biome suppressions | <https://biomejs.dev/analyzer/suppressions/> | Suppression syntax with explanation, unused suppressions | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| MCP sampling (latest) | <https://modelcontextprotocol.io/specification/latest/client/sampling> | Sampling deprecated 2026-07-28 (SEP-2577) | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| OWASP LLM prompt injection cheat sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Code comments as injection channel | [quality service research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | 2026-10-14 |
+| ECC (affaan-m/ECC) at b92f181 | <https://github.com/affaan-m/ECC> | Agents, skills, subagent guidance (MIT); adoptions TD-115 | [ECC evaluation](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/ecc-evaluation.md) | 2026-10-15 |
+| WCAG 2.2 target size minimum | <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html> | 24×24 CSS px with spacing and other exceptions | [ECC evaluation](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/ecc-evaluation.md) | 2026-10-15 |

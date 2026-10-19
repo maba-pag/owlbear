@@ -38,17 +38,17 @@ Renovate's pull requests are left alone until the old engine is gone (owner, 202
 
 | Area | Build document | Pull requests |
 | --- | --- | --- |
-| The engine and the whole journey, shaping to cleanup, visual check, design pack | [architecture](delivery-next-architecture.md), [design skill](delivery-next-design-skill.md) | #449 |
-| Review and challenge rounds for every role (TD-208, steps 1 to 8) | [challenge rounds](challenge-rounds-build.md) | #449; steps 6 to 8 as commits before the PR route |
+| The engine and the whole journey, shaping to cleanup, visual check, design pack | [architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md), [design skill](delivery-next-design-skill.md) | #449 |
+| Review and challenge rounds for every role (TD-208, steps 1 to 8) | [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | #449; steps 6 to 8 as commits before the PR route |
 | Pull requests with required CI (TD-278) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | #455 to #458 |
 | Merge-queue support (TD-226) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | commits before the PR route, `0d4272eef` and its repairs |
 | Per-role session time limits, doubled (TD-286) | — | #460 |
-| Pages on lit-html (TD-264), machine host, one UI, Global memory, SQLite stores, settings across projects | [machine host](machine-host-build.md) | #461 to #469, #471 |
+| Pages on lit-html (TD-264), machine host, one UI, Global memory, SQLite stores, settings across projects | [machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | #461 to #469, #471 |
 | Self-update steps 1 to 3b: machine settings, Pause, paused maintenance, PR labels, push CI, release walk | [self-update](self-update-build.md) | #473, #476, #478, #480 to #482 |
 | Test curation of delivery-next (TD-311, TD-312) | — | #477 |
 | Decision review TD-319..TD-381: Snyk Code and Renovate, Cyclopts, subagents per role, owner notes as written | the record | #483, #487 to #489, #492, #494, #495 |
-| The machine preference layer and session limits (TD-336) | [settings scopes](settings-scopes-build.md) | #496, #497 |
-| The test review from the Maintenance page (C-26) | [test review](test-review-build.md) | #498, #499 |
+| The machine preference layer and session limits (TD-336) | [settings scopes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/settings-scopes-build.md) | #496, #497 |
+| The test review from the Maintenance page (C-26) | [test review](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/test-review-build.md) | #498, #499 |
 
 ## 2. The Plan
 
@@ -59,8 +59,8 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest: none; built: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | TD-330 in [challenge rounds](challenge-rounds-build.md) §3.4; TD-334 in [machine host](machine-host-build.md) | Done |
-| 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
+| 1 | TD-358's rest: none; built: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | TD-330 in [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) §3.4; TD-334 in [machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | Done |
+| 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | §3.3 | Done |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Not started |
@@ -78,7 +78,7 @@ the table lists the items in their order.
   repair plan of 2026-10-11 put it after the watcher, because its live proof needs a runtime the owner can follow.
   [Plan](delivery-next-visual-baseline.md), nothing built.
 - The amendment design (TD-185): its design session with the owner comes before any amendment code (C-14).
-- The quality service (TD-89): [research](repo-quality-service.md), not built.
+- The quality service (TD-89): [research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md), not built.
 - Contradicting findings of the two visual judges go to the owner ([design skill §3.5](delivery-next-design-skill.md));
   they are not detected (§3.7 there).
 - An organisation with the merge queue for OwlBear's `main`, once someone else contributes or Delivery builds
@@ -111,12 +111,18 @@ waits for the owner's approval (TD-194); a change to expected evidence asks the 
 (TD-177); the challenger checks that each change is needed and lists every changed file (TD-194). Steps 4 and 5 are
 §3–§5 and §7 there.
 
-### 3.3 Items 6 and 7: research move, then (after the self-update) the old engine
+### 3.3 Items 6 and 7: research moved, then (after the self-update) the old engine
 
-The research move needs a short design: which documents move (TD-395 keeps the decision record, this plan and the
-build designs of unbuilt work here, since GitHub's agents and reviewer read only this repository; they move once
-history), how links from kept files and agents point there, and where agents write research from then on (C-09:
-never into a consumer project). The removal follows the self-update (TD-394) and the ledger's batches 1 to 5 (the
+The research moved on 2026-10-20: 1,156 documents went to `owlbear-data/owlbear/research/`, with a README there that
+says how their relative links resolve. Here stay the decision record, this plan and the build designs of work not
+yet built (TD-395): self-update, PR/CI/merge queue (its pack route), design skill (judge conflicts), visual
+baseline, watcher design and options,
+transfer ledger and cutover. A design moves there once its work is built. Links from what stays point at the moved
+documents' GitHub pages. Agents write research to the project's folder in the data repository (`w-research` Step 6,
+`r-workspace-governance`), OwlBear's included; `.owlbear/research/` takes only the record, the plan and new build
+designs. The old engine's designer keeps its `.owlbear/research/` hook until item 7 removes it.
+
+The removal follows the self-update (TD-394) and the ledger's batches 1 to 5 (the
 `main` sync batch is gone, TD-203) with the tag first; its precondition for batch 2 (the new Changes page reachable)
 holds. It rewrites the documentation v1.0 needs (TD-393). Open issues #225 and #400 and pull requests #405 and #412
 belong to the old engine and close with it; Renovate's pull requests come back after it.
@@ -155,7 +161,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-04 | A missing tool reruns once in a runtime that has it | No other runtime while window steps are paused | keep | 8 |
 | C-05 | The repository's instructions apply, Delivery's format wins, a clash asks | Agents are not told which wins | align | — |
 | C-05 | Project agents and skills off in steps after self-update step 5 | Discoverable, allowed until then (TD-329) | build | 5 |
-| C-09 | `owlbear-data` holds OwlBear's research too; the record, the plan and unbuilt build designs stay (TD-227, TD-395) | Still in this repository | build | 6 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
 | C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | not placed |
@@ -201,26 +206,29 @@ curator's threshold, what the line limit covers and the GitHub account.
 
 ## 6. Documents
 
+Links to GitHub pages point into `owlbear-data/owlbear/research/`, where the built designs and the research live
+since item 6; the others are in this folder.
+
 | Document | Role | Status |
 | --- | --- | --- |
 | [Decision record](delivery-liveness-first-rebuild.md) | The owner's decisions in force, by topic | Current; the authority for intent |
 | This file | Status, order, gaps, open questions | Current |
 | [Self-update](self-update-build.md) | Build design of items 2 to 4 | Steps 1 to 3b built; 3c planned; 4 and 5 open |
-| [Settings scopes](settings-scopes-build.md) | Machine layer and session limits | Built (#496, #497) |
-| [Test review](test-review-build.md) | C-26's test review | Built (#499) |
-| [Machine host](machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built |
+| [Settings scopes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/settings-scopes-build.md) | Machine layer and session limits | Built (#496, #497) |
+| [Test review](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/test-review-build.md) | C-26's test review | Built (#499) |
+| [Machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built |
 | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its open pack route is item 2 |
-| [Challenge rounds](challenge-rounds-build.md) | Review and challenge loops | Built |
+| [Challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | Review and challenge loops | Built |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
 | [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; not built; its PDS part is item 11, the rest not placed |
 | [Watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | The watcher | Draft for the owner's session; to revise (§3.5) |
 | [Transfer ledger](delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Decided as TD-199 to TD-201; plan of item 7 |
 | [Cutover](delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Partly replaced by TD-199 and TD-203; input to item 7 |
-| [Quality service](repo-quality-service.md) | TD-89's service | Research; not built |
-| [Charter](delivery-next-charter.md) | The approved charter of 2026-10-10 | In force only where no later decision replaced it (TD-23); the record wins |
-| [Architecture](delivery-next-architecture.md), [status and exits](delivery-next-status-and-exits.md), [journey](delivery-next-journey-and-failure-modes.md), [glossary](delivery-next-glossary.md) | The design of 2026-10-10..14 | History; the record and the code win |
-| [Ownership map](delivery-next-ownership-map.md), [route comparison](delivery-next-route-comparison.md), [platform probe](delivery-next-platform-probe.md), [agent runtime](delivery-next-agent-runtime.md), [tool surface](delivery-tool-surface-audit.md), [reuse study](delivery-next-reuse-study-v2.md), [agents from old](delivery-next-agents-from-old.md), [ECC](ecc-evaluation.md) | Research behind the design | History |
-| [Redesign execution plan](delivery-redesign-execution-plan.md) | The old engine's programme | Superseded (TD-202); history |
+| [Quality service](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | TD-89's service | Research; not built |
+| [Charter](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-charter.md) | The approved charter of 2026-10-10 | In force only where no later decision replaced it (TD-23); the record wins |
+| [Architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md), [status and exits](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-status-and-exits.md), [journey](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-journey-and-failure-modes.md), [glossary](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-glossary.md) | The design of 2026-10-10..14 | History; the record and the code win |
+| [Ownership map](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-ownership-map.md), [route comparison](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-route-comparison.md), [platform probe](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-platform-probe.md), [agent runtime](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-agent-runtime.md), [tool surface](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-tool-surface-audit.md), [reuse study](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-reuse-study-v2.md), [agents from old](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-agents-from-old.md), [ECC](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/ecc-evaluation.md) | Research behind the design | History |
+| [Redesign execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md) | The old engine's programme | Superseded (TD-202); history |
 | Old record at `04b1d8ec4` | Every decision row as first recorded; roadmap M0–M7; repair plan | History: `git show 04b1d8ec4:.owlbear/research/delivery-liveness-first-rebuild.md` |
 
 ## 7. Keeping This File Current

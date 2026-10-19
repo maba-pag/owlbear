@@ -35,7 +35,8 @@ Delivery transition; a later reviewed result may record the earlier trigger as c
 ## Placement And Identity
 
 Use `.owlbear/scratch/{task-id}-process-observation.md` for working notes and delete it before task
-closure. Preserve a note in `.owlbear/research/{slug}.md` only when it has durable value beyond the
+closure. Preserve a note as research (`w-research` Step 6: the project's research folder in the data repository)
+only when it has durable value beyond the
 active Change, following `w-research` and workspace attribution rules. Use a filesystem-safe slug.
 
 Every preserved note names:

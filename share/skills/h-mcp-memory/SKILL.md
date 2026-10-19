@@ -137,7 +137,7 @@ The loop is **human-assisted and sampled**, not universally mandatory and not
 expected to become automatic without a later evidence-based policy change.
 
 This follows F11/F12 in the [2026-09-05 memory-system
-audit](../../../.owlbear/research/memory-system-audit-2026-09-05.md): historical
+audit](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-system-audit-2026-09-05.md): historical
 assessment totals show past use, not role coverage or effectiveness, and the
 observed pending entries do not establish starvation. Existing role/tool
 matrices and workflow cadence are the evidence boundary for this policy.

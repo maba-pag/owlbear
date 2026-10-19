@@ -80,7 +80,9 @@
 - ## `What belongs elsewhere`
 - ## `Pull-request checks`
 - ## `Snyk`
-- ## `MegaLinter toolchain updates`
+- ## `Releases`
+- ## `Dependency updates`
+- ## `Reviews`
 
 ### Outbound links
 - [`share/`](../share/README.md)
@@ -88,24 +90,34 @@
 - [`serve/`](../serve/README.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
+- [CI](../.github/workflows/ci.yml)
+- [Release](../.github/workflows/release.yml)
+- [CI](../.github/workflows/ci.yml)
+- [`ci_scope.py`](../.github/scripts/ci_scope.py)
 - [Python](../.github/workflows/python.yml)
 - [Python browser](../.github/workflows/python-browser.yml)
 - [Cockpit](../.github/workflows/cockpit.yml)
 - [Static checks](../.github/workflows/static.yml)
 - [Tooling](../.github/workflows/tooling.yml)
 - [Agent ecosystem](../.github/workflows/agent-ecosystem.yml)
+- [Security](../.github/workflows/security.yml)
 - [`test_ci_workflows.py`](../tests/test_ci_workflows.py)
+- [Security](../.github/workflows/security.yml)
+- [`snyk_findings.py`](../.github/scripts/snyk_findings.py)
+- [Snyk ignore](../.github/workflows/snyk-ignore.yml)
+- [Release](../.github/workflows/release.yml)
+- [`release.py`](../.github/scripts/release.py)
 - [Renovate](../.github/renovate.json)
-- [synchronization workflow](../.github/workflows/sync-megalinter-toolchain.yml)
-- [Biome schema](../biome.json)
-- [synchronizer](../.github/scripts/sync_megalinter_toolchain.py)
-- [Tooling workflow](../.github/workflows/tooling.yml)
+- [`check_ruff_toolchain.py`](../.github/scripts/check_ruff_toolchain.py)
+- [`biome.json`](../biome.json)
+- [`.coderabbit.yaml`](../.coderabbit.yaml)
+- [review brief](../.github/instructions/code-review.instructions.md)
 
 ## .github/copilot-instructions.md
 - # `OwlBear — Copilot Workspace Instructions`
 - ## `1. Project Identity`
 - ## `2. Repository Branches`
-- ### `Direct Delivery Redesign`
+- ### `Plan and Status`
 - ### `Asking the Owner`
 - ## `Directory Structure`
 - ## `3. Cockpit Frontend`
@@ -115,8 +127,9 @@
 - ### `Local Development and CI`
 
 ### Outbound links
-- [the execution plan](research/delivery-redesign-execution-plan.md)
-- [the programme](research/change-continuation-delivery-redesign.md)
+- [The plan](research/owlbear-plan.md)
+- [the decisions](research/delivery-liveness-first-rebuild.md)
+- [its execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md)
 - [the decision record](research/delivery-liveness-first-rebuild.md)
 - [cloud-agent](../.github/instructions/cloud-agent.instructions.md)
 - [code-review](../.github/instructions/code-review.instructions.md)
@@ -128,7 +141,7 @@
 - ## `Delivery Redesign Tasks`
 
 ### Outbound links
-- [the execution plan](research/delivery-redesign-execution-plan.md)
+- [the plan](research/owlbear-plan.md)
 
 ## .github/instructions/code-review.instructions.md
 - # `GitHub Copilot Code Review`
@@ -451,32 +464,30 @@
 - [design skill research §3.8](research/delivery-next-design-skill.md)
 - [owner session](../serve/delivery-next/DEMO-slice1.md#owner-session-new-change-sleep-and-overlap-2026-10-13-times-utc)
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/builder.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-builder.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/challenger.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-challenger.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/designer.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-design-judge.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/planner.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-planner.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/preparer.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-preparer.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/reviewer.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-reviewer.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/agents/updater.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-shaper.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/chat_agents/owlbear-shaper.agent.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-test-curator.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/skills/delivery/SKILL.md
-- # `Delivery in chat`
-- ## `Shape a brief`
-- ## `Read-Back`
-- ## `Status and questions`
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-test-reviewer.agent.md
 
-## serve/delivery-next/src/owlbear_delivery_next/worker_skills/NOTICE.md
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-updater.agent.md
+
+## serve/delivery-next/src/owlbear_delivery_next/skills/NOTICE.md
 - # `Notices`
 
-## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-acceptance/SKILL.md
+## serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-acceptance-criteria/SKILL.md
 - # `Acceptance Criteria and Proof`
 - ## `Proof Selection`
 - ## `Durable Tests`
@@ -488,23 +499,22 @@
 - ### `C5 - Literals From Their Source`
 - ## `Bad and Good`
 
-## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-findings/SKILL.md
-- # `Findings`
-- ## `Evidence`
-- ## `Where Defects Hide`
-- ## `Operating Context`
-- ## `Finding Quality`
+## serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-change-shaping/SKILL.md
+- # `Delivery in chat`
+- ## `Shape a brief`
+- ## `Read-Back`
+- ## `Status and questions`
 
-## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-module-design/SKILL.md
-- # `Module Design`
-- ## `Module Quality Vocabulary`
-- ## `Deletion Test`
-- ## `Interface Is the Test Surface`
-- ## `Seam Discipline`
-- ## `Dependency Classification`
-- ## `Applying the Diagnostics`
+## serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-design-review/SKILL.md
+- # `UI Review`
+- ## `What you judge`
+- ## `Two phases`
+- ## `Blind comparison`
+- ## `Rubric`
+- ## `Findings`
+- ## `Verdict`
 
-## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-ui-design/SKILL.md
+## serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-interface-design/SKILL.md
 - # `UI Design`
 - ## `Context first`
 - ## `The visitor's mode`
@@ -517,14 +527,21 @@
 - ## `Order of fixes`
 - ## `Evidence`
 
-## serve/delivery-next/src/owlbear_delivery_next/worker_skills/owlbear-ui-review/SKILL.md
-- # `UI Review`
-- ## `What you judge`
-- ## `Two phases`
-- ## `Blind comparison`
-- ## `Rubric`
-- ## `Findings`
-- ## `Verdict`
+## serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-module-design/SKILL.md
+- # `Module Design`
+- ## `Module Quality Vocabulary`
+- ## `Deletion Test`
+- ## `Interface Is the Test Surface`
+- ## `Seam Discipline`
+- ## `Dependency Classification`
+- ## `Applying the Diagnostics`
+
+## serve/delivery-next/src/owlbear_delivery_next/skills/owlbear-review-judgment/SKILL.md
+- # `Findings`
+- ## `Evidence`
+- ## `Where Defects Hide`
+- ## `Operating Context`
+- ## `Finding Quality`
 
 ## serve/knowledge/README.md
 - # `owlbear-knowledge — Knowledge Engine`
@@ -1208,7 +1225,6 @@
 - ## `File-Capture Fallback`
 - ## `General Gotchas`
 - ## `OwlBear Workspace Notes`
-- ### `MegaLinter reports`
 
 ## share/skills/h-python-conventions/SKILL.md
 - # `Python Conventions`

@@ -47,7 +47,7 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 | Agent institutional knowledge (queryable) | MCP canonical | `owlbear-memory` |
 | Job-specific context and working state | Native artifacts | Change/job records or `.owlbear/scratch/` |
 | Architecture decisions | Not memory | Native change decisions and requests |
-| Research findings | Not memory | `.owlbear/research/` |
+| Research findings | Not memory | `owlbear-data/<folder>/research/` (`w-research`) |
 | Code snippets, task-specific context | Not memory | Do not record |
 
 The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not use it for user preferences, session notes, repo inbox notes, or fallback agent learnings.
@@ -145,7 +145,8 @@ An entry **fails** if any of the following are true:
 
 ## Anti-Patterns
 
-1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
+1. **Storing research findings as memory entries.** Research belongs in the project's research folder of the data
+   repository (`w-research`); memory is for agent behavioral learnings.
 2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `owlbear-memory` only.
 3. **Writer-assigned scope.** New candidates must remain unscoped. The curator assigns relevance
  scope during promotion.
