@@ -22,7 +22,7 @@ FLOOR = "941ee5d9d692532e9184350eb4f6b079a9b96699"  # the last merge before push
 LABELS = {"release:major": "major", "release:minor": "minor"}  # major wins when both are set
 CI = ".github/workflows/ci.yml"
 VERSION = re.compile(r"v(\d+)(?:\.(\d+))?")
-BOT = ("-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com")
+TAGGER = {"name": "github-actions[bot]", "email": "41898282+github-actions[bot]@users.noreply.github.com"}
 
 
 class GitHub(Protocol):
@@ -34,6 +34,10 @@ class GitHub(Protocol):
 
     def ci(self, sha: str) -> str:
         """The commit's own CI: ``success``, ``failure``, or ``pending`` while none has completed."""
+        ...
+
+    def create(self, name: str, sha: str, message: str) -> None:
+        """Create the annotated tag *name* on *sha*, never moving an existing one."""
         ...
 
 
@@ -56,16 +60,32 @@ def git(*args: str) -> str:
     return done.stdout.strip()
 
 
-def versions() -> list[tuple[str, tuple[int, int]]]:
-    """Each version tag's commit and number; ``vN`` counts as ``(N, 0)``."""
-    found = []
+def tags() -> dict[str, str]:
+    """Each version-like tag's name and the commit it peels to."""
+    found = {}
     for line in git(
         "for-each-ref", "refs/tags/v*", "--format=%(refname:short) %(objectname) %(*objectname)"
     ).splitlines():
         name, obj, peeled = [*line.split(), ""][:3]
-        if m := VERSION.fullmatch(name):
-            found.append((peeled or obj, (int(m[1]), int(m[2] or 0))))
+        found[name] = peeled or obj
     return found
+
+
+def versions() -> list[tuple[str, tuple[int, int]]]:
+    """Each version tag's commit and number; ``vN`` counts as ``(N, 0)``."""
+    return [(sha, (int(m[1]), int(m[2] or 0))) for name, sha in tags().items() if (m := VERSION.fullmatch(name))]
+
+
+def unpaired() -> list[tuple[str, str]]:
+    """A major's missing partner, ``vN`` for ``vN.0`` or the reverse, with the commit it belongs on (TD-392)."""
+    found = tags()
+    missing = []
+    for name, sha in found.items():
+        if (m := VERSION.fullmatch(name)) and int(m[1]) > 0 and m[2] in (None, "0"):
+            partner = f"v{m[1]}" if m[2] else f"v{m[1]}.0"
+            if partner not in found:
+                missing.append((partner, sha))
+    return missing
 
 
 def merges(floor: str, tip: str) -> list[tuple[str, bool]]:
@@ -103,15 +123,15 @@ def plan(gh: GitHub, floor: str, tip: str) -> list[Step]:
     return steps
 
 
-def tag(step: Step) -> None:
-    """Create the annotated tags and push them together, never forced: an existing name fails the run.
+def tag(gh: GitHub, step: Step) -> None:
+    """Create the step's annotated tags through GitHub; an existing name fails the run.
 
-    A major version ``vN.0`` also gets ``vN`` on the same commit (TD-392).
+    A major version ``vN.0`` also gets ``vN`` on the same commit (TD-392). GitHub refuses the workflow token a git
+    push of a tag whose commit's workflow files differ from every branch tip, so the tags are made through the API.
     """
     names = [step.tag, step.tag.removesuffix(".0")] if step.tag.endswith(".0") else [step.tag]
     for name in names:
-        git(*BOT, "tag", "-a", name, "-m", f"{name}: {step.why}", step.sha)
-    git("push", "--atomic", "origin", *(f"refs/tags/{name}" for name in names))
+        gh.create(name, step.sha, f"{name}: {step.why}")
 
 
 class Api:
@@ -120,22 +140,30 @@ class Api:
     def __init__(self, repo: str, token: str, base: str = "https://api.github.com") -> None:
         self.repo, self.token, self.base = repo, token, base
 
-    def _get(self, path: str) -> object:
+    def _call(self, path: str, body: dict | None = None) -> object:
         request = urllib.request.Request(  # noqa: S310 - the API's own https URL
             f"{self.base}/repos/{self.repo}/{path}",
+            data=None if body is None else json.dumps(body).encode(),
             headers={"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github+json"},
+            method="GET" if body is None else "POST",
         )
         with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
             return json.load(response)
 
+    def create(self, name: str, sha: str, message: str) -> None:
+        """The tag object first, then its ref; GitHub answers 422 for a ref that exists, which fails the run."""
+        tag = {"tag": name, "message": message, "object": sha, "type": "commit", "tagger": TAGGER}
+        made = self._call("git/tags", tag)
+        self._call("git/refs", {"ref": f"refs/tags/{name}", "sha": made["sha"]})
+
     def pull(self, sha: str) -> dict | None:
         """The pull request merged into main with exactly this merge commit."""
-        found = self._get(f"commits/{sha}/pulls")
+        found = self._call(f"commits/{sha}/pulls")
         return next((p for p in found if p.get("merge_commit_sha") == sha and p["base"]["ref"] == "main"), None)
 
     def ci(self, sha: str) -> str:
         """The newest run of the CI workflow for this merge's own push to main."""
-        found = self._get(f"actions/runs?head_sha={sha}&event=push&branch=main&per_page=100")["workflow_runs"]
+        found = self._call(f"actions/runs?head_sha={sha}&event=push&branch=main&per_page=100")["workflow_runs"]
         runs = [r for r in found if r.get("path") == CI]
         if not runs or (run := max(runs, key=lambda r: r["id"]))["status"] != "completed":
             return "pending"
@@ -149,9 +177,13 @@ def main() -> int:
     live = os.environ.get("RELEASE_TAGS") == "on"
     mode = "tagging" if live else "dry run: nothing is tagged"
     lines = [f"Release walk after {FLOOR[:9]} to {git('rev-parse', '--short', 'HEAD')}, {mode}"]
+    for name, sha in unpaired():
+        if live:
+            gh.create(name, sha, f"{name}: the partner of a major version (TD-392)")
+        lines.append(f"- {'tagged' if live else 'would tag'} {sha[:9]} as {name}: the missing partner of a major")
     for step in plan(gh, FLOOR, "HEAD"):
         if step.action == "tag" and live:
-            tag(step)
+            tag(gh, step)
         verb = {"tag": "tagged" if live else "would tag", "pass": "passed over", "stop": "stopped at"}[step.action]
         lines.append(f"- {verb} {step.sha[:9]}{f' as {step.tag}' if step.tag else ''}: {step.why}")
     report = "\n".join(lines) + "\n"

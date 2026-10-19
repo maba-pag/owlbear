@@ -54,7 +54,7 @@ def pr(number: int, *labels: str) -> dict:
 
 
 class Fake:
-    """GitHub as the walk reads it: each merge's pull request and its CI."""
+    """GitHub as the walk uses it: each merge's pull request and its CI, and tags made on the bare remote."""
 
     def __init__(self) -> None:
         self.prs: dict[str, dict] = {}
@@ -65,6 +65,10 @@ class Fake:
 
     def ci(self, sha: str) -> str:
         return self.runs.get(sha, "pending")
+
+    def create(self, name: str, sha: str, message: str) -> None:
+        release.git("-c", "user.name=t", "-c", "user.email=t@t", "tag", "-a", name, "-m", message, sha)
+        release.git("push", "origin", f"refs/tags/{name}")
 
 
 def walked(gh: Fake, floor: str) -> list[tuple[str, str, str]]:
@@ -85,7 +89,7 @@ def test_labelled_merges_become_versions_in_order_and_the_walk_waits_at_one_whos
     ]  # fmt: skip
     for step in release.plan(gh, floor, "HEAD"):
         if step.action == "tag":
-            release.tag(step)
+            release.tag(gh, step)
     assert [(git(repo, "cat-file", "-t", n), git(repo, "rev-parse", f"{n}^{{commit}}")) for n in ("v1.0", "v1")] == [
         ("tag", c), ("tag", c)
     ]  # fmt: skip
@@ -111,9 +115,40 @@ def test_a_tag_name_taken_meanwhile_fails_the_run_instead_of_moving(repo: Path, 
     (step,) = release.plan(gh, floor, "HEAD")
     git(repo, "tag", "v0.2", "HEAD~1")
     with pytest.raises(subprocess.CalledProcessError):
-        release.tag(step)
+        release.tag(gh, step)
     assert "already exists" in capsys.readouterr().err
     assert git(repo, "rev-parse", "v0.2^{commit}") == git(repo, "rev-parse", "HEAD~1")
+
+
+def test_a_major_missing_its_partner_gets_it_on_the_same_commit(repo: Path, monkeypatch):
+    """TD-392: tags are made one by one through the API, so a run that stopped between them is completed later."""
+    floor, gh = git(repo, "rev-parse", "HEAD"), Fake()
+    a = merge(repo, "a")
+    gh.create("v1.0", a, "v1.0")
+    monkeypatch.setattr(release, "FLOOR", floor)
+    monkeypatch.setattr(release, "Api", lambda *_a: gh)
+    for name, value in (("GITHUB_REPOSITORY", "o/r"), ("GH_TOKEN", "t"), ("RELEASE_TAGS", "on")):
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    assert release.unpaired() == [("v1", a)]
+    assert release.main() == 0
+    assert (git(repo, "rev-parse", "v1^{commit}"), release.unpaired()) == (a, [])
+
+
+def test_the_api_makes_the_annotated_tag_object_then_its_ref(monkeypatch):
+    sent = []
+
+    def urlopen(request, timeout):  # noqa: ARG001 - urlopen's signature
+        sent.append((request.get_method(), request.full_url, json.loads(request.data)))
+        return io.BytesIO(json.dumps({"sha": "obj"}).encode())
+
+    monkeypatch.setattr(release.urllib.request, "urlopen", urlopen)
+    release.Api("o/r", "tok", "https://api.test").create("v0.2", "c0ffee", "v0.2: #1 change")
+    assert sent == [
+        ("POST", "https://api.test/repos/o/r/git/tags",
+         {"tag": "v0.2", "message": "v0.2: #1 change", "object": "c0ffee", "type": "commit", "tagger": release.TAGGER}),
+        ("POST", "https://api.test/repos/o/r/git/refs", {"ref": "refs/tags/v0.2", "sha": "obj"}),
+    ]  # fmt: skip
 
 
 def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, monkeypatch, tmp_path):
