@@ -3,8 +3,8 @@
 > **Owning task:** TD-213 — TD-208 for the builder's task and final reviews, one shared round module
 > **Date:** 2026-10-17
 > **Question:** How does the engine implement the owner's challenge-round rule for the builder's reviews?
-> **Status 2026-10-19:** steps 1 to 8 built. TD-330 replaced TD-218: every loop's last round, ended early or at the
-> maximum, gets one rejections-only check outside the round count; not built ([the plan](owlbear-plan.md) item 1).
+> **Status 2026-10-20:** steps 1 to 8 built. TD-330 replaced TD-218 and is built: every loop's last round, ended
+> early or at the maximum, gets one rejections-only check outside the round count (§3.4).
 
 ## 1. Context and Question
 
@@ -72,10 +72,13 @@ updater and the shaper's brief challenge to the same build (§3.9). More rounds 
   `max_rounds + extra` with `new ≥ ask_owner_at` → the owner is asked (3.6). Otherwise the batch is done
   unreviewed: its tasks are listed as unreviewed repairs, its rejections stand unjudged, the subject resolves.
 - Final review: its repair batch is reviewed by the next final-review round, not by a task review.
-- Rejections-only check (TD-218): when a round ends early by its count before the last allowed round and the
-  worker rejected findings, one short session judges only those rejections on the repaired head, without new
-  findings; a rejection it does not accept goes to the owner. It takes the next round's slot. The last
-  allowed round's rejections stay unjudged until new work reopens the loop (TD-235).
+- Rejections-only check (TD-330, replacing TD-218): when a loop's last round, ended early by its count or at the
+  maximum, leaves rejections no round judged, one short session judges only those on the repaired head, without
+  new findings; a rejection it does not accept goes to the owner. It counts outside the rounds: the round number,
+  that round's finding count and the head its new work is diffed from stay. When the last allowed round found
+  `ask owner at` or more, the owner chooses after the check and its disputes. A check that reports a wrong premise
+  instead judges nothing: its rejections stand, marked unjudged, and the premise is repaired like a finding.
+  Repairs after one round share its label (`r<round>`), listed once as unreviewed.
 - Completion without a pass: an engine-issued completion record binds the policy, the last verdict, the
   complete repair batch, the criteria and the resulting head. `publish.reviewed` and merge accept it for
   identical content under the same criteria only (TD-237); later changes invalidate it like a review.
@@ -231,8 +234,8 @@ step is built.
   shaper's rejections and look for new findings within the cap; a challenger's wrong premise or a tool no runtime
   provides is its round's finding. A failed session counts none and runs again. Saves are refused while a
   challenge runs or the owner decides.
-- After a request, as in the other loops: not the last round → a challenge; an early last round with rejections →
-  a rejections-only challenge (TD-218); the last allowed round with `ask owner at` or more new findings → the owner on
+- After a request, as in the other loops: not the last round → a challenge; a last round with rejections → a
+  rejections-only check (TD-330); then the last allowed round with `ask owner at` or more new findings → the owner on
   the Changes page: "Another round" or "Shape the brief again" (a new attempt; the shaper is told why); otherwise no
   session: the requested version is the loop's outcome, unreviewed (`count`/`max`). A verdict with nothing left to
   address, or the owner's decisions leaving none, makes the judged version the outcome (`clean`). An upheld
@@ -269,8 +272,8 @@ step is built.
   its result tool. It writes only in its own folder and runs no shell (`Policy.confined`); after each session every
   allowed skill is copied into the candidate, so a skill restored to its start replaces an earlier edit. The replay
   reruns whenever the pack identity changed.
-- After a repair, as in the other loops: not the last round → the next round; an early last round with rejections →
-  a rejections-only check (TD-218), which never reviews the fixes beside them; otherwise the run stops before
+- After a repair, as in the other loops: not the last round → the next round; a last round with rejections → a
+  rejections-only check (TD-330), which never reviews the fixes beside them; otherwise the run stops before
   activating and asks the owner on the Settings page: "Activate the unreviewed repair" or "Discard the update"
   (TD-256), with "Another round" first when the last allowed round found `ask owner at` or more (TD-208). A full round
   with nothing left to address and no unreviewed repair activates and pushes as before.

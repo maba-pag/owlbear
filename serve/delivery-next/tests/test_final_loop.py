@@ -176,7 +176,7 @@ def test_final_rounds_name_tasks_and_the_next_final_round_judges_its_repairs_rej
     assert (cfg.cap, cfg.plan_tasks, cfg.rechecks) == (0, (), ("F7",))
     c = store.read("c1")
     lp = c.loops[FINAL]
-    assert (lp.round, lp.ended, lp.unreviewed, at(c)) == (3, "count", ["t3"], (K.PUBLISH, None, None))
+    assert (lp.round, lp.ended, lp.unreviewed, at(c)) == (2, "count", ["t3"], (K.PUBLISH, None, None))  # TD-330
 
 
 def test_a_final_dispute_the_owner_decides_is_fixed_and_ends_the_loop(tmp_path, clone, monkeypatch):
@@ -269,17 +269,22 @@ def test_a_final_loop_ended_unreviewed_publishes_on_its_completion_for_that_cont
 def test_new_work_after_the_final_loop_ended_adds_one_focused_round(tmp_path, clone, monkeypatch):
     store = stored(tmp_path, RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1)))
     reviewed(store, clone, monkeypatch, range(1, 3))
-    built(store, clone, monkeypatch, "c\n", "F2")  # the last round's rejection stays unjudged for now
+    reviewed_head = store.read("c1").loops[FINAL].head
+    built(store, clone, monkeypatch, "c\n", "F2")
+    assert at(store.read("c1")) == (K.REVIEW, None, RECHECK)  # TD-330: the last round's rejection is judged now
+    reviewed(store, clone, monkeypatch, F2=False)
     c = store.read("c1")
-    reviewed_head = c.loops[FINAL].head
+    assert (c.loops[FINAL].round, c.loops[FINAL].ended, c.loops[FINAL].head, at(c)) == (
+        1, "count", reviewed_head, (K.PUBLISH, None, None)
+    )  # fmt: skip
     c.plan.tasks.append(Task(id="t3", title="Fix the failing CI check", scope=["a.txt"], origin="ci"))
     c.step = Step(kind=K.BUILD, task="t3")  # CI failed after publishing
     store.write(Lock("c1"), c)
     built(store, clone, monkeypatch, "ci fix\n")
     assert at(store.read("c1")) == FINAL_STEP  # no review of its own
-    cfg = reviewed(store, clone, monkeypatch, F2=False)
-    assert f"## New since the last round: `git diff {reviewed_head[:12]}..HEAD`" in cfg.message
-    assert (round_flow.FOCUS in cfg.message, cfg.rechecks) == (True, ("F2",))
+    cfg = reviewed(store, clone, monkeypatch)
+    assert f"## New since the last round: `git diff {reviewed_head[:12]}..HEAD`" in cfg.message  # the repair too
+    assert (round_flow.FOCUS in cfg.message, cfg.rechecks) == (True, ())
     c = store.read("c1")
     lp = c.loops[FINAL]
     assert (lp.round, lp.extra, lp.ended, lp.reentry, lp.completion, lp.findings[1].state, at(c)) == (
@@ -297,12 +302,14 @@ def test_the_owner_is_asked_after_the_last_final_round_and_may_accept_it_as_done
     store = stored(tmp_path, RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1)))
     reviewed(store, clone, monkeypatch, range(1, 9))
     built(store, clone, monkeypatch, "c\n", "F8")
+    assert at(store.read("c1")) == (K.REVIEW, None, RECHECK)  # TD-330: its rejection is judged before the owner
+    reviewed(store, clone, monkeypatch, F8=False)
     q = loop.open_question(store.read("c1"))
     assert [o.id for o in q.options] == ["rebuild", "accept", "another", "replan", "clean"]
     assert q.text.startswith("Final review round 1 found 8 new findings, and it was the last allowed round: F1 fixed")
     c = answer(store, "another")
     assert (c.loops[FINAL].extra, c.loops[FINAL].completion, at(c)) == (1, None, FINAL_STEP)
-    reviewed(store, clone, monkeypatch, range(9, 17), F8=False)
+    reviewed(store, clone, monkeypatch, range(9, 17))
     built(store, clone, monkeypatch, "d\n")
     assert "Final review round 2" in loop.open_question(store.read("c1")).text
     c = answer(store, "accept")

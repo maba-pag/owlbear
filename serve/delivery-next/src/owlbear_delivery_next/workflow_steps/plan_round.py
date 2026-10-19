@@ -115,7 +115,7 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
         return verdict  # the session failed or stopped: the mode stays, so the same plan is challenged again
     then = plan_rounds.counted(change, found, upheld)
     change.step.mode = None
-    if then == "ask" and (q := plan_rounds.first(change)) is not None:
+    if then == "ask" and (q := plan_rounds.first(change) or plan_rounds.last(change.loops[PLAN])) is not None:
         return loop.StepResult(exit=Exit.ASK, reason=q.text, cause=q.cause, question=q)
     if then == "revise":
         said = "; ".join(found)[:1500] or "the owner's decisions"

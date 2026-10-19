@@ -59,7 +59,7 @@ the table lists the items in their order.
 
 | # | Work | Decided by | Build document | Status |
 | --- | --- | --- | --- | --- |
-| 1 | TD-358's rest (TD-330, TD-334); built: TD-328, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | none yet; TD-330 extends [challenge rounds](challenge-rounds-build.md) | In progress |
+| 1 | TD-358's rest (TD-334); built: TD-328, TD-330, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | TD-330 in [challenge rounds](challenge-rounds-build.md) §3.4; TD-334 none yet | In progress |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | none yet | Not started |
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Planned, Sol-challenged |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
@@ -99,11 +99,11 @@ TD-358 ("All of it now, before self-update step 3b") was recorded after step 3b 
 "before the rest of the self-update"; TD-394 confirms it comes first. The audit of §4 found the eight below unbuilt;
 the range's other rows are built, history, or part of steps 3c and 4 (TD-325, TD-352, TD-353, TD-357). TD-403 adds
 the small items of 2026-10-19. Built since: TD-392 (#502), TD-328, TD-341, TD-347's skill, TD-396, TD-397 and TD-399,
-with the C-02 catalogue text (#506), TD-345 with TD-405 and TD-406 (#508), TD-350 (#509) and TD-335. Remaining:
+with the C-02 catalogue text (#506), TD-345 with TD-405 and TD-406 (#508), TD-350 (#509), TD-335 (#510) and TD-330.
+Remaining:
 
 | Decision | What is missing |
 | --- | --- |
-| TD-330 | Every loop's last round gets one rejections-only check outside the round count; all five loops still follow TD-218 |
 | TD-334 | Each project's live database lives under `~/.owlbear`, one folder per project; it is still in the clone's Git folder |
 
 ### 3.2 Items 2 to 4: the self-update
@@ -162,7 +162,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-09 | `owlbear-data` holds OwlBear's research too; the record, the plan and unbuilt build designs stay (TD-227, TD-395) | Still in this repository | build | 6 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
-| C-12, C-15 | Last round's rejections get one rejections-only check outside the count (TD-330) | TD-218's behaviour in all five loops | align | 1 |
 | C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | not placed |
 | C-15 | The updater may change its whole candidate; a code change waits for approval (TD-194) | It may edit only skills | align | 2 |
 | C-15 | A change to expected evidence asks the owner (TD-177) | The run ends failed | align | 2 |
@@ -215,7 +214,7 @@ curator's threshold, what the line limit covers and the GitHub account.
 | [Test review](test-review-build.md) | C-26's test review | Built (#499) |
 | [Machine host](machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built; TD-334 re-decided part open (item 1) |
 | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its open pack route is item 2 |
-| [Challenge rounds](challenge-rounds-build.md) | Review and challenge loops | Built; TD-330 open (item 1) |
+| [Challenge rounds](challenge-rounds-build.md) | Review and challenge loops | Built |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
 | [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; not built; its PDS part is item 11, the rest not placed |
 | [Watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | The watcher | Draft for the owner's session; to revise (§3.5) |

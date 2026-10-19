@@ -432,7 +432,8 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
         case StepKind.REVIEW:
             if r and r.review:
                 c.reviews.append(r.review)
-            round_flow.passed(c)
+            if round_flow.passed(c, now):
+                return  # the owner chooses after the last allowed round
             c.budgets.rounds.pop(budgets.round_key(c), None)
             done = resolved(c, s.task)
             for t in c.plan.tasks if c.plan else []:
