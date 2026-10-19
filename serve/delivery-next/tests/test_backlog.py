@@ -134,6 +134,30 @@ def test_a_repeat_merges_only_with_an_entry_naming_the_same_projects_and_is_link
     assert docs.read(fresh=True)[0]["2"].links == ["1", "3", "4"]
 
 
+@pytest.mark.usefixtures("github")
+def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_skips_a_full_entry(shared, monkeypatch):
+    """Sol: a lagging listing never merges into an entry the owner re-scoped; a save that failed is completed later."""
+    root, title = shared[0], "Status line hides the step"
+    shop, docs = view(root), Backlog(DataRepo(root), "docs-site", Clock())
+    shop.add(title, source="watcher")
+    docs.add(title, source="watcher")
+    shop._save(shop.current("1").model_copy(update={"links": []}))  # noqa: SLF001 - the reciprocal save failed
+    docs.add(title, source="watcher")
+    assert (shop.current("1").links, shop.current("2").count) == (["2"], 2)
+
+    stale, real = shop.read(fresh=True), Backlog.read
+    shop.update("1", {"projects": []})  # Global, while GitHub's listing still shows it untriaged
+    monkeypatch.setattr(Backlog, "read", lambda _self, *, fresh=False: (dict(stale[0]), []))  # noqa: ARG005
+    third, new = shop.add(title, source="watcher")
+    assert (new, third.id, shop.current("1").count) == (True, "3", 1)
+    monkeypatch.setattr(Backlog, "read", real)
+
+    full = [str(n) for n in range(100, 150)]
+    shop._save(shop.current("2").model_copy(update={"links": full}))  # noqa: SLF001 - fifty connected entries
+    fourth = Backlog(DataRepo(root), "api-site", Clock()).add(title, source="watcher")[0]
+    assert (fourth.links, shop.current("2").links) == (["1", "3"], full)
+
+
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):
     root, _ = shared
     github.labels["scope:untriaged"] = {"name": "scope:untriaged", "color": "000000"}

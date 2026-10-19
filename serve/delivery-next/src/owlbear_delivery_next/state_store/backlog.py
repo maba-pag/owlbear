@@ -123,6 +123,10 @@ def _valid(fields: dict[str, Any]) -> Entry:
         raise BacklogError(422, f"{'.'.join(map(str, error['loc']))}: {error['msg']}") from exc
 
 
+def _linked(entry: Entry, other: str, now: datetime) -> Entry:
+    return _valid(entry.model_dump() | {"links": [*entry.links, other], "updated_at": now})
+
+
 class Backlog:
     """The backlog issues of the shared repository, seen from one project."""
 
@@ -179,21 +183,23 @@ class Backlog:
         refs = list(dict.fromkeys(r.strip() for r in evidence if r.strip()))
 
         def work(found: dict[str, Entry], now: datetime) -> tuple[Entry, bool]:
-            same = next((e for e in found.values() if repeats(e, self.project, source, title)), None)
-            if same is None:
-                alike = sorted((e.id for e in found.values() if key(e.source, e.title) == key(source, title)), key=int)
+            match = key(source, title)
+            listed = [e.id for e in found.values() if key(e.source, e.title) == match]  # read again: the listing lags
+            fresh = [e for e in (self._fetch(found, i) for i in listed) if e and key(e.source, e.title) == match]
+            same = next((e for e in fresh if repeats(e, self.project, source, title)), None)
+            if same is None:  # TD-405: linked both ways at once, to every match with room for one more link
+                alike = sorted((e for e in fresh if len(e.links) < LINKS), key=lambda e: int(e.id))[-LINKS:]
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
-                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project, "links": alike[-LINKS:]}
+                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project, "links": [e.id for e in alike]}
                 entry = self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now}))
-                them = [self._get(found, i) for i in entry.links]  # TD-405: linked both ways at once
-                self._save(*(_valid(e.model_dump() | {"links": [*e.links, entry.id][-LINKS:], "updated_at": now})
-                             for e in them))  # fmt: skip
+                self._save(*(_linked(e, entry.id, now) for e in alike))
                 return entry, True
-            same = self._get(found, same.id)
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}
             entry = _valid(same.model_dump() | seen | {"evidence": (same.evidence + new)[-EVIDENCE:]})
-            self._save(entry)
+            others = [self._fetch(found, i) for i in entry.links]  # a link a failed save left one-sided is completed
+            lacking = [e for e in others if e and entry.id not in e.links and len(e.links) < LINKS]
+            self._save(entry, *(_linked(e, entry.id, now) for e in lacking))
             if new:
                 said = "\n".join(f"- {' '.join(r.split())}" for r in new)
                 self._github("save", lambda: self.issues.comment(int(entry.id), f"New evidence:\n\n{said}"))
