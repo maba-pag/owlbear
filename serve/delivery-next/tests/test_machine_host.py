@@ -105,15 +105,31 @@ def test_a_project_that_fails_to_load_is_listed_with_its_reason_beside_a_working
     assert http.get(f"/p/{bad.id}/api/next/changes").status_code == 200
 
 
-def running_step(path: Path) -> Path:
+def running_step(path: Path, sessions: int = 0) -> Path:
     store = Store.open(path)
     with store.lock("c1") as lock:
         store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
     me = psutil.Process(os.getpid())
-    rec = RunnerRecord(pid=me.pid, created=me.create_time(), started_at=datetime.now(UTC))
+    rec = RunnerRecord(pid=me.pid, created=me.create_time(), started_at=datetime.now(UTC), sessions=sessions)
     path = store.root / "changes" / "c1" / "runner.json"
     path.write_text(rec.model_dump_json())
     return path
+
+
+def test_a_project_that_did_not_load_counts_its_runners_until_a_host_confirms_them(tmp_path, http, machine):
+    """TD-336, Sol: no host confirms them gone, so their sessions count, even a dead runner's, and removal waits."""
+    bad = registry.register(clone(tmp_path / "bad"))
+    runner = running_step(Path(bad.path), sessions=2)
+    (Path(bad.path) / ".git" / "owlbear-delivery" / "format").write_text("99\n")
+    machine.load_all()
+    assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 2)
+    refused = http.delete(f"/api/next/projects/{bad.id}")
+    assert (refused.status_code, refused.json()["detail"]) == (
+        409, "bad has steps of c1 not confirmed ended; it must load again to check them"
+    )  # fmt: skip
+    runner.unlink()  # as a host's check of its processes does
+    assert http.delete(f"/api/next/projects/{bad.id}").json() == {"removed": bad.id}
+    assert machine.slots.counts(bad.id)[2] == 0
 
 
 def test_removal_is_refused_while_a_step_runs_and_then_stops_the_project_before_forgetting_it(tmp_path, http, machine):
@@ -259,8 +275,10 @@ def test_a_reclone_is_shown_replaced_until_adopted(tmp_path, http, machine):
     machine.load_all()
     pid = registry.load().projects[0].id
     assert http.get("/api/next/projects").json()["projects"][0]["state"] == "replaced"
+    machine.slots.restore(pid, {"c1": 2})  # counted while it failed to load (TD-336)
     adopted = http.post(f"/api/next/projects/{pid}/adopt").json()
     assert (adopted["state"], adopted["id"] != pid) == ("loaded", True)
+    assert machine.slots.counts(pid)[2] == 0  # Sol: the old id holds nothing once the new clone takes its place
 
 
 def test_clones_sharing_a_settings_folder_are_each_others_peers(machine):
@@ -374,9 +392,10 @@ def test_the_machine_s_own_values_are_read_apart_from_any_settings_layer(http, m
 
 
 def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(http):
-    """TD-288, TD-300: channel and the two update switches, refused when another page saved first."""
+    """TD-288, TD-300, TD-336: channel, the two update switches and the sessions at once, refused when another page
+    saved first."""
     read = http.get("/api/next/machine").json()
-    chosen = {"channel": "major", "update_when_idle": False, "update_while_paused": True}
+    chosen = {"channel": "major", "update_when_idle": False, "update_while_paused": True, "sessions": 3}
     saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     wrong = http.put("/api/next/machine/settings", json={"rev": "x", "settings": {"channel": "nightly"}})

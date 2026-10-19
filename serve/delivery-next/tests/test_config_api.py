@@ -12,6 +12,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Store
 
@@ -46,8 +47,8 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
     got = client(store, headers=AUTH).get("/api/next/config").json()
 
     assert got["project"] == {
-        "format": 6, "agents": {}, "runtimes": {}, "widths": None, "preparations": None, "data": None,
-        "design_failures": None, "final_review": None, "pr_labels": None, "pr_marker": None,
+        "format": F, "agents": {}, "runtimes": {}, "widths": None, "preparations": None, "data": None,
+        "design_failures": None, "final_review": None, "pr_labels": None, "pr_marker": None, "sessions": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -66,7 +67,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes", "pr_labels", "pr_marker",
         "agents.planner.subagents", "agents.builder.subagents", "agents.reviewer.subagents",
         "agents.challenger.subagents", "agents.design-judge.subagents", "agents.preparer.subagents",
-        "agents.updater.subagents",
+        "agents.updater.subagents", "sessions",
     ]  # fmt: skip
     assert len(got["project_rev"]) == 64
 
@@ -132,7 +133,7 @@ def test_the_challenge_round_values_are_saved_per_loop(store):
 def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
-    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 6, **layer}})
+    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": F, **layer}})
 
     assert r.status_code == 422
     assert not (store.root / "config.json").exists()
@@ -141,21 +142,21 @@ def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
 def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tmp_path):
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
-    r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 6, "visible": True}})
+    r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "visible": True}})
     assert r.status_code == 409
     assert "location" in r.json()["detail"]
 
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
-    assert (got["global"], got["global_location"]) == ({"format": 6, "agents": {}, "runtimes": {}, "widths": None,
+    assert (got["global"], got["global_location"]) == ({"format": F, "agents": {}, "runtimes": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
-                                                         "pr_marker": None, "visible": None},
+                                                         "pr_marker": None, "sessions": None, "visible": None},
                                                         True)  # fmt: skip
-    data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": 6, "data": {}}})
+    data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})
     assert data.status_code == 422  # test preparation is a project setting (TD-96)
-    layer = {"format": 6, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
+    layer = {"format": F, "visible": True, "agents": {"builder": {"model": "g-1", "effort": "high"}}}
     r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": layer})
     assert r.status_code == 200
     assert json.loads(path.read_text())["visible"] is True
@@ -170,7 +171,7 @@ def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store
     first = c.get("/api/next/config").json()
     a = first["project"] | {"agents": {"builder": {"effort": "low"}}}
     c.put("/api/next/config/project", json={"rev": first["project_rev"], "layer": a})
-    newer = {"format": 6, "agents": {"builder": {"effort": "high"}}, "runtimes": {}, "widths": None}
+    newer = {"format": F, "agents": {"builder": {"effort": "high"}}, "runtimes": {}, "widths": None}
     path, real_text, real_bytes = store.root / "config.json", Path.read_text, Path.read_bytes
     landed = []
 
@@ -196,7 +197,7 @@ def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store
 
 
 def test_saves_need_the_token_and_a_local_host(store):
-    body = {"rev": "x", "layer": {"format": 6}}
+    body = {"rev": "x", "layer": {"format": F}}
     assert client(store).put("/api/next/config/project", json=body).status_code == 401
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://example.com", headers=AUTH)
     assert c.put("/api/next/config/project", json=body).status_code == 403
@@ -207,11 +208,11 @@ def test_a_stale_or_invalid_global_save_changes_nothing(store, tmp_path):
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
-    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 6, "visible": True}})
+    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "visible": True}})
     assert ok.status_code == 200
     before = path.read_bytes()
 
-    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 6, "visible": False}})
+    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "visible": False}})
     bad = c.put("/api/next/config/global", json={"rev": ok.json()["global_rev"], "layer": {"widths": [100]}})
 
     assert (stale.status_code, bad.status_code) == (409, 422)
@@ -222,9 +223,9 @@ def test_global_round_values_are_valid_on_their_own_whatever_this_project_overri
     path = tmp_path / "global" / "config.json"
     c = client(store, path, headers=AUTH)
     got = c.get("/api/next/config").json()
-    mine = {"format": 6, "agents": {"builder": {"last_round_at": 1}}}
+    mine = {"format": F, "agents": {"builder": {"last_round_at": 1}}}
     assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": mine}).status_code == 200
-    hidden = {"format": 6, "agents": {"builder": {"last_round_at": 8}}}  # above the default ask-owner value 7
+    hidden = {"format": F, "agents": {"builder": {"last_round_at": 8}}}  # above the default ask-owner value 7
     r = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": hidden})
     assert (r.status_code, path.exists(), c.get("/api/next/config").status_code) == (422, False, 200)
 
@@ -237,7 +238,7 @@ def test_round_values_stored_out_of_fit_show_on_the_page_to_be_fixed(store, tmp_
     got = c.get("/api/next/config").json()
     assert got["notice"].startswith("The challenge-round values in use here do not fit together (Value error, last")
     assert got["settings"]["agents"]["builder"]["last_round_at"] == 4  # shown without them meanwhile
-    fixed = {"format": 6, "agents": {"builder": {"ask_owner_at": 9}}}
+    fixed = {"format": F, "agents": {"builder": {"ask_owner_at": 9}}}
     saved = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": fixed}).json()
     assert saved["settings"]["agents"]["builder"]["last_round_at"] == 8
     assert saved["notice"].startswith("The challenge-round values of the global layer and this machine do not fit")
@@ -256,7 +257,7 @@ def test_a_global_save_must_suit_every_project_sharing_it(tmp_path):
     c = client(store, root / "config.json", headers=AUTH)
     rev = c.get("/api/next/config").json()["global_rev"]
     for layer in ({"agents": {"builder": {"ask_owner_at": 6}}}, {"final_review": {"ask_owner_at": 6}}):
-        r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": 6, **layer}})
+        r = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, **layer}})
         assert (r.status_code, (root / "config.json").exists()) == (422, False)  # b's last round at 6 needs more
 
 
@@ -267,7 +268,7 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", full)
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
-    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": 6}})
+    r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": F}})
 
     assert r.status_code == 503
     assert r.json()["detail"] == "the settings could not be saved: No space left on device"
@@ -339,9 +340,9 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
     c = client(store, store.global_path, headers=AUTH)
     got = c.get("/api/next/config").json()
     assert (got["machine"]["agents"], got["inherited"]["machine"]["agents"]["builder"]["effort"]) == ({}, "medium")
-    glob = {"format": 6, "agents": {"builder": {"effort": "high", "minutes": 50}, "planner": {"effort": "low"}}}
+    glob = {"format": F, "agents": {"builder": {"effort": "high", "minutes": 50}, "planner": {"effort": "low"}}}
     got = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": glob}).json()
-    machine = {"format": 6, "agents": {"builder": {"effort": "xhigh", "minutes": 60}}}
+    machine = {"format": F, "agents": {"builder": {"effort": "xhigh", "minutes": 60}}}
     saved = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": machine})
     assert saved.status_code == 200
     s, sources = saved.json()["settings"], saved.json()["settings"]["sources"]
@@ -349,7 +350,7 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
     assert (s["agents"]["planner"]["effort"], sources["agents.planner.effort"]) == ("low", "global")
     assert saved.json()["inherited"]["project"]["agents"]["builder"]["minutes"] == 60  # a blank project field
     assert saved.json()["inherited"]["machine"]["agents"]["builder"]["minutes"] == 50  # a blank machine field
-    project = {"format": 6, "agents": {"builder": {"effort": "low"}}}
+    project = {"format": F, "agents": {"builder": {"effort": "low"}}}
     mine = c.put("/api/next/config/project", json={"rev": saved.json()["project_rev"], "layer": project}).json()
     assert (mine["settings"]["agents"]["builder"]["effort"], mine["settings"]["sources"]["agents.builder.minutes"]) == (
         "low", "machine"
@@ -362,7 +363,7 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
     ).stdout  # fmt: skip
     assert "machine" not in shown  # never published
     assert not list(root.glob("**/settings.json"))
-    stale = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": {"format": 6}})
+    stale = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": {"format": F}})
     assert stale.status_code == 409
 
 
@@ -373,19 +374,19 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
 def test_this_machine_s_layer_refuses_project_and_global_settings_and_combinations_that_do_not_fit(store, layer):
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["machine_rev"]
-    r = c.put("/api/next/config/machine", json={"rev": rev, "layer": {"format": 6, **layer}})
+    r = c.put("/api/next/config/machine", json={"rev": rev, "layer": {"format": F, **layer}})
     assert (r.status_code, store.machine_path.exists()) == (422, False)  # 8 is above the default ask-owner value 7
 
 
 def test_this_machine_s_layer_must_fit_every_project_loaded_on_this_machine(store, tmp_path):
     """Sol: a project of this machine outside the shared repository is checked too, and named."""
     there = Store(tmp_path / "there")
-    there.update_config(lambda _l: Layer.model_validate({"format": 6, "agents": {"builder": {"last_round_at": 6}}}))
+    there.update_config(lambda _l: Layer.model_validate({"format": F, "agents": {"builder": {"last_round_at": 6}}}))
     host = Host()
     host.machine = lambda: [there, store]
     c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)
     rev = c.get("/api/next/config").json()["machine_rev"]
-    layer = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}
+    layer = {"format": F, "agents": {"builder": {"ask_owner_at": 6}}}
     refused = c.put("/api/next/config/machine", json={"rev": rev, "layer": layer})
     assert (refused.status_code, store.machine_path.exists()) == (422, False)  # fits here, not there
     assert refused.json()["detail"].startswith(f"it does not fit the project {there.root}:")
@@ -396,16 +397,16 @@ def test_this_machine_s_layer_must_fit_every_project_loaded_on_this_machine(stor
 def test_a_project_only_in_the_shared_repository_never_meets_this_machine_s_layer(store, shared_repo):
     """Sol: a global save is checked with this machine's layer for this machine's projects only."""
     root = shared_repo[0]
-    elsewhere = {"format": 6, "agents": {"builder": {"last_round_at": 6}}}  # a project of another machine
+    elsewhere = {"format": F, "agents": {"builder": {"last_round_at": 6}}}  # a project of another machine
     (root / "elsewhere").mkdir()
     (root / "elsewhere" / "config.json").write_text(json.dumps(elsewhere))
     store = Store(store.root, data_repo.DataRepo(root), "shop")
     c = client(store, store.global_path, headers=AUTH)
     got = c.get("/api/next/config").json()
-    machine = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}
+    machine = {"format": F, "agents": {"builder": {"ask_owner_at": 6}}}
     assert c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": machine}).status_code == 200
-    minutes = {"format": 6, "agents": {"builder": {"minutes": 50}}}
+    minutes = {"format": F, "agents": {"builder": {"minutes": 50}}}
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": minutes}).status_code == 200
     got = c.get("/api/next/config").json()
-    unfit = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}  # the other project's own 6 needs more
+    unfit = {"format": F, "agents": {"builder": {"ask_owner_at": 6}}}  # the other project's own 6 needs more
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": unfit}).status_code == 422

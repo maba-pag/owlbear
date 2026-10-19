@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Stop
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import in_window
 from owlbear_delivery_next.change_flow import loop
@@ -29,6 +29,33 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 type Result = loop.StepResult
+GRANT: int | None = None  # the agent sessions this runner may run at once; set from --sessions (TD-336)
+NOT_RUN = "not run: a judge of an earlier wave may still run"
+
+
+class SessionGrantError(Exception):
+    """A session asked for under a grant of 0: a scheduling bug, refused before any adapter starts (TD-336)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(f"Delivery started {label} with no session slot granted to its step")
+
+    def result(self, now: datetime) -> Result:
+        """The stop that hands the bug to the owner."""
+        stop = Stop(
+            kind=ErrorKind.STATE,
+            reason=str(self),
+            action="Report this scheduling bug; Resume runs the step again with a new grant",
+            resume="You pressed Resume",
+            at=now,
+        )
+        return loop.StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
+
+
+def granted(label: str) -> int:
+    """How many sessions may run at once; none under a grant of 0."""
+    if GRANT == 0:
+        raise SessionGrantError(label)
+    return GRANT or sys.maxsize
 
 
 class UsageUnreadError(Exception):
@@ -61,6 +88,7 @@ def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> sessio
     Either runtime's unknown model stops the Change for the owner (TD-94), unless the caller *holds* the run to
     decide it with others, as a visual round does.
     """
+    granted(cfg.job or str(cfg.kind))
     if in_window(store.read_profile()):
         done = vscode_adapter.run(cfg, store.root / "steps" / f"{uuid.uuid4().hex}.json")
     else:
@@ -170,7 +198,9 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
         return cfgs
 
     def ran(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
-        return [run(store, cfgs[0], hold=hold)] if len(cfgs) == 1 else asyncio.run(_together(cfgs))
+        if len(cfgs) == 1:
+            return [run(store, cfgs[0], hold=hold)]
+        return _waves(cfgs, lambda left: store.log(lock, change.slug, {"event": "wave", "at": _at(), "left": left}))
 
     window = in_window(store.read_profile())
     runs = isolated(store, lock, change, source, fresh, ran, each=window)
@@ -271,6 +301,28 @@ def _closed(store: Store, lock: Lock, change: Change, copy: disposable.Copy, run
             r.ending, r.payload, r.first, r.head, r.detail = "read-only-write", None, None, None, reason
     if all(r.termination and r.termination.confirmed for r in runs):
         disposable.settled(store.root / "changes" / change.slug)
+
+
+def _at() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _waves(cfgs: list[sdk_adapter.Session], told: Callable[[int], None]) -> list[session_result.Run]:
+    """Judges together in plan order, at most the grant at once (TD-336); *told* gets how many are left per wave.
+
+    After a wave whose session is not confirmed gone no further wave starts: the rest are not run, so the round
+    stops on that session and never reaches a verdict.
+    """
+    size, runs = granted(cfgs[0].job or str(cfgs[0].kind)), list[session_result.Run]()
+    for first in range(0, len(cfgs), size):
+        if any(not (r.termination and r.termination.confirmed) for r in runs):
+            break
+        if size < len(cfgs):
+            told(len(cfgs) - first)
+        runs += asyncio.run(_together(cfgs[first : first + size]))
+    done = Termination(confirmed=True)  # never started
+    rest = [session_result.Run(c.session_id, "error", detail=NOT_RUN, termination=done) for c in cfgs[len(runs) :]]
+    return runs + rest
 
 
 async def _together(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:

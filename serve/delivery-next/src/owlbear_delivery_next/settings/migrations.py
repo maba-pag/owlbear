@@ -110,6 +110,18 @@ def subagents_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def sessions_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 6 to 7: agent sessions at once per project (TD-336); older runtimes refuse format 7."""
+    return data
+
+
 CHANGE: Migrations = {1: brief_challenged, 2: visual_decided, 3: rounds_kept, 4: labelled_added}
 PROFILE: Migrations = {1: roles_moved}
-CONFIG: Migrations = {1: seed_dropped, 2: judge_renamed, 3: minutes_added, 4: labels_added, 5: subagents_added}
+CONFIG: Migrations = {
+    1: seed_dropped,
+    2: judge_renamed,
+    3: minutes_added,
+    4: labels_added,
+    5: subagents_added,
+    6: sessions_added,
+}

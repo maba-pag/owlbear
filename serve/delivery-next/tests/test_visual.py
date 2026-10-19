@@ -53,7 +53,7 @@ from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import check, decision, held, judges, merge, visual
+from owlbear_delivery_next.workflow_steps import check, decision, held, judges, merge, sessions, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -488,6 +488,38 @@ def test_the_detectors_findings_are_recorded_as_evidence_and_never_fail_the_chec
         ("home", "page", [("old", ".card", "existing"), ("fresh", ".card", "new")]),
         ("sources", "source", [("tiny-text", "web/app.css:1", "new")]),  # the file is new on the Change
     ]
+
+
+@pytest.mark.parametrize(("grant", "peak", "left"), [(None, 2, []), (1, 1, [2, 1]), (2, 2, [])])
+def test_the_judges_run_in_waves_of_at_most_the_runners_grant(flow, grant, peak, left):
+    flow.mp.setattr(sessions, "GRANT", grant)
+    running, most, inner = [0], [0], flow.review
+
+    async def counted(cfg):
+        running[0] += 1
+        most[0] = max(most[0], running[0])
+        await asyncio.sleep(0.01)  # the other judges of its wave start meanwhile
+        try:
+            return await inner(cfg)
+        finally:
+            running[0] -= 1
+
+    flow.mp.setattr(runner.sdk_adapter, "run", counted)
+    c = checking(flow.store, flow.clone)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    assert (most[0], len(inner.calls), len(inner.designs), after.visual.passed) == (peak, 1, 1, True)
+    assert [e["left"] for e in flow.store.events("c1") if e.get("event") == "wave"] == left
+
+
+def test_a_wave_left_running_stops_the_round_and_no_further_judge_starts(flow):
+    flow.mp.setattr(sessions, "GRANT", 1)
+    flow.review.termination = processes.Termination(confirmed=False, survivors=(4242,))
+    c = checking(flow.store, flow.clone)
+    runner._visual(flow.store, Lock("c1"), c, flow.clone)  # noqa: SLF001
+    after = flow.store.read("c1")
+    assert (len(flow.review.calls), flow.review.designs) == (1, [])  # the design judge never started
+    assert (after.outcome.exit, after.stop.action, after.visual) == (Exit.STOP, "End processes 4242", None)
 
 
 def test_both_judges_run_and_the_round_keeps_the_design_judges_blind_two_phase_verdict(flow):

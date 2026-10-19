@@ -133,6 +133,9 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(labels).to_have_value("inherit")
         labels.fill("release:minor, owlbear")
         page.get_by_label("The line Opened by OwlBear Delivery").select_option("off")
+        at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
+        expect(at_once).to_have_attribute("placeholder", "inherit (2)")
+        at_once.fill("3")
         page.get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         page.get_by_label("Layer").select_option("global")
@@ -142,7 +145,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
     assert (project.agents["builder"].max_rounds, project.design_failures, project.agents["builder"].minutes) == (
         4, "back", None
     )  # fmt: skip
-    assert (project.pr_labels, project.pr_marker) == (["release:minor", "owlbear"], False)
+    assert (project.pr_labels, project.pr_marker, project.sessions) == (["release:minor", "owlbear"], False, 3)
     assert not store.global_path.exists()
 
 

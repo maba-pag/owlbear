@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK, CLONE_ID = "machine.json", "machine.lock", "clone-id"
-MACHINE_FORMAT = 2  # 2: the machine's own settings (TD-243, TD-288, TD-300)
+MACHINE_FORMAT = 3  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions at once (TD-336)
 STALE = "the machine settings changed since this page loaded them"
 
 
@@ -51,6 +51,7 @@ class Settings(Record):
     channel: Literal["minor", "major"] = "minor"  # every minor version, or major versions only (TD-300)
     update_when_idle: bool = True  # TD-288
     update_while_paused: bool = True
+    sessions: int = Field(default=4, ge=1)  # TD-336: agent sessions at once on this machine, all projects together
 
 
 class Machine(Record):

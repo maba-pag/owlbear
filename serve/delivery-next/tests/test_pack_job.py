@@ -23,6 +23,7 @@ from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.design_packs import calibration, design_pack, pack_git, pack_update
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.pack_runs import pack_job, pack_rounds, pack_updater
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.admission import STOPPING
@@ -793,6 +794,10 @@ class Host:
     draining = staticmethod(lambda: False)
     closed = staticmethod(lambda: False)
     launching = threading.Lock()
+
+    def __init__(self) -> None:  # the session slots its pack sessions take (TD-336)
+        self.slots, self.stopped = Slots(lambda: 4), threading.Event()
+        self.store = SimpleNamespace(root=Path("/project"), settings=lambda: SimpleNamespace(sessions=2))
 
 
 def test_a_pause_holds_no_update_but_a_stop_holds_its_start_and_answers(tmp_path, checkout, clone):

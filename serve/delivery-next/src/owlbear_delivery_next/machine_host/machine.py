@@ -6,19 +6,25 @@ owner pauses again with Pause, or with Pause and stop when idle (TD-288), which 
 
 from __future__ import annotations
 
+import contextlib
+import subprocess
 import sys
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
+from owlbear_delivery_next.local_system.git_files import git_common_dir
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import Project
-from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.machine_host.registry import Settings
+from owlbear_delivery_next.project_host.host import RunnerRecord
+from owlbear_delivery_next.state_store.store import STORE_DIR, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.project_host.host import Host, HostRecord
 
@@ -35,6 +41,21 @@ class MachineError(Exception):
         self.status, self.text = status, text
 
 
+def recorded(repo: Path) -> dict[str, int]:
+    """The sessions a project's runners hold, read from their records while no host serves it (TD-336).
+
+    A record goes only once a host confirms its runner and processes gone, so each one counts; a project whose
+    records cannot be read counts none.
+    """
+    held = {}
+    with contextlib.suppress(OSError, subprocess.CalledProcessError):
+        for path in (git_common_dir(repo) / STORE_DIR / "changes").glob("*/runner.json"):
+            with contextlib.suppress(OSError, ValueError):
+                if sessions := RunnerRecord.model_validate_json(path.read_text()).sessions:
+                    held[path.parent.name] = sessions
+    return held
+
+
 class Machine:
     """Every registered project, loaded once; requests about them are serialized by ``lock``."""
 
@@ -46,6 +67,14 @@ class Machine:
         self.lock = threading.RLock()
         self.stopping = threading.Event()
         self.on_stop: Callable[[], None] = lambda: None
+        self.total = Settings().sessions
+        self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
+
+    def _sessions(self) -> int:
+        """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
+        with contextlib.suppress(registry.RegistryError):
+            self.total = registry.load().settings.sessions
+        return self.total
 
     def say(self, text: str) -> None:
         """Write one line to the machine host's log."""
@@ -62,11 +91,14 @@ class Machine:
             h.machine = lambda: [o.store for o in list(self.projects.values()) if o.store]  # a failed host's too
             h.draining = lambda: self.ending
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
+            h.slots = self.slots
 
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
+        if p.state == "failed":
+            self.slots.restore(entry.id, recorded(Path(entry.path)))  # its runners may live on without a host
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 
@@ -87,6 +119,7 @@ class Machine:
         with self.lock:
             for entry in registry.load().projects:
                 self._load(entry)
+        self.slots.open()  # a project that failed to load counts its live steps once it loads
 
     def retry(self) -> None:
         """Load again each project that failed or was replaced."""
@@ -122,10 +155,14 @@ class Machine:
         """Stop and forget a project; refused, naming them, while its steps or admitted work still run."""
         with self.lock:
             p = self.get(pid)
+            if p.state == "failed" and (live := recorded(Path(p.entry.path))):  # no host confirms them gone (TD-336)
+                msg = f"{p.name} has steps of {', '.join(live)} not confirmed ended; it must load again to check them"
+                raise MachineError(409, msg)
             if left := p.stop(refuse=True):
                 raise MachineError(409, f"{p.name} still runs {', '.join(left)}; remove it once they end")
             registry.remove(pid)
             del self.projects[pid]
+            self.slots.restore(pid, {})
             self.say(f"{p.name}: removed")
 
     def adopt(self, pid: str) -> Project:
@@ -139,7 +176,10 @@ class Machine:
             except registry.RegistryError as exc:
                 raise MachineError(409, str(exc)) from exc
             del self.projects[pid]
-            return self._load(entry)
+            p = self._load(entry)
+            self.slots.leave(pid)  # only once the clone now at its path counts its own runners: never a gap
+            self.slots.restore(pid, {})
+            return p
 
     def resume(self) -> None:
         """The owner's Resume: work starts again in every project; a stop when idle is cancelled."""

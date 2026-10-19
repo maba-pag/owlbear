@@ -39,6 +39,7 @@ _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "step": lambda e: f"{e.get('kind')} ended: {e.get('exit')}",
     "pids": lambda _e: "started a process",
     "force-stop": lambda _e: "stopped the session",
+    "wave": lambda _e: "started judges",
 }
 _WHO = {
     Waiting.CI: "CI",
@@ -72,6 +73,7 @@ class Activity:
     last_event_at: datetime | None = None
     start_failure: Stop | None = None
     paused: bool = False  # Delivery itself waits for Resume (TD-259)
+    waiting_slot: str = ""  # how full the session slots are while its step waits for one (TD-336)
 
 
 @dataclass(frozen=True)
@@ -140,6 +142,7 @@ def card(
         said = _SAID.get(last["event"], lambda e: str(e["event"]))(last)
         line += f" · {said} {_age(now - datetime.fromisoformat(last['at']))} ago"
     failing, quiet = _episode(c, now)
+    line += _left(events, since)
     if failing:
         line += f" · {failing}"
     step = sum(
@@ -154,6 +157,15 @@ def card(
         "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2), "unknown": len(c.spend.unread)},
         "overlaps": [f"overlaps with {o.other}: {', '.join(o.paths[:5])}" for o in c.overlaps],
     }
+
+
+def _left(events: list[dict[str, Any]], since: datetime | None) -> str:
+    """A visual round running in waves: the judges not yet ended when its latest wave started (TD-336)."""
+    wave = next((e for e in reversed(events) if e.get("event") == "wave"), None)
+    if wave and since and datetime.fromisoformat(wave["at"]) >= since:
+        n = wave["left"]
+        return f" · {n} judge{'s' if n != 1 else ''} left"
+    return ""
 
 
 def passes(c: Change, now: datetime) -> bool:
@@ -247,4 +259,6 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return Status(f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}", None, "delivery")
     if activity.holder_pid:
         return Status(f"{s} · not running: waiting for process {activity.holder_pid} to end", None, "delivery")
+    if activity.waiting_slot:
+        return Status(f"{s} · waiting for a session slot ({activity.waiting_slot})", None, "delivery")
     return Status(f"{s} · not running: starting {role}", None, "delivery")

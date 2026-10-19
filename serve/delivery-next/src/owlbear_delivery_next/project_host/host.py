@@ -20,22 +20,18 @@ import psutil
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import failures
-from owlbear_delivery_next.change_contracts.models import (
-    VISUAL,
-    ErrorKind,
-    Exit,
-    Record,
-    StepKind,
-    Stop,
-    Waiting,
-)
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Record, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
 from owlbear_delivery_next.local_system import codebase, data_repo, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.project_host import environment
+from owlbear_delivery_next.project_host import environment, session_slots
+from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
+from owlbear_delivery_next.project_host.runner_end import block as _block
+from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
@@ -57,7 +53,6 @@ PROBE = timedelta(seconds=10)  # between network probes while a Change waits on 
 PROBE_TIMEOUT = 3.0
 RESTART = "Delivery's code changed since the host started; restart the host"
 ENDING = "OwlBear stops once the running steps end; press Resume to cancel"
-type Found = dict[int, str]
 
 
 class HostRecord(Record):
@@ -78,6 +73,7 @@ class RunnerRecord(Record):
     pid: int
     created: float | None
     started_at: datetime
+    sessions: int = 0  # the agent sessions it was granted at once (TD-336), held until it is confirmed gone
 
 
 def running(store: Store) -> HostRecord | None:
@@ -115,48 +111,19 @@ def offline(c: Change, now: datetime) -> bool:
     return failures.kind_of(o.cause) == ErrorKind.NETWORK and o.wake_at is not None and o.wake_at > now
 
 
-def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool = False) -> Activity:
+def activity(store: Store, slug: str, host: HostRecord | None, *, paused: bool = False, waiting: str = "") -> Activity:
     """Observed liveness for the status line: the Change lock's holder, unless it is the host itself."""
     holder = store.holder(slug)
     runner = holder is not None and (host is None or holder.pid != host.pid)
     last = next((e["at"] for e in reversed(store.events(slug)) if "at" in e), None)
     at = datetime.fromisoformat(last) if last else None
     pid = holder.pid if runner and holder else None
-    return Activity(host_up=host is not None, runner_alive=runner, holder_pid=pid, last_event_at=at, paused=paused)
+    up = host is not None
+    return Activity(up, runner, pid, at, paused=paused, waiting_slot="" if runner else waiting)
 
 
 def _scan(path: Path, since: datetime) -> Found:
     return dict(ProcessTableWorktreeProbe().active_processes((path,), started_after=since))
-
-
-def _block(found: Found | None, now: datetime) -> Stop:
-    if found is None:
-        reason, action = "the process table could not be scanned", "Check that no process of this step remains"
-    else:
-        named = ", ".join(f"{p} ({n})" if n else str(p) for p, n in sorted(found.items()))
-        reason, action = f"processes still present: {named}", f"End processes {', '.join(map(str, sorted(found)))}"
-    return Stop(kind=ErrorKind.LIVENESS, reason=reason, action=action, resume="The host sees none of them", at=now)
-
-
-def _unverified(c: Change) -> bool:
-    return bool(c.stop and c.stop.kind == ErrorKind.LIVENESS and c.outcome and c.outcome.exit == Exit.STOP)
-
-
-def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:
-    """Whether the runner ended without committing an exit while its step was runnable.
-
-    A person check's environment means its preparer already exited; the visual runner captures while one exists.
-    A "before" capture the runner recorded counts as its exit (TD-24).
-    """
-    o, env, b = prior.outcome, prior.env, prior.before
-    runner = env is None or env.check == VISUAL
-    return not any(r and r.at >= rec.started_at for r in (o, b)) and runner and loop.next_step(prior, now) is not None
-
-
-def gone(kind: StepKind) -> loop.StepResult:
-    """One counted liveness retry for a runner that disappeared, so a repeating startup failure escalates."""
-    cause = failures.cause_key(ErrorKind.LIVENESS, kind, "runner-gone")
-    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason="the runner ended without recording an exit")
 
 
 class Host:
@@ -187,6 +154,8 @@ class Host:
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
         self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
         self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
+        self.slots, self.wants, self.grants = Slots(lambda: session_slots.ALL), dict[str, int](), dict[str, int]()
+        self.waiting, self.asked = set[str](), set[str]()  # Changes waiting for a session slot (TD-336)
         self.wake, self.stopped, self.launching = threading.Event(), threading.Event(), threading.Lock()
         self.pr_states: dict[str, PrState] = {}
         self.pr_seen: dict[str, tuple[float, Seen]] = {}
@@ -216,7 +185,7 @@ class Host:
 
     def activity(self, slug: str) -> Activity:
         """Liveness of one Change as this host sees it."""
-        return activity(self.store, slug, self.record, paused=self.paused())
+        return activity(self.store, slug, self.record, paused=self.paused(), waiting=session_slots.waiting(self, slug))
 
     def observe_pr(self, slug: str) -> Seen:
         """The PR's terminal state and consent-wait news, observed before a waiting Change is skipped; once per poll."""
@@ -238,14 +207,18 @@ class Host:
         slugs = self.store.slugs()
         self.offline &= set(slugs)
         self.back = {s: t for s, t in self.back.items() if s in slugs}
-        for slug in slugs:
-            try:
-                if self._one(slug, now or datetime.now(UTC)) and self._launch(slug):
-                    launched.append(slug)
-            except LockHeldError:
-                continue
-            except StoreError as exc:
-                self._unloadable(slug, str(exc))
+        try:
+            for slug in slugs:
+                try:
+                    if self._one(slug, now or datetime.now(UTC)) and self._launch(slug):
+                        launched.append(slug)
+                except LockHeldError:
+                    continue
+                except StoreError as exc:
+                    self._unloadable(slug, str(exc))
+        finally:  # who waits for a slot after this pass, even one that failed: no wait outlives its asking
+            self.waiting, self.asked = self.asked, set()
+            self.slots.keep(session_slots.project(self), self.waiting)
         return launched
 
     def interval(self) -> float:
@@ -325,6 +298,7 @@ class Host:
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
+            self.wants[slug] = session_slots.wanted(c, step)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 
     def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change:
@@ -368,6 +342,7 @@ class Host:
             c.stop = c.outcome = None
         c.blocked = None
         self._path(c.slug).unlink(missing_ok=True)
+        session_slots.release(self, c.slug)  # its sessions are confirmed gone with it (TD-336)
         disposable.settled(self.store.root / "changes" / c.slug)
         return True
 
@@ -455,11 +430,17 @@ class Host:
         recent = [t for t in self.launches.get(slug, []) if time.monotonic() - t < BURST[1]]
         if len(recent) >= BURST[0]:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
-        self.launches[slug] = [*recent, time.monotonic()]
         with self.launching:  # a project folder rename or a project's stop waits, so no runner starts during it
             if self.paused() and not (slug in self.passing and self.owner_runs()):
                 return False
-            rec = self.spawn(slug)
+            if (granted := session_slots.reserve(self, slug)) is None:
+                return False  # waits for a session slot (TD-336); no launch is counted
+            self.launches[slug], self.grants[slug] = [*recent, time.monotonic()], granted
+            try:
+                rec = self.spawn(slug).model_copy(update={"sessions": granted})
+            except BaseException:
+                session_slots.release(self, slug)
+                raise
             atomic_write(self._path(slug), rec.model_dump_json())
         self.say(f"{slug}: runner {rec.pid} started")
         return True
@@ -467,6 +448,7 @@ class Host:
     def _spawn(self, slug: str) -> RunnerRecord:
         started = datetime.now(UTC)  # before the runner can commit, so its exit is later than this
         argv = [sys.executable, "-m", "owlbear_delivery_next", "run", slug, "--repo", str(self.repo)]
+        argv += ["--sessions", str(self.grants.pop(slug, 1))]  # what its agent sessions may use at once (TD-336)
         with (self.store.root / "changes" / slug / "runner.log").open("ab") as out:
             proc = subprocess.Popen(  # noqa: S603 - this interpreter and a fixed module
                 argv,

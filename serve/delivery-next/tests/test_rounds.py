@@ -15,7 +15,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import rounds
-from owlbear_delivery_next.settings.config import Agent, FinalReview, GlobalLayer, Layer, resolve
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Agent, FinalReview, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import review
 
@@ -60,15 +60,15 @@ def test_layers_that_do_not_combine_are_refused_on_save_and_stop_a_run(tmp_path)
     store.global_path = tmp_path / "global.json"
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
     got = c.get("/api/next/config").json()
-    layer = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}
+    layer = {"format": CONFIG_FORMAT, "agents": {"builder": {"ask_owner_at": 6}}}
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": layer}).status_code == 200
     got = c.get("/api/next/config").json()
-    clash = {"format": 6, "agents": {"builder": {"last_round_at": 6}}}  # valid alone, not over the global layer
+    clash = {"format": CONFIG_FORMAT, "agents": {"builder": {"last_round_at": 6}}}  # valid alone, not over the global
     assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": clash}).status_code == 422
-    fits = {"format": 6, "agents": {"builder": {"last_round_at": 5}}}
+    fits = {"format": CONFIG_FORMAT, "agents": {"builder": {"last_round_at": 5}}}
     assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": fits}).status_code == 200
     got = c.get("/api/next/config").json()
-    under = {"format": 6, "agents": {"builder": {"ask_owner_at": 5}}}  # valid alone, not under the project layer
+    under = {"format": CONFIG_FORMAT, "agents": {"builder": {"ask_owner_at": 5}}}  # valid alone, not under the project
     assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": under}).status_code == 422
     path = Path(store.config_path)
     path.parent.mkdir(parents=True, exist_ok=True)
