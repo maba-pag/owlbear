@@ -168,33 +168,45 @@ def _others(store: Store) -> list[Layer]:
     return layers
 
 
-def _combined(store: Store, new: Layer) -> None:
+def _combined(store: Store, new: Layer, host: Host) -> None:
     """Resolve *new* with the other layers wherever it applies; a ValidationError says it does not fit (TD-209).
 
-    A wide layer applies to every project in the shared repository and to a project without values of its own.
+    The global layer applies to every project in the shared repository and to a project without values of its own;
+    this machine's layer to every project loaded on this machine.
+
+    Raises:
+        HTTPException: This machine's layer does not fit one of its projects, which is named.
     """
     glob = read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None
     machine = read_layer_bytes(store.machine_path, MachineLayer)[0]
-    projects = [store.read_config(), *_others(store), Layer()]
     if isinstance(new, GlobalLayer):
-        for layer in projects:
+        for layer in [store.read_config(), *_others(store), Layer()]:
             resolve(new, layer)  # on a machine without its own values
             resolve(new, layer, machine)
     elif isinstance(new, MachineLayer):
-        for layer in projects:
-            resolve(glob, layer, new)
+        resolve(glob, Layer(), new)
+        stores = [store, *(h.store for h in getattr(host, "machine", list)() if h.store is not store)]  # no host: one
+        for s in stores:
+            with contextlib.suppress(StoreError):  # a project whose layer does not read is that project's to fix
+                try:
+                    resolve(glob, s.read_config(), new)
+                except ValidationError as exc:
+                    why = "; ".join(e["msg"] for e in exc.errors(include_url=False))
+                    raise HTTPException(422, f"it does not fit the project {s.name or s.root}: {why}") from exc
     else:
         resolve(glob, new, machine)
 
 
-def _save[T: Layer](store: Store, path: Path, model: type[T], body: Save, what: str) -> str:
+def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's projects for its layer
+    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host
+) -> str:
     """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice.
 
     This machine's layer is written in place and never published (TD-336).
     """
     try:
         new = model.model_validate(body.layer)
-        _combined(store, new)
+        _combined(store, new, host)
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
     except StoreError as exc:
@@ -270,18 +282,18 @@ def router(store: Store, host: Host) -> APIRouter:
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
-        notice = _save(store, store.config_path, Layer, body, f"{store.name or 'the project'}: from the settings page")
-        return _state(store, notice)
+        what = f"{store.name or 'the project'}: from the settings page"
+        return _state(store, _save(store, store.config_path, Layer, body, what, host))
 
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page"))
+        return _state(store, _save(store, store.global_path, GlobalLayer, body, "global: from the settings page", host))
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:
-        return _state(store, _save(store, store.machine_path, MachineLayer, body, "this machine"))
+        return _state(store, _save(store, store.machine_path, MachineLayer, body, "this machine", host))
 
     @routes.put("/config/folder")
     def put_folder(body: Folder) -> dict[str, Any]:

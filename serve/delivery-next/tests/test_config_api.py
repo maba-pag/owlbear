@@ -12,6 +12,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -374,3 +375,19 @@ def test_this_machine_s_layer_refuses_project_and_global_settings_and_combinatio
     rev = c.get("/api/next/config").json()["machine_rev"]
     r = c.put("/api/next/config/machine", json={"rev": rev, "layer": {"format": 6, **layer}})
     assert (r.status_code, store.machine_path.exists()) == (422, False)  # 8 is above the default ask-owner value 7
+
+
+def test_this_machine_s_layer_must_fit_every_project_loaded_on_this_machine(store, tmp_path):
+    """Sol: a project of this machine outside the shared repository is checked too, and named."""
+    there = Store(tmp_path / "there")
+    there.update_config(lambda _l: Layer.model_validate({"format": 6, "agents": {"builder": {"last_round_at": 6}}}))
+    host = Host()
+    host.machine = lambda: [SimpleNamespace(store=there), SimpleNamespace(store=store)]
+    c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)
+    rev = c.get("/api/next/config").json()["machine_rev"]
+    layer = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}
+    refused = c.put("/api/next/config/machine", json={"rev": rev, "layer": layer})
+    assert (refused.status_code, store.machine_path.exists()) == (422, False)  # fits here, not there
+    assert refused.json()["detail"].startswith(f"it does not fit the project {there.root}:")
+    host.machine = lambda: [SimpleNamespace(store=store)]
+    assert c.put("/api/next/config/machine", json={"rev": rev, "layer": layer}).status_code == 200

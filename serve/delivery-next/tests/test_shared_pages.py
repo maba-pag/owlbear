@@ -316,9 +316,13 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store) -> None:
     assert store.read_config().agents["reviewer"].subagents is False
     page.get_by_label("Layer").select_option("machine")  # TD-336: this machine's own preferences, kept local
     page.get_by_label("Minutes per session, builder").fill("55")
-    page.get_by_role("button", name="Save this machine's preferences").click()
+    page.locator(".bar").get_by_role("button", name="Save this machine's preferences").click()
+    expect(page.locator("dialog")).to_contain_text("These apply to every project on this machine")
+    page.locator("dialog").get_by_role("button", name="Save this machine's preferences").click()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings. They apply to the next session.")
     assert store.settings().sources["agents.builder.minutes"] == "machine"
+    minutes = page.locator("#across-table tr", has_text="agents · builder · minutes")  # both baselines, apart
+    expect(minutes.locator("td")).to_have_text(["agents · builder · minutes", "40 (built-in default)", "55", "none"])
     page.get_by_label("Layer").select_option("project")
 
 
