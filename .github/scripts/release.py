@@ -48,8 +48,11 @@ class Step:
 
 
 def git(*args: str) -> str:
-    """Run one git command in the checkout and return its output."""
-    done = subprocess.run(["git", *args], capture_output=True, text=True, check=True)  # noqa: S603, S607
+    """Run one git command in the checkout and return its output; a failure prints git's own message."""
+    done = subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S603, S607
+    if done.returncode:
+        sys.stderr.write(done.stderr)
+        done.check_returncode()
     return done.stdout.strip()
 
 
@@ -72,9 +75,9 @@ def merges(floor: str, tip: str) -> list[tuple[str, bool]]:
 
 
 def following(highest: tuple[int, int], kind: str) -> tuple[str, tuple[int, int]]:
-    """The next version after *highest*: ``vX+1`` for a major one, ``vX.Y+1`` for a minor one."""
+    """The next version after *highest*: ``vX+1.0`` for a major one, ``vX.Y+1`` for a minor one."""
     major, minor = highest
-    return (f"v{major + 1}", (major + 1, 0)) if kind == "major" else (f"v{major}.{minor + 1}", (major, minor + 1))
+    return (f"v{major + 1}.0", (major + 1, 0)) if kind == "major" else (f"v{major}.{minor + 1}", (major, minor + 1))
 
 
 def plan(gh: GitHub, floor: str, tip: str) -> list[Step]:
@@ -101,9 +104,14 @@ def plan(gh: GitHub, floor: str, tip: str) -> list[Step]:
 
 
 def tag(step: Step) -> None:
-    """Create the annotated tag and push it, never forced: an existing name fails the run."""
-    git(*BOT, "tag", "-a", step.tag, "-m", f"{step.tag}: {step.why}", step.sha)
-    git("push", "origin", f"refs/tags/{step.tag}")
+    """Create the annotated tags and push them together, never forced: an existing name fails the run.
+
+    A major version ``vN.0`` also gets ``vN`` on the same commit (TD-392).
+    """
+    names = [step.tag, step.tag.removesuffix(".0")] if step.tag.endswith(".0") else [step.tag]
+    for name in names:
+        git(*BOT, "tag", "-a", name, "-m", f"{name}: {step.why}", step.sha)
+    git("push", "--atomic", "origin", *(f"refs/tags/{name}" for name in names))
 
 
 class Api:
