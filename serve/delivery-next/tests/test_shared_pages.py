@@ -323,6 +323,8 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store) -> None:
     assert store.settings().sources["agents.builder.minutes"] == "machine"
     minutes = page.locator("#across-table tr", has_text="agents · builder · minutes")  # both baselines, apart
     expect(minutes.locator("td")).to_have_text(["agents · builder · minutes", "40 (built-in default)", "55", "none"])
+    rounds = page.locator("#across-table tr", has_text="final_review · max_rounds")  # derived from the builder's
+    expect(rounds.locator("td").nth(2)).to_have_text("same")
     page.get_by_label("Layer").select_option("project")
 
 

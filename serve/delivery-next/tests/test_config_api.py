@@ -382,12 +382,30 @@ def test_this_machine_s_layer_must_fit_every_project_loaded_on_this_machine(stor
     there = Store(tmp_path / "there")
     there.update_config(lambda _l: Layer.model_validate({"format": 6, "agents": {"builder": {"last_round_at": 6}}}))
     host = Host()
-    host.machine = lambda: [SimpleNamespace(store=there), SimpleNamespace(store=store)]
+    host.machine = lambda: [there, store]
     c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)
     rev = c.get("/api/next/config").json()["machine_rev"]
     layer = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}
     refused = c.put("/api/next/config/machine", json={"rev": rev, "layer": layer})
     assert (refused.status_code, store.machine_path.exists()) == (422, False)  # fits here, not there
     assert refused.json()["detail"].startswith(f"it does not fit the project {there.root}:")
-    host.machine = lambda: [SimpleNamespace(store=store)]
+    host.machine = lambda: [store]
     assert c.put("/api/next/config/machine", json={"rev": rev, "layer": layer}).status_code == 200
+
+
+def test_a_project_only_in_the_shared_repository_never_meets_this_machine_s_layer(store, shared_repo):
+    """Sol: a global save is checked with this machine's layer for this machine's projects only."""
+    root = shared_repo[0]
+    elsewhere = {"format": 6, "agents": {"builder": {"last_round_at": 6}}}  # a project of another machine
+    (root / "elsewhere").mkdir()
+    (root / "elsewhere" / "config.json").write_text(json.dumps(elsewhere))
+    store = Store(store.root, data_repo.DataRepo(root), "shop")
+    c = client(store, store.global_path, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    machine = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}
+    assert c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": machine}).status_code == 200
+    minutes = {"format": 6, "agents": {"builder": {"minutes": 50}}}
+    assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": minutes}).status_code == 200
+    got = c.get("/api/next/config").json()
+    unfit = {"format": 6, "agents": {"builder": {"ask_owner_at": 6}}}  # the other project's own 6 needs more
+    assert c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": unfit}).status_code == 422

@@ -171,22 +171,23 @@ def _others(store: Store) -> list[Layer]:
 def _combined(store: Store, new: Layer, host: Host) -> None:
     """Resolve *new* with the other layers wherever it applies; a ValidationError says it does not fit (TD-209).
 
-    The global layer applies to every project in the shared repository and to a project without values of its own;
-    this machine's layer to every project loaded on this machine.
+    The global layer applies to every project in the shared repository and to a project without values of its own,
+    with this machine's layer for this machine's projects; this machine's layer to every project on this machine.
 
     Raises:
         HTTPException: This machine's layer does not fit one of its projects, which is named.
     """
     glob = read_layer_bytes(store.global_path, GlobalLayer)[0] if store.global_path else None
     machine = read_layer_bytes(store.machine_path, MachineLayer)[0]
+    here = [store, *(s for s in getattr(host, "machine", list)() if s is not store)]  # no host: this one
     if isinstance(new, GlobalLayer):
         for layer in [store.read_config(), *_others(store), Layer()]:
             resolve(new, layer)  # on a machine without its own values
+        for layer in [*_layers(here), Layer()]:
             resolve(new, layer, machine)
     elif isinstance(new, MachineLayer):
         resolve(glob, Layer(), new)
-        stores = [store, *(h.store for h in getattr(host, "machine", list)() if h.store is not store)]  # no host: one
-        for s in stores:
+        for s in here:
             with contextlib.suppress(StoreError):  # a project whose layer does not read is that project's to fix
                 try:
                     resolve(glob, s.read_config(), new)
@@ -195,6 +196,15 @@ def _combined(store: Store, new: Layer, host: Host) -> None:
                     raise HTTPException(422, f"it does not fit the project {s.name or s.root}: {why}") from exc
     else:
         resolve(glob, new, machine)
+
+
+def _layers(stores: list[Store]) -> list[Layer]:
+    """The project layers of *stores*; one that does not read is that project's to fix."""
+    layers = []
+    for s in stores:
+        with contextlib.suppress(StoreError):
+            layers.append(s.read_config())
+    return layers
 
 
 def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's projects for its layer

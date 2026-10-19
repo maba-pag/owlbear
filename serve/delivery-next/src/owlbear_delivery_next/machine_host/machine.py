@@ -59,7 +59,7 @@ class Machine:
 
         def bind(h: Host) -> None:  # before its scheduler's first pass
             h.peers = lambda: self.sharing(p)
-            h.machine = lambda: [o.host for o in list(self.projects.values()) if o.host]
+            h.machine = lambda: [o.store for o in list(self.projects.values()) if o.store]  # a failed host's too
             h.draining = lambda: self.ending
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
 
