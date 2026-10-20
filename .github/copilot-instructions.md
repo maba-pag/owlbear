@@ -66,34 +66,14 @@ decisions TD-41..43, TD-150 and TD-156 in
 | `setup/` | Workspace initialiser (`init.py`), setup guide, sharing guide |
 | `tests/` | Workspace regression and integration tests |
 
-## 3. Cockpit Frontend
+## 3. Web Frontend
 
-`serve/cockpit/web/` is the frontend package — the only Node.js/npm code in this otherwise Python-only monorepo.
+The Delivery engine's pages in `serve/delivery-next/src/owlbear_delivery_next/web/` are the only web frontend:
+plain HTML, CSS and JavaScript the machine host serves, with no build step. Their tests are the package's pytest
+suite, including its `browser`-marked Playwright tests. The root `package.json` holds only Node tooling (Biome, on
+the Node version pinned in `.nvmrc`); every `serve/` package is Python, so use `uv run`.
 
-| Attribute | Value |
-| --- | --- |
-| Stack | React 19 + Vite 8 + TypeScript 6 + Porsche Design System React 4 + React Router 8 + React Compiler (`babel-plugin-react-compiler`) |
-| Test runner | Vitest 4 (`npm test`) |
-| E2E test runner | Playwright (version locked by `serve/cockpit/web/package-lock.json`) via `npm run test:e2e` — Chromium only; requires `npx playwright install chromium` once |
-| CSS/HTML lint | Biome and HTMLHint (`npm run lint:html`) |
-| Build output | `serve/cockpit/dist/` (`npm run build`); gitignored, so build it before the first `uv run cockpit` |
-| Node requirement | Node 24.21.0 pinned in `serve/cockpit/web/.nvmrc`; `package.json` requires `>=24.21.0` |
-| Package manager | `npm` (never `uv` for this package) |
-
-All other `serve/` packages are Python — use `uv run` for those.
-
-## 4. Cockpit Backend
-
-`serve/cockpit/src/owlbear_cockpit/` is the Python FastAPI backend — read/write API consumed by the Cockpit frontend.
-
-| Attribute | Value |
-| --- | --- |
-| Stack | FastAPI + Pydantic v2 |
-| Endpoints | REST API under `/api/` — see `owlbear_cockpit/routes/` for current routes |
-| Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; requires built `dist/` |
-| Package manager | `uv` (standard for all `serve/` Python packages) |
-
-## 5. Test Domain Mapping
+## 4. Test Domain Mapping
 
 ### GitHub Cloud Sessions
 
@@ -110,14 +90,12 @@ quality-runner `mode=full` with `changed_paths`.
 
 | Source prefix | Test scope | Toolchain |
 | --- | --- | --- |
-| `serve/cockpit/web/` | `npm test` in `serve/cockpit/web/` | vitest |
 | `serve/*/src/`, `serve/*/tests/`, `tests/` | `uv run test --changed` | manifest- and import-aware pytest scope plus invariant tests |
 | `share/` `.owlbear/` | skip (docs/config only, except executable hooks/scripts) | — |
 | (unsafe or unknown path) | full Python suite fallback | pytest |
 
-`uv run test` remains the complete Python and Cockpit unit-test suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests that start the package in a child process always run. Other changes there (pages, skills, fixtures) run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
+`uv run test` remains the complete Python suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests that start the package in a child process always run. Other changes there (pages, skills, fixtures) run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
 
-For local development, prefer `uv run test` for the complete Python and frontend suites and
-`uv run test [PATH ...]` to apply this routing table to explicit paths. `uv run test-e2e` runs
-Cockpit's maintained fast E2E gate. Direct pytest and npm commands remain valid when runner-specific
-flags or diagnostics are needed.
+For local development, prefer `uv run test` for the complete Python suite and
+`uv run test [PATH ...]` to apply this routing table to explicit paths. Direct pytest commands remain valid
+when runner-specific flags or diagnostics are needed.

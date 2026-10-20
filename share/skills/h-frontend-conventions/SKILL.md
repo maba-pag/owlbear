@@ -20,7 +20,7 @@ Before changing frontend code, inspect the owning package and established implem
 - test, lint, typecheck, build, preview, and browser scripts.
 
 Follow coherent local patterns unless they directly cause the problem being solved. Do not infer
-React, Cockpit, Porsche Design System, Vite, Vitest, or Playwright without repository evidence.
+React, Porsche Design System, Vite, Vitest, or Playwright without repository evidence.
 
 ## Design System
 
@@ -41,7 +41,7 @@ knowledge skill as an optional companion:
 
 - Discover the PDS wrapper package, framework, installed version, and active Copilot skill roots from
   the project manifest, lockfile, and workspace settings. Do not assume React, a `web/` directory,
-  Cockpit, or `.owlbear/skills`.
+  or `.owlbear/skills`.
 - Use the installed wrapper's `pds-skill` binary with explicit `--package`, `--location`, and
   `--skill pds-knowledge-{framework}` arguments to link the companion into a configured local skill
   root. Keep the link generated and ignored; do not copy or commit the package-owned skill into
@@ -121,34 +121,3 @@ Use task-local search, diff, lint, typecheck, build, or inspection for one-time 
 Automated accessibility checks can identify classes of violations but do not prove workflow usability.
 Use exact values and discriminating cases for bounded option or event contracts; DOM presence alone
 does not prove visibility or reachability.
-
-## Cockpit/PDS/React Profile
-
-Apply this profile only when the target package uses Cockpit's React and Porsche Design System stack:
-
-- Import components from `@porsche-design-system/components-react` and use PDS spacing, color,
-  typography, component, slot, property, and event contracts rather than duplicating them.
-- PDS custom elements are hosts in jsdom. Do not assume native roles or events unless verified for
-  the installed version. `PInputText` exposes value on its host; `PSelect` commonly emits `change`
-  with `detail.value`; `PMultiSelect` emits `update` with `detail.value`.
-- When jsdom cannot represent layout, focus trapping, or another browser behavior, use Cockpit's
-  Playwright proof rather than replacing the component contract with a native-element assumption.
-- React Compiler may generate memo/cache branches. Do not add implementation tests merely to cover
-  generated branches; behavior-binding assertions are the proof.
-- Cockpit's setup imports the PDS jsdom polyfill, Testing Library DOM matchers, and
-  `skipPorscheDesignSystemCDNRequestsDuringTests()` from the main PDS React package.
-- jsdom does not implement `attachInternals`. It belongs on `HTMLElement`, not `Element`:
-
-  ```ts
-  if (
-    typeof HTMLElement !== "undefined" &&
-    !HTMLElement.prototype.attachInternals
-  ) {
-    (HTMLElement.prototype as unknown as Record<string, unknown>)[
-      "attachInternals"
-    ] = vi.fn();
-  }
-  ```
-
-- Discover Cockpit E2E, build, CSS, and HTML scripts from its package manifest. Build or web-server
-  startup failure can prevent Playwright assertions from running; classify that failure separately.

@@ -37,13 +37,13 @@ Index commands write fixed artifacts under `.owlbear/`. Dependency commands use 
 
 ### Dependency environment
 
-Use `uv run dep-sync` to reconcile the checked-out manifests and lockfiles with the local Python and Cockpit npm environments. Use `uv run dep-status` for a read-only check. Both commands support `--all` (`-a`) for the complete workspace profile; `--pds` (`-p`) includes generated Porsche Design System assets, and `--browsers` (`-b`) installs the Playwright Chromium browser. Status also supports `--verbose` (`-v`) and `--json` (`-j`).
+Use `uv run dep-sync` to reconcile the checked-out manifests and lockfiles with the local Python and root npm environments, after checking the running Node against `.nvmrc`. Use `uv run dep-status` for a read-only check; it also supports `--verbose` (`-v`) and `--json` (`-j`).
 
 These commands consume the dependency versions already selected in the checkout. Hosted Renovate remains responsible for selecting updates and opening pull requests; synchronization never edits manifests or lockfiles.
 
 ### Dependency profile
 
-The dependency commands use the repository checkout and do not require environment variables. The default profile covers the uv workspace and the Cockpit npm root; `--all` adds the other npm roots, PDS assets, and Playwright Chromium.
+The dependency commands use the repository checkout and do not require environment variables. They cover the uv workspace and the repository-root npm package, which holds Biome.
 
 ## Dependencies
 

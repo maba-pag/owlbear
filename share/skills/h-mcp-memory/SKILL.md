@@ -56,9 +56,9 @@ retry with its new revision.
 
 1. Assessment transitions an entry to `contested`, `disputed`, or `stale`
 2. The memory audit prompt surfaces the exceptional-state metadata
-3. The user resolves or retires the entry from Cockpit's `/memories` page
+3. The user resolves or retires the entry on the Delivery engine's Memory page
 
-There is no MCP resolution tool. `curate_memory` rejects exceptional states until Cockpit resolves
+There is no MCP resolution tool. `curate_memory` rejects exceptional states until the Memory page resolves
 them to `approved`; `delete_memory` may soft-delete them when the user chooses retirement.
 
 ### Batch commits
@@ -150,8 +150,8 @@ matrices and workflow cadence are the evidence boundary for this policy.
   the parent validates and may call `save_memory`. It is not an assessment
   handoff and does not change the review or Delivery result.
 - `memory-curator` owns pending-entry curation. A human owns approval and
-  exceptional-state resolution through the existing review prompt and Cockpit
-  paths.
+  exceptional-state resolution through the existing review prompt and the
+  Memory page.
 
 ### Assessment boundary
 
@@ -200,7 +200,7 @@ persist across those edits.
 
 - `memory-curator` is the owner. No Delivery or continuation step triggers it:
   the user runs `memory-curator` with `Curate: Periodic curation` or reviews
-  pending entries in Cockpit's Memory tab. Manual curation is available at any
+  pending entries on the Delivery engine's Memory page. Manual curation is available at any
   time.
 - Curation is opportunistic, not an eventual-processing SLA. No durable due
   state or age scheduler is implied.
@@ -278,8 +278,7 @@ Named provenance is accepted at intake without active-agent runtime validation. 
 
 Scope members are validated at the shared memory-model boundary and must be nonblank strings. An
 empty list is valid for a pending entry; `*` is valid universal scope and is not authorization.
-`save_memory` always creates an unscoped pending entry; curation or human Cockpit editing assigns
-scope.
+`save_memory` always creates an unscoped pending entry; curation assigns scope.
 
 Returns: the unscoped pending entry and a guidance hint indicating next-step curation.
 
@@ -385,7 +384,7 @@ Curator update tool for content edits and lifecycle transitions.
 | `content` | str \| null | `null` | Replace markdown body |
 | `categories` | list[str] \| null | `null` | Replace categories |
 | `confidence` | float \| null | `null` | Replace confidence |
-| `scope_agents` | list[str] \| null | `null` | Replace scope list; pending promotion requires a non-empty scope, while human Cockpit editing may clear scope to `[]` |
+| `scope_agents` | list[str] \| null | `null` | Replace scope list; pending promotion requires a non-empty scope |
 
 State is code-managed and is not a caller-supplied parameter.
 
@@ -393,7 +392,7 @@ Auto-state behavior:
 
 - `pending -> curated` when scope is provided
 - any mutation from `approved` downgrades to `curated`
-- mutations from `contested`, `disputed`, or `stale` are rejected until Cockpit resolves the entry
+- mutations from `contested`, `disputed`, or `stale` are rejected until the Memory page resolves the entry
 - other invalid transitions are rejected
 
 Response hint values clarify what happened, for example:

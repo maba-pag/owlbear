@@ -342,7 +342,7 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
 
 @pytest.mark.browser
 def test_the_deleted_section_removes_entries_deleted_long_ago(shared):
-    """TD-416: the old Cockpit's purge, on the Memory page; only entries deleted 30 days ago or earlier go."""
+    """TD-416: the Memory page's purge; only entries deleted 30 days ago or earlier go."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     root, _, repo = shared

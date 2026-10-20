@@ -11,7 +11,6 @@ resolution-markers = [
 members = [
     "owlbear-browser",
     "owlbear-browser-mcp",
-    "owlbear-cockpit",
     "owlbear-delivery-next",
     "owlbear-knowledge",
     "owlbear-knowledge-mcp",
@@ -1744,25 +1743,6 @@ dependencies = [
 requires-dist = [
     { name = "mcp", specifier = ">=2,<2.4" },
     { name = "owlbear-browser", editable = "serve/browser" },
-]
-
-[[package]]
-name = "owlbear-cockpit"
-version = "0.1.0"
-source = { editable = "serve/cockpit" }
-dependencies = [
-    { name = "fastapi" },
-    { name = "owlbear-memory" },
-    { name = "pydantic" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi" },
-    { name = "owlbear-memory", editable = "serve/memory" },
-    { name = "pydantic" },
-    { name = "uvicorn" },
 ]
 
 [[package]]

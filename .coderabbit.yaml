@@ -19,7 +19,6 @@ reviews:
     labels: ["coderabbit"]
     auto_incremental_review: false
   path_filters:
-    - "!serve/cockpit/web/public/porsche-design-system/**"
     - "!serve/delivery-next/src/owlbear_delivery_next/web/vendor/**"
     - "!serve/delivery-next/src/owlbear_delivery_next/web/pds/**"
   path_instructions:

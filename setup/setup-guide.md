@@ -191,9 +191,8 @@ OwlBear path with the location of `~/.owlbear/runtime`. If a server is missing, 
 run `uv sync --locked --all-packages --all-extras --all-groups` in `~/.owlbear/runtime`, and rerun
 setup from the project root.
 
-Chromium is optional. Install it when you select Browser MCP Chromium mode or run Cockpit's
-browser-backed tests; the default managed Edge mode needs stable Microsoft Edge. See the
-[Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
+Chromium is optional. Install it when you select Browser MCP Chromium mode; the default managed Edge
+mode needs stable Microsoft Edge.
 
 ### Browser readiness
 
@@ -207,7 +206,7 @@ Browser-to-Knowledge round is ready.
    **Expected result:** both stdio processes are available; this confirms startup only.
 2. **Browser readiness:** An unset `BROWSER_MODE` selects managed Edge and its fixed OwlBear
    profile. Confirm stable Microsoft Edge is installed before starting the Browser MCP. For
-   Chromium mode or Cockpit's browser-backed tests, install Chromium for the OwlBear runtime from
+   Chromium mode, install Chromium for the OwlBear runtime from
    the consumer project root:
 
     ```shell
@@ -285,9 +284,6 @@ the project in VS Code, run `Profiles: Switch Profile`, and rerun `setup/init.py
 take a profile-selection command-line argument. Noninteractive setup skips this user-local profile
 mutation.
 
-For development-only browser-backed tests, use the
-[Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
-
 ### Managed Mac browser pilot
 
 Run this pilot on the managed Mac before relying on SharePoint or Confluence access. Keep the two
@@ -344,8 +340,6 @@ the repository or in a Change's brief, answers, or status.
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ~/.owlbear/runtime cockpit` from the project root |
-| Cockpit shows another project's memory or ideas | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
 

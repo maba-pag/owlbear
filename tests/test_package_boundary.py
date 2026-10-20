@@ -8,7 +8,6 @@ from pathlib import Path
 ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "owlbear_browser": frozenset({"owlbear_web_content"}),
     "owlbear_browser_mcp": frozenset({"owlbear_browser"}),
-    "owlbear_cockpit": frozenset({"owlbear_memory"}),
     "owlbear_delivery_next": frozenset({"owlbear_memory"}),
     "owlbear_knowledge": frozenset({"owlbear_web_content"}),
     "owlbear_knowledge_mcp": frozenset({"owlbear_knowledge"}),

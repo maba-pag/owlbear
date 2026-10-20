@@ -188,7 +188,7 @@ async function globalize(m) {
   if (sure) act(m, "make-global");
 }
 
-const PURGE_DAYS = 30;  // as the old Cockpit's purge: an entry deleted this long ago is removed
+const PURGE_DAYS = 30;  // an entry deleted this long ago is removed
 const many = (n) => `${n} deleted ${n === 1 ? "entry" : "entries"}`;
 
 // The deleted entries old enough to remove, grouped by the place they are kept in.

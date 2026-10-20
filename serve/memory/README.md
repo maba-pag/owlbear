@@ -2,10 +2,10 @@
 
 Transport-free memory primitives for the OwlBear pipeline. Provides Pydantic models,
 domain error types, and atomic file I/O for markdown-backed memory entries — no HTTP or
-CLI dependency. Suitable for embedding in MCP servers and the Cockpit backend.
+CLI dependency. Suitable for embedding in MCP servers and the Delivery engine's Memory page.
 
 **Use this guide when:** you need to extend file-backed memory storage, entry lifecycle rules, or the
-engine API used by MCP and Cockpit.
+engine API used by MCP and the Memory page.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
@@ -78,7 +78,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `unremarkable_count` | `int` | Default: `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | `int` | Default: `0`; incremented by assessment tool when entry was skipped |
 | `score` | `float` | Default: `0.0`; initialized to `confidence` on `save()` |
-| `scope_agents` | `list[str]` | Default: `[]`; supplied members must be nonblank strings; `*` means all agents. Human Cockpit editing may clear scope to `[]`; MCP curation requires scope when promoting pending entries. |
+| `scope_agents` | `list[str]` | Default: `[]`; supplied members must be nonblank strings; `*` means all agents. MCP curation requires scope when promoting pending entries. |
 | `source_agent` | `str` | Non-blank; frozen after creation |
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `updated_at` | `str` | Timezone-aware ISO 8601 timestamp |
@@ -297,7 +297,7 @@ instead require `expected_revision` from the caller's recalled entry; a mismatch
 state, counters, or receipts change. `save()` creates new entries and does not require an OCC token.
 
 For `approve`, `edit` (the engine operation behind MCP `curate_memory`), and `delete`, the engine
-also accepts `expected_revision`; each call must supply exactly one token. Cockpit uses
+also accepts `expected_revision`; each call must supply exactly one token. The Memory page uses
 `expected_updated_at`, while the MCP adapter uses `revision` as `expected_revision`. Both token
 forms are validated by the same `MemoryEngine` against the current entry before mutation.
 

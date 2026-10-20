@@ -23,12 +23,12 @@
   },
   "accessibility.chat.showCheckmarks": true,
   "biome.lsp.bin": {
-    "darwin-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-darwin-arm64/biome",
-    "darwin-x64": "serve/cockpit/web/node_modules/@biomejs/cli-darwin-x64/biome",
-    "linux-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-linux-arm64/biome",
-    "linux-arm64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-arm64-musl/biome",
-    "linux-x64": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64/biome",
-    "linux-x64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64-musl/biome"
+    "darwin-arm64": "node_modules/@biomejs/cli-darwin-arm64/biome",
+    "darwin-x64": "node_modules/@biomejs/cli-darwin-x64/biome",
+    "linux-arm64": "node_modules/@biomejs/cli-linux-arm64/biome",
+    "linux-arm64-musl": "node_modules/@biomejs/cli-linux-arm64-musl/biome",
+    "linux-x64": "node_modules/@biomejs/cli-linux-x64/biome",
+    "linux-x64-musl": "node_modules/@biomejs/cli-linux-x64-musl/biome"
   },
   "biome.requireConfiguration": true,
   "chat.agent.maxRequests": 99999,
@@ -57,12 +57,10 @@
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.compressOutput.enabled": true,
   "chat.tools.terminal.autoApprove": {
-    "npm test": true,
     "uv run coverage": true,
     "uv run format": true,
     "uv run help": true,
     "uv run lint": true,
-    "uv run lint-cockpit": true,
     "uv run pytest": true,
     "uv run python": true,
     "uv run quality": true,

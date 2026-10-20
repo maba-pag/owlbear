@@ -106,7 +106,7 @@ When the queue is exhausted:
 
 - Do not silently broaden scope beyond the selected surface.
 - Do not run destructive actions or submit real production mutations while gathering evidence.
-- Do not infer project conventions from OwlBear, Cockpit, Porsche Design System, React, or any other
+- Do not infer project conventions from OwlBear, Porsche Design System, React, or any other
   specific product or stack unless the target repository provides that evidence.
 - Keep out-of-scope structural observations separate from findings; propose them only as optional
   follow-ups with explicit user approval.

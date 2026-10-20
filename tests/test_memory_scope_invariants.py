@@ -11,7 +11,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry
 from pydantic import ValidationError as PydanticValidationError
 
-from owlbear_cockpit.routes.memory import EditRequest
 from owlbear_memory_mcp.tools import curate_memory, read_memory
 
 
@@ -57,14 +56,3 @@ async def test_mcp_curate_rejects_blank_scope_before_engine_edit(tmp_path: Path)
 
     with pytest.raises(ToolError, match="scope_agents"):
         await curate_memory(ctx, entry_id=entry.id, revision=revision, scope_agents=[" "])
-
-
-def test_cockpit_edit_request_rejects_blank_scope_member() -> None:
-    with pytest.raises(PydanticValidationError, match="scope_agents"):
-        EditRequest(expected_updated_at="2026-01-01T00:00:00+00:00", scope_agents=[""])
-
-
-def test_cockpit_edit_request_allows_clearing_scope() -> None:
-    request = EditRequest(expected_updated_at="2026-01-01T00:00:00+00:00", scope_agents=[])
-
-    assert request.scope_agents == []

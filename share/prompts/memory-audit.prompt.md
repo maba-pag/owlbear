@@ -66,7 +66,7 @@ Boundary rules:
 - `approve_memory` is valid only for `curated -> approved`; never call it for `pending`, `approved`, or `deleted` entries.
 - If an approved entry is edited with `curate_memory`, explain that the tool intentionally downgrades it to `curated` and it needs re-approval.
 - This prompt must not edit or approve `contested`, `disputed`, or `stale` entries. Their metadata is
-   visible here, but resolution belongs to Cockpit's `/memories` page because no MCP resolution tool
+   visible here, but resolution belongs to the Delivery engine's Memory page because no MCP resolution tool
    is exposed. `contested` remains recallable; `disputed` and `stale` are excluded from recall.
 
 This prompt must not promote pending entries; delegate pending work to `w-mem-curation`. For manual
@@ -89,7 +89,7 @@ Identity evidence does not raise stored entry confidence or review confidence.
    - counts by category
    - source agents represented
    - scoped agents represented
-   - what this prompt can mutate, what remains for `memory-curator`, and what requires Cockpit
+   - what this prompt can mutate, what remains for `memory-curator`, and what requires the Memory page
 4. Ask one queue-choice decision with `askQuestions`:
    - `(bp:, rec:) Review curated approval queue in order` - best for normal sessions.
    - `Filter by source agent, scoped agent, or category` - best when the queue is large.
@@ -98,7 +98,7 @@ Identity evidence does not raise stored entry confidence or review confidence.
      workflow into this inspection path.
    - `Audit approved entries for staleness` - maintenance mode; edits will downgrade entries to `curated`.
    - `Review entries needing resolution` - inspect `contested`, `disputed`, and `stale` entries one at
-     a time, then hand resolution to Cockpit without MCP mutation.
+     a time, then hand resolution to the Memory page without MCP mutation.
 
 If there are no curated entries, do not stop. Present the pending, approved, and exceptional-state
 counts, explain the next useful modes, and ask one continuation decision.
@@ -213,20 +213,19 @@ time. Call `owlbear-memory/read_memory` for the exact entry ID, then present:
 **Meta:** source: {source_agent} | scope: {scope_agents} | categories: {categories}
 > {content}
 **Recall impact:** {contested remains recallable at curated priority | disputed/stale is excluded from recall}
-**Resolution boundary:** Cockpit `/memories`; MCP edit and approval are blocked for this state.
-**Recommended action:** {Resolve in Cockpit|Retire in Cockpit|Skip} - {one-line reason}
+**Resolution boundary:** the Memory page; MCP edit and approval are blocked for this state.
+**Recommended action:** {Resolve on the Memory page|Retire on the Memory page|Skip} - {one-line reason}
 ```
 
 Then ask one action decision:
 
-- `Resolve in Cockpit` - make no MCP mutation; tell the user to run `uv run cockpit` if Cockpit is
-   not already available, open `http://127.0.0.1:8420/memories`, and locate the entry by its displayed
-   title or short reference before choosing the Cockpit resolution action.
-- `Retire in Cockpit` - make no MCP mutation; use the same Cockpit route and locate the entry before
-   choosing deletion.
+- `Resolve on the Memory page` - make no MCP mutation; tell the user to open the project's Memory page
+   in OwlBear and locate the entry by its displayed title or short reference before choosing Resolve.
+- `Retire on the Memory page` - make no MCP mutation; locate the entry the same way before choosing
+   deletion.
 - `Skip` - make no mutation and continue to the next exceptional entry.
 
-Do not claim resolution is complete from this prompt. After a Cockpit handoff, ask whether the user
+Do not claim resolution is complete from this prompt. After a Memory page handoff, ask whether the user
 wants to continue with the next queued item or refresh the queue with `list_memories`.
 
 ## 4. Review Card
@@ -318,7 +317,7 @@ When the selected queue is exhausted, when no approval-ready entries exist, or w
 - Inspect pending backlog metadata without loading the curation workflow, then decide whether to run
    `memory-curator` separately.
 - Audit approved entries for stale or obsolete guidance.
-- Review entries needing resolution and hand them to Cockpit.
+- Review entries needing resolution and hand them to the Memory page.
 - Run `owlbear-memory/commit_memory_batch` with `session_type: "review"` if mutations occurred.
 - Pause the session.
 

@@ -17,7 +17,6 @@ from owlbear_tools.dependency_ci import classify_dependency_change
 
 ROOT = Path(__file__).parents[1]
 VERIFY_PATH = ROOT / ".github/workflows/tooling.yml"
-COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
 COPILOT_SETUP_PATH = ROOT / ".github/workflows/copilot-setup-steps.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
@@ -122,6 +121,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".github/workflows/**",
         ".pre-commit-config.yaml",
         ".python-version",
+        ".nvmrc",
         ".owlbear/scripts/diagrams/**",
         "share/diagrams/**",
         "biome.json",
@@ -129,9 +129,6 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "package-lock.json",
         "pyproject.toml",
         "serve/*/pyproject.toml",
-        "serve/cockpit/web/.nvmrc",
-        "serve/cockpit/web/package.json",
-        "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "tests/test_archify_diagrams.py",
         "tests/test_dependency_verification_workflow.py",
@@ -184,12 +181,11 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
 
     assert "pytest tests serve" not in text
     assert "--all-extras" not in text
-    assert "npm ci --prefix serve/cockpit/web --engine-strict" in text
-    assert "npm run sync:pds" in text
     assert "git apply" not in text
     assert "Check Node runtime declaration" in text
     node_setup = next(step for step in verify["steps"] if step.get("name") == "Setup Node.js")
-    for surface in ("node", "shared_node_runtime", "root_node", "diagrams", "pds"):
+    assert node_setup["with"]["node-version-file"] == ".nvmrc"
+    for surface in ("shared_node_runtime", "root_node", "diagrams"):
         assert f"steps.scope.outputs.{surface} == 'true'" in node_setup["if"]
     archify_steps = [
         step for step in verify["steps"] if step.get("name") == "Verify pinned Archify release and static render"
@@ -281,10 +277,6 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
         "npm ci --engine-strict --no-audit --no-fund",
     }
     for step in steps:
-        if step.get("working-directory") == "serve/cockpit/web" or step.get("uses", "").startswith(
-            "actions/setup-node@"
-        ):
-            assert step["if"] == "hashFiles('serve/cockpit/web/package-lock.json') != ''"
         if step.get("run") in install_commands:
             assert 0 < step["timeout-minutes"] <= 8
     assert not re.search(r"\b(pytest|megalint|quality|docker|playwright)\b", "\n".join(runs))
@@ -327,7 +319,7 @@ def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
     assert required.startswith(">=")
     assert tuple(map(int, uv_setup["with"]["version"].split("."))) >= tuple(map(int, required[2:].split(".")))
     node_setup = next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))
-    assert node_setup["with"]["node-version-file"] == "serve/cockpit/web/.nvmrc"
+    assert node_setup["with"]["node-version-file"] == ".nvmrc"
     assert "node-version" not in node_setup["with"]
     assert not any("python-version" in step.get("with", {}) for step in steps)
     for line in COPILOT_SETUP_PATH.read_text().splitlines():
@@ -390,9 +382,7 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
         ("uv.lock", "python"),
         ("serve/delivery-next/pyproject.toml", "python"),
         ("serve/web-content/pyproject.toml", "python"),
-        ("serve/cockpit/web/package.json", "node"),
-        ("serve/cockpit/web/package-lock.json", "node"),
-        ("serve/cockpit/web/.nvmrc", "node"),
+        (".nvmrc", "shared_node_runtime"),
         ("package.json", "root_node"),
         ("package-lock.json", "root_node"),
         (".owlbear/scripts/diagrams/archify.lock.json", "diagrams"),
@@ -407,7 +397,7 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
     ],
 )
 def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> None:
-    scope = classify_dependency_change([path], "")
+    scope = classify_dependency_change([path])
 
     assert getattr(scope, surface)
     assert scope.applicable
@@ -422,24 +412,13 @@ def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> No
     ],
 )
 def test_classifier_marks_source_paths_for_python_behavior_proof(path: str) -> None:
-    scope = classify_dependency_change([path], "")
+    scope = classify_dependency_change([path])
 
     assert scope.python
 
 
-def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
-    frontend = classify_dependency_change(
-        ["serve/cockpit/web/package-lock.json"],
-        '+    "node_modules/@porsche-design-system/components-react": {\n',
-    )
-
-    assert frontend.node
-    assert frontend.pds
-    assert "frontend_runtime" not in frontend.github_outputs()
-
-
 def test_unrelated_precommit_changes_use_compatibility_proof_without_python_suite() -> None:
-    scope = classify_dependency_change([".pre-commit-config.yaml"], "")
+    scope = classify_dependency_change([".pre-commit-config.yaml"])
 
     assert scope.precommit
     assert scope.compatibility
@@ -509,7 +488,6 @@ def test_ruff_toolchain_classification_uses_relevant_snapshot_values(
 ) -> None:
     scope = classify_dependency_change(
         [path],
-        "",
         before_files={path: before},
         after_files={path: after},
     )
@@ -540,7 +518,6 @@ def test_ruff_only_root_manifest_changes_skip_python_behavior_proof(
 ) -> None:
     scope = classify_dependency_change(
         [path],
-        "",
         before_files={path: before},
         after_files={path: after},
     )
@@ -556,7 +533,6 @@ def test_non_ruff_root_manifest_changes_keep_python_behavior_proof() -> None:
 
     scope = classify_dependency_change(
         ["pyproject.toml"],
-        "",
         before_files={"pyproject.toml": before},
         after_files={"pyproject.toml": after},
     )
@@ -566,7 +542,7 @@ def test_non_ruff_root_manifest_changes_keep_python_behavior_proof() -> None:
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:
-    outputs = classify_dependency_change(["pyproject.toml"], "").github_outputs()
+    outputs = classify_dependency_change(["pyproject.toml"]).github_outputs()
 
     assert outputs["python"] == "true"
     assert outputs["applicable"] == "true"
@@ -589,9 +565,9 @@ def test_node_runtime_checker_accepts_the_checked_in_contract() -> None:
     result = _run_script(
         RUNTIME_SCRIPT,
         "--version-file",
-        "serve/cockpit/web/.nvmrc",
+        ".nvmrc",
         "--engines-file",
-        "serve/cockpit/web/package.json",
+        "package.json",
     )
 
     assert result.returncode == 0, result.stderr
@@ -693,55 +669,6 @@ def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: 
 
     assert result.returncode != 0
     assert "does not match" in result.stderr
-
-
-def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
-    workflow = _workflow(COCKPIT_VERIFY_PATH)
-    browser = _job(workflow, "browser")
-    text = COCKPIT_VERIFY_PATH.read_text(encoding="utf-8")
-    package = json.loads((ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
-
-    assert set(workflow["jobs"]) == {"unit", "browser"}
-    assert "workflow_dispatch:" in text
-    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
-    assert "node-version-file: serve/cockpit/web/.nvmrc" in text
-    assert "npm ci --engine-strict" in text
-    assert browser["env"] == {
-        "E2E_COMPAT_BROWSERS": "chromium",
-    }
-    assert "npx playwright install --with-deps chromium" in text
-    assert "npm run test:e2e:compat" in text
-    assert package["scripts"]["test:e2e:compat:all"] == (
-        "cross-env E2E_COMPAT_BROWSERS=chromium node scripts/run-e2e-compat.mjs"
-    )
-    compatibility = (ROOT / "serve/cockpit/web/playwright.compat.config.ts").read_text(encoding="utf-8")
-    assert re.findall(r'name:\s*[\'"]([^\'"]+)[\'"]', compatibility) == ["compatibility-chromium"]
-    vite = (ROOT / "serve/cockpit/web/vite.config.ts").read_text(encoding="utf-8")
-    assert 'const BROWSER_TARGET = ["chrome123", "edge123"]' in vite
-
-
-def test_cockpit_compatibility_retains_failure_diagnostics() -> None:
-    config = (ROOT / "serve/cockpit/web/playwright.compat.config.ts").read_text(encoding="utf-8")
-    workflow = _workflow(COCKPIT_VERIFY_PATH)
-    browser = _job(workflow, "browser")
-
-    assert re.search(r"trace:\s*['\"]retain-on-failure['\"]", config)
-    assert re.search(r"outputFolder:\s*['\"]playwright-report['\"]", config)
-
-    upload_steps = [step for step in browser["steps"] if step.get("name") == "Upload browser diagnostics"]
-    assert upload_steps == [
-        {
-            "name": "Upload browser diagnostics",
-            "if": "failure()",
-            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-            "with": {
-                "name": "cockpit-browser-diagnostics",
-                "path": "serve/cockpit/web/test-results\nserve/cockpit/web/playwright-report\n",
-                "if-no-files-found": "ignore",
-                "retention-days": 15,
-            },
-        }
-    ]
 
 
 def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:

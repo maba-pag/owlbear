@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
-_COCKPIT_WEB = _REPOSITORY_ROOT / "serve/cockpit/web"
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = (
     "tests/test_package_boundary.py",
@@ -201,9 +200,7 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
 def _python_scope(path: str) -> list[str] | None:
     normalized = path.removeprefix("./")
     scope: list[str] | None = None
-    if normalized.startswith("serve/cockpit/web/"):
-        scope = []
-    elif normalized.startswith(".owlbear/hooks/"):
+    if normalized.startswith(".owlbear/hooks/"):
         scope = ["tests/test_write_guard_hooks.py"]
     elif normalized.startswith(".owlbear/scripts/diagrams/"):
         scope = ["tests/test_archify_diagrams.py", *_INVARIANT_TESTS]
@@ -227,10 +224,6 @@ def _python_scope(path: str) -> list[str] | None:
             if normalized.startswith("tests/") and candidate.is_file() and candidate.name.startswith("test_"):
                 scope = [normalized]
     return scope
-
-
-def _is_web_path(path: str) -> bool:
-    return path.removeprefix("./").startswith("serve/cockpit/web/")
 
 
 def _git_executable() -> str:
@@ -293,34 +286,23 @@ def _split_paths(paths: list[str], *, coverage: bool) -> tuple[set[str] | None, 
     return scopes, list(monitored.values())
 
 
-def _commands_for_paths(
-    paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool
-) -> list[tuple[list[str], Path]]:
+def _commands_for_paths(paths: list[str], *, all_tests: bool, coverage: bool) -> list[tuple[list[str], Path]]:
     commands: list[tuple[list[str], Path]] = []
     selected: list[tuple[list[str], Path]] = []
     if all_tests:
         python_targets = ["tests", "serve"]
-        run_python = not web_only
-        run_web = not python_only
     else:
         scopes, monitored = _split_paths(paths, coverage=coverage)
-        if scopes is not None and not web_only:
+        if scopes is not None:
             selected = _testmon_commands(monitored, scopes)
         python_targets = ["tests", "serve"] if scopes is None else sorted(scopes)
-        run_python = bool(python_targets) and not web_only
-        run_web = any(_is_web_path(path) for path in paths) and not python_only
 
-    if run_python:
+    if python_targets:
         command = ["uv", "run", "--locked", "pytest", *python_targets]
         if coverage:
             command.append("--cov")
         commands.append((command, _REPOSITORY_ROOT))
     commands.extend(selected)
-    if run_web:
-        command = ["npm", "test"]
-        if coverage:
-            command.extend(("--", "--coverage"))
-        commands.append((command, _COCKPIT_WEB))
     return commands
 
 
@@ -362,9 +344,6 @@ def test_main() -> None:
     scope.add_argument("-a", "--all", action="store_true", dest="all_tests")
     scope.add_argument("--changed", action="store_true")
     parser.add_argument("--base", help="Git ref used as the committed-change baseline for --changed")
-    toolchain = parser.add_mutually_exclusive_group()
-    toolchain.add_argument("--py", action="store_true", dest="python_only")
-    toolchain.add_argument("--web", action="store_true", dest="web_only")
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
@@ -385,28 +364,8 @@ def test_main() -> None:
             print(f"Changed test scope unavailable; running the full suite: {error}")  # noqa: T201
             paths = []
             all_tests = True
-    commands = _commands_for_paths(
-        paths,
-        all_tests=all_tests,
-        python_only=args.python_only,
-        web_only=args.web_only,
-        coverage=args.coverage,
-    )
+    commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
     if not commands:
         print("No test scope matched the selected paths.")  # noqa: T201
         raise SystemExit(0)
     raise SystemExit(_run_commands(commands))
-
-
-def test_e2e_main() -> None:
-    """Run the maintained Cockpit Playwright gate."""
-    _require_development_checkout()
-    parser = argparse.ArgumentParser(prog="test-e2e")
-    parser.add_argument("-a", "--all", action="store_true", dest="all_tests")
-    parser.add_argument("specs", nargs="*")
-    args = parser.parse_args()
-    script = "test:e2e:all" if args.all_tests else "test:e2e"
-    command = ["npm", "run", script]
-    if args.specs:
-        command.extend(("--", *args.specs))
-    raise SystemExit(_run_commands([(command, _REPOSITORY_ROOT)]))

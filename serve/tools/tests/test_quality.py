@@ -12,15 +12,13 @@ from owlbear_tools.quality import (
     FixMode,
     _consumer_lint,
     _run_biome,
-    _run_cockpit_html,
     _run_named,
     format_eof,
     format_whitespace,
     lint,
-    lint_cockpit_biome,
+    lint_biome,
     lint_python,
     quality,
-    typecheck_cockpit,
 )
 from owlbear_tools.quality_runtime import _call
 
@@ -43,10 +41,8 @@ def test_lint_runs_the_normal_local_suite() -> None:
         ["pre-commit", "run", "actionlint", *manual],
         ["pre-commit", "run", "zizmor", *manual],
         ["pre-commit", "run", "editorconfig-checker", *manual],
-        ["node", "serve/cockpit/web/scripts/run-biome-check.mjs", "check", ".", "--write"],
-        ["npm", "run", "lint:html"],
+        ["node", "node_modules/@biomejs/biome/bin/biome", "check", ".", "--write"],
     ]
-    assert call.call_args_list[-1].kwargs["cwd"] == Path("serve/cockpit/web")
 
 
 def test_call_bridges_node_ca_to_python_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,7 +63,7 @@ def test_call_bridges_node_ca_to_python_tools(tmp_path: Path, monkeypatch: pytes
 
 
 def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
-    staged = b"README.md\0serve/cockpit/web/src/App.tsx\0"
+    staged = b"README.md\0package.json\0"
     with (
         patch.object(sys, "argv", ["lint", "--staged"]),
         patch("owlbear_tools.quality_runtime.subprocess.check_output", return_value=staged),
@@ -99,17 +95,17 @@ def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
     ("options", "flags"),
     [([], ["--write"]), (["--no-fix"], []), (["--unsafe-fix"], ["--write", "--unsafe"])],
 )
-def test_lint_cockpit_biome_forwards_fix_policy(options: list[str], flags: list[str]) -> None:
+def test_lint_biome_forwards_fix_policy(options: list[str], flags: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["lint-cockpit-biome", *options]),
+        patch.object(sys, "argv", ["lint-biome", *options]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
-        lint_cockpit_biome()
+        lint_biome()
 
     assert call.call_args.args[0] == [
         "node",
-        "serve/cockpit/web/scripts/run-biome-check.mjs",
+        "node_modules/@biomejs/biome/bin/biome",
         "check",
         ".",
         *flags,
@@ -160,9 +156,7 @@ def test_quality_executes_todo_last() -> None:
         "lint-actionlint",
         "lint-zizmor",
         "lint-editorconfig",
-        "lint-cockpit-biome",
-        "lint-cockpit-html",
-        "typecheck-cockpit",
+        "lint-biome",
         "todo",
     ]
 
@@ -245,16 +239,6 @@ def test_consumer_staged_lint_does_not_apply_fixes(tmp_path: Path) -> None:
     assert call.call_args.args[0] == ["ruff", "check", str(tmp_path / "main.py")]
 
 
-def test_staged_cockpit_html_lints_any_html_file() -> None:
-    with (
-        patch("owlbear_tools.quality._git_paths", return_value=["serve/cockpit/web/src/other.html"]),
-        patch("owlbear_tools.quality._call", return_value=0) as call,
-    ):
-        assert _run_cockpit_html(staged=True) == 0
-
-    call.assert_called_once()
-
-
 def test_no_fix_text_check_skips_deleted_tracked_paths() -> None:
     with (
         patch.object(sys, "argv", ["format-eof", "--no-fix"]),
@@ -325,30 +309,6 @@ def test_text_check_reports_invalid_precommit_exclude(capsys: pytest.CaptureFixt
         format_eof()
 
     assert "Error:" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize(("results", "expected"), [([0, 0], "0"), ([1, 0], "1"), ([0, 1], "1")])
-def test_typecheck_covers_application_and_all_browser_specs(results: list[int], expected: str) -> None:
-    with (
-        patch.object(sys, "argv", ["typecheck-cockpit"]),
-        patch("owlbear_tools.quality._call", side_effect=results) as call,
-        pytest.raises(SystemExit, match=expected),
-    ):
-        typecheck_cockpit()
-    assert call.call_args_list[0].args[0][-1] == "serve/cockpit/web/tsconfig.json"
-    assert call.call_args_list[1].args[0] == ["npm", "run", "typecheck:e2e"]
-    assert call.call_args_list[1].kwargs["cwd"] == Path("serve/cockpit/web")
-
-
-def test_typecheck_reports_missing_runtime(capsys: pytest.CaptureFixture[str]) -> None:
-    with (
-        patch.object(sys, "argv", ["typecheck-cockpit"]),
-        patch("owlbear_tools.quality._run_typecheck_cockpit", side_effect=OSError("npx unavailable")),
-        pytest.raises(SystemExit, match="2"),
-    ):
-        typecheck_cockpit()
-
-    assert "Error: npx unavailable" in capsys.readouterr().err
 
 
 def test_text_check_reports_malformed_precommit_config(capsys: pytest.CaptureFixture[str]) -> None:

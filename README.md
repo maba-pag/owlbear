@@ -39,7 +39,6 @@ The main terms are simple:
 | Skill | Reusable instructions that teach an agent how to handle a domain or workflow |
 | MCP server | A tool connection that lets agents use one OwlBear capability from VS Code |
 | Change | One approved piece of work tracked from its brief through review and publication |
-| Cockpit | An optional browser view of one project's local memory and ideas files |
 
 The normal path is **New Change** on the Changes page, which opens a shaping chat; OwlBear then
 plans, builds, reviews and publishes that Change. It keeps the work ordered and reviewed; you
@@ -56,8 +55,8 @@ Pull requests reach `main` with the required `CI` check; versions are Git tags (
 that the release workflow sets on merges labelled `release:minor` or `release:major`.
 
 Requirements: macOS, Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with
-GitHub Copilot, [GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also
-needs the Node version pinned in `serve/cockpit/web/.nvmrc`.
+GitHub Copilot, [GitHub CLI](https://cli.github.com/), and Git. JSON linting and diagram rendering also
+need the Node version pinned in `.nvmrc`.
 
 The checked-in development runtime is pinned to Python 3.14.8; OwlBear supports the 3.14 series only.
 
@@ -68,8 +67,8 @@ uv sync --locked --all-packages --all-extras --all-groups
 uv run dep-sync
 ```
 
-`uv run dep-sync` reconciles the local Cockpit npm environment with the checked-out manifests;
-use `uv run dep-sync --all` when you also need optional workspace assets or browsers.
+`uv run dep-sync` reconciles the local Python and root npm (Biome) environments with the checked-out
+manifests.
 
 Open this checkout directly in VS Code. Its repository settings already load the shared
 `share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run

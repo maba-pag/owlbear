@@ -38,13 +38,13 @@ the caller to re-read before retrying. Re-read the entry and retry with the new 
 | `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` | builder |
 | `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` | builder |
 | `curated` / `approved` / `contested` | `stale` | Non-use exceeds the slot-efficiency threshold | `assess_memories` | memory service |
-| `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Cockpit | human user |
+| `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Memory page | human user |
 | `pending` | removed | Noise/duplicate pruned before commit | `delete_memory(entry_id=..., revision=...)` | curator agent |
 | `curated` / `approved` / `contested` / `disputed` / `stale` | `deleted` | Superseded or invalidated guidance retired | `delete_memory(entry_id=..., revision=...)` | curator agent |
 
 The curator does not approve entries. Approval is a user decision through the memory review prompt.
 The curator also does not resolve exceptional states. `curate_memory` is blocked for `contested`,
-`disputed`, and `stale`; the user resolves them from Cockpit's `/memories` page.
+`disputed`, and `stale`; the user resolves them on the Delivery engine's Memory page.
 
 ## Step 0 — Setup
 
@@ -77,7 +77,7 @@ ordinary content or scope uncertainty remain reportable.
 1. Call `list_memories(states=["pending", "curated", "approved", "contested", "disputed", "stale"])`.
 2. Read each pending candidate with `read_memory(entry_id=...)`.
 3. Keep curated/approved metadata nearby for duplicate and conflict checks. Treat exceptional-state
- metadata as unavailable for curation until the user resolves it in Cockpit. Read likely overlaps
+ metadata as unavailable for curation until the user resolves it on the Memory page. Read likely overlaps
  before deciding.
 
 ## Step 2 — Classify Signal

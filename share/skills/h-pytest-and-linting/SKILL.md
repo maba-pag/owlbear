@@ -104,24 +104,21 @@ Apply these only when the target is the OwlBear repository or matching configura
 
 | Command | Scope |
 | --- | --- |
-| `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
-| `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, invariants, and affected frontend tests; for `serve/delivery-next` Python sources, the tests pytest-testmon saw executing the changed code plus those that start the package as a child process |
-| `uv run test [PATH ...]` (also `uv run tests`) | Tests owning the explicit paths; routes to pytest and/or Vitest |
-| `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
+| `uv run test` or `uv run test --all` | Complete Python suite |
+| `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, and invariants; for `serve/delivery-next` Python sources, the tests pytest-testmon saw executing the changed code plus those that start the package as a child process |
+| `uv run test [PATH ...]` (also `uv run tests`) | Tests owning the explicit paths |
 | `uv run lint` | Normal local lint aggregate on the workspace, the same set CI's Static suite runs with `--no-fix`; `--staged` selects staged files |
-| `uv run lint-cockpit` | Cockpit frontend lint aggregate |
-| `uv run lint-cockpit-biome` | Biome lint, formatting, and Assist for owned frontend and repository JSON |
+| `uv run lint-biome` | Biome lint, formatting, and Assist for repository JSON |
 | `uv run format` | Python, Biome, whitespace, and final-newline formatters |
-| `uv run format-biome` | Format owned frontend and JSON; `--no-fix` checks, `--staged` selects staged files |
-| `uv run typecheck-cockpit` | Cockpit application and all E2E TypeScript checks |
-| `uv run quality` | Format, lint, typecheck-cockpit, then advisory TODO scan |
+| `uv run format-biome` | Format repository JSON; `--no-fix` checks, `--staged` selects staged files |
+| `uv run quality` | Format, lint, then advisory TODO scan |
 
 Use these workspace entry points instead of invoking individual linters manually. `lint` may auto-fix
 files through its configured safe fixers; inspect the diff afterward. Agents should scope validation to
 their own work with `lint --staged`; workspace-wide `lint` and `quality` are broad user workflows rather
 than focused agent validation commands.
 
-`lint`, `lint-cockpit`, and `quality` accept one optional fix-policy flag. `--no-fix`
+`lint`, `lint-biome`, and `quality` accept one optional fix-policy flag. `--no-fix`
 replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables unsafe Ruff and Biome
 fixes. The flags are mutually exclusive; review the resulting diff
 whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help quality`.
@@ -137,7 +134,7 @@ whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help qu
 Explicit routine `-m` expressions must include `not model` because they replace the default `addopts` marker selection.
 
 - **Runner.** Use `uv run`; bare system Python does not resolve OwlBear workspace dependencies.
-- **Direct runner debugging.** Raw `uv run pytest` and package-owned npm scripts remain valid when
+- **Direct runner debugging.** Raw `uv run pytest` remains valid when
   debugging runner-specific behavior or passing options not modeled by the maintained wrappers.
 - **Coverage.** Bare `--cov` reads `source_pkgs` from `pyproject.toml`. Locally observed explicit
   module/path forms can conflict with Pydantic instrumentation or report misleading zero coverage.

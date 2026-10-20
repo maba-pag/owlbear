@@ -39,7 +39,6 @@ _EXCLUDED_RELATIVE_DIRS = frozenset(
         ".owlbear/research",
         ".owlbear/sources",
         ".owlbear/target",
-        "serve/cockpit/web/public/porsche-design-system",
     }
 )
 _TODO_RE = re.compile(r"^> \*\*TODO:\*\*")

@@ -8,7 +8,7 @@ user-invocable: true
 
 Produce high-quality, self-contained visual output (diagrams, tables, architecture maps) for delivery via browser or Kroki render.
 
-Boundary: this skill is for explanatory artifacts, reports, and diagrams. It is not the source of truth for production frontend app design; use `h-frontend-design` and `h-frontend-conventions` for Cockpit UI work.
+Boundary: this skill is for explanatory artifacts, reports, and diagrams. It is not the source of truth for production frontend app design; use `h-frontend-design` and `h-frontend-conventions` for product UI work.
 
 > Adapted from [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) (MIT).
 

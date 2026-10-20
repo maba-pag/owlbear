@@ -165,7 +165,7 @@ class TestDocIndexCollection:
     @pytest.mark.parametrize("excluded_name", _EXCLUDED_NAMES)
     def test_excludes_name_based_dirs_at_any_depth(self, tmp_path: Path, excluded_name: str) -> None:
         """Boundary: name-based exclusions (node_modules, .venv, etc.) work at any nesting depth."""
-        nested = tmp_path / "serve" / "cockpit" / "web" / excluded_name / "pkg" / "README.md"
+        nested = tmp_path / "serve" / "example" / "web" / excluded_name / "pkg" / "README.md"
         nested.parent.mkdir(parents=True)
         nested.write_text("# Nested excluded\n")
         result = collect_docs(tmp_path)

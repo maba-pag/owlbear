@@ -14,14 +14,13 @@ ROOT = Path(__file__).parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
 SUITE_WORKFLOWS = (
     "agent-ecosystem.yml",
-    "cockpit.yml",
     "python.yml",
     "python-browser.yml",
     "security.yml",
     "static.yml",
     "tooling.yml",
 )
-REUSING_WORKFLOWS = ("cockpit.yml", "python.yml", "python-browser.yml", "static.yml", "tooling.yml")
+REUSING_WORKFLOWS = ("python.yml", "python-browser.yml", "static.yml", "tooling.yml")
 SKIPPED_PACKAGE_WORKFLOWS = ("python.yml", "copilot-setup-steps.yml")
 PR_ONLY = "${{ github.event_name == 'pull_request' }}"
 _SPEC = importlib.util.spec_from_file_location("ci_scope", ROOT / ".github/scripts/ci_scope.py")
@@ -56,7 +55,7 @@ def _skipped_packages(name: str) -> list[str]:
 
 
 def test_replaced_workflows_are_gone() -> None:
-    for name in ("source-verification.yml", "dependency-verification.yml", "cockpit-verification.yml"):
+    for name in ("source-verification.yml", "dependency-verification.yml", "cockpit-verification.yml", "cockpit.yml"):
         assert not (WORKFLOWS / name).exists()
 
 
@@ -94,7 +93,7 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
     [
         (["README.md"], ["static"]),
         (["serve/delivery-next/src/owlbear_delivery_next/api.py"], ["python", "python-browser", "static", "security"]),
-        (["serve/cockpit/web/src/app.tsx"], ["cockpit", "static", "security"]),
+        ([".nvmrc"], ["static", "tooling"]),
         (["uv.lock"], ["python", "python-browser", "static", "tooling"]),
         ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
         ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),
@@ -312,23 +311,6 @@ def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> Non
     assert "pytest serve/delivery-next -m browser" in runs
 
 
-def test_cockpit_unit_and_browser_proofs_run_in_parallel() -> None:
-    jobs = _jobs("cockpit.yml")
-    unit = _runs(jobs["unit"])
-    browser = _runs(jobs["browser"])
-
-    assert "**/*.json" not in ci_scope.SUITES["cockpit"]
-    assert "serve/cockpit/web/**" in ci_scope.SUITES["cockpit"]
-    for command in ("npm test", "npm run typecheck:e2e", "npm run test:biome-pds", "npm run test:sync-pds"):
-        assert command in unit
-    assert "check_node_runtime.py" in unit
-    assert "npx playwright install --with-deps chromium" in browser
-    assert "npm run test:e2e:compat" in browser
-    assert jobs["browser"]["env"] == {"E2E_COMPAT_BROWSERS": "chromium"}
-    upload = next(step for step in jobs["browser"]["steps"] if step.get("name") == "Upload browser diagnostics")
-    assert upload["if"] == "failure()"
-
-
 def test_static_runs_the_workspace_lint_on_every_change() -> None:
     """CI runs what `uv run lint` and `uv run format` run locally; EditorConfig reads every text file (TD-409)."""
     runs = _runs(_jobs("static.yml")["lint"])
@@ -337,7 +319,7 @@ def test_static_runs_the_workspace_lint_on_every_change() -> None:
     assert "uv sync --locked --package owlbear-tools --group dev" in runs
     assert "uv run --no-sync lint --no-fix" in runs
     assert "uv run --no-sync format --no-fix" in runs
-    assert "npm ci --prefix serve/cockpit/web" in runs
+    assert "npm ci --engine-strict --no-audit --no-fund" in runs
 
 
 @pytest.mark.parametrize("name", [*SUITE_WORKFLOWS, "copilot-setup-steps.yml"])

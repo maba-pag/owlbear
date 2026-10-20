@@ -20,7 +20,7 @@ Root conftest.py — shared fixtures and marker registrations for v2 tests.
 
 ## .github/scripts/check_node_runtime.py
 
-Validate the checked-in Node runtime against the Cockpit lower bound.
+Validate the checked-in Node runtime against the workspace lower bound.
 
 ### Imports
 
@@ -831,212 +831,6 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `async def select(ctx: Context, selector: str, value: str) -> str`
 - `async def read_text(ctx: Context) -> str`
 - `async def snapshot(ctx: Context) -> str`
-
-## serve/cockpit/src/owlbear_cockpit/__init__.py
-
-owlbear_cockpit — Cockpit package for the OwlBear Delivery UI.
-
-### Imports
-
-- `__future__`
-
-## serve/cockpit/src/owlbear_cockpit/deps.py
-
-Cockpit FastAPI dependency callables.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `typing`
-
-### Interfaces
-
-- `def get_workspace_root() -> Path`
-- `def get_memory_engine() -> MemoryEngine`
-- `def get_ideas_path(workspace_root = Depends(get_workspace_root)) -> Path`
-
-## serve/cockpit/src/owlbear_cockpit/main.py
-
-Cockpit FastAPI application.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `contextlib`
-- `datetime`
-- `fastapi`
-- `fastapi.responses`
-- `fastapi.staticfiles`
-- `http.client`
-- `json`
-- `os`
-- `owlbear_cockpit.deps`
-- `owlbear_cockpit.models`
-- `owlbear_cockpit.routes.ideas`
-- `owlbear_cockpit.routes.memory`
-- `owlbear_cockpit.storage_io`
-- `owlbear_memory.errors`
-- `pathlib`
-- `sys`
-- `tempfile`
-- `threading`
-- `typing`
-- `uvicorn`
-- `webbrowser`
-
-### Interfaces
-
-- `def _get_health_memory_engine() -> object | None`
-- `def _get_health_ideas_path() -> Path`
-- `def _error_envelope(code: str, message: str) -> dict[str, str]`
-- `def handle_memory_not_found(_request: Request, exc: MemoryNotFoundError) -> JSONResponse`
-- `def handle_memory_duplicate_entry(_request: Request, exc: MemoryDuplicateEntryError) -> JSONResponse`
-- `def handle_memory_concurrency(_request: Request, exc: MemoryConcurrencyError) -> JSONResponse`
-- `def handle_memory_transition(_request: Request, exc: MemoryTransitionError) -> JSONResponse`
-- `def handle_unexpected_error(_request: Request, _exc: Exception) -> JSONResponse`
-- `def _module_health(checker: object) -> HealthModule`
-- `def _ideas_health(ideas_path: Path) -> IdeasHealth`
-- `def health_live() -> dict[str, int | str | None]`
-- `def memory_health(memory_engine: _HealthMemoryEngine) -> HealthModule`
-- `def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth`
-- `def _resolve_port(override: int | None = None) -> int`
-- `def _registry_dir() -> Path`
-- `def _instance_path(pid: int) -> Path`
-- `def _register_instance(instance: CockpitInstance) -> Path`
-- `def _process_exists(pid: int) -> bool`
-- `def _probe_instance(instance: CockpitInstance) -> bool`
-- `def _running_instances() -> list[CockpitInstance]`
-- `def list_instances() -> None`
-- `def _resolve_dist_dir() -> Path`
-- `def run(*, port_override: int | None = None, no_open: bool = False) -> None`
-- `def main() -> None`
-
-## serve/cockpit/src/owlbear_cockpit/models.py
-
-Pydantic response model for the cockpit GET /api/board endpoint.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `pydantic`
-
-### Interfaces
-
-- `class BoardOut(BaseModel)`
-- `class HealthModule(BaseModel)`
-- `class IdeasHealth(BaseModel)`
-- `class WorkspaceHealth(BaseModel)`
-- `class CockpitInstance(BaseModel)`
-
-## serve/cockpit/src/owlbear_cockpit/storage_io.py
-
-Atomic file writes for Cockpit-owned files.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `os`
-- `pathlib`
-- `tempfile`
-
-### Interfaces
-
-- `def atomic_write(target: Path, content: str) -> None`
-
-## serve/cockpit/src/owlbear_cockpit/routes/__init__.py
-
-Cockpit routes package.
-
-## serve/cockpit/src/owlbear_cockpit/routes/ideas.py
-
-Ideas API routes for reading and persisting shared markdown content.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `fastapi`
-- `fastapi.responses`
-- `owlbear_cockpit.deps`
-- `owlbear_cockpit.storage_io`
-- `pathlib`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class IdeasResponse(BaseModel)`
-- `class IdeasUpdateRequest(BaseModel)`
-- `def _ideas_updated_at(ideas_path: Path) -> str | None`
-- `def get_ideas(ideas_path: _IdeasPath) -> IdeasResponse`
-- `def _read_ideas_content(ideas_path: Path) -> str`
-- `def put_ideas(req: IdeasUpdateRequest, ideas_path: _IdeasPath) -> Response`
-
-## serve/cockpit/src/owlbear_cockpit/routes/memory.py
-
-Memory management routes for cockpit API.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `owlbear_cockpit.deps`
-- `owlbear_memory.models`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class MemoryEntryResponse(BaseModel)`
-- `class MemoriesResponse(BaseModel)`
-- `class MemoryEntryEnvelope(BaseModel)`
-- `class ApproveRequest(BaseModel)`
-- `class ResolveRequest(BaseModel)`
-- `class EditRequest(BaseModel)`
-  - `def _validate_scope_agents(cls, value: list[str] | None) -> list[str] | None`
-- `class DeleteRequest(BaseModel)`
-- `class DeleteResponse(BaseModel)`
-- `class PurgeRequest(BaseModel)`
-- `def _to_response(entry: MemoryEntry) -> MemoryEntryResponse`
-- `def list_memories(engine = Depends(get_memory_engine)) -> MemoriesResponse`
-- `def preview_memory_purge(req: PurgeRequest, engine = Depends(get_memory_engine)) -> PurgePreview`
-- `def purge_memories(req: PurgeRequest, engine = Depends(get_memory_engine)) -> PurgeResult`
-- `def approve_memory(entry_id: str, req: ApproveRequest, engine = Depends(get_memory_engine)) -> MemoryEntryEnvelope`
-- `def resolve_memory(entry_id: str, req: ResolveRequest, engine = Depends(get_memory_engine)) -> MemoryEntryEnvelope`
-- `def edit_memory(entry_id: str, req: EditRequest, engine = Depends(get_memory_engine)) -> MemoryEntryEnvelope`
-- `def delete_memory(entry_id: str, req: DeleteRequest, engine = Depends(get_memory_engine)) -> DeleteResponse`
-
-## serve/cockpit/web/e2e/support/prove-memory-lifecycle-mcp.py
-
-Capture exceptional-state curation rejections through MCP stdio transport.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `asyncio`
-- `json`
-- `mcp`
-- `mcp.client.stdio`
-- `mcp.types`
-- `pathlib`
-- `shutil`
-- `subprocess`
-- `sys`
-
-### Interfaces
-
-- `def _parse_args() -> argparse.Namespace`
-- `def _snapshot(memory_dir: Path) -> dict[str, bytes]`
-- `def _response_text(result: CallToolResult) -> str`
-- `async def _capture(memory_dir: Path) -> list[dict[str, object]]`
-- `def _tested_sha(root: Path) -> str`
-- `def _write_receipt(output: Path, tested_sha: str, responses: list[dict[str, object]]) -> None`
-- `def main() -> None`
 
 ## serve/delivery-next/src/owlbear_delivery_next/__init__.py
 
@@ -4298,12 +4092,14 @@ The Memory page's API (TD-85): the project's agent memory in its shared-reposito
 
 - `class Shown(BaseModel)`
 - `class EditBody(Shown)`
+- `class PurgeBody(BaseModel)`
 - `def _shown(entry: MemoryEntry) -> dict[str, Any]`
 - `def _files(folder: Path) -> dict[Path, bytes]`
 - `def folder_of(store: Store, where: Where) -> Path`
 - `def _refused(exc: Exception) -> HTTPException`
 - `def _act(store: Store, entry_id: str, what: str, do: Callable[[MemoryEngine], MemoryEntry], where: Where = 'project') -> dict[str, Any]`
 - `def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]`
+- `def _purge(store: Store, days: int, where: Where) -> dict[str, Any]`
 - `def router(store: Store) -> APIRouter`
 
 ## serve/delivery-next/src/owlbear_delivery_next/project_host/pack_routes.py
@@ -8177,7 +7973,7 @@ Classify dependency-update diffs for focused CI proof.
   - `def compatibility(self) -> bool`
   - `def applicable(self) -> bool`
   - `def github_outputs(self) -> dict[str, str]`
-- `def classify_dependency_change(paths: Iterable[str], diff: str, *, before_files: Mapping[str, str | None] | None = None, after_files: Mapping[str, str | None] | None = None) -> DependencyScope`
+- `def classify_dependency_change(paths: Iterable[str], *, before_files: Mapping[str, str | None] | None = None, after_files: Mapping[str, str | None] | None = None) -> DependencyScope`
 - `def _read_paths(path: Path) -> list[str]`
 - `def _write_outputs(path: Path, values: dict[str, str]) -> None`
 - `def main() -> int`
@@ -8192,29 +7988,23 @@ Reconcile the checked-out dependency environment.
 - `argparse`
 - `dataclasses`
 - `json`
-- `os`
 - `owlbear_tools.commands`
 - `owlbear_tools.quality_runtime`
 - `pathlib`
 - `re`
-- `shutil`
 - `subprocess`
 - `sys`
-- `tempfile`
 
 ### Interfaces
 
 - `class OperationResult`
-- `def _run(command: list[str], *, cwd: Path, capture: bool = False, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]`
+- `def _run(command: list[str], *, cwd: Path, capture: bool = False) -> subprocess.CompletedProcess[str]`
 - `def _captured_output(result: subprocess.CompletedProcess[str]) -> str`
 - `def _version(value: str, source: str) -> tuple[int, int, int]`
 - `def _check_node_runtime(root: Path) -> OperationResult`
-- `def _selected_npm_roots(*, include_all: bool, include_browsers: bool) -> tuple[tuple[str, Path], ...]`
 - `def _process_result(name: str, result: subprocess.CompletedProcess[str]) -> OperationResult`
 - `def _sync_npm(root: Path, name: str, repository: Path) -> OperationResult`
-- `def _sync_pds(repository: Path) -> OperationResult`
-- `def _sync_browsers(root: Path, name: str, repository: Path) -> OperationResult`
-- `def _sync_results(repository: Path, options: argparse.Namespace) -> list[OperationResult]`
+- `def _sync_results(repository: Path) -> list[OperationResult]`
 - `def _uv_status(repository: Path) -> OperationResult`
 - `def _npm_changes(payload: object) -> tuple[dict[str, str], ...]`
 - `def _npm_package_value(value: object) -> str | None`
@@ -8222,14 +8012,9 @@ Reconcile the checked-out dependency environment.
 - `def _npm_json(output: str) -> object | None`
 - `def _npm_reports_changes(payload: object) -> bool`
 - `def _npm_status(root: Path, name: str, repository: Path) -> OperationResult`
-- `def _tree_files(root: Path) -> dict[str, bytes]`
-- `def _pds_status(repository: Path) -> OperationResult`
-- `def _browser_status(root: Path, name: str, repository: Path) -> OperationResult`
-- `def _status_results(repository: Path, options: argparse.Namespace) -> list[OperationResult]`
-- `def _add_profile_arguments(parser: argparse.ArgumentParser) -> None`
+- `def _status_results(repository: Path) -> list[OperationResult]`
 - `def _successful(result: OperationResult) -> bool`
 - `def _print_results(title: str, results: list[OperationResult], *, verbose: bool) -> None`
-- `def _print_recommendation(*, include_all: bool) -> None`
 - `def _finish(exit_code: int) -> None`
 - `def dep_sync() -> None`
 - `def dep_status() -> None`
@@ -8360,9 +8145,7 @@ Workspace lint, formatting, and quality commands.
 - `def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> int`
 - `def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]`
 - `def _check_text_files(name: str, *, staged: bool) -> int`
-- `def _run_cockpit_html(*, staged: bool) -> int`
 - `def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) -> int`
-- `def _run_typecheck_cockpit() -> int`
 - `def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int`
 - `def _run_named(name: str, *, staged: bool, fix_mode: FixMode) -> int`
 - `def _run_named_checked(name: str, *, staged: bool, fix_mode: FixMode) -> int`
@@ -8371,21 +8154,18 @@ Workspace lint, formatting, and quality commands.
 - `def _consumer_lint(root: Path, *, staged: bool, fix_mode: FixMode) -> int`
 - `def lint() -> None`
 - `def _run_public_leaf(name: str, *, fixes: bool, allow_unsafe: bool, staged: bool) -> None`
-- `def lint_cockpit() -> None`
 - `def lint_python() -> None`
 - `def lint_markdown() -> None`
 - `def lint_yaml() -> None`
 - `def lint_shell() -> None`
 - `def lint_actions() -> None`
 - `def lint_editorconfig() -> None`
-- `def lint_cockpit_biome() -> None`
-- `def lint_cockpit_html() -> None`
+- `def lint_biome() -> None`
 - `def format_python() -> None`
 - `def format_biome() -> None`
 - `def format_whitespace() -> None`
 - `def format_eof() -> None`
 - `def format_commands() -> None`
-- `def typecheck_cockpit() -> None`
 - `def quality() -> None`
 
 ## serve/tools/src/owlbear_tools/quality_runtime.py
@@ -8488,18 +8268,16 @@ Maintained test commands for the OwlBear development checkout.
 - `def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -> list[tuple[list[str], Path]]`
 - `def _package_for_path(normalized: str) -> _WorkspacePackage | None`
 - `def _python_scope(path: str) -> list[str] | None`
-- `def _is_web_path(path: str) -> bool`
 - `def _git_executable() -> str`
 - `def _run_git(arguments: list[str]) -> subprocess.CompletedProcess[bytes]`
 - `def _git_paths(arguments: list[str]) -> set[str]`
 - `def _default_changed_base() -> str`
 - `def _changed_paths(base: str | None) -> list[str]`
 - `def _split_paths(paths: list[str], *, coverage: bool) -> tuple[set[str] | None, list[_WorkspacePackage]]`
-- `def _commands_for_paths(paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool) -> list[tuple[list[str], Path]]`
+- `def _commands_for_paths(paths: list[str], *, all_tests: bool, coverage: bool) -> list[tuple[list[str], Path]]`
 - `def _testmon_lock(command: list[str]) -> Iterator[dict[str, tuple[int, ...]]]`
 - `def _run_commands(commands: list[tuple[list[str], Path]]) -> int`
 - `def test_main() -> None`
-- `def test_e2e_main() -> None`
 
 ## serve/tools/src/owlbear_tools/todo.py
 

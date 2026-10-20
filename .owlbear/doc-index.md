@@ -98,7 +98,6 @@
 - [`ci_scope.py`](../.github/scripts/ci_scope.py)
 - [Python](../.github/workflows/python.yml)
 - [Python browser](../.github/workflows/python-browser.yml)
-- [Cockpit](../.github/workflows/cockpit.yml)
 - [Static checks](../.github/workflows/static.yml)
 - [Tooling](../.github/workflows/tooling.yml)
 - [Agent ecosystem](../.github/workflows/agent-ecosystem.yml)
@@ -122,9 +121,8 @@
 - ### `Plan and Status`
 - ### `Asking the Owner`
 - ## `Directory Structure`
-- ## `3. Cockpit Frontend`
-- ## `4. Cockpit Backend`
-- ## `5. Test Domain Mapping`
+- ## `3. Web Frontend`
+- ## `4. Test Domain Mapping`
 - ### `GitHub Cloud Sessions`
 - ### `Local Development and CI`
 
@@ -200,28 +198,6 @@
 - [`serve/`](../serve/README.md)
 - [`.github/`](../.github/README-automation.md)
 - [`tests/`](../tests/README.md)
-
-## .owlbear/ideas.md
-- # `Delivery implementation audit and improvement plan`
-- ## `Why the old proposal no longer applies directly`
-- ## `Audit method and baseline`
-- ## `Architecture generations currently present`
-- ## `Reconciliation of the initial assessment`
-- ## `Priority 0 — prevent acquisition from revoking live work`
-- ## `Priority 0 — preserve Design stage in work-item projection`
-- ## `Priority 1 — retire the confirmed dead Integration API`
-- ## `Priority 1 decision — complete or remove Assembly`
-- ## `Priority 1 — prove and remove empty authority reintroduction`
-- ## `Priority 2 — make startup authorization a pure steady-state gate`
-- ## `Priority 2 — replace the transitional work-item projection`
-- ## `Priority 2 — validate supported concurrency before adding new lock abstractions`
-- ## `Priority 3 — reassess naming and decomposition after deletion`
-- ## `Reviewed and retained — Delivery MCP module split`
-- ## `Recommended execution order`
-- ## `Memory`
-- ## `Code index — push detail into file headers, keep the index thin`
-- ### `Status quo`
-- ### `Proposal`
 
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
@@ -308,7 +284,6 @@
 - [Setup authority](../setup/setup-guide.md)
 - [Delivery engine](../serve/delivery-next)
 - [Operating OwlBear](../setup/operating-owlbear.md#running-owlbear)
-- [Cockpit](../serve/cockpit/README.md)
 - [Memory MCP](../serve/memory-mcp/README.md)
 - [Memory core](../serve/memory/README.md)
 - [Knowledge MCP](../serve/knowledge-mcp/README.md)
@@ -319,7 +294,6 @@
 - [Tools](../serve/tools/README.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
-- [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
@@ -357,23 +331,6 @@
 - [Browser package guide](../serve/browser/README.md)
 - [acquisition tests](../serve/browser-mcp/tests/test_acquire.py)
 - [SSRF policy tests](../serve/browser-mcp/tests/test_ssrf_preflight.py)
-
-## serve/cockpit/README.md
-- # `owlbear-cockpit — Steering Cockpit Package`
-- ## `Launch / Usage`
-- ## `Frontend Surface`
-- ## `Frontend Quality`
-- ## `Browser-backed tests`
-- ## `Configuration`
-- ## `Delivery Packaging`
-- ## `Dependencies`
-
-### Outbound links
-- [serve/README.md](../serve/README.md)
-- [README.md](../README.md)
-- [Biome configuration](../biome.json)
-- [EditorConfig](../.editorconfig)
-- [Delivery Packaging](../serve/cockpit/README.md#delivery-packaging)
 
 ## serve/delivery-next/DEMO-slice1.md
 - # `Delivery-next slice 1, phase B: live demonstration`
@@ -665,7 +622,6 @@
 - ### `Removing OwlBear from your Mac`
 - ### `Removing the agent workspace from a project`
 - ## `Delivery Workflow`
-- ## `Cockpit details`
 - ## `Project-Specific Customization`
 - ### `Adding local agents`
 - ### `Overriding instructions`
@@ -683,7 +639,6 @@
 - [Shared vs Copied](../setup/operating-owlbear.md#shared-vs-copied)
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
-- [Cockpit details](../setup/operating-owlbear.md#cockpit-details)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [setup guide](../setup/setup-guide.md#optional-agent-workspace)
@@ -692,7 +647,6 @@
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
-- [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
 ## setup/setup-guide.md
@@ -730,11 +684,9 @@
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
 - [Quick Start](../setup/setup-guide.md#quick-start)
 - [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
-- [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Browser MCP guide](../serve/browser-mcp/README.md)
 - [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
 - [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
-- [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Adding local agents](../setup/operating-owlbear.md#adding-local-agents)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
@@ -766,7 +718,6 @@
 - [Quick Start](../setup/setup-guide.md#quick-start)
 - [Quick Start](../setup/setup-guide.md#quick-start)
 - [the setup guide](../setup/setup-guide.md#4-confirm-it-loaded)
-- [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
@@ -981,7 +932,6 @@
 - ## `Component and Module Structure`
 - ## `Responsive and Visual Behavior`
 - ## `Testing and Proof`
-- ## `Cockpit/PDS/React Profile`
 
 ## share/skills/h-frontend-design/SKILL.md
 - # `Frontend Design Reference`
@@ -1139,7 +1089,6 @@
 - ### `Browser/E2E`
 - ### `Coverage`
 - ## `Durable Frontend Test Admission`
-- ## `Cockpit/PDS Profile`
 - ## `Known Gotchas`
 
 ## share/skills/r-challenger-protocol/SKILL.md

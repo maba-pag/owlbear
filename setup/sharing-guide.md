@@ -77,18 +77,6 @@ code .
 and the four seeded MCP servers; check them as
 [the setup guide](setup-guide.md#4-confirm-it-loaded) describes.
 
-To launch Cockpit for the shared project, run it from the project directory and point uv
-at the OwlBear runtime alias:
-
-```shell
-cd ~/Dev/my-project
-uv run --project ~/.owlbear/runtime cockpit
-```
-
-This serves the Cockpit bundle built in the OwlBear runtime
-([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)) while keeping Memory and Ideas
-state scoped to the project.
-
 ---
 
 ## Platform Notes
@@ -172,8 +160,6 @@ organization agent registry as a complement to the local installation.
 | A teammate's Changes page shows **Setup required** | Run the `owlbear setup --repo PATH` command it names on that teammate's Mac, then reload the project's VS Code window |
 | Setup cannot claim the project's folder in the shared settings | Run `owlbear setup --repo PATH --folder NAME` with a folder name no other repository uses |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
-| Cockpit command not found in project | Run `uv run --project ~/.owlbear/runtime cockpit` from the project root instead of plain `uv run cockpit` |
-| Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after an OwlBear update | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | Different OwlBear versions between teammates | Compare `owlbear versions` on each Mac; `owlbear update` takes the newest ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)). For the agent workspace, rerun `init.py` after an update to refresh copied runtime files |

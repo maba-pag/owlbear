@@ -10,7 +10,6 @@ owns it. Start with the job, then open the package guide for commands and config
 | I want to... | Start here | What it provides |
 | --- | --- | --- |
 | Turn an idea into reviewed work | [Delivery engine](delivery-next/) | The machine host, its pages, the `owlbear` command, and the chat server; run it as [Operating OwlBear](../setup/operating-owlbear.md#running-owlbear) describes |
-| Review a project's local memory and ideas files | [Cockpit](cockpit/README.md) | An optional browser UI for `.owlbear/memory/` and `.owlbear/ideas.md` |
 | Give agents durable institutional memory | [Memory MCP](memory-mcp/README.md) | The VS Code tool boundary for scoped, curated memory |
 | Change memory storage or lifecycle rules | [Memory core](memory/README.md) | File-backed entries, states, scoring, and engine primitives |
 | Search documents and knowledge graphs | [Knowledge MCP](knowledge-mcp/README.md) | Ingestion, search, sources, graph lookup, and enrichment tools |
@@ -25,15 +24,14 @@ owns it. Start with the job, then open the package guide for commands and config
 Core packages hold reusable behavior. MCP packages expose that behavior to VS Code agents through
 Model Context Protocol, the tool interface used by the four seeded servers. The Delivery engine runs
 once per Mac, serves every registered project on its pages, and publishes Changes to GitHub; it
-uses the Memory core for agent memory. Cockpit is an optional view of one project's memory and
-ideas files; Tools support the repository rather than the product runtime.
+uses the Memory core for agent memory, and its Memory page is where people review memory. Tools
+support the repository rather than the product runtime.
 
 ```text
 owlbear command -> Delivery engine -> pages, agent sessions, GitHub
                                    -> Memory core
 VS Code agents  -> MCP packages    -> core packages
                 -> Delivery chat server
-Cockpit         -> Memory core
 Tools
 ```
 
@@ -47,12 +45,10 @@ and recovery.
 | Group | Packages |
 | --- | --- |
 | Delivery | `delivery-next` |
-| Human operation | `cockpit` |
 | Agent memory | `memory`, `memory-mcp` |
 | Knowledge | `knowledge`, `knowledge-mcp` |
 | Browser | `browser`, `browser-mcp`, `web-content` |
 | Repository maintenance | `tools` |
 
-All packages use the workspace's Python environment. Cockpit's `web/` directory is the only Node.js
-surface; its `dist/` bundle is built from it and not tracked, so build it before the first
-`uv run cockpit` ([Cockpit packaging](cockpit/README.md#delivery-packaging)).
+All packages use the workspace's Python environment. The Delivery engine's pages are its only web
+frontend; they are plain HTML, CSS and JavaScript served from the package, with no build step.

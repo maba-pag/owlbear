@@ -25,7 +25,7 @@ existing UI patterns:
 State unresolved assumptions. Ask the user only when materially different interpretations would
 change the design direction or audit result.
 
-Do not infer Cockpit, Porsche Design System, React, or any other product or stack without repository
+Do not infer Porsche Design System, React, or any other product or stack without repository
 evidence. When those dependencies and product surfaces are present, their local conventions remain
 authoritative.
 
@@ -124,8 +124,7 @@ Use these only when project evidence supports the profile:
 | Content or editorial surface | Reading rhythm, navigation, hierarchy, media treatment, content focus |
 | Marketing or brand surface | Distinct identity, offer clarity, narrative pacing, credible product evidence, conversion path |
 
-An established local design system overrides these starting points. For Cockpit, repository evidence
-identifies the operational-tool profile and Porsche Design System conventions.
+An established local design system overrides these starting points.
 
 ## State and Evidence Discipline
 

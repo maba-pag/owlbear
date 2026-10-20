@@ -69,7 +69,8 @@ reflection.
 ## State Model
 
 Lifecycle transitions are controlled by the memory service. MCP tools expose ordinary curation,
-approval, assessment, and deletion; Cockpit is the human resolution surface for exceptional states.
+approval, assessment, and deletion; the Delivery engine's Memory page is the human resolution surface
+for exceptional states.
 
 | From | To | Trigger | Tool |
 | --- | --- | --- | --- |
@@ -79,13 +80,13 @@ approval, assessment, and deletion; Cockpit is the human resolution surface for 
 | `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` |
 | `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` |
 | `curated` / `approved` / `contested` | `stale` | Non-use exceeds the slot-efficiency threshold | `assess_memories` |
-| `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Cockpit (`MemoryEngine.resolve`) |
+| `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Memory page (`MemoryEngine.resolve`) |
 | `pending` | `deleted` | Prune noise/duplicates (hard delete from disk) | `delete_memory` |
 | `curated` / `approved` / `contested` / `disputed` / `stale` | `deleted` | Retire guidance (soft delete) | `delete_memory` |
 
 `contested` remains recallable at curated priority. `disputed` and `stale` are excluded from recall.
-MCP curation edits are blocked for all three exceptional states until the user resolves them in
-Cockpit. Tool responses include hints describing the transition or deletion branch applied.
+MCP curation edits are blocked for all three exceptional states until the user resolves them on the
+Memory page. Tool responses include hints describing the transition or deletion branch applied.
 
 ## Revision-Bound Assessment Feedback
 

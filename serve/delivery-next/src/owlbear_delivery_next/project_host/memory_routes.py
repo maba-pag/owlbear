@@ -3,7 +3,7 @@
 Global memory (``<shared>/memory/``, TD-241) is read by every project's agents beside their own; the owner moves an
 entry there with Make global. ``?where=global`` reads and acts on it.
 
-Reads and the owner's actions go through the memory package's engine, as in the old Cockpit's Memory tab; each action
+Reads and the owner's actions go through the memory package's engine; each action
 names the entry's ``updated_at`` the page showed, holds the shared repository's lock and the memory's writer lock, and
 commits and pushes exactly the files the action changed before an agent can write again.
 """
@@ -149,7 +149,7 @@ def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]:
 
 
 def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
-    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal (Cockpit's purge)."""
+    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal."""
     folder = folder_of(store, where)
     if not folder.is_dir():
         return {"purged": 0, "skipped": 0, "failed": 0, "notice": ""}
