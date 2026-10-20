@@ -9,6 +9,8 @@
 > **Status 2026-10-19:** still not built. The PDS part (§3.6) is [the plan](owlbear-plan.md)'s item 11, with browser
 > tests on the real CDN (TD-398); the rest is decided (TD-38, TD-40) but not yet placed in the order. Slices now reach
 > `main` as pull requests, not as commits on `next/m4-slice1`.
+> **Status 2026-10-20:** §3.6 is built (item 11's first part): every page loads PDS only from its CDN, with no
+> native branch, and the browser tests reach the CDN. The rest is still not built.
 
 ## 1. Context, decisions and gaps
 

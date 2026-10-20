@@ -53,8 +53,8 @@ def store(tmp_path: Path, monkeypatch) -> Store:
 
 
 @contextlib.contextmanager
-def settings_page(store: Store) -> Iterator[Any]:
-    """The Settings page in a real browser, offline: only the test host answers, so the plain controls show."""
+def settings_page(store: Store, pds: Any) -> Iterator[Any]:
+    """The Settings page in a real browser: only the test host and the PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     sock = socket.socket()
@@ -71,7 +71,7 @@ def settings_page(store: Store) -> Iterator[Any]:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
             page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
             yield page
@@ -81,28 +81,29 @@ def settings_page(store: Store) -> Iterator[Any]:
 
 
 @pytest.mark.browser
-def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_save(store) -> None:
+def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_save(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(store) as page:
+    with settings_page(store, pds) as page:
         limits = page.locator("#limits")  # TD-286: each worker role's minutes; the shaper's chat has none
         expect(limits).to_contain_text("builder")
         expect(limits).not_to_contain_text("shaper")
         minutes = limits.get_by_label("Minutes per session, builder")
         expect(minutes).to_have_attribute("placeholder", "inherit (40)")
-        page.get_by_label("Model for builder").select_option("tiny")
+        pds.pick(page, "Model for builder", "tiny")
         expect(page.locator("#agents")).to_contain_text("tiny takes no effort setting")
-        page.get_by_label("Model for reviewer").select_option("claude-opus-5.5")
-        message = page.locator('[id="reviewer.effort-message"]')
-        expect(message).to_have_text("claude-opus-5.5 does not offer effort xhigh (inherited); choose one it offers")
+        pds.pick(page, "Model for reviewer", "claude-opus-5.5")
+        said = "claude-opus-5.5 does not offer effort xhigh (inherited); choose one it offers"
+        message = pds.select(page, "Effort for reviewer").get_by_text(said, exact=True)
+        expect(message).to_be_visible()
         page.get_by_role("button", name="Save project settings").click()
         expect(page.locator("#error")).to_contain_text("Not saved: claude-opus-5.5 does not offer effort xhigh")
-        page.get_by_label("Effort for reviewer").select_option("high")
-        expect(message).to_have_text("")
+        pds.pick(page, "Effort for reviewer", "high")
+        expect(message).to_have_count(0)
         minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
-        expect(page.get_by_role("dialog")).to_contain_text("These apply to this project only")  # TD-396
-        page.locator("dialog").get_by_role("button", name="Save project settings").click()
+        expect(pds.modal(page)).to_contain_text("These apply to this project only")  # TD-396
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     agents = store.read_config().agents
     assert (agents["builder"].model, agents["reviewer"].model, agents["reviewer"].effort) == (
@@ -113,35 +114,35 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
 
 
 @pytest.mark.browser
-def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store) -> None:
+def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(store) as page:
+    with settings_page(store, pds) as page:
         rounds = page.get_by_label("Rounds at most, builder")
         rounds.fill("4")
-        page.get_by_label("Layer").select_option("global")
+        pds.pick(page, "Layer", "global")
         expect(page.locator("#pending")).to_have_text("No unsaved edits. This project: 1 more unsaved.")
         expect(rounds).to_have_value("")
         page.get_by_label("Minutes per session, builder").fill("60")
-        page.get_by_label("Layer").select_option("project")
+        pds.pick(page, "Layer", "project")
         expect(rounds).to_have_value("4")
         expect(page.locator("#pending")).to_have_text(
             "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
         )
-        page.get_by_label("When the design judge fails a change").select_option("back")  # renders the page again
+        pds.pick(page, "When the design judge fails a change", "back")  # renders the page again
         expect(rounds).to_have_value("4")
         labels = page.get_by_label("Labels, comma-separated; none for no labels")
         labels.fill("inherit")  # a label may be named so: typing it never means "inherit"
         expect(labels).to_have_value("inherit")
         labels.fill("release:minor, owlbear")
-        page.get_by_label("The line Opened by OwlBear Delivery").select_option("off")
+        pds.pick(page, "The line Opened by OwlBear Delivery", "off")
         at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
         page.get_by_role("button", name="Save project settings").click()
-        page.locator("dialog").get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        page.get_by_label("Layer").select_option("global")
+        pds.pick(page, "Layer", "global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
         expect(page.locator("#pr")).to_contain_text("Set in each project")  # TD-308: the marker is per project
     project = store.read_config()
@@ -153,29 +154,30 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
 
 
 @pytest.mark.browser
-def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(store) -> None:
+def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(store) as page:
+    with settings_page(store, pds) as page:
         c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1",
                        headers={"authorization": "Bearer t"})  # fmt: skip
         got = c.get("/api/next/config").json()
         newer = got["project"] | {"widths": [1600]}
         assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
         page.get_by_label("Minutes per session, reviewer").fill("25")
-        page.get_by_role("button", name="Save project settings").click()
-        page.locator("dialog").get_by_role("button", name="Save project settings").click()
+        save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
+        save.click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
-        page.get_by_role("button", name="Save project settings").click()
-        page.locator("dialog").get_by_role("button", name="Save project settings").click()
+        save.click()  # the answered confirmation may still be fading out with its own button of this name
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
     saved = json.loads(store.config_path.read_text())
     assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)
 
 
 @pytest.mark.browser
-def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_left(store, monkeypatch) -> None:
+def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_left(store, monkeypatch, pds) -> None:
     """Sol, TD-264: the offered models replace the typed field only once the owner leaves it."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -198,9 +200,9 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
-            typed = page.locator('input[aria-label="Model for builder"]')
+            typed = page.locator('p-input-text[label="Model for builder"]').get_by_label("Model for builder")
             typed.click()
             typed.press_sequentially("my-model")
             expect(page.locator("#models-note")).to_contain_text("Reading the models")
@@ -208,18 +210,19 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             typed.press_sequentially("-2")
             expect(typed).to_be_focused()
             expect(typed).to_have_value("my-model-2")
-            page.get_by_label("Layer").focus()  # leaving the settings lets the models in
+            pds.select(page, "Layer").get_by_role("combobox").focus()  # leaving the settings lets the models in
             expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
-            chosen = page.locator('select[aria-label="Model for builder"]')
-            expect(chosen).to_have_value("my-model-2")
-            expect(chosen.locator("option:checked")).to_have_text("my-model-2 (not offered here)")
+            chosen = pds.select(page, "Model for builder")
+            expect(chosen).to_have_js_property("value", "my-model-2")
+            said = "my-model-2 (not offered here)"
+            expect(chosen.get_by_role("option", name=said, selected=True, include_hidden=True)).to_have_count(1)
             browser.close()
     finally:
         server.should_exit = True
 
 
 @pytest.mark.browser
-def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch) -> None:
+def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pds) -> None:
     """Sol, TD-264: a save under way when the models arrive leaves them for its end, never for good."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -253,16 +256,16 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch) ->
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
             page.get_by_label("Minutes per session, builder").fill("50")
             page.get_by_role("button", name="Save project settings").click()
-            page.locator("dialog").get_by_role("button", name="Save project settings").click()
+            pds.modal(page).get_by_role("button", name="Save project settings").click()
             expect(page.locator("#status")).to_have_text(
                 "Saved this project's settings. They apply to the next session.", timeout=10_000
             )
             expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
-            expect(page.locator('select[aria-label="Model for builder"]')).to_be_visible()
+            expect(pds.select(page, "Model for builder")).to_be_visible()
             browser.close()
     finally:
         server.should_exit = True

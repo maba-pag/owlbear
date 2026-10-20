@@ -239,8 +239,8 @@ def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(sto
 
 
 @contextlib.contextmanager
-def backlog_page(store: Store) -> Iterator[Any]:
-    """The Backlog page in a real browser, offline: only the test host answers, so the plain controls show."""
+def backlog_page(store: Store, pds: Any) -> Iterator[Any]:
+    """The Backlog page in a real browser: only the test host and the PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     sock = socket.socket()
@@ -258,7 +258,7 @@ def backlog_page(store: Store) -> Iterator[Any]:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/backlog#token=tok")
             yield page
             browser.close()
@@ -267,11 +267,11 @@ def backlog_page(store: Store) -> Iterator[Any]:
 
 
 @pytest.mark.browser
-def test_the_owner_adds_an_idea_and_triages_it_on_the_backlog_page(store):
+def test_the_owner_adds_an_idea_and_triages_it_on_the_backlog_page(store, pds):
     """TD-264: the page renders with lit-html; adding clears the form, and choosing a kind moves it to Open."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with backlog_page(store) as page:
+    with backlog_page(store, pds) as page:
         expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
         page.get_by_label("Title").fill("Show the build date")
         page.get_by_role("button", name="Add idea").click()
@@ -279,19 +279,19 @@ def test_the_owner_adds_an_idea_and_triages_it_on_the_backlog_page(store):
         expect(page.get_by_label("Title")).to_have_value("")
         inbox = page.locator("#inbox > li.entry")
         expect(inbox).to_have_count(1)
-        inbox.first.locator(".triage").get_by_label("Kind").select_option("idea")
+        pds.pick(inbox.first.locator(".triage"), "Kind", "idea")
         expect(page.locator("#open > li.entry")).to_have_count(1)
         expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
     assert [e.kind for e in Backlog.of(store).read()[0].values()] == ["idea"]
 
 
 @pytest.mark.browser
-def test_notes_being_typed_and_an_open_card_survive_a_refresh_with_new_entries(store):
+def test_notes_being_typed_and_an_open_card_survive_a_refresh_with_new_entries(store, pds):
     """TD-264: drafts and open details live in page state, so a refresh that adds cards above keeps both."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     entry = Backlog.of(store).add("Wider status line")[0]
-    with backlog_page(store) as page:
+    with backlog_page(store, pds) as page:
         card = page.locator("li.entry").filter(has=page.locator(".title", has_text="Wider status line"))
         card.locator("summary").click()
         notes = card.get_by_label("Your notes: context for whoever shapes the Change")

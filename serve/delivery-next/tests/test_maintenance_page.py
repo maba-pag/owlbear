@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.browser
-def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp_path: Path) -> None:
+def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp_path: Path, pds) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     sock = socket.socket()
@@ -39,7 +39,7 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/maintenance#token=tok")
             actions = page.locator("#actions > li")
             expect(actions).to_have_count(5)
@@ -51,9 +51,8 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
             ran = [{"agent": "explore", "credits": 1.25, "credits_known": True}]
             store.log(Lock("a"), "a", {"event": "step", "session": "s1", "kind": "build", "subagents": ran})
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
-            expect(page.locator("#use tbody tr > *")).to_have_text(["builder", "1", "1", "1", "1.25", "explore 1"])
+            expect(page.locator("#use p-table-cell")).to_have_text(["builder", "1", "1", "1", "1.25", "explore 1"])
             expect(page.locator("#error")).to_be_hidden()
-            expect(page.locator("#offline")).to_be_visible()  # offline: the design system's CDN is blocked
             assert page.evaluate("location.hash") == ""  # the token left the address bar
             page.route("**/api/next/**", lambda r: r.abort())
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
@@ -65,7 +64,7 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
 
 
 @pytest.mark.browser
-def test_the_test_review_starts_from_the_chosen_packages_once_confirmed(tmp_path: Path) -> None:
+def test_the_test_review_starts_from_the_chosen_packages_once_confirmed(tmp_path: Path, pds) -> None:
     """TD-370, TD-390: every package is chosen, the dialog says what runs, and the Start opens one Change."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -91,7 +90,7 @@ def test_the_test_review_starts_from_the_chosen_packages_once_confirmed(tmp_path
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/maintenance#token=tok")
             tests = page.locator("#tests")
             expect(tests.get_by_role("checkbox")).to_have_count(2)
@@ -99,11 +98,13 @@ def test_the_test_review_starts_from_the_chosen_packages_once_confirmed(tmp_path
             tests.get_by_label("the repository's root: 1 files, 1 lines, 1 share").uncheck()
             expect(page.locator("#tests-runs")).to_contain_text("1 reviewer session on")
             page.get_by_role("button", name="Review tests").click()
-            expect(page.locator("dialog")).to_contain_text("which your Start approves")
-            page.locator("dialog").get_by_role("button", name="Cancel").click()
+            expect(page.get_by_role("dialog", name="Review the tests?")).to_be_visible()
+            expect(pds.modal(page)).to_contain_text("which your Start approves")
+            pds.modal(page).get_by_role("button", name="Cancel").click()
+            expect(page.get_by_role("dialog")).to_be_hidden()
             assert store.slugs() == []  # declined: nothing starts
             page.get_by_role("button", name="Review tests").click()
-            page.locator("dialog").get_by_role("button", name="Start the test review").click()
+            pds.modal(page).get_by_role("button", name="Start the test review").click()
             expect(page.locator("#status")).to_contain_text("Started test review c1")
             expect(tests).to_contain_text("Test review c1 has not finished")
             c = store.read(store.slugs()[0])

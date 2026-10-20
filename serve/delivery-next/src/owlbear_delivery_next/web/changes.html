@@ -59,7 +59,7 @@
   .act { box-shadow: inset 0 0 0 1px var(--p-color-contrast-low); }
   #changes { display: grid; gap: var(--p-spacing-fluid-sm); }
   .info { padding-top: var(--p-spacing-static-md); border-top: 1px solid var(--p-color-contrast-lower); }
-  .panel > p-button, .panel > p-link-pure, .panel > button, .panel > a { justify-self: start; }
+  .panel > p-button, .panel > p-link-pure, .panel > a { justify-self: start; }
   .brief, .gallery { display: grid; gap: var(--p-spacing-static-sm); }
   /* The brief: the agreement first, each part with room around it; details collapsed below. */
   .brief { gap: var(--p-spacing-static-md); }
@@ -95,11 +95,6 @@
     display: grid; place-items: center; padding: var(--p-spacing-static-sm); text-align: center;
     border-style: dashed; border-color: var(--p-color-contrast-low);
   }
-  dialog.lightbox {
-    width: 96vw; max-width: none; max-height: 96vh; padding: var(--p-spacing-static-sm); border: 0;
-    border-radius: var(--p-radius-lg); background: var(--p-color-canvas); color: var(--p-color-primary);
-  }
-  dialog.lightbox::backdrop { background: var(--p-color-backdrop, rgb(0 0 0 / .7)); }
   .lightbox .frame { overflow: auto; max-height: calc(96vh - 5rem); margin-top: var(--p-spacing-static-sm); }
   .lightbox img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
   .lightbox .caption { flex: 1; margin: 0; text-align: center; font-size: var(--p-typescale-sm); }
@@ -116,7 +111,6 @@
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
   .stale { opacity: .45; pointer-events: none; }
-  .no-pds .card .open { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -133,7 +127,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { api, call as host, designSystem, here, HostDown, project, Restarted, shown, token } from "/assets/ui.mjs";
+import { api, call as host, defined, here, HostDown, project, Restarted, shown, token } from "/assets/ui.mjs";
 
 const TITLE = document.title;
 const KEY = /^(?:[0-9a-f]{16}\/)?[a-z0-9][a-z0-9-]{0,63}$/;  // a Change: its project's id, then its slug (TD-241)
@@ -142,7 +136,7 @@ const REVERT = "Reversing the merge needs a revert you make yourself.";
 // Everything the page shows comes from here (TD-264): the list and the detail as last read, the owner's unsent input
 // per form (drafts: form key -> its fields), which toggles are open (by their summary), and the notes above.
 const state = {
-  pds: true, changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
+  changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
   stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, creating: false,
   choosing: false,
 };
@@ -153,7 +147,8 @@ function show() {
   render(view(), document.getElementById("page"));
   render(button("New Change", newChange, { icon: "add", aria: DIALOG, busy: state.creating }),
     document.getElementById("header-actions"));
-  if (focused?.isConnected && document.activeElement !== focused && !document.querySelector("dialog[open]")) {
+  const modal = [...document.querySelectorAll("p-modal")].some((m) => m.open);
+  if (focused?.isConnected && document.activeElement !== focused && !modal) {
     focused.focus({ preventScroll: true });
   }
   document.title = youCount() ? `(${youCount()}) ${TITLE}` : TITLE;
@@ -241,12 +236,9 @@ async function send(path, body, d, form = "") {
 }
 
 function button(label, onclick, { icon, variant, aria, busy = false, disabled = false, title, keys, cls } = {}) {
-  return state.pds
-    ? html`<p-button type="button" compact="true" icon=${icon ?? nothing} variant=${variant ?? nothing}
-        aria=${aria ?? nothing} title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing} class=${cls ?? nothing}
-        .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`
-    : html`<button type="button" title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing}
-        class=${cls ?? nothing} .disabled=${busy || disabled} @click=${onclick}>${label}</button>`;
+  return html`<p-button type="button" compact="true" icon=${icon ?? nothing} variant=${variant ?? nothing}
+    aria=${aria ?? nothing} title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing} class=${cls ?? nothing}
+    .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
 }
 
 function external(label, href) {
@@ -257,18 +249,14 @@ function external(label, href) {
     web = false;
   }
   if (!web) return html`<p-text>${label}</p-text>`;
-  const link = html`<a href=${href} target="_blank" rel="noopener">${label}</a>`;
-  return state.pds ? html`<p-link-pure icon="external">${link}</p-link-pure>` : link;
+  return html`<p-link-pure icon="external"><a href=${href} target="_blank" rel="noopener">${label}</a></p-link-pure>`;
 }
 
 // A text field bound to the draft field *name* of form *key*.
 function field(key, name, label, rows = "2") {
   const d = draft(key, () => ({})), keep = (e) => { d[name] = e.target.value ?? ""; };
-  return state.pds
-    ? html`<p-textarea label=${label} rows=${rows} .value=${live(d[name] ?? "")} @input=${keep}
-        @change=${keep}></p-textarea>`
-    : html`<label class="field">${label}<textarea rows=${rows} .value=${live(d[name] ?? "")}
-        @input=${keep}></textarea></label>`;
+  return html`<p-textarea label=${label} rows=${rows} .value=${live(d[name] ?? "")} @input=${keep}
+    @change=${keep}></p-textarea>`;
 }
 
 // Radio choices bound to the draft field *name* of form *key*; re-rendering never changes the choice, and a choice
@@ -276,21 +264,14 @@ function field(key, name, label, rows = "2") {
 function choice(key, name, label, options) {
   const d = draft(key, () => ({})), pick = (v) => { d[name] = v; show(); };
   if (d[name] !== undefined && !options.some((o) => o.id === d[name])) delete d[name];
-  if (state.pds) {
-    return html`<p-radio-group name=${`${key}-${name}`} label=${label} .value=${live(d[name] ?? "")}
-      @change=${(e) => pick(e.target.value)}>${options.map((o) => html`<p-radio-group-option value=${o.id}
-      label=${o.label}></p-radio-group-option>`)}</p-radio-group>`;
-  }
-  return html`<fieldset><legend>${label}</legend>${options.map((o) => html`<label><input type="radio"
-    name=${`${key}-${name}`} value=${o.id} .checked=${live(d[name] === o.id)} @change=${() => pick(o.id)}>
-    ${o.label}</label>`)}</fieldset>`;
+  return html`<p-radio-group name=${`${key}-${name}`} label=${label} .value=${live(d[name] ?? "")}
+    @change=${(e) => pick(e.target.value)}>${options.map((o) => html`<p-radio-group-option value=${o.id}
+    label=${o.label}></p-radio-group-option>`)}</p-radio-group>`;
 }
 
 function tick(label, checked, flipped) {
   const flip = (e) => flipped(e.target.checked === true);
-  return state.pds
-    ? html`<p-checkbox label=${label} .checked=${live(checked)} @change=${flip}></p-checkbox>`
-    : html`<label><input type="checkbox" .checked=${live(checked)} @change=${flip}> ${label}</label>`;
+  return html`<p-checkbox label=${label} .checked=${live(checked)} @change=${flip}></p-checkbox>`;
 }
 
 function hd(level, title, size, { tabindex } = {}) {
@@ -325,7 +306,6 @@ function info(title, ...children) {
 }
 
 function notice(kind, title, ...lines) {
-  if (!state.pds) return html`<section class="panel act">${hd(3, title, "md")}${lines.map((l) => text(l))}</section>`;
   return html`<p-inline-notification state=${kind} heading=${title} heading-tag="h3" description=${lines.join(" ")}
     dismiss-button="false"></p-inline-notification>`;
 }
@@ -728,9 +708,6 @@ function pullbackNote(p, d) {
     });
     if (sure) send("/pull", {}, d);
   };
-  if (!state.pds) {
-    return behind ? panel(title, "", text(p.reason || ""), button("Pull", pull)) : info(title, text(p.reason || ""));
-  }
   return html`<p-inline-notification state=${behind ? "warning" : "success"} heading=${title} heading-tag="h3"
     dismiss-button="false" action-label=${behind ? "Pull" : nothing} action-icon=${behind ? "refresh" : nothing}
     @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
@@ -763,12 +740,13 @@ function zoomable(entry, gallery) {
       src=${s.url ?? nothing}></button>`;
 }
 
-// The enlarged screenshots: arrow keys or buttons step through them, Escape or Close ends. Built apart from the
-// page's render, so a poll never touches it.
+// The enlarged screenshots: arrow keys or buttons step through them, Escape or the modal's dismiss button ends. Built
+// apart from the page's render, so a poll never touches it.
 function lightbox(gallery, start) {
-  const dialog = document.createElement("dialog");
-  dialog.className = "lightbox";
-  dialog.setAttribute("aria-label", "Screenshots");
+  const modal = document.createElement("p-modal");
+  modal.className = "lightbox";
+  modal.setAttribute("fullscreen", "true");
+  modal.setAttribute("aria", "{ 'aria-label': 'Screenshots' }");
   let at = start, size = "";
   const draw = () => {
     const e = gallery[at], s = shot(e.slug, e.kind, e.name, e.at);
@@ -780,11 +758,10 @@ function lightbox(gallery, start) {
         ? " \u00b7 not available" : ""}${size}</p>`,
       button("Next", () => go(1), { icon: "arrow-right", variant: "secondary", keys: "ArrowRight",
         title: "Next screenshot (right arrow)" }),
-      button("Close", () => dialog.close(), { icon: "close", variant: "secondary" }),
     )}<div class="frame"><img alt=${e.alt} src=${s.url ?? nothing} @load=${(ev) => {
       size = ` \u00b7 ${ev.target.naturalWidth} \u00d7 ${ev.target.naturalHeight} px`;
       draw();
-    }}></div>`, dialog);
+    }}></div>`, modal);
     if (!s.url && !s.failed) s.loading.then(() => { if (gallery[at] === e) draw(); });
   };
   const go = (step) => {
@@ -792,16 +769,18 @@ function lightbox(gallery, start) {
     size = "";
     draw();
   };
-  dialog.addEventListener("keydown", (k) => {
+  modal.addEventListener("keydown", (k) => {
     if (k.key !== "ArrowLeft" && k.key !== "ArrowRight") return;
     k.preventDefault();
     go(k.key === "ArrowLeft" ? -1 : 1);
   });
-  dialog.addEventListener("click", (k) => { if (k.target === dialog) dialog.close(); });
-  dialog.addEventListener("close", () => dialog.remove());
-  document.body.append(dialog);
+  modal.addEventListener("dismiss", () => {
+    modal.open = false;
+    setTimeout(() => modal.remove(), 1000);
+  });
+  document.body.append(modal);
   draw();
-  dialog.showModal();
+  modal.open = true;
 }
 
 function side(label, child) {
@@ -1167,10 +1146,8 @@ function proposedWording(amendments) {
 }
 
 function detailHead(d) {
-  const back = state.pds
-    ? html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
-      Changes</p-button-pure>`
-    : html`<button type="button" class="back" @click=${() => choose(null)}>All Changes</button>`;
+  const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
+    Changes</p-button-pure>`;
   let intent = nothing;
   if (!/^(Done|Abandoned) /.test(d.line)) {  // a finished Change has nothing left to pause
     const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
@@ -1321,8 +1298,6 @@ function startedView() {
 function view() {
   const d = state.detail && state.detail.key === state.selected ? state.detail : null;
   return html`
-    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
-      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
     ${startedView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
       ?? ""}</p-inline-notification>
@@ -1460,7 +1435,7 @@ function newChange() {
   if (several()) {
     state.choosing = shown()[0].id;
     show();
-    document.querySelector("#choose select")?.focus();
+    document.querySelector("#choose p-select")?.focus();
     return undefined;
   }
   return shape(shown()?.[0]?.id ?? project);
@@ -1475,9 +1450,9 @@ function chooserView() {
     shape(of);
   };
   const stop = () => { state.choosing = false; show(); };
-  return html`<div id="choose" class="row"><label>Shape the new Change in <select .value=${state.choosing}
-    @change=${picked}>${shown().map((p) => html`<option value=${p.id} ?selected=${p.id === state.choosing}>${p.name}
-    </option>`)}</select></label>
+  return html`<div id="choose" class="row"><p-select label="Shape the new Change in" .value=${state.choosing}
+    @change=${picked}>${shown().map((p) => html`<p-select-option value=${p.id}>${p.name}</p-select-option>`)}
+    </p-select>
     ${button("Continue", go)}${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }
 
@@ -1509,10 +1484,9 @@ async function shape(of) {
   }
 }
 
-// The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
 state.selected = wanted(new URLSearchParams(location.search).get("change"));
 arrived = Boolean(state.selected);
-state.pds = await designSystem(["p-button"]);
+await defined(["p-button", "p-select", "p-checkbox", "p-textarea", "p-radio-group"]);
 show();
 addEventListener("popstate", () => choose(new URLSearchParams(location.search).get("change"), false));
 refresh();

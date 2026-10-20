@@ -295,8 +295,8 @@ def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:
 
 
 @contextlib.contextmanager
-def memory_page(store: Store) -> Iterator[Any]:
-    """The Memory page in a real browser, offline: only the test host answers, so the plain controls show."""
+def memory_page(store: Store, pds: Any) -> Iterator[Any]:
+    """The Memory page in a real browser: only the test host and the PDS CDN answer."""
     import socket  # noqa: PLC0415
     import time  # noqa: PLC0415
 
@@ -317,7 +317,7 @@ def memory_page(store: Store) -> Iterator[Any]:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/memory#token=tok")
             yield page
             browser.close()
@@ -330,7 +330,7 @@ def refreshed(page: Any) -> None:
 
 
 @pytest.mark.browser
-def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(shared):
+def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(shared, pds):
     """TD-264: the draft lives in page state, so a filter that removes the cards above it keeps what was typed."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -341,14 +341,14 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
     above = seed(folder, "Name the release", agent="shaper")
     engine.edit(above.id, {"categories": [MemoryCategory.PROCESS]}, expected_revision=above.revision)
     seed(folder, "Ask before merging", agent="shaper")  # newer, so listed above it in the same group
-    with memory_page(store) as page:
+    with memory_page(store, pds) as page:
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
         waiting = page.locator("section", has_text="Waiting for the curator").locator(".entry")
         expect(waiting).to_have_count(2)
         expect(waiting.first).to_contain_text("Ask before merging")
         page.locator(".entry", has_text="Name the release").get_by_role("button", name="Edit").click()
         page.get_by_label("Title").fill("Name the release after its tag")
-        page.get_by_label("Category").select_option("process")  # the card above it leaves the page
+        pds.pick(page, "Category", "process")  # the card above it leaves the page
         expect(page.locator("#shown")).to_have_text("1 of 2 shown")
         expect(page.get_by_label("Title")).to_have_value("Name the release after its tag")
         page.get_by_role("button", name="Save").click()
@@ -357,7 +357,7 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
 
 
 @pytest.mark.browser
-def test_the_deleted_section_removes_entries_deleted_long_ago(shared):
+def test_the_deleted_section_removes_entries_deleted_long_ago(shared, pds):
     """TD-416: the Memory page's purge; only entries deleted 30 days ago or earlier go."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -375,20 +375,20 @@ def test_the_deleted_section_removes_entries_deleted_long_ago(shared):
         old = next(p for p in folder.glob("*.md") if f"title: {title}" in p.read_text())
         stamp = next(e.updated_at for e in MemoryEngine(folder).get_entries() if e.title == title)
         old.write_text(old.read_text().replace(stamp, "2020-01-01T00:00:00+00:00"))
-    with memory_page(store) as page:
-        page.get_by_label("State").select_option("any")
-        page.get_by_label("Category").select_option("pitfall")
+    with memory_page(store, pds) as page:
+        pds.pick(page, "State", "any")
+        pds.pick(page, "Category", "pitfall")
         deleted = page.locator("section", has_text="Deleted (history kept)")
         expect(deleted.locator(".entry")).to_have_count(2)
         deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 30 days from {store.name}").click()
-        page.locator("dialog").get_by_role("button", name="Remove them").click()
+        pds.modal(page).get_by_role("button", name="Remove them").click()
         expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
         expect(deleted.locator(".entry")).to_have_count(1)
     assert [e.title for e in MemoryEngine(folder).get_entries()] == ["Recent lesson"]
 
 
 @pytest.mark.browser
-def test_approving_one_memory_leaves_the_next_ones_button_ready(shared):
+def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
     """Sol, TD-264: a finished action's busy state never moves to the card that takes its place."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -397,7 +397,7 @@ def test_approving_one_memory_leaves_the_next_ones_button_ready(shared):
     folder = root / store.name / "memory"
     seed(folder, "Run ruff first", curated=True)
     seed(folder, "Pin the runtime", curated=True)
-    with memory_page(store) as page:
+    with memory_page(store, pds) as page:
         review = page.locator("section", has_text="Needs your review")
         expect(review.locator(".entry")).to_have_count(2)
         review.locator(".entry").first.get_by_role("button", name="Approve").click()
@@ -406,7 +406,7 @@ def test_approving_one_memory_leaves_the_next_ones_button_ready(shared):
 
 
 @pytest.mark.browser
-def test_a_filter_whose_choice_vanished_shows_everything_again(shared):
+def test_a_filter_whose_choice_vanished_shows_everything_again(shared, pds):
     """Sol, TD-264: the filter falls back to Any before the list is computed, so the count and list agree."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -415,13 +415,13 @@ def test_a_filter_whose_choice_vanished_shows_everything_again(shared):
     folder = root / store.name / "memory"
     builder = seed(folder, "Run ruff first", curated=True)
     seed(folder, "Ask before merging", agent="shaper")
-    with memory_page(store) as page:
-        page.get_by_label("Agent").select_option("builder")
+    with memory_page(store, pds) as page:
+        pds.pick(page, "Agent", "builder")
         expect(page.locator("#shown")).to_have_text("1 of 2 shown")
         engine = MemoryEngine(folder)
         now = next(e for e in engine.get_entries() if e.id == builder.id)
         engine.edit(builder.id, {"scope_agents": ["reviewer"]}, expected_revision=now.revision)
         refreshed(page)
-        expect(page.get_by_label("Agent")).to_have_value("any")
+        expect(pds.select(page, "Agent")).to_have_js_property("value", "any")
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
         expect(page.locator(".entry")).to_have_count(2)

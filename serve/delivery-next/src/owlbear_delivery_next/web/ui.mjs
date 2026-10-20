@@ -79,12 +79,9 @@ export async function call(path, { method, body, timeout = 5000, machine = false
   return data;
 }
 
-// Whether the design system's components arrived within three seconds; without them the page shows plain controls.
-export async function designSystem(tags = ["p-heading"]) {
-  const ready = Promise.all(tags.map((t) => customElements.whenDefined(t))).then(() => true);
-  const pds = await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 3000, false))]);
-  if (!pds) document.documentElement.classList.add("no-pds");
-  return pds;
+// Resolves once the design system defined *tags*, so property bindings reach upgraded elements.
+export function defined(tags) {
+  return Promise.all(tags.map((t) => customElements.whenDefined(t)));
 }
 
 // The machine host's projects and pause, or null on a clone's own host (which has no such route) or when down.
@@ -147,10 +144,8 @@ async function act(name, work) {
 }
 
 function control(label, onclick, { variant = "secondary", busy = false, title } = {}) {
-  return customElements.get("p-button")
-    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy} title=${title ?? nothing}
-        @click=${onclick}>${label}</p-button>`
-    : html`<button type="button" .disabled=${busy} title=${title ?? nothing} @click=${onclick}>${label}</button>`;
+  return html`<p-button type="button" compact="true" variant=${variant} .loading=${busy} title=${title ?? nothing}
+    @click=${onclick}>${label}</p-button>`;
 }
 
 function chosen(p, all) {
@@ -193,19 +188,18 @@ function view() {
   });
   return html`
     <div class="projects">
-      ${projects.length ? html`<label>Project <select .value=${project} @change=${go}>
-        ${scope === "all" ? html`<option value="" ?selected=${!project}>All projects</option>` : nothing}
-        ${projects.map((o) => html`<option value=${o.id} ?selected=${o.id === project}>${chosen(o, projects)}
-          </option>`)}
-      </select></label>` : html`<span>No project yet: add the folder of a clone.</span>`}
+      ${projects.length ? html`<p-select label="Project" compact="true" .value=${project} @change=${go}>
+        ${scope === "all" ? html`<p-select-option value="">All projects</p-select-option>` : nothing}
+        ${projects.map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
+      </p-select>` : html`<span>No project yet: add the folder of a clone.</span>`}
       ${p ? control("Remove project", () => remove(p), { busy: bar.busy === "remove" }) : nothing}
       ${p?.state === "replaced" ? control("Adopt the new clone", () => !held() && act("adopt", async () => {
         const adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
         location.assign(here({ project: adopted.id }));
       }), { busy: bar.busy === "adopt" }) : nothing}
       <details ?open=${!projects.length}><summary>Add project</summary>
-        <label>Folder <input type="text" placeholder="~/Projects/my-app" .value=${bar.draft}
-          @input=${(e) => { bar.draft = e.target.value; }}></label>
+        <p-input-text label="Folder" compact="true" placeholder="~/Projects/my-app" .value=${bar.draft}
+          @input=${(e) => { bar.draft = e.target.value ?? ""; }}></p-input-text>
         ${control("Add", add, { busy: bar.busy === "add" })}
       </details>
       ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
@@ -294,6 +288,7 @@ function showBar() {
 }
 
 if (bar.data) {
+  await defined(["p-select", "p-select-option", "p-input-text", "p-button"]);
   showBar();
   const counted = () => { until = bar.data?.announce ? Date.now() + bar.data.announce.left * 1000 : 0; };
   counted();

@@ -47,7 +47,7 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
 
 @pytest.mark.browser
 def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_resumes(  # noqa: PLR0915 - a journey
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, pds
 ) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -63,7 +63,7 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/#token=t")
             expect(page.locator("#changes")).to_contain_text("alpha-1")  # All: every project's Changes
             expect(page.locator("#changes")).to_contain_text("beta-1")
@@ -71,25 +71,27 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
             expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
             expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
-            page.locator("#machine select").select_option(b.id)
+            bar = page.locator("#machine")
+            pds.pick(bar, "Project", b.id)
             expect(page.locator("#changes")).to_contain_text("beta-1")
             expect(page.locator("#changes")).not_to_contain_text("alpha-1")
             expect(page.get_by_role("link", name="Backlog")).to_have_attribute("href", f"/backlog?project={b.id}")
             page.locator("#changes a.open").first.click()
             expect(page).to_have_url(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")
             page.reload()
-            expect(page.locator("#machine select")).to_have_value(b.id)
+            expect(pds.select(bar, "Project")).to_have_js_property("value", b.id)
             page.get_by_role("button", name="Resume").click()
             expect(page.locator("#machine .paused")).to_have_count(0)
             assert (machine.paused, registry.load().resumed_at is not None) == (False, True)
             pause = page.get_by_role("button", name="Pause Delivery")
-            expect(pause).to_have_attribute("title", re.compile("may still update"))  # TD-288
+            tip = bar.locator("p-button", has=pause)  # the tooltip is on the PDS button, around its inner button
+            expect(tip).to_have_attribute("title", re.compile("may still update"))  # TD-288
             pause.click()
             expect(page.locator("#machine .paused")).to_contain_text("Delivery is paused: 2 Changes would continue")
             stop = page.get_by_role("button", name="Pause and stop when idle")
-            expect(stop).to_have_attribute("title", re.compile("stops"))
+            expect(bar.locator("p-button", has=stop)).to_have_attribute("title", re.compile("stops"))
             stop.click()
-            page.locator("dialog").get_by_role("button", name="Pause and stop").click()
+            pds.modal(page).get_by_role("button", name="Pause and stop").click()
             expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
             assert (machine.paused, machine.ending) == (True, True)
             page.get_by_role("button", name="Resume").click()
@@ -102,7 +104,7 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             added = next(p for p in registry.load().projects if p.path == str(third))
             expect(page).to_have_url(f"{base}/?project={added.id}")
             page.get_by_role("button", name="Remove project").click()
-            page.locator("dialog").get_by_role("button", name="Remove project").click()
+            pds.modal(page).get_by_role("button", name="Remove project").click()
             expect(page).to_have_url(f"{base}/")  # back to All
             assert [p.id for p in registry.load().projects] == [a.id, b.id]
             page.get_by_role("link", name="Backlog").click()
@@ -116,7 +118,9 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
 
 
 @pytest.mark.browser
-def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(tmp_path: Path, monkeypatch) -> None:
+def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
@@ -130,7 +134,7 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/#token=t")
             cards = page.locator("#changes li.card")
             expect(cards).to_have_count(2)
@@ -146,13 +150,14 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
             page.go_back()
             expect(page).to_have_url(f"{base}/")
             page.get_by_role("button", name="New Change").click()
-            expect(page.locator("#choose select")).to_have_value(a.id)
+            chooser = pds.select(page.locator("#choose"), "Shape the new Change in")
+            expect(chooser).to_have_js_property("value", a.id)
             page.get_by_role("button", name="Cancel").click()
             expect(page.locator("#choose")).to_have_count(0)
             page.get_by_role("button", name="New Change").click()
-            page.locator("#choose select").select_option(b.id)
+            pds.pick(page.locator("#choose"), "Shape the new Change in", b.id)
             page.get_by_role("button", name="Continue").click()
-            page.locator("dialog").get_by_role("button", name="Not now").click()
+            pds.modal(page).get_by_role("button", name="Not now").click()
             expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
             page.route(f"**/p/{a.id}/api/next/changes", lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
             expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
@@ -169,7 +174,7 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
 
 
 @pytest.mark.browser
-def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_version_runs() -> None:
+def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_version_runs(pds) -> None:
     """TD-288, TD-352, TD-299: Run updates now on the paused bar; the version taken is said once."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -190,13 +195,13 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/#token=t")
             expect(page.locator("#update-done")).to_contain_text("OwlBear now runs v0.2")
             page.locator("#update-done").get_by_role("button", name="OK").click()
             expect(page.locator("#update-done")).to_have_count(0)
             page.get_by_role("button", name="Run updates now").click()
-            page.locator("dialog").get_by_role("button", name="Run updates now").click()
+            pds.modal(page).get_by_role("button", name="Run updates now").click()
             expect(page.locator("#update-state")).to_contain_text(
                 "Update to v0.3: waiting · waits for p: c1: a running step"
             )
@@ -211,7 +216,7 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
 
 
 @pytest.mark.browser
-def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it() -> None:
+def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it(pds) -> None:
     """TD-301: open pages announce it 2 minutes ahead with Postpone; Postpone is use."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -224,7 +229,7 @@ def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it()
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
-            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            pds.only(page, base)
             page.goto(f"{base}/#token=t")
             expect(page.locator("#update-announce")).to_contain_text("OwlBear updates to v0.3 in 1:4")
             page.locator("#update-announce").get_by_role("button", name="Postpone").click()

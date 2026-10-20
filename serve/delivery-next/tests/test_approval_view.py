@@ -66,8 +66,8 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 
 
 @contextlib.contextmanager
-def opened(base: str, slug: str) -> Iterator[Any]:
-    """The Changes page on *slug* in a real browser, offline: only the test host answers."""
+def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
+    """The Changes page on *slug* in a real browser: only the test host and the PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -76,7 +76,7 @@ def opened(base: str, slug: str) -> Iterator[Any]:
         except Error as exc:
             pytest.skip(f"no Playwright Chromium: {exc}")
         page = browser.new_page()
-        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+        pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
         page.goto(f"{base}/?change={slug}")
         yield page
@@ -87,11 +87,11 @@ STAGES = ["Shape", "Plan", "Build", "Final review", "Publish", "Visual check", "
 
 
 @pytest.mark.browser
-def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_owners_additions(page_url) -> None:
+def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_owners_additions(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
-    with opened(base, "flip") as page:
+    with opened(base, "flip", pds) as page:
         expect(page.locator("ol.stepper > li > span > span:first-child")).to_have_text(STAGES)
         current = page.locator("ol.stepper > li[aria-current]")
         expect(current).to_have_count(1)
@@ -108,8 +108,10 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(page.get_by_text(LEFT_TO_SHAPER, exact=False)).to_be_hidden()  # collapsed until opened
         page.get_by_role("button", name="Approve brief v2").click()
         dialog = page.get_by_role("dialog")
-        expect(dialog).to_contain_text("including its technical details (2 criteria \u00b7 1 screen \u00b7 1 check")
-        expect(dialog).to_contain_text("Do your check once the pull request's checks pass")
+        expect(dialog).to_be_visible()
+        said = pds.modal(page)
+        expect(said).to_contain_text("including its technical details (2 criteria \u00b7 1 screen \u00b7 1 check")
+        expect(said).to_contain_text("Do your check once the pull request's checks pass")
         page.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
         assert store.read("flip").brief.approved_version is None  # declining approves nothing
@@ -132,22 +134,22 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
 
 
 @pytest.mark.browser
-def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_he_accepts_it(page_url) -> None:
+def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_he_accepts_it(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     tail = change().model_copy(update={"slug": "tail"})
     tail.loops["brief"] = RoundLoop(subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"])
     store.write(Lock("tail"), tail)
-    with opened(base, "tail") as page:
+    with opened(base, "tail", pds) as page:
         page.get_by_role("button", name="Approve brief v2").click()
-        dialog = page.get_by_role("dialog")
+        dialog = pds.modal(page)
         confirm = dialog.get_by_role("button", name="Approve and start")
         expect(confirm).to_be_disabled()  # TD-255
         dialog.get_by_label("no challenger reviewed that revision", exact=False).check()
         expect(confirm).to_be_enabled()
         confirm.click()
-        expect(dialog).to_be_hidden()
+        expect(page.get_by_role("dialog")).to_be_hidden()
         page.wait_for_timeout(500)
     assert store.fold(Lock("tail"), "tail", NOW)[0].brief.approved_version == 2
 
@@ -173,13 +175,13 @@ def asking() -> m.Change:
 
 
 @pytest.mark.browser
-def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sent(page_url) -> None:
+def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sent(page_url, pds) -> None:
     """TD-264: the answer's draft lives in page state; a poll with new data renders the detail again around it."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     store.write(Lock("greet"), asking())
-    with opened(base, "greet") as page:
+    with opened(base, "greet", pds) as page:
         form = page.locator("section.act", has_text="Question q1")
         expect(form).to_contain_text("Which language?")
         form.get_by_label("English").check()
@@ -198,12 +200,12 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
 
 
 @pytest.mark.browser
-def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(page_url) -> None:
+def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     store.write(Lock("greet"), asking())
-    with opened(base, "flip") as page:
+    with opened(base, "flip", pds) as page:
         expect(page.locator("#detail h2")).to_have_text("flip")
         expect(page.locator("#changes")).to_contain_text("Needs you (")
         page.locator("#changes a[data-key='greet']").click()
@@ -218,21 +220,21 @@ def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(p
 
 @pytest.mark.parametrize("left", [["de", "fr"], []])
 @pytest.mark.browser
-def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left) -> None:
+def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds) -> None:
     """Sol, TD-264: a choice dropped from the question by a later poll leaves the draft too, even with none left."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     store.write(Lock("greet"), asking())
-    with opened(base, "greet") as page:
+    with opened(base, "greet", pds) as page:
         form = page.locator("section.act", has_text="Question q1")
         form.get_by_label("English").check()
         changed = asking()
         labels = {"de": "German", "fr": "French"}
         changed.questions[0].options = [m.Option(id=o, label=labels[o]) for o in left]
         store.write(Lock("greet"), changed)
-        expect(form.locator("input[type=radio]")).to_have_count(len(left), timeout=10_000)
-        expect(form.locator("input:checked")).to_have_count(0)
+        expect(form.get_by_role("radio")).to_have_count(len(left), timeout=10_000)
+        expect(form.get_by_role("radio", checked=True)).to_have_count(0)
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     assert '"option":null' in sent(store, "greet").replace(" ", "")
