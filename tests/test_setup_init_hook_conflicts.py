@@ -28,14 +28,14 @@ def init_module() -> types.ModuleType:
 
 
 def _make_seed_hook(owlbear_dir: Path, content: str) -> Path:
-    hook_path = owlbear_dir / "seed" / ".owlbear" / "hooks" / "deny-writes.py"
+    hook_path = owlbear_dir / "seed" / ".owlbear" / "hooks" / "deny-src-writes.py"
     hook_path.parent.mkdir(parents=True, exist_ok=True)
     hook_path.write_text(content, encoding="utf-8")
     return hook_path
 
 
 def _make_existing_hook(target_dir: Path, content: str) -> Path:
-    hook_path = target_dir / ".owlbear" / "hooks" / "deny-writes.py"
+    hook_path = target_dir / ".owlbear" / "hooks" / "deny-src-writes.py"
     hook_path.parent.mkdir(parents=True, exist_ok=True)
     hook_path.write_text(content, encoding="utf-8")
     return hook_path

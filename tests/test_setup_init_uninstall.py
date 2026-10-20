@@ -72,7 +72,7 @@ def test_uninstall_removes_unchanged_seed_surfaces_and_preserves_user_state(tmp_
     custom_editorconfig = "root = false\n"
     (target_dir / ".editorconfig").write_text(custom_editorconfig, encoding="utf-8")
 
-    custom_hook = target_dir / ".owlbear" / "hooks" / "deny-writes.py"
+    custom_hook = target_dir / ".owlbear" / "hooks" / "deny-src-writes.py"
     custom_hook.parent.mkdir(parents=True, exist_ok=True)
     custom_hook.write_text("# consumer hook\n", encoding="utf-8")
 
@@ -94,7 +94,7 @@ def test_uninstall_removes_unchanged_seed_surfaces_and_preserves_user_state(tmp_
     assert not (target_dir / ".markdownlintignore").exists()
     assert not (target_dir / ".yamllint.yml").exists()
     assert not (target_dir / ".owlbear" / "install-manifest.json").exists()
-    assert not (target_dir / ".owlbear" / "hooks" / "allow-stances-only.py").exists()
+
     assert not (target_dir / ".owlbear" / "scripts" / "test-root.py").exists()
     assert not (target_dir / ".owlbear" / "knowledge" / ".gitkeep").exists()
     assert not (target_dir / "store" / "knowledge" / ".gitkeep").exists()
@@ -135,7 +135,7 @@ def test_cli_uninstall_requires_explicit_confirmation_without_a_tty(tmp_path: Pa
 
     assert result.returncode != 0
     assert "--yes" in result.stderr or "--yes" in result.stdout
-    assert (target_dir / ".owlbear" / "hooks" / "deny-writes.py").exists()
+    assert (target_dir / ".owlbear" / "hooks" / "deny-src-writes.py").exists()
 
 
 def test_cli_uninstall_dry_run_preserves_files(tmp_path: Path) -> None:
@@ -155,7 +155,7 @@ def test_cli_uninstall_dry_run_preserves_files(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "dry-run" in result.stdout
     assert "would remove" in result.stdout
-    assert (target_dir / ".owlbear" / "hooks" / "deny-writes.py").exists()
+    assert (target_dir / ".owlbear" / "hooks" / "deny-src-writes.py").exists()
 
 
 def test_uninstall_dry_run_returns_actions_without_an_out_parameter(tmp_path: Path) -> None:
@@ -168,7 +168,7 @@ def test_uninstall_dry_run_returns_actions_without_an_out_parameter(tmp_path: Pa
 
     assert result.completed is True
     assert result.actions
-    assert (target_dir / ".owlbear" / "hooks" / "deny-writes.py").exists()
+    assert (target_dir / ".owlbear" / "hooks" / "deny-src-writes.py").exists()
 
 
 def test_uninstall_preserves_preexisting_setting_equal_to_seed(tmp_path: Path) -> None:
@@ -209,8 +209,8 @@ def test_uninstall_does_not_follow_parent_symlink_outside_target(tmp_path: Path)
 
     outside_hooks = tmp_path / "outside" / "hooks"
     outside_hooks.mkdir(parents=True)
-    outside_hook = outside_hooks / "deny-writes.py"
-    outside_hook.write_bytes((target_dir / ".owlbear/hooks/deny-writes.py").read_bytes())
+    outside_hook = outside_hooks / "deny-src-writes.py"
+    outside_hook.write_bytes((target_dir / ".owlbear/hooks/deny-src-writes.py").read_bytes())
     shutil.rmtree(target_dir / ".owlbear/hooks")
     (target_dir / ".owlbear/hooks").symlink_to(outside_hooks, target_is_directory=True)
 
@@ -234,12 +234,12 @@ def test_uninstall_uses_install_digest_after_seed_drift(tmp_path: Path) -> None:
     target_dir.mkdir()
     _initialize(module, target_dir, owlbear_dir=owlbear_dir)
 
-    drifted_seed = owlbear_dir / "seed/.owlbear/hooks/deny-writes.py"
+    drifted_seed = owlbear_dir / "seed/.owlbear/hooks/deny-src-writes.py"
     drifted_seed.write_text("# newer seed\n", encoding="utf-8")
     result = module.uninstall(target_dir, owlbear_dir, confirm=False)
 
     assert result.completed is True
-    assert not (target_dir / ".owlbear/hooks/deny-writes.py").exists()
+    assert not (target_dir / ".owlbear/hooks/deny-src-writes.py").exists()
 
 
 def test_uninstall_removes_receipt_file_when_seed_surface_is_retired(tmp_path: Path) -> None:
@@ -249,8 +249,8 @@ def test_uninstall_removes_receipt_file_when_seed_surface_is_retired(tmp_path: P
     target_dir.mkdir()
     _initialize(module, target_dir, owlbear_dir=owlbear_dir)
 
-    retired_seed = owlbear_dir / "seed/.owlbear/hooks/allow-stances-only.py"
-    installed_file = target_dir / ".owlbear/hooks/allow-stances-only.py"
+    retired_seed = owlbear_dir / "seed/.owlbear/hooks/deny-src-writes.py"
+    installed_file = target_dir / ".owlbear/hooks/deny-src-writes.py"
     retired_seed.unlink()
 
     module.uninstall(target_dir, owlbear_dir, confirm=False)

@@ -1,14 +1,12 @@
 # Tests
 
 The top-level `tests/` tree verifies workspace-wide contracts: setup and seed behavior, package
-boundaries, MCP registrations, Delivery transitions, memory and knowledge persistence, hooks, and
-sync behavior. It is development evidence, not a runtime package.
+boundaries, MCP registrations, memory and knowledge persistence, hooks, and sync behavior. It is
+development evidence, not a runtime package.
 
 ## What lives here
 
 - `test_*.py` contains cross-package and repository-contract regressions.
-- `fixtures/delivery-authority/` contains inert compliant and non-compliant code samples that
-  workspace governance checks must accept or reject.
 - `benchmarks/` is reserved for benchmark support; it currently contains only package scaffolding.
 
 Package-specific tests stay beside the implementation under `serve/*/tests/`. Cockpit frontend

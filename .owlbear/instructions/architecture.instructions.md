@@ -11,12 +11,9 @@ OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files exec
 agents/*.agent.md             (agent definitions — pure markdown, no Python)
     use tools from the MCP servers below
 
-serve/delivery-github/        (provider adapter: GitHub publication)
-    import from
-serve/delivery/                (core library: Change lifecycle and target Delivery)
-
+serve/delivery-next/           (Delivery engine: Change loop, MCP tools, GitHub publication, pages)
 serve/cockpit/                 (HTTP application: read-oriented operator UI)
-    import from delivery, delivery-github, memory
+    import from memory
 serve/tools/                   (repository tools: quality, testing, and indexing)
 
 serve/memory-mcp/              (MCP server: persistent agent memory)
@@ -34,8 +31,8 @@ serve/browser/                   (core library: browser acquisition)
 serve/web-content/               (core library: shared HTML extraction and Markdown normalization)
 ```
 
-Each MCP server is a standalone MCPServer application. Core libraries, the Delivery provider
-adapter, Cockpit, and repository tools are separate packages. Cross-package imports are enforced by
+Each MCP server is a standalone MCPServer application. Core libraries, the Delivery engine,
+Cockpit, and repository tools are separate packages. Cross-package imports are enforced by
 `tests/test_package_boundary.py`, which scans runtime and `TYPE_CHECKING` imports.
 
 ## Dependency Rules
@@ -46,12 +43,11 @@ constant in that file maps each package namespace to its permitted owlbear-names
 **Rules:**
 
 - When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise.
-- Core libraries do not import applications, MCP servers, provider adapters, or repository tools.
-- The Delivery GitHub provider adapter may import only the Delivery core.
-- Cockpit may import Delivery, the Delivery GitHub provider adapter, and Memory for its read API.
+- Core libraries do not import applications, MCP servers, or repository tools.
+- Cockpit may import Memory for its read API.
 - Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab, and nothing else.
-- Each MCP server may import its corresponding core package and any provider adapter required by
-  its public operations, but MCP servers must not import other MCP servers.
+- Each MCP server may import its corresponding core package, but MCP servers must not import other
+  MCP servers.
 - Repository tools import no other OwlBear package, and product packages must not import repository tools.
 - Relative imports remain within the owning package; the boundary test reports only external
   `owlbear_*` namespaces.
@@ -63,8 +59,7 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 
 | Domain | Scope |
 | --- | --- |
-| delivery | `serve/delivery/` (Change lifecycle, target contract, workspaces, publication state) |
-| delivery-github | `serve/delivery-github/` (fixed-operation GitHub publication provider) |
+| delivery | `serve/delivery-next/` (Delivery engine: Change loop, MCP tools, GitHub publication, pages) |
 | cockpit | `serve/cockpit/` (FastAPI read API and Cockpit frontend) |
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | knowledge-mcp | `serve/knowledge-mcp/` |

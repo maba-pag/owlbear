@@ -21,7 +21,6 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _COCKPIT_WEB = _REPOSITORY_ROOT / "serve/cockpit/web"
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = (
-    "tests/test_deny_code_writes.py",
     "tests/test_package_boundary.py",
     "tests/test_write_guard_hooks.py",
 )
@@ -205,7 +204,7 @@ def _python_scope(path: str) -> list[str] | None:
     if normalized.startswith("serve/cockpit/web/"):
         scope = []
     elif normalized.startswith(".owlbear/hooks/"):
-        scope = ["tests/test_deny_code_writes.py", "tests/test_write_guard_hooks.py"]
+        scope = ["tests/test_write_guard_hooks.py"]
     elif normalized.startswith(".owlbear/scripts/diagrams/"):
         scope = ["tests/test_archify_diagrams.py", *_INVARIANT_TESTS]
     else:

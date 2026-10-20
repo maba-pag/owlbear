@@ -11,9 +11,8 @@ knowledge/*.db
 knowledge/vectors/
 memory/*.db
 
-# Delivery runtime state; keep the visible host defaults trackable
+# Old-engine Delivery runtime state
 delivery/runtime/*
-!delivery/runtime/host.json
 delivery/worktrees/
 worktrees/
 

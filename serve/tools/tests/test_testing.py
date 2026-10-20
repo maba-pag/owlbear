@@ -34,16 +34,12 @@ def test_python_source_routes_to_owning_package_tests() -> None:
     assert "tests/test_package_boundary.py" in command
 
 
-@pytest.mark.parametrize(
-    "support_file",
-    ["conftest.py", "fixtures/historical-admission/r1-browser-corrected/decisions.yaml"],
-)
-def test_package_test_support_file_routes_to_package_test_modules(support_file: str) -> None:
-    scope = testing_module._python_scope(f"serve/delivery/tests/{support_file}")  # noqa: SLF001
+def test_package_test_support_file_routes_to_package_test_modules() -> None:
+    scope = testing_module._python_scope("serve/delivery-next/tests/conftest.py")  # noqa: SLF001
 
     assert scope
     assert all(Path(path).name.startswith("test_") and path.endswith(".py") for path in scope)
-    assert "serve/delivery/tests/test_delivery_runtime.py" in scope
+    assert "serve/delivery-next/tests/test_config.py" in scope
 
 
 def test_package_test_module_routes_to_itself() -> None:
@@ -166,9 +162,9 @@ def test_setup_source_falls_back_to_full_python_suite() -> None:
 
 
 def test_hook_source_routes_guard_tests() -> None:
-    scope = testing_module._python_scope(".owlbear/hooks/deny-writes.py")  # noqa: SLF001
+    scope = testing_module._python_scope(".owlbear/hooks/deny-src-writes.py")  # noqa: SLF001
 
-    assert scope == ["tests/test_deny_code_writes.py", "tests/test_write_guard_hooks.py"]
+    assert scope == ["tests/test_write_guard_hooks.py"]
 
 
 def test_deleted_test_path_falls_back_to_full_python_suite() -> None:

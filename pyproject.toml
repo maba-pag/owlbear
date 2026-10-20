@@ -21,7 +21,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = [".", "serve/delivery/src", "serve/tools/src"]
+pythonpath = [".", "serve/tools/src"]
 addopts = """\
 --import-mode=importlib -m 'not e2e and not model' -n auto --dist loadfile \
 -p no:logfire -p no:pytest_logfire\
@@ -43,8 +43,6 @@ markers = [
 target-version = "py314"
 line-length = 120
 src = [
-  "serve/delivery/src",
-  "serve/delivery-github/src",
   "serve/delivery-next/src",
   "serve/knowledge/src",
   "serve/knowledge-mcp/src",
@@ -132,11 +130,6 @@ ignore = [
   "PLR2004", # magic values are fine in tests
   "TCH",     # type-checking blocks impractical in tests
 ]
-"tests/fixtures/delivery-authority/**/*.py" = [
-  "INP001", # structural snippets are parsed as source fixtures, not imported modules
-  "S603",   # subprocess calls are inert AST fixture text, never executed
-  "S607",   # executable names are inert AST fixture text, never executed
-]
 "serve/*/tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
@@ -157,8 +150,6 @@ quote-style = "double"
 
 [tool.coverage.run]
 source_pkgs = [
-  "owlbear_delivery",
-  "owlbear_delivery_github",
   "owlbear_knowledge",
   "owlbear_browser_mcp",
   "owlbear_knowledge_mcp",
