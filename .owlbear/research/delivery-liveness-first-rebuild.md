@@ -507,7 +507,7 @@ TD-65.
 
 ## C-14 Brief, approval and amendments
 
-**Rows:** decided TD-73, TD-122, TD-179, TD-181, TD-185, TD-221, TD-236, TD-249, TD-255; autonomous TD-254.
+**Rows:** decided TD-73, TD-122, TD-179, TD-181, TD-185, TD-221, TD-236, TD-249, TD-255, TD-422; autonomous TD-254.
 
 - The brief review is a challenge, not a review, named "brief challenge" [TD-73].
 - Challenge the brief before approval; the shaper may revise or reject with reasons. Apply the shaper's round
@@ -544,12 +544,14 @@ TD-65.
 - TD-236, 2026-10-17: "'Designer' meant the shaping of the brief (already TD-221), not the UI judge"
 - TD-249, 2026-10-17: "The shaper requests the challenge once the draft is ready"
 - TD-255, 2026-10-17: "Approvable, but the approve dialog makes me tick that I accept the unreviewed last revision"
+- TD-422, 2026-10-20: "Before item 10: after the watcher, so the first real project has amendments"
 
 **Replaced:** TD-249 by TD-255.
 
 **Open:**
 
-- The end-to-end amendment design (TD-185); known gap: a builder's or reviewer's proposal sends the Change back to
+- The end-to-end amendment design (TD-185), its session with the owner before item 10, after the watcher [TD-422];
+  known gap: a builder's or reviewer's proposal sends the Change back to
   planning against the unchanged brief.
 
 ## C-15 Design pack update
@@ -720,8 +722,8 @@ TD-65.
 
 ## C-19 Machine host and UI
 
-**Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321, TD-416; autonomous
-  TD-294.
+**Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321, TD-416, TD-420,
+  TD-421; autonomous TD-294.
 
 - One Delivery host per machine serves every registered project (one dashboard, one process); registered projects
   keep advancing while their folders are closed [TD-104, TD-242].
@@ -733,6 +735,11 @@ TD-65.
   [TD-281, TD-321].
 - Install chat-tool configuration only with consent; commit nothing from OwlBear into consumer projects
   [TD-11, TD-321].
+- The optional agent workspace (`setup/init.py`) asks before writing and hides its files from Git, so nothing shows
+  as new [TD-420].
+- Add project offers an existing folder or a new one: folder, name, Git identity, an optional GitHub repository with
+  its account and visibility, Delivery's chat tools (with consent), the agent workspace, the first commit and push;
+  the installer may open it at its end. Its design goes to the owner before it is built [TD-421].
 - Organise one machine-wide UI by work, not project mode; tag items and actions with their project and offer
   project, Global and All filters [TD-241].
 - Keep maintenance next to its data, with an overview linking actions and runs: memory in Memory, pack and engine
@@ -757,6 +764,8 @@ TD-65.
 - TD-321, 2026-10-18: "TD-281 replaces TD-11's task; TD-11 keeps: .mcp.json only with consent, nothing committed"
 - TD-416, 2026-10-20: "Audit Cockpit; delete it at once if nothing is worth porting, otherwise keep it only until
   the port lands, at the latest at v1.0"
+- TD-420, 2026-10-20: "Keep it optional; it asks before writing and hides its files from Git"
+- TD-421, 2026-10-20: "set up a new local folder, optionally with the installer, and create the repo … a gui workflow"
 
 **Replaced:** TD-11 by TD-281; TD-242 by TD-281.
 
@@ -1028,7 +1037,7 @@ TD-197.
 
 ## C-28 Code and tool rules
 
-**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63, TD-401; autonomous TD-184, TD-391.
+**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63, TD-401, TD-417; autonomous TD-184, TD-391.
 
 - Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63 [TD-1, TD-63].
 - No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
@@ -1038,8 +1047,9 @@ TD-197.
   [TD-19].
 - Split oversized code without cutting logic: aim for at most 400 lines per module; a test fails at 500 raw lines,
   comments and structure included; pages, scripts and styles count, tests do not [TD-19, TD-33, TD-401].
-- Delivery keeps at most eleven step kinds, the design's ten and a test review's parallel reviewers, which no other
-  step can run with its fixed plan [TD-391].
+- Step kinds are a guide, not a gate: a new kind is allowed when no existing step can run its work, recorded with
+  its reason; the count (eleven: the design's ten and a test review's parallel reviewers) is reported, not failed
+  [TD-391, TD-417].
 - Default size and complexity rules of tools such as SonarQube or Snyk guide splits or rework, with wiggle room,
   never as a hard gate; SonarQube itself is not used (licence) [TD-31].
 
@@ -1050,8 +1060,9 @@ TD-197.
 - TD-31, 2026-10-11: "take these default rules as an instruction to decide whether something is still acceptable"
 - TD-63, 2026-10-12: "i do not agree with t7, this is far too strict. tools follow process"
 - TD-401, 2026-10-19: "Pages, scripts and styles count like Python; tests don't"
+- TD-417, 2026-10-20: "A guide, not a gate: a new kind is allowed when no existing step can run its work"
 
-**Replaced:** TD-1 by TD-63; TD-19 by TD-33.
+**Replaced:** TD-1 by TD-63; TD-19 by TD-33; TD-391's cap by TD-417.
 
 ## C-29 Confirmations and input
 
@@ -1119,6 +1130,8 @@ TD-344; TD-344 by TD-374.
   §3.8's allow list was replaced [TD-23, decided, partly; TD-82].
 - The pages load the Porsche Design System only from its documented CDN: no own fallback rendering or load
   diagnostic; browser tests reach the real CDN [TD-39, TD-398, decided].
+- On those pages dialogs close with PDS's dismiss button and Escape and the confirmation does not focus Cancel first;
+  screenshot thumbnails stay plain image buttons, as PDS has no image button [TD-423, autonomous].
 - The builder's code is linted once, at submission, on the changed files with the project's linters; no per-edit
   lint, broad-edit warning or session-start context hook [TD-87, decided].
 - Lint may refuse 5 builder submits per session; later submits pass marked `lint-unresolved` [TD-88, decided].
@@ -1191,7 +1204,7 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
 
 ## C-31 The decision record
 
-**Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388; autonomous TD-389.
+**Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419; autonomous TD-389.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1205,6 +1218,11 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
   line, and for a `decided` one the owner's words with number and date; nothing is appended elsewhere [TD-389].
 - Implementation choices go to the pull request text only; an autonomous choice that changes a rule is
   recorded in its topic. New numbers continue after the highest one in this file [TD-389].
+- Until a decision system replaces this record, implementation choices the owner would notice on a page are
+  recorded as autonomous rows too [TD-418].
+- Decisions become a system of their own for OwlBear's work and Delivery's projects, scoped like memory (project,
+  Global); its design is the next item, before item 5: the assistant's, Sol's blind one, merged, Sol-challenged
+  [TD-419].
 
 **Owner's words:**
 
@@ -1215,5 +1233,7 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
 - TD-386, 2026-10-19: "One short line per topic, numbers only"
 - TD-387, 2026-10-19: "One compact line per topic, numbers grouped by origin"
 - TD-388, 2026-10-19: "1 and 2" (keep every quote, each cut to its decisive words; drop "chosen without a quote")
+- TD-418, 2026-10-20: "option 2" (implementation choices you would notice on a page are recorded as autonomous rows)
+- TD-419, 2026-10-20: "treat them similarly to memories, with scopes to projects, global … we should prioritize this"
 
 **Replaced:** TD-359 by TD-383 and TD-388.
