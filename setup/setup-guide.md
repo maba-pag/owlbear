@@ -1,67 +1,164 @@
 # OwlBear Setup Guide
 
-> From clone to a working VS Code workspace and one completed change.
+> From clone to a running OwlBear, one added project and one completed change.
 
-This guide owns installation and first success. Day-to-day operation, refresh, uninstall, and
+This guide owns installation and first success. Day-to-day operation, updates, uninstall, and
 customization live in [Operating OwlBear](operating-owlbear.md); teammate and multi-project
 workflows live in the [sharing guide](sharing-guide.md).
 
 ## Prerequisites
 
-Before running setup, ensure the following are installed on your machine:
+OwlBear supports macOS only. Linux and Windows are not supported yet; the `owlbear` command stops
+on them with `OwlBear runs on macOS only for now`.
+
+Before running setup, ensure the following are installed on your Mac:
 
 | Requirement | Why | How to get it |
 | --- | --- | --- |
 | Python 3.14.8 | OwlBear runtime; OwlBear supports the 3.14 series only | [python.org](https://www.python.org/downloads/) |
-| macOS or Linux (Ubuntu) | Supported operating systems | — |
-| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
+| [uv](https://docs.astral.sh/uv/) | Installs OwlBear's dependencies and launches its tool servers | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
+| Git, with `user.name` and `user.email` set | Clone, and the commits of each Change | [git-scm.com](https://git-scm.com/) |
+| [GitHub CLI](https://cli.github.com/), signed in (`gh auth login`) | Pull requests; needs push access to your project | [Installation guide](https://cli.github.com/manual/installation) |
+| GitHub Copilot CLI | Runs OwlBear's agent sessions | `npm install -g @github/copilot`, or set `COPILOT_CLI_PATH` to it |
+| VS Code | New Change's shaping chat opens there | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
-| [GitHub CLI](https://cli.github.com/) | GitHub publication and pull-request operations | [Installation guide](https://cli.github.com/manual/installation) |
-| Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
 
-> **Windows:** Windows is unsupported. Setup uses relative paths; if running it experimentally,
-> keep OwlBear and the project on the same drive because cross-drive paths cannot be resolved.
-
-<!-- separate blockquotes -->
-
-> **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser MCP
-> defaults to managed Microsoft Edge on macOS and Chromium elsewhere.
-
-Chromium is optional for setup. Install it later when you select Browser MCP Chromium mode or run
-Cockpit's browser-backed tests. Managed Edge requires stable Microsoft Edge installed on macOS; see
-[Verify the installation](#verify-the-installation) and the
-[Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
+If your Git configuration signs commits, OwlBear checks that the signing key is usable before it
+works on a project.
 
 ---
 
 ## Quick Start
 
-This is the complete first-time path. Run it from the parent directory of both repositories.
-If your project is already checked out, skip its clone command. Replace `OWNER/PROJECT` with the
-project's GitHub identity.
+This is the complete first-time path. OwlBear installs once per Mac into `~/.owlbear/runtime` and
+serves every project you add; your projects stay where they are.
 
-### 1. Put both repositories side by side
+### 1. Clone OwlBear into its runtime folder
 
 ```shell
-# Only if the project is not already checked out.
-git clone https://github.com/OWNER/PROJECT.git my-project
-git clone https://github.com/maba-pag/owlbear.git owlbear
-cd my-project
+git clone https://github.com/maba-pag/owlbear.git ~/.owlbear/runtime
+cd ~/.owlbear/runtime
+uv sync --locked
 ```
 
-**Expected result:** the OwlBear checkout and the project are siblings, for example
-`~/work/owlbear` and `~/work/my-project`. The OwlBear clone is on `main`, its default branch and the
-supported consumer surface.
+**Expected result:** `~/.owlbear/runtime` holds the OwlBear checkout on `main`, its default branch,
+with its environment in `~/.owlbear/runtime/.venv`.
+
+### 2. Install the command
+
+```shell
+.venv/bin/owlbear install
+```
+
+It writes the zsh completion to `~/.owlbear/completion.zsh` and names the line to add to `~/.zshrc`
+if you want it. Then it asks three separate questions:
+
+1. Link `~/.local/bin/owlbear`, so `owlbear` runs in any shell.
+2. Link the shaping agent and its skill into `~/.copilot`, so **New Change** finds them. Answer yes;
+   New Change needs them.
+3. Start OwlBear at login, paused until you press **Resume**.
+
+**Expected result:** each answer is confirmed in one line, such as `linked ~/.local/bin/owlbear`.
+If `~/.local/bin` is not on your `PATH`, the command says so. Until it is, use
+`~/.owlbear/runtime/.venv/bin/owlbear` wherever this guide writes `owlbear`.
+
+### 3. Start OwlBear
+
+```shell
+owlbear start
+```
+
+**Expected result:** `OwlBear started, running: http://127.0.0.1:<port>/#token=…`. Open that
+address; `owlbear status` prints it again. OwlBear listens only on this Mac's loopback address, on a
+free port it picks at start.
+
+### 4. Add your project
+
+On the page, open **Add project** in the bar at the top, enter the folder of your project's clone
+and press **Add**. Adding a project here is the only way OwlBear starts serving it; opening the
+project in VS Code never starts or changes OwlBear.
+
+**Expected result:** the project appears in the project selector and its Changes page opens.
+
+### 5. Connect the project's chats
+
+If the page shows **Setup required**, run the command it names in a terminal, for example:
+
+```shell
+owlbear setup --repo ~/work/my-project
+```
+
+Setup checks readiness and stops at the first problem with a `Next:` line naming the fix. Then it
+shows the detected project profile, asks for anything unknown and asks you to confirm it. Last, it
+asks before each of two local writes: the Delivery chat server in `.mcp.json`, and
+`chat.defaultToCopilotHarness` in `.vscode/settings.json`.
+
+**Expected result:** `Profile vN confirmed and saved`, then
+`written: <project>/.mcp.json (kept out of git by .git/info/exclude)` and the same line for the
+settings file. Reload the project's VS Code window; the **Setup required** note disappears.
+
+Setup never writes a file Git tracks. For a tracked `.mcp.json` it prints the server entry to add
+under `"servers"` with **MCP: Open User Configuration** instead.
+
+## Verify the installation
+
+1. Run `owlbear status`.
+
+   **Expected result:** `OwlBear is running: <address>`, your project listed as `loaded` with its
+   path, and the login item's state.
+2. Run `owlbear doctor`.
+
+   **Expected result:** `all checks passed`. Otherwise each line names a problem and its fix.
+3. Open the project's Changes page.
+
+   **Expected result:** no **Setup required** note, and **New Change** is available.
+
+## First successful workflow
+
+After verification, prove the installation with one small outcome on the Changes page:
+
+1. Press **New Change** and describe the outcome in the shaping chat it opens in VS Code.
+
+   **Expected result:** the chat asks what it needs and saves a brief for your approval.
+2. Approve the brief on the Changes page.
+
+   **Expected result:** OwlBear plans, builds, reviews and publishes the Change as a pull request;
+   when it needs you, it asks on the Changes page.
+3. When the Changes page asks you to approve the merge, review the pull request and approve it
+   there, or merge it in GitHub. Once checks and branch rules pass, OwlBear merges on its own.
+
+   **Expected result:** the Change shows as done.
+
+See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operation.
+
+---
+
+## Optional agent workspace
+
+OwlBear's shared agents, skills, instructions and prompts, and its Memory, Knowledge and Browser
+tool servers, can be loaded into a project's VS Code workspace for your own Copilot chats. Delivery
+does not need this. `setup/init.py` writes it into the project; unlike Delivery's setup, the files
+it creates are ordinary project files that Git will show as new.
+
+Run setup through the runtime alias `~/.owlbear/runtime`. Setup writes its paths through that alias
+rather than the version folder behind it, so OwlBear's self-updates keep them valid.
+
+### 1. Open a terminal in the project root
+
+```shell
+cd ~/work/my-project
+```
+
+**Expected result:** `pwd` prints your project directory; OwlBear is installed in
+`~/.owlbear/runtime` by the [Quick Start](#quick-start).
 
 ### 2. Run setup from the project root
 
 ```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
 ```
 
-Interactive setup may ask about differing hook files and, on macOS, user-local Copilot profile
-settings.
+Interactive setup may ask about differing hook files and user-local Copilot profile settings.
 
 **Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json` and
 copies the project-local hooks and runtime templates.
@@ -75,25 +172,27 @@ code .
 ```
 
 **Expected result:** VS Code opens the project directory, not the OwlBear checkout. The shared
-agents, skills, instructions, and prompts are loaded from the sibling OwlBear path.
+agents, skills, instructions, and prompts are loaded through `~/.owlbear/runtime`.
 
 ### 4. Confirm it loaded
-
-Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact checks are in
-[Verify the installation](#verify-the-installation).
-
-**Expected result:** the four seeded MCP server processes are running and the shared OwlBear
-customization roots appear in Chat Customizations. Browser capability readiness is a separate
-check below because it also depends on the selected browser and its allowlist.
-
-## Verify the installation
 
 1. Open Copilot Chat and run **Chat: Open Customizations**.
 2. Confirm that OwlBear agents, skills, instructions, and prompts are listed.
 3. Run **MCP: List Servers** and confirm these four servers show `running`:
    `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
-4. Before the first workflow, run `gh auth status` and confirm the GitHub CLI reports an active
-  account.
+
+**Expected result:** the four seeded MCP server processes are running and the shared OwlBear
+customization roots appear in Chat Customizations. Browser capability readiness is a separate
+check below because it also depends on the selected browser and its allowlist.
+
+If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
+OwlBear path with the location of `~/.owlbear/runtime`. If a server is missing, inspect `.vscode/mcp.json`,
+run `uv sync --locked --all-packages --all-extras --all-groups` in `~/.owlbear/runtime`, and rerun
+setup from the project root.
+
+Chromium is optional. Install it when you select Browser MCP Chromium mode or run Cockpit's
+browser-backed tests; the default managed Edge mode needs stable Microsoft Edge. See the
+[Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ### Browser readiness
 
@@ -105,17 +204,17 @@ Browser-to-Knowledge round is ready.
    `owlbear-knowledge` show `running`.
 
    **Expected result:** both stdio processes are available; this confirms startup only.
-2. **Browser readiness:** On macOS, an unset `BROWSER_MODE` selects managed Edge and its fixed
-   OwlBear profile; elsewhere it selects Chromium. Confirm stable Microsoft Edge is installed before
-   starting the Browser MCP on macOS. For Chromium mode or Cockpit's browser-backed tests, install
-   Chromium for the sibling OwlBear checkout from the consumer project root:
+2. **Browser readiness:** An unset `BROWSER_MODE` selects managed Edge and its fixed OwlBear
+   profile. Confirm stable Microsoft Edge is installed before starting the Browser MCP. For
+   Chromium mode or Cockpit's browser-backed tests, install Chromium for the OwlBear runtime from
+   the consumer project root:
 
     ```shell
-    uv run --project ../owlbear playwright install chromium
+    uv run --project ~/.owlbear/runtime playwright install chromium
     ```
 
-   This download is not required for macOS managed Edge mode. To select Chromium explicitly on
-   macOS, set `BROWSER_MODE` to `chromium` in the local `owlbear-browser` server environment; an
+   This download is not required for managed Edge mode. To select Chromium explicitly, set
+   `BROWSER_MODE` to `chromium` in the local `owlbear-browser` server environment; an
    invalid mode is reported as `invalid-mode` rather than silently falling back to another browser.
    `PLAYWRIGHT_USER_DATA_DIR` only affects Chromium and should be an absolute path; managed Edge
    always uses `~/.owlbear/edge-profile` and ignores that override.
@@ -139,7 +238,7 @@ Browser-to-Knowledge round is ready.
    fully prevent DNS rebinding or an allowlisted server redirecting to a private address; these
    are accepted limits, so keep the allowlist narrow. See the
    [Browser MCP guide](../serve/browser-mcp/README.md) for the full policy.
-3. **Managed SSO readiness:** On macOS, the default is a visible managed Edge session using the
+3. **Managed SSO readiness:** The default is a visible managed Edge session using the
    fixed `~/.owlbear/edge-profile`; `PLAYWRIGHT_USER_DATA_DIR` and `SSO_EXTENSION_PATH` do not
    configure managed Edge. Call an allowed `navigate` or `acquire` action to launch the browser,
    then verify one permitted target site with the organization's normal login flow. Chromium mode
@@ -160,14 +259,9 @@ Browser-to-Knowledge round is ready.
 See the [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py) for the
 exercised end-to-end workflow.
 
-If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
-OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
-run `uv sync --locked --all-packages --all-extras --all-groups` in the OwlBear checkout, and rerun
-setup from the project root.
+### Copilot profile settings
 
-## macOS Copilot profile settings
-
-When setup runs interactively on macOS, it inspects VS Code's workspace profile association for the
+When setup runs interactively, it inspects VS Code's workspace profile association for the
 consumer project directory that `setup/init.py` is initializing before changing any Copilot profile
 data:
 
@@ -190,13 +284,14 @@ the project in VS Code, run `Profiles: Switch Profile`, and rerun `setup/init.py
 take a profile-selection command-line argument. Noninteractive setup skips this user-local profile
 mutation.
 
-For development-only browser-backed tests, use the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
+For development-only browser-backed tests, use the
+[Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
-## Managed Mac browser pilot
+### Managed Mac browser pilot
 
 Run this pilot on the managed Mac before relying on SharePoint or Confluence access. Keep the two
 approved target URLs local; do not put URLs, hostnames, page content, credentials, or session files in
-the repository, Delivery requests, or status.
+the repository or in a Change's brief, answers, or status.
 
 1. Install stable Microsoft Edge and start the `owlbear-browser` MCP server. Leave
   `BROWSER_MODE` and `PLAYWRIGHT_USER_DATA_DIR` unset for the managed default. Configure
@@ -229,33 +324,7 @@ the repository, Delivery requests, or status.
   **Expected result:** both targets remain authenticated after restart, no `--no-sandbox` or
   unsupported-flag warning appears, and only OwlBear-owned browser resources close. Record only each
   target class (`SharePoint` or `Confluence`) and `pass` or `fail`; include no URL, hostname, page
-  content, credential, or session data. If a Delivery pilot request is active, answer it using only
-  those bounded outcomes.
-
-## First successful workflow
-
-After verification, prove the installation with one small outcome on the new Delivery engine's
-Changes page:
-
-1. Start OwlBear with `owlbear start` (or `~/.owlbear/runtime/.venv/bin/owlbear start` before the
-   command is linked); it prints the address of its pages, and `owlbear status` prints it again.
-   Open it, choose **Add project** in the bar at the top and enter the project's folder.
-
-   **Expected result:** the project is listed as loaded and its Changes page opens.
-2. Press **New Change** and describe the outcome in the shaping chat it opens.
-
-   **Expected result:** the chat asks what it needs and saves a brief for your approval.
-3. Approve the brief on the Changes page.
-
-   **Expected result:** the engine plans, builds, reviews and publishes the Change as a pull
-   request; when it needs you, it asks on the Changes page.
-4. When the Changes page asks for merge consent, review the pull request and approve it there, or
-   merge it in GitHub.
-
-   **Expected result:** the Change shows as done.
-
-The Changes page replaces the retired `/continue-change` prompt, its exception prompts and
-Cockpit's old Delivery view; see [Delivery Workflow](operating-owlbear.md#delivery-workflow).
+  content, credential, or session data.
 
 ---
 
@@ -263,11 +332,18 @@ Cockpit's old Delivery view; see [Delivery Workflow](operating-owlbear.md#delive
 
 | Symptom | Likely cause | Resolution |
 | --- | --- | --- |
-| Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Run **Chat: Open Customizations**; verify the path relative to project root matches owlbear location |
+| `owlbear: command not found` | The link was declined or `~/.local/bin` is not on `PATH` | Use `~/.owlbear/runtime/.venv/bin/owlbear`, or add `~/.local/bin` to `PATH` |
+| `run this from the installed runtime` | `owlbear install` ran from another checkout | Run `~/.owlbear/runtime/.venv/bin/owlbear install` |
+| `OwlBear ended at once` or `did not answer` after `owlbear start` | The host failed to start | Read `owlbear logs` (the end of `~/.owlbear/host.log`) |
+| Setup prints a `FIX` line | A readiness check failed | Apply the fix on its `Next:` line, then run `owlbear setup --repo PATH` again |
+| A project shows as failed on the page | Its folder or store could not be loaded | Read the reason shown beside it; `owlbear doctor` names each project's fix |
+| **New Change** opens no shaping chat | The shaping agent is not linked into `~/.copilot` | Run `owlbear install` again and answer yes to the shaping agent |
+| `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration** |
+| Agents not appearing in picker (agent workspace) | Wrong path in `chat.agentFilesLocations` | Run **Chat: Open Customizations**; verify the path relative to project root matches owlbear location |
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
+| `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ~/.owlbear/runtime cockpit` from the project root |
 | Cockpit shows another project's memory or ideas | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
@@ -280,7 +356,7 @@ raw LLM request/response payloads.
 | You want to... | Go to |
 | --- | --- |
 | Know exactly what setup wrote, and how to undo it | [Operating OwlBear](operating-owlbear.md) |
-| Upgrade OwlBear and migrate Delivery state | [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
-| Run, correct, publish, and accept changes | [Delivery Workflow](operating-owlbear.md#delivery-workflow) |
+| Update OwlBear | [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
+| Run Changes day to day | [Delivery Workflow](operating-owlbear.md#delivery-workflow) |
 | Add project-local agents, instructions, or MCP servers | [Project-Specific Customization](operating-owlbear.md#project-specific-customization) |
 | Set a teammate up on the same installation | [Sharing guide](sharing-guide.md) |

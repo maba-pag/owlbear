@@ -109,6 +109,19 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     ]
 
 
+def test_init_writes_paths_through_the_runtime_alias(tmp_path: Path, init_module: types.ModuleType) -> None:
+    version = tmp_path / ".owlbear/versions/v1.0"
+    version.mkdir(parents=True)
+    alias = tmp_path / ".owlbear/runtime"
+    alias.symlink_to(version, target_is_directory=True)
+    target_dir = tmp_path / "Projects/app"
+    target_dir.mkdir(parents=True)
+
+    paths = init_module._build_replacements(alias, target_dir)
+
+    assert (paths["owlbear_rel_path"], paths["owlbear_abs_path"]) == ("../../.owlbear/runtime", str(alias))
+
+
 def test_init_warns_when_existing_mcp_json_is_malformed(tmp_path: Path, init_module: types.ModuleType) -> None:
     mcp_path = tmp_path / ".vscode" / "mcp.json"
     mcp_path.parent.mkdir()

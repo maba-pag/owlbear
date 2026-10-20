@@ -1,27 +1,123 @@
 # Operating OwlBear
 
-> What setup created, how to update or remove it, how the Delivery workflow runs day to day, and
-> how to customize an installed project.
+> What OwlBear installed, how to run, update or remove it, how the Delivery workflow runs day to
+> day, and how to customize an installed project.
 
 Install first with the [setup guide](setup-guide.md). Multi-project and teammate workflows live in
 the [sharing guide](sharing-guide.md).
 
 | You want to... | Section |
 | --- | --- |
-| See what setup wrote into your project | [What Setup Creates](#what-setup-creates) |
-| Understand what `git pull` updates | [Shared vs Copied](#shared-vs-copied) |
-| Upgrade OwlBear and migrate Delivery state | [Upgrading OwlBear](#upgrading-owlbear) |
+| See what OwlBear installed on your Mac and in a project | [What OwlBear Installs](#what-owlbear-installs) |
+| Start, stop, pause, or check OwlBear | [Running OwlBear](#running-owlbear) |
+| Update OwlBear | [Upgrading OwlBear](#upgrading-owlbear) |
+| Run a Change from idea to merge | [Delivery Workflow](#delivery-workflow) |
+| See what the optional agent workspace setup wrote | [What Setup Creates](#what-setup-creates) |
+| Understand what an OwlBear update changes in the agent workspace | [Shared vs Copied](#shared-vs-copied) |
 | Replace seeded editor and lint configuration | [Refreshing Consumer Configs](#refreshing-consumer-configs) |
-| Remove OwlBear from a project | [Uninstalling](#uninstalling) |
-| Run, correct, publish, and accept a Change | [Delivery Workflow](#delivery-workflow) |
-| Launch Cockpit for memory and ideas | [Cockpit details](#cockpit-details) |
+| Remove OwlBear | [Uninstalling](#uninstalling) |
+| Launch Cockpit for a project's local memory and ideas | [Cockpit details](#cockpit-details) |
 | Add project-local agents, instructions, or servers | [Project-Specific Customization](#project-specific-customization) |
+
+---
+
+## What OwlBear Installs
+
+OwlBear keeps everything it runs and records under `~/.owlbear/` on your Mac:
+
+| Path | Purpose |
+| --- | --- |
+| `runtime` | The active version: the clone you installed, and after the first update a link to a folder under `versions/` |
+| `versions/<tag>/`, `repo.git` | Installed versions, each with its own environment, and the clone they are fetched from |
+| `projects/<id>/` | Each registered project's Delivery state |
+| `worktrees/` | The worktrees OwlBear's agents work in |
+| `design-pack/` | The pinned design pack Delivery's design checks use |
+| `machine.json` | The registered projects and the machine's settings |
+| `data.json` | Which shared settings repository OwlBear uses |
+| `host.log` | The running host's log; `owlbear logs` shows its end |
+
+Only with your yes at `owlbear install`, OwlBear also adds:
+
+| Path | Purpose |
+| --- | --- |
+| `~/.local/bin/owlbear` | A link to the command |
+| `~/.copilot/agents/owlbear-shaper.agent.md`, `~/.copilot/skills/owlbear-change-shaping` | Links to the shaping agent and its skill, which **New Change** opens |
+| `~/Library/LaunchAgents/com.owlbear.host.plist` | The login item; `owlbear autostart on` or `off` changes it |
+| `~/.owlbear/completion.zsh` | The zsh completion, always written; nothing edits `~/.zshrc` |
+
+In a project, `owlbear setup --repo PATH` writes only with your yes, and lists each file in the
+clone's `.git/info/exclude`:
+
+| File | Entry |
+| --- | --- |
+| `.mcp.json` | The `owlbear-delivery` chat server, so the project's chats reach Delivery |
+| `.vscode/settings.json` | `chat.defaultToCopilotHarness: true`, for New Change's Copilot chat |
+
+The clone's Git folder also holds `owlbear-delivery/`, with the project's id and format marker.
+Opening the project in VS Code never starts or changes OwlBear.
+
+## Running OwlBear
+
+One OwlBear runs per Mac and serves every project added on its pages. It keeps advancing a
+project's Changes while that project's VS Code window is closed.
+
+| Command | What it does |
+| --- | --- |
+| `owlbear` | Starts OwlBear if it is stopped, else shows its status |
+| `owlbear start [--paused]` | Starts it in the background, running, or paused until you press **Resume** |
+| `owlbear stop` | Stops it; running steps finish on their own |
+| `owlbear restart [--paused]` | Stops it, then starts it running or paused as it was |
+| `owlbear status` | Its address, pause, projects, and login item |
+| `owlbear logs [-n N]` | The end of its log |
+| `owlbear doctor` | Checks Git, the GitHub CLI and its sign-in, and each project's readiness, with the fix |
+| `owlbear update` | Runs updates now |
+| `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
+| `owlbear autostart on` or `off` | Starts OwlBear at login, or not |
+| `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
+| `owlbear data [PATH]` | Shows or sets the shared settings repository |
+| `owlbear home` | Shows OwlBear's folder on this Mac |
+| `owlbear install`, `owlbear uninstall` | Adds or removes the command link, the shaping agent links and the login item |
+
+`owlbear --help` lists every command, including the project commands that take `--repo PATH`.
+
+**Pause Delivery** in the bar stops new automatic agent steps on every project until you press
+**Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,
+**Pause and stop when idle** stops OwlBear once the running steps end.
+
+A shared settings repository is a local clone of a Git repository you choose, set with
+`owlbear data PATH` and used after `owlbear restart`. When one is set, project settings, agent
+memory and the backlog live there, and OwlBear commits and pushes each save, so they follow you
+across clones and machines. Without one, settings stay in each clone.
+
+## Upgrading OwlBear
+
+OwlBear's versions are Git tags such as `v1.0`. OwlBear installs a new version beside the running
+one, checks it, and switches only while nothing runs; it never moves to an older version.
+
+- By default it takes every new minor version after 15 minutes without use, announced on open
+  pages 2 minutes ahead. **Settings → This machine** chooses major versions only, and whether it
+  updates when idle or while paused.
+- **Run updates now** on a paused page, or `owlbear update`, updates at once.
+- After an update, the pages say once which version OwlBear now runs. A chat whose Delivery server
+  is older answers `OwlBear updated: reload this VS Code window`; reload it.
+
+The agent workspace follows these updates: setup writes its paths through `~/.owlbear/runtime`, so
+they stay valid. Rerun setup from the project root after an update to refresh copied files:
+
+```shell
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
+```
+
+**Expected result:** setup preserves your edits; see
+[Refreshing Consumer Configs](#refreshing-consumer-configs) for the editor and lint files.
 
 ---
 
 ## What Setup Creates
 
-Running `init.py` writes the following files into your project directory:
+The optional agent workspace setup (`setup/init.py`, see the
+[setup guide](setup-guide.md#optional-agent-workspace)) writes the following files into your project
+directory:
 
 | File / Directory | Purpose | Idempotency |
 | --- | --- | --- |
@@ -54,8 +150,8 @@ project. Setup skips this file on later runs so those project-specific instructi
 The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testing; replace it with
 exact hostnames before using Browser against production or sensitive sites.
 
-Setup does not create Delivery state, worktrees, verification profiles, or retired task, decision,
-board, accept, or audit stores; the Delivery engine keeps its own settings and state.
+Setup does not create Delivery state, worktrees, or Delivery settings; OwlBear keeps those under
+`~/.owlbear/` ([What OwlBear Installs](#what-owlbear-installs)).
 
 ### Where these files come from
 
@@ -74,13 +170,15 @@ installed into consumer projects.
 
 OwlBear uses two different update models:
 
-- **Shared live surfaces:** `share/agents/`, `share/skills/`, `share/instructions/`, and `share/prompts/` stay in the owlbear clone and are read live by VS Code.
-- **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this includes `.owlbear/hooks/` and project-local editor/runtime configuration.
+- **Shared live surfaces:** `share/agents/`, `share/skills/`, `share/instructions/`, and
+  `share/prompts/` stay in the OwlBear runtime and are read live by VS Code.
+- **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this
+  includes `.owlbear/hooks/` and project-local editor/runtime configuration.
 
-This split is why `git pull` updates shared agents and skills immediately, while copied
-runtime files may need a later `init.py` run to refresh. A pull also changes the Delivery code that
-the next MCP or Cockpit start runs, so update the checkout through
-[Upgrading OwlBear](#upgrading-owlbear) rather than a plain `git pull`.
+This split is why an OwlBear update changes shared agents and skills immediately, while copied
+runtime files may need a later `init.py` run to refresh. The update also changes the Memory,
+Knowledge and Browser server code that their next start runs
+([Upgrading OwlBear](#upgrading-owlbear)).
 
 ## Refreshing Consumer Configs
 
@@ -91,7 +189,7 @@ are not overwritten. The refreshable files are `.editorconfig`, `.markdownlint-c
 From the consumer project root, check for missing or customized files without changing them:
 
 ```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py --check-configs
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py --check-configs
 ```
 
 The command exits successfully when the files match the owlbear seed and exits with status 1 when
@@ -99,31 +197,46 @@ one or more files are missing or different. To intentionally replace those five 
 current seed versions, run:
 
 ```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py --refresh-configs
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py --refresh-configs
 ```
 
 `--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
 project-specific files that are outside the refreshable set.
 
-## Upgrading OwlBear
-
-The new Delivery engine's pages replace the retired `/upgrade-delivery` prompt: **Run updates now**
-takes the newest version, and the engine also updates itself when idle. Then rerun setup from the
-project root to refresh copied files:
-
-```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py
-```
-
-**Expected result:** setup preserves your edits; see
-[Refreshing Consumer Configs](#refreshing-consumer-configs) for the editor and lint files.
-
 ## Uninstalling
+
+### Removing OwlBear from your Mac
+
+1. Stop OwlBear:
+
+   ```shell
+   owlbear stop
+   ```
+
+   **Expected result:** OwlBear stops once its running steps finish; `owlbear status` reports
+   `OwlBear is not running`.
+2. Remove the command link, the shaping agent links, the completion and the login item:
+
+   ```shell
+   owlbear uninstall
+   ```
+
+   **Expected result:** one `removed ...` line per link; the runtime and every project stay.
+3. In each project, delete the `owlbear-delivery` entry from `.mcp.json` and
+   `chat.defaultToCopilotHarness` from `.vscode/settings.json` if setup wrote them, and their lines in
+   `.git/info/exclude`.
+4. To remove everything, delete `~/.owlbear`. This deletes every project's Delivery state and
+   cannot be undone; your projects' own files, branches and pull requests stay.
+
+To stop serving only one project, use **Remove project** on its page. OwlBear forgets the project
+and deletes nothing; its clone keeps its id.
+
+### Removing the agent workspace from a project
 
 To remove the OwlBear setup from a consumer project, run this command from the project root:
 
 ```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py --uninstall
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py --uninstall
 ```
 
 An interactive terminal asks for confirmation and prints the files it removes or updates. Preview
@@ -131,7 +244,7 @@ the plan without changing files by adding `--dry-run`. A non-interactive uninsta
 explicit confirmation:
 
 ```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py --uninstall --yes
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py --uninstall --yes
 ```
 
 **Expected result:** an interactive run asks before changing anything; `--dry-run` reports the
@@ -152,7 +265,7 @@ refuses the OwlBear checkout and any descendant of that checkout. A non-interact
 `--yes` or `--dry-run`, and `--yes` and `--dry-run` are valid only with `--uninstall`.
 
 Custom seed files, unrelated VS Code settings and MCP servers, custom ignore rules, Delivery
-records, runtime data, knowledge and memory data, and user-local VS Code profile settings are
+state, runtime data, knowledge and memory data, and user-local VS Code profile settings are
 preserved. In particular, uninstall does not revert the global Copilot reasoning settings that
 interactive setup may have written; those settings are shared across projects and remain under the
 user's control.
@@ -169,42 +282,51 @@ entry, so setup does not seed a separate memory store.
 
 ## Delivery Workflow
 
-The new Delivery engine's Changes page runs Changes. **New Change** opens a shaping chat that
-turns an idea into a brief; you approve the brief on the page, and the engine plans, builds,
-reviews and publishes the Change. Its questions, merge consent and recovery are answered on that
-page. It replaces the old engine's `/continue-change`, `/inspect-change`,
-`/resolve-delivery-attention`, `/address-pr-feedback`, `/finalize-change`, `/repair-delivery` and
-`/resolve-target-conflict` prompts and Cockpit's old Delivery view, which are retired; the tag
-`delivery-v1-final` archives them.
+OwlBear's pages run Changes; open them at the address `owlbear status` prints.
+
+1. **New Change** on the Changes page opens a shaping chat in VS Code. When several projects are
+   shown, it asks which one first. The chat asks what it needs and saves a brief.
+2. Approve the brief on the Changes page. OwlBear plans, builds and reviews the Change in its own
+   worktrees and publishes it as a pull request.
+3. When a Change waits for you, its status says why, with **Answer** for a question or
+   **Approve merge** for merge consent.
+4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
+   shows as done.
+
+The other pages serve the same projects:
+
+| Page | What it holds |
+| --- | --- |
+| Backlog | Improvement ideas and findings, kept as issues in the shared settings repository |
+| Memory | Agent memory per project and Global memory that every project's agents read |
+| Settings | Settings for this project, this machine, and all projects |
+| Maintenance | Maintenance actions and their runs, such as the test review, and agent use |
 
 ---
 
 ## Cockpit details
 
-Cockpit is the browser UI for Memory and Ideas. Launch it from the project root so it reads this
-project's `.owlbear/memory/` and `.owlbear/ideas.md`.
+Cockpit is an optional, separate browser UI for one project's local `.owlbear/memory/` and
+`.owlbear/ideas.md` files. It runs from the OwlBear runtime and needs its frontend bundle
+built once ([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)). Launch it from the
+project root.
 
 1. Open a terminal in the project directory.
 
-   Expected outcome: `pwd` or `$PWD` points to your project, not the owlbear clone.
+   Expected outcome: `pwd` or `$PWD` points to your project, not `~/.owlbear/runtime`.
 
-2. Start Cockpit using the sibling owlbear installation.
-
-   macOS / Linux:
+2. Start Cockpit through the OwlBear runtime alias.
 
    ```shell
-   uv run --project ../owlbear cockpit
+   uv run --project ~/.owlbear/runtime cockpit
    ```
 
     Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
     Memory workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
 
-3. If your owlbear clone is not a sibling directory, replace `../owlbear` with the path
-   to the clone.
-
-    Expected outcome: uv resolves the `cockpit` command from owlbear while Cockpit keeps
-    the current project directory as its runtime working directory. If you run the command
-    from somewhere else, add `--directory /path/to/project`.
+    uv resolves the `cockpit` command from owlbear while Cockpit keeps the current project
+    directory as its runtime working directory. If you run the command from somewhere else,
+    add `--directory /path/to/project`.
 
 ---
 
@@ -221,12 +343,14 @@ same-name agents from different locations — if you create `reviewer.agent.md` 
 both your version and the owlbear version will appear, which is confusing. Prefer names
 like `my-project-reviewer.agent.md`.
 
-To register your local agent directory, add to `.vscode/settings.json`:
+To register your local agent directory, add to `.vscode/settings.json`. Keep the OwlBear entry
+that setup wrote: a relative path to `~/.owlbear/runtime`, shown here for a project at
+`~/Projects/app`:
 
 ```json
 {
   "chat.agentFilesLocations": {
-    "../owlbear/share/agents": true,
+    "../../.owlbear/runtime/share/agents": true,
     ".owlbear/agents": true
   }
 }

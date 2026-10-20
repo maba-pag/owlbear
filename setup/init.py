@@ -150,7 +150,7 @@ def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]:
     """Build the placeholder replacement dict for seed templates."""
     return {
         "owlbear_rel_path": Path(os.path.relpath(owlbear_dir, target_dir)).as_posix(),
-        "owlbear_abs_path": str(owlbear_dir.resolve()),
+        "owlbear_abs_path": str(owlbear_dir.absolute()),
         "target_abs_path": str(target_dir.resolve()),
     }
 
@@ -1656,7 +1656,7 @@ def uninstall(
 if __name__ == "__main__":  # pragma: no cover
     if sys.platform == "win32":
         print(
-            "Windows is unsupported. OwlBear setup supports macOS and Linux (Ubuntu).",
+            "Windows is unsupported. OwlBear supports macOS only; Linux and Windows are not supported yet.",
             file=sys.stderr,
         )
         raise SystemExit(1)
@@ -1698,7 +1698,8 @@ if __name__ == "__main__":  # pragma: no cover
     args = parser.parse_args()
 
     _target = Path.cwd()
-    _owlbear = Path(__file__).resolve().parent.parent
+    # Not resolved: run from the ~/.owlbear/runtime alias, seeded paths keep the alias across updates.
+    _owlbear = Path(__file__).absolute().parent.parent
     if args.yes and not args.uninstall:
         parser.error("--yes requires --uninstall")
     if args.dry_run and not args.uninstall:

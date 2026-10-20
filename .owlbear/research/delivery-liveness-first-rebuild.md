@@ -720,7 +720,7 @@ TD-65.
 
 ## C-19 Machine host and UI
 
-**Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321; autonomous
+**Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321, TD-416; autonomous
   TD-294.
 
 - One Delivery host per machine serves every registered project (one dashboard, one process); registered projects
@@ -738,6 +738,9 @@ TD-65.
 - Keep maintenance next to its data, with an overview linking actions and runs: memory in Memory, pack and engine
   updates in Settings, test review per project [TD-113].
 - Mac first: Linux and Windows are clearly stated as not supported yet before OwlBear goes to a colleague [TD-262].
+- The machine host's web UI is the one UI (TD-85's "cockpit" meant it). The old Cockpit (`serve/cockpit`) is
+  audited for what the new UI lacks (design-system components and workarounds, memory purge, the ideas editor);
+  it is deleted at once if nothing is worth porting, otherwise once the port lands, at the latest at v1.0 [TD-416].
 - Keep live Change data in per-project SQLite databases under `~/.owlbear`; git-shared owlbear-data remains files
   [TD-265, TD-334].
 
@@ -752,6 +755,8 @@ TD-65.
 - TD-265, 2026-10-17: "Move to SQLite as part of TD-242 (the machine host)"
 - TD-281, 2026-10-17: "Opening a window never touches Delivery; projects are added only in the UI"
 - TD-321, 2026-10-18: "TD-281 replaces TD-11's task; TD-11 keeps: .mcp.json only with consent, nothing committed"
+- TD-416, 2026-10-20: "Audit Cockpit; delete it at once if nothing is worth porting, otherwise keep it only until
+  the port lands, at the latest at v1.0"
 
 **Replaced:** TD-11 by TD-281; TD-242 by TD-281.
 
