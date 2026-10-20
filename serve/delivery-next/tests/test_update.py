@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import leases, local_home, processes
 from owlbear_delivery_next.machine_host import alias, app, control, handover, registry, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
@@ -283,7 +283,7 @@ def test_a_host_started_through_the_alias_runs_on_from_its_versions_own_folder()
     link = local_home.root() / local_home.RUNTIME
     link.symlink_to(folder)
 
-    assert alias.physical(link / "bin" / "python") == folder.resolve() / "bin" / "python"
+    assert leases.physical(link / "bin" / "python") == folder.resolve() / "bin" / "python"
 
 
 def wait_for(check, timeout: float = 10.0) -> bool:
@@ -359,3 +359,79 @@ def test_a_standby_that_does_not_take_over_is_ended_and_the_version_restarts_for
     python = local_home.root() / local_home.RUNTIME / ".venv" / "bin" / "python"
     assert started == [[str(python), "-m", "owlbear_delivery_next", "machine", "--takeover"]]
     assert handover.taken() == given
+
+
+def test_a_process_of_an_installed_version_holds_a_lease_until_it_ends():
+    folder = version("v0.2")
+    python = folder / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+
+    lease = leases.take(python)
+
+    assert lease is not None
+    assert lease.parent == folder / leases.LEASES
+    assert leases.held(folder) == [os.getpid()]
+    assert leases.take(Path(sys.executable)) is None  # a developer checkout holds none
+    lease.rename(lease.with_name(f"{2**22 + 1}-1.0"))  # its process is gone
+    assert leases.held(folder) == []
+    assert not list((folder / leases.LEASES).iterdir())
+
+
+def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(monkeypatch):
+    removed: list[str] = []
+    monkeypatch.setattr(versions, "remove", lambda p: removed.append(p.name))
+    for tag in ("v0.1", "v0.2", "v0.3", "v0.4"):
+        (version(tag) / versions.ACTIVATED).touch()
+    (local_home.root() / local_home.RUNTIME).symlink_to(local_home.root() / local_home.VERSIONS / "v0.4")
+    held = local_home.root() / local_home.VERSIONS / "v0.2" / leases.LEASES
+    held.mkdir()
+    (held / f"{os.getpid()}-{processes.started(os.getpid())!r}").touch()
+
+    assert versions.prune() == ["v0.1"]  # v0.2 is held; v0.3 has one newer; v0.4 runs
+    assert removed == [".v0.1-removing"]  # renamed first: a process starting from it now finds nothing
+    assert not (local_home.root() / local_home.VERSIONS / "v0.1").exists()
+
+
+def test_the_old_runtime_is_removed_only_on_the_owners_word():
+    runtime = legacy()
+    alias.activate(version("v0.3"), "v0.3")
+    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
+    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
+    auth = {"authorization": f"Bearer {TOKEN}"}
+    kept = versions.legacy()
+    assert len(kept) == 1
+    assert client.get("/api/next/machine", headers=auth).json()["legacy"] == [str(kept[0])]
+
+    said = client.post("/api/next/machine/legacy/remove", headers=auth)
+
+    assert (said.status_code, said.json()["legacy"]) == (200, [])
+    assert not kept[0].exists()
+    assert runtime.resolve().name == "v0.3"
+
+
+def test_the_old_runtime_stays_while_a_process_still_runs_it(monkeypatch):
+    legacy()
+    alias.activate(version("v0.3"), "v0.3")
+    monkeypatch.setattr(leases, "unpinned", lambda: [4242])
+    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
+    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
+
+    said = client.post("/api/next/machine/legacy/remove", headers={"authorization": f"Bearer {TOKEN}"})
+
+    assert said.status_code == 409
+    assert "processes 4242 still run it" in said.json()["detail"]
+    assert len(versions.legacy()) == 1
+
+
+def test_a_process_started_through_the_alias_and_never_pinned_is_found():
+    runtime = version("v0.3")
+    (local_home.root() / local_home.RUNTIME).symlink_to(runtime)
+    sleeper = local_home.root() / local_home.RUNTIME / "sleep.py"
+    sleeper.write_text("import time\ntime.sleep(30)\n")
+    proc = subprocess.Popen([sys.executable, str(sleeper)])  # noqa: S603 - this interpreter and a test script
+    try:
+        assert wait_for(lambda: proc.pid in leases.unpinned())
+    finally:
+        proc.kill()
+        proc.wait()
+    assert proc.pid not in leases.unpinned()

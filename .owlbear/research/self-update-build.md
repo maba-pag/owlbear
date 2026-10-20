@@ -294,7 +294,11 @@ with its C-15 alignment (#515, #516); step 4's first part (4a, #517): `repo.git`
 beside the others and its `selfcheck` (§5.1), with `owlbear versions [--prepare]`; its second part (4b): the standby
 (the version's own process, told its version on its command line), the fence, the alias rename with the first
 migration, the handover and the watch (§5.2 to §5.5), started by `owlbear update` or `POST /api/next/update`, and the
-chat server's reload answer (§5.6); a host started through the alias re-executes from its version's folder. Open in
-step 4: leases and removing old versions (§3), the pages' Run updates now button and their "now runs" notice, pending
-maintenance first (§5.8) and the crash-injection proof; step 5 not built. After step 5, steps run with the project's agents and skills switched off
+chat server's reload answer (§5.6); a host started through the alias re-executes from its version's folder. Its third
+part (4c): leases taken by every process at its entry and old versions removed at a start once two newer ones were
+active (§3), the kept legacy runtime removed with a button in Settings → This machine, Run updates now on the paused
+bar with the update's state and the "now runs" notice said once (TD-288, TD-299). Pending maintenance needs no step of
+its own: maintenance runs while paused (TD-287) and the update waits for it like any running work. The crash points
+are proved by tests of each: a link made but never renamed, a swap without its clean-up, a standby that never takes
+over and the forward restart. Step 5 not built. After step 5, steps run with the project's agents and skills switched off
 (TD-274's gap, TD-317, TD-329), the plan's item 5.

@@ -20,8 +20,15 @@ PROCESSES = {  # started by Delivery itself
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run one command; a process command gets the arguments after its name."""
+    """Run one command; a process command gets the arguments after its name.
+
+    Each process holds a lease on its installed version while it runs, so no update removes its code (§3).
+    """
+    from owlbear_delivery_next.local_system import leases  # noqa: PLC0415 - before the command's own imports
+
     args = sys.argv[1:] if argv is None else argv
+    leases.pinned(args)  # through the alias: run on from the version's own folder first
+    leases.take()
     if args and args[0] in PROCESSES:
         name, rest = PROCESSES[args[0]], args[1:]
     else:

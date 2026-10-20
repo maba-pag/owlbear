@@ -193,8 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     if sys.platform != "darwin":
         sys.stderr.write("OwlBear runs on macOS only for now (TD-262)\n")
         return 2
+    from owlbear_delivery_next.local_system import leases  # noqa: PLC0415
     from owlbear_delivery_next.machine_host import environment  # noqa: PLC0415
 
+    leases.take()  # the command's own version stays while it runs (§3)
     DROPPED[:] = environment.scrub()  # before anything else, so probes and the host it starts see the same environment
     if args and args[0] in PROJECT:
         return forward(args)

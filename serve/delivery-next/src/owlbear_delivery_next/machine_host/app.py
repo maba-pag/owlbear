@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import re
 import secrets
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -19,7 +20,8 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
-from owlbear_delivery_next.machine_host import control, registry
+from owlbear_delivery_next.local_system import leases, local_home
+from owlbear_delivery_next.machine_host import control, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import api, pages
 
@@ -138,7 +140,7 @@ def _routes(machine: Machine) -> APIRouter:
             "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
             "left": machine.left() if machine.ending else [],
             "update_while_paused": registry.load().settings.update_while_paused,
-            "update": machine.updater.read(), "updated": machine.updated,
+            "update": machine.updater.read(), "updated": machine.updated or versions.running(),
         }  # fmt: skip
 
     @routes.post("/projects")
@@ -155,6 +157,7 @@ def _routes(machine: Machine) -> APIRouter:
         return answer(lambda: machine.adopt(pid).info())
 
     _machine_routes(routes, machine)
+    _update_routes(routes, machine)
     return routes
 
 
@@ -163,13 +166,7 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
 
     @routes.get("/machine")
     def values() -> dict[str, Any]:
-        """The machine's own values (TD-243): its settings, Resume and the login item, which `owlbear` changes."""
-        login = control.autostarts() if sys.platform == "darwin" else "not available on this system"
-        saved = registry.load()
-        return {
-            "paused": machine.paused, "resumed_at": saved.resumed_at, "login_item": login,
-            "settings": saved.settings.model_dump(), "settings_rev": registry.revision(saved.settings),
-        }  # fmt: skip
+        return machine_values(machine)
 
     @routes.put("/machine/settings")
     def configure(body: SettingsBody) -> dict[str, Any]:
@@ -199,6 +196,21 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
         machine.on_stop()
         return {"stopping": True}
 
+
+def machine_values(machine: Machine) -> dict[str, Any]:
+    """The machine's own values (TD-243): its settings, Resume, the login item and a kept legacy runtime."""
+    login = control.autostarts() if sys.platform == "darwin" else "not available on this system"
+    saved = registry.load()
+    return {
+        "paused": machine.paused, "resumed_at": saved.resumed_at, "login_item": login,
+        "settings": saved.settings.model_dump(), "settings_rev": registry.revision(saved.settings),
+        "legacy": [str(p) for p in versions.legacy()],
+    }  # fmt: skip
+
+
+def _update_routes(routes: APIRouter, machine: Machine) -> None:
+    """Run updates now, its state, and the removal of the runtime the first update put away (self-update §3, §5)."""
+
     @routes.get("/update")
     def update_state() -> dict[str, Any]:
         return machine.updater.read()
@@ -207,3 +219,15 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
     def update_now() -> dict[str, Any]:
         """Run updates now (TD-352, TD-353): no waiting for idle time; it still waits for running steps."""
         return machine.updater.run_now()
+
+    @routes.post("/machine/legacy/remove")
+    def remove_legacy() -> dict[str, Any]:
+        """Remove the runtime folders the first update put away; never a running one (§3)."""
+        for path in versions.legacy():
+            if path.resolve() == (local_home.root() / local_home.RUNTIME).resolve():
+                raise HTTPException(409, f"{path} is the running version")
+            if users := leases.unpinned():  # it holds no leases: processes started through the alias before
+                pids = ", ".join(map(str, users[:5]))
+                raise HTTPException(409, f"processes {pids} still run it: reload the VS Code windows, then try again")
+            shutil.rmtree(path)
+        return machine_values(machine)
