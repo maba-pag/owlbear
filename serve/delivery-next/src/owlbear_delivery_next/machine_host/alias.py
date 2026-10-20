@@ -54,6 +54,7 @@ def activate(folder: Path, tag: str) -> None:
     else:
         _swap(new, runtime)  # the first update: the legacy folder now has the name runtime.new
     with contextlib.suppress(OSError, registry.RegistryError):
+        (folder / versions.ACTIVATED).touch()
         complete()
         _marked(tag)
 
@@ -70,6 +71,8 @@ def complete() -> None:
         new.rename(legacy)
     runtime = home / local_home.RUNTIME
     if runtime.is_symlink():
+        with contextlib.suppress(OSError):
+            (runtime.resolve() / versions.ACTIVATED).touch(exist_ok=True)
         _marked(runtime.resolve().name)
 
 

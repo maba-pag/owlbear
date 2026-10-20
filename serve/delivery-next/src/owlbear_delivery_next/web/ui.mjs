@@ -178,7 +178,7 @@ async function remove(p) {
 }
 
 function view() {
-  const { projects, paused, waiting, ending, left = [] } = bar.data;
+  const { projects, paused, waiting, ending, left = [], update, updated } = bar.data;
   const p = projects.find((o) => o.id === project);
   const go = (e) => {
     if (held()) {
@@ -219,9 +219,31 @@ function view() {
         : `Delivery is paused: ${waiting} Change${waiting === 1 ? "" : "s"} would continue.`}
       ${control("Resume", () => act("resume", () => call("/resume", { method: "POST", machine: true })),
         { variant: "primary", busy: bar.busy === "resume" })}
+      ${ending ? nothing : control("Run updates now", runUpdates, { busy: bar.busy === "update" || updating(update) })}
       ${!ending && bar.data.update_while_paused ? control("Pause and stop when idle", stopWhenIdle,
         { busy: bar.busy === "pause-stop" }) : nothing}</p>` : nothing}
+    ${update?.phase && update.phase !== "idle" ? html`<p role="status" id="update-state">Update${update.version
+      ? ` to ${update.version}` : ""}: ${update.phase}${update.detail ? ` · ${update.detail}` : ""}</p>` : nothing}
+    ${updated && localStorage.getItem(SEEN) !== updated ? html`<p role="status" id="update-done">OwlBear now runs
+      ${updated}. ${control("OK", () => { localStorage.setItem(SEEN, updated); showBar(); })}</p>` : nothing}
     ${bar.error ? html`<p role="alert">${bar.error}</p>` : nothing}`;
+}
+
+const SEEN = "owlbear-version-seen";  // the version the owner was told about, so he is told once (TD-299)
+
+// Whether an update runs now: its button shows it running.
+function updating(update) {
+  return Boolean(update?.phase) && !["idle", "current", "failed", "refused"].includes(update.phase);
+}
+
+async function runUpdates() {
+  const yes = await window.ask({ title: "Run updates now?",
+    now: "OwlBear installs the newest version of this machine's channel beside the running one and checks it.",
+    then: "Once no step, check environment or design pack update runs, it switches to that version; this page "
+      + "keeps working and says once which version runs.",
+    after: "Delivery stays paused or running as it is.", instead: "OwlBear keeps running this version.",
+    yes: "Run updates now" });
+  if (yes) await act("update", () => call("/update", { method: "POST", machine: true }));
 }
 
 async function stopWhenIdle() {

@@ -161,3 +161,45 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+@pytest.mark.browser
+def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_version_runs() -> None:
+    """TD-288, TD-352, TD-299: Run updates now on the paused bar; the version taken is said once."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    machine, server, base = serve()
+    machine.updated = "v0.2"
+    asked: list[bool] = []
+
+    def run_now() -> dict:
+        asked.append(True)
+        machine.updater.state |= {"phase": "waiting", "detail": "waits for p: c1: a running step", "version": "v0.3"}
+        return machine.updater.read()
+
+    machine.updater.run_now = run_now
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/#token=t")
+            expect(page.locator("#update-done")).to_contain_text("OwlBear now runs v0.2")
+            page.locator("#update-done").get_by_role("button", name="OK").click()
+            expect(page.locator("#update-done")).to_have_count(0)
+            page.get_by_role("button", name="Run updates now").click()
+            page.locator("dialog").get_by_role("button", name="Run updates now").click()
+            expect(page.locator("#update-state")).to_contain_text(
+                "Update to v0.3: waiting · waits for p: c1: a running step"
+            )
+            assert asked == [True]
+            page.reload()
+            expect(page.locator("#update-state")).to_be_visible()
+            expect(page.locator("#update-done")).to_have_count(0)  # told once
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()

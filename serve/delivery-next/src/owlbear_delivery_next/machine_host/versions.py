@@ -17,7 +17,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import leases, local_home
 from owlbear_delivery_next.machine_host import registry
 
 if TYPE_CHECKING:
@@ -32,6 +32,7 @@ TAG = re.compile(r"v(\d+)(?:\.(\d+))?")
 FREE = 2 * 1024**3  # bytes an install needs free (§3)
 FETCH, SYNC, CHECK = 120, 900, 300  # seconds a fetch, an environment and a selfcheck may take
 FIRST_MAJOR = "v0.1"  # a major-only machine's version until v1.0 exists (TD-369)
+ACTIVATED = ".activated"  # in a version's folder once the alias named it
 type Number = tuple[int, int]
 
 
@@ -258,6 +259,26 @@ def remove(folder: Path) -> None:
     shutil.rmtree(folder, ignore_errors=True)
     with contextlib.suppress(VersionError):
         _git("-C", str(local_home.root() / REPO), "worktree", "prune")
+
+
+def prune() -> list[str]:
+    """Remove each version two newer ones were active after, unless a live lease holds it (§3); their tags."""
+    folder = local_home.root() / local_home.VERSIONS
+    current = (local_home.root() / local_home.RUNTIME).resolve()
+    installed = {p: n for p in folder.glob("v*") if p.is_dir() and (n := number(p.name)) is not None}
+    active = [n for p, n in installed.items() if (p / ACTIVATED).exists()]
+    removed = []
+    for path, found in sorted(installed.items(), key=lambda item: item[1]):
+        if path.resolve() == current or sum(n > found for n in active) < 2 or leases.held(path):  # noqa: PLR2004
+            continue
+        remove(path)
+        removed.append(path.name)
+    return removed
+
+
+def legacy() -> list[Path]:
+    """The runtime folders the first update put away; the owner removes them (§3)."""
+    return sorted(p for p in (local_home.root() / local_home.VERSIONS).glob("legacy-*") if p.is_dir())
 
 
 def report(say: Callable[[str], None], *, prepare: bool = False) -> int:

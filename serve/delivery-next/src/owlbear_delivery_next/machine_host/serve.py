@@ -27,7 +27,7 @@ import uvicorn
 
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.machine_host import alias, app, environment, handover, registry
+from owlbear_delivery_next.machine_host import alias, app, environment, handover, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
@@ -125,22 +125,11 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
         return 0
     given = handover.taken() if handing else None
     alias.complete()  # before any store opens: a half-done first migration, and the mark (§3, §4)
+    pruned = _pruned()
     sock = _bind(given.port if given else 0)
-    url = f"http://127.0.0.1:{sock.getsockname()[1]}/"
-    token = given.token if given else secrets.token_urlsafe(32)
-    record = HostRecord(url=url, token=token, pid=os.getpid(), started_at=datetime.now(UTC), code=codebase.CURRENT)
-    crashed = given is None and (home / "host.json").exists()
-    atomic_write(home / "host.json", record.model_dump_json())
-    (home / "host.json").chmod(0o600)
-    machine = Machine(record, paused=given.paused if given else crashed or not run)
-    if given:
-        machine.ending, machine.updated = given.ending, given.version
-    elif not machine.paused:
-        with contextlib.suppress(registry.RegistryError):
-            registry.resumed(record.started_at)
-    said = "running" if not machine.paused else "paused until you press Resume"
-    now = f" · now {given.version}" if given else " (the last run crashed)" if crashed else ""
-    machine.say(f"OwlBear {os.getpid()} on {link(record)} · {said}{now}")
+    machine = _machine(home, sock, given, run=run)
+    if pruned:
+        machine.say(f"removed old versions: {', '.join(pruned)}")
     machine.load_all()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
@@ -164,6 +153,34 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     if machine.handover is not None:
         _handed(machine, *machine.handover)
     return 0
+
+
+def _pruned() -> list[str]:
+    """The old versions removed at this start (§3); a failure is said, never fatal."""
+    try:
+        return versions.prune()
+    except (OSError, versions.VersionError) as exc:
+        return [f"none: {exc}"]
+
+
+def _machine(home: Path, sock: socket.socket, given: handover.Handover | None, *, run: bool) -> Machine:
+    """The machine with its record written: the old host's address, token and state when handed over (TD-299)."""
+    url = f"http://127.0.0.1:{sock.getsockname()[1]}/"
+    token = given.token if given else secrets.token_urlsafe(32)
+    record = HostRecord(url=url, token=token, pid=os.getpid(), started_at=datetime.now(UTC), code=codebase.CURRENT)
+    crashed = given is None and (home / "host.json").exists()
+    atomic_write(home / "host.json", record.model_dump_json())
+    (home / "host.json").chmod(0o600)
+    machine = Machine(record, paused=given.paused if given else crashed or not run)
+    if given:
+        machine.ending, machine.updated = given.ending, given.version
+    elif not machine.paused:
+        with contextlib.suppress(registry.RegistryError):
+            registry.resumed(record.started_at)
+    said = "running" if not machine.paused else "paused until you press Resume"
+    now = f" · now {given.version}" if given else " (the last run crashed)" if crashed else ""
+    machine.say(f"OwlBear {os.getpid()} on {link(record)} · {said}{now}")
+    return machine
 
 
 def _handed(machine: Machine, standby: handover.Standby, given: handover.Handover) -> None:
