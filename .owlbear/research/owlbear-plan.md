@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-20, status at `main` after v1.0, decisions to TD-434
+> **Date:** 2026-10-20, status at `main` after #533, decisions to TD-438
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -95,6 +95,29 @@ names, not positions: the table lists the items in their order.
   OwlBear (TD-326).
 - The "align" fixes of §4 that belong to no item above: small, each its own pull request.
 
+**What depends on what** (open work only; solid: needed first, dashed: decided order without a technical need):
+
+```mermaid
+flowchart LR
+  A402["TD-402: GitHub account per project"] --> I15["15 New project from zero"]
+  A420["TD-420: agent workspace hidden from Git"] --> I15
+  A402 --> I10["10 First real project"]
+  I14["14 Decision system"] -.-> I5["5 Memory work"]
+  I5 -.-> I8["8 Window-step gate"]
+  I8 -.-> I9["9 Watcher"]
+  B27["TD-27 benchmark"] --> I9
+  I9 --> I16["16 Amendment design"]
+  I16 --> I10
+  I9 --> I10
+  I15 -. its Changes wait for .-> I9
+  I10 --> I17["17 Browser and knowledge rebuild"]
+  I9 -.-> VB["Visual baseline"]
+```
+
+Independent of everything else: TD-402 and TD-420 (each small; both before item 15), the align fixes of §4, the
+quality service. Item 14's runner gate only stops and asks until item 16 designs amendments; its CI freshness check
+(slice 6) needs the owner's `OWLBEAR_DATA_TOKEN` secret (TD-436).
+
 **The old roadmap.** The roadmap M0–M7 and the repair plan of 2026-10-11 are history at `04b1d8ec4` (§3.7 and §3.12
 of the old record). Older documents still name their milestones: M0 to M4 are done (M4 is #449 and what followed);
 E1 is part of item 7; M5 is item 10; M6 is item 7; M7's size and style rules are C-28. The repair plan's phases 1
@@ -153,7 +176,7 @@ script became ES modules under `web/pages/<page>/`, served from a list fixed at 
 `changes.html` went from 1496 lines to 128, `config.html` from 1102 to 39, `backlog.html` from 524 to 55; no module
 has more than 259.
 v1.0 is the first merge labelled `release:major`, after items 1, 6, 2, 3, 4, 7, 11 and 13; it is tagged `v1.0` and `v1`.
-Next is item 5.
+Next is item 14, the decision system (TD-419), then item 5.
 
 ### 3.5 Items 8 and 9: gate, then watcher
 
@@ -211,7 +234,7 @@ Ask each with the question tool in the owner's format (workspace instructions, "
 test review while paused, the research move's timing and scope, the PDS fallback, which roles save memory, the
 curator's threshold, what the line limit covers and the GitHub account.
 
-1. None open. Answered on 2026-10-20 as TD-417..TD-434: the step-kind cap, the recording rule and the decision
+1. None open. Answered on 2026-10-20 as TD-417..TD-438: the step-kind cap, the recording rule and the decision
    system, the agent workspace, a new project from zero, the amendment session's timing, the browser and knowledge
    rebuild.
 
