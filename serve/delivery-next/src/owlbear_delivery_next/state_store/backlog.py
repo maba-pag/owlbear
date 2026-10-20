@@ -201,7 +201,8 @@ class Backlog:
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}
             entry = _valid(same.model_dump() | seen | {"evidence": (same.evidence + new)[-EVIDENCE:]})
-            others = [self._fetch(found, i) for i in entry.links]  # a link a failed save left one-sided is completed
+            read = {e.id: e for e in fresh}  # each issue is read once per add: many matches cost no second read
+            others = [read.get(i) or self._fetch(found, i) for i in entry.links]  # a one-sided link is completed
             lacking = [_linked(e, entry.id, now) for e in others if e and entry.id not in e.links]
             self._room(lacking)
             self._save(entry, *lacking)

@@ -162,6 +162,21 @@ def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_links_
     assert "4" not in shop.current("1").links + shop.current("2").links
 
 
+def test_a_repeat_reads_each_issue_once(shared, github, monkeypatch):  # noqa: ARG001 - the fake GitHub
+    """Sol: a repeat linked to many matches reads every issue once, so GitHub's hourly budget holds."""
+    root, title = shared[0], "Status line hides the step"
+    for project in ("shop", "docs-site", "api-site", "blog"):
+        Backlog(DataRepo(root), project, Clock()).add(title, source="watcher")
+    reads: list[str] = []
+    fetch = Backlog._fetch  # noqa: SLF001 - counting the direct reads
+    monkeypatch.setattr(Backlog, "_fetch", lambda self, found, i: reads.append(i) or fetch(self, found, i))
+
+    entry, new = Backlog(DataRepo(root), "docs-site", Clock()).add(title, source="watcher")
+
+    assert (new, entry.id, entry.links) == (False, "2", ["1", "3", "4"])
+    assert sorted(reads) == ["1", "2", "3", "4"]
+
+
 def test_a_link_an_issue_has_no_room_for_refuses_the_new_entry_naming_the_full_one(shared, github, monkeypatch):
     """TD-405: no match is left unlinked silently; nothing is written, so no link is one-sided."""
     root, title = shared[0], "Status line hides the step"
