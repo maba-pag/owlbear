@@ -723,7 +723,7 @@ TD-65.
 ## C-19 Machine host and UI
 
 **Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321, TD-416, TD-420,
-  TD-421; autonomous TD-294.
+  TD-421, TD-431, TD-432, TD-433; autonomous TD-294.
 
 - One Delivery host per machine serves every registered project (one dashboard, one process); registered projects
   keep advancing while their folders are closed [TD-104, TD-242].
@@ -740,6 +740,9 @@ TD-65.
 - Add project offers an existing folder or a new one: folder, name, Git identity, an optional GitHub repository with
   its account and visibility, Delivery's chat tools (with consent), the agent workspace, the first commit and push;
   the installer may open it at its end. Its design goes to the owner before it is built [TD-421].
+- The new-project dialog asks visibility first and warns only when the account's plan cannot protect a private
+  repository; CI and protection are ticked and recommended, the agent workspace ticked [TD-431, TD-432].
+- A project created this way is a real project: Delivery's work on it waits for the watcher [TD-433, TD-338].
 - Organise one machine-wide UI by work, not project mode; tag items and actions with their project and offer
   project, Global and All filters [TD-241].
 - Keep maintenance next to its data, with an overview linking actions and runs: memory in Memory, pack and engine
@@ -766,6 +769,9 @@ TD-65.
   the port lands, at the latest at v1.0"
 - TD-420, 2026-10-20: "Keep it optional; it asks before writing and hides its files from Git"
 - TD-421, 2026-10-20: "set up a new local folder, optionally with the installer, and create the repo … a gui workflow"
+- TD-431, 2026-10-20: "we first ask if repo should be private or public, and in that choice we already warn"
+- TD-432, 2026-10-20: "Offered in the dialog, ticked by default"
+- TD-433, 2026-10-20: "no" (Delivery does not work on a new project before the watcher)
 
 **Replaced:** TD-11 by TD-281; TD-242 by TD-281.
 
@@ -1169,6 +1175,8 @@ TD-344; TD-344 by TD-374.
   before v1.0; the threshold with TD-318's work; the GitHub account before the first real project [TD-403, decided].
 - The build work of TD-319..TD-357 comes before self-update step 3b; TD-274's gap stays until after self-update
   step 5 [TD-358, decided; TD-329].
+- After the first real project (item 10), the browser and knowledge packages are rebuilt from scratch, starting from
+  the ideas of the issues closed on 2026-10-20; until then they stay untouched, no fixes [TD-434, decided].
 
 **Owner's words:**
 
@@ -1196,6 +1204,7 @@ TD-344; TD-344 by TD-374.
 - TD-398, 2026-10-19: "Remove the fallback and notice; tests reach the real CDN"
 - TD-402, 2026-10-19: "A project setting, defaulting to the owner's account when gh has it, else maba-pag"
 - TD-403, 2026-10-19: "Small ones with item 1; PDS removal, then the page split, before v1.0"
+- TD-434, 2026-10-20: "once delivery is stable we will work on browser and knowledge packages … saving the ideas"
 
 **Replaced:** TD-17 by TD-402; TD-250 by TD-394.
 
@@ -1204,7 +1213,8 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
 
 ## C-31 The decision record
 
-**Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419; autonomous TD-389.
+**Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419, TD-424, TD-425, TD-427,
+  TD-428, TD-429, TD-430; autonomous TD-389, TD-426.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1222,7 +1232,19 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
   recorded as autonomous rows too [TD-418].
 - Decisions become a system of their own for OwlBear's work and Delivery's projects, scoped like memory (project,
   Global); its design is the next item, before item 5: the assistant's, Sol's blind one, merged, Sol-challenged
-  [TD-419].
+  [TD-419]. Its design is [decision-system-build.md](decision-system-build.md).
+- All decisions, OwlBear's and every project's, live in `owlbear-data` [TD-424]; OwlBear's repository keeps a
+  generated full view for GitHub's agents and reviewers, data credentials only in its generator [TD-425].
+- Global rules apply to every project at once; a project departs from one only by an exception (the owner took the
+  recommendation: per-project adoption at a pinned revision lets rules go stale) [TD-426].
+- Read-backs live on the Decisions page; ignoring one leaves the rule in force; only ambiguity, new evidence, a
+  conflict or changed consequences queue one; working chats may read back on the same records [TD-427].
+- A change of mind with built effect shows an impact report; activating, stopping affected work and scheduling
+  fixes are separate steps; fixes are backlog entries grouped by what one Change can do [TD-428].
+- Decisions link by a fixed set (replaces, refines, exception to, depends on, related to, promoted from); a
+  conflict is a flag the owner resolves [TD-429].
+- Decisions are never deleted: replaced, withdrawn and spent ones stay hidden by default; only a leaked secret or
+  personal data is purged, with the owner's consent [TD-430].
 
 **Owner's words:**
 
@@ -1235,5 +1257,12 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
 - TD-388, 2026-10-19: "1 and 2" (keep every quote, each cut to its decisive words; drop "chosen without a quote")
 - TD-418, 2026-10-20: "option 2" (implementation choices you would notice on a page are recorded as autonomous rows)
 - TD-419, 2026-10-20: "treat them similarly to memories, with scopes to projects, global … we should prioritize this"
+- TD-424, 2026-10-20: "all decisions for both owlbear and projects live in owlbear-data"
+- TD-425, 2026-10-20: "A: generated full view in OwlBear's repository, data credentials only in the generator"
+- TD-427, 2026-10-20: "The Decisions page holds every read-back and ignoring leaves the rule in force"
+- TD-428, 2026-10-20: "The corrected model: impact report, three separate steps, fix entries grouped by what one Change
+  can do"
+- TD-429, 2026-10-20: "A fixed set …; a conflict is a flag you resolve, never a lasting link"
+- TD-430, 2026-10-20: "Never delete …; only a leak (secret, personal data) is purged, with your consent"
 
 **Replaced:** TD-359 by TD-383 and TD-388.
