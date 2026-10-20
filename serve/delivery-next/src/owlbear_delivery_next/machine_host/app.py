@@ -59,7 +59,12 @@ class Dispatcher:
         self.app, self.machine, self.expected = app, machine, expected
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Route one connection."""
+        """Route one connection; one that changes anything, or a chat's call, is the owner's use (§7)."""
+        if scope["type"] == "http":
+            headers = dict(scope.get("headers", []))
+            asked = scope.get("method") != "GET" or b"x-owlbear-use" in headers
+            if asked and secrets.compare_digest(headers.get(b"authorization", b""), self.expected):
+                self.machine.auto.use()
         found = PROJECT.match(scope.get("path", "")) if scope["type"] == "http" else None
         if found is None:
             await self.app(scope, receive, send)
@@ -141,6 +146,7 @@ def _routes(machine: Machine) -> APIRouter:
             "left": machine.left() if machine.ending else [],
             "update_while_paused": registry.load().settings.update_while_paused,
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
+            "announce": machine.auto.read(),
         }  # fmt: skip
 
     @routes.post("/projects")
@@ -219,6 +225,11 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
     def update_now() -> dict[str, Any]:
         """Run updates now (TD-352, TD-353): no waiting for idle time; it still waits for running steps."""
         return machine.updater.run_now()
+
+    @routes.post("/seen")
+    def seen() -> dict[str, bool]:
+        """A page's word that the owner is at it, and Postpone: use, counted where every request comes in (§7)."""
+        return {"seen": True}
 
     @routes.post("/machine/legacy/remove")
     def remove_legacy() -> dict[str, Any]:

@@ -34,6 +34,7 @@ class Updater:
         self.machine, self.lock = machine, threading.Lock()
         self.thread: threading.Thread | None = None
         self.attempts: dict[str, int] = {}
+        self.auto, self.uses = False, 0  # an automatic update, and the owner's use counted when it started
         self.state: dict[str, Any] = {"phase": "idle", "detail": "", "version": "", "at": None}
 
     def read(self) -> dict[str, Any]:
@@ -48,22 +49,32 @@ class Updater:
                 self.state["version"] = version
         self.machine.say(f"update: {phase}" + (f" {version}" if version else "") + (f": {detail}" if detail else ""))
 
-    def run_now(self) -> dict[str, Any]:
-        """Run updates now (TD-352, TD-353): start an update unless one runs or OwlBear stops."""
+    def run_now(self, *, auto: bool = False) -> dict[str, Any]:
+        """Run updates now (TD-352, TD-353): start an update unless one runs or OwlBear stops.
+
+        An *auto* update, after an announcement (§7), gives way to the owner: any use, his settings or new work end it.
+        """
         with self.lock:
             if self.thread is not None and self.thread.is_alive():
                 return dict(self.state)
+            self.auto, self.uses = auto, self.machine.auto.uses
             if why := self._cancelled():
                 return dict(self.state) | {"phase": "refused", "detail": why}
             self.thread = threading.Thread(target=self._run, name="update", daemon=True)
             self.thread.start()
         return self.read()
 
-    def _cancelled(self) -> str:
+    def _cancelled(self, *, working: bool = False) -> str:
         """Why the update may not go on: a stop, or a stop when idle the owner asked for (a stop wins, §5)."""
         if self.machine.stopping.is_set():
             return "OwlBear is stopping"
-        return "OwlBear stops once the running steps end" if self.machine.ending else ""
+        if self.machine.ending:
+            return "OwlBear stops once the running steps end"
+        if self.auto and self.machine.auto.uses != self.uses:
+            return "postponed: you used OwlBear"
+        if self.auto and not self.machine.auto.permitted():
+            return "postponed: updating by itself is off now"
+        return "postponed: work started" if self.auto and working else ""
 
     def _run(self) -> None:
         try:
@@ -96,6 +107,8 @@ class Updater:
             return
         while not (why := self._cancelled()):
             if left := self.machine.busy():  # the request stays: it goes on once they end (TD-353)
+                if why := self._cancelled(working=True):  # an automatic one gives way to new work instead
+                    break
                 self._set("waiting", f"waits for {'; '.join(left[:5])}", tag)
                 self.machine.stopping.wait(RECHECK)
                 continue

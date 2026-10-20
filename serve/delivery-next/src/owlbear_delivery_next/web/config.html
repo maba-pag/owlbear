@@ -975,8 +975,9 @@ function machineSection() {
     ${m.legacy?.length ? html`<p-text id="machine-legacy">The runtime from before the first update is kept in
       ${m.legacy.join(", ")}; nothing runs it any more.</p-text>
       ${button("Remove the old runtime", removeLegacy, { variant: "secondary" })}` : nothing}
-    <p-text id="machine-note" size="xs" color="contrast-medium">OwlBear updates itself when you press Run updates
-      now on a paused page or run <code>owlbear update</code>; updating by itself when idle comes later.</p-text>
+    <p-text id="machine-note" size="xs" color="contrast-medium">OwlBear updates itself after 15 minutes without
+      use while nothing runs, announced on open pages 2 minutes ahead; Run updates now on a paused page or
+      <code>owlbear update</code> updates at once.</p-text>
   </section>`;
 }
 

@@ -300,5 +300,7 @@ active (§3), the kept legacy runtime removed with a button in Settings → This
 bar with the update's state and the "now runs" notice said once (TD-288, TD-299). Pending maintenance needs no step of
 its own: maintenance runs while paused (TD-287) and the update waits for it like any running work. The crash points
 are proved by tests of each: a link made but never renamed, a swap without its clean-up, a standby that never takes
-over and the forward restart. Step 5 not built. After step 5, steps run with the project's agents and skills switched off
+over and the forward restart. This machine's first update ran on 2026-10-20 (TD-415). Step 5 (§7): idle, use,
+the announcement with Postpone and the automatic update (`machine_host/auto_update.py`); a page reports use at most
+once a minute while visible, every request but a read counts, and the chat server marks its calls. After step 5, steps run with the project's agents and skills switched off
 (TD-274's gap, TD-317, TD-329), the plan's item 5.

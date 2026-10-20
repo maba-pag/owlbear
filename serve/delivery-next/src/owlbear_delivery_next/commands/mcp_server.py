@@ -57,7 +57,7 @@ class Chat:
             return STALE, {"error": UPDATED}
         if rec is None or not rec.token:
             return 503, {"error": down}
-        headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "chat"}
         data = None if body is None else json.dumps(body).encode()
         url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{path}"  # the machine host's (TD-242)
         request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
