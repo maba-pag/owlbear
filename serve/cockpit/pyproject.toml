@@ -2,10 +2,8 @@
 name = "owlbear-cockpit"
 version = "0.1.0"
 requires-python = ">=3.14.8"
-description = "OwlBear Cockpit — FastAPI backend for the Delivery UI"
+description = "OwlBear Cockpit — FastAPI backend for the Memory and Ideas UI"
 dependencies = [
-  "owlbear-delivery",
-  "owlbear-delivery-github",
   "owlbear-memory",
   "fastapi",
   "uvicorn",
@@ -23,6 +21,4 @@ packages = ["src/owlbear_cockpit"]
 cockpit = "owlbear_cockpit.main:main"
 
 [tool.uv.sources]
-owlbear-delivery = { workspace = true }
-owlbear-delivery-github = { workspace = true }
 owlbear-memory = { workspace = true }

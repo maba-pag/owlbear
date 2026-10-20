@@ -373,7 +373,6 @@
 - ## `Frontend Surface`
 - ## `Frontend Quality`
 - ## `Browser-backed tests`
-- ## `Delivery Evidence`
 - ## `Configuration`
 - ## `Delivery Packaging`
 - ## `Dependencies`
@@ -384,7 +383,6 @@
 - [Biome configuration](../biome.json)
 - [EditorConfig](../.editorconfig)
 - [Delivery Packaging](../serve/cockpit/README.md#delivery-packaging)
-- [operator recovery boundary](../setup/operating-owlbear.md#correction-and-recovery)
 
 ## serve/delivery/README.md
 - # `owlbear-delivery`
@@ -713,12 +711,6 @@
 - ## `Upgrading OwlBear`
 - ## `Uninstalling`
 - ## `Delivery Workflow`
-- ### `Specification`
-- ### `Delivery`
-- ### `Exceptional Entries`
-- ### `Correction And Recovery`
-- ### `Publication, Acceptance, And Completed History`
-- ### `Current Manual Boundaries`
 - ## `Portability and recovery`
 - ### `Pinned controller releases`
 - ## `Cockpit details`
@@ -745,9 +737,6 @@
 - [`serve/`](../serve/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
-- [Delivery MCP reference](../serve/delivery-mcp/README.md)
-- [WIRING.md](../share/WIRING.md)
-- [Cockpit package guide](../serve/cockpit/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
@@ -785,8 +774,7 @@
 - [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
 - [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 - [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
-- [Exceptional entries](../setup/operating-owlbear.md#exceptional-entries)
-- [Delivery workflow reference](../setup/operating-owlbear.md#delivery-workflow)
+- [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
 - [Adding local agents](../setup/operating-owlbear.md#adding-local-agents)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
@@ -931,8 +919,6 @@
 
 ## share/instructions/research-docs.instructions.md
 
-## share/prompts/address-pr-feedback.prompt.md
-
 ## share/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
 - ## `Step 1 - Load the standard first`
@@ -948,11 +934,7 @@
 - ## `Step 3 - Present Candidates`
 - ## `Step 4 - Explore the Selected Design`
 
-## share/prompts/continue-change.prompt.md
-
 ## share/prompts/design.prompt.md
-
-## share/prompts/finalize-change.prompt.md
 
 ## share/prompts/frontend-audit.prompt.md
 - # `Frontend Audit`
@@ -964,8 +946,6 @@
 - ## `Guardrails`
 
 ## share/prompts/ideate.prompt.md
-
-## share/prompts/inspect-change.prompt.md
 
 ## share/prompts/kb-enrich.prompt.md
 - ## `Execution Contract`
@@ -1006,12 +986,6 @@
 - ### `Skip`
 - ## `6. Continuation And Batch Review Helper`
 - ## `7. Tool Failure Rules`
-
-## share/prompts/repair-delivery.prompt.md
-
-## share/prompts/resolve-delivery-attention.prompt.md
-
-## share/prompts/resolve-target-conflict.prompt.md
 
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`

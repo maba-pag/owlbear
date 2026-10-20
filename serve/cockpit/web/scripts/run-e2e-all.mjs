@@ -3,7 +3,6 @@ import { checkChromium } from "./check-playwright-browser.mjs";
 
 const suites = [
   { name: "chromium", environment: {} },
-  { name: "work-portfolio", environment: { WORK_PORTFOLIO_E2E: "1" } },
   { name: "memory-purge-assembled", environment: { PURGE_E2E: "1" } },
   { name: "memory-lifecycle-assembled", environment: { LIFECYCLE_E2E: "1" } },
 ];

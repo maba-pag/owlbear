@@ -6,7 +6,7 @@
  * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { EMPTY_WORK_ITEM_PORTFOLIO } from "./support/api-fixtures";
+import { EMPTY_MEMORIES } from "./support/api-fixtures";
 import { type PageErrorTracker, trackPageErrors, waitForWorkspaceWithoutPageErrors } from "./support/page-errors";
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────
@@ -36,9 +36,9 @@ async function stubApis(page: Page): Promise<PageErrorTracker> {
   );
 
   // Core data route — registered last so it takes priority over catch-all
-  await page.route("/api/work-items", (route) =>
+  await page.route("/api/memories", (route) =>
     route.fulfill({
-      json: EMPTY_WORK_ITEM_PORTFOLIO,
+      json: EMPTY_MEMORIES,
     }),
   );
 

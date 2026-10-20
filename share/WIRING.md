@@ -61,7 +61,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
-Orchestrator continues one selected Change through `/continue-change`: it acquires and dispatches at
+Orchestrator continues one selected Change (its `/continue-change` prompt is retired): it acquires and dispatches at
 most one Change action at a time, then forwards ordinary transitions and routes typed attention and
 admitted Change repair proposals. Before dispatching, it inspects only that Change's running
 Planner/Builder/Finalizer claims through `get_change` and asks once with `vscode/askQuestions`
@@ -83,15 +83,8 @@ not proof.
 | --- | --- | --- |
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
-| `continue-change` | `prompt` -> orchestrator | The normal execution entry: one selected Change; session-start claim check, then acquires and dispatches at most one Change action at a time |
 | `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
 | `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
-| `finalize-change` | `prompt` -> finalizer | Exceptional fallback when the continuation host cannot dispatch Finalizer, and the `address-pr-feedback` handoff; agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
-| `inspect-change` | `agent` with a read-only allowlist | Read-only Change diagnosis through `get_change` and `delivery_health` (exact-name tool search for deferred bindings; `readFile` only for host-spilled results); no mutation or host repair |
-| `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
-| `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to `/continue-change` |
-| `repair-delivery` | Current agent directed by prompt | Loads `w-delivery-repair`; read-only `delivery-diagnose` bootstrap, then `delivery-repair` classification and fenced proposals under the confirmation policy while the user has stopped the controllers |
-| `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
@@ -103,6 +96,10 @@ not proof.
 
 Project-local prompts are outside the portable inventory. They may select built-in agents or load
 project-local skills in addition to the shared surface.
+
+The new Delivery engine's Changes page (New Change, the shaping chat) replaces the retired
+`continue-change`, `finalize-change`, `inspect-change`, `address-pr-feedback`,
+`resolve-target-conflict`, `repair-delivery` and `resolve-delivery-attention` prompts.
 
 ## Conditional Skill Loading
 
@@ -119,9 +116,6 @@ The named caller owns each on-demand condition and timing.
 | frontend conventions | package-provided `pds-knowledge-{framework}` | The project declares a PDS wrapper and its generated companion link resolves |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
 | Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
-| `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Delivery attention or blocked outcome needs interactive diagnosis or a user-selected remedy |
-| `resolve-target-conflict` prompt | `w-target-conflict-resolution` | One exact target merge needs managed-worktree resolution and Delivery-owned merge validation |
-| `repair-delivery` prompt | `w-delivery-repair` | Delivery refuses to start or the user asks for offline diagnosis and supported repair |
 
 ## Required Skill Consumers
 
@@ -155,14 +149,14 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
 | builder | orchestrator | Settled no-result preserves same-task work; unreturned/live work stays held |
-| finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the exceptional `/finalize-change <change_id>` fallback instead |
+| finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the exceptional `/finalize-change <change_id>` fallback, a prompt that is now retired |
 | repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
-`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody; the user
-recovers claims through Cockpit or `/resolve-delivery-attention`. The user-stopped release route is
+`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody; Cockpit's
+recovery controls and `/resolve-delivery-attention` are retired. The user-stopped release route is
 separate. No agent triggers `memory-curator`; the user runs it or reviews pending entries in Cockpit.
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see

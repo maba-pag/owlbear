@@ -47,20 +47,6 @@ for (const [id, title, state, updatedAt] of entries) {
 }
 await mkdir(resolve(fixtureManifest, ".."), { recursive: true });
 await writeFile(fixtureManifest, JSON.stringify({ memoryDir }));
-// The cockpit backend refuses to boot without a Delivery config, even for Memory-only runs.
-await runFile(
-  "uv",
-  [
-    "run",
-    "--project",
-    root,
-    "python",
-    resolve(import.meta.dirname, "seed-work-portfolio-delivery.py"),
-    "--workspace",
-    fixture,
-  ],
-  { cwd: root },
-);
 
 const server = spawn("uv", ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"], {
   cwd: fixture,

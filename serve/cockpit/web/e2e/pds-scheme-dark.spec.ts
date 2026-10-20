@@ -6,7 +6,7 @@
  * catch-all registered before specific handlers.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { EMPTY_WORK_ITEM_PORTFOLIO } from "./support/api-fixtures";
+import { EMPTY_MEMORIES } from "./support/api-fixtures";
 import { trackPageErrors, waitForWorkspaceWithoutPageErrors } from "./support/page-errors";
 
 function requirePresent<T>(value: T | null | undefined): T {
@@ -74,7 +74,7 @@ async function stubApis(page: Page) {
 
   await page.route("/api/tasks", (route) => route.fulfill({ json: TASKS }));
   await page.route("/api/board", (route) => route.fulfill({ json: BOARD }));
-  await page.route("/api/work-items", (route) => route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }));
+  await page.route("/api/memories", (route) => route.fulfill({ json: EMPTY_MEMORIES }));
 
   return pageErrors;
 }

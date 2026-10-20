@@ -13,29 +13,21 @@ tools, or your GitHub workflow.
 
 ## What it looks like
 
-You work in Copilot Chat. Three prompts cover the normal loop:
-
-```text
-/ideate                       Refine a rough idea, one question at a time.
-/design                       Turn it into an approved work package. You approve it.
-/continue-change my-change    Plan, build, review, and publish it. Run it again after any stop.
-```
+You work on the new Delivery engine's Changes page and in Copilot Chat. **New Change** on that page
+opens a shaping chat that turns your idea into a brief; you approve the brief on the page, and the
+engine plans, builds, reviews and publishes it:
 
 ```mermaid
 flowchart LR
-    A[Rough idea] -->|/ideate| B[Refined outcome]
-    B -->|/design| C[Approved change]
-    C -->|/continue-change| D[Plan, build, review, pull request]
-    D -->|you approve the merge| E[Completed history]
+    A[Rough idea] -->|New Change: shaping chat| B[Approved brief]
+    B -->|plan, build, review| C[Pull request]
+    C -->|you approve the merge| D[Done]
 ```
 
-While a chat runs, a browser view called Cockpit shows what is in flight, what is waiting on you, and
-what already completed. When a step needs a decision or gets stuck, it stops and asks there instead
-of guessing. When the pull request is ready, you approve the merge in Cockpit or merge it in GitHub.
-A few other prompts handle exceptions; Cockpit or the chat names them when they are needed.
-
-![Cockpit delivery portfolio: one change in Design, portfolio counters for work that needs you, is
-blocked, running, or ready, and the exact next command to run](share/diagrams/cockpit-delivery.png)
+When a step needs a decision or gets stuck, the engine asks on the Changes page instead of guessing.
+When the pull request is ready, you approve the merge there or merge it in GitHub. The Changes page
+replaces the retired `/continue-change` prompt, its exception prompts and Cockpit's old Delivery
+view; Cockpit keeps Memory and Ideas.
 
 ## Is this for you?
 
@@ -125,23 +117,13 @@ and [Troubleshooting](setup/setup-guide.md#troubleshooting).
 
 ## Your first change
 
-Prove the installation with one small outcome:
+Prove the installation with one small outcome on the Changes page:
 
-1. `/ideate` — describe what you want. Answer the questions it asks.
-2. `/design` — review the proposed work and approve it. It returns the Change ID and the prompt to
-   run next, for example `/continue-change improve-search`.
-3. `/continue-change improve-search` — the work is planned, built, reviewed, and published as a
-   pull request, in order. When the chat stops to wait for you, act in Cockpit, then run the same
-   prompt again.
-4. Open Cockpit from the project root to watch progress, or to answer whatever it is waiting for:
-
-   ```shell
-   uv run --project ../owlbear cockpit
-   ```
-
-   It opens at `http://127.0.0.1:8420` and reads the project you launched it from.
-5. When Cockpit shows **Ready to merge**, review the pull request and approve it with
-   **Approve merge**, or merge it in GitHub yourself.
+1. Press **New Change** and describe what you want in the shaping chat it opens.
+2. Approve the brief on the Changes page. The engine plans, builds, reviews and publishes it as a
+   pull request, and asks on the page when it needs you.
+3. When the page asks for merge consent, review the pull request and approve it there, or merge it
+   in GitHub yourself.
 
 The full walkthrough with expected output at each step is in
 [First successful workflow](setup/setup-guide.md#first-successful-workflow).
@@ -182,7 +164,7 @@ copied files. See [Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbe
 | Surface | Status | What it does |
 | --- | --- | --- |
 | Delivery | Core | Plans, executes, reviews, publishes, and recovers one change |
-| Cockpit | Core | The browser view for work, requests, recovery, and history |
+| Cockpit | Core | The browser view for Memory and Ideas |
 | Memory | Available | Durable, scoped knowledge that carries across sessions |
 | Knowledge | Alpha | Searchable documents and knowledge graphs; needs field validation |
 | Browser | Alpha | Authenticated web acquisition; needs field validation |

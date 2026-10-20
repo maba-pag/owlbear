@@ -1,12 +1,11 @@
 # owlbear-cockpit — Steering Cockpit Package
 
 Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
-served as built static assets from `dist/`. The backend loads the canonical Delivery application
-and projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
-Delivery authority.
+served as built static assets from `dist/`. It shows and edits the workspace's Memory and Ideas.
+Changes run on the new Delivery engine's Changes page; Cockpit's old Delivery view is retired.
 
 **Use this guide when:** you need to build, launch, or package Cockpit, or trace its frontend/backend
-boundary and human operator controls.
+boundary.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
@@ -28,10 +27,9 @@ uv run cockpit
 ```
 
 `uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
-and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
-`.owlbear/delivery/config.json`, canonical Delivery state, and `.owlbear/memory/` relative to the
-workspace root. Consumer launches must use the target project as their working directory or pass
-it to `uv --directory`.
+and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads `.owlbear/memory/` and
+`.owlbear/ideas.md` relative to the workspace root. Consumer launches must use the target project
+as their working directory or pass it to `uv --directory`.
 
 Build frontend assets for the developer/source workflow:
 
@@ -127,62 +125,6 @@ smoke scenarios against the Playwright-pinned Chromium engine. Pull-request CI a
 both install and test Chromium only. Chrome and Edge are the supported browser families; consumers
 do not run these developer-only tests.
 
-## Delivery Evidence
-
-Cockpit projects current Delivery state and user-owned controls without becoming authority:
-
-| Surface | Authority |
-| --- | --- |
-| Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, task progress, and explicit per-Change admission/runtime status from `PortfolioApplication` |
-| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
-| Acceptance evidence | Each acceptance criterion's status and evidence records from Delivery's evidence projection |
-| User controls | Copy continuation prompt, Pause and Resume, answer requests, clear blocks, release workers, request recovery, move backward, approve merge, observe acceptance |
-| Completed history | Bounded list, semantic search, and exact completed-change lookup |
-| Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
-
-The `/api/work-items` response consumes Delivery's explicit status axes. A package is shown as
-unadmitted Design only when persisted admission is absent. An admitted Change with no tasks is a
-valid Planning state and reports `Task plan not published`; an admitted but non-actionable Change
-retains its admission state and reports the generic `runtime_unavailable` diagnostic.
-`recover_claim` remains an exact recovery request and does not prove worker closure; it refuses with
-`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` when supported host exclusion is unavailable. Separately,
-Cockpit's "Release stuck worker" action calls `release_stuck_worker` after the user identifies a
-stopped chat. Delivery requires no worktree writes for 30 seconds and no live same-user process with a
-cwd or open file under the managed worktree or Git admin directory; terminal-attached idle shells with
-no live child are ignored unless an open file matches. `ERR_DELIVERY_WORKER_ACTIVE` includes a retry time when the write
-guard is pending, or process details otherwise, and leaves custody and files unchanged. The action
-does not operate the process. See the
-[operator recovery boundary](../../setup/operating-owlbear.md#correction-and-recovery).
-
-The current frontend polls `/api/work-items` every three seconds. Each poll observes a reconciled
-Delivery read, so an already-running Cockpit can see newly admitted Changes without a process
-restart. Polling does not reload the full application, use SSE, or replace persisted Delivery
-authority.
-
-The assembled FastAPI inventory preserves 27 POST routes for user-owned controls:
-
-| Control family | Preserved operations | Routes |
-| --- | --- | ---: |
-| Continuation | Acquire the selected Change's next action; execute an acquired engine action | 2 |
-| Requests and outcomes | Answer/clear; release stopped worker; request recovery; move backward | 6 |
-| Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; approve merge; adopt an external head; observe publication checks; resolve attention; supersede a publication; defer; resume | 11 |
-| Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees, or discard a target merge and clean up; recover a worktree | 8 |
-
-These controls remain Cockpit user authority and continue to use the Delivery domain methods and
-locks. Cockpit does not schedule work, choose worker transitions, interpret reviewer evidence, or
-silently turn these controls into agent actions.
-
-Cause-specific missing-coordination classification is deferred to a separate follow-up Change.
-Stopped-worker release is available through both Cockpit and Delivery MCP. Broader user-control parity
-remains deferred; later operations must define explicit user confirmation and reuse core Delivery
-methods.
-
-Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
-answer-bearing and administrative controls reserved for users. It does not schedule work, choose
-worker transitions, interpret reviewer evidence, repair source, merge pull requests, or update the
-configured target branch on its own. Persisted Integration attention remains visible through the
-current attention surfaces.
-
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -190,8 +132,8 @@ current attention surfaces.
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
 
-Cockpit always reads Delivery authority and memory state from the current workspace and serves the
-package's bundled `dist/` directory.
+Cockpit always reads memory and ideas from the current workspace and serves the package's bundled
+`dist/` directory.
 
 ## Delivery Packaging
 
@@ -207,5 +149,4 @@ package's bundled `dist/` directory.
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `owlbear-delivery` | Design authority, Delivery runtime, admission, publication, acceptance observation, and completed history |
 | `owlbear-memory` | Memory engine (workspace package) |

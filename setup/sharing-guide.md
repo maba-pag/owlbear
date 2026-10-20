@@ -74,8 +74,8 @@ uv run --project ../owlbear cockpit
 ```
 
 This serves the Cockpit bundle built in the owlbear checkout
-([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)) while keeping target change, delivery,
-Memory, and Ideas state scoped to the project.
+([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)) while keeping Memory and Ideas
+state scoped to the project.
 
 ---
 
