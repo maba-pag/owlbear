@@ -178,7 +178,7 @@ async function remove(p) {
 }
 
 function view() {
-  const { projects, paused, waiting, ending, left = [], update, updated } = bar.data;
+  const { projects, paused, waiting, ending, left = [], update, updated, announce } = bar.data;
   const p = projects.find((o) => o.id === project);
   const go = (e) => {
     if (held()) {
@@ -222,6 +222,9 @@ function view() {
       ${ending ? nothing : control("Run updates now", runUpdates, { busy: bar.busy === "update" || updating(update) })}
       ${!ending && bar.data.update_while_paused ? control("Pause and stop when idle", stopWhenIdle,
         { busy: bar.busy === "pause-stop" }) : nothing}</p>` : nothing}
+    ${announce ? html`<p role="status" id="update-announce">OwlBear updates to ${announce.version} in
+      ${clock(announced())} · ${control("Postpone", () => act("postpone", seen), { busy: bar.busy === "postpone" })}
+      </p>` : nothing}
     ${update?.phase && update.phase !== "idle" ? html`<p role="status" id="update-state">Update${update.version
       ? ` to ${update.version}` : ""}: ${update.phase}${update.detail ? ` · ${update.detail}` : ""}</p>` : nothing}
     ${updated && localStorage.getItem(SEEN) !== updated ? html`<p role="status" id="update-done">OwlBear now runs
@@ -230,6 +233,28 @@ function view() {
 }
 
 const SEEN = "owlbear-version-seen";  // the version the owner was told about, so he is told once (TD-299)
+const USE = 60_000;  // a page says the owner is at it at most once a minute (§7)
+let told = 0, until = 0;
+
+// The owner's use: a page he works in, while it is visible; polls never count.
+function seen() {
+  told = Date.now();
+  return call("/seen", { method: "POST", machine: true });
+}
+for (const kind of ["keydown", "pointerdown", "wheel", "scroll", "focusin"]) {
+  addEventListener(kind, () => {
+    if (document.visibilityState === "visible" && bar.data && Date.now() - told >= USE) seen().catch(() => {});
+  }, { passive: true, capture: true });
+}
+
+// Seconds left of an announced update, counted here between polls.
+function announced() {
+  return Math.max(0, Math.round((until - Date.now()) / 1000));
+}
+
+function clock(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 
 // Whether an update runs now: its button shows it running.
 function updating(update) {
@@ -267,11 +292,16 @@ function showBar() {
 
 if (bar.data) {
   showBar();
+  const counted = () => { until = bar.data?.announce ? Date.now() + bar.data.announce.left * 1000 : 0; };
+  counted();
   setInterval(async () => {
-    if (bar.busy || document.activeElement?.closest?.("#machine")) return;  // never under the owner's typing
+    // never under the owner's typing, unless an update is announced: its countdown must stay true (§7)
+    if (bar.busy || (document.activeElement?.closest?.("#machine") && !bar.data?.announce)) return;
     const was = bar.data?.paused;
     bar.data = await machine().catch(() => bar.data);
+    counted();
     showBar();
     if (bar.data?.paused !== was) changed();
   }, 5000);
+  setInterval(() => { if (bar.data?.announce) showBar(); }, 1000);
 }

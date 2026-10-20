@@ -130,6 +130,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     machine.load_all()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
+    threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
 
     def ended() -> None:  # the discovery file goes while this process still holds the lock; a handover keeps it
         if machine.handover is None:

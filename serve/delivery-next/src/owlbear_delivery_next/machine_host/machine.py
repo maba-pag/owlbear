@@ -74,9 +74,11 @@ class Machine:
         self.on_stop: Callable[[], None] = lambda: None
         self.total = Settings().sessions
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
+        from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
 
         self.updater = Updater(self)
+        self.auto = Auto(self)
 
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""

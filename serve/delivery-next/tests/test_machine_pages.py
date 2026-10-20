@@ -203,3 +203,29 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+@pytest.mark.browser
+def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it() -> None:
+    """TD-301: open pages announce it 2 minutes ahead with Postpone; Postpone is use."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    machine, server, base = serve()
+    machine.auto.target, machine.auto.deadline = "v0.3", machine.auto.mono() + 105
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+            page.goto(f"{base}/#token=t")
+            expect(page.locator("#update-announce")).to_contain_text("OwlBear updates to v0.3 in 1:4")
+            page.locator("#update-announce").get_by_role("button", name="Postpone").click()
+            expect(page.locator("#update-announce")).to_have_count(0)
+            assert machine.auto.deadline is None
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
