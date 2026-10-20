@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 type Revised = Literal["challenge", "recheck", "end"]
 type Counted = Literal["dispute", "reconsider", "update", "pass", "end"]
 FIX, RECONSIDER, DROP = "fix", "reconsider", "drop"
-ANOTHER, ACTIVATE, DISCARD = "another", "activate", "discard"
+ANOTHER, ACTIVATE, DISCARD, RETRY = "another", "activate", "discard", "retry"
 LABELS = {
     FIX: "Have the updater fix it",
     RECONSIDER: "Ask the challenger to reconsider",
@@ -28,7 +28,9 @@ LABELS = {
     ANOTHER: "Another round",
     ACTIVATE: "Activate the unreviewed repair",
     DISCARD: "Discard the update",
+    RETRY: "Try again",
 }
+PUBLISH = (RETRY, DISCARD)  # publication stopped: try again once fixed, or discard (the pull request stays)
 HOW = {
     "fixed": "fixed, not challenged again",
     "rejected": "rejected, never judged",
@@ -187,7 +189,7 @@ def questions(lp: RoundLoop, run: str, identity: str) -> list[dict[str, Any]]:
         if lp.unreviewed
         else " The candidate is what the last round judged."
     )
-    end = " Activate it as it is (commit and push), or discard the update?"
+    end = " Activate it as it is (a pull request to main, merged once CI passes), or discard the update?"
     options = [ANOTHER] * many(lp) + [ACTIVATE, DISCARD]
     text = f"{head}{repair} Findings: {said}.{end}"
     return [_question(f"{run}:end:{lp.round}", "end", text, options, identity=identity)]

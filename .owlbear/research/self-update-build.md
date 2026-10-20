@@ -192,7 +192,8 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   are kept in the update's state, so a retry reuses them. Its merge, brought up to date with `main` as any
   pull request and checked by CI, becomes a version as its labels say; machines take it at their next idle
   time.
-- **Step 3c build (before step 4's `repo.git`), after Sol's challenge (REVISE, 96%):**
+- **Step 3c build (before step 4's `repo.git`), after Sol's challenge (REVISE, 96%):** built 2026-10-20 as below
+  (`design_packs/pack_git.py`, `pack_runs/pack_publish.py`), except the C-15 alignment, which is still open.
   - **Source:** the package's own Git checkout stands in for `repo.git`: its `origin` must be `maba-pag/owlbear`,
     its tracked files clean, and its `HEAD`, pinned at the candidate stage as the running version, an ancestor of
     the freshly fetched `origin/main`; anything else is refused before any session, with what to do. The machine's
@@ -253,6 +254,6 @@ the pull request labels and marker settings (TD-308).
 | 4 | `repo.git`, versions, leases, never backwards, selfcheck, standby, fence, alias activation with first migration, handover, watch, Run updates now (§3–§5) | disposable macOS processes with two local tags: success, selfcheck and standby failure, a crash injected at each ownership step and around the alias rename, an open page and a chat server across it, a second update, disk refusal |
 | 5 | Idle, use, announcement, automatic updates (§7) | clock-driven tests: polls never count, Postpone, cancel, sleep |
 
-Status 2026-10-19: step 1 #473; step 2 #476 and #478; step 3 #480 to #482, except design pack updates through a pull
-request (3c, §8); steps 4 and 5 not built. After step 5, steps run with the project's agents and skills switched off
+Status 2026-10-20: step 1 #473; step 2 #476 and #478; step 3 #480 to #482 and the design pack's pull request (3c, §8),
+except 3c's C-15 alignment; steps 4 and 5 not built. After step 5, steps run with the project's agents and skills switched off
 (TD-274's gap, TD-317, TD-329), the plan's item 5.

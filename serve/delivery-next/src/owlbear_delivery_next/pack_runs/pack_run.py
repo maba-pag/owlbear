@@ -19,7 +19,7 @@ from owlbear_delivery_next.change_contracts import dispute_tools, tools
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git
 from owlbear_delivery_next.local_system import preload
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_rounds, pack_updater
+from owlbear_delivery_next.pack_runs import pack_candidate, pack_publish, pack_rounds, pack_updater
 from owlbear_delivery_next.settings import rounds
 
 if TYPE_CHECKING:
@@ -57,7 +57,8 @@ class Context(BaseModel):
     manifest: str
     notice: str
     baseline: dict[str, str]  # the package's files an update rewrites, by package path: their digests at the start
-    checkout: dict[str, str]  # the package checkout an activation commits on
+    checkout: dict[str, str]  # the package's checkout: its root, repository and the base pinned for the commit
+    publication: pack_publish.Publication | None = None  # set once the update goes into main
     start: dict[str, str]  # the updater repository's files as laid out
     sid: str
     sessions: int = 0  # updater sessions so far: the first repair resumes the producer (TD-123)
@@ -77,7 +78,7 @@ def _path(name: str) -> str:
 
 
 def begin(  # noqa: PLR0913 - the job, the candidate, its checkout and the evidence so far
-    job: Job, c: pack_candidate.Candidate, co: pack_git.Checkout, *, diff: str, golden: str, why: str
+    job: Job, c: pack_candidate.Candidate, src: pack_git.Source, *, diff: str, golden: str, why: str
 ) -> str | None:
     """Lay out the updater's repository, pin the loop's values and run; the ending's words, or None while waiting."""
     at = job.store.root / UPDATER
@@ -87,7 +88,7 @@ def begin(  # noqa: PLR0913 - the job, the candidate, its checkout and the evide
     ctx = Context(
         tag=c.tag, why=why, diff=diff, golden=golden, pins=c.pins, manifest=c.manifest, notice=c.notice,
         baseline=c.inputs,  # what the candidate was made from, never a later read
-        checkout={"root": str(co.root), "branch": co.branch, "remote": co.remote, "merge": co.merge},
+        checkout={"root": str(src.root), "repository": src.repository, "base": src.base},
         start=start, sid=pack_updater.new_id(),
     )  # fmt: skip
     lp = RoundLoop(subject=PACK, policy=rounds.policy(job.store.settings(), PACK, "updater"))
@@ -122,7 +123,7 @@ def _unchanged(package: Path, ctx: Context) -> None:
 
 
 def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str | None:
-    """Run the actions from the context's next one until the owner is asked or the pack is pushed.
+    """Run the actions from the context's next one until the owner is asked or the pack is merged.
 
     Raises:
         Stopped: An action ended the run.
@@ -256,30 +257,47 @@ def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action:
     return NEXT[pack_rounds.after(lp)]
 
 
-def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str:
-    """Commit and push exactly the pack the last verdict passed, or the one the owner accepted (TD-256)."""
-    live, package = job.live, job.live.package.resolve()
+def _activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> str | None:
+    """Take exactly the pack the last verdict passed, or the one the owner accepted (TD-256), into ``main``.
+
+    The run waits for the owner (None) when publication stops; trying again goes on from where it got.
+    """
+    package = job.live.package.resolve()
     expected = ctx.accepted or (lp.head if lp.ended == "clean" else "")
     if not expected or design_pack.identity(c.manifest, c.skills) != expected:
         msg = "the candidate is not what the challenger passed or you accepted; run the update again"
         raise Stopped(msg)
+    root = Path(ctx.checkout["root"]).resolve()
+    if ctx.publication is None:  # the edited skills join the one commit, checked against the package just before
+        job.do("commit", lambda: _unchanged(package, ctx), lambda _o: "the package's skills are as the update found")
+        edited = [n for n in c.pins["skills"] if _sha(pack_updater.skill(c, n).read_bytes()) != ctx.baseline[_path(n)]]
+        said = f"The updater changed {', '.join(edited)}." if edited else "The updater changed no skill."
+        passed = "" if ctx.accepted else " The challenger passed."
+        rounds_ = pack_rounds.summary(lp, owner=bool(ctx.accepted))
+        ctx.publication = pack_publish.Publication(
+            root=str(root), repository=ctx.checkout["repository"], base=ctx.checkout["base"],
+            branch=f"pack/{job.state['run'][:12]}",
+            body=f"Golden pages as expected. Calibration replay: {ctx.replayed}. {said}{passed} {rounds_}",
+        )  # fmt: skip
+        job.keep(ctx, lp)
     edited = [n for n in c.pins["skills"] if _sha(pack_updater.skill(c, n).read_bytes()) != ctx.baseline[_path(n)]]
-    said = f"The updater changed {', '.join(edited)}." if edited else "The updater changed no skill."
-    passed = "" if ctx.accepted else " The challenger passed."
-    rounds_ = pack_rounds.summary(lp, owner=bool(ctx.accepted))
-    body = f"{ctx.why}\n\nGolden pages as expected. Calibration replay: {ctx.replayed}. {said}{passed} {rounds_}"
-    co = pack_git.Checkout(Path(ctx.checkout["root"]), ctx.checkout["branch"], ctx.checkout["remote"],
-                           ctx.checkout["merge"])  # fmt: skip
-    changed = {package / pack_candidate.MANIFEST: c.manifest, package / pack_candidate.NOTICE: c.notice}
+    files = {str((package / pack_candidate.MANIFEST).relative_to(root)): c.manifest,
+             str((package / pack_candidate.NOTICE).relative_to(root)): c.notice}  # fmt: skip
+    files |= {str((package / _path(n)).relative_to(root)): pack_updater.skill(c, n).read_text("utf-8") for n in edited}
+    return _published(job, ctx, files)
 
-    def activate() -> str:  # the edited skills join the one commit, checked against the package just before
-        _unchanged(package, ctx)
-        changed.update({package / _path(n): pack_updater.skill(c, n).read_text(encoding="utf-8") for n in edited})
-        return pack_git.activate(co, changed, body, live.git)
 
-    commit = job.do("activate", activate)
-    job.do("push", lambda: pack_git.push(co, commit, live.git), lambda _o: f"{commit} to {co.remote} {co.merge}")
-    job.pushed(commit, co, sorted(str(p.relative_to(co.root)) for p in changed))
-    if ctx.accepted:
-        return "activated by you after rounds without a pass, committed and pushed"
-    return "activated, committed and pushed"
+def republish(job: Job, ctx: Context) -> str | None:
+    """Go on with a publication whose commit exists: GitHub first, never the candidate again (its base moved on)."""
+    return _published(job, ctx, {})
+
+
+def _published(job: Job, ctx: Context, files: dict[str, str]) -> str | None:
+    pub = ctx.publication
+    try:
+        merged = pack_publish.publish(job, pub, files, ctx.why)
+    except pack_publish.Held as exc:
+        job.hold(ctx, str(exc))
+        return None
+    by = " by you after rounds without a pass" if ctx.accepted else ""
+    return f"activated{by}: merged into main as {merged[:12]} through {pub.url}"

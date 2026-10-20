@@ -1,10 +1,11 @@
 """The Settings page's design pack update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
 
 Stages run in order and the first that fails stops the run with its reason: notice, candidate, diff, golden pages, then
-the updater's and the challenger's rounds with the calibration replay (``pack_run``), activate (one commit in the
-package's checkout) and push. Until activation nothing in the package changes. A run whose rounds need the owner waits
-for his answers on the Settings page; its state is kept under the store, so a waiting run survives a host restart,
-while a run the host stopped during reads as failed.
+the updater's and the challenger's rounds with the calibration replay (``pack_run``), then the way into ``main``
+(``pack_publish``): commit, push, pull request, CI and merge. Until the merge nothing in ``main`` changes, and the
+running checkout never does. A run whose rounds or publication need the owner waits for his answers on the Settings
+page; its state is kept under the store, so a waiting run survives a host restart. A run the host stopped during
+reads as failed, except during publication: it waits for the owner, and trying again reconciles with GitHub first.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import json
 import os
 import shutil
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -23,9 +25,10 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_update
+from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_replay, pack_rounds, pack_run
+from owlbear_delivery_next.pack_runs import pack_candidate, pack_publish, pack_replay, pack_rounds, pack_run
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -33,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.design_packs.calibration import Replay
+    from owlbear_delivery_next.github.provider import Provider
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
@@ -46,8 +50,10 @@ STAGES = (
     ("update", "Updater: skills against upstream and the findings"),
     ("replay", "Calibration replay"),
     ("challenger", "Challenger on the whole pack"),
-    ("activate", "Activate: one commit in the package"),
+    ("commit", "Commit: one commit on a pack branch"),
     ("push", "Push the branch"),
+    ("pull-request", "Pull request to main"),
+    ("merge", "CI and merge"),
 )
 LOG = 200  # lines kept of the last run's log
 MACHINE_LOCK = "design-pack.lock"  # one running update per machine, whichever project started it (TD-242)
@@ -84,6 +90,10 @@ class Live:
     challenge: Callable[[Store, Any], Run] = sessions.run
     update: Callable[[Store, Any], Run] = sessions.run  # the writing updater (TD-125)
     git: pack_git.Git = pack_git.git
+    github: Callable[[Path], Provider] = GhProvider
+    sleep: Callable[[float], None] = time.sleep
+    poll: float = 30.0  # seconds between looks at the pull request's checks
+    ci_wait: float = 3600.0  # seconds CI may take at one head before the owner is asked
 
 
 def _now() -> str:
@@ -93,7 +103,7 @@ def _now() -> str:
 def _blank() -> dict[str, Any]:
     stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in STAGES]
     return {"state": "idle", "stage": "", "stages": stages, "started_at": None, "ended_at": None, "reason": "",
-            "log": [], "pushed": None, "run": "", "loop": None, "questions": [], "context": None}  # fmt: skip
+            "log": [], "published": None, "run": "", "loop": None, "questions": [], "context": None}  # fmt: skip
 
 
 class Job:
@@ -105,7 +115,10 @@ class Job:
         self.thread: threading.Thread | None = None
         self.held: int | None = None
         self.state = self._read()
-        if self.state["state"] == "running":
+        if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
+            reason = "the host stopped while the update was being published"
+            self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
+        elif self.state["state"] == "running":
             self._end("failed", "the host stopped during this run; check the package checkout before running again")
 
     @property
@@ -239,21 +252,43 @@ class Job:
             self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
             self._save()
 
-    def wait(self, ctx: pack_run.Context, lp: RoundLoop, questions: list[dict[str, Any]]) -> None:
+    def wait(
+        self, ctx: pack_run.Context, lp: RoundLoop, questions: list[dict[str, Any]], stage: str = "challenger"
+    ) -> None:
         """Stop the run for the owner's answers; it goes on when he has answered every question."""
         with self.lock:
             ctx.next = "wait"
             self.state |= {"state": "waiting", "stage": "", "questions": questions}
             self.state |= {"context": ctx.model_dump(mode="json"), "loop": lp.model_dump(mode="json")}
-            stage = next(s for s in self.state["stages"] if s["name"] == "challenger")
-            stage["result"] = "waiting"
+            next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
             self._log(f"waiting for you: {len(questions)} question(s)")
             self._save()
 
-    def pushed(self, commit: str, co: pack_git.Checkout, changed: list[str]) -> None:
-        """Record the pushed commit."""
+    def hold(self, ctx: pack_run.Context, reason: str) -> None:
+        """Publication stopped: the owner tries again once he fixed what stopped it, or discards the update."""
         with self.lock:
-            self.state["pushed"] = {"commit": commit, "remote": co.remote, "branch": co.merge, "files": changed}
+            self._hold(ctx, reason)
+
+    def _hold(self, ctx: pack_run.Context, reason: str) -> None:
+        pub = ctx.publication
+        link = f" ({pub.url})" if pub and pub.url else ""
+        question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
+                    "options": [{"id": o, "label": pack_rounds.LABELS[o]} for o in pack_rounds.PUBLISH]}  # fmt: skip
+        ctx.next = "wait"
+        stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
+        if stage is not None:
+            stage["result"], stage["detail"] = "waiting", reason[:4000]
+        self.state |= {"state": "waiting", "stage": "", "questions": [question], "reason": reason}
+        self.state["context"] = ctx.model_dump(mode="json")
+        self._log(f"waiting for you: {reason}")
+        self._save()
+
+    def published(self, pub: pack_publish.Publication) -> None:
+        """Record how far the update got on its way into ``main``, with the run's context, so a retry goes on."""
+        with self.lock:
+            self.state["published"] = pub.model_dump(exclude={"root", "body"})
+            if self.state.get("context"):
+                self.state["context"]["publication"] = pub.model_dump(mode="json")
             self._save()
 
     def _end(self, state: str, reason: str) -> None:
@@ -311,8 +346,13 @@ class Job:
             if reason is not None:  # None: the run waits for the owner
                 self._end("passed", reason)
 
-    def do[T](self, name: str, work: Callable[[], T], said: Callable[[T], str] = str) -> T:
-        """Run one stage's work: its result shown, any failure ending the run with the stage named."""
+    def do[T](
+        self, name: str, work: Callable[[], T], said: Callable[[T], str] = str, hold: type[Exception] | None = None
+    ) -> T:
+        """Run one stage's work: its result shown, any failure ending the run with the stage named.
+
+        A failure of the *hold* kind is raised as it is, for the owner to decide.
+        """
         self.stage(name, "running")
         try:
             out = work()
@@ -320,6 +360,9 @@ class Job:
             self.stage(name, "passed" if exc.current else "failed", exc.reason)
             raise
         except Exception as exc:
+            if hold is not None and isinstance(exc, hold):
+                self.stage(name, "failed", str(exc))
+                raise
             reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
             self.stage(name, "failed", reason)
             raise Stopped(reason) from exc
@@ -332,23 +375,26 @@ class Job:
         old = json.loads((package / pack_candidate.MANIFEST).read_text(encoding="utf-8"))
         tag = self.do("notice", self._notice)
 
-        def candidate() -> tuple[pack_git.Checkout, pack_candidate.Candidate]:
-            co = pack_git.checkout(package, live.git)  # before any download: a checkout that cannot commit stops
+        def candidate() -> tuple[pack_git.Source, pack_candidate.Candidate]:
+            src = pack_git.source(package, live.git)  # before any download: a checkout that cannot publish stops
+            pack_publish.preflight(live.github(src.root), src.repository)
             live.sync(live.clone, old["upstream"]["repository"])
             folder = store.root / CANDIDATE  # kept after the run, so the owner can read what was judged
             shutil.rmtree(folder, ignore_errors=True)
-            return co, pack_candidate.prepare(live.clone, package, tag, live.download, folder)
+            return src, pack_candidate.prepare(live.clone, package, tag, live.download, folder)
 
-        co, c = self.do("candidate", candidate, lambda out: _pack(*out))
+        src, c = self.do("candidate", candidate, lambda out: _pack(*out))
         diff = self.do("diff", lambda: pack_update.diff(live.clone, tag))
         golden = self.do("golden", lambda: _golden(live.golden(c.installed)))
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"
-        return pack_run.begin(self, c, co, diff=diff, golden=golden, why=why)
+        return pack_run.begin(self, c, src, diff=diff, golden=golden, why=why)
 
     def _resume(self) -> str | None:
         with self.lock:
             ctx = pack_run.Context.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
+        if ctx.publication and ctx.publication.commit:  # GitHub first: the package may have moved on meanwhile
+            return pack_run.republish(self, ctx)
         return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:
@@ -372,6 +418,9 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
         if not left:  # TD-193: the answers are carried out together
             ctx.next = pack_run.NEXT[pack_rounds.after(lp)]
         return left
+    if q["kind"] == "publish":  # trying again reconciles with GitHub before anything is repeated
+        ctx.next = "activate"
+        return []
     if option == pack_rounds.ANOTHER:
         lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
     else:
@@ -379,9 +428,9 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
     return []
 
 
-def _pack(co: pack_git.Checkout, c: pack_candidate.Candidate) -> str:
+def _pack(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
     up = c.pins["upstream"]
-    return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; commits on {co.branch}"
+    return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
 
 
 def _golden(wrong: dict[str, dict[str, list[str]]]) -> str:

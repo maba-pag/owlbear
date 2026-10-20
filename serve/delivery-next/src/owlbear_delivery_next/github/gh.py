@@ -190,6 +190,13 @@ class GhProvider(Queue, Conversation):
         endpoint = f"{repo(repository)}/pulls/{number}"
         self._api("reopen_pull_request", "PATCH", endpoint, body={"state": "open"}, write=True)
 
+    def update_branch(self, repository: str, number: int, expected_head: str) -> bool:
+        """Merge the base into the pull request's branch at *expected_head*; whether GitHub accepted it (422: no)."""
+        endpoint = f"{repo(repository)}/pulls/{number}/update-branch"
+        done = self._api("update_branch", "PUT", endpoint, body={"expected_head_sha": expected_head}, write=True,
+                         absent={422})  # fmt: skip
+        return not isinstance(done, Missing)
+
     def compare(self, repository: str, base: str, head: str) -> str:
         """Return a short delta from *base* to *head*: commit subjects and changed files."""
         c = self._api("compare", "GET", f"{repo(repository)}/compare/{base}...{head}")
