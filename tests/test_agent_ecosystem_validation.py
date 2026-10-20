@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import re
 import sys
 import types
 from pathlib import Path
-from typing import Any
 
 import pytest
 import yaml
-from pydantic import BaseModel
 
 _REPO_ROOT = Path(__file__).parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "share/agents"
@@ -220,29 +217,6 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         )
     )
     assert "tests/test_dependency_verification_workflow.py" not in pytest_run
-
-
-class _TargetApplicationDouble:
-    def __getattr__(self, _name: str) -> object:
-        def operation(*_args: object, **_kwargs: object) -> None:
-            return None
-
-        return operation
-
-
-class _TransitionResult(BaseModel):
-    operation: str
-
-
-class _TransitionApplicationDouble(_TargetApplicationDouble):
-    def __init__(self) -> None:
-        self.transitions: list[tuple[str, dict[str, object]]] = []
-
-    def transition_delivery(self, change_id: str, transition: object) -> _TransitionResult:
-        model_dump = getattr(transition, "model_dump", None)
-        assert callable(model_dump)
-        self.transitions.append((change_id, model_dump(mode="json")))
-        return _TransitionResult(operation="transition_delivery")
 
 
 def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: Path) -> None:
@@ -476,158 +450,18 @@ user-invocable: false
     assert _SKILL_VALIDATOR.validate_skill(invalid_dir)
 
 
-def _assert_finalizer_settlement_schema(finalizer_settlement: dict[str, Any]) -> None:
-    assert {
-        "change_id",
-        "attempt_id",
-        "claim_id",
-        "expected_head",
-        "expected_reviewed_base",
-        "report_id",
-        "disposition",
-        "outcome",
-        "host_id",
-        "session_id",
-    } <= set(finalizer_settlement["required"])
-    assert finalizer_settlement["additionalProperties"] is False
-    assert {"release", "elapsed_time", "confirmed_lost"}.isdisjoint(finalizer_settlement["properties"])
-
-
-def _assert_worker_settlement_schemas(
-    planning_settlement: dict[str, Any],
-    builder_settlement: dict[str, Any],
-) -> None:
-    assert {
-        "change_id",
-        "outcome_id",
-        "claim_id",
-        "attempt_id",
-        "disposition",
-    } <= set(planning_settlement["required"])
-    assert {
-        "change_id",
-        "outcome_id",
-        "claim_id",
-        "attempt_id",
-        "task_id",
-        "expected_last_reviewed_commit",
-        "disposition",
-    } <= set(builder_settlement["required"])
-
-
-@pytest.mark.asyncio
-async def test_delivery_transition_envelope_matches_registered_field() -> None:
-    """The old Delivery server keeps its typed transition and settlement envelopes."""
-    from mcp import Client  # noqa: PLC0415
-
-    from owlbear_delivery_mcp.target_server import assemble_target_server  # noqa: PLC0415
-
-    planner_transition = {
-        "action": "advance",
-        "outcome_id": "OUT-001",
-        "claim_id": "planner-claim",
-        "output": {
-            "output_id": "planner-output",
-            "claim_id": "planner-claim",
-            "stage": "planning",
-            "kind": "planning",
-            "digest": "a" * 64,
-        },
-    }
-    builder_transition = {
-        "action": "advance",
-        "outcome_id": "OUT-002",
-        "claim_id": "builder-claim",
-        "output": {
-            "output_id": "builder-output",
-            "claim_id": "builder-claim",
-            "stage": "implementation",
-            "kind": "implementation",
-            "digest": "b" * 64,
-        },
-    }
-    application = _TransitionApplicationDouble()
-    server = assemble_target_server(application)  # type: ignore[arg-type]
-
-    async with Client(server) as client:
-        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        transition_schema = tools["transition_delivery"].input_schema
-        settlement_schema = tools["settle_worker_invocation"].input_schema
-        transition_fields = tuple(field for field in transition_schema["properties"] if field != "change_id")
-        assert len(transition_fields) == 1
-        transition_field = transition_fields[0]
-        assert transition_field != "request"
-        assert transition_field in transition_schema["required"]
-        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id", "retry_reason"}
-        assert settlement_schema["additionalProperties"] is False
-        settlement_variants = settlement_schema["properties"]["settlement"]["anyOf"]
-        settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_variants}
-        assert settlement_refs == {
-            "DeliveryPlanningRetrySettlement",
-            "DeliveryBuilderInvocationSettlement",
-            "FinalizerSettlement",
-        }
-        assert set(settlement_schema["required"]) == {"settlement"}
-        definitions = settlement_schema["$defs"]
-        planning_settlement = definitions["DeliveryPlanningRetrySettlement"]
-        builder_settlement = definitions["DeliveryBuilderInvocationSettlement"]
-        finalizer_settlement = definitions["FinalizerSettlement"]
-        _assert_worker_settlement_schemas(planning_settlement, builder_settlement)
-        _assert_finalizer_settlement_schema(finalizer_settlement)
-
-        for change_id, transition in (
-            ("planner-change", planner_transition),
-            ("builder-change", builder_transition),
-        ):
-            result = await client.call_tool(
-                "transition_delivery",
-                {"change_id": change_id, transition_field: transition},
-            )
-            assert not result.is_error
-
-        rejected = await client.call_tool(
-            "transition_delivery",
-            {"change_id": "planner-change", "request": planner_transition},
-        )
-
-    assert application.transitions == [
-        ("planner-change", planner_transition),
-        ("builder-change", builder_transition),
-    ]
-    assert rejected.is_error
-    rejected_text = "\n".join(getattr(item, "text", "") for item in rejected.content)
-    prefix, marker, content = rejected_text.partition("{")
-    assert prefix == "Error executing tool transition_delivery: "
-    assert marker, rejected_text
-    assert json.loads(marker + content) == {
-        "code": "ERR_TARGET_PARAM_VALIDATION",
-        "detail": "Invalid tool arguments. Check the tool input schema.",
-        "current_authority_identity": "portfolio",
-        "retry_safe": False,
-    }
-    for value in ("planner-change", "advance", "OUT-001", "planner-claim", "planner-output", "planning", "a" * 64):
-        assert value not in rejected_text
-
-
 @pytest.mark.asyncio
 async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415
-    from owlbear_delivery_mcp.server import mcp as delivery_mcp  # noqa: PLC0415
-    from owlbear_delivery_mcp.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server  # noqa: PLC0415
     from owlbear_knowledge_mcp.server import mcp as knowledge_mcp  # noqa: PLC0415
     from owlbear_memory_mcp.server import mcp as memory_mcp  # noqa: PLC0415
 
-    target_mcp = assemble_target_server(_TargetApplicationDouble())  # type: ignore[arg-type]
     browser_tools = {tool.name: tool for tool in await browser_mcp.list_tools()}
     registries = {
         "owlbear-browser": set(browser_tools),
-        "owlbear-delivery": {tool.name for tool in await delivery_mcp.list_tools()},
         "owlbear-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
         "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
     }
-    target_registry = {tool.name for tool in await target_mcp.list_tools()}
-    assert target_registry == set(DELIVERY_OPERATION_NAMES)
-    assert target_registry.isdisjoint(_RETIRED_DELIVERY_TOOLS)
 
     for agent_path in _AGENTS_ROOT.glob("*.agent.md"):
         metadata = _frontmatter(agent_path)

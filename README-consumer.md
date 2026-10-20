@@ -90,17 +90,8 @@ uv run --project ../owlbear python ../owlbear/setup/init.py
 code .
 ```
 
-**Expected result:** `.vscode/settings.json`, `.vscode/mcp.json`, and a tracked
-`.owlbear/delivery/config.json` exist in your project. Existing project settings are merged, not
-replaced. Setup reads the GitHub identity from `origin` and, in an interactive run, suggests the
-checked-out branch as the pull-request target.
-
-If the project has no GitHub `origin`, or you want a different identity, name it explicitly:
-
-```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py \
-  --github-repository OWNER/PROJECT
-```
+**Expected result:** `.vscode/settings.json` and `.vscode/mcp.json` exist in your project.
+Existing project settings are merged, not replaced.
 
 See the [setup guide](setup/setup-guide.md#quick-start) for the copy-paste variant and every option.
 
@@ -136,7 +127,7 @@ Setup writes project-local configuration and copied runtime files. It never touc
 code.
 
 - `.vscode/settings.json` and `.vscode/mcp.json` — merged, with your existing keys preserved.
-- `.owlbear/` — tracked Delivery configuration, copied hooks, and local runtime state.
+- `.owlbear/` — copied hooks and local runtime state.
 - `.github/copilot-instructions.md` — a starter file, only when none exists. Replace its
   placeholders with your project's own conventions.
 - Editor and lint config (`.editorconfig`, markdownlint, yamllint) — only when absent.

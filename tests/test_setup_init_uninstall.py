@@ -37,7 +37,6 @@ def _initialize(
         owlbear_dir,
         interactive=False,
         refresh_configs=refresh_configs,
-        github_repository="example/project",
     )
 
 
@@ -78,8 +77,6 @@ def test_uninstall_removes_unchanged_seed_surfaces_and_preserves_user_state(tmp_
     custom_hook.write_text("# consumer hook\n", encoding="utf-8")
 
     _initialize(module, target_dir)
-    delivery_config = target_dir / ".owlbear" / "delivery" / "config.json"
-    delivery_config_before = delivery_config.read_bytes()
 
     assert module.uninstall(target_dir, _REPO_ROOT, confirm=False).completed is True
 
@@ -90,7 +87,6 @@ def test_uninstall_removes_unchanged_seed_surfaces_and_preserves_user_state(tmp_
     assert instructions.read_text(encoding="utf-8") == custom_instructions
     assert (target_dir / ".editorconfig").read_text(encoding="utf-8") == custom_editorconfig
     assert custom_hook.read_text(encoding="utf-8") == "# consumer hook\n"
-    assert delivery_config.read_bytes() == delivery_config_before
 
     assert not (target_dir / ".gitattributes").exists()
     assert not (target_dir / ".markdownlint.json").exists()
@@ -104,7 +100,7 @@ def test_uninstall_removes_unchanged_seed_surfaces_and_preserves_user_state(tmp_
     assert not (target_dir / "store" / "knowledge" / ".gitkeep").exists()
 
 
-def test_cli_uninstall_does_not_require_delivery_identity(tmp_path: Path) -> None:
+def test_cli_uninstall_with_yes_completes(tmp_path: Path) -> None:
     module = _load_init_module()
     target_dir = tmp_path / "project"
     target_dir.mkdir()
@@ -120,7 +116,7 @@ def test_cli_uninstall_does_not_require_delivery_identity(tmp_path: Path) -> Non
 
     assert result.returncode == 0, result.stderr
     assert "uninstalled" in result.stdout
-    assert (target_dir / ".owlbear" / "delivery" / "config.json").exists()
+    assert not (target_dir / ".owlbear" / "install-manifest.json").exists()
 
 
 def test_cli_uninstall_requires_explicit_confirmation_without_a_tty(tmp_path: Path) -> None:

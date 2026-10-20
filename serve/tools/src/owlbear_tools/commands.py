@@ -297,13 +297,6 @@ COMMANDS = (
         topic_only=True,
     ),
     Command(
-        "target-branch",
-        "uv run target-branch [BRANCH]",
-        "Show or safely change the Delivery target branch.",
-        "Setup",
-        topic_only=True,
-    ),
-    Command(
         "dep-status",
         "uv run dep-status [OPTIONS]",
         "Report local dependency environment agreement without changing files.",

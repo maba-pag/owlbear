@@ -11,13 +11,12 @@ ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "owlbear_cockpit": frozenset({"owlbear_memory"}),
     "owlbear_delivery": frozenset(),
     "owlbear_delivery_github": frozenset({"owlbear_delivery"}),
-    "owlbear_delivery_mcp": frozenset({"owlbear_delivery", "owlbear_delivery_github"}),
     "owlbear_delivery_next": frozenset({"owlbear_memory"}),
     "owlbear_knowledge": frozenset({"owlbear_web_content"}),
     "owlbear_knowledge_mcp": frozenset({"owlbear_knowledge"}),
     "owlbear_memory": frozenset(),
     "owlbear_memory_mcp": frozenset({"owlbear_memory"}),
-    "owlbear_tools": frozenset({"owlbear_delivery"}),
+    "owlbear_tools": frozenset(),
     "owlbear_web_content": frozenset(),
 }
 
@@ -66,10 +65,3 @@ def test_serve_package_imports_follow_allowlist(project_root: Path) -> None:
                 if imported_namespace != package_name and imported_namespace not in allowed
             )
     assert violations == []
-
-
-def test_delivery_diagnostics_is_a_stdlib_bootstrap(project_root: Path) -> None:
-    """Offline diagnosis must import without Delivery/MCP/Cockpit composition."""
-    source = project_root / "serve/tools/src/owlbear_tools/delivery_diagnostics.py"
-    imported = _imported_namespaces(source)
-    assert imported == ()

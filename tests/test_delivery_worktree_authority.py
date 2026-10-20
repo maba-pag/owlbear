@@ -127,10 +127,6 @@ _ALLOWED_CAPABILITY_LINES = frozenset(
         ("serve/delivery-github/src/owlbear_delivery_github/github.py", '_QUEUE_RULE_TYPE = "merge_queue"'),
         # N05-B2: the registry path of merge attempts, a record family rather than a merge route.
         ("serve/delivery/src/owlbear_delivery/state_formats.py", 'rf"{_CH}/merge-attempts/{_D}\\.json",'),
-        (
-            "serve/tools/src/owlbear_tools/delivery_diagnostics.py",
-            '"merge_attempt": ".owlbear/delivery/runtime/changes/<redacted>/merge-attempts/<opaque>.json",',
-        ),
     }
 )
 _MERGE_ROUTE_FUNCTION = "_merge_async_endpoint"
@@ -1319,9 +1315,7 @@ def _merge_request_call_violations(
 
 
 def _automation_governance_files() -> tuple[Path, ...]:
-    delivery_roots = tuple(
-        root for root in _SOURCE_ROOTS if root.parent.name in {"delivery", "delivery-mcp", "delivery-github"}
-    )
+    delivery_roots = tuple(root for root in _SOURCE_ROOTS if root.parent.name in {"delivery", "delivery-github"})
     optional_agent_root = _REPO_ROOT / ".owlbear/agents"
     source_files = (
         path
@@ -1947,7 +1941,6 @@ def test_delivery_automation_scan_covers_required_roots() -> None:
     paths = _automation_governance_files()
     required_roots = (
         _REPO_ROOT / "serve/delivery/src",
-        _REPO_ROOT / "serve/delivery-mcp/src",
         _REPO_ROOT / "serve/delivery-github/src",
         _REPO_ROOT / "share/agents",
         _REPO_ROOT / "share/instructions",

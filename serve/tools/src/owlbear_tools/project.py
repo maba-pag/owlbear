@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 from owlbear_tools.commands import command_footer
-from owlbear_tools.delivery_config import _delivery_config_status
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
@@ -34,18 +33,10 @@ def setup_project() -> None:
     """Run the repository initializer for a target project."""
     parser = argparse.ArgumentParser(prog="setup-project")
     parser.add_argument("path", nargs="?", type=Path, default=Path.cwd())
-    parser.add_argument("--remote", default="origin", metavar="NAME")
-    parser.add_argument("--target-branch", metavar="BRANCH")
-    parser.add_argument("--github-repository", metavar="OWNER/NAME")
     parser.add_argument("--replace-hooks", action="store_true")
     args = parser.parse_args()
     target = args.path.expanduser().resolve()
     command = [sys.executable, str(_REPOSITORY_ROOT / "setup/init.py")]
-    command.extend(["--remote", args.remote])
-    if args.target_branch:
-        command.extend(["--target-branch", args.target_branch])
-    if args.github_repository:
-        command.extend(["--github-repository", args.github_repository])
     if args.replace_hooks:
         command.append("--replace-hooks")
     _finish(_run(command, cwd=target))
@@ -65,10 +56,6 @@ def doctor() -> None:
             print(f"PASS  {executable} is available")  # noqa: T201
         else:
             failures.append(f"{executable} is not available")
-    config_failures, config_success = _delivery_config_status(root)
-    failures.extend(config_failures)
-    if config_success is not None:
-        print(f"PASS  {config_success}")  # noqa: T201
     relative = Path(".vscode/mcp.json")
     if (root / relative).is_file():
         print(f"PASS  {relative}")  # noqa: T201

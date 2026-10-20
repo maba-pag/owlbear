@@ -9,17 +9,15 @@ OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files exec
 
 ```text
 agents/*.agent.md             (agent definitions — pure markdown, no Python)
-    use tools from
-serve/delivery-mcp/           (MCP server: Delivery operations)
-    import from
+    use tools from the MCP servers below
+
 serve/delivery-github/        (provider adapter: GitHub publication)
     import from
 serve/delivery/                (core library: Change lifecycle and target Delivery)
 
 serve/cockpit/                 (HTTP application: read-oriented operator UI)
     import from delivery, delivery-github, memory
-serve/tools/                   (repository tools and migration utilities)
-    import from delivery
+serve/tools/                   (repository tools: quality, testing, and indexing)
 
 serve/memory-mcp/              (MCP server: persistent agent memory)
     import from
@@ -54,7 +52,7 @@ constant in that file maps each package namespace to its permitted owlbear-names
 - Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab, and nothing else.
 - Each MCP server may import its corresponding core package and any provider adapter required by
   its public operations, but MCP servers must not import other MCP servers.
-- Repository tools may import Delivery, but product packages must not import repository tools.
+- Repository tools import no other OwlBear package, and product packages must not import repository tools.
 - Relative imports remain within the owning package; the boundary test reports only external
   `owlbear_*` namespaces.
 - Browser and Knowledge may import the shared web-content core; web-content imports neither.
@@ -67,7 +65,6 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | --- | --- |
 | delivery | `serve/delivery/` (Change lifecycle, target contract, workspaces, publication state) |
 | delivery-github | `serve/delivery-github/` (fixed-operation GitHub publication provider) |
-| delivery-mcp | `serve/delivery-mcp/` (Delivery MCP tools and target-facing server) |
 | cockpit | `serve/cockpit/` (FastAPI read API and Cockpit frontend) |
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | knowledge-mcp | `serve/knowledge-mcp/` |
@@ -76,7 +73,7 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | browser | `serve/browser/` |
 | browser-mcp | `serve/browser-mcp/` |
 | web-content | `serve/web-content/` (shared HTML extraction and Markdown normalization) |
-| tools | `serve/tools/` (repository utilities, migration, quality, and indexing commands) |
+| tools | `serve/tools/` (repository utilities, quality, and indexing commands) |
 | agent-config | `share/agents/`, `share/skills/`, `share/instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |
 | docs | `docs/`, `README.md`, `SECURITY.md` |
