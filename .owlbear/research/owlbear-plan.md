@@ -166,14 +166,9 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
 | C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | not placed |
-| C-15, C-16 | Every pack update opens a labelled PR, merges on green and becomes a version | No versions yet | build | 3 |
 | C-16 | OwlBear's own project sets `release:minor` | OwlBear is not a registered project | keep | 10 |
 | C-16 | Chat-authored PRs get `release:minor` for runtime changes (TD-314) | Written nowhere agents read | align | — |
 | C-16 | v1.0 after the self-update and the old engine's removal, docs rewritten (TD-393) | Not yet | build | 12 |
-| C-17 | Take the newest version, never backwards, idle updates, Run updates now, back as it was | Steps 4 and 5 | build | 3, 4 |
-| C-18 | Paused pages offer Run updates now; the stop-when-idle choice hides with Update while paused off | Step 4 | build | 3 |
-| C-18 | The Pause tooltip says plain Pause may still update | Missing | align | 3 |
-| C-19 | The maintenance overview includes the engine update | Step 4 | build | 3 |
 | C-19 | Linux and Windows stated as not supported yet | `README-consumer.md` and `setup/setup-guide.md` claim Linux support | align | 7 |
 | C-20 | OwlBear builds itself through its own Delivery (TD-319) | Developed in chat only | keep | 10 |
 | C-21 | Old engine batches with the tag first; three skills retire with batch 3 | Not started | build | 7 |

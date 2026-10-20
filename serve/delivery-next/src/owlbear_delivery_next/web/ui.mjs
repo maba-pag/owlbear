@@ -146,11 +146,11 @@ async function act(name, work) {
   changed();
 }
 
-function control(label, onclick, { variant = "secondary", busy = false } = {}) {
+function control(label, onclick, { variant = "secondary", busy = false, title } = {}) {
   return customElements.get("p-button")
-    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy}
+    ? html`<p-button type="button" compact="true" variant=${variant} .loading=${busy} title=${title ?? nothing}
         @click=${onclick}>${label}</p-button>`
-    : html`<button type="button" .disabled=${busy} @click=${onclick}>${label}</button>`;
+    : html`<button type="button" .disabled=${busy} title=${title ?? nothing} @click=${onclick}>${label}</button>`;
 }
 
 function chosen(p, all) {
@@ -209,7 +209,7 @@ function view() {
         ${control("Add", add, { busy: bar.busy === "add" })}
       </details>
       ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
-        machine: true })), { busy: bar.busy === "pause" })}
+        machine: true })), { busy: bar.busy === "pause", title: PAUSE_TIP })}
     </div>
     ${p && p.state !== "loaded" ? html`<p role="status">${p.name} is ${p.state}: ${p.reason}</p>` : nothing}
     ${p?.setup ? html`<p role="status">Setup required: the chats of ${p.name} cannot reach Delivery yet. Run
@@ -221,7 +221,7 @@ function view() {
         { variant: "primary", busy: bar.busy === "resume" })}
       ${ending ? nothing : control("Run updates now", runUpdates, { busy: bar.busy === "update" || updating(update) })}
       ${!ending && bar.data.update_while_paused ? control("Pause and stop when idle", stopWhenIdle,
-        { busy: bar.busy === "pause-stop" }) : nothing}</p>` : nothing}
+        { busy: bar.busy === "pause-stop", title: STOP_TIP }) : nothing}</p>` : nothing}
     ${announce ? html`<p role="status" id="update-announce">OwlBear updates to ${announce.version} in
       ${clock(announced())} · ${control("Postpone", () => act("postpone", seen), { busy: bar.busy === "postpone" })}
       </p>` : nothing}
@@ -233,6 +233,9 @@ function view() {
 }
 
 const SEEN = "owlbear-version-seen";  // the version the owner was told about, so he is told once (TD-299)
+// Plain Pause may still update; the stop-when-idle choice starts nothing and stops (TD-288).
+const PAUSE_TIP = "Holds Delivery's work on Changes. OwlBear may still update itself while paused.";
+const STOP_TIP = "Starts no work, waits for running steps, then stops OwlBear.";
 const USE = 60_000;  // a page says the owner is at it at most once a minute (§7)
 let told = 0, until = 0;
 

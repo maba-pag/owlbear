@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import socket
 import subprocess
 import threading
@@ -81,9 +82,13 @@ def test_changes_of_all_projects_or_one_and_the_bar_switches_adds_removes_and_re
             page.get_by_role("button", name="Resume").click()
             expect(page.locator("#machine .paused")).to_have_count(0)
             assert (machine.paused, registry.load().resumed_at is not None) == (False, True)
-            page.get_by_role("button", name="Pause Delivery").click()  # TD-288
+            pause = page.get_by_role("button", name="Pause Delivery")
+            expect(pause).to_have_attribute("title", re.compile("may still update"))  # TD-288
+            pause.click()
             expect(page.locator("#machine .paused")).to_contain_text("Delivery is paused: 2 Changes would continue")
-            page.get_by_role("button", name="Pause and stop when idle").click()
+            stop = page.get_by_role("button", name="Pause and stop when idle")
+            expect(stop).to_have_attribute("title", re.compile("stops"))
+            stop.click()
             page.locator("dialog").get_by_role("button", name="Pause and stop").click()
             expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
             assert (machine.paused, machine.ending) == (True, True)

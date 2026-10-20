@@ -45,7 +45,7 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
             expect(actions).to_have_count(5)
             expect(actions.nth(1)).to_contain_text("Design pack update")
             expect(page.get_by_role("link", name="Open Memory curation in Memory")).to_have_attribute("href", "/memory")
-            expect(actions.nth(2)).to_contain_text("not built yet")
+            expect(actions.nth(2)).to_contain_text("No run record kept.")
             expect(page.locator("#use-none")).to_have_text("No step has run in this project yet.")
             store.write(Lock("a"), Change(slug="a", brief=Brief(version=1)))
             ran = [{"agent": "explore", "credits": 1.25, "credits_known": True}]
