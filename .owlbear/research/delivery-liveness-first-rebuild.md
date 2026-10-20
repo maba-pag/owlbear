@@ -642,7 +642,7 @@ TD-65.
 ## C-17 Runtime and self-update
 
 **Rows:** decided TD-239, TD-289, TD-297, TD-299, TD-300, TD-301, TD-352, TD-353, TD-369; autonomous TD-247,
-  TD-296, TD-305, TD-309.
+  TD-296, TD-305, TD-309, TD-415.
 
 - Run one installed OwlBear runtime per machine under `~/.owlbear`, never a developer checkout [TD-239, TD-247].
 - Never track `main`. Automatically take the newest version in the machine's chosen channel: every minor by
@@ -658,8 +658,8 @@ TD-65.
   environments and pack updates to end [TD-353].
 - After an update, Delivery comes back as it was (running stays running, paused stays paused), and the page tells
   the owner once which version it now runs [TD-299, TD-350].
-- Until self-update is built, after each merge stop the host without killing running steps, update the runtime and
-  restart with its previous running or paused state [TD-289, TD-299, TD-309, TD-350].
+- After each merge, Run updates now (`owlbear update`) takes the new version once it is tagged; an update that fails
+  is repaired forward by hand. This machine's first update ran on 2026-10-20 (v0.20) [TD-299, TD-309, TD-350, TD-415].
 - Deploying sessions need not re-review merges from the owner's other sessions; report which such merges are
   included [TD-309].
 
@@ -676,7 +676,9 @@ TD-65.
 - TD-369, 2026-10-18: "A major-only machine starts at the newest major; until v1.0 exists that is v0.1"
 
 **Replaced:** TD-239 by TD-241, TD-242, TD-300, TD-302, TD-306, TD-354; TD-247 by TD-289; TD-289 by TD-309,
-  TD-350; TD-296 by TD-305; TD-297 by TD-354.
+  TD-350; TD-296 by TD-305; TD-297 by TD-354; TD-309's deploy by hand by TD-415 (TD-415 autonomous: the owner took
+  the recommendation on 2026-10-20, because step 4 was built and a rehearsal in a throwaway home updated v0.19 to
+  v0.20 in about 10 s with the address and state kept).
 
 ## C-18 Pause, stop and resume
 
