@@ -1,11 +1,14 @@
 # Security Policy
 
-## Supported Branches
+## Supported Versions
 
-| Branch | Supported |
+OwlBear's versions are Git tags on `main`, and an installed OwlBear updates itself to the newest
+version of its channel.
+
+| Version | Supported |
 | --- | --- |
-| main | ✅ Yes |
-| dev | No |
+| Newest version tag and `main` | ✅ Yes |
+| Older version tags | No |
 
 ## Reporting a Vulnerability
 

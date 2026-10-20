@@ -1,8 +1,8 @@
 # OwlBear
 
 This is the OwlBear development checkout. OwlBear gives GitHub Copilot a reliable path from an idea
-to a reviewed change inside VS Code, combining reusable agent instructions with tools for planning,
-execution, memory, knowledge, browser access, and human review.
+to a reviewed change on a Mac, combining a Delivery engine that serves every project on the machine
+with reusable agent instructions and tools for memory, knowledge, browser access, and human review.
 
 If you want to know what OwlBear is or how to install it in a project, read
 [README-consumer.md](README-consumer.md). That file owns the product story, the requirements, and
@@ -13,7 +13,7 @@ the install path.
 | You are here to... | Start here |
 | --- | --- |
 | Decide whether OwlBear fits your work | [README-consumer.md](README-consumer.md) |
-| Add OwlBear to another project | [Setup guide](setup/setup-guide.md) |
+| Install OwlBear and add a project | [Setup guide](setup/setup-guide.md) |
 | Develop OwlBear itself | [Develop OwlBear](#develop-owlbear) |
 | Find a runtime package or MCP server | [Package map](serve/README.md) |
 | Change agents, skills, prompts, or instructions | [Shared ecosystem guide](share/README.md) |
@@ -21,28 +21,29 @@ the install path.
 
 ## What OwlBear does
 
-You describe an outcome. Copilot helps refine it, creates an approved work package, and runs the
-result through reviewed steps. The new Delivery engine's Changes page shows each Change and gives a
-person the controls for approvals, merge consent and recovery; Cockpit keeps memory and ideas.
+You describe an outcome. Copilot helps shape it into a brief you approve, and OwlBear runs the
+result through reviewed steps. OwlBear runs once per Mac, started with the `owlbear` command, and
+its pages (Changes, Backlog, Memory, Settings, Maintenance) show each Change and give a person the
+controls for approvals, answers, merge consent and pausing.
 
-OwlBear expects VS Code with GitHub Copilot and a Git project with a GitHub repository identity. A
-completed Delivery change becomes a pull request that a person reviews and either approves for merge
+OwlBear supports macOS only; Linux and Windows are not supported yet. It expects VS Code with
+GitHub Copilot and a Git project with a GitHub repository identity. A completed Change becomes a
+pull request that OwlBear merges once its checks and branch rules pass, or that a person approves
 on the Changes page or merges in GitHub.
 
 The main terms are simple:
 
 | Term | Meaning |
 | --- | --- |
-| Agent | A Copilot role with a specific job, such as design, planning, building, or review |
+| Agent | A Copilot role with a specific job, such as shaping, planning, building, or review |
 | Skill | Reusable instructions that teach an agent how to handle a domain or workflow |
 | MCP server | A tool connection that lets agents use one OwlBear capability from VS Code |
-| Change | One approved piece of work tracked from design through review and publication |
-| Cockpit | The browser UI for memory and ideas |
+| Change | One approved piece of work tracked from its brief through review and publication |
+| Cockpit | An optional browser view of one project's local memory and ideas files |
 
-The normal path is **New Change** on the Changes page, which opens a shaping chat; the engine then
-plans, builds, reviews and publishes that Change. The Changes page replaces the retired
-`/continue-change` prompt. The Delivery engine keeps the work ordered and reviewed; you decide
-when to approve, answer, pause, recover, or merge.
+The normal path is **New Change** on the Changes page, which opens a shaping chat; OwlBear then
+plans, builds, reviews and publishes that Change. It keeps the work ordered and reviewed; you
+decide when to approve, answer, pause, or merge.
 
 Current surface maturity is published on the consumer front door in
 [Status and expectations](README-consumer.md#status-and-expectations). The
@@ -51,17 +52,17 @@ Current surface maturity is published on the consumer front door in
 ## Develop OwlBear
 
 `main` is the only long-lived branch: the development checkout and the branch consumers clone.
-OwlBear has no numbered product releases yet; versions will be git tags.
+Pull requests reach `main` with the required `CI` check; versions are Git tags (`vMAJOR.MINOR`)
+that the release workflow sets on merges labelled `release:minor` or `release:major`.
 
-Requirements: Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
-[GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also needs the Node
-version pinned in
-`serve/cockpit/web/.nvmrc`.
+Requirements: macOS, Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with
+GitHub Copilot, [GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also
+needs the Node version pinned in `serve/cockpit/web/.nvmrc`.
 
 The checked-in development runtime is pinned to Python 3.14.8; OwlBear supports the 3.14 series only.
 
 ```shell
-git clone -b dev https://github.com/maba-pag/owlbear.git
+git clone https://github.com/maba-pag/owlbear.git
 cd owlbear
 uv sync --locked --all-packages --all-extras --all-groups
 uv run dep-sync
@@ -72,7 +73,8 @@ use `uv run dep-sync --all` when you also need optional workspace assets or brow
 
 Open this checkout directly in VS Code. Its repository settings already load the shared
 `share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run
-consumer setup against the OwlBear checkout itself.
+consumer setup against the OwlBear checkout itself. The machine's running OwlBear lives in
+`~/.owlbear/runtime`, separate from this checkout.
 
 Run the repository checks:
 
@@ -88,7 +90,7 @@ uv run lint --no-fix
 | Agents, skills, instructions, prompts, or hooks | [Shared ecosystem guide](share/README.md) |
 | A runtime package or MCP server | [Package map](serve/README.md) |
 | Consumer installation and verification | [Setup guide](setup/setup-guide.md) |
-| Consumer operation, refresh, recovery, or uninstall | [Operating OwlBear](setup/operating-owlbear.md) |
+| Consumer operation, updates, or uninstall | [Operating OwlBear](setup/operating-owlbear.md) |
 
 For package or shared-ecosystem changes, use the focused guide first, then run the scoped checks
 for the paths you changed. `uv run test --all` and `uv run lint --no-fix` are the full development
@@ -103,7 +105,7 @@ checkout and the next decision visible.
 | --- | --- |
 | `serve/` | Runtime packages and the [package map](serve/README.md) |
 | `share/` | Agents, skills, instructions, prompts, and their [loading model](share/README.md) |
-| `seed/` | Files copied into a consumer project by `setup/init.py`; see [What setup creates](setup/operating-owlbear.md#what-setup-creates) for why this tree has no README |
+| `seed/` | Files copied into a project by the optional agent workspace setup, `setup/init.py`; see [What setup creates](setup/operating-owlbear.md#what-setup-creates) for why this tree has no README |
 | `setup/` | Installation in the [setup guide](setup/setup-guide.md), daily operation in [Operating OwlBear](setup/operating-owlbear.md), and teams in the [sharing guide](setup/sharing-guide.md) |
 | `.owlbear/` | Tracked project authority plus host-local runtime state in the [.owlbear guide](.owlbear/README.md) |
 | `tests/` | Workspace regression and integration tests described in the [test guide](tests/README.md) |

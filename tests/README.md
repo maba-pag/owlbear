@@ -1,17 +1,18 @@
 # Tests
 
 The top-level `tests/` tree verifies workspace-wide contracts: setup and seed behavior, package
-boundaries, MCP registrations, memory and knowledge persistence, hooks, and sync behavior. It is
-development evidence, not a runtime package.
+boundaries, MCP registrations, memory and knowledge persistence, hooks, CI workflows, and the agent
+ecosystem. It is development evidence, not a runtime package.
 
 ## What lives here
 
 - `test_*.py` contains cross-package and repository-contract regressions.
 - `benchmarks/` is reserved for benchmark support; it currently contains only package scaffolding.
 
-Package-specific tests stay beside the implementation under `serve/*/tests/`. Cockpit frontend
-tests live under `serve/cockpit/web/`. Those package-local tests follow their package's toolchain;
-this directory does not replace them.
+Package-specific tests stay beside the implementation under `serve/*/tests/`, including the
+Delivery engine's under `serve/delivery-next/tests/`. Cockpit frontend tests live under
+`serve/cockpit/web/`. Those package-local tests follow their package's toolchain; this directory
+does not replace them.
 
 ## Run the suite
 
@@ -20,6 +21,9 @@ From the repository root:
 ```shell
 # Full maintained Python and frontend test routing
 uv run test --all
+
+# Tests affected by your changes, with their direct consumers
+uv run test --changed
 
 # One narrow Python regression
 uv run pytest tests/test_ci_workflows.py -q

@@ -4,17 +4,25 @@
 
 ## Sharing Model
 
-OwlBear uses a **shared installation** model: a single owlbear repository lives on a
-developer's machine alongside their project directories. Each project references owlbear
-using relative paths (e.g., `../owlbear/share/agents`). There is no packaging step — clone is
-install.
+OwlBear installs once per Mac. Each teammate installs it on their own Mac and adds their own clone
+of the project on its pages; there is no packaging step, cloning OwlBear is the installation.
 
-This means sharing owlbear with a teammate means they clone **both**:
+Two things can be shared between teammates and machines:
 
-1. The **owlbear** repository (shared tooling)
-2. The **project** repository (their actual project)
+1. A **shared settings repository**: a Git repository that holds project settings, agent memory
+   and the backlog. Each machine points at its own clone of it with `owlbear data PATH`; OwlBear
+   commits and pushes every save there.
+2. The optional **agent workspace**: OwlBear's agents, skills and tool servers loaded into the
+   project's VS Code workspace from the OwlBear runtime alias `~/.owlbear/runtime`. Setup writes
+   relative paths to that alias (e.g., `../../.owlbear/runtime/share/agents` for a project at
+   `~/Dev/my-project`), so self-updates keep them valid; teammates who share these settings keep
+   the project at the same path relative to their home folder.
 
-Both repos must sit in a sibling layout for the relative paths to work.
+## Prerequisites
+
+The teammate needs a Mac with everything in the setup guide's
+[Prerequisites](setup-guide.md#prerequisites), push access to the project on GitHub, and read and
+write access to the shared settings repository if you use one.
 
 ---
 
@@ -30,47 +38,54 @@ git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
 
 **Expected result:** the project is checked out at `~/Dev/my-project`.
 
-### 2. Clone OwlBear as a sibling
+### 2. Install and start OwlBear
+
+Follow the setup guide's [Quick Start](setup-guide.md#quick-start) steps 1 to 3.
+
+**Expected result:** `owlbear start` prints the address of OwlBear's pages.
+
+### 3. Point OwlBear at the shared settings repository
+
+Skip this step if your team does not use one.
 
 ```shell
-git clone https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
+git clone https://github.com/OWNER/SETTINGS.git ~/Dev/owlbear-settings
+owlbear data ~/Dev/owlbear-settings
+owlbear restart
 ```
 
-**Expected result:** the OwlBear checkout is at `~/Dev/owlbear`, beside the project repository.
+**Expected result:** `owlbear data` names the repository and asks for the restart.
 
-### 3. Bootstrap OwlBear into the project workspace
+### 4. Add the project and connect its chats
+
+Follow the setup guide's [Quick Start](setup-guide.md#quick-start) steps 4 and 5 with
+`~/Dev/my-project`.
+
+**Expected result:** the project is listed as `loaded` by `owlbear status`, and its Changes page
+shows no **Setup required** note. Setup finds the project's folder in the shared settings
+repository by the repository's identity, so every teammate's clone uses the same settings.
+
+### 5. Optional: set up the agent workspace
 
 ```shell
 cd ~/Dev/my-project
-uv run --project ../owlbear python ../owlbear/setup/init.py
-```
-
-**Expected result:** setup creates or merges the project's VS Code configuration, registers the
-seeded MCP servers, and copies the project-local runtime files.
-
-### 4. Open the project in VS Code
-
-```shell
+uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
 code .
 ```
 
 **Expected result:** VS Code opens `~/Dev/my-project` with the shared OwlBear customization roots
-available.
-
-After VS Code opens, have the teammate follow the canonical
-[installation verification](setup-guide.md#verify-the-installation). It checks both the shared
-customization roots and all four seeded MCP servers. Before the first workflow, also run
-`gh auth status` and confirm an active account.
+and the four seeded MCP servers; check them as
+[the setup guide](setup-guide.md#4-confirm-it-loaded) describes.
 
 To launch Cockpit for the shared project, run it from the project directory and point uv
-at the sibling owlbear clone:
+at the OwlBear runtime alias:
 
 ```shell
 cd ~/Dev/my-project
-uv run --project ../owlbear cockpit
+uv run --project ~/.owlbear/runtime cockpit
 ```
 
-This serves the Cockpit bundle built in the owlbear checkout
+This serves the Cockpit bundle built in the OwlBear runtime
 ([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)) while keeping Memory and Ideas
 state scoped to the project.
 
@@ -78,24 +93,27 @@ state scoped to the project.
 
 ## Platform Notes
 
-OwlBear supports macOS and Linux (Ubuntu). Windows is unsupported.
+OwlBear supports macOS only. Linux and Windows are not supported yet.
 
-No platform-specific configuration is required:
+No further platform-specific configuration is required:
 
-- **Hooks** — the seeded hook `deny-src-writes.py` is a Python script executed by VS Code's extension host — no shell dependency
-- **MCP servers** — started via `uv run` on macOS and Linux
+- **Hooks** — the seeded hook `deny-src-writes.py` is a Python script executed by VS Code's
+  extension host — no shell dependency
+- **MCP servers** — started via `uv run`
 
 ## What's Shared vs. Project-Local
 
 | Resource | Location | Shared? |
 | --- | --- | --- |
-| Agents (`.agent.md`) | `../owlbear/share/agents/` | Yes — all teammates get the same agents |
-| Skills (`SKILL.md`) | `../owlbear/share/skills/` | Yes — all teammates get the same skills |
-| Instructions (`*.instructions.md`) | `../owlbear/share/instructions/` | Yes — shared baseline |
-| Prompts (`*.prompt.md`) | `../owlbear/share/prompts/` | Yes — shared baseline |
-| MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
-| Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
+| OwlBear runtime | `~/.owlbear/runtime` | No — one per Mac; each machine updates itself |
 | Delivery state | `~/.owlbear/projects/<id>/`, one folder per project | No — per machine |
+| Project settings, agent memory, backlog | Shared settings repository | Yes — when one is set |
+| Agents (`.agent.md`) | `~/.owlbear/runtime/share/agents/` | Yes — all teammates get the same agents |
+| Skills (`SKILL.md`) | `~/.owlbear/runtime/share/skills/` | Yes — all teammates get the same skills |
+| Instructions (`*.instructions.md`) | `~/.owlbear/runtime/share/instructions/` | Yes — shared baseline |
+| Prompts (`*.prompt.md`) | `~/.owlbear/runtime/share/prompts/` | Yes — shared baseline |
+| MCP server code | `~/.owlbear/runtime/serve/` | Yes — started from owlbear via `uv run --project` |
+| Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 
@@ -130,8 +148,8 @@ root and keep it in source control.
 
 If the project is a monorepo, VS Code's `chat.useCustomizationsInParentRepositories`
 setting allows owlbear customizations to be discovered from a parent directory. This
-eliminates the need for the sibling-dir setup but requires all developers to have the
-same directory structure. Use this sparingly — the sibling layout is simpler.
+eliminates the need for the runtime-alias paths but requires all developers to have the
+same directory structure. Use this sparingly — the runtime alias is simpler.
 
 ---
 
@@ -151,9 +169,11 @@ organization agent registry as a complement to the local installation.
 
 | Symptom | Resolution |
 | --- | --- |
+| A teammate's Changes page shows **Setup required** | Run the `owlbear setup --repo PATH` command it names on that teammate's Mac, then reload the project's VS Code window |
+| Setup cannot claim the project's folder in the shared settings | Run `owlbear setup --repo PATH --folder NAME` with a folder name no other repository uses |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
-| Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
+| Cockpit command not found in project | Run `uv run --project ~/.owlbear/runtime cockpit` from the project root instead of plain `uv run cockpit` |
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
-| Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
+| Hook updates not taking effect after an OwlBear update | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| Different owlbear checkout states between teammates | Take the newest version with **Run updates now** on the new Delivery engine's pages ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) and rerun `init.py` to refresh copied runtime files |
+| Different OwlBear versions between teammates | Compare `owlbear versions` on each Mac; `owlbear update` takes the newest ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)). For the agent workspace, rerun `init.py` after an update to refresh copied runtime files |

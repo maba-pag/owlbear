@@ -21,7 +21,7 @@ truth for their own content; do not use this directory as a substitute for regis
 | --- | --- |
 | Knowledge runtime state and registered sources | `.owlbear/knowledge/` |
 | Durable agent memory entries | `.owlbear/memory/` |
-| Delivery authority and change state | `.owlbear/delivery/` |
+| Delivery state of a registered project | `~/.owlbear/projects/<id>/`, outside the repository |
 | Knowledge implementation and MCP tools | `serve/knowledge/` and `serve/knowledge-mcp/` |
 | Cross-package regression tests | `tests/` |
 | Portable consumer templates | `seed/` |
