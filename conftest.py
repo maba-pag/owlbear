@@ -22,9 +22,10 @@ def project_root() -> Path:
 
 @pytest.fixture
 def run_init_without_test_surface() -> Callable[..., None]:
-    """Run setup initialization for a project without test-surface scaffolding."""
+    """Run setup initialization for a project without test-surface scaffolding, consenting to its writes."""
 
     def run(initializer: Callable[..., object], /, *args: object, **kwargs: object) -> None:
+        kwargs.setdefault("yes", True)
         initializer(*args, **kwargs)
 
     return run
