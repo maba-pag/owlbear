@@ -31,13 +31,6 @@ def get_memory_engine() -> MemoryEngine:
     return _main.app.state.memory_engine
 
 
-def get_target_context() -> object:
-    """Return the canonical Delivery Cockpit context."""
-    import owlbear_cockpit.main as _main  # noqa: PLC0415
-
-    return _main.app.state.target_context
-
-
 def get_ideas_path(workspace_root=Depends(get_workspace_root)) -> Path:  # noqa: ANN001, B008
     """Return the shared ideas markdown path in the active workspace."""
     return workspace_root / ".owlbear" / "ideas.md"

@@ -12,7 +12,7 @@ owns it. Start with the job, then open the package guide for commands and config
 | Turn an idea into reviewed work | [Delivery MCP](delivery-mcp/README.md) | The VS Code tool boundary for Design, Planning, Build, publication, and acceptance |
 | Understand or extend the Delivery lifecycle | [Delivery core](delivery/README.md) | Change authority, workspaces, commits, publication state, and recovery |
 | Publish Delivery pull requests | [GitHub adapter](delivery-github/README.md) | The fixed GitHub operations used by Delivery |
-| See current work and answer requests | [Cockpit](cockpit/README.md) | The browser UI for work items, requests, attention, recovery, and completed history |
+| Review memory and ideas in a browser | [Cockpit](cockpit/README.md) | The browser UI for Memory and Ideas |
 | Give agents durable institutional memory | [Memory MCP](memory-mcp/README.md) | The VS Code tool boundary for scoped, curated memory |
 | Change memory storage or lifecycle rules | [Memory core](memory/README.md) | File-backed entries, states, scoring, and engine primitives |
 | Search documents and knowledge graphs | [Knowledge MCP](knowledge-mcp/README.md) | Ingestion, search, sources, graph lookup, and enrichment tools |
@@ -25,13 +25,13 @@ owns it. Start with the job, then open the package guide for commands and config
 
 Core packages hold reusable behavior. MCP packages expose that behavior to VS Code agents through
 Model Context Protocol, the tool interface used by the five seeded servers. Cockpit is the human
-operator surface; the GitHub adapter is Delivery's publication provider; Tools support the repository
+Memory and Ideas surface; the GitHub adapter is Delivery's publication provider; Tools support the repository
 rather than the product runtime.
 
 ```text
 VS Code agents
     -> MCP packages -> core packages
-    -> Cockpit -> Delivery, GitHub adapter, Memory
+    -> Cockpit -> Memory
     -> Tools -> Delivery
 ```
 

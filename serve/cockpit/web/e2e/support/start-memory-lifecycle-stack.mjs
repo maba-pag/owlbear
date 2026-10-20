@@ -54,27 +54,6 @@ await mkdir(resolve(fixtureManifest, ".."), { recursive: true });
 await writeFile(fixtureManifest, JSON.stringify({ memoryDir }));
 await rm(mcpProof, { force: true });
 
-// The cockpit backend refuses to boot without a Delivery config, even for Memory-only runs.
-const deliverySeed = spawn(
-  "uv",
-  [
-    "run",
-    "--project",
-    root,
-    "python",
-    resolve(import.meta.dirname, "seed-work-portfolio-delivery.py"),
-    "--workspace",
-    fixture,
-  ],
-  { cwd: root, stdio: "inherit" },
-);
-const [deliverySeedExit] = await once(deliverySeed, "exit");
-if (deliverySeedExit !== 0) {
-  await rm(fixtureManifest, { force: true });
-  await rm(fixture, { recursive: true, force: true });
-  process.exit(deliverySeedExit ?? 1);
-}
-
 const mcpProbe = spawn(
   "uv",
   [

@@ -22,12 +22,12 @@ the install path.
 ## What OwlBear does
 
 You describe an outcome. Copilot helps refine it, creates an approved work package, and runs the
-result through reviewed steps. Cockpit shows the current work and gives a person the controls for
-requests, recovery, publication, and completed history.
+result through reviewed steps. The new Delivery engine's Changes page shows each Change and gives a
+person the controls for approvals, merge consent and recovery; Cockpit keeps memory and ideas.
 
 OwlBear expects VS Code with GitHub Copilot and a Git project with a GitHub repository identity. A
 completed Delivery change becomes a pull request that a person reviews and either approves for merge
-in Cockpit or merges in GitHub.
+on the Changes page or merges in GitHub.
 
 The main terms are simple:
 
@@ -37,11 +37,11 @@ The main terms are simple:
 | Skill | Reusable instructions that teach an agent how to handle a domain or workflow |
 | MCP server | A tool connection that lets agents use one OwlBear capability from VS Code |
 | Change | One approved piece of work tracked from design through review and publication |
-| Cockpit | The browser UI for seeing work and taking human-owned actions |
+| Cockpit | The browser UI for memory and ideas |
 
-The normal path is `/ideate` to refine the outcome, `/design` to approve the work package, and
-`/continue-change <change-id>` to plan, build, review, finalize, and publish that one Change; run the
-same prompt again after any stop. The Delivery engine keeps the work ordered and reviewed; you decide
+The normal path is **New Change** on the Changes page, which opens a shaping chat; the engine then
+plans, builds, reviews and publishes that Change. The Changes page replaces the retired
+`/continue-change` prompt. The Delivery engine keeps the work ordered and reviewed; you decide
 when to approve, answer, pause, recover, or merge.
 
 Current surface maturity is published on the consumer front door in

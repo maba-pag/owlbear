@@ -1,6 +1,5 @@
 import { type ComponentType, type LazyExoticComponent, lazy } from "react";
 
-const WorkPortfolioPage = lazy(() => import("./pages/WorkPortfolioPage"));
 const IdeasPage = lazy(() => import("./pages/IdeasPage"));
 const MemoryTab = lazy(() => import("./pages/MemoryTab"));
 
@@ -16,12 +15,6 @@ export interface RouteConfigEntry {
 
 export const routeConfig: RouteConfigEntry[] = [
   {
-    path: "/delivery",
-    label: "Delivery",
-    icon: "work",
-    component: WorkPortfolioPage,
-  },
-  {
     path: "/memory",
     label: "Memory",
     icon: "memory",
@@ -36,18 +29,11 @@ export const routeConfig: RouteConfigEntry[] = [
 ];
 
 export function routeForPath(pathname: string): RouteConfigEntry | undefined {
-  return routeConfig.find((route) => {
-    if (route.path !== "/delivery") return pathname === route.path;
-    const segments = pathname.split("/").filter(Boolean);
-    const isHistoryRoute = segments[1] === "history" && (segments.length === 2 || segments.length === 4);
-    const isLiveRoute = segments.length === 1 || (segments.length === 3 && segments[1] !== "history");
-    return segments[0] === "delivery" && (isLiveRoute || isHistoryRoute);
-  });
+  return routeConfig.find((route) => pathname === route.path);
 }
 
 /** Superseded paths kept reachable so existing links and bookmarks still resolve. */
 export const legacyRouteRedirects: Array<{ from: string; to: string }> = [
-  { from: "/", to: "/delivery" },
-  { from: "/work", to: "/delivery" },
+  { from: "/", to: "/memory" },
   { from: "/memories", to: "/memory" },
 ];

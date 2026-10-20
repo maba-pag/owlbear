@@ -16,8 +16,7 @@ from pathlib import Path
 from typing import Annotated
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from owlbear_memory.errors import (
@@ -37,14 +36,7 @@ from owlbear_cockpit.deps import get_ideas_path, get_memory_engine
 from owlbear_cockpit.models import CockpitInstance, HealthModule, IdeasHealth
 from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
-from owlbear_cockpit.routes.target_work import (
-    handle_target_http_error,
-    handle_target_validation_error,
-)
-from owlbear_cockpit.routes.target_work import router as target_work_router
-from owlbear_cockpit.target_context import load_target_context
-from owlbear_delivery import DeliveryCheckpointSupervisor
-from owlbear_delivery.storage_io import atomic_write
+from owlbear_cockpit.storage_io import atomic_write
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
@@ -58,9 +50,6 @@ _REGISTRY_ENV = "OWLBEAR_COCKPIT_REGISTRY"
 _REVALIDATE_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 
 app = FastAPI(title="OwlBear Cockpit")
-app.add_exception_handler(HTTPException, handle_target_http_error)
-app.add_exception_handler(RequestValidationError, handle_target_validation_error)
-app.include_router(target_work_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 
@@ -302,16 +291,6 @@ def list_instances() -> None:
         print(f"{instance.pid:>7}  {instance.port:>5}  {started:<20}  {instance.workspace}")  # noqa: T201
 
 
-def _load_target_runtime() -> tuple[Path, object]:
-    workspace_root = Path.cwd().resolve()
-    try:
-        target_context = load_target_context(workspace_root)
-    except RuntimeError as exc:
-        sys.stderr.write(f"Error: {exc}\n")
-        sys.exit(1)
-    return workspace_root, target_context
-
-
 def _resolve_dist_dir() -> Path:
     dist_dir = _DIST_DIR.resolve()
     if not dist_dir.is_dir():
@@ -325,16 +304,12 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     from owlbear_memory.engine import MemoryEngine  # noqa: PLC0415
 
     port = _resolve_port(port_override)
-    workspace_root, target_context = _load_target_runtime()
+    workspace_root = Path.cwd().resolve()
     dist_dir = _resolve_dist_dir()
 
     # --- runtime init (before uvicorn starts) ---
     memory_engine = MemoryEngine(workspace_root / _MEMORY_DIR)
     app.state.workspace_root = workspace_root
-    app.state.target_context = target_context
-    checkpoint_supervisor = DeliveryCheckpointSupervisor(target_context)
-    checkpoint_supervisor.start()
-    app.state.checkpoint_supervisor = checkpoint_supervisor
     app.state.memory_engine = memory_engine
     app.state.port = port
 
@@ -383,7 +358,6 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     try:
         uvicorn.run(app, host=_HOST, port=port)
     finally:
-        checkpoint_supervisor.stop()
         record.unlink(missing_ok=True)
 
 

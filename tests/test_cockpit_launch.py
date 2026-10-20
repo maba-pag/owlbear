@@ -1,4 +1,4 @@
-"""Cockpit launch contracts for canonical Delivery startup."""
+"""Cockpit launch contracts."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def reset_app() -> object:
     routes = list(main.app.routes)
     yield
     main.app.routes[:] = routes
-    for attribute in ("workspace_root", "target_context", "memory_engine"):
+    for attribute in ("workspace_root", "memory_engine"):
         with contextlib.suppress(AttributeError, KeyError):
             delattr(main.app.state, attribute)
 
@@ -30,12 +30,11 @@ def _dist(tmp_path: Path) -> Path:
     return root
 
 
-def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_binds_workspace_state_before_uvicorn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from owlbear_cockpit import main  # noqa: PLC0415
 
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
-    context = object()
     monkeypatch.chdir(workspace_root)
     monkeypatch.setattr(main, "_DIST_DIR", _dist(tmp_path))
     monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(tmp_path / "ignored-workspace"))
@@ -44,33 +43,13 @@ def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: py
     present: list[bool] = []
 
     def check_state(*_args: object, **_kwargs: object) -> None:
-        present.append(main.app.state.target_context is context)
+        present.append(main.app.state.workspace_root == workspace_root.resolve())
+        present.append(main.app.state.memory_engine is not None)
 
-    with (
-        patch("owlbear_cockpit.main.load_target_context", return_value=context) as load,
-        patch("uvicorn.run", side_effect=check_state),
-    ):
+    with patch("uvicorn.run", side_effect=check_state):
         main.run()
 
-    assert present == [True]
-    assert main.app.state.workspace_root == workspace_root.resolve()
-    load.assert_called_once_with(workspace_root.resolve())
-
-
-def test_run_rejects_missing_target_receipt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from owlbear_cockpit.main import run  # noqa: PLC0415
-
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
-
-    with (
-        patch(
-            "owlbear_cockpit.main.load_target_context",
-            side_effect=RuntimeError("Cockpit startup requires valid Delivery configuration"),
-        ),
-        pytest.raises(SystemExit),
-    ):
-        run()
+    assert present == [True, True]
 
 
 def test_run_registers_instance_while_uvicorn_owns_process(
@@ -91,10 +70,7 @@ def test_run_registers_instance_while_uvicorn_owns_process(
     def check_record(*_args: object, **_kwargs: object) -> None:
         observed.append((registry / f"{main.os.getpid()}.json").is_file())
 
-    with (
-        patch("owlbear_cockpit.main.load_target_context", return_value=object()),
-        patch("uvicorn.run", side_effect=check_record),
-    ):
+    with patch("uvicorn.run", side_effect=check_record):
         main.run(port_override=8431)
 
     assert observed == [True]

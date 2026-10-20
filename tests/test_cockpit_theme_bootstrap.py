@@ -33,7 +33,7 @@ def _reset_app_after_run() -> object:
     saved_routes = list(_m.app.routes)
     yield
     _m.app.routes[:] = saved_routes
-    for attribute in ("workspace_root", "target_context", "memory_engine"):
+    for attribute in ("workspace_root", "memory_engine"):
         with contextlib.suppress(AttributeError, KeyError):
             delattr(_m.app.state, attribute)
 
@@ -47,7 +47,7 @@ class TestThemeBootstrapServing:
 
         _configure_run(tmp_path, monkeypatch)
 
-        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
+        with patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
@@ -70,7 +70,7 @@ class TestThemeBootstrapServing:
 
         _configure_run(tmp_path, monkeypatch)
 
-        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
+        with patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
@@ -91,7 +91,7 @@ class TestThemeBootstrapServing:
 
         _configure_run(tmp_path, monkeypatch)
 
-        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
+        with patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
@@ -108,18 +108,18 @@ class TestThemeBootstrapServing:
     def test_spa_shell_is_revalidated_after_frontend_builds(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """GET /delivery must revalidate the un-hashed SPA shell."""
+        """GET /memory must revalidate the un-hashed SPA shell."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
         _configure_run(tmp_path, monkeypatch)
 
-        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
+        with patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
 
         with TestClient(app, raise_server_exceptions=True) as client:
-            resp = client.get("/delivery")
+            resp = client.get("/memory")
 
         assert resp.status_code == 200
         assert resp.headers["cache-control"] == "no-cache, must-revalidate"

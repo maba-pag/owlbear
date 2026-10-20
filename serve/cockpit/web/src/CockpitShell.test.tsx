@@ -17,12 +17,6 @@ vi.mock("./components/ThemeToggle", () => ({
 vi.mock("./routes", () => {
   const routeConfig = [
     {
-      path: "/delivery",
-      label: "Delivery",
-      icon: "work",
-      component: () => <main>Work portfolio</main>,
-    },
-    {
       path: "/memory",
       label: "Memory",
       icon: "memory",
@@ -37,35 +31,30 @@ vi.mock("./routes", () => {
   ];
   return {
     routeConfig,
-    routeForPath: (pathname: string) =>
-      routeConfig.find((route) => {
-        if (route.path !== "/delivery") return pathname === route.path;
-        const segments = pathname.split("/").filter(Boolean);
-        return segments[0] === "delivery" && (segments.length === 1 || segments.length === 3);
-      }),
+    routeForPath: (pathname: string) => routeConfig.find((route) => pathname === route.path),
   };
 });
 
 it("navigates between the target product areas", async () => {
   render(
-    <MemoryRouter initialEntries={["/delivery"]}>
+    <MemoryRouter initialEntries={["/memory"]}>
       <CockpitShell />
     </MemoryRouter>,
   );
 
-  expect(screen.getByText("Work portfolio")).toBeInTheDocument();
+  expect(screen.getByText("Memory workspace")).toBeInTheDocument();
   const desktopNavigation = screen.getByTestId("desktop-product-navigation");
-  expect(desktopNavigation.querySelector('a[title="Delivery"]')).toHaveAttribute("aria-current", "page");
-
-  fireEvent.click(requirePresent(desktopNavigation.querySelector('a[title="Memory"]')));
-
-  expect(await screen.findByText("Memory workspace")).toBeInTheDocument();
   expect(desktopNavigation.querySelector('a[title="Memory"]')).toHaveAttribute("aria-current", "page");
+
+  fireEvent.click(requirePresent(desktopNavigation.querySelector('a[title="Ideas"]')));
+
+  expect(await screen.findByText("Ideas workspace")).toBeInTheDocument();
+  expect(desktopNavigation.querySelector('a[title="Ideas"]')).toHaveAttribute("aria-current", "page");
 });
 
 it("opens labeled product navigation from the compact mobile header", () => {
   render(
-    <MemoryRouter initialEntries={["/delivery"]}>
+    <MemoryRouter initialEntries={["/memory"]}>
       <CockpitShell />
     </MemoryRouter>,
   );
@@ -76,7 +65,7 @@ it("opens labeled product navigation from the compact mobile header", () => {
     open: boolean;
   };
   expect(flyout.open).toBe(true);
-  expect(flyout.querySelector("p-link-pure")).toHaveTextContent("Delivery");
+  expect(flyout.querySelector("p-link-pure")).toHaveTextContent("Memory");
 });
 
 it("renders Not Found for an unmatched path", () => {
@@ -87,20 +76,14 @@ it("renders Not Found for an unmatched path", () => {
   );
 
   expect(screen.getByTestId("not-found-view")).toBeInTheDocument();
-  expect(screen.getByText("Go to Delivery portfolio")).toBeInTheDocument();
 });
 
 it("does not render a generic command footer", () => {
   render(
-    <MemoryRouter initialEntries={["/delivery"]}>
+    <MemoryRouter initialEntries={["/memory"]}>
       <CockpitShell />
     </MemoryRouter>,
   );
 
   expect(screen.queryByTestId("command-reference")).not.toBeInTheDocument();
-  expect(
-    screen.queryByRole("button", {
-      name: "Copy command /finalize-change <change-id>",
-    }),
-  ).not.toBeInTheDocument();
 });

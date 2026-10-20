@@ -478,27 +478,6 @@ def test_prompt_validator_accepts_current_prompt_roots() -> None:
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
 
 
-def test_repair_delivery_prompt_bootstraps_read_only_then_routes_through_the_repair_skill() -> None:
-    path = _PROMPTS_ROOT / "repair-delivery.prompt.md"
-    prompt = path.read_text(encoding="utf-8")
-    metadata = _frontmatter(path)
-    assert metadata["agent"] == "agent"
-    assert metadata["tools"] == ["execute/runInTerminal", "vscode/askQuestions", "read/readFile"]
-    assert "mode" not in metadata
-    assert "../skills/w-delivery-repair/SKILL.md" in prompt
-    assert "delivery-diagnose inspect" in prompt
-    assert "PYTHONDONTWRITEBYTECODE=1" in prompt
-    assert "uv run --no-sync delivery-diagnose inspect" in prompt
-    assert "uv run --no-sync python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
-    assert "`python -B serve/tools" not in prompt
-    assert "terminal is unavailable" in prompt
-    assert "do not substitute another tool" in prompt
-    assert "automation-permission bypass" in prompt
-    assert "automatic fix" in prompt
-    assert "manual repair" in prompt
-    assert "D07" not in prompt
-
-
 def test_repair_delivery_skill_applies_the_u1_confirmation_policy() -> None:
     skill = " ".join((_SKILLS_ROOT / "w-delivery-repair/SKILL.md").read_text(encoding="utf-8").split())
     bootstrap, classify = skill.index("delivery-diagnose inspect"), skill.index("delivery-repair classify")
@@ -518,89 +497,6 @@ def test_repair_delivery_skill_applies_the_u1_confirmation_policy() -> None:
     assert "Never write request provenance" in skill
     assert "C09" in skill
     assert "D07" not in skill
-
-
-def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
-    path = _PROMPTS_ROOT / "inspect-change.prompt.md"
-    metadata = _frontmatter(path)
-
-    assert metadata["agent"] == "agent"
-    assert "mode" not in metadata
-    assert metadata["tools"] == [
-        "owlbear-delivery/get_change",
-        "owlbear-delivery/delivery_health",
-        "read/readFile",
-    ]
-    content = " ".join(path.read_text(encoding="utf-8").split())
-    assert "query is exactly `get_change` or `delivery_health`." in content
-    assert "read that exact file with `read/readFile`" in content
-    assert "read no other file and call no other tool" in content
-    assert "remains uncallable or unreadable, report that inspection is unavailable" in content
-    assert "raw Git" in content
-
-
-def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> None:
-    path = _PROMPTS_ROOT / "upgrade-delivery.prompt.md"
-    metadata = _frontmatter(path)
-    prompt = " ".join(path.read_text(encoding="utf-8").split())
-
-    assert metadata["agent"] == "agent"
-    assert metadata["tools"] == [
-        "execute/runInTerminal",
-        "owlbear-delivery/delivery_health",
-        "owlbear-delivery/list_changes",
-        "owlbear-delivery/get_change",
-        "owlbear-delivery/list_work_items",
-        "vscode/askQuestions",
-    ]
-    assert _PROMPT_VALIDATOR.validate_prompt(path) == []
-    steps = (
-        "install <revision>",
-        "preflight",
-        "backup --destination",
-        "delivery-migrate",
-        "switch <new commit>",
-        "<root> verify",
-        "<root> prune",
-        "ask the user to start `owlbear-delivery`",
-        "`delivery_health`, which must be `healthy`",
-    )
-    positions = [prompt.index(step) for step in steps]
-    assert positions == sorted(positions)
-    unpinned = ("*Stop*", "git -C <owlbear> pull --ff-only` (or", "<root> preflight")
-    assert [prompt.index(step) for step in unpinned] == sorted(prompt.index(step) for step in unpinned)
-    assert "`NEW/<tool>` is `uv --project <owlbear> run <tool>`" in prompt
-    assert "install `HEAD`" in prompt
-    assert "git -C <owlbear> archive <revision> serve/cockpit/dist" in prompt
-    assert "install `<revision>` with `--bundle-source <that directory>/serve/cockpit/dist`" in prompt
-    assert "no per-Change baseline exists, and continue; steps 3 and 5 still apply" in prompt
-    assert "where step 2 recorded one" in prompt
-    assert "safe only when step 7 reported `migration-not-required`" in prompt
-    assert "Do not stop or kill processes yourself" in prompt
-    assert "previous release's own gate accepts the migrated state" in prompt
-    assert "Restoring the step-6 backup is the user's decision" in prompt
-    assert "never run checkout code" in prompt
-    assert "upgrade-delivery" in (_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8")
-
-
-def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path) -> None:
-    path = _write_prompt(
-        tmp_path / "prompts",
-        "inspect-change",
-        """---
-description: Inspect a Change
-agent: agent
-tools:
-  - owlbear-delivery/get_change
-  - owlbear-delivery/repair
----
-Inspect the returned state.
-""",
-    )
-
-    errors = _PROMPT_VALIDATOR.validate_prompt(path)
-
-    assert any("exactly the read-only allowlist" in error for error in errors)
 
 
 def test_prompt_validator_rejects_unresolved_agent_and_skill(tmp_path: Path) -> None:
@@ -1161,16 +1057,10 @@ def _assert_stopped_worker_release_guidance() -> None:
     ) in finalization
     assert "not an observation, proof, or finalization receipt" in finalization
     assert "`finalizer-ended-without-report` has `checks_state: unknown` and is not proof" in finalizer
-    assert "no same-cycle replacement" in operator_guide
-    assert "window-exit row" in operator_guide
-    assert "Recorded PID/start time is gone" in operator_guide
-    assert "no writes for 30 seconds" in operator_guide
     assert "Before dispatching from either entry route" not in operator_guide
     assert "Before either entry route" not in wiring
-    assert "ERR_DELIVERY_WORKER_ACTIVE" in operator_guide
     assert "release_stuck_worker" in delivery_readme
     assert "release_stuck_worker" in delivery_mcp
-    assert "Release stuck worker" in cockpit_readme
     for content in (
         orchestration,
         operator_guide,
@@ -1275,7 +1165,6 @@ def test_worker_settlement_guidance_matches_native_contract() -> None:
     assert "eligible for recovery after the configured" not in delivery_readme
     assert "confirmed-dead claim recovery" not in operator_guide
     assert "Clean matching Builder custody is restarted and released" not in delivery_readme
-    assert "If active claims occupy every slot" in operator_guide
     assert "unsettled claims continue to consume shared capacity" in delivery_readme
     assert "expose and recover current typed Integration attention" not in delivery_mcp_readme
     assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in delivery_mcp_readme
@@ -1433,14 +1322,12 @@ def test_continuation_shows_merge_offers_and_checks_an_unknown_merge_only_on_an_
     orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
     section = orchestration[orchestration.index("### Merge Offer And Unknown Merge") :]
     section = section[: section.index("###", 4)]
-    prompt = " ".join((_PROMPTS_ROOT / "continue-change.prompt.md").read_text(encoding="utf-8").split())
 
     assert "No agent tool approves a merge; only the user approves, in Cockpit." in section
     assert "**Approve merge** in Cockpit or merge the PR in GitHub, and stop" in section
     assert "options **Check again** and **Not now**" in section
     assert "Each Check again answer makes exactly one `observe_acceptance(change_id)` call" in section
     assert "never loop on it, and never request a merge" in section
-    assert "one `observe_acceptance` call per Check again answer" in prompt
     for agent in _AGENTS_ROOT.glob("*.agent.md"):
         assert not [tool for tool in _frontmatter(agent).get("tools", ()) if "approve" in str(tool)], agent.name
 
@@ -1564,8 +1451,7 @@ def test_pr_feedback_no_fix_start_replies_without_preparing() -> None:
 
 def test_pr_feedback_preserves_existing_workflow_rules() -> None:
     skill = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
-    prompt = (_PROMPTS_ROOT / "address-pr-feedback.prompt.md").read_text(encoding="utf-8")
-    combined = _normalize_contract_text(skill + prompt).lower()
+    combined = _normalize_contract_text(skill).lower()
 
     for required in (
         "one commit per thread means one commit per independent review conversation",
@@ -1646,16 +1532,12 @@ def test_pr_feedback_phase_routing_precedes_mutation_and_fences_finalized_phases
     assert "`prepare_review_repair` validates the expected head" in step1
 
 
-def test_pr_feedback_prompt_mode_is_optional_derived_and_next_commands_are_mode_free() -> None:
-    prompt = (_PROMPTS_ROOT / "address-pr-feedback.prompt.md").read_text(encoding="utf-8")
+def test_pr_feedback_next_commands_are_mode_free() -> None:
     skill = (_SKILLS_ROOT / "w-address-pr-feedback/SKILL.md").read_text(encoding="utf-8")
-    normalized_prompt = _normalize_contract_text(prompt)
     normalized_skill = _normalize_contract_text(skill)
     output_start = skill.index("## Output Template")
     output = skill[output_start:]
 
-    assert "Optional mode (omit to derive it" in normalized_prompt
-    assert "An omitted mode is derived" in normalized_prompt
     assert "Refuse any other value or mismatch before mutation" in normalized_skill
     assert "`/address-pr-feedback <change-id>`" in normalized_skill
     assert (

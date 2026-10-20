@@ -2,7 +2,6 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
-const digest = "a".repeat(64);
 
 const memories = [
   {
@@ -23,20 +22,6 @@ const memories = [
 async function seed(page: Page) {
   // Playwright matches routes in reverse registration order, so the catch-all must be registered first.
   await page.route("**/api/**", (route) => route.fulfill({ status: 200, json: {} }));
-  await page.route("**/api/changes", (route) =>
-    route.fulfill({
-      json: {
-        changes: [
-          {
-            change_id: "change",
-            state: "loaded",
-            delivery_digest: digest,
-            diagnostics: [],
-          },
-        ],
-      },
-    }),
-  );
   await page.route("**/api/events", (route) =>
     route.fulfill({
       status: 200,

@@ -239,55 +239,33 @@ the repository, Delivery requests, or status.
   **Expected result:** both targets remain authenticated after restart, no `--no-sandbox` or
   unsupported-flag warning appears, and only OwlBear-owned browser resources close. Record only each
   target class (`SharePoint` or `Confluence`) and `pass` or `fail`; include no URL, hostname, page
-  content, credential, or session data. If a Delivery pilot request is active, answer it in Cockpit
-  using only those bounded outcomes.
+  content, credential, or session data. If a Delivery pilot request is active, answer it using only
+  those bounded outcomes.
 
 ## First successful workflow
 
-After verification, prove the installation with one small outcome:
+After verification, prove the installation with one small outcome on the new Delivery engine's
+Changes page:
 
-1. Run `/ideate` and describe the outcome.
+1. Start OwlBear with `owlbear start` (or `~/.owlbear/runtime/.venv/bin/owlbear start` before the
+   command is linked); it prints the address of its pages, and `owlbear status` prints it again.
+   Open it, choose **Add project** in the bar at the top and enter the project's folder.
 
-   **Expected result:** the Designer records a refined outcome and asks the next bounded question
-   when more detail is needed.
-2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
-   note the returned lowercase, hyphenated Change ID, for example `improve-search`, and the next
-   prompt, `/continue-change improve-search`.
+   **Expected result:** the project is listed as loaded and its Changes page opens.
+2. Press **New Change** and describe the outcome in the shaping chat it opens.
 
-  **Expected result:** one approved Change is admitted, its verified package is backed up on the
-  managed Change branch, its initial checkpoint is queued or published, and its ID is available
-  for later commands. The remote recovery guarantee begins at this boundary; earlier drafts remain
-  local.
-3. Run `/continue-change improve-search` in Copilot Chat. It continues only that Change: Planning,
-  Build, finalization, and publication proceed in order until the chat stops for you or the pull
-  request is ready.
+   **Expected result:** the chat asks what it needs and saves a brief for your approval.
+3. Approve the brief on the Changes page.
 
-   **Expected result:** the Change advances through Planning and Build, or the chat stops and
-   Cockpit shows a typed request or block that needs your action. After you act, run the same
-   prompt again.
-4. Launch Cockpit from the project root and confirm the Change is visible.
+   **Expected result:** the engine plans, builds, reviews and publishes the Change as a pull
+   request; when it needs you, it asks on the Changes page.
+4. When the Changes page asks for merge consent, review the pull request and approve it there, or
+   merge it in GitHub.
 
-   ```shell
-   uv run --project ../owlbear cockpit
-   ```
+   **Expected result:** the Change shows as done.
 
-   **Expected result:** Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and
-   shows the Change, its progress, and the next available action, such as
-   **Copy continuation prompt**.
-5. When Cockpit shows **Your decision** with the headline **Ready to merge**, review the pull
-   request and approve it with
-  **Approve merge**, or merge it in GitHub.
-
-   **Expected result:** an approval merges only the exact reviewed head. After the merge, Delivery
-   observes it on GitHub and the Change shows **Done**.
-
-If a worker returns a request or block, answer the request or clear the requestless block in Cockpit
-and then run `/continue-change <change-id>` again. Do not edit `.owlbear` Delivery state by hand.
-Other prompts handle exceptions; see
-[Exceptional entries](operating-owlbear.md#exceptional-entries).
-
-Use the [Delivery workflow reference](operating-owlbear.md#delivery-workflow) when you need the
-detailed correction, publication, acceptance, or recovery procedure.
+The Changes page replaces the retired `/continue-change` prompt, its exception prompts and
+Cockpit's old Delivery view; see [Delivery Workflow](operating-owlbear.md#delivery-workflow).
 
 ---
 
@@ -300,12 +278,12 @@ detailed correction, publication, acceptance, or recovery procedure.
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
-| `owlbear-delivery` refuses to start with `state-migration-required` | The OwlBear checkout moved to a release that needs a newer Delivery state format | Run `/upgrade-delivery` from the project; see [Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear) |
-| `owlbear-delivery` refuses to start with `state-newer-than-controller` | The OwlBear checkout is older than the project's Delivery state | Move the checkout forward with `/upgrade-delivery`; going back needs the upgrade backup restored first |
+| `owlbear-delivery` refuses to start with `state-migration-required` | The OwlBear checkout moved to a release that needs a newer Delivery state format | The old Delivery engine is retired, and its `/repair-delivery` prompt with it; use the new Delivery engine's Changes page |
+| `owlbear-delivery` refuses to start with `state-newer-than-controller` | The OwlBear checkout is older than the project's Delivery state | Move the checkout forward with **Run updates now** on the new Delivery engine's pages; going back needs the upgrade backup restored first |
 | Delivery reports that remote Delivery-state snapshots are unavailable | The configured `delivery_state_branch` cannot be read from the configured remote | Verify remote access and the tracked branch name, then retry from the project root; do not copy hidden refs or ignored runtime files |
-| Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention in Cockpit, and resolve the exact divergence before acquisition |
+| Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention, and resolve the exact divergence before acquisition |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Cockpit shows the wrong workspace or cannot find `.owlbear/delivery/config.json` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
+| Cockpit shows another project's memory or ideas | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
 

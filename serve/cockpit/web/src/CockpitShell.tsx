@@ -7,7 +7,6 @@ import { useWorkspaceHealth } from "./hooks/useWorkspaceHealth";
 import { routeConfig, routeForPath } from "./routes";
 
 const ICONS = {
-  work: "grid",
   memory: "brain",
   ideas: "user-manual",
 } as const;
@@ -191,15 +190,6 @@ export default function CockpitShell() {
                   <p className="text-sm text-contrast-medium">
                     This Cockpit address does not match an available workspace.
                   </p>
-                  <PLinkPure
-                    href="/delivery"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      goTo("/delivery");
-                    }}
-                  >
-                    Go to Delivery portfolio
-                  </PLinkPure>
                 </section>
               </main>
             )}
