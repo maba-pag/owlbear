@@ -12,10 +12,8 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
-from mcp import Client
 from serve.delivery.tests.test_merge_offer import (
     _REPOSITORY,
-    _acquire,
     _check,
     _counted_reads,
     _memory_awaiting_merge,
@@ -62,7 +60,6 @@ from owlbear_delivery.publication_provider import (
 from owlbear_delivery.recovery import RetryStopCode
 from owlbear_delivery.work_items import WorkItemActionKind, WorkItemNextActor
 from owlbear_delivery_github.memory import InMemoryPublicationProvider
-from owlbear_delivery_mcp.target_server import assemble_target_server
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -521,46 +518,6 @@ def test_a_provider_change_between_the_settlement_and_acceptance_reads_settles_t
         diagnostics = runtime.change_disposition().diagnostics
         assert any(item.startswith("target-advanced-during-merge:") for item in diagnostics)
     assert len(memory.merge_request_bodies) == 1
-
-
-@pytest.mark.asyncio
-async def test_an_unknown_merge_waits_for_the_user_and_check_again_reads_once(tmp_path: Path) -> None:
-    application, runtime, memory, _head, state_root = _memory_awaiting_merge(tmp_path)
-    start = datetime(2026, 8, 4, tzinfo=UTC)
-    now = [start]
-    _with_clock(application, now)
-    memory.lose_next_merge_response = True
-    with pytest.raises(PublicationProviderError):
-        _approve(application)
-    for seconds in (0, 1, 3):
-        now[0] = start + timedelta(seconds=seconds)
-        assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
-    now[0] += timedelta(days=1)
-
-    readiness = application.get_change("change-a").readiness
-    assert (readiness.reason_code, readiness.next_actor, readiness.merge_attempt.state) == (
-        "merge-response-unknown",
-        WorkItemNextActor.YOU,
-        "released",
-    )
-    assert _acquire(application).kind == "human"
-    with _counted_reads() as reads:
-        application.reconcile_awaiting_acceptance(("change-a",))
-    assert reads.call_count == 0
-    async with Client(assemble_target_server(application)) as client:
-        with _counted_reads() as reads:
-            still = await client.call_tool("observe_acceptance", {"change_id": "change-a"})
-    # One read set per Check again: the settlement's merge evidence and the acceptance observation.
-    assert (still.is_error, reads.call_count, _attempt(state_root).state) == (True, 2, MergeAttemptState.RELEASED)
-    reopened = _reopen_with_providers(tmp_path, application, runtime, state_root, now)
-    memory.execute_pending_merges()
-    async with Client(assemble_target_server(reopened)) as client:
-        with _counted_reads() as reads:
-            merged = await client.call_tool("observe_acceptance", {"change_id": "change-a"})
-
-    assert (merged.is_error, reads.call_count) == (False, 2)
-    assert _attempt(state_root).state is MergeAttemptState.MERGED
-    assert (len(_completions(state_root)), len(memory.merge_request_bodies)) == (1, 1)
 
 
 def test_abandon_stays_allowed_while_the_merge_is_unknown(tmp_path: Path) -> None:

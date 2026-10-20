@@ -25,7 +25,6 @@ def run_init_without_test_surface() -> Callable[..., None]:
     """Run setup initialization for a project without test-surface scaffolding."""
 
     def run(initializer: Callable[..., object], /, *args: object, **kwargs: object) -> None:
-        kwargs.setdefault("github_repository", "example/project")
         initializer(*args, **kwargs)
 
     return run

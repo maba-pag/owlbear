@@ -78,9 +78,6 @@ _REFRESHABLE_CONFIG_REL = frozenset(
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
-_DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
-_DELIVERY_CONFIG_SCHEMA_VERSION = 2
-_DELIVERY_STATE_BRANCH = "owlbear/delivery-state"
 _INSTALL_MANIFEST_PATH = Path(".owlbear/install-manifest.json")
 _INSTALL_MANIFEST_SCHEMA_VERSION = 1
 _DEFAULT_PROFILE_ASSOCIATION = "__default__profile__"
@@ -915,146 +912,6 @@ def config_drift(target_dir: Path, owlbear_dir: Path) -> dict[str, str]:
     return drift
 
 
-def _current_branch(target_dir: Path) -> str | None:
-    """Return the checked-out local branch when the target is a Git repository."""
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],  # noqa: S607
-        cwd=target_dir,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    branch = result.stdout.strip()
-    return branch or None
-
-
-def _valid_branch_name(target_dir: Path, branch: str) -> bool:
-    """Return whether *branch* is a valid unqualified Git branch name."""
-    syntax = subprocess.run(  # noqa: S603
-        ["git", "check-ref-format", f"refs/heads/{branch}"],  # noqa: S607
-        cwd=target_dir,
-        check=False,
-        capture_output=True,
-    )
-    return syntax.returncode == 0
-
-
-def _select_target_branch(target_dir: Path, requested: str | None, *, interactive: bool) -> str:
-    """Resolve a fresh project's target from an option, prompt, or stable fallback."""
-    if requested is not None:
-        if not _valid_branch_name(target_dir, requested):
-            msg = f"Target branch name is invalid: {requested}"
-            raise RuntimeError(msg)
-        return requested
-    if not interactive:
-        return "main"
-    suggested = _current_branch(target_dir) or "main"
-    selected = input(f"Target branch [{suggested}]: ").strip() or suggested
-    if not _valid_branch_name(target_dir, selected):
-        msg = f"Target branch name is invalid: {selected}"
-        raise RuntimeError(msg)
-    return selected
-
-
-def _github_repository_from_remote(target_dir: Path, remote: str) -> str | None:
-    """Infer an exact GitHub ``owner/name`` identity from one remote URL."""
-    completed = subprocess.run(  # noqa: S603
-        ["git", "remote", "get-url", remote],  # noqa: S607
-        cwd=target_dir,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if completed.returncode != 0:
-        return None
-    match = re.fullmatch(
-        r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^\s/]+/[^\s/]+?)(?:\.git)?",
-        completed.stdout.strip(),
-    )
-    return match.group(1) if match else None
-
-
-def _select_github_repository(
-    target_dir: Path,
-    remote: str,
-    requested: str | None,
-    *,
-    interactive: bool,
-) -> str:
-    """Resolve an exact GitHub repository identity without placeholders."""
-    selected = requested or _github_repository_from_remote(target_dir, remote)
-    if selected is None and interactive:
-        selected = input("GitHub repository (owner/name): ").strip()
-    if selected is None or re.fullmatch(r"[^\s/]+/[^\s/]+", selected) is None:
-        msg = "GitHub repository must be provided as owner/name or inferred from the configured remote"
-        raise RuntimeError(msg)
-    return selected
-
-
-def _write_delivery_config(
-    target_dir: Path,
-    remote: str,
-    target_branch: str | None,
-    github_repository: str | None,
-    *,
-    interactive: bool,
-) -> None:
-    """Create the tracked project Delivery policy."""
-    path = target_dir / _DELIVERY_CONFIG_PATH
-    if path.exists():
-        try:
-            existing = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            msg = f"Delivery configuration cannot be read: {path}"
-            raise RuntimeError(msg) from exc
-        if (
-            not isinstance(existing, dict)
-            or existing.get("schema_version") != _DELIVERY_CONFIG_SCHEMA_VERSION
-            or set(existing)
-            != {
-                "schema_version",
-                "remote",
-                "target_branch",
-                "github_repository",
-                "delivery_state_branch",
-            }
-        ):
-            msg = f"Delivery configuration is not current: {path}"
-            raise RuntimeError(msg)
-        return
-    content = None
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if content is None:
-        content = {
-            "schema_version": _DELIVERY_CONFIG_SCHEMA_VERSION,
-            "remote": remote,
-            "target_branch": _select_target_branch(
-                target_dir,
-                target_branch,
-                interactive=interactive,
-            ),
-            "github_repository": _select_github_repository(
-                target_dir,
-                remote,
-                github_repository,
-                interactive=interactive,
-            ),
-            "delivery_state_branch": _DELIVERY_STATE_BRANCH,
-        }
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        delete=False,
-    ) as temporary:
-        temporary.write(json.dumps(content, indent=2) + "\n")
-        temporary.flush()
-        os.fsync(temporary.fileno())
-        temporary_path = Path(temporary.name)
-    temporary_path.replace(path)
-
-
 def _hook_files_match(src: Path, dest: Path) -> bool:
     """Return True when the existing hook file already matches the seed file."""
     return dest.exists() and src.read_bytes() == dest.read_bytes()
@@ -1518,12 +1375,11 @@ def _hook_diff(src: Path, dest: Path) -> str:
 def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """Write .vscode/mcp.json, merging owlbear servers with existing entries.
 
-    Writes five MCP server entries from the seed template:
-            - owlbear-delivery (owlbear_delivery_mcp)
-            - owlbear-knowledge (owlbear_knowledge_mcp)
-            - owlbear-memory (owlbear_memory_mcp)
+    Writes four MCP server entries from the seed template:
+        - owlbear-knowledge (owlbear_knowledge_mcp)
+        - owlbear-memory (owlbear_memory_mcp)
         - owlbear-browser (owlbear_browser_mcp)
-      - microsoft/markitdown
+        - microsoft/markitdown
 
     Standalone entry point for callers that only need the MCP config written.
     Delegates to ``_write_mcp``.
@@ -1543,16 +1399,13 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def init(  # noqa: C901, PLR0913
+def init(  # noqa: C901
     target_dir: Path,
     owlbear_dir: Path,
     *,
     replace_hooks: bool = False,
     refresh_configs: bool = False,
     interactive: bool | None = None,
-    remote: str = "origin",
-    target_branch: str | None = None,
-    github_repository: str | None = None,
 ) -> None:
     """Initialise an OwlBear workspace in *target_dir*.
 
@@ -1571,9 +1424,6 @@ def init(  # noqa: C901, PLR0913
         replace_hooks: Overwrite differing existing hook runtime files.
         refresh_configs: Replace existing refreshable consumer configs from seed/.
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
-        remote: Git remote used for Delivery publication.
-        target_branch: Unqualified branch targeted by Delivery pull requests.
-        github_repository: Exact GitHub ``owner/name`` identity for publication.
     """
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
@@ -1660,13 +1510,6 @@ def init(  # noqa: C901, PLR0913
         _write_seed_file(src, dest, replacements)
         _record_seed_install(manifest, rel_posix, dest, created=created)
 
-    _write_delivery_config(
-        target_dir,
-        remote,
-        target_branch,
-        github_repository,
-        interactive=interactive_mode,
-    )
     _configure_copilot_profile(target_dir, interactive=interactive_mode)
     _write_install_manifest(manifest_path, manifest)
 
@@ -1678,7 +1521,6 @@ def _has_owlbear_surface(target_dir: Path) -> bool:
     return any(
         (target_dir / relative).exists()
         for relative in (
-            ".owlbear/delivery/config.json",
             ".owlbear/hooks/deny-writes.py",
             ".owlbear/.gitignore",
             ".vscode/mcp.json",
@@ -1845,22 +1687,6 @@ if __name__ == "__main__":  # pragma: no cover
         help="Report consumer lint/editor config drift without changing files.",
     )
     parser.add_argument(
-        "--remote",
-        default="origin",
-        metavar="NAME",
-        help="Use this Git remote for Delivery publication (default: origin).",
-    )
-    parser.add_argument(
-        "--target-branch",
-        metavar="BRANCH",
-        help="Use this target branch for Delivery pull requests (default: main).",
-    )
-    parser.add_argument(
-        "--github-repository",
-        metavar="OWNER/NAME",
-        help="Use this GitHub repository identity, or infer it from the configured remote.",
-    )
-    parser.add_argument(
         "--yes",
         action="store_true",
         help="Confirm an uninstall without prompting.",
@@ -1922,9 +1748,6 @@ if __name__ == "__main__":  # pragma: no cover
             _owlbear,
             replace_hooks=args.replace_hooks,
             refresh_configs=args.refresh_configs,
-            remote=args.remote,
-            target_branch=args.target_branch,
-            github_repository=args.github_repository,
         )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc

@@ -303,7 +303,7 @@
 ### Outbound links
 - [Project README](../README.md)
 - [Setup authority](../setup/setup-guide.md)
-- [Delivery MCP](../serve/delivery-mcp/README.md)
+- [Delivery engine](../serve/delivery-next)
 - [Delivery core](../serve/delivery/README.md)
 - [GitHub adapter](../serve/delivery-github/README.md)
 - [Cockpit](../serve/cockpit/README.md)
@@ -384,7 +384,7 @@
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
-- [serve/delivery-mcp/README.md](../serve/delivery-mcp/README.md)
+- [`delivery-v1-final` tag](https://github.com/maba-pag/owlbear/tree/delivery-v1-final/serve/delivery-mcp)
 
 ## serve/delivery-github/README.md
 - # `owlbear-delivery-github — GitHub Publication Adapter`
@@ -397,19 +397,6 @@
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
-
-## serve/delivery-mcp/README.md
-- # `owlbear-delivery-mcp — Delivery MCP Server`
-- ## `Launch / Usage`
-- ### `Tools`
-- ## `Configuration`
-- ### `External-head responses`
-- ## `Dependencies`
-
-### Outbound links
-- [serve/README.md](../serve/README.md)
-- [README.md](../README.md)
-- [core Delivery configuration reference](../serve/delivery/README.md#configuration)
 
 ## serve/delivery-next/DEMO-slice1.md
 - # `Delivery-next slice 1, phase B: live demonstration`
@@ -697,8 +684,6 @@
 - ## `Upgrading OwlBear`
 - ## `Uninstalling`
 - ## `Delivery Workflow`
-- ## `Portability and recovery`
-- ### `Pinned controller releases`
 - ## `Cockpit details`
 - ## `Project-Specific Customization`
 - ### `Adding local agents`
@@ -715,7 +700,6 @@
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
-- [Portability and recovery](../setup/operating-owlbear.md#portability-and-recovery)
 - [Cockpit details](../setup/operating-owlbear.md#cockpit-details)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [`seed/`](../seed)
@@ -723,7 +707,6 @@
 - [`serve/`](../serve/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
-- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
 ## setup/setup-guide.md
@@ -1275,4 +1258,4 @@
 
 ## share/diagrams/mcp-topology.svg
 source: share/diagrams/mcp-topology.architecture.json
-describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/delivery/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**
+describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**

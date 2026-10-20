@@ -23,7 +23,7 @@ worktrees/
 # Delivery migration staging, backups and archived journals (outside authoritative state)
 delivery-migrations/
 
-# Pinned Delivery controller releases, launchers and pin (delivery-controller)
+# Pinned old-engine Delivery controller releases, launchers and pin
 controller/
 
 # Lock files (transient runtime artifacts)

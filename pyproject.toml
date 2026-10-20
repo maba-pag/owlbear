@@ -47,7 +47,6 @@ src = [
   "serve/delivery-github/src",
   "serve/delivery-next/src",
   "serve/knowledge/src",
-  "serve/delivery-mcp/src",
   "serve/knowledge-mcp/src",
   "serve/memory-mcp/src",
   "serve/browser-mcp/src",
@@ -90,9 +89,6 @@ ignore = [
 ]
 "serve/browser/src/owlbear_browser/_errors.py" = [
   "N818",   # AuthenticationRequired is an established public API name
-]
-"serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py" = [
-  "N818",   # DeliveryStartupDiagnostic is an established public API name
 ]
 ".owlbear/scripts/*.py" = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
@@ -165,7 +161,6 @@ source_pkgs = [
   "owlbear_delivery_github",
   "owlbear_knowledge",
   "owlbear_browser_mcp",
-  "owlbear_delivery_mcp",
   "owlbear_knowledge_mcp",
   "owlbear_memory_mcp",
   "owlbear_browser",

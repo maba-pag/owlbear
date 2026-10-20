@@ -4,32 +4,24 @@
   "meta": {
     "title": "OwlBear MCP Topology",
     "output": "share/diagrams/mcp-topology.html",
-    "subtitle": "Five seeded stdio servers; configuration and implementations remain authoritative.",
+    "subtitle": "Four seeded stdio servers; configuration and implementations remain authoritative.",
     "quality_profile": "showcase",
-    "viewBox": [1390, 680]
+    "viewBox": [1110, 680]
   },
   "components": [
     {
       "id": "copilot",
       "type": "frontend",
       "label": "VS Code Copilot Agents",
-      "pos": [550, 80],
+      "pos": [270, 80],
       "size": [300, 80]
-    },
-    {
-      "id": "delivery_mcp",
-      "type": "backend",
-      "label": "Delivery MCP",
-      "sublabel": "uv stdio",
-      "pos": [50, 260],
-      "size": [200, 80]
     },
     {
       "id": "knowledge_mcp",
       "type": "backend",
       "label": "Knowledge MCP",
       "sublabel": "uv stdio",
-      "pos": [330, 260],
+      "pos": [50, 260],
       "size": [200, 80]
     },
     {
@@ -37,7 +29,7 @@
       "type": "backend",
       "label": "Memory MCP",
       "sublabel": "stdio",
-      "pos": [600, 260],
+      "pos": [320, 260],
       "size": [200, 80]
     },
     {
@@ -45,7 +37,7 @@
       "type": "backend",
       "label": "Browser MCP",
       "sublabel": "stdio",
-      "pos": [890, 260],
+      "pos": [610, 260],
       "size": [200, 80]
     },
     {
@@ -53,23 +45,15 @@
       "type": "external",
       "label": "MarkItDown",
       "sublabel": "uvx stdio",
-      "pos": [1160, 260],
+      "pos": [880, 260],
       "size": [200, 80]
-    },
-    {
-      "id": "delivery_core",
-      "type": "backend",
-      "label": "Delivery core",
-      "sublabel": "change authority and recovery",
-      "pos": [50, 450],
-      "size": [200, 100]
     },
     {
       "id": "knowledge_core",
       "type": "backend",
       "label": "Knowledge core",
       "sublabel": "search, ingest, enrichment",
-      "pos": [330, 450],
+      "pos": [50, 450],
       "size": [200, 100]
     },
     {
@@ -77,7 +61,7 @@
       "type": "database",
       "label": "Memory store",
       "sublabel": "file-backed scoped entries",
-      "pos": [600, 450],
+      "pos": [320, 450],
       "size": [200, 100]
     },
     {
@@ -85,7 +69,7 @@
       "type": "backend",
       "label": "Browser core",
       "sublabel": "CDP acquisition",
-      "pos": [890, 450],
+      "pos": [610, 450],
       "size": [200, 100]
     },
     {
@@ -93,7 +77,7 @@
       "type": "external",
       "label": "Document converter",
       "sublabel": "external uvx tool",
-      "pos": [1160, 450],
+      "pos": [880, 450],
       "size": [200, 100]
     }
   ],
@@ -101,26 +85,23 @@
     {
       "kind": "region",
       "label": "MCP server processes",
-      "wraps": ["delivery_mcp", "knowledge_mcp", "memory_mcp", "browser_mcp", "markitdown_mcp"]
+      "wraps": ["knowledge_mcp", "memory_mcp", "browser_mcp", "markitdown_mcp"]
     },
     {
       "kind": "region",
       "label": "OwlBear backing surfaces",
-      "wraps": ["delivery_core", "knowledge_core", "memory_core", "browser_core", "markitdown_core"]
+      "wraps": ["knowledge_core", "memory_core", "browser_core", "markitdown_core"]
     }
   ],
   "connections": [
     {
-      "id": "copilot_delivery",
-      "from": "copilot",
-      "to": "delivery_mcp",
-      "variant": "emphasis"
-    },
-    {
       "id": "copilot_knowledge",
       "from": "copilot",
       "to": "knowledge_mcp",
-      "variant": "emphasis"
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v"
     },
     {
       "id": "copilot_memory",
@@ -143,7 +124,6 @@
       "to": "markitdown_mcp",
       "variant": "emphasis"
     },
-    { "id": "delivery_binding", "from": "delivery_mcp", "to": "delivery_core" },
     {
       "id": "knowledge_binding",
       "from": "knowledge_mcp",

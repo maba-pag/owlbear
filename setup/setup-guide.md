@@ -60,21 +60,11 @@ supported consumer surface.
 uv run --project ../owlbear python ../owlbear/setup/init.py
 ```
 
-If the project has a GitHub `origin`, setup infers the repository identity. In an interactive run,
-the target-branch prompt suggests the currently checked-out branch, or `main` when no branch is
-available; noninteractive setup uses `main`. Use `--remote`, `--target-branch`, or
-`--github-repository OWNER/PROJECT` only when you need an explicit override. Interactive setup may
-also ask about differing hook files and, on macOS, user-local Copilot profile settings.
+Interactive setup may ask about differing hook files and, on macOS, user-local Copilot profile
+settings.
 
-When the project has no inferable GitHub remote, rerun the command with the repository identity:
-
-```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py \
-  --github-repository OWNER/PROJECT
-```
-
-**Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json`, writes
-tracked `.owlbear/delivery/config.json`, and copies the project-local hooks and runtime templates.
+**Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json` and
+copies the project-local hooks and runtime templates.
 The complete inventory is in
 [What Setup Creates](operating-owlbear.md#what-setup-creates).
 
@@ -92,7 +82,7 @@ agents, skills, instructions, and prompts are loaded from the sibling OwlBear pa
 Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact checks are in
 [Verify the installation](#verify-the-installation).
 
-**Expected result:** the five seeded MCP server processes are running and the shared OwlBear
+**Expected result:** the four seeded MCP server processes are running and the shared OwlBear
 customization roots appear in Chat Customizations. Browser capability readiness is a separate
 check below because it also depends on the selected browser and its allowlist.
 
@@ -277,11 +267,6 @@ Cockpit's old Delivery view; see [Delivery Workflow](operating-owlbear.md#delive
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
-| `owlbear-delivery` refuses to start with `state-migration-required` | The OwlBear checkout moved to a release that needs a newer Delivery state format | The old Delivery engine is retired, and its `/repair-delivery` prompt with it; use the new Delivery engine's Changes page |
-| `owlbear-delivery` refuses to start with `state-newer-than-controller` | The OwlBear checkout is older than the project's Delivery state | Move the checkout forward with **Run updates now** on the new Delivery engine's pages; going back needs the upgrade backup restored first |
-| Delivery reports that remote Delivery-state snapshots are unavailable | The configured `delivery_state_branch` cannot be read from the configured remote | Verify remote access and the tracked branch name, then retry from the project root; do not copy hidden refs or ignored runtime files |
-| Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention, and resolve the exact divergence before acquisition |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
 | Cockpit shows another project's memory or ideas | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |

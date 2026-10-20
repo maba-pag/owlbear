@@ -14,9 +14,8 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 ## Launch / Usage
 
 The package has no standalone service. Embedded callers use its public stores, runtimes, and
-`PortfolioApplication`; agent clients use the `owlbear-delivery-mcp` adapter documented in
-[serve/delivery-mcp/README.md](../delivery-mcp/README.md). The adapter is the public tool and startup
-configuration reference.
+`PortfolioApplication`; its `owlbear-delivery-mcp` adapter is retired and kept at the
+[`delivery-v1-final` tag](https://github.com/maba-pag/owlbear/tree/delivery-v1-final/serve/delivery-mcp).
 
 The main public areas are:
 

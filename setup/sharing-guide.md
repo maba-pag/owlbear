@@ -57,12 +57,9 @@ code .
 **Expected result:** VS Code opens `~/Dev/my-project` with the shared OwlBear customization roots
 available.
 
-Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
-different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
-
 After VS Code opens, have the teammate follow the canonical
 [installation verification](setup-guide.md#verify-the-installation). It checks both the shared
-customization roots and all five seeded MCP servers. Before the first workflow, also run
+customization roots and all four seeded MCP servers. Before the first workflow, also run
 `gh auth status` and confirm an active account.
 
 To launch Cockpit for the shared project, run it from the project directory and point uv
