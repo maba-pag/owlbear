@@ -118,8 +118,8 @@ The optional SSO extension is used only by Chromium startup. The core launcher r
 | `owlbear-browser` | Playwright-based content fetcher (workspace package) |
 
 > **First-time setup:** Install Playwright Chromium with
-> `uv run --project ../owlbear playwright install chromium` when selecting Chromium mode or running
-> Cockpit browser-backed tests. Managed Edge uses stable Microsoft Edge already installed on macOS.
+> `uv run --project ../owlbear playwright install chromium` when selecting Chromium mode.
+> Managed Edge uses stable Microsoft Edge already installed on macOS.
 
 Both tools now apply the same MCP-side policy before delegating to Playwright. Exact allowlist
 entries are the explicit approval for private, loopback, or link-local results from that hostname;

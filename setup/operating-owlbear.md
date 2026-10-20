@@ -16,7 +16,6 @@ the [sharing guide](sharing-guide.md).
 | Understand what an OwlBear update changes in the agent workspace | [Shared vs Copied](#shared-vs-copied) |
 | Replace seeded editor and lint configuration | [Refreshing Consumer Configs](#refreshing-consumer-configs) |
 | Remove OwlBear | [Uninstalling](#uninstalling) |
-| Launch Cockpit for a project's local memory and ideas | [Cockpit details](#cockpit-details) |
 | Add project-local agents, instructions, or servers | [Project-Specific Customization](#project-specific-customization) |
 
 ---
@@ -296,32 +295,6 @@ The other pages serve the same projects:
 | Memory | Agent memory per project and Global memory that every project's agents read |
 | Settings | Settings for this project, this machine, and all projects |
 | Maintenance | Maintenance actions and their runs, such as the test review, and agent use |
-
----
-
-## Cockpit details
-
-Cockpit is an optional, separate browser UI for one project's local `.owlbear/memory/` and
-`.owlbear/ideas.md` files. It runs from the OwlBear runtime and needs its frontend bundle
-built once ([Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)). Launch it from the
-project root.
-
-1. Open a terminal in the project directory.
-
-   Expected outcome: `pwd` or `$PWD` points to your project, not `~/.owlbear/runtime`.
-
-2. Start Cockpit through the OwlBear runtime alias.
-
-   ```shell
-   uv run --project ~/.owlbear/runtime cockpit
-   ```
-
-    Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
-    Memory workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
-
-    uv resolves the `cockpit` command from owlbear while Cockpit keeps the current project
-    directory as its runtime working directory. If you run the command from somewhere else,
-    add `--directory /path/to/project`.
 
 ---
 

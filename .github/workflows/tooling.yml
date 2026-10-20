@@ -28,10 +28,9 @@ jobs:
       - name: Fingerprint inputs
         id: fingerprint
         run: |
-          value="$(git ls-files -s -- .github .pre-commit-config.yaml .python-version \
+          value="$(git ls-files -s -- .github .pre-commit-config.yaml .python-version .nvmrc \
             .owlbear/scripts/diagrams share/diagrams biome.json package.json package-lock.json \
-            pyproject.toml ':(glob)serve/*/pyproject.toml' serve/cockpit/web/.nvmrc \
-            serve/cockpit/web/package.json serve/cockpit/web/package-lock.json \
+            pyproject.toml ':(glob)serve/*/pyproject.toml' \
             serve/tools/src/owlbear_tools/dependency_ci.py tests/test_archify_diagrams.py \
             tests/test_dependency_verification_workflow.py uv.lock | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
@@ -60,7 +59,7 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             : > "$RUNNER_TEMP/tooling-paths"
             for output in \
-              python node shared_node_runtime root_node diagrams pds precommit \
+              python shared_node_runtime root_node diagrams precommit \
               ruff_toolchain workflows renovate applicable compatibility
             do
               echo "$output=true" >> "$GITHUB_OUTPUT"
@@ -70,10 +69,8 @@ jobs:
             if [[ "$EVENT_NAME" == "push" ]]; then BASE_SHA="$(git rev-parse "$HEAD_SHA^1")"; fi
             MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
             git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/tooling-paths"
-            git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/tooling.diff"
             python3 serve/tools/src/owlbear_tools/dependency_ci.py \
               --paths-file "$RUNNER_TEMP/tooling-paths" \
-              --diff-file "$RUNNER_TEMP/tooling.diff" \
               --base-ref "$MERGE_BASE" \
               --head-ref "$HEAD_SHA" \
               --repository-root "$GITHUB_WORKSPACE" \
@@ -104,8 +101,8 @@ jobs:
               .github/renovate.json|\
               .github/scripts/check_ruff_toolchain.py|\
               biome.json|\
-              serve/cockpit/web/package.json|\
-              serve/cockpit/web/package-lock.json|\
+              package.json|\
+              package-lock.json|\
               serve/tools/src/owlbear_tools/dependency_ci.py|\
               tests/test_dependency_verification_workflow.py)
                 proof_tooling=true
@@ -155,26 +152,23 @@ jobs:
       - name: Setup Node.js
         if: >-
           steps.reuse.outputs.cache-hit != 'true' &&
-          (steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true' ||
-          steps.scope.outputs.root_node == 'true' || steps.scope.outputs.diagrams == 'true' ||
-          steps.scope.outputs.pds == 'true')
+          (steps.scope.outputs.shared_node_runtime == 'true' || steps.scope.outputs.root_node == 'true' ||
+          steps.scope.outputs.diagrams == 'true')
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version-file: serve/cockpit/web/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            serve/cockpit/web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Check Node runtime declaration
         if: >-
           steps.reuse.outputs.cache-hit != 'true' &&
-          (steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true')
+          (steps.scope.outputs.root_node == 'true' || steps.scope.outputs.shared_node_runtime == 'true')
         run: |
           python3 .github/scripts/check_node_runtime.py \
-            --version-file serve/cockpit/web/.nvmrc \
-            --engines-file serve/cockpit/web/package.json \
-            --expected-version "$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
+            --version-file .nvmrc \
+            --engines-file package.json \
+            --expected-version "$(tr -d '\r\n' < .nvmrc)"
 
       - name: Install locked root dependencies
         if: >-
@@ -231,19 +225,6 @@ jobs:
             fi
             diagram_index=$((diagram_index + 1))
           done < "$RUNNER_TEMP/archify-diagrams.tsv"
-
-      - name: Install locked Cockpit dependencies
-        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.pds == 'true'
-        run: npm ci --prefix serve/cockpit/web --engine-strict --no-audit --no-fund
-
-      - name: Verify generated PDS assets
-        if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.pds == 'true'
-        working-directory: serve/cockpit/web
-        run: |
-          npm run sync:pds
-          git status --porcelain --untracked-files=all -- public/porsche-design-system \
-            | tee "$RUNNER_TEMP/pds-status"
-          test ! -s "$RUNNER_TEMP/pds-status"
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'

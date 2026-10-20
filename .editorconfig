@@ -35,14 +35,6 @@ max_line_length = unset
 [.owlbear/delivery/packages/**]
 max_line_length = unset
 
-# Generated Porsche Design System assets — minified vendor output
-[serve/cockpit/web/public/porsche-design-system/**]
-end_of_line = unset
-indent_size = unset
-insert_final_newline = false
-max_line_length = unset
-trim_trailing_whitespace = false
-
 # Vendored Porsche Design System loader and stylesheet for the delivery-next Changes page — minified vendor output
 [serve/delivery-next/src/owlbear_delivery_next/web/pds/**]
 max_line_length = unset

@@ -12,19 +12,15 @@ import pytest
 
 from owlbear_tools import testing as testing_module
 from owlbear_tools.testing import _commands_for_paths, _require_development_checkout
-from owlbear_tools.testing import test_e2e_main as run_test_e2e
 from owlbear_tools.testing import test_main as run_test
 
 _ROOT = Path(__file__).resolve().parents[3]
-_WEB = _ROOT / "serve/cockpit/web"
 
 
 def test_python_source_routes_to_owning_package_tests() -> None:
     commands = _commands_for_paths(
         ["serve/tools/src/owlbear_tools/commands.py"],
         all_tests=False,
-        python_only=False,
-        web_only=False,
         coverage=False,
     )
 
@@ -53,7 +49,7 @@ _PAGE = "serve/delivery-next/src/owlbear_delivery_next/web/config.html"
 
 
 def _routed(*paths: str, coverage: bool = False) -> list[list[str]]:
-    commands = _commands_for_paths(list(paths), all_tests=False, python_only=False, web_only=False, coverage=coverage)
+    commands = _commands_for_paths(list(paths), all_tests=False, coverage=coverage)
     return [command for command, _cwd in commands]
 
 
@@ -168,54 +164,21 @@ def test_hook_source_routes_guard_tests() -> None:
 
 
 def test_deleted_test_path_falls_back_to_full_python_suite() -> None:
-    commands = _commands_for_paths(
-        ["tests/test_deleted.py"],
-        all_tests=False,
-        python_only=False,
-        web_only=False,
-        coverage=False,
-    )
+    commands = _commands_for_paths(["tests/test_deleted.py"], all_tests=False, coverage=False)
 
     assert commands == [(["uv", "run", "--locked", "pytest", "tests", "serve"], _ROOT)]
 
 
-def test_frontend_source_routes_to_vitest() -> None:
-    commands = _commands_for_paths(
-        ["serve/cockpit/web/src/App.tsx"],
-        all_tests=False,
-        python_only=False,
-        web_only=False,
-        coverage=False,
-    )
-
-    assert commands == [(["npm", "test"], _WEB)]
-
-
 def test_markdown_outside_shared_roots_needs_no_test_scope() -> None:
-    commands = _commands_for_paths(
-        ["README.md"],
-        all_tests=False,
-        python_only=False,
-        web_only=False,
-        coverage=False,
-    )
+    commands = _commands_for_paths(["README.md"], all_tests=False, coverage=False)
 
     assert commands == []
 
 
-def test_all_runs_python_and_frontend_suites_with_coverage() -> None:
-    commands = _commands_for_paths(
-        [],
-        all_tests=True,
-        python_only=False,
-        web_only=False,
-        coverage=True,
-    )
+def test_all_runs_the_python_suite_with_coverage() -> None:
+    commands = _commands_for_paths([], all_tests=True, coverage=True)
 
-    assert commands == [
-        (["uv", "run", "--locked", "pytest", "tests", "serve", "--cov"], _ROOT),
-        (["npm", "test", "--", "--coverage"], _WEB),
-    ]
+    assert commands == [(["uv", "run", "--locked", "pytest", "tests", "serve", "--cov"], _ROOT)]
 
 
 def test_docs_only_paths_exit_without_running_tests(capsys: pytest.CaptureFixture[str]) -> None:
@@ -230,24 +193,20 @@ def test_docs_only_paths_exit_without_running_tests(capsys: pytest.CaptureFixtur
     assert "No test scope matched" in capsys.readouterr().out
 
 
-def test_no_paths_runs_all_suites() -> None:
+def test_no_paths_runs_the_full_suite() -> None:
     with (
         patch.object(sys, "argv", ["test"]),
-        patch("owlbear_tools.testing.subprocess.call", side_effect=[0, 0]) as call,
+        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
         run_test()
 
-    assert [item.args for item in call.call_args_list] == [
-        (["uv", "run", "--locked", "pytest", "tests", "serve"],),
-        (["npm", "test"],),
-    ]
-    assert [item.kwargs for item in call.call_args_list] == [{"cwd": _ROOT}, {"cwd": _WEB}]
+    call.assert_called_once_with(["uv", "run", "--locked", "pytest", "tests", "serve"], cwd=_ROOT)
 
 
 def test_changed_runs_git_scope_and_accepts_explicit_base() -> None:
     with (
-        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev", "--py"]),
+        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev"]),
         patch(
             "owlbear_tools.testing._changed_paths", return_value=["serve/tools/src/owlbear_tools/commands.py"]
         ) as changed_paths,
@@ -264,7 +223,7 @@ def test_changed_runs_git_scope_and_accepts_explicit_base() -> None:
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
     with (
-        patch.object(sys, "argv", ["test", "--changed", "--py"]),
+        patch.object(sys, "argv", ["test", "--changed"]),
         patch(
             "owlbear_tools.testing._changed_paths",
             side_effect=testing_module._ChangedScopeError("missing upstream"),  # noqa: SLF001
@@ -277,34 +236,17 @@ def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() 
     assert call.call_args.args[0] == ["uv", "run", "--locked", "pytest", "tests", "serve"]
 
 
-def test_failures_are_aggregated_across_all_suites() -> None:
+def test_failures_are_aggregated_across_all_commands() -> None:
+    commands = [(["uv", "run", "pytest", "a"], _ROOT), (["uv", "run", "pytest", "b"], _ROOT)]
     with (
         patch.object(sys, "argv", ["test", "--all"]),
+        patch("owlbear_tools.testing._commands_for_paths", return_value=commands),
         patch("owlbear_tools.testing.subprocess.call", side_effect=[1, 0]) as call,
         pytest.raises(SystemExit, match="1"),
     ):
         run_test()
 
     assert call.call_count == 2
-
-
-@pytest.mark.parametrize(
-    ("argv", "expected"),
-    [
-        (["test-e2e"], ["npm", "run", "test:e2e"]),
-        (["test-e2e", "--all"], ["npm", "run", "test:e2e:all"]),
-        (["test-e2e", "work.spec.ts"], ["npm", "run", "test:e2e", "--", "work.spec.ts"]),
-    ],
-)
-def test_e2e_delegates_to_root_npm_scripts(argv: list[str], expected: list[str]) -> None:
-    with (
-        patch.object(sys, "argv", argv),
-        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        run_test_e2e()
-
-    call.assert_called_once_with(expected, cwd=_ROOT)
 
 
 def test_commands_reject_consumer_checkouts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

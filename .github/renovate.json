@@ -88,13 +88,6 @@
       "automerge": false
     },
     {
-      "description": "Review Porsche Design System updates with refreshed self-hosted assets",
-      "matchManagers": ["npm"],
-      "matchPackageNames": ["@porsche-design-system/components-js", "@porsche-design-system/components-react"],
-      "addLabels": ["cockpit", "pds"],
-      "automerge": false
-    },
-    {
       "description": "Review Archify release asset and digest updates",
       "matchManagers": ["custom.regex"],
       "matchDatasources": ["github-release-attachments"],
@@ -109,20 +102,6 @@
       "minimumReleaseAge": "72 hours",
       "prCreation": "immediate",
       "automerge": false
-    },
-    {
-      "description": "Keep Porsche Design System major versions coupled",
-      "matchManagers": ["npm"],
-      "matchPackageNames": ["@porsche-design-system/components-js", "@porsche-design-system/components-react"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "Porsche Design System major updates"
-    },
-    {
-      "description": "Keep Vite and its build plugins coupled on major updates",
-      "matchManagers": ["npm"],
-      "matchPackageNames": ["vite", "@vitejs/plugin-react", "@rolldown/plugin-babel", "babel-plugin-react-compiler"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "Vite major updates"
     }
   ],
   "pre-commit": {

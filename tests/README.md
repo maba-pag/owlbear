@@ -10,8 +10,8 @@ ecosystem. It is development evidence, not a runtime package.
 - `benchmarks/` is reserved for benchmark support; it currently contains only package scaffolding.
 
 Package-specific tests stay beside the implementation under `serve/*/tests/`, including the
-Delivery engine's under `serve/delivery-next/tests/`. Cockpit frontend tests live under
-`serve/cockpit/web/`. Those package-local tests follow their package's toolchain; this directory
+Delivery engine's under `serve/delivery-next/tests/`. Those package-local tests follow their
+package's toolchain; this directory
 does not replace them.
 
 ## Run the suite

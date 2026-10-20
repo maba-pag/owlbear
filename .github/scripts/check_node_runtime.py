@@ -1,4 +1,4 @@
-"""Validate the checked-in Node runtime against the Cockpit lower bound."""
+"""Validate the checked-in Node runtime against the workspace lower bound."""
 
 from __future__ import annotations
 

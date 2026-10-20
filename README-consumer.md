@@ -157,7 +157,6 @@ once; `owlbear versions` shows the version it runs and the next one. See
 | Memory | Available | Durable, scoped agent knowledge that carries across sessions and projects |
 | Knowledge | Alpha | Searchable documents and knowledge graphs; needs field validation |
 | Browser | Alpha | Authenticated web acquisition; needs field validation |
-| Cockpit | Optional | A separate browser view of one project's local memory and ideas files; needs a Node build |
 
 ## Learn more
 

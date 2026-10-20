@@ -116,6 +116,25 @@ def test_the_owner_approves_edits_and_deletes_and_each_action_is_committed(share
     assert log == [f"memory {store.name}: edit Run ruff before tests", f"memory {store.name}: approve Run ruff first"]
 
 
+def test_purge_removes_only_old_deleted_entries_and_publishes_their_removal(shared):
+    root, remote, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    gone, kept = seed(folder, "Old lesson", curated=True), seed(folder, "Still used", curated=True)
+    c = client(store)
+    approved = c.post(f"/api/next/memory/{gone.id}/approve", json={"updated_at": gone.updated_at}).json()["entry"]
+    c.post(f"/api/next/memory/{gone.id}/delete", json={"updated_at": approved["updated_at"]})
+
+    recent = c.post("/api/next/memory/purge", json={}).json()
+    purged = c.post("/api/next/memory/purge", json={"min_age_days": 0}).json()
+
+    assert (recent["purged"], recent["skipped"], recent["notice"]) == (0, 1, "")
+    assert (purged["purged"], purged["skipped"], purged["failed"]) == (1, 0, 0)
+    assert [p.stem for p in folder.glob("*.md")] == [kept.id]
+    assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: purge 1 deleted"
+    assert c.post("/api/next/memory/purge", json={"min_age_days": -1}).status_code == 422
+
+
 def test_refused_memory_actions_say_why(shared):
     root, _, repo = shared
     store = Store.open(repo)
@@ -167,6 +186,22 @@ def test_a_duplicate_repair_publishes_every_file_it_touched(shared):
     assert approved.status_code == 200
     assert len(git(root, "show", "--name-only", "--format=", "HEAD").splitlines()) > 1
     assert git(root, "status", "--porcelain") == f"?? {store.name}/memory/{other.id}.md"
+
+
+def test_a_purge_publishes_what_its_duplicate_repair_touched(shared):
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    curated = seed(folder, "Run ruff first", curated=True)
+    (folder / "copy.md").write_text((folder / f"{curated.id}.md").read_text().replace("what to know", "a twin"))
+    git(root, "add", "--", f"{store.name}/memory")
+    git(root, "commit", "-qm", "differing duplicates")
+    git(root, "push", "-q")
+
+    purged = client(store).post("/api/next/memory/purge", json={})
+
+    assert purged.status_code == 200
+    assert git(root, "status", "--porcelain") == ""  # the repair's files are published with it
 
 
 def test_no_agent_can_write_the_memory_until_the_owners_action_is_published(shared, monkeypatch):
@@ -319,6 +354,37 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
         page.get_by_role("button", name="Save").click()
         expect(page.locator("#status")).to_have_text('Saved "Name the release after its tag".')
     assert {e.id: e.title for e in MemoryEngine(folder).get_entries()}[above.id] == "Name the release after its tag"
+
+
+@pytest.mark.browser
+def test_the_deleted_section_removes_entries_deleted_long_ago(shared):
+    """TD-416: the Memory page's purge; only entries deleted 30 days ago or earlier go."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    engine = MemoryEngine(folder)
+    for title in ("Old lesson", "Old process", "Recent lesson"):
+        entry = seed(folder, title, curated=True)
+        if title == "Old process":  # hidden by the category filter below, but removed all the same
+            entry = engine.edit(entry.id, {"categories": [MemoryCategory.PROCESS]}, expected_revision=entry.revision)
+        approved = engine.approve(entry.id, entry.updated_at)
+        engine.delete(entry.id, approved.updated_at)
+    for title in ("Old lesson", "Old process"):
+        old = next(p for p in folder.glob("*.md") if f"title: {title}" in p.read_text())
+        stamp = next(e.updated_at for e in MemoryEngine(folder).get_entries() if e.title == title)
+        old.write_text(old.read_text().replace(stamp, "2020-01-01T00:00:00+00:00"))
+    with memory_page(store) as page:
+        page.get_by_label("State").select_option("any")
+        page.get_by_label("Category").select_option("pitfall")
+        deleted = page.locator("section", has_text="Deleted (history kept)")
+        expect(deleted.locator(".entry")).to_have_count(2)
+        deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 30 days from {store.name}").click()
+        page.locator("dialog").get_by_role("button", name="Remove them").click()
+        expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
+        expect(deleted.locator(".entry")).to_have_count(1)
+    assert [e.title for e in MemoryEngine(folder).get_entries()] == ["Recent lesson"]
 
 
 @pytest.mark.browser

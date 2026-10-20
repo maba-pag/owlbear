@@ -52,7 +52,7 @@ _P01_SHARED_EXCLUDED_PATHS = (
 )
 _P01_SHARED_INCLUDED_PATHS = (
     "src/example.py",
-    ".owlbear/ideas.md",
+    ".owlbear/README.md",
     "store/audit/history.txt",
     "generated/output.txt",
 )
@@ -62,7 +62,7 @@ _P08_JSON_SCOPE_SAMPLES = (
     (".vscode/settings.json", True),
     (".vscode/mcp.json", True),
     (".markdownlint-cli2.jsonc", True),
-    ("serve/cockpit/web/src/App.tsx", False),
+    ("serve/delivery-next/src/owlbear_delivery_next/web/ui.mjs", False),
 )
 _M04_ALLOWED_ELEMENTS = [
     "agents",
@@ -105,14 +105,6 @@ _X04_FORMATTERS = {
     "[toml]": "tamasfe.even-better-toml",
     "[xml]": "redhat.vscode-xml",
 }
-_P06_TYPECHECK_SCOPE = r"^serve/cockpit/web/(src/.*\.(ts|tsx)|vite\.config\.ts|vitest\.setup\.ts)$"
-_P06_SCOPE_SAMPLES = (
-    ("serve/cockpit/web/src/CockpitShell.tsx", True),
-    ("serve/cockpit/web/vite.config.ts", True),
-    ("serve/cockpit/web/vitest.setup.ts", True),
-    ("serve/cockpit/web/e2e/smoke.spec.ts", False),
-    ("serve/cockpit/web/playwright.config.ts", False),
-)
 
 
 def _normalize_pattern(pattern: str, *, cli2: bool) -> str:
@@ -349,25 +341,15 @@ def test_precommit_exclusion_taxonomy() -> None:
 def test_biome_replaces_frontend_and_json_scanners() -> None:
     root_package = json.loads((_ROOT / "package.json").read_text(encoding="utf-8"))
     assert isinstance(root_package, dict)
-    root_scripts = root_package.get("scripts")
-    assert isinstance(root_scripts, dict)
-    assert "lint:json" not in root_scripts
+    assert "lint:json" not in root_package.get("scripts", {})
     assert not (_ROOT / "scripts/lint-json.mjs").exists()
-
-    package = json.loads((_ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
-    assert isinstance(package, dict)
-    dependencies = package.get("devDependencies")
-    scripts = package.get("scripts")
+    dependencies = root_package.get("devDependencies")
     assert isinstance(dependencies, dict)
-    assert isinstance(scripts, dict)
-    assert "@eslint/json" not in dependencies
-    assert "eslint" not in dependencies
-    assert "stylelint" not in dependencies
-    assert "typescript-eslint" not in dependencies
-    assert "lint:css" not in scripts
+    assert "@biomejs/biome" in dependencies
+    assert not {"@eslint/json", "eslint", "stylelint", "typescript-eslint"} & set(dependencies)
 
     precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    biome_hook = precommit_hooks["biome-frontend-check"]
+    biome_hook = precommit_hooks["biome-check"]
     assert biome_hook.get("pass_filenames", True) is True
     assert "stages" not in biome_hook
     assert "check --write" in biome_hook.get("entry", "")
@@ -404,23 +386,14 @@ def test_biome_json_scope_excludes_generated_and_machine_managed_paths() -> None
 
 @pytest.fixture
 def biome_workspace(tmp_path: Path) -> Path:
-    package = Path("serve/cockpit/web")
-    dependencies = _ROOT / package / "node_modules"
-    if shutil.which("node") is None or not (dependencies / "@biomejs/biome/bin/biome").exists():
-        pytest.skip("Cockpit Node dependencies are required for Biome integration checks")
-    for relative in (
-        Path("biome.json"),
-        Path(".editorconfig"),
-        Path(".gitignore"),
-        Path(".owlbear/.gitignore"),
-        package / "scripts/run-biome-check.mjs",
-        package / "plugins/pds-component-wrappers.grit",
-    ):
+    if shutil.which("node") is None or not (_ROOT / quality.BIOME).exists():
+        pytest.skip("Root Node dependencies are required for Biome integration checks")
+    for relative in (Path("biome.json"), Path(".editorconfig"), Path(".gitignore"), Path(".owlbear/.gitignore")):
         destination = tmp_path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(_ROOT / relative, destination)
-    (tmp_path / package / "node_modules").symlink_to(dependencies, target_is_directory=True)
-    hook = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))["biome-frontend-check"]
+    (tmp_path / "node_modules").symlink_to(_ROOT / "node_modules", target_is_directory=True)
+    hook = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))["biome-check"]
     (tmp_path / ".pre-commit-config.yaml").write_text(
         yaml.safe_dump({"repos": [{"repo": "local", "hooks": [hook]}]}), encoding="utf-8"
     )
@@ -430,19 +403,19 @@ def biome_workspace(tmp_path: Path) -> Path:
 
 def _biome_probe(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
-        ["node", str(root / "serve/cockpit/web/scripts/run-biome-check.mjs"), *arguments],  # noqa: S607
-        cwd=root / "serve/cockpit/web",
+        ["node", str(root / quality.BIOME), *arguments],  # noqa: S607
+        cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
 
 
-@pytest.mark.cockpit
+@pytest.mark.biome
 def test_biome_applies_width_and_excludes_generated_json(biome_workspace: Path) -> None:
-    source = biome_workspace / "serve/cockpit/web/vite.config.ts"
-    expected = "export const settings = { alpha: 123456789, beta: 123456789, gamma: 123456789, delta: 123456789 };\n"
-    source.write_text(expected.replace(" = ", "="), encoding="utf-8")
+    source = biome_workspace / "settings.json"
+    expected = '{ "alpha": 123456789, "beta": 123456789, "gamma": 123456789, "delta": 123456789, "epsilon": 1 }\n'
+    source.write_text(expected.replace(" ", ""), encoding="utf-8")
     for relative in ("nested/build/broken.json", "scratch/broken.json", ".owlbear/research/broken.json"):
         ignored = biome_workspace / relative
         ignored.parent.mkdir(parents=True, exist_ok=True)
@@ -451,45 +424,45 @@ def test_biome_applies_width_and_excludes_generated_json(biome_workspace: Path) 
     assert result.returncode == 0, result.stderr
     assert source.read_text(encoding="utf-8") == expected
     assert _biome_probe(biome_workspace, "ci", ".").returncode == 0
-    source.write_text("export const broken = ;", encoding="utf-8")
+    source.write_text("{broken", encoding="utf-8")
     assert _biome_probe(biome_workspace, "check", ".").returncode == 1
 
 
-@pytest.mark.cockpit
+@pytest.mark.biome
 def test_biome_staged_checks_handle_empty_ignored_and_invalid_files(biome_workspace: Path) -> None:
     arguments = ("check", "--staged", "--no-errors-on-unmatched")
     assert _biome_probe(biome_workspace, *arguments).returncode == 0
-    lockfile = biome_workspace / "serve/cockpit/web/package-lock.json"
+    lockfile = biome_workspace / "package-lock.json"
     lockfile.write_text("{}\n", encoding="utf-8")
     subprocess.run(["git", "add", str(lockfile)], cwd=biome_workspace, check=True)  # noqa: S603, S607
     assert _biome_probe(biome_workspace, *arguments).returncode == 0
-    source = biome_workspace / "serve/cockpit/web/playwright.config.ts"
-    source.write_text("export const broken = ;", encoding="utf-8")
+    source = biome_workspace / "settings.json"
+    source.write_text("{broken", encoding="utf-8")
     subprocess.run(["git", "add", str(source)], cwd=biome_workspace, check=True)  # noqa: S603, S607
     assert _biome_probe(biome_workspace, *arguments).returncode == 1
-    assert source.read_text(encoding="utf-8") == "export const broken = ;"
+    assert source.read_text(encoding="utf-8") == "{broken"
 
 
-@pytest.mark.cockpit
+@pytest.mark.biome
 def test_biome_precommit_fixes_only_selected_files(biome_workspace: Path) -> None:
-    selected = "serve/cockpit/web/vite.config.ts"
-    other = "serve/cockpit/web/playwright.config.ts"
+    selected = "selected.json"
+    other = "other.json"
     for relative in (selected, other):
-        (biome_workspace / relative).write_text("export const value=1;\n", encoding="utf-8")
+        (biome_workspace / relative).write_text('{"value":1}\n', encoding="utf-8")
     subprocess.run(["git", "add", selected, other], cwd=biome_workspace, check=True)  # noqa: S603, S607
-    command = [sys.executable, "-m", "pre_commit", "run", "biome-frontend-check"]
+    command = [sys.executable, "-m", "pre_commit", "run", "biome-check"]
     result = subprocess.run(  # noqa: S603
         [*command, "--files", selected], cwd=biome_workspace, capture_output=True, text=True, check=False
     )
     assert result.returncode == 1, result.stdout + result.stderr
-    assert (biome_workspace / selected).read_text(encoding="utf-8") == "export const value = 1;\n"
-    assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value=1;\n"
+    assert (biome_workspace / selected).read_text(encoding="utf-8") == '{ "value": 1 }\n'
+    assert (biome_workspace / other).read_text(encoding="utf-8") == '{"value":1}\n'
     subprocess.run([*command, "--all-files"], cwd=biome_workspace, capture_output=True, check=False)  # noqa: S603
     result = subprocess.run(  # noqa: S603
         [*command, "--all-files"], cwd=biome_workspace, capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value = 1;\n"
+    assert (biome_workspace / other).read_text(encoding="utf-8") == '{ "value": 1 }\n'
 
 
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:
@@ -550,23 +523,6 @@ def test_vscode_language_formatter_matrix_remains_explicit() -> None:
         language_settings = settings.get(language_scope)
         assert isinstance(language_settings, dict)
         assert language_settings.get("editor.defaultFormatter") == formatter
-
-
-def test_frontend_typecheck_trigger_covers_project_inputs() -> None:
-    precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    typecheck_hook = precommit_hooks["typecheck-frontend"]
-    typecheck_pattern = re.compile(_P06_TYPECHECK_SCOPE)
-
-    assert typecheck_hook.get("files") == _P06_TYPECHECK_SCOPE
-    assert typecheck_hook.get("pass_filenames") is False
-    assert typecheck_hook.get("stages") == ["manual"]
-
-    tsconfig = json.loads((_ROOT / "serve/cockpit/web/tsconfig.json").read_text(encoding="utf-8"))
-    assert isinstance(tsconfig, dict)
-    assert tsconfig.get("include") == ["src", "vite.config.ts", "vitest.setup.ts"]
-
-    for path, expected in _P06_SCOPE_SAMPLES:
-        assert bool(typecheck_pattern.search(path)) is expected, path
 
 
 def test_scripts_run_outside_the_pinned_python_keep_python_312_syntax() -> None:

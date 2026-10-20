@@ -32,7 +32,7 @@ asyncio_mode = "strict"
 markers = [
   "api: tests that require API integrations or network services",
   "browser: tests that require an installed browser runtime",
-  "cockpit: tests that require installed Cockpit frontend dependencies",
+  "biome: tests that require the root Node dependencies (Biome)",
   "slow: tests that are long-running",
   "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
   "e2e: end-to-end tests requiring VS Code agent runtime prerequisites (run explicitly with -m e2e)",
@@ -50,7 +50,6 @@ src = [
   "serve/browser-mcp/src",
   "serve/browser/src",
   "serve/web-content/src",
-  "serve/cockpit/src",
   "serve/tools/src",
 ]
 
@@ -155,6 +154,5 @@ source_pkgs = [
   "owlbear_knowledge_mcp",
   "owlbear_memory_mcp",
   "owlbear_browser",
-  "owlbear_cockpit",
   "owlbear_tools",
 ]

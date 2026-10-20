@@ -16,12 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
 
-_SHARED_NODE_RUNTIME_FILES = {"serve/cockpit/web/.nvmrc"}
-_COCKPIT_NODE_FILES = {
-    "serve/cockpit/web/.nvmrc",
-    "serve/cockpit/web/package-lock.json",
-    "serve/cockpit/web/package.json",
-}
+_SHARED_NODE_RUNTIME_FILES = {".nvmrc"}
 _ROOT_NODE_FILES = {"package-lock.json", "package.json"}
 _DIAGRAM_FILES = {".owlbear/scripts/diagrams/archify.lock.json"}
 _PYTHON_BEHAVIOR_FILES = {
@@ -43,10 +38,6 @@ _RUFF_PRE_COMMIT_REPOSITORY_BLOCK = re.compile(
     r"(?P<body>.*?)(?=^[ \t]*-[ \t]+repo:|\Z)",
 )
 _RUFF_PRE_COMMIT_REVISION = re.compile(r"(?m)^[ \t]+rev:[ \t]*(?P<revision>\S+)")
-_PDS_PACKAGES = (
-    "@porsche-design-system/components-js",
-    "@porsche-design-system/components-react",
-)
 
 
 def _raise_runtime_error(message: str) -> NoReturn:
@@ -254,11 +245,9 @@ class DependencyScope:
     """Proof surfaces affected by one pull-request diff."""
 
     python: bool
-    node: bool
     shared_node_runtime: bool
     root_node: bool
     diagrams: bool
-    pds: bool
     precommit: bool
     ruff_toolchain: bool
     workflows: bool
@@ -272,14 +261,7 @@ class DependencyScope:
     @property
     def applicable(self) -> bool:
         """Return whether the diff contains a maintained dependency surface."""
-        return (
-            self.python
-            or self.node
-            or self.shared_node_runtime
-            or self.root_node
-            or self.diagrams
-            or self.compatibility
-        )
+        return self.python or self.shared_node_runtime or self.root_node or self.diagrams or self.compatibility
 
     def github_outputs(self) -> dict[str, str]:
         """Serialize classifications as GitHub Actions boolean outputs."""
@@ -289,7 +271,6 @@ class DependencyScope:
 
 def classify_dependency_change(
     paths: Iterable[str],
-    diff: str,
     *,
     before_files: Mapping[str, str | None] | None = None,
     after_files: Mapping[str, str | None] | None = None,
@@ -297,7 +278,6 @@ def classify_dependency_change(
     """Classify changed paths and dependency declarations into proof surfaces."""
     changed = {path for path in paths if path}
     python = _python_behavior_changed(changed, before_files, after_files)
-    node = bool(changed & _COCKPIT_NODE_FILES)
     shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)
     diagrams = bool(changed & _DIAGRAM_FILES) or any(
@@ -310,11 +290,9 @@ def classify_dependency_change(
 
     return DependencyScope(
         python=python,
-        node=node,
         shared_node_runtime=shared_node_runtime,
         root_node=root_node,
         diagrams=diagrams,
-        pds=node and any(package in diff for package in _PDS_PACKAGES),
         precommit=precommit,
         ruff_toolchain=ruff_toolchain,
         workflows=workflows,
@@ -338,7 +316,6 @@ def main() -> int:
     """Classify files supplied by a workflow and publish GitHub outputs."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--paths-file", type=Path, required=True)
-    parser.add_argument("--diff-file", type=Path, required=True)
     parser.add_argument("--base-ref")
     parser.add_argument("--head-ref")
     parser.add_argument("--repository-root", type=Path, default=Path.cwd())
@@ -355,12 +332,7 @@ def main() -> int:
         before_files = _read_revision_files(args.repository_root, args.base_ref, snapshot_paths)
         after_files = _read_revision_files(args.repository_root, args.head_ref, snapshot_paths)
 
-    scope = classify_dependency_change(
-        paths,
-        args.diff_file.read_text(encoding="utf-8"),
-        before_files=before_files,
-        after_files=after_files,
-    )
+    scope = classify_dependency_change(paths, before_files=before_files, after_files=after_files)
     values = scope.github_outputs()
     _write_outputs(args.github_output, values)
     with args.summary.open("a", encoding="utf-8") as summary:

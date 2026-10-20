@@ -12,7 +12,6 @@ agents/*.agent.md             (agent definitions — pure markdown, no Python)
     use tools from the MCP servers below
 
 serve/delivery-next/           (Delivery engine: Change loop, MCP tools, GitHub publication, pages)
-serve/cockpit/                 (HTTP application: read-oriented operator UI)
     import from memory
 serve/tools/                   (repository tools: quality, testing, and indexing)
 
@@ -32,7 +31,7 @@ serve/web-content/               (core library: shared HTML extraction and Markd
 ```
 
 Each MCP server is a standalone MCPServer application. Core libraries, the Delivery engine,
-Cockpit, and repository tools are separate packages. Cross-package imports are enforced by
+and repository tools are separate packages. Cross-package imports are enforced by
 `tests/test_package_boundary.py`, which scans runtime and `TYPE_CHECKING` imports.
 
 ## Dependency Rules
@@ -44,7 +43,6 @@ constant in that file maps each package namespace to its permitted owlbear-names
 
 - When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise.
 - Core libraries do not import applications, MCP servers, or repository tools.
-- Cockpit may import Memory for its read API.
 - Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab, and nothing else.
 - Each MCP server may import its corresponding core package, but MCP servers must not import other
   MCP servers.
@@ -60,7 +58,6 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | Domain | Scope |
 | --- | --- |
 | delivery | `serve/delivery-next/` (Delivery engine: Change loop, MCP tools, GitHub publication, pages) |
-| cockpit | `serve/cockpit/` (FastAPI read API and Cockpit frontend) |
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | knowledge-mcp | `serve/knowledge-mcp/` |
 | memory | `serve/memory/` (memory state, scoring, and storage) |

@@ -102,7 +102,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 ## Delegation And Nesting
 
 No shared agent delegates to a subagent. No agent triggers `memory-curator`; the user runs it or
-reviews pending entries in Cockpit.
+reviews pending entries on the Delivery engine's Memory page.
 
 The agent validator enforces frontmatter-to-`<agents>` alignment; see `h-agent-structure` for the
 nesting rules.

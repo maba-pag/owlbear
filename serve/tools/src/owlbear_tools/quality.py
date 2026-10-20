@@ -25,7 +25,7 @@ from owlbear_tools.quality_runtime import (
 )
 from owlbear_tools.todo import run_todo
 
-COCKPIT_WEB = Path("serve/cockpit/web")
+BIOME = Path("node_modules/@biomejs/biome/bin/biome")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 
 
@@ -51,12 +51,11 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
         "lint-shell",
         "lint-actions",
         "lint-editorconfig",
-        "lint-cockpit",
+        "lint-biome",
     ),
     "lint-actions": ("lint-actionlint", "lint-zizmor"),
-    "lint-cockpit": ("lint-cockpit-biome", "lint-cockpit-html"),
     "format": ("format-python", "format-biome", "format-whitespace", "format-eof"),
-    "quality": ("format", "lint", "typecheck-cockpit", "todo"),
+    "quality": ("format", "lint", "todo"),
 }
 
 
@@ -148,17 +147,8 @@ def _check_text_files(name: str, *, staged: bool) -> int:
     return int(bool(failures))
 
 
-def _run_cockpit_html(*, staged: bool) -> int:
-    if staged and not any(
-        path.startswith("serve/cockpit/web/") and Path(path).suffix.lower() == ".html"
-        for path in _git_paths(staged=True)
-    ):
-        return 0
-    return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
-
-
 def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) -> int:
-    command = ["node", str(COCKPIT_WEB / "scripts/run-biome-check.mjs"), "format" if format_only else "check"]
+    command = ["node", str(BIOME), "format" if format_only else "check"]
     command.extend(["--staged", "--no-errors-on-unmatched"] if staged else ["."])
     if fix_mode is not FixMode.NONE:
         command.append("--write")
@@ -167,33 +157,13 @@ def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) ->
     return _call(command)
 
 
-def _run_typecheck_cockpit() -> int:
-    app_result = _call(
-        [
-            "npx",
-            "--prefix",
-            str(COCKPIT_WEB),
-            "tsc",
-            "--noEmit",
-            "--project",
-            str(COCKPIT_WEB / "tsconfig.json"),
-        ]
-    )
-    e2e_result = _call(["npm", "run", "typecheck:e2e"], cwd=COCKPIT_WEB)
-    return int(bool(app_result or e2e_result))
-
-
 def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
     if name in _PRECOMMIT_FIX_HOOKS:
         result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
     elif name in _PRECOMMIT_CHECK_HOOKS:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
-    elif name in {"lint-cockpit-biome", "format-biome"}:
+    elif name in {"lint-biome", "format-biome"}:
         result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
-    elif name == "lint-cockpit-html":
-        result = _run_cockpit_html(staged=staged)
-    elif name == "typecheck-cockpit":
-        result = _run_typecheck_cockpit()
     elif name == "todo":
         result = run_todo()
     else:
@@ -308,11 +278,6 @@ def _run_public_leaf(name: str, *, fixes: bool, allow_unsafe: bool, staged: bool
     _finish(rc)
 
 
-def lint_cockpit() -> None:
-    """Run the Cockpit frontend lint suite."""
-    _run_public_leaf("lint-cockpit", fixes=True, allow_unsafe=True, staged=True)
-
-
 def lint_python() -> None:
     """Run Ruff's Python lint checks."""
     _run_public_leaf("lint-python", fixes=True, allow_unsafe=True, staged=True)
@@ -343,14 +308,9 @@ def lint_editorconfig() -> None:
     _run_public_leaf("lint-editorconfig", fixes=False, allow_unsafe=False, staged=True)
 
 
-def lint_cockpit_biome() -> None:
-    """Run Biome checks for the Cockpit and owned repository frontend files."""
-    _run_public_leaf("lint-cockpit-biome", fixes=True, allow_unsafe=True, staged=True)
-
-
-def lint_cockpit_html() -> None:
-    """Run Cockpit HTMLHint checks."""
-    _run_public_leaf("lint-cockpit-html", fixes=False, allow_unsafe=False, staged=True)
+def lint_biome() -> None:
+    """Run Biome checks for repository JSON files."""
+    _run_public_leaf("lint-biome", fixes=True, allow_unsafe=True, staged=True)
 
 
 def format_python() -> None:
@@ -359,7 +319,7 @@ def format_python() -> None:
 
 
 def format_biome() -> None:
-    """Format owned frontend and JSON files with Biome."""
+    """Format repository JSON files with Biome."""
     _run_public_leaf("format-biome", fixes=True, allow_unsafe=False, staged=True)
 
 
@@ -380,16 +340,8 @@ def format_commands() -> None:
     _finish(_run_named_checked("format", staged=args.staged, fix_mode=args.fix_mode))
 
 
-def typecheck_cockpit() -> None:
-    """Type-check the Cockpit frontend."""
-    parser = argparse.ArgumentParser(prog="typecheck-cockpit")
-    parser.parse_args()
-    _require_development("typecheck-cockpit")
-    _finish(_run_named_checked("typecheck-cockpit", staged=False, fix_mode=FixMode.NONE))
-
-
 def quality() -> None:
-    """Run format, lint, typecheck, and advisory checks."""
+    """Run format, lint, and advisory checks."""
     args = _parse_options("quality", staged=False, fixes=True, allow_unsafe=True)
     _require_development("quality")
     _finish(_run_named_checked("quality", staged=False, fix_mode=args.fix_mode))

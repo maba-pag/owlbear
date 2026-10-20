@@ -124,7 +124,7 @@ class TestDenySrcWrites:
     def test_allows_dunder_tests_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
-            "tool_input": {"filePath": "serve/cockpit/web/src/__tests__/useScanPolling.test.ts"},
+            "tool_input": {"filePath": "serve/example/web/src/__tests__/useScanPolling.test.ts"},
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
@@ -133,7 +133,7 @@ class TestDenySrcWrites:
             "tool_name": "apply_patch",
             "tool_input": {
                 "input": (
-                    "*** Begin Patch\n*** Update File: serve/cockpit/web/src/App.wiring.test.tsx\n@@\n"
+                    "*** Begin Patch\n*** Update File: serve/example/web/src/App.wiring.test.tsx\n@@\n"
                     "-old\n+new\n*** End Patch"
                 ),
             },
@@ -143,7 +143,7 @@ class TestDenySrcWrites:
     def test_allows_colocated_spec_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
-            "tool_input": {"filePath": "serve/cockpit/web/src/App.spec.mts"},
+            "tool_input": {"filePath": "serve/example/web/src/App.spec.mts"},
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
@@ -152,7 +152,7 @@ class TestDenySrcWrites:
             "tool_name": "apply_patch",
             "tool_input": {
                 "input": (
-                    "*** Begin Patch\n*** Update File: serve/cockpit/web/src/__tests__/hook.test.ts\n@@\n"
+                    "*** Begin Patch\n*** Update File: serve/example/web/src/__tests__/hook.test.ts\n@@\n"
                     "-old\n+new\n*** End Patch"
                 ),
             },
@@ -162,7 +162,7 @@ class TestDenySrcWrites:
     def test_allows_e2e_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
-            "tool_input": {"filePath": "serve/cockpit/web/e2e/filter-controls.spec.ts"},
+            "tool_input": {"filePath": "serve/example/web/e2e/filter-controls.spec.ts"},
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
@@ -171,7 +171,7 @@ class TestDenySrcWrites:
             "tool_name": "apply_patch",
             "tool_input": {
                 "input": (
-                    "*** Begin Patch\n*** Update File: serve/cockpit/web/e2e/hook.spec.ts\n@@\n"
+                    "*** Begin Patch\n*** Update File: serve/example/web/e2e/hook.spec.ts\n@@\n"
                     "-old\n+new\n*** End Patch"
                 ),
             },

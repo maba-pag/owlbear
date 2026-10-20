@@ -7,14 +7,8 @@
   },
   "files": {
     "includes": [
-      "serve/cockpit/web/**/*.js",
-      "serve/cockpit/web/**/*.mjs",
-      "serve/cockpit/web/**/*.ts",
-      "serve/cockpit/web/**/*.tsx",
-      "serve/cockpit/web/src/**/*.css",
       "**/*.json",
       "**/*.jsonc",
-      "!serve/cockpit/web/public",
       "!**/scratch",
       "!**/worktrees",
       "!**/.owlbear/controller",
@@ -40,11 +34,5 @@
   },
   "assist": {
     "enabled": true
-  },
-  "plugins": ["./serve/cockpit/web/plugins/pds-component-wrappers.grit"],
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
   }
 }

@@ -15,7 +15,6 @@ portable source tree copied into a consumer project.
 | `sources/` | External-source attribution for research and implementation work |
 | `memory/` | Agent memory entries written by the `owlbear-memory` server; host-local memory databases are ignored |
 | `knowledge/` | Local Knowledge database and placeholders; databases and vectors are ignored |
-| `ideas.md` | Markdown ideas notebook read by Cockpit and edited through its ideas workflow |
 | `scratch/` | Temporary investigation output; it is ignored and should be cleaned up after use |
 | `*-index.md` | Generated navigation indexes; regenerate them from the repository root with `uv run indexes` |
 

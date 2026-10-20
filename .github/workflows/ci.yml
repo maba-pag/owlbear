@@ -58,11 +58,6 @@ jobs:
     if: contains(fromJSON(needs.scope.outputs.suites), 'python-browser')
     uses: ./.github/workflows/python-browser.yml
 
-  cockpit:
-    needs: scope
-    if: contains(fromJSON(needs.scope.outputs.suites), 'cockpit')
-    uses: ./.github/workflows/cockpit.yml
-
   static:
     needs: scope
     if: contains(fromJSON(needs.scope.outputs.suites), 'static')
@@ -91,7 +86,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [scope, python, python-browser, cockpit, static, tooling, agent-ecosystem, security]
+    needs: [scope, python, python-browser, static, tooling, agent-ecosystem, security]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

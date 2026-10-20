@@ -52,9 +52,8 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 | --- | --- | --- |
 | [Python](workflows/python.yml) | 4 hash-sharded test jobs (`worksteal` inside each) | Python sources, tests, setup, seed, manifests, locks |
 | [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium | `serve/browser*`, `serve/web-content`, manifests, locks |
-| [Cockpit](workflows/cockpit.yml) | Unit tests and the browser smoke build, in parallel | `serve/cockpit/web`, `biome.json` |
-| [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: Ruff, Markdown, YAML, shell, actionlint, zizmor, EditorConfig, Biome, HTMLHint | Every change |
-| [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, PDS, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
+| [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: Ruff, Markdown, YAML, shell, actionlint, zizmor, EditorConfig, Biome | Every change |
+| [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |
 | [Security](workflows/security.yml) | Snyk Code test, high severity and above; on a pull request, one comment per finding | Code, `.snyk` |
 

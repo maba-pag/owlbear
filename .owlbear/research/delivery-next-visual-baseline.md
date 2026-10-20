@@ -169,7 +169,9 @@ the owner's journey and has no route yet.
   `choice`, `external`, `pullbackNote`, the row button), the `.no-pds` CSS and its notice.
 - Nothing else: no own load diagnostic (the owner's read-back of TD-39: "PDS's documented CDN loading,
   nothing else").
-- Cockpit is unchanged; whether its own mirror (S8) should follow PDS is a separate question.
+- Cockpit is gone (TD-416). Its audit left one lesson for this removal: Cockpit asked through PDS's modal and its
+  removable tags, where the machine UI still asks through a native `<dialog>`; with the native branches gone, the
+  confirmation dialog moves to `p-modal` too, and every control is checked against the PDS component list first.
 
 ### 3.7 Removed as-built behaviour
 

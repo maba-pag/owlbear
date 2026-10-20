@@ -37,7 +37,7 @@ without behavior change).
   broad directory.
 - Never push, merge, or run provider mutations directly (`git push`, `gh pr merge`, `gh api` writes).
   Delivery publishes Change branches, draft pull requests and its state as system work, and merges
-  only after the user approves the exact head in Cockpit. Otherwise the user pushes manually.
+  only after the user approves the exact head on the Changes page. Otherwise the user pushes manually.
 
 ### VS Code Auto-Staging Trap
 

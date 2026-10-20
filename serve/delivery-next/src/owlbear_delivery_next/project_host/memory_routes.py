@@ -3,7 +3,7 @@
 Global memory (``<shared>/memory/``, TD-241) is read by every project's agents beside their own; the owner moves an
 entry there with Make global. ``?where=global`` reads and acts on it.
 
-Reads and the owner's actions go through the memory package's engine, as in the old Cockpit's Memory tab; each action
+Reads and the owner's actions go through the memory package's engine; each action
 names the entry's ``updated_at`` the page showed, holds the shared repository's lock and the memory's writer lock, and
 commits and pushes exactly the files the action changed before an agent can write again.
 """
@@ -59,6 +59,14 @@ class EditBody(Shown):
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)] | None = None
     content: str | None = Field(default=None, max_length=1024)
     categories: list[MemoryCategory] | None = Field(default=None, min_length=1)
+
+
+class PurgeBody(BaseModel):
+    """Remove the files of entries deleted at least this many days ago; Git history keeps them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_age_days: int = Field(default=30, ge=0, le=3650)
 
 
 def _shown(entry: MemoryEntry) -> dict[str, Any]:
@@ -140,6 +148,25 @@ def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]:
     return {"entry": _shown(entry), "notice": notice}
 
 
+def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
+    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal."""
+    folder = folder_of(store, where)
+    if not folder.is_dir():
+        return {"purged": 0, "skipped": 0, "failed": 0, "notice": ""}
+    shared, until = store.shared, time.monotonic() + data_repo.SAVE_SECONDS
+    label = "global" if where == "global" else store.name
+    try:
+        with shared.locked(), writer_lock(folder):
+            before = _files(folder)
+            done = MemoryEngine(folder).purge(days)
+            after = _files(folder)  # a duplicate repair on the way may add a recovered entry: publish it too
+            changed = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+            notice = shared.publish(changed, f"memory {label}: purge {done.purged} deleted", until) if changed else ""
+    except tuple(e for e, _, _ in REFUSED) as exc:
+        raise _refused(exc) from exc
+    return {"purged": done.purged, "skipped": done.skipped, "failed": done.failed, "notice": notice}
+
+
 def router(store: Store) -> APIRouter:
     """The memory routes; the caller adds the token check."""
     routes = APIRouter()
@@ -181,5 +208,9 @@ def router(store: Store) -> APIRouter:
     @routes.post("/memory/{entry_id}/delete")
     def delete(entry_id: str, body: Shown, where: Where = "project") -> dict[str, Any]:
         return _act(store, entry_id, "delete", lambda e: e.delete(entry_id, body.updated_at), where)
+
+    @routes.post("/memory/purge")
+    def purge(body: PurgeBody, where: Where = "project") -> dict[str, Any]:
+        return _purge(store, body.min_age_days, where)
 
     return routes

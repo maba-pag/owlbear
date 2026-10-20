@@ -29,10 +29,7 @@ _QUALITY_TREE = (
     "      lint-shell",
     "      lint-actions",
     "      lint-editorconfig",
-    "      lint-cockpit",
-    "        lint-cockpit-biome",
-    "        lint-cockpit-html",
-    "    typecheck-cockpit",
+    "      lint-biome",
     "    todo",
 )
 
@@ -154,9 +151,9 @@ def test_help_aligns_capabilities_without_iconless_rows(monkeypatch: object, cap
     options_index = next(index for index, line in enumerate(lines) if line.startswith("  Available options:"))
     tree_lines = lines[:options_index]
     capability_lines = [line for line in tree_lines if any(symbol in line for symbol in ("ˢ", "✚", "⚠"))]
-    assert {line.find("ˢ") for line in capability_lines if "ˢ" in line} == {58}
-    assert {line.find("✚") for line in capability_lines if "✚" in line} == {60}
-    assert {line.find("⚠") for line in capability_lines if "⚠" in line} == {62}
+    assert {line.find("ˢ") for line in capability_lines if "ˢ" in line} == {55}
+    assert {line.find("✚") for line in capability_lines if "✚" in line} == {57}
+    assert {line.find("⚠") for line in capability_lines if "⚠" in line} == {59}
     assert len(next(line for line in lines if line.startswith("    todo"))) > 60
     assert lines[options_index : options_index + 4] == [
         "  Available options:",
@@ -208,7 +205,6 @@ def test_help_preserves_tree_on_narrow_terminals(monkeypatch: object) -> None:
 
     help_main()
 
-    assert "        lint" in output.getvalue()
     assert "    lint" in output.getvalue()
     assert "      lint" in output.getvalue()
     assert "      lint-python" in output.getvalue()

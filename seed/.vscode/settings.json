@@ -32,7 +32,6 @@
     "uv run format": true,
     "uv run help": true,
     "uv run lint": true,
-    "uv run lint-cockpit": true,
     "uv run pytest": true,
     "uv run python": true,
     "uv run quality": true,

@@ -125,31 +125,6 @@ Every durable test should answer: which plausible user-visible, state, or API re
 fail? Exercise meaningful input and observable output. Add alternate or negative cases only when
 they distinguish the contract from a common incorrect implementation.
 
-## Cockpit/PDS Profile
-
-Apply this profile only when the target package uses Cockpit's scripts and Porsche Design System:
-
-- The package root is discovered from `serve/cockpit/web/package.json`; repository-root proxy scripts
-  are also valid.
-- In the OwlBear development checkout, `uv run test` includes this frontend suite and
-  `uv run test [PATH ...]` is the preferred path-aware unit-test entry point.
-- `npm test` supplies `NODE_OPTIONS=--max-old-space-size=2048`, `vitest run`, and `--silent=true`.
-  Preserve those flags for normal runs; direct `npx vitest run` is useful when debugging console
-  output.
-- Vitest configuration lives in `vite.config.ts` and uses jsdom plus `vitest.setup.ts`. Running a
-  direct Vitest command from the wrong directory can skip this setup and produce environment errors.
-- Setup includes the PDS jsdom polyfill, Testing Library matchers, CDN-request suppression, and local
-  shims for browser APIs such as `HTMLDialogElement`, `HTMLElement.attachInternals`, and `EventSource`.
-- PDS custom elements may not expose native roles in jsdom. Drive their actual host contracts:
-  `PSelect` commonly emits `change` with `detail.value`; `PMultiSelect` emits `update` with
-  `detail.value`.
-- `npm run test:e2e` is Cockpit's maintained fast gate; `npm run test:e2e:all` is the deliberate full
-  sweep. `uv run test-e2e` and `uv run test-e2e --all` are the repository-level wrappers. Playwright
-  currently uses Chromium and starts through the configured build/preview server.
-- PDS can emit extremely large jsdom console output. Use the silent package script normally. If
-  output is still truncated, capture it under `.owlbear/scratch/vitest-{task_id}.log` and inspect a
-  bounded summary with `tail` or targeted `grep`; do not load the entire log into model context.
-
 ## Known Gotchas
 
 - **Configuration resolution.** A wrong working directory can silently select the wrong environment,

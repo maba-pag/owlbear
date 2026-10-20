@@ -40,12 +40,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/delivery-next/**",
         "serve/memory/**",
     ),
-    "cockpit": (
-        ".github/workflows/cockpit.yml",
-        ".github/scripts/check_node_runtime.py",
-        "biome.json",
-        "serve/cockpit/web/**",
-    ),
     "static": ("**",),  # `uv run lint` checks every text file, EditorConfig included
     "tooling": (
         ".github/renovate.json",
@@ -53,6 +47,7 @@ SUITES: dict[str, tuple[str, ...]] = {
         ".github/workflows/**",
         ".pre-commit-config.yaml",
         ".python-version",
+        ".nvmrc",
         ".owlbear/scripts/diagrams/**",
         "share/diagrams/**",
         "biome.json",
@@ -60,9 +55,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "package-lock.json",
         "pyproject.toml",
         "serve/*/pyproject.toml",
-        "serve/cockpit/web/.nvmrc",
-        "serve/cockpit/web/package.json",
-        "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "tests/test_archify_diagrams.py",
         "tests/test_dependency_verification_workflow.py",

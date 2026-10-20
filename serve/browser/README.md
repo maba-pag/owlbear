@@ -99,5 +99,5 @@ for document identity. Diagnostic URLs with secret-like paths are replaced in fu
 
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Playwright
 > Chromium with `uv run --project ../owlbear playwright install chromium` only when selecting
-> Chromium mode or running Cockpit browser-backed tests. Managed Edge uses stable Microsoft Edge
+> Chromium mode. Managed Edge uses stable Microsoft Edge
 > already installed on macOS.

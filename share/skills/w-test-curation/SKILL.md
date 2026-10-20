@@ -116,8 +116,7 @@ Run the affected tests with the owning runner. Use the repository's maintained c
 cover the selected scope:
 
 - Python: `uv run test {paths}` or a focused `uv run pytest` command;
-- Cockpit unit tests: `npm test` from `serve/cockpit/web`, or the repository path-aware runner;
-- Cockpit E2E tests: `uv run test-e2e {specs}` or the package's maintained E2E script.
+- frontend tests: the owning package's maintained unit and browser test scripts.
 
 Run applicable lint, typecheck, build, or browser checks when the edited test surface requires
 them. Run the full maintained suite after a batch that changes shared test helpers, package

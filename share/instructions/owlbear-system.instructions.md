@@ -15,7 +15,7 @@ applyTo: "**"
 - **No legacy, no backwards compatibility.** Break things to improve them.
 - **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
 - **Prior decisions by origin.** A recorded decision is `decided` (the user chose it directly: an
-  `askQuestions` answer, a Cockpit request answer, or the user's own words in a prompt or chat),
+  `askQuestions` answer, a Delivery request answer, or the user's own words in a prompt or chat),
   `approved` (part of a plan, package, or amendment the user approved without being asked about it
   individually), or `autonomous` (made by an agent or the lead, including anything under "decide
   yourself"). Ask the user directly about any decision you consider important instead of leaving it
