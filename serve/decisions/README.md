@@ -1,0 +1,81 @@
+# owlbear-decisions — Decision Files
+
+The file contract for OwlBear's decisions and every project's: one Markdown file per lasting decision, a
+validator for a data repository's decision folders, and a preview of the first migration from the hand-edited
+[decision record](../../.owlbear/research/delivery-liveness-first-rebuild.md). It is slice 1 of the
+[decision system design](../../.owlbear/research/decision-system-build.md); storage in `owlbear-data`, the index,
+the Decisions page and step context come in later slices.
+
+**Use this guide when:** you write or read decision files, change their rules, or run the migration preview.
+
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
+
+---
+
+## Launch / Usage
+
+```bash
+uv run decisions-validate <data-repo-root>
+uv run decisions-migrate-preview <record.md> <out-dir> [--project owlbear]
+```
+
+`decisions-validate` prints one line per finding (`path: rule: message`) and exits 1 on any. The Global layer is
+the repository root (`<root>/decisions/`), each project's layer its folder (`<root>/<project>/decisions/`) and a
+Change's layer `<root>/<project>/changes/<slug>/decisions/`, as in Delivery's data repository.
+
+`decisions-migrate-preview` writes one proposed decision per in-force bullet into `<out-dir>/<project>/decisions/`
+and a `REPORT.md` with counts, unclear clauses, orphan rows, a proposed-scope table for the owner to mark Global
+topics, the validator's findings with their explanation and the row-to-entry concordance. It refuses a folder that
+already holds a preview and never changes the record (TD-437).
+
+```python
+from owlbear_decisions import Decision, load_folder, validate_repo, write
+
+revision = write(decision, layer_folder)  # create; refuses an existing file
+write(successor, layer_folder)  # a change of wording is a successor
+write(replaced, layer_folder, expected_revision=revision)  # update; refuses a stale revision
+loaded = load_folder(layer_folder)  # decisions by path, and per-file errors
+```
+
+### File contract
+
+`<layer>/decisions/<id>.md`: YAML front matter with every field but `rationale` in a fixed order, then the
+rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename) under a lock on the folder.
+
+| Field | Notes |
+| --- | --- |
+| `id` | `D-` plus a 26-character ULID (Crockford base32: 48-bit milliseconds, 80 random bits), sortable by creation |
+| `aliases` | Display names such as `TD-417`; one record row split into clauses names each of them |
+| `title`, `topic`, `statement` | The statement is the in-force line, at most 240 characters |
+| `applies_to` | `paths` (repository-relative globs), `roles`, `steps`; all empty means the whole scope |
+| `scope`, `project`, `change` | `global` (no project), `project` (its folder name), `change` (project and slug) |
+| `origin`, `actor`, `source` | `decided`, `approved` or `autonomous`; who made it; where (chat, Change, PR, question) |
+| `owner_words` | `{text, date, alias}` items; required for `decided` |
+| `state` | `draft`, `in_force`, `replaced`, `withdrawn`, `spent`; nothing is deleted |
+| `links` | `{type, target}`; types `replaces`, `refines`, `exception_to`, `depends_on`, `related_to`, `promoted_from` |
+| `conflict`, `read_back` | A flag the owner resolves; `none`, `pending` or the ISO date of the last read-back |
+| `created_at` | Time-zone-aware timestamp |
+
+`revision` is not stored: it is the sha256 of the canonical JSON of every other field, so any content change
+gives a new one. `write` refuses a stale `expected_revision` and never edits the statement of an in-force
+decision. A malformed file is reported by `load_folder`, never skipped.
+
+### Validator rules
+
+`schema`, `link-type`, `duplicate-id` (across all layers), `link-target`
+(missing, self, or out of reach: a project may target Global and its own decisions, Global only Global, and
+`promoted_from` anything), `two-successors` (two in-force decisions replace one), `no-successor` (replaced with no
+non-draft successor), `owner-words`, `statement-length`, `placement` (scope fields against the folder, including a
+change decision outside a change folder) and `exception-target` (`exception_to` a non-Global decision).
+Statement length and missing owner's words are validator findings rather than load errors, so such files still
+load and are reported.
+
+---
+
+## Configuration
+
+No environment variables. Pass folders explicitly; the package never locates `owlbear-data` itself.
+
+## Dependencies
+
+`pydantic` and `ruamel.yaml`; no other OwlBear package. Delivery Next may import it.
