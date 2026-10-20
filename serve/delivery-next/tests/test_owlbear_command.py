@@ -117,7 +117,7 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert listed is not None
     assert listed | {"update": None} == {
         "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True,
-        "update": None, "updated": "",
+        "update": None, "updated": "", "announce": None,
     }  # fmt: skip
     assert listed["update"]["phase"] == "idle"
     assert control.stop(said.append) == 0
