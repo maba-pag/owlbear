@@ -52,6 +52,20 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
 - **Writes** carry an expected revision; validation refuses two active successors of one decision; a Git merge or a
   timestamp never decides authority. Receipts distinguish saved, committed, published and active. Missing,
   conflicted or invalid decisions stop the affected work; they never become an empty rule set.
+- **Built in slice 3** (choices made while building): a save fetches and, when its checkout is behind and clean,
+  rebases first, so the expected revision is checked against the remote's file; a push the remote rejects because it
+  changed the same decision file takes this save's commit back and reports it not saved, and Git never rebases over a
+  decision file both sides changed. When a published save's reloaded snapshot shows two in-force successors of one
+  decision, the saving checkout flags every successor of it `conflict` (its own and the other checkout's) and
+  publishes the flags, reloading up to three rounds until none is left unflagged, so the second writer's receipt says
+  `conflict` and the first checkout sees it after its next refresh. A flagged decision is never active until the owner
+  clears the flag. A save does not refuse a successor it knows competes; it records the conflict for the owner.
+  A snapshot validates every project's folder and keeps Global's and its own project's decisions and every finding
+  involving one of them, so a `promoted_from` link to another project's decision is not a finding but another
+  project's decision replacing a Global one (`replace-scope`) keeps that Global decision out of force everywhere. A
+  project folder that is missing, a folder that cannot be read, or a file in the project's view that is not a usable
+  decision stops loading. The index rebuilds a project's rows when the data commit or the digest of its decision
+  files' revisions changes, so uncommitted files count; creating or replacing its file is serialized by a lock file.
 
 ## 4. Scopes (TD-426)
 

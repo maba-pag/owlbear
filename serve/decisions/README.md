@@ -1,10 +1,11 @@
 # owlbear-decisions — Decision Files
 
 The file contract for OwlBear's decisions and every project's: one Markdown file per lasting decision, a
-validator for a data repository's decision folders, and a preview of the first migration from the hand-edited
+validator for a data repository's decision folders, a project's snapshot of them, and a preview of the first
+migration from the hand-edited
 [decision record](../../.owlbear/research/delivery-liveness-first-rebuild.md). It is slice 1 of the
-[decision system design](../../.owlbear/research/decision-system-build.md); storage in `owlbear-data`, the index,
-the Decisions page and step context come in later slices.
+[decision system design](../../.owlbear/research/decision-system-build.md); Delivery stores the files in
+`owlbear-data` and indexes them (slice 3), and the Decisions page and step context come in later slices.
 
 **Use this guide when:** you write or read decision files, change their rules, or run the migration preview.
 
@@ -29,13 +30,23 @@ topics, the validator's findings with their explanation and the row-to-entry con
 already holds a preview and never changes the record (TD-437).
 
 ```python
-from owlbear_decisions import Decision, load_folder, validate_repo, write
+from owlbear_decisions import Decision, load_folder, snapshot, validate_repo, write
 
 revision = write(decision, layer_folder)  # create; refuses an existing file
 write(successor, layer_folder)  # a change of wording is a successor
 write(replaced, layer_folder, expected_revision=revision)  # update; refuses a stale revision
 loaded = load_folder(layer_folder)  # decisions by path, and per-file errors
+seen = snapshot(data_root, "shop-site")  # Global plus one project's layers, and every finding involving them
+seen.active(decision.id)  # in force, not flagged `conflict` and involved in no finding
 ```
+
+`snapshot(root, project)` is file-only: it loads the Global layer and the project's layers (its folder and its
+Changes' folders; an empty project loads Global alone), validates every project's folder, and keeps Global's and the
+project's entries (`Entry`: path, `Layer`, decision) and every finding whose `involves` names one of them, wherever
+its file lies: another project's decision replacing a Global one leaves that Global decision not active everywhere.
+A file in these layers that did not load is a finding involving no decision, also in `unreadable`, and makes the
+snapshot not `complete`. A folder that cannot be looked into raises `OSError` (only a missing path counts as absent);
+Delivery's `state_store/decision_store.py` turns that, or an incomplete snapshot, into a stop.
 
 ### File contract
 
@@ -66,7 +77,10 @@ decision. A malformed file is reported by `load_folder`, never skipped.
 (missing, self, or out of reach: a project may target Global and its own decisions, Global only Global, and
 `promoted_from` anything), `two-successors` (two in-force decisions replace one), `no-successor` (replaced with no
 non-draft successor), `owner-words`, `statement-length`, `placement` (scope fields against the folder, including a
-change decision outside a change folder) and `exception-target` (`exception_to` a non-Global decision).
+change decision outside a change folder), `exception-target` (`exception_to` a non-Global decision) and
+`replace-scope` (`replaces` reaches only the same or a narrower layer: Global only Global, a project its own project's
+and Changes' decisions, a Change its own; widening goes through `promoted_from`, departing from Global through
+`exception_to`).
 Statement length and missing owner's words are validator findings rather than load errors, so such files still
 load and are reported.
 

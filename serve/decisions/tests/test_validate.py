@@ -56,6 +56,25 @@ def test_a_repeated_replaces_link_is_one_successor(tmp_path, put):
     assert rules(tmp_path) == []
 
 
+@pytest.mark.parametrize(
+    ("target", "source", "allowed"),
+    [
+        ({"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, True),
+        ({"scope": Scope.PROJECT}, {"scope": Scope.PROJECT}, True),
+        ({"scope": Scope.CHANGE}, {"scope": Scope.PROJECT}, True),
+        ({"scope": Scope.CHANGE}, {"scope": Scope.CHANGE}, True),
+        ({"scope": Scope.GLOBAL}, {"scope": Scope.PROJECT}, False),
+        ({"scope": Scope.GLOBAL}, {"scope": Scope.CHANGE}, False),
+        ({"scope": Scope.PROJECT}, {"scope": Scope.CHANGE}, False),
+        ({"scope": Scope.CHANGE, "change": "c2"}, {"scope": Scope.CHANGE}, False),
+    ],
+)
+def test_replaces_only_reaches_the_same_or_a_narrower_layer(tmp_path, put, target, source, allowed):
+    old = put(**target, state=State.REPLACED)
+    put(**source, links=(Link(type=LinkType.REPLACES, target=old.id),))
+    assert rules(tmp_path) == ([] if allowed else ["replace-scope"])
+
+
 def test_duplicate_id(tmp_path, put):
     first = put(Scope.GLOBAL)
     put(id=first.id)
