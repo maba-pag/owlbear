@@ -126,6 +126,6 @@ def test_interactive_cancel_raises(
     monkeypatch.setattr("builtins.input", lambda _prompt: "cancel")
 
     with pytest.raises(RuntimeError, match="Hook seeding cancelled"):
-        init_module.init(target_dir, owlbear_dir, interactive=True)
+        init_module.init(target_dir, owlbear_dir, interactive=True, yes=True)
 
     assert existing.read_text(encoding="utf-8") == "local-version"

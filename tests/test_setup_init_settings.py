@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import runpy
+import subprocess
 import sys
 import types
 from collections.abc import Callable
@@ -203,10 +204,8 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
         server = mcp["servers"][server_name]
         assert server["command"] == "uv"
         assert server["args"][:2] == ["--project", owlbear_rel_path]
-    gitignore = (target_dir / ".gitignore").read_text(encoding="utf-8")
-    assert "/.owlbear/delivery/runtime/" not in gitignore
-    nested_gitignore = (target_dir / ".owlbear/.gitignore").read_text(encoding="utf-8")
-    assert "delivery/runtime/*" in nested_gitignore
+    assert not (target_dir / ".gitignore").exists()
+    assert not (target_dir / ".owlbear/.gitignore").exists()
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in target_dir.rglob("*")
@@ -215,10 +214,10 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
     assert "openspec" not in installed_text.lower()
     assert ".owlbear/kanban/tasks" not in installed_text
     assert ".owlbear/kanban/decisions" not in installed_text
-    package_install.assert_not_called()
+    assert all(call.args[0][0] == "git" for call in package_install.call_args_list)
 
 
-def test_init_rerun_preserves_user_settings_and_gitignore_rules(
+def test_init_rerun_preserves_user_settings(
     tmp_path: Path,
     init_module: types.ModuleType,
     run_init_without_test_surface: Callable[..., None],
@@ -232,12 +231,6 @@ def test_init_rerun_preserves_user_settings_and_gitignore_rules(
     settings["example.userSetting"] = "preserved"
     settings["chat.tools.terminal.autoApprove"]["example-command"] = False
     settings_path.write_text(json.dumps(settings), encoding="utf-8")
-    nested_gitignore_path = target_dir / ".owlbear/.gitignore"
-    nested_gitignore_path.write_text(
-        nested_gitignore_path.read_text(encoding="utf-8").replace("delivery/runtime/*", "delivery/runtime/")
-        + "\ncustom-consumer-rule/\n",
-        encoding="utf-8",
-    )
 
     run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
     first_rerun = {path.relative_to(target_dir): path.read_bytes() for path in target_dir.rglob("*") if path.is_file()}
@@ -247,32 +240,134 @@ def test_init_rerun_preserves_user_settings_and_gitignore_rules(
     merged_settings = json.loads(settings_path.read_text(encoding="utf-8"))
     assert merged_settings["example.userSetting"] == "preserved"
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
-    nested_gitignore = nested_gitignore_path.read_text(encoding="utf-8")
-    assert "delivery/runtime/*" in nested_gitignore
-    assert "custom-consumer-rule/" in nested_gitignore
     assert second_rerun == first_rerun
 
 
-def test_init_rerun_preserves_legacy_managed_coverage_rule(
+def _git(repository: Path, *arguments: str) -> str:
+    return subprocess.run(  # noqa: S603
+        ["git", *arguments],  # noqa: S607
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+def _git_project(tmp_path: Path) -> Path:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    _git(target_dir, "init", "-q")
+    return target_dir
+
+
+def test_cli_setup_without_consent_writes_nothing(tmp_path: Path) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+
+    refused = subprocess.run(  # noqa: S603
+        [sys.executable, str(_INIT_PATH)], cwd=target_dir, capture_output=True, text=True, check=False
+    )
+    dry_run = subprocess.run(  # noqa: S603
+        [sys.executable, str(_INIT_PATH), "--dry-run"], cwd=target_dir, capture_output=True, text=True, check=False
+    )
+
+    assert refused.returncode == 1
+    assert "--yes" in refused.stderr
+    assert dry_run.returncode == 0, dry_run.stderr
+    assert "create: .vscode/settings.json" in dry_run.stdout
+    assert list(target_dir.iterdir()) == []
+
+
+def test_interactive_decline_writes_nothing(
     tmp_path: Path,
     init_module: types.ModuleType,
-    run_init_without_test_surface: Callable[..., None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = _git_project(tmp_path)
+    exclude = target_dir / ".git/info/exclude"
+    exclude_before = exclude.read_bytes()
+    prompts: list[str] = []
+    monkeypatch.setattr("builtins.input", lambda prompt: prompts.append(prompt) or "n")
+
+    assert init_module.init(target_dir, _REPO_ROOT, interactive=True) is False
+
+    assert prompts == [f"Write the OwlBear agent workspace into {target_dir.resolve()}? [y/N] "]
+    assert [path.name for path in target_dir.iterdir()] == [".git"]
+    assert exclude.read_bytes() == exclude_before
+
+
+def test_install_in_git_repository_shows_nothing_new_and_keeps_gitignore(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = _git_project(tmp_path)
+    gitignore = target_dir / ".gitignore"
+    gitignore.write_text("consumer-rule/\n", encoding="utf-8")
+    _git(target_dir, "add", ".gitignore")
+    _git(target_dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "base", "--no-gpg-sign")
+
+    assert init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True) is True
+    for runtime_file in (".owlbear/scratch/note.txt", ".owlbear/knowledge/kb.db"):
+        (target_dir / runtime_file).parent.mkdir(parents=True, exist_ok=True)
+        (target_dir / runtime_file).write_text("x\n", encoding="utf-8")
+
+    assert _git(target_dir, "status", "--porcelain", "--untracked-files=all") == ""
+    assert gitignore.read_text(encoding="utf-8") == "consumer-rule/\n"
+    assert (target_dir / ".vscode/mcp.json").is_file()
+
+
+def test_tracked_settings_are_listed_as_tracked(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target_dir = _git_project(tmp_path)
+    settings_path = target_dir / ".vscode/settings.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text('{"user.setting": true}\n', encoding="utf-8")
+    _git(target_dir, "add", ".vscode/settings.json")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+
+    output = capsys.readouterr().out.splitlines()
+    assert "  merge into existing: .vscode/settings.json (tracked: your change will show as modified)" in output
+    assert "  create: .vscode/mcp.json" in output
+    changed = {line[3:] for line in _git(target_dir, "status", "--porcelain", "--untracked-files=all").splitlines()}
+    assert changed == {".vscode/settings.json"}
+
+
+def test_rerun_keeps_one_exclude_block(tmp_path: Path, init_module: types.ModuleType) -> None:
+    target_dir = _git_project(tmp_path)
+    exclude = target_dir / ".git/info/exclude"
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+    first = exclude.read_text(encoding="utf-8")
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+    second = exclude.read_text(encoding="utf-8")
+
+    manifest = json.loads((target_dir / ".owlbear/install-manifest.json").read_text(encoding="utf-8"))
+    block = second.split(f"{init_module._workspace_git.BLOCK_BEGIN}\n")[1].split(
+        f"{init_module._workspace_git.BLOCK_END}\n"
+    )[0]
+    assert second == first
+    assert second.count(init_module._workspace_git.BLOCK_BEGIN) == 1
+    assert block.splitlines() == manifest["git_exclude"]
+    assert "/.owlbear/" in manifest["git_exclude"]
+
+
+def test_install_outside_git_says_nothing_is_hidden(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
-    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
-    gitignore_path = target_dir / ".gitignore"
-    current = gitignore_path.read_text(encoding="utf-8")
-    prefix, marker, managed = current.partition(init_module._OWLBEAR_GITIGNORE_MARKER)
-    assert marker
-    legacy_prefix = "\n".join(line for line in prefix.splitlines() if line != ".coverage.*").rstrip()
-    legacy_managed = managed.rstrip() + "\n.coverage.*\n"
-    gitignore_path.write_text(f"{legacy_prefix}\n\n{marker}{legacy_managed}", encoding="utf-8")
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
 
-    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
-
-    assert ".coverage.*" in gitignore_path.read_text(encoding="utf-8").splitlines()
+    assert "Not a Git repository" in capsys.readouterr().out
+    manifest = json.loads((target_dir / ".owlbear/install-manifest.json").read_text(encoding="utf-8"))
+    assert "git_exclude" not in manifest
 
 
 def test_init_does_not_scaffold_retired_verification_profile(
@@ -285,12 +380,12 @@ def test_init_does_not_scaffold_retired_verification_profile(
     (target_dir / "package.json").write_text('{"scripts":{"test":"vitest run"}}\n', encoding="utf-8")
     (target_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
 
     profile_path = target_dir / ".owlbear/delivery/verification.json"
     assert not profile_path.exists()
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
 
     assert not profile_path.exists()
 

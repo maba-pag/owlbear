@@ -3280,6 +3280,7 @@ The machine's registered projects (TD-242): ``~/.owlbear/machine.json``, written
 - `importlib.resources`
 - `json`
 - `pathlib`
+- `re`
 - `sys`
 
 ### Interfaces
@@ -4144,6 +4145,7 @@ The host's pages, their tab bar, the base stylesheet and the scripts they share 
 
 ### Interfaces
 
+- `def page_files() -> dict[tuple[str, str], str]`
 - `def lit_files() -> dict[str, str]`
 - `def lit_version() -> str`
 - `def assets(app: FastAPI) -> None`
@@ -8417,6 +8419,7 @@ OwlBear workspace initialiser — setup/init.py.
 - `contextlib`
 - `difflib`
 - `hashlib`
+- `importlib.util`
 - `json`
 - `os`
 - `pathlib`
@@ -8426,10 +8429,12 @@ OwlBear workspace initialiser — setup/init.py.
 - `subprocess`
 - `sys`
 - `tempfile`
+- `typing`
 - `warnings`
 
 ### Interfaces
 
+- `def _load_workspace_git() -> ModuleType`
 - `def _strip_jsonc_comments(text: str) -> str`
 - `def _merge_settings(owlbear: dict, existing: dict) -> dict`
 - `def _settings_claims(seed: dict, existing: dict) -> dict`
@@ -8444,14 +8449,11 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _ensure_parent_dirs(path: Path, target_dir: Path, manifest: dict[str, object]) -> None`
 - `def _merge_manifest_record(manifest: dict[str, object], relative: str, record: dict[str, object]) -> None`
 - `def _merge_claims(old: dict, new: dict) -> dict`
-- `def _write_gitignore(src: Path, dest: Path) -> None`
 - `def _write_settings(src: Path, dest: Path, replacements: dict[str, str], *, manifest: dict[str, object] | None = None) -> None`
 - `def _write_mcp(src: Path, dest: Path, replacements: dict[str, str], *, manifest: dict[str, object] | None = None) -> None`
 - `def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _render_seed_file(src: Path, replacements: dict[str, str]) -> bytes`
-- `def _record_seed_install(manifest: dict[str, object], relative: str, dest: Path, *, created: bool, kind: str = 'file', **extra: object) -> None`
-- `def _gitignore_section_lines(content: str) -> list[str]`
-- `def _gitignore_added_lines(before: str, after: str) -> list[str]`
+- `def _record_seed_install(manifest: dict[str, object], relative: str, dest: Path, *, created: bool) -> None`
 - `class UninstallResult`
   - `def __init__(self, *, completed: bool, actions: tuple[str, ...]) -> None`
   - `def __bool__(self) -> bool`
@@ -8505,8 +8507,43 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`
 - `def _hook_diff(src: Path, dest: Path) -> str`
 - `def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None`
-- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, refresh_configs: bool = False, interactive: bool | None = None) -> None`
+- `class _PlannedFile(NamedTuple)`
+- `class _InstallPlan(NamedTuple)`
+- `def _planned_action(src: Path, relative: str, dest: Path, replacements: dict[str, str], *, refresh_configs: bool) -> str | None`
+- `def _plan_seed_files(seed_dir: Path, target_dir: Path, replacements: dict[str, str], *, refresh_configs: bool) -> list[_PlannedFile]`
+- `def _missing_directories(paths: list[Path], target_dir: Path) -> list[str]`
+- `def _created_paths(manifest: dict[str, object]) -> tuple[set[str], set[str]]`
+- `def _exclude_lines_for(target_dir: Path, prefix: str, directories: set[str], files: set[str]) -> list[str]`
+- `def _build_install_plan(seed_dir: Path, target_dir: Path, replacements: dict[str, str], manifest: dict[str, object], *, refresh_configs: bool) -> _InstallPlan`
+- `def _hook_label(*, replace_hooks: bool, interactive: bool) -> str`
+- `def _inventory_lines(target_dir: Path, plan: _InstallPlan, *, replace_hooks: bool, interactive: bool) -> list[str]`
+- `def _confirm_install(target_dir: Path, *, yes: bool, dry_run: bool, interactive: bool) -> bool`
+- `def _install_seed_files(files: list[_PlannedFile], target_dir: Path, replacements: dict[str, str], manifest: dict[str, object], *, replace_hooks: bool, interactive: bool) -> None`
+- `def _hide_from_git(target_dir: Path, manifest: dict[str, object]) -> None`
+- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, refresh_configs: bool = False, interactive: bool | None = None, yes: bool = False, dry_run: bool = False) -> bool`
 - `def _has_owlbear_surface(target_dir: Path) -> bool`
 - `def _remove_install_manifest(path: Path, original: bytes | None, options: _UninstallOptions) -> None`
 - `def _remove_seed_surfaces(seed_dir: Path, options: _UninstallOptions) -> None`
+- `def _remove_git_exclude(options: _UninstallOptions) -> None`
 - `def uninstall(target_dir: Path, owlbear_dir: Path, *, confirm: bool | None = None, dry_run: bool = False) -> UninstallResult`
+
+## setup/workspace_git.py
+
+Hide the OwlBear agent workspace from Git through the repository's local exclude file.
+
+### Imports
+
+- `__future__`
+- `pathlib`
+- `subprocess`
+
+### Interfaces
+
+- `def _git(target_dir: Path, *arguments: str) -> subprocess.CompletedProcess[str] | None`
+- `def locate(target_dir: Path) -> tuple[Path, str] | None`
+- `def tracked_paths(target_dir: Path, relatives: list[str]) -> set[str]`
+- `def exclude_lines(prefix: str, created_dirs: set[str], created_files: set[str]) -> list[str]`
+- `def _runtime_line(prefix: str, pattern: str) -> str`
+- `def _split_block(text: str) -> tuple[str, list[str] | None, str]`
+- `def write_block(exclude_path: Path, lines: list[str]) -> None`
+- `def remove_block(exclude_path: Path, recorded: list[str], *, dry_run: bool) -> str | None`
