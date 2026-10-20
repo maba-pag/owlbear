@@ -42,7 +42,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, designSystem, shown as projects } from "/assets/ui.mjs";
+import { call, defined, shown as projects } from "/assets/ui.mjs";
 
 const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved", "deleted"];  // needs you first
 const GROUPS = [  // who acts next on an entry in each state
@@ -58,7 +58,7 @@ const ACTIVE = "active", ANY = "any";
 const DIALOG = "{ 'aria-haspopup': 'dialog' }";
 // editing: the entry being edited and its draft, so what is typed lives in state, not in an element (TD-264);
 // pending: the entry and action whose request is under way.
-const state = { pds: true, loaded: null, editing: null, pending: null, error: "", status: "" };
+const state = { loaded: null, editing: null, pending: null, error: "", status: "" };
 const filter = { state: ACTIVE, category: ANY, agent: ANY, place: ANY };
 const answers = new Map();  // each read's last answer by "project id|where", kept while that project fails to answer
 
@@ -71,38 +71,26 @@ function notify(message = "") {
   show();
 }
 
-// A button: the design system's when it loaded, else a plain one; busy while its request is under way.
+// A button, busy while its request is under way.
 function button(label, onclick, { variant, icon, aria, busy = false } = {}) {
-  return state.pds
-    ? html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
-        aria=${aria ?? nothing} .loading=${busy} @click=${onclick}>${label}</p-button>`
-    : html`<button type="button" .disabled=${busy} @click=${onclick}>${label}</button>`;
+  return html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
+    aria=${aria ?? nothing} .loading=${busy} @click=${onclick}>${label}</p-button>`;
 }
 
 function select(key, label, options) {
   const changed = (e) => { filter[key] = e.target.value; show(); };
-  if (state.pds) {
-    return html`<p-select label=${label} .value=${filter[key]} @change=${changed}>
-      ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
-  }
-  return html`<label class="field">${label}<select .value=${filter[key]} @change=${changed}>
-    ${options.map(([v, said]) => html`<option value=${v} ?selected=${v === filter[key]}>${said}</option>`)}
-    </select></label>`;
+  return html`<p-select label=${label} .value=${filter[key]} @change=${changed}>
+    ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
 }
 
 // An edit field bound to the draft: typing updates the draft, and a re-render shows the draft again.
 function field(key, label, multiline, max) {
   const draft = state.editing.draft, typed = (e) => { draft[key] = e.target.value ?? ""; };
-  if (state.pds) {
-    return multiline
-      ? html`<p-textarea label=${label} max-length=${max} rows="5" counter="true" .value=${live(draft[key])}
-          @input=${typed} @change=${typed}></p-textarea>`
-      : html`<p-input-text label=${label} max-length=${max} .value=${live(draft[key])} @input=${typed}
-          @change=${typed}></p-input-text>`;
-  }
-  return html`<label class="field">${label}${multiline
-    ? html`<textarea maxlength=${max} rows="5" .value=${live(draft[key])} @input=${typed}></textarea>`
-    : html`<input maxlength=${max} .value=${live(draft[key])} @input=${typed}>`}</label>`;
+  return multiline
+    ? html`<p-textarea label=${label} max-length=${max} rows="5" counter="true" .value=${live(draft[key])}
+        @input=${typed} @change=${typed}></p-textarea>`
+    : html`<p-input-text label=${label} max-length=${max} .value=${live(draft[key])} @input=${typed}
+        @change=${typed}></p-input-text>`;
 }
 
 function tick(c) {
@@ -112,9 +100,7 @@ function tick(c) {
     state.editing.draft.categories = checked ? [...new Set([...chosen, c])] : chosen.filter((x) => x !== c);
     show();
   };
-  return state.pds
-    ? html`<p-checkbox label=${c} .checked=${live(on)} @change=${flip}></p-checkbox>`
-    : html`<label><input type="checkbox" .checked=${live(on)} @change=${flip}> ${c}</label>`;
+  return html`<p-checkbox label=${c} .checked=${live(on)} @change=${flip}></p-checkbox>`;
 }
 
 function age(iso) {
@@ -339,8 +325,6 @@ function view() {
   document.getElementById("shown").textContent = available ? `${shown.length} of ${loaded.entries.length} shown` : "";
   const errors = loaded?.parse_errors ? ` ${loaded.parse_errors} file(s) could not be read.` : "";
   return html`
-    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
-      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-inline-notification id="unavailable" state="info" heading="No shared repository" heading-tag="h2"
@@ -405,8 +389,7 @@ async function refresh() {
   show();
 }
 
-// The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
-state.pds = await designSystem();
+await defined(["p-select", "p-button", "p-checkbox", "p-input-text", "p-textarea"]);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !state.editing) refresh(); });
 refresh();
 </script>

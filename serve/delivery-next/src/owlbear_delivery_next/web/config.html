@@ -17,18 +17,6 @@
   p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
   details.panel > summary { font-size: var(--p-typescale-md); }
   details.panel[open] { gap: var(--p-spacing-static-md); }
-  .scroll { min-width: 0; overflow-x: auto; }
-  .no-pds table { width: 100%; border-collapse: collapse; font-size: var(--p-typescale-sm); }
-  .no-pds caption { text-align: start; font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
-  .no-pds :is(th, td) {
-    padding: var(--p-spacing-static-xs) var(--p-spacing-static-sm); text-align: start; vertical-align: top;
-    border-bottom: 1px solid var(--p-color-contrast-lower);
-  }
-  .no-pds td { min-width: 7rem; }
-  .no-pds td label { display: block; }
-  .no-pds td :is(select, input:not([type="checkbox"])) { min-width: 11rem; }
-  .no-pds td select { max-width: 14rem; }
-  .no-pds p-text[color="error"] { color: var(--p-color-error); }
   #pack-stages { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding-inline-start: 1.5rem; }
   #pack-stages li > * { display: inline-block; vertical-align: middle; margin-inline-end: var(--p-spacing-static-xs); }
   #pack-log { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
@@ -49,7 +37,7 @@
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { call, designSystem, guard, here, loaded as clones, project as current } from "/assets/ui.mjs";
+import { call, defined, guard, here, loaded as clones, project as current } from "/assets/ui.mjs";
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const INHERIT = "inherit";  // the option that clears the layer's own value
@@ -79,7 +67,7 @@ const FOUND = { open: "to fix", fixed: "fixed by the updater", rejected: "reject
 // Everything shown comes from here (TD-264): drafts per layer ("role.field" -> as typed), the folder being typed,
 // the offered models once read, and the design pack's update with the notes typed for its questions.
 const state = {
-  pds: true, loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
+  loaded: null, layer: "project", saving: false, offered: null, modelsNote: "", error: "", status: "",
   folder: null, pack: null, packProblem: "", update: null, packNotes: new Map(),
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
@@ -121,75 +109,49 @@ function source(key, inUse) {
 }
 
 function cell(...parts) {
-  return state.pds ? html`<p-table-cell multiline="true">${parts}</p-table-cell>` : html`<td>${parts}</td>`;
+  return html`<p-table-cell multiline="true">${parts}</p-table-cell>`;
 }
 
 function row(...cells) {
-  return state.pds ? html`<p-table-row>${cells}</p-table-row>` : html`<tr>${cells}</tr>`;
+  return html`<p-table-row>${cells}</p-table-row>`;
 }
 
-// A table: the design system's, else a native one in a box that scrolls on a narrow screen and takes the keyboard.
 function table(caption, heads, body, rows, { id, hidden = false } = {}) {
-  if (state.pds) {
-    return html`<p-table id=${id ?? nothing} caption=${caption} ?hidden=${hidden}><p-table-head><p-table-head-row>
-      ${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
-      <p-table-body id=${body}>${rows}</p-table-body></p-table>`;
-  }
-  return html`<div id=${id ?? nothing} class="scroll" role="region" tabindex="0" aria-label=${caption}
-    ?hidden=${hidden}><table><caption>${caption}</caption>
-    <thead><tr>${heads.map((h) => html`<th scope="col">${h}</th>`)}</tr></thead>
-    <tbody id=${body}>${rows}</tbody></table></div>`;
+  return html`<p-table id=${id ?? nothing} caption=${caption} ?hidden=${hidden}><p-table-head><p-table-head-row>
+    ${heads.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row></p-table-head>
+    <p-table-body id=${body}>${rows}</p-table-body></p-table>`;
 }
 
 // A table cell's choice: its column says what it is, so the label is for assistive technology only.
 // *wrong* says why the choice cannot run, for a choice that is checked (an effort); undefined for the others.
 function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
   const changed = (e) => chosen(e.target.value);
-  const items = options.map(([v, said]) => (state.pds ? html`<p-select-option value=${v}>${said}</p-select-option>`
-    : html`<option value=${v} ?selected=${v === value}>${said}</option>`));
-  if (state.pds) {
-    const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
-    return html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
-      filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
-      .value=${live(value)} @change=${changed}>${items}</p-select>`;
-  }
-  const said = wrong === undefined ? undefined : `${key}-message`;
-  return html`<select aria-label=${label} data-key=${key ?? nothing} ?disabled=${disabled} .value=${live(value)}
-    aria-invalid=${said ? (wrong ? "true" : "false") : nothing} aria-describedby=${said ?? nothing}
-    @change=${changed}>${items}</select>${said ? html`<p-text size="xs" color="error" class="message"
-    id=${said}>${wrong}</p-text>` : nothing}`;
+  const items = options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`);
+  const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
+  return html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
+    filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
+    .value=${live(value)} @change=${changed}>${items}</p-select>`;
 }
 
 function typed(label, value, onInput, { key, placeholder, inputmode, disabled = false } = {}) {
   const keep = (e) => onInput(e.target.value ?? "");
-  return state.pds
-    ? html`<p-input-text label=${label} hide-label="true" data-key=${key ?? nothing}
-        placeholder=${placeholder ?? nothing} inputmode=${inputmode ?? nothing} ?disabled=${disabled}
-        .value=${live(value)} @input=${keep} @change=${keep}></p-input-text>`
-    : html`<input type="text" aria-label=${label} data-key=${key ?? nothing} placeholder=${placeholder ?? nothing}
-        inputmode=${inputmode ?? nothing} ?disabled=${disabled} .value=${live(value)} @input=${keep}>`;
+  return html`<p-input-text label=${label} hide-label="true" data-key=${key ?? nothing}
+    placeholder=${placeholder ?? nothing} inputmode=${inputmode ?? nothing} ?disabled=${disabled}
+    .value=${live(value)} @input=${keep} @change=${keep}></p-input-text>`;
 }
 
 function tick(label, checked, hideLabel = true) {
-  if (state.pds) {
-    return html`<p-checkbox label=${label} hide-label=${hideLabel ? "true" : "false"} disabled="true"
-      .checked=${checked}></p-checkbox>`;
-  }
-  const box = html`<input type="checkbox" disabled aria-label=${hideLabel ? label : nothing} .checked=${checked}>`;
-  return hideLabel ? box : html`<label>${box} ${label}</label>`;
+  return html`<p-checkbox label=${label} hide-label=${hideLabel ? "true" : "false"} disabled="true"
+    .checked=${checked}></p-checkbox>`;
 }
 
 function pure(label, onclick) {
-  return state.pds
-    ? html`<p-button-pure type="button" size="x-small" icon="reset" @click=${onclick}>${label}</p-button-pure>`
-    : html`<button type="button" @click=${onclick}>${label}</button>`;
+  return html`<p-button-pure type="button" size="x-small" icon="reset" @click=${onclick}>${label}</p-button-pure>`;
 }
 
 function button(label, onclick, { id, icon, variant, busy = false, disabled = false } = {}) {
-  return state.pds
-    ? html`<p-button id=${id ?? nothing} type="button" compact="true" icon=${icon ?? nothing}
-        variant=${variant ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`
-    : html`<button id=${id ?? nothing} type="button" .disabled=${busy || disabled} @click=${onclick}>${label}</button>`;
+  return html`<p-button id=${id ?? nothing} type="button" compact="true" icon=${icon ?? nothing}
+    variant=${variant ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
 }
 
 function saved(layer, key) {
@@ -338,13 +300,10 @@ function contextCell(role) {
     const items = [["default", tokens(model.context), `${tokens(model.context)}, default context`],
       ["long", `${tokens(model.long.context)}${up ? "\u00a0\u2191" : ""}`,
         `${tokens(model.long.context)}, long context, ${more}`]];
-    control = state.pds
-      ? html`<p-segmented-control label=${label} hide-label="true" compact="true" columns="2" data-key=${key}
-          ?disabled=${state.saving} .value=${live(tierOf(role))} @change=${(e) => edit(key, e.target.value)}>
-          ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
-            aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`
-      : choose(label, items.map(([v, , aria]) => [v, aria]), tierOf(role), (v) => edit(key, v),
-        { key, disabled: state.saving });
+    control = html`<p-segmented-control label=${label} hide-label="true" compact="true" columns="2" data-key=${key}
+      ?disabled=${state.saving} .value=${live(tierOf(role))} @change=${(e) => edit(key, e.target.value)}>
+      ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
+        aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`;
   } else if (model) {
     const wrong = tierMismatch(role);
     control = html`<p-text size="sm">${tokens(model.context)} \u00b7 only tier</p-text>${wrong ? html`
@@ -414,8 +373,7 @@ function inactive(label, value, key) {
       { disabled: true });
   } else if (key.endsWith(".categories")) {
     const names = Object.keys(state.loaded.catalogue.categories);
-    control = html`<div role=${state.pds ? nothing : "group"} aria-label=${state.pds ? nothing : label}>
-      ${names.map((name) => tick(name, value.includes(name), false))}</div>`;
+    control = html`<div>${names.map((name) => tick(name, value.includes(name), false))}</div>`;
   } else {
     control = typed(label, shown(value), () => {}, { disabled: true });
   }
@@ -618,13 +576,10 @@ function packQuestion(q) {
   if (q.kind === "dispute") {
     const label = "Your note (guides the updater; needed to ask the challenger again)";
     const note = state.packNotes.get(q.id) ?? "", keep = (e) => state.packNotes.set(q.id, e.target.value ?? "");
-    field = state.pds
-      ? html`<p-textarea label=${label} rows="2" max-length="2000" .value=${live(note)} @input=${keep}
-          @change=${keep}></p-textarea>`
-      : html`<label class="field">${label}<textarea rows="2" maxlength="2000" .value=${live(note)}
-          @input=${keep}></textarea></label>`;
+    field = html`<p-textarea label=${label} rows="2" max-length="2000" .value=${live(note)} @input=${keep}
+      @change=${keep}></p-textarea>`;
   }
-  return html`<div class="pack-question">${state.pds ? html`<p-text>${q.text}</p-text>` : html`<p>${q.text}</p>`}
+  return html`<div class="pack-question"><p-text>${q.text}</p-text>
     ${q.diff ? html`<pre class="pack-diff" aria-label="The change">${q.diff}</pre>` : nothing}
     ${field}
     <div class="row">${q.options.map((o) => button(o.label, () => answerUpdate(q, o, state.packNotes.get(q.id) ?? ""),
@@ -804,14 +759,9 @@ function scopeSection() {
     }
     location.assign(here({ project: v.slice(3) }));
   };
-  const control = state.pds
-    ? html`<p-select id="scope" label="Layer" ?disabled=${state.saving} .value=${live(state.layer)}
-        @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<p-select-option value=${v}
-        ?disabled=${v === "global" && !loaded.global_location}>${said}</p-select-option>`)}</p-select>`
-    : html`<label class="field">Layer<select id="scope" ?disabled=${state.saving} .value=${live(state.layer)}
-        @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<option value=${v}
-        ?selected=${v === state.layer} ?disabled=${v === "global" && !loaded.global_location}>${said}</option>`)}
-        </select></label>`;
+  const control = html`<p-select id="scope" label="Layer" ?disabled=${state.saving} .value=${live(state.layer)}
+    @change=${(e) => pick(e.target.value)}>${options.map(([v, said]) => html`<p-select-option value=${v}
+    ?disabled=${v === "global" && !loaded.global_location}>${said}</p-select-option>`)}</p-select>`;
   return html`<section class="panel" aria-labelledby="scope-title">
     <p-heading size="lg"><h2 id="scope-title">Where you edit</h2></p-heading>
     <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
@@ -854,11 +804,8 @@ function acrossSection() {
     cell(r.machine),
     cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
   const flip = (e) => { state.everything = e.target.checked === true; show(); };
-  const showAll = state.pds
-    ? html`<p-checkbox id="across-all" label="Show all settings" .checked=${live(state.everything)}
-        @change=${flip}></p-checkbox>`
-    : html`<label><input id="across-all" type="checkbox" .checked=${live(state.everything)} @change=${flip}>
-        Show all settings</label>`;
+  const showAll = html`<p-checkbox id="across-all" label="Show all settings" .checked=${live(state.everything)}
+    @change=${flip}></p-checkbox>`;
   const unread = state.unread.length ? `Not read: ${state.unread.join("; ")}.` : "";
   return html`<section class="panel" aria-labelledby="across-title">
     <p-heading size="lg"><h2 id="across-title">Across projects</h2></p-heading>
@@ -894,22 +841,13 @@ function machineEdit(key, value) {
 
 function machineControls() {
   const pick = (e) => machineEdit("channel", e.target.value);
-  const channel = state.pds
-    ? html`<p-select id="machine-channel" label="Versions this machine takes" .value=${live(machineValue("channel"))}
-        ?disabled=${state.machineSaving} @change=${pick}>${CHANNELS.map(([v, said]) => html`<p-select-option
-        value=${v}>${said}</p-select-option>`)}
-      </p-select>`
-    : html`<label class="field">Versions this machine takes<select id="machine-channel"
-        .value=${live(machineValue("channel"))} ?disabled=${state.machineSaving} @change=${pick}>${CHANNELS.map(
-        ([v, said]) => html`<option value=${v} ?selected=${v === machineValue("channel")}>${said}</option>`)}
-        </select></label>`;
+  const channel = html`<p-select id="machine-channel" label="Versions this machine takes"
+    .value=${live(machineValue("channel"))} ?disabled=${state.machineSaving} @change=${pick}>${CHANNELS.map(
+    ([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
   const box = (key, label) => {
     const flip = (e) => machineEdit(key, e.target.checked === true);
-    return state.pds
-      ? html`<p-checkbox label=${label} .checked=${live(machineValue(key))} ?disabled=${state.machineSaving}
-          @change=${flip}></p-checkbox>`
-      : html`<label><input type="checkbox" .checked=${live(machineValue(key))} ?disabled=${state.machineSaving}
-          @change=${flip}> ${label}</label>`;
+    return html`<p-checkbox label=${label} .checked=${live(machineValue(key))} ?disabled=${state.machineSaving}
+      @change=${flip}></p-checkbox>`;
   };
   // TD-336: the machine's total of agent sessions at once, across every project it serves.
   const count = (e) => {
@@ -917,12 +855,9 @@ function machineControls() {
     machineEdit("sessions", /^\d+$/.test(v) ? Number(v) : v);
   };
   const label = "Agent sessions at once on this machine, across its projects";
-  const sessions = state.pds
-    ? html`<p-input-text id="machine-sessions" label=${label} inputmode="numeric"
-        .value=${live(String(machineValue("sessions")))} ?disabled=${state.machineSaving} @input=${count}
-        @change=${count}></p-input-text>`
-    : html`<label class="field">${label}<input id="machine-sessions" type="text" inputmode="numeric"
-        .value=${live(String(machineValue("sessions")))} ?disabled=${state.machineSaving} @input=${count}></label>`;
+  const sessions = html`<p-input-text id="machine-sessions" label=${label} inputmode="numeric"
+    .value=${live(String(machineValue("sessions")))} ?disabled=${state.machineSaving} @input=${count}
+    @change=${count}></p-input-text>`;
   return html`${channel}${box("update_when_idle", "Update itself when idle")}
     ${box("update_while_paused", "Update itself while paused")}
     ${sessions}
@@ -1024,11 +959,8 @@ function folderSection() {
   const loaded = state.loaded, off = !loaded.folder || state.saving, value = state.folder ?? loaded.folder ?? "";
   const keep = (e) => { state.folder = e.target.value ?? ""; };
   const label = "Folder in the shared settings repository";
-  const input = state.pds
-    ? html`<p-input-text id="folder" label=${label} ?disabled=${off} .value=${live(value)} @input=${keep}
-        @change=${keep}></p-input-text>`
-    : html`<label class="field">${label}<input id="folder" type="text" ?disabled=${off} .value=${live(value)}
-        @input=${keep}></label>`;
+  const input = html`<p-input-text id="folder" label=${label} ?disabled=${off} .value=${live(value)} @input=${keep}
+    @change=${keep}></p-input-text>`;
   return html`<section class="panel" aria-labelledby="folder-title">
     <p-heading size="lg"><h2 id="folder-title">Project folder</h2></p-heading>
     <div class="row">${input}${button("Rename folder", rename, { id: "rename", icon: "edit", disabled: off })}</div>
@@ -1143,10 +1075,8 @@ function view() {
   const loaded = state.loaded;
   if (loaded && !loaded.global_location && state.layer === "global") state.layer = "project";
   return html`
-    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
-      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
-    <p-inline-notification id="error" state="error" dismiss-button="false" role=${state.pds ? nothing : "alert"}
-      ?hidden=${!state.error}>${state.error}</p-inline-notification>
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
+    </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
     ${loaded ? html`${scopeSection()}${folderSection()}${settingsSections()}${acrossSection()}${machineSection()}`
       : packSection()}`;
@@ -1159,8 +1089,7 @@ document.addEventListener("owlbear-machine", async () => {
   show();
 });
 
-// PDS loads from its CDN (TD-39, no local delivery), so the page picks its controls once.
-state.pds = await designSystem(["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"]);
+await defined(["p-select", "p-input-text", "p-checkbox", "p-button", "p-table"]);
 show();
 await reload();
 show();

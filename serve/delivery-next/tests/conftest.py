@@ -168,6 +168,41 @@ def change_repo(tmp_path, monkeypatch) -> Path:
     return work
 
 
+class Pds:
+    """The pages' Porsche Design System controls in Playwright, with the PDS CDN reachable (TD-39, TD-398)."""
+
+    CDN = "https://cdn.ui.porsche.com/"
+
+    @classmethod
+    def only(cls, page, base: str) -> None:
+        """Let *page* reach the test host and the PDS CDN only; anything else is refused."""
+        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith((base, cls.CDN)) else r.abort())
+
+    @staticmethod
+    def modal(page):
+        """The newest open ``p-modal`` (one just answered fades out for a moment): its content is slotted, so its text
+        and buttons are found from it, not from its dialog."""
+        return page.locator("p-modal").filter(has=page.get_by_role("dialog")).last
+
+    @staticmethod
+    def select(scope, label: str):
+        """The ``p-select`` labelled *label*; its label names its combobox and listbox, so get_by_label finds two."""
+        return scope.locator(f'p-select[label="{label}"]')
+
+    @classmethod
+    def pick(cls, scope, label: str, value: str) -> None:
+        """Choose the option of value *value* in the select labelled *label*, as a person does: open it, click it."""
+        select = cls.select(scope, label)
+        select.get_by_role("combobox").click()
+        select.locator(f'p-select-option[value="{value}"]').click()
+
+
+@pytest.fixture
+def pds() -> type[Pds]:
+    """Helpers for pages on PDS components in a real browser."""
+    return Pds
+
+
 def _offline(url: str, *_args: object, **_kwargs: object) -> bytes:
     msg = f"offline in tests: {url}"
     raise OSError(msg)

@@ -61,7 +61,7 @@ def assets(app: FastAPI) -> None:
 
 
 def nav(current: int) -> str:
-    """The tab bar with tab ``current`` marked; plain links, so it works before the design system loads."""
+    """The tab bar with tab ``current`` marked: PDS's tabs bar over plain links."""
     links = "".join(
         f'<a href="{path}"{' aria-current="page"' if i == current else ""}>{label}</a>'
         for i, (path, label, _) in enumerate(TABS)

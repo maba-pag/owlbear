@@ -1,6 +1,5 @@
 /* Shared by every host page; pages.py puts it in place of the base marker, before the page's own styles. */
 :not(:defined) { visibility: hidden; }
-.no-pds :not(:defined) { visibility: visible; }
 [hidden] { display: none !important; }
 #page { display: contents; }  /* the part a page renders with lit-html sits in main's grid (TD-264) */
 body {
@@ -52,22 +51,6 @@ textarea, input, select, button { font: inherit; }
 #machine p { margin: 0; }
 #machine .paused { padding: var(--p-spacing-static-sm) var(--p-spacing-static-md); background: var(--p-color-surface);
   border-radius: var(--p-radius-lg); }
-/* Without the PDS CDN the page keeps working: native controls, and layout for the display elements. */
-.no-pds body { font-family: system-ui, sans-serif; line-height: 1.5; }
-.no-pds p-text, .no-pds p-heading, .no-pds p-inline-notification { display: block; }
-.no-pds p-heading > * { margin: 0; }
-.no-pds p-text[size="xs"] { font-size: var(--p-typescale-xs); }
-.no-pds p-text[size="sm"] { font-size: var(--p-typescale-sm); }
-.no-pds p-text[color="contrast-medium"] { color: var(--p-color-contrast-medium); }
-.no-pds p-text[weight="semibold"] { font-weight: 600; }
-.no-pds p-tag {
-  display: inline-block; padding: 0 var(--p-spacing-static-xs); font-size: var(--p-typescale-xs); font-weight: 600;
-  border: 1px solid currentColor; border-radius: var(--p-radius-sm);
-}
-.no-pds nav a { margin-inline-end: var(--p-spacing-static-md); }
-.no-pds p-inline-notification {
-  padding: var(--p-spacing-static-sm); border: 1px solid; border-radius: var(--p-radius-md);
-}
 .ask .parts { display: grid; gap: var(--p-spacing-static-md); max-width: 38rem; }
 .ask .parts ul { margin: var(--p-spacing-static-xs) 0 0; padding-inline-start: var(--p-spacing-static-lg); }
 .ask .row { margin-block-start: var(--p-spacing-static-md); }

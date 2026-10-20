@@ -79,8 +79,8 @@ def served(tmp_path: Path) -> Iterator[Callable[[RoundLoop | None], tuple[pack_j
 
 
 @contextlib.contextmanager
-def opened(base: str) -> Iterator[Any]:
-    """The Settings page in a real browser, offline: only the test host answers, so the plain controls show."""
+def opened(base: str, pds: Any) -> Iterator[Any]:
+    """The Settings page in a real browser: only the test host and the PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -89,7 +89,7 @@ def opened(base: str) -> Iterator[Any]:
         except Error as exc:
             pytest.skip(f"no Playwright Chromium: {exc}")
         page = browser.new_page()
-        page.route("**/*", lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
+        pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
         page.goto(f"{base}/config")
         yield page
@@ -97,11 +97,11 @@ def opened(base: str) -> Iterator[Any]:
 
 
 @pytest.mark.browser
-def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_settings_page(served) -> None:
+def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_settings_page(served, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     job, base = served()
-    with opened(base) as page:
+    with opened(base, pds) as page:
         ask = page.locator("#pack-ask")
         expect(ask).to_be_visible()
         state = page.locator("#pack-state")
@@ -127,7 +127,7 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_settings_pag
 
 
 @pytest.mark.browser
-def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_changed_for(served) -> None:
+def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_changed_for(served, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     found = [
@@ -136,12 +136,14 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
     ]
     lp = RoundLoop(subject=PACK, policy=RoundPolicy(), round=1, findings=found, unreviewed=["r1"], ended="count")
     job, base = served(lp)
-    with opened(base) as page:
+    with opened(base, pds) as page:
         expect(page.locator("#pack-ask")).to_contain_text("The updater's last repair (r1) was not reviewed")
         page.get_by_role("button", name="Activate the unreviewed repair").click()
         dialog = page.get_by_role("dialog")
-        expect(dialog).to_contain_text("Repair r1: no challenger reviewed it.")
-        expect(dialog).to_contain_text("F2 not changed for (rejected by the updater; the challenger accepted that)")
-        dialog.get_by_role("button", name="Keep it waiting").click()
+        expect(dialog).to_be_visible()
+        said = pds.modal(page)
+        expect(said).to_contain_text("Repair r1: no challenger reviewed it.")
+        expect(said).to_contain_text("F2 not changed for (rejected by the updater; the challenger accepted that)")
+        said.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
     assert job.read()["state"] == "waiting"  # declining activates nothing

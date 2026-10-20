@@ -29,7 +29,7 @@
   .entry .title, .entry li { overflow-wrap: anywhere; }
   .entry .more { padding-top: var(--p-spacing-static-sm); }
   .entry .triage { flex-wrap: nowrap; }
-  .entry .triage p-select, .entry .triage label { flex: 0 1 14rem; min-width: 0; }
+  .entry .triage p-select { flex: 0 1 14rem; min-width: 0; }
   .said { white-space: pre-wrap; }
   .later > summary { font-size: var(--p-typescale-lg); }
   .later[open] > summary { margin-bottom: var(--p-spacing-static-sm); }
@@ -54,7 +54,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, designSystem, here, loaded, project } from "/assets/ui.mjs";
+import { call, defined, here, loaded, project } from "/assets/ui.mjs";
 
 const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
 const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review", run: "a run" };
@@ -63,7 +63,7 @@ const DIALOG = "{ 'aria-haspopup': 'dialog' }";
 const GET = 15000, WRITE = 60000;  // reads and writes go to GitHub's issues, a network round trip or several
 // Everything the page shows comes from here, so a re-render never loses what the person typed, ticked or opened.
 const state = {
-  pds: true, loaded: null, error: "", status: "", started: null, creating: false, adding: false,
+  loaded: null, error: "", status: "", started: null, creating: false, adding: false,
   idea: { title: "", text: "", clone: "" },  // the Add an idea form, and the clone it is found in
   choosing: null,  // the entries a Change starts from while the owner picks its clone
   notes: new Map(),  // entry key -> notes typed and not saved yet (an entry's key: its repository and number)
@@ -85,53 +85,36 @@ function notify(message = "") {
 }
 
 function button(label, onclick, { variant, icon, aria, busy = false, disabled = false } = {}) {
-  return state.pds
-    ? html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
-        aria=${aria ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`
-    : html`<button type="button" .disabled=${busy || disabled} @click=${onclick}>${label}</button>`;
+  return html`<p-button type="button" compact="true" variant=${variant ?? nothing} icon=${icon ?? nothing}
+    aria=${aria ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
 }
 
 // A choice list showing *value* as the data has it; *chosen* gets the person's pick.
 function select(label, options, value, chosen, { compact = false, hideLabel = false } = {}) {
   const changed = (e) => chosen(e.target.value);
-  if (state.pds) {
-    return html`<p-select label=${label} compact=${compact ? "true" : nothing}
-        hide-label=${hideLabel ? "true" : nothing} .value=${live(value)} @change=${changed}>
-      ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
-  }
-  return html`<label class="field">${label}<select .value=${live(value)} @change=${changed}>
-    ${options.map(([v, said]) => html`<option value=${v} ?selected=${v === value}>${said}</option>`)}
-    </select></label>`;
+  return html`<p-select label=${label} compact=${compact ? "true" : nothing}
+      hide-label=${hideLabel ? "true" : nothing} .value=${live(value)} @change=${changed}>
+    ${options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
 }
 
 // A text field bound to a draft: *typed* keeps each keystroke, so a re-render shows the draft again.
 function field(label, value, typed, { multiline = false, rows = "3" } = {}) {
   const max = multiline ? "4000" : "200", keep = (e) => typed(e.target.value ?? "");
-  if (state.pds) {
-    return multiline
-      ? html`<p-textarea label=${label} max-length=${max} rows=${rows} .value=${live(value)} @input=${keep}
-          @change=${keep}></p-textarea>`
-      : html`<p-input-text label=${label} max-length=${max} .value=${live(value)} @input=${keep}
-          @change=${keep}></p-input-text>`;
-  }
-  return html`<label class="field">${label}${multiline
-    ? html`<textarea maxlength=${max} rows=${rows} .value=${live(value)} @input=${keep}></textarea>`
-    : html`<input type="text" maxlength=${max} .value=${live(value)} @input=${keep}>`}</label>`;
+  return multiline
+    ? html`<p-textarea label=${label} max-length=${max} rows=${rows} .value=${live(value)} @input=${keep}
+        @change=${keep}></p-textarea>`
+    : html`<p-input-text label=${label} max-length=${max} .value=${live(value)} @input=${keep}
+        @change=${keep}></p-input-text>`;
 }
 
 function tick(label, checked, flipped) {
   const flip = (e) => flipped(e.target.checked === true);
-  return state.pds
-    ? html`<p-checkbox label=${label} hide-label="true" .checked=${live(checked)} @change=${flip}></p-checkbox>`
-    : html`<input type="checkbox" aria-label=${label} .checked=${live(checked)} @change=${flip}>`;
+  return html`<p-checkbox label=${label} hide-label="true" .checked=${live(checked)} @change=${flip}></p-checkbox>`;
 }
 
 function labelled(label, checked, flipped, disabled = false) {
   const flip = (e) => flipped(e.target.checked === true);
-  return state.pds
-    ? html`<p-checkbox label=${label} .checked=${live(checked)} ?disabled=${disabled} @change=${flip}></p-checkbox>`
-    : html`<label><input type="checkbox" .checked=${live(checked)} .disabled=${disabled} @change=${flip}>
-        ${label}</label>`;
+  return html`<p-checkbox label=${label} .checked=${live(checked)} ?disabled=${disabled} @change=${flip}></p-checkbox>`;
 }
 
 // The clones of the entry's repository on this machine: where its Changes start and its writes go.
@@ -396,8 +379,6 @@ function view() {
       </div>`);
   }
   return html`
-    <p id="offline" role="status" ?hidden=${state.pds}>The Porsche Design System did not load from
-      cdn.ui.porsche.com, so the page uses plain controls. Reload to try again.</p>
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     ${started()}
@@ -535,8 +516,7 @@ async function shapeFrom(picked, of) {
   }
 }
 
-// The PDS components load from its CDN (PDS 4 has no local delivery), so the page picks its controls once.
-state.pds = await designSystem();
+await defined(["p-select", "p-button", "p-checkbox", "p-input-text", "p-textarea"]);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !state.creating) refresh(); });
 refresh();
 </script>
