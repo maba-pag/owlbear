@@ -32,6 +32,7 @@ class Host:
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
     closed = staticmethod(lambda: False)
+    updating = staticmethod(lambda: "")
     launching = threading.Lock()
 
 

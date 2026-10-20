@@ -1,7 +1,8 @@
 """The machine host's process (TD-242): one per machine, serving every registered project.
 
 It starts paused unless ``--run`` asks it to run; a start after a crash is paused all the same (TD-350). A crash is
-what leaves ``host.json`` behind: a host that ends any other way removes it.
+what leaves ``host.json`` behind: a host that ends any other way removes it, unless it hands over to a new version,
+which starts with the old one's address, token and state instead (self-update §5.4).
 
 It takes ``~/.owlbear/host.lock``, binds a free loopback port and writes ``~/.owlbear/host.json``; each project
 it loads gets its own ``host.json`` with the machine's address and the project's id, so a clone's chat server and
@@ -14,16 +15,19 @@ import contextlib
 import os
 import secrets
 import socket
+import subprocess
 import sys
 import threading
+import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import uvicorn
 
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.machine_host import app, environment, registry
+from owlbear_delivery_next.machine_host import alias, app, environment, handover, registry
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
@@ -57,43 +61,93 @@ def running() -> HostRecord | None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``python -m owlbear_delivery_next machine [--run]``: the process ``owlbear start`` and the login item run."""
-    return serve(run="--run" in (argv or []))
+    """``python -m owlbear_delivery_next machine [--run | --standby]``: ``owlbear start``, the login item, an update.
+
+    A host started through the runtime alias runs on from its version's own folder, so a later switch of the alias
+    never changes the code it loads (self-update §3).
+    """
+    args = argv or []
+    exe = Path(sys.executable)
+    if (own := alias.physical(exe)) != exe and own.exists():
+        os.execv(own, [str(own), "-m", "owlbear_delivery_next", "machine", *args])  # noqa: S606 - this interpreter
+    if "--standby" in args:  # an update's new version: it takes over once the old host says so (§5.2)
+        version = args[args.index("--standby") + 1] if len(args) > args.index("--standby") + 1 else ""
+        return serve(handing=True) if handover.standby(version) else 0
+    if "--takeover" in args:  # an update's forward restart: the handover file still names the old address (§5.5)
+        return serve(handing=True)
+    return serve(run="--run" in args)
 
 
-def serve(*, run: bool = False) -> int:
-    """Run the machine host until it is stopped, or print the running one's URL and exit 0."""
+def _lock(home: Path, *, wait: float) -> int | None:
+    """``host.lock`` held, waiting up to *wait* seconds for the host handing over to release it; None when held."""
+    deadline = time.monotonic() + wait
+    while True:
+        dir_fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            return open_lock(dir_fd, blocking=False, name="host.lock")
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                return None
+        finally:
+            os.close(dir_fd)
+        time.sleep(0.2)
+
+
+def _bind(port: int) -> socket.socket:
+    """The loopback socket: *port* when handed over (its old host just closed it), else a free one."""
+    deadline = time.monotonic() + (10 if port else 0)
+    while True:
+        sock = socket.socket()
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            sock.close()
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.2)
+            continue
+        return sock
+
+
+def serve(*, run: bool = False, handing: bool = False) -> int:
+    """Run the machine host until it is stopped, or print the running one's URL and exit 0.
+
+    *handing*: this new version takes over from the host that started it as its standby (§5.4).
+    """
     for name in environment.scrub():
         sys.stdout.write(f"dropped {name} from the environment: a project's own settings decide it\n")
     home = local_home.root()
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    dir_fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        lock_fd = open_lock(dir_fd, blocking=False, name="host.lock")
-    except BlockingIOError:
+    lock_fd = _lock(home, wait=handover.HEALTH if handing else 0)
+    if lock_fd is None:
         sys.stdout.write(f"OwlBear is already running: {link(running()) or '(starting)'}\n")
         return 0
-    finally:
-        os.close(dir_fd)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    url, token = f"http://127.0.0.1:{sock.getsockname()[1]}/", secrets.token_urlsafe(32)
+    given = handover.taken() if handing else None
+    alias.complete()  # before any store opens: a half-done first migration, and the mark (§3, §4)
+    sock = _bind(given.port if given else 0)
+    url = f"http://127.0.0.1:{sock.getsockname()[1]}/"
+    token = given.token if given else secrets.token_urlsafe(32)
     record = HostRecord(url=url, token=token, pid=os.getpid(), started_at=datetime.now(UTC), code=codebase.CURRENT)
-    crashed = (home / "host.json").exists()
+    crashed = given is None and (home / "host.json").exists()
     atomic_write(home / "host.json", record.model_dump_json())
     (home / "host.json").chmod(0o600)
-    machine = Machine(record, paused=crashed or not run)
-    if not machine.paused:
+    machine = Machine(record, paused=given.paused if given else crashed or not run)
+    if given:
+        machine.ending, machine.updated = given.ending, given.version
+    elif not machine.paused:
         with contextlib.suppress(registry.RegistryError):
             registry.resumed(record.started_at)
     said = "running" if not machine.paused else "paused until you press Resume"
-    machine.say(f"OwlBear {os.getpid()} on {link(record)} · {said}" + (" (the last run crashed)" if crashed else ""))
+    now = f" · now {given.version}" if given else " (the last run crashed)" if crashed else ""
+    machine.say(f"OwlBear {os.getpid()} on {link(record)} · {said}{now}")
     machine.load_all()
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
     threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
 
-    def ended() -> None:  # the discovery file goes while this process still holds the lock
-        (home / "host.json").unlink(missing_ok=True)
+    def ended() -> None:  # the discovery file goes while this process still holds the lock; a handover keeps it
+        if machine.handover is None:
+            (home / "host.json").unlink(missing_ok=True)
 
     server = Server(uvicorn.Config(app.create(machine, ended), log_level="warning"), machine)
     machine.on_stop = server.stop
@@ -107,4 +161,28 @@ def serve(*, run: bool = False) -> int:
         if clean:  # an exception leaves the record behind: the next start is after a crash
             ended()
         os.close(lock_fd)
+    if machine.handover is not None:
+        _handed(machine, *machine.handover)
     return 0
+
+
+def _handed(machine: Machine, standby: handover.Standby, given: handover.Handover) -> None:
+    """After the old host let go (§5.4, §5.5): the standby takes over.
+
+    Without every project loaded in time the new version is started once more from the alias, never the older one
+    (TD-305).
+    """
+    handover.write(given)
+    if standby.take_over() and handover.watch(given):
+        machine.say(f"handed over to {given.version}")
+        return
+    machine.say(f"{given.version} did not take over within {handover.HEALTH:.0f} s; starting it again from the alias")
+    standby.kill()  # a candidate that holds the lock but serves nothing must not keep it
+    handover.write(given)  # it may have read the file: the forward restart takes over the same address and state
+    python = local_home.root() / local_home.RUNTIME / ".venv" / "bin" / "python"
+    with (local_home.root() / "host.log").open("ab") as out:
+        subprocess.Popen(  # noqa: S603 - the alias's interpreter and a fixed module
+            [str(python), "-m", "owlbear_delivery_next", "machine", "--takeover"],
+            cwd=local_home.root(), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )  # fmt: skip

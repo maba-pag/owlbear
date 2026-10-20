@@ -39,6 +39,7 @@ class Host:
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
     closed = staticmethod(lambda: False)
+    updating = staticmethod(lambda: "")
     launching = threading.Lock()
 
     def __init__(self, project: str) -> None:

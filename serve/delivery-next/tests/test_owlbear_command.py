@@ -113,15 +113,20 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert said[-1] == f"OwlBear started, running: {rec.url}#token={rec.token}"
     assert control.start(said.append, paused=True) == 0
     assert said[-1].startswith("OwlBear is running")
-    assert control.projects() == {
-        "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True
+    listed = control.projects()
+    assert listed is not None
+    assert listed | {"update": None} == {
+        "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True,
+        "update": None, "updated": "",
     }  # fmt: skip
+    assert listed["update"]["phase"] == "idle"
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
     logged = (local_home.root() / control.LOG).read_text()
     assert ("· running" in logged, "stopped: every project closed" in logged) == (True, True)
 
 
+@pytest.mark.timeout(120)  # six real hosts start and stop in turn; a loaded CI runner needs more than 30 s
 def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps_the_state(monkeypatch) -> None:
     """TD-350: only a login start, a start after a crash and one asked for paused wait for Resume."""
     said = []

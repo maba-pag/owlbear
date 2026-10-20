@@ -1274,6 +1274,7 @@ class Host:
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
     closed = staticmethod(lambda: False)
+    updating = staticmethod(lambda: "")
     launching = threading.Lock()
 
     def __init__(self) -> None:  # the session slots its pack sessions take (TD-336)

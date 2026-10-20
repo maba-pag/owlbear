@@ -290,7 +290,11 @@ the pull request labels and marker settings (TD-308).
 | 5 | Idle, use, announcement, automatic updates (§7) | clock-driven tests: polls never count, Postpone, cancel, sleep |
 
 Status 2026-10-20: step 1 #473; step 2 #476 and #478; step 3 #480 to #482 and the design pack's pull request (3c, §8)
-with its C-15 alignment (#515, #516); step 4's first part (4a): `repo.git`, choosing the version (§4), installing it
-beside the others and its `selfcheck` (§5.1), with `owlbear versions [--prepare]`; the rest of step 4 (leases,
-standby, fence, activation, handover, watch, Run updates now) and step 5 not built. After step 5, steps run with the project's agents and skills switched off
+with its C-15 alignment (#515, #516); step 4's first part (4a, #517): `repo.git`, choosing the version (§4), installing it
+beside the others and its `selfcheck` (§5.1), with `owlbear versions [--prepare]`; its second part (4b): the standby
+(the version's own process, told its version on its command line), the fence, the alias rename with the first
+migration, the handover and the watch (§5.2 to §5.5), started by `owlbear update` or `POST /api/next/update`, and the
+chat server's reload answer (§5.6); a host started through the alias re-executes from its version's folder. Open in
+step 4: leases and removing old versions (§3), the pages' Run updates now button and their "now runs" notice, pending
+maintenance first (§5.8) and the crash-injection proof; step 5 not built. After step 5, steps run with the project's agents and skills switched off
 (TD-274's gap, TD-317, TD-329), the plan's item 5.

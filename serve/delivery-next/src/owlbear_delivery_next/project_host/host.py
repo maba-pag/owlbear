@@ -153,6 +153,7 @@ class Host:
         self.machine: Callable[[], list[Store]] = lambda: [self.store]  # every project store on this machine (TD-336)
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
         self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
+        self.updating: Callable[[], str] = lambda: ""  # the machine's update fence: why nothing starts now
         self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
         self.slots, self.wants, self.grants = Slots(lambda: session_slots.ALL), dict[str, int](), dict[str, int]()
         self.waiting, self.asked = set[str](), set[str]()  # Changes waiting for a session slot (TD-336)
@@ -431,6 +432,8 @@ class Host:
         if len(recent) >= BURST[0]:
             return False  # A runner that keeps exiting at once is retried after the window, not in a spin.
         with self.launching:  # a project folder rename or a project's stop waits, so no runner starts during it
+            if self.updating():
+                return False  # an update's fence: nothing starts until it hands over or lifts it
             if self.paused() and not (slug in self.passing and self.owner_runs()):
                 return False
             if (granted := session_slots.reserve(self, slug)) is None:

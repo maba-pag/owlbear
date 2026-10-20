@@ -17,6 +17,7 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - tool annotations resolve at runtime
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop
+from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -27,6 +28,15 @@ NOT_RUNNING = (
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 _STATE: dict[str, Chat] = {}
 OK = 200
+UPDATED = "OwlBear updated: reload this VS Code window"  # a chat server older than the host (self-update §5.6)
+STALE = 409
+
+
+def updated(rec: host.HostRecord | None) -> bool:
+    """Whether OwlBear runs other code than this chat server loaded: the host's, or the files under it changed."""
+    return host.stale(rec) or codebase.identity() != codebase.CURRENT
+
+
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
 PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every Change: 16 rows were 77 KB with them
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
@@ -43,6 +53,8 @@ class Chat:
         """One request to the host with its token; 503 when it is not running."""
         rec = host.running(self.store)
         down = NOT_RUNNING.format(repo=self.repo)
+        if updated(rec):  # it reads no state either: a newer version may have written it
+            return STALE, {"error": UPDATED}
         if rec is None or not rec.token:
             return 503, {"error": down}
         headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json"}
@@ -68,6 +80,8 @@ class Chat:
     def show_status(self, change: str = "") -> dict[str, Any]:
         """Every Change (or one) with its line, next action and open question; read from the state when down."""
         code, rows = self.call("GET", "/changes")
+        if code == STALE:
+            return {"running": False, "error": UPDATED}
         rec = host.running(self.store)
         out: dict[str, Any] = {"running": code == OK, "changes_page": api.link(rec) if code == OK else None}
         if code == OK and rec:
@@ -127,6 +141,8 @@ class Chat:
 
     def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:
         """Answer one worker question; recovery decisions are refused with the Changes page (T6)."""
+        if updated(host.running(self.store)):
+            return {"answered": False, "error": UPDATED}
         handle, _, qid = question.partition(".")
         for slug in self.store.slugs():
             try:

@@ -101,17 +101,50 @@ def stop(say: Say) -> int:
 
 def projects() -> dict[str, Any] | None:
     """The running host's project list, or None when it does not run or answer."""
+    return _api("projects")
+
+
+def _api(path: str, method: str = "GET") -> dict[str, Any] | None:
     rec = serve.running()
     if not (rec and rec.token):
         return None
     request = urllib.request.Request(  # noqa: S310 - the loopback address the host wrote
-        f"{rec.url}api/next/projects", headers={"Authorization": f"Bearer {rec.token}"}
+        f"{rec.url}api/next/{path}", method=method, headers={"Authorization": f"Bearer {rec.token}"}
     )
     try:
         with _LOCAL.open(request, timeout=10) as response:
             return json.load(response)
     except OSError, ValueError:
         return None
+
+
+def update(say: Say, wait: float = 1800.0) -> int:
+    """Run updates now (TD-352, TD-353) and follow the update until it ends or the new version took over.
+
+    It waits on while the update waits for running steps; another process answering at the address is the new one.
+    """
+    before = serve.running()
+    state = _api("update", "POST")
+    if state is None or before is None:
+        say("OwlBear is not running; `owlbear start` starts it")
+        return 1
+    seen, deadline = "", time.monotonic() + wait
+    while time.monotonic() < deadline:
+        line = f"{state['phase']}{f' {state["version"]}' if state.get('version') else ''}: {state['detail']}"
+        if line != seen:
+            say(line)
+            seen = line
+        if state["phase"] in {"current", "failed", "refused"}:
+            return 0 if state["phase"] == "current" else 1
+        time.sleep(1)
+        rec = serve.running()
+        if rec is not None and rec.pid not in {before.pid, 0} and (listed := projects()) and listed.get("updated"):
+            say(f"OwlBear now runs {listed['updated']}")
+            return 0
+        if rec is not None and rec.pid == before.pid and (now := _api("update")) is not None:
+            state = now
+    say("the update still runs; see `owlbear logs`")
+    return 1
 
 
 def status(say: Say) -> int:

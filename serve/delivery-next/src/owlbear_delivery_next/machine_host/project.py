@@ -181,7 +181,7 @@ class Project:
         self._publish()
         self.host.say("readiness: " + ("; ".join(failed) or "ok"))
 
-    def working(self, *, stopping: bool = False) -> list[str]:
+    def working(self, *, stopping: bool = False, requests: bool = True) -> list[str]:
         """What keeps the project from being removed: live runners, check environments and admitted work.
 
         With *stopping* (a stop when idle) also what is not yet confirmed gone: an ended step's processes, a block
@@ -193,7 +193,7 @@ class Project:
                     if (r := h.runner(s)) and h.alive(r.pid, r.created) is not False]  # fmt: skip
         if not (self.store and self.host and self.app):
             return []
-        left = [f"{n} request{'s' if n > 1 else ''}" for n in [self.gate.count] if n]
+        left = [f"{n} request{'s' if n > 1 else ''}" for n in [self.gate.count] if n and requests]
         left += self.app.state.busy()
         for slug in self.store.slugs():
             rec = self.host.runner(slug)
