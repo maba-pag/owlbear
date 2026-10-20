@@ -63,7 +63,9 @@ def complete() -> None:
 def _commit(folder: Path) -> str:
     command = ["git", "-C", str(folder), "rev-parse", "--short=12", "HEAD"]
     try:
-        said = subprocess.run(command, capture_output=True, text=True, check=True, timeout=30).stdout.strip()  # noqa: S603
+        said = subprocess.run(  # noqa: S603 - fixed git arguments
+            command, capture_output=True, text=True, check=True, timeout=30
+        ).stdout.strip()
     except OSError, subprocess.SubprocessError:
         said = ""
     return said or "unknown"
