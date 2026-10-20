@@ -144,9 +144,12 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         run: uv run --no-sync playwright install --with-deps chromium
 
+      # One line per test and a thread timeout that prints every stack, so a hang names its test.
       - name: Run browser-marked tests
         if: steps.reuse.outputs.cache-hit != 'true'
-        run: uv run --no-sync pytest serve/delivery-next -m browser -n 4 --dist worksteal
+        run: >-
+          uv run --no-sync pytest serve/delivery-next -m browser -n 4 --dist worksteal -v
+          -o timeout_method=thread --timeout 180
 
       - name: Record passing result
         if: github.event_name == 'pull_request' && steps.reuse.outputs.cache-hit != 'true'

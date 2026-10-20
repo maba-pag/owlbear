@@ -77,8 +77,10 @@ def overview(store: Store) -> list[dict[str, Any]]:
         {"name": "Design pack update", "where": "Settings", "href": "/config#pack", "built": True,
          "recorded": True, "last": pack_job.last(store),
          "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push."},
-        {"name": "Engine update", "where": "Settings", "href": None, "built": False, "recorded": False,
-         "last": None, "note": "Not built yet."},
+        {"name": "Engine update", "where": "Settings", "href": "/config#machine-title", "built": True,
+         "recorded": False, "last": None,
+         "note": "OwlBear updates itself when idle, announced on open pages; Run updates now on a paused page "
+                 "updates at once."},
         {"name": "Review Tests", "where": "Maintenance", "href": "#tests", "built": True, "recorded": False,
          "last": None, "note": "Reviewers judge shares of the tests; a curator applies what holds in a Change."},
         {"name": "Backlog triage", "where": "Backlog", "href": "/backlog", "built": True, "recorded": False,
