@@ -31,7 +31,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import sdk_adapter, session_result
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.briefs import new_slug, next_number
 from owlbear_delivery_next.state_store.store import StoreError
@@ -157,6 +157,7 @@ def _message(t: TestReview, i: int) -> str:
         "",
         "Other reviewers judge these tests at the same time; a bug may still be caught there:",
         *(f"- {p}" for p in near[:300]),
+        *step_decisions.held(),
         "",
         "## Finish",
         "Call submit_result with your verdicts, how many tests stay, and every file you read in covered_paths.",

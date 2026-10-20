@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
+from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, Decision, DecisionBaseline
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
@@ -124,20 +125,6 @@ class VisualState(Record):
     version: int = 1
 
 
-type Origin = Literal["decided", "approved", "autonomous"]
-
-
-class BriefDecision(Record):
-    """One choice made while shaping a brief version, with who made it."""
-
-    id: str = ""  # owlbear_decisions.new_id(), kept across brief versions; empty in Changes older than TD-419
-    question: str
-    answer: str
-    origin: Origin
-    scope: Literal["change", "project"] = "change"  # project: a lasting rule for later Changes (TD-426)
-    replaces: str = ""  # the approved decision this one changes: an approved answer is never edited (TD-430)
-
-
 class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""
 
@@ -189,17 +176,6 @@ class PersonCheck(Record):
     procedure: int = 1
     environment: list[str] = Field(default_factory=list)
     answer: Answer | None = None
-
-
-class Decision(Record):
-    """One recorded decision with its provenance."""
-
-    id: str = ""  # owlbear_decisions.new_id() at creation; empty in Changes older than TD-419
-    text: str
-    origin: Origin
-    at: datetime
-    words: str = ""  # the owner's own answer behind a decided one; empty in Changes older than TD-419
-    paths: list[str] = Field(default_factory=list)  # the UI paths a "Not a UI change" answer covers
 
 
 class Option(Record):
@@ -497,3 +473,6 @@ class Change(Record):
     inbox_acked: list[str] = Field(default_factory=list)
     handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
     tests: TestReview | None = None  # a test review's shares and report (TD-373)
+    decisions_baseline: DecisionBaseline | None = None  # pinned at brief approval (TD-419 slice 4)
+    decisions_offered: DecisionBaseline | None = None  # the set the owner's open decisions question would pin
+    decisions_unpinned_at: datetime | None = None  # approved while unreadable: the owner confirms the set to pin

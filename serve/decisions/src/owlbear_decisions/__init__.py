@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from owlbear_decisions.applies import applies, matches
 from owlbear_decisions.errors import ConcurrencyError, DecisionError, DecisionFileError, ImmutableError
 from owlbear_decisions.models import (
     Applicability,
@@ -37,9 +38,11 @@ __all__ = [
     "Scope",
     "Snapshot",
     "State",
+    "applies",
     "check_write",
     "decision_path",
     "load_folder",
+    "matches",
     "new_id",
     "read",
     "snapshot",

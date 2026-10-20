@@ -97,6 +97,23 @@ personal data is purged, with the owner's consent.
 - **Baselines:** a Change pins its decisions at approval. When an applicable decision changes, the runner (publication
   and merge included) stops the Change at its next step boundary and asks; until the amendment design (item 16)
   exists it never rewrites an approved brief.
+- **Built in slice 4** (choices made while building): a decision applies when it is in force, its scope reaches the
+  Change (a Change decision only its own, by record stem) and its role, step and path selectors match; a glob and a
+  scope entry overlap when either covers a path under the other, and a decision with paths stays unresolved, listed
+  and marked, while the Change has no scope paths. The approval pins every decision in force in the project's view by
+  revision, with the wording of those that apply, and the data commit; approved while the decisions cannot be read,
+  the first readable gated step asks the owner to pin the set in force then (never a silent pin), while a Change
+  approved before this gate is pinned on its first gated step. The gate runs once per step in the runner before
+  any step but shaping (it waits for chat) and cleanup (an ending Change always cleans up), before a due test-copy
+  preparation and before the host launches a check environment: an unreadable store stops with its `state` stop; an
+  applying decision
+  flagged `conflict` or in any finding stops naming it; a new, changed or no-longer-in-force decision that applies
+  now or applied at the pin asks "Continue with the current decisions" (re-pins the set the question showed) or
+  "Pause" (asks again after resume); a decision that applies to neither never stops the Change, and one that only
+  starts applying because the scope grew is listed without a question. A project without a data repository runs as
+  before until a Change holds a baseline, which then stops: Changes from before the gate had no rules to compare
+  with. The section is held for the step's whole run, so the worker's, a challenger's and a judge's inputs carry the
+  same text; above 12,000 characters of decision entries the step stops and asks for a split, never a cut.
 
 ## 8. Read-backs (TD-427)
 

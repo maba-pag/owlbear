@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
+from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline  # noqa: TC001 - pydantic
 from owlbear_delivery_next.change_contracts.models import Channel, Inputs, Record
 
 
@@ -20,6 +21,8 @@ class BriefApproval(_Item):
 
     kind: Literal["brief-approval"] = "brief-approval"
     version: int
+    baseline: DecisionBaseline | None = None  # None: no data repository, or *unpinned*
+    unpinned: bool = False  # the decisions could not be read when the owner approved; the runner asks to pin them
 
 
 class AnswerItem(_Item):

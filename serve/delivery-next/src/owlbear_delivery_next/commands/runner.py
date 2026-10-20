@@ -21,7 +21,14 @@ from owlbear_delivery_next.local_system import git_files
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.pack_runs import visual_settled
 from owlbear_delivery_next.project_host import host
-from owlbear_delivery_next.runtimes import amendments, readiness, sdk_adapter, session_result, step_input
+from owlbear_delivery_next.runtimes import (
+    amendments,
+    readiness,
+    sdk_adapter,
+    session_result,
+    step_decisions,
+    step_input,
+)
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
@@ -34,6 +41,7 @@ from owlbear_delivery_next.workflow_steps import (
     conversation,
     curation,
     curation_build,
+    decisions_gate,
     design,
     engine,
     follow,
@@ -122,7 +130,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             kind=s.kind,
             worktree=at,
             session_id=s.session or "",
-            message=step_input.answer(answer) if resume and answer else (parts.message if resume else told),
+            message=step_decisions.resumed(step_input.answer(answer))
+            if resume and answer
+            else (parts.message if resume else told),
             resume=resume,
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
@@ -385,9 +395,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _step(  # noqa: C901, PLR0912 - one branch per phase
-    store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
-) -> None:
+def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
     if step is not None:
         try:
@@ -397,6 +405,17 @@ def _step(  # noqa: C901, PLR0912 - one branch per phase
             stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
             store.write(lock, loop.apply(change, stop, now))
             return
+    with decisions_gate.gated(store, lock, change, step) as passed:
+        if passed is None:  # a gone check's end runs whatever the decisions say
+            prepare.ran(store, lock, store.read(lock.slug), repo, runnable=False)
+        else:
+            _run(store, lock, passed, step, repo)
+
+
+def _run(  # noqa: C901 - one branch per phase
+    store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
+) -> None:
+    """The step's phase: a test copy's end, the visual capture, "before", a test review, an agent or engine step."""
     try:
         if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
             _out(f"{change.slug}: test preparation ran")
