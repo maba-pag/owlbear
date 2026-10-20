@@ -38,6 +38,7 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/browser-mcp/**",
         "serve/web-content/**",
         "serve/delivery-next/**",
+        "serve/decisions/**",
         "serve/memory/**",
     ),
     "static": ("**",),  # `uv run lint` checks every text file, EditorConfig included

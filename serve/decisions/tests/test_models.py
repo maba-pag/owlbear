@@ -47,6 +47,7 @@ def test_new_id_format_and_seed():
         {"scope": Scope.GLOBAL},
         {"scope": Scope.CHANGE},
         {"scope": Scope.PROJECT, "change": "slug"},
+        {"scope": Scope.CHANGE, "change": "x" * 97},
         {"id": "D-123"},
         {"aliases": ("td 1",)},
         {"read_back": "soon"},
@@ -65,6 +66,11 @@ def test_schema_refusals(make, changes):
 def test_long_statement_and_missing_words_still_load(make):
     decision = make(statement="x" * 300, owner_words=())
     assert parse(serialize(decision)) == decision
+
+
+def test_a_change_folder_holds_a_delivery_record_stem(make):
+    stem = f"20261020-090000-{'a' * 64}"  # the approval second and the longest slug Delivery accepts
+    assert make(scope=Scope.CHANGE, change=stem).change == stem
 
 
 def test_unquoted_yaml_dates_are_accepted(make):

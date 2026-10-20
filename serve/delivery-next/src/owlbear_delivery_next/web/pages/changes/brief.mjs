@@ -25,11 +25,16 @@ function part(title, ...children) {
   return html`<section>${hd(4, title, "sm")}${children}</section>`;
 }
 
+// A project-scope decision stays in force for later Changes once approved, so it says so (C-14, TD-426).
+function said(x) {
+  return [x.question, x.scope === "project" ? `${x.answer} (lasting: applies to later Changes too)` : x.answer];
+}
+
 // The agreement the owner approves (TD-122, TD-179 rule 2): his decisions, what he specified among the technical
 // details, the shaper's choices that the approval accepts, and what is out.
 function agreement(d, approved = false) {
   const decisions = d.brief.decisions || [], out = d.brief.non_goals || [], parts = [];
-  const mine = decisions.filter((x) => x.origin === "decided").map((x) => [x.question, x.answer]);
+  const mine = decisions.filter((x) => x.origin === "decided").map(said);
   const specified = [
     ...d.criteria.filter((k) => yours(d, k.id)).map((k) => ["Acceptance criterion", k.text]),
     ...d.brief.visual.filter((s) => yours(d, `screen:${s.name}`)).map((s) => ["Screen the visual check takes",
@@ -37,7 +42,7 @@ function agreement(d, approved = false) {
     ...d.checks.filter((c) => yours(d, `check:${c.id}`)).map((c) => ["Check you do yourself", checkSaid(c)]),
   ];
   if (mine.length || specified.length) parts.push(part("Your decisions", saidList([...mine, ...specified])));
-  const proposed = decisions.filter((x) => x.origin !== "decided").map((x) => [x.question, x.answer]);
+  const proposed = decisions.filter((x) => x.origin !== "decided").map(said);
   if (proposed.length) {
     const accepts = approved ? "Your approval accepted these choices." : "Approving accepts these choices.";
     parts.push(part("Choices proposed by the shaper", text(accepts), saidList(proposed)));

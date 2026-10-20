@@ -48,7 +48,7 @@ rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename
 | `aliases` | Display names such as `TD-417`; one record row split into clauses names each of them |
 | `title`, `topic`, `statement` | The statement is the in-force line, at most 240 characters |
 | `applies_to` | `paths` (repository-relative globs), `roles`, `steps`; all empty means the whole scope |
-| `scope`, `project`, `change` | `global` (no project), `project` (its folder name), `change` (project and slug) |
+| `scope`, `project`, `change` | `global` (no project), `project` (its folder name), `change` (project and the Change's folder, up to 96 characters: Delivery's record stem) |
 | `origin`, `actor`, `source` | `decided`, `approved` or `autonomous`; who made it; where (chat, Change, PR, question) |
 | `owner_words` | `{text, date, alias}` items; required for `decided` |
 | `state` | `draft`, `in_force`, `replaced`, `withdrawn`, `spent`; nothing is deleted |

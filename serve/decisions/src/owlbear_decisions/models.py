@@ -17,6 +17,7 @@ _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 ID_PATTERN = r"^D-[0-7][0-9A-HJKMNP-TV-Z]{25}$"
 ALIAS_PATTERN = r"^[A-Z][A-Z0-9]*-[0-9]+$"
 FOLDER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+CHANGE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"  # Delivery's record stem: approval second plus a 64-char slug
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 Alias = Annotated[str, StringConstraints(pattern=ALIAS_PATTERN)]
@@ -113,7 +114,7 @@ class Decision(_Frozen):
     applies_to: Applicability = Applicability()
     scope: Scope
     project: Annotated[str, StringConstraints(pattern=f"{FOLDER_PATTERN}|^$")] = ""
-    change: Annotated[str, StringConstraints(pattern=f"{FOLDER_PATTERN}|^$")] = ""
+    change: Annotated[str, StringConstraints(pattern=f"{CHANGE_PATTERN}|^$")] = ""
     origin: Origin
     actor: NonBlank
     source: str = ""

@@ -130,9 +130,12 @@ type Origin = Literal["decided", "approved", "autonomous"]
 class BriefDecision(Record):
     """One choice made while shaping a brief version, with who made it."""
 
+    id: str = ""  # owlbear_decisions.new_id(), kept across brief versions; empty in Changes older than TD-419
     question: str
     answer: str
     origin: Origin
+    scope: Literal["change", "project"] = "change"  # project: a lasting rule for later Changes (TD-426)
+    replaces: str = ""  # the approved decision this one changes: an approved answer is never edited (TD-430)
 
 
 class Brief(Record):
@@ -191,9 +194,11 @@ class PersonCheck(Record):
 class Decision(Record):
     """One recorded decision with its provenance."""
 
+    id: str = ""  # owlbear_decisions.new_id() at creation; empty in Changes older than TD-419
     text: str
     origin: Origin
     at: datetime
+    words: str = ""  # the owner's own answer behind a decided one; empty in Changes older than TD-419
     paths: list[str] = Field(default_factory=list)  # the UI paths a "Not a UI change" answer covers
 
 

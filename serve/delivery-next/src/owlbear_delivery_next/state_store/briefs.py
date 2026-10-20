@@ -6,6 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_decisions import new_id
 from owlbear_delivery_next.change_contracts import evidence, tool_schema
 from owlbear_delivery_next.change_contracts.models import (
     BriefDecision,
@@ -54,7 +55,7 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     owner = [*d.specified, *(f"screen:{s.name}" for s in d.visual if s.owner)]
     owner += [f"check:{p.name}" for p in d.person_checks if p.owner]
     fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals, "specified": list(dict.fromkeys(owner))}
-    fields["decisions"] = [BriefDecision(**x.model_dump()) for x in d.decisions]
+    fields["decisions"] = _decisions(c, d)
     c.brief = c.brief.model_copy(update=fields)
     if c.step.mode == brief_rounds.PLANNED:  # a new version waits for its own challenge and approval
         c.step = c.step.model_copy(update={"mode": None})
@@ -71,6 +72,34 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
         at=datetime.now(UTC),
     )  # fmt: skip
     return c
+
+
+def _decisions(c: Change, d: brief_tools.BriefDraft) -> list[BriefDecision]:
+    """The draft's decisions; one asking a question the previous version asked keeps its identity (TD-419).
+
+    Once an answer was approved it is never edited: a changed answer becomes a successor that replaces it.
+    """
+    now, key = datetime.now(UTC), brief_tools.question_key
+    previous = {key(x.question): x for x in c.brief.decisions}
+    accepted = {x.id: x for b in c.brief.approved for x in b.decisions if x.id}
+    found = []
+    for x in d.decisions:
+        ident, replaces = _identity(previous.get(key(x.question)), x.answer, accepted, now)
+        found.append(BriefDecision(**x.model_dump(), id=ident, replaces=replaces))
+    return found
+
+
+def _identity(
+    prev: BriefDecision | None, answer: str, accepted: dict[str, BriefDecision], now: datetime
+) -> tuple[str, str]:
+    """(id, replaces) for a decision whose previous version is *prev*."""
+    if prev is None or not prev.id:
+        return new_id(now), ""
+    if prev.id in accepted:  # approved as it stands: kept while its answer is, else a successor
+        return (prev.id, prev.replaces) if accepted[prev.id].answer == answer else (new_id(now), prev.id)
+    if (back := accepted.get(prev.replaces)) and back.answer == answer:  # back to the approved answer
+        return back.id, back.replaces
+    return prev.id, prev.replaces
 
 
 def new_slug(title: str, taken: list[str]) -> str:
@@ -164,7 +193,10 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
                "owner": f"check:{p.id}" in owner} for p in c.checks]  # fmt: skip
     brief = {"change": draft.change, "title": c.brief.title, "outcome": c.brief.outcome, "scope": c.brief.scope}
     brief |= {"criteria": [k.text for k in c.brief.criteria], "person_checks": checks, "ui": draft.ui}
-    brief |= {"non_goals": c.brief.non_goals, "decisions": [x.model_dump() for x in c.brief.decisions]}
+    brief |= {
+        "non_goals": c.brief.non_goals,
+        "decisions": [x.model_dump(exclude={"id", "replaces"}) for x in c.brief.decisions],
+    }
     brief |= {"specified": [k.id for k in c.brief.criteria if k.id in owner]}
     brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
     return save_brief(store, brief)

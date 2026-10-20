@@ -146,13 +146,14 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     change = store.read(store.slugs()[0])
     brief = change.brief
     assert (brief.version, brief.non_goals) == (2, ["No translations"])
-    assert [d.model_dump() for d in brief.decisions] == DECIDED
+    assert [d.model_dump(include={"question", "answer", "origin"}) for d in brief.decisions] == DECIDED
     shown = [step_input.plan(change, Profile(), Path("/w"), {}), step_input.brief_challenge(change, Path("/w"))]
     for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
         assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
     read_back = Chat(repo).show_status("c1")["brief"]
-    assert (read_back["non_goals"], read_back["decisions"], read_back["version"]) == (["No translations"], DECIDED, 2)
+    assert read_back["decisions"] == [{**d, "scope": "change"} for d in DECIDED]  # what the shaper sends again
+    assert (read_back["non_goals"], read_back["version"]) == (["No translations"], 2)
     bad = {**body, "decisions": [{"question": "Which?", "answer": "this", "origin": "guessed"}]}
     assert c.post("/api/next/briefs", json=bad).json()["errors"][0].startswith("decisions")
 

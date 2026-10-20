@@ -159,7 +159,8 @@ def _locked(directory: Path) -> Iterator[None]:
         os.close(descriptor)
 
 
-def _check(current: Decision | None, decision: Decision, expected_revision: str | None) -> None:
+def check_write(current: Decision | None, decision: Decision, expected_revision: str | None) -> None:
+    """Raise what `write` would refuse for *decision* over *current*; a batch checks every file before writing any."""
     if expected_revision is None and current is not None:
         msg = f"{decision.id} exists at revision {current.revision}; pass it as expected_revision"
         raise ConcurrencyError(msg)
@@ -213,6 +214,6 @@ def write(decision: Decision, folder: Path, expected_revision: str | None = None
         raise DecisionFileError(msg)
     with _locked(path.parent):
         current = read(path) if path.exists() else None
-        _check(current, decision, expected_revision)
+        check_write(current, decision, expected_revision)
         _replace(path, text)
     return decision.revision

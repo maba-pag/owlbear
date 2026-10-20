@@ -40,6 +40,7 @@ def change() -> m.Change:
     decisions = [
         m.BriefDecision(question="Where does the button sit?", answer="Top right of the hero", origin="decided"),
         m.BriefDecision(question="Animation length", answer="250 ms ease-out", origin="autonomous"),
+        m.BriefDecision(question="Hero motion", answer="Never autoplay", origin="decided", scope="project"),
     ]
     brief = m.Brief(
         version=2, challenged=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.",
@@ -101,6 +102,8 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         brief = page.locator(".brief").first
         yours = brief.locator("section", has_text="Your decisions")
         expect(yours).to_contain_text("Top right of the hero")
+        expect(yours).to_contain_text("Never autoplay (lasting: applies to later Changes too)")  # C-14
+        expect(yours.get_by_text("Top right of the hero (lasting", exact=False)).to_have_count(0)
         expect(yours).to_contain_text(MINE)  # an owner-stated criterion is part of his agreement
         expect(brief.locator("section", has_text="Choices proposed by the shaper")).to_contain_text("250 ms")
         expect(brief.locator("section", has_text="Not in this Change")).to_contain_text("Saving the direction")

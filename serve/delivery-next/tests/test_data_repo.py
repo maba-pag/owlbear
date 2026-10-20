@@ -241,7 +241,7 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     assert change_record.save(store, c, pr, at) == ""
     assert change_record.save(store, c, pr, at + timedelta(days=1)) == ""  # a cleanup run again rewrites it
     folder = root / "shop-site" / "changes"
-    assert [p.name for p in folder.iterdir()] == ["20261015-090000-notes.json"]
+    assert sorted(p.name for p in folder.iterdir()) == ["20261015-090000-notes", "20261015-090000-notes.json"]
     record = json.loads((folder / "20261015-090000-notes.json").read_text())
     assert (record["outcome"], record["pr"]["number"], record["brief"]["title"]) == ("merged", 7, "Notes")
     assert (record["brief"]["decisions"][0]["answer"], record["decisions"][0]["text"]) == ("yes", "keep 800 characters")

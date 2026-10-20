@@ -56,6 +56,11 @@ class DecisionDraft(Args):
         "being asked; autonomous: the shaping agent chose it",
         examples=["decided"],
     )
+    scope: Literal["change", "project"] = Field(
+        default="change",
+        description="project: a lasting rule for later Changes in this project; change: only this Change",
+        examples=["project"],
+    )
 
 
 class VisualDraft(Args):
@@ -149,6 +154,11 @@ def _steps(brief: BriefDraft) -> list[str]:
     return errors + [f"steps: state {n} has {k} steps, over {STEPS}" for n, k in sorted(counts.items()) if k > STEPS]
 
 
+def question_key(question: str) -> str:
+    """A decision question as its identity across brief versions: case and spacing do not count."""
+    return " ".join(question.split()).casefold()
+
+
 def check_brief(brief: BriefDraft) -> list[str]:
     """Return field errors the schema cannot express: paths outside the repository, repeated entries."""
     errors = [
@@ -160,6 +170,8 @@ def check_brief(brief: BriefDraft) -> list[str]:
         errors.append("criteria: repeated criterion - state each one once")
     if len({p.name for p in brief.person_checks}) < len(brief.person_checks):
         errors.append("person_checks: names repeat - give each check its own name")
+    if len({question_key(d.question) for d in brief.decisions}) < len(brief.decisions):
+        errors.append("decisions: a question repeats - ask each once; its question is a decision's identity")
     errors += [
         f'person_checks[{i}].name: "{VISUAL}" is reserved for the visual check - choose another name'
         for i, p in enumerate(brief.person_checks)

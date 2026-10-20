@@ -43,7 +43,11 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    decisions and person checks. `decisions` holds every choice the owner made and each consequential
    choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
    came with something the owner approved without being asked) or `autonomous` (you chose it). Send
-   all of them again with every save. `specified` names the criteria the owner stated himself (`AC-1`
+   all of them again with every save, each with its question unchanged so it keeps its identity. Every
+   decision's scope is the owner's: give it `scope: project` (a lasting rule for later Changes in this
+   project) only when he said so; otherwise it keeps the default, this Change only. Never change a
+   saved decision's scope yourself; ask him. `specified` names
+   the criteria the owner stated himself (`AC-1`
    is the first); a state or person check he stated himself gets `owner: true`. Everything else is
    your proposal, and the approval page shows it as such. Leave `change` empty for a new Change; pass its handle
    (`c3`) to revise. For a UI change then call
