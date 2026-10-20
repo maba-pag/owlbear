@@ -149,7 +149,7 @@ def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]:
 
 
 def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
-    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal (the old Cockpit's purge)."""
+    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal (Cockpit's purge)."""
     folder = folder_of(store, where)
     if not folder.is_dir():
         return {"purged": 0, "skipped": 0, "failed": 0, "notice": ""}
