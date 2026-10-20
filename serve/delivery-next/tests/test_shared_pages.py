@@ -269,7 +269,7 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
     """Sol: a refresh of the machine's values asked for while a save runs never shows the values before it."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    held, answered = [], []  # the save waits for the test; a refresh is answered by the server at once, delivered late
+    held, answered = [], []  # the save waits for the test; a refresh read before it is delivered after it
 
     def hold(route) -> None:
         if route.request.method == "GET":
@@ -280,11 +280,12 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
     page.route("**/api/next/machine**", hold)
     page.get_by_label("Update itself when idle").check()
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh begun before the save
+    while not answered:
+        page.wait_for_timeout(50)
     pds.modal(page).get_by_role("button", name="Save machine settings").click()
     while not held:
         page.wait_for_timeout(50)
-    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh while the save runs
-    page.wait_for_timeout(300)
     with page.expect_response(lambda r: r.request.method == "PUT"):  # the status already says Saved from before
         held[0].continue_()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
