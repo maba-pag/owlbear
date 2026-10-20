@@ -27,6 +27,7 @@ from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from importlib.resources.abc import Traversable
 
     from owlbear_delivery_next.design_packs.design_pack import Installed
 
@@ -153,13 +154,15 @@ def diff(clone: Path, to: str) -> str:
     return "\n".join([*lines, "", f"Skill text: git -C {clone} diff {pinned} {to} -- {SKILL}"])
 
 
-def golden(installed: Installed, *, pages: bool = True) -> dict[str, dict[str, list[str]]]:
+def golden(
+    installed: Installed, folder: Traversable | None = None, *, pages: bool = True
+) -> dict[str, dict[str, list[str]]]:
     """Each fixture page whose rules differ from the expected ones: what was unexpected and what was missing.
 
     The engine scans the pages' source; with *pages*, the pack's bundle also scans them rendered. Keyed by page and
-    mode, such as ``bad.html (page)``.
+    mode, such as ``bad.html (page)``. *folder* holds a candidate's pages and expectations; the package's by default.
     """
-    folder = files("owlbear_delivery_next").joinpath("golden")
+    folder = folder or files("owlbear_delivery_next").joinpath("golden")
     expected: dict[str, dict[str, list[str]]] = json.loads(folder.joinpath("expected.json").read_text("utf-8"))
     names = list(expected["source"])
     with tempfile.TemporaryDirectory(prefix="owlbear-golden-") as tmp:

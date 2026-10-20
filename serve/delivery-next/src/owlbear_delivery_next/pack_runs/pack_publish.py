@@ -59,7 +59,7 @@ class Publication(BaseModel):
     merged: str = ""  # the merge commit on main
 
 
-def publish(job: Job, pub: Publication, files: dict[str, str], title: str) -> str:
+def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str) -> str:
     """Take the update into ``main``; the merge commit.
 
     Raises:

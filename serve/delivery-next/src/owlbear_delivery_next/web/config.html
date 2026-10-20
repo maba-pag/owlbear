@@ -34,6 +34,7 @@
   #pack-log { margin: 0; white-space: pre-wrap; font-size: var(--p-typescale-xs); }
   .pack-question { display: grid; gap: var(--p-spacing-static-sm); margin-block: var(--p-spacing-static-md);
     padding-block-start: var(--p-spacing-static-sm); border-block-start: 1px solid var(--p-color-contrast-low); }
+  .pack-diff { margin: 0; max-block-size: 24rem; overflow: auto; white-space: pre; font-size: var(--p-typescale-xs); }
 </style>
 </head>
 <body>
@@ -609,8 +610,9 @@ function findings(found) {
   });
 }
 
-// A waiting run's question: one per finding the challenger upheld against the updater (TD-193), or the end without
-// a pass (TD-256). A note being typed lives in state, so it survives every reload of the update's state.
+// A waiting run's question: one per finding the challenger upheld against the updater (TD-193), the end without a
+// pass (TD-256), or a change the owner decides (TD-177, TD-194), with its diff. A note being typed lives in state, so
+// it survives every reload of the update's state.
 function packQuestion(q) {
   let field = nothing;
   if (q.kind === "dispute") {
@@ -623,6 +625,7 @@ function packQuestion(q) {
           @input=${keep}></textarea></label>`;
   }
   return html`<div class="pack-question">${state.pds ? html`<p-text>${q.text}</p-text>` : html`<p>${q.text}</p>`}
+    ${q.diff ? html`<pre class="pack-diff" aria-label="The change">${q.diff}</pre>` : nothing}
     ${field}
     <div class="row">${q.options.map((o) => button(o.label, () => answerUpdate(q, o, state.packNotes.get(q.id) ?? ""),
       { variant: "secondary" }))}</div></div>`;
@@ -634,9 +637,9 @@ async function answerUpdate(q, o, note) {
   const items = [...(loop?.unreviewed ?? []).map((r) => `Repair ${r}: no challenger reviewed it.`),
     ...standing.map((f) => `${f.id} not changed for (${FOUND[f.state]}): ${f.text}`)];
   if (o.id === "activate" && !(await ask({
-    title: "Activate the pack without a passing challenge?", yes: "Activate and push", no: "Keep it waiting",
-    now: "Delivery activates the candidate as it is now, commits design_pack.json, skills/NOTICE.md and the "
-      + "skills the updater changed on the package checkout's current branch, and pushes that commit. It activates "
+    title: "Activate the pack without a passing challenge?", yes: "Activate", no: "Keep it waiting",
+    now: "Delivery activates the candidate as it is now: it commits design_pack.json, skills/NOTICE.md and the "
+      + "files the updater changed, opens a pull request to main and merges it once CI passes. It activates "
       + (items.length ? "with these left as they are:" : "with no repair left unreviewed and no finding left open."),
     items,
     then: "The commit message records that the rounds ended without a pass and which findings were not changed for.",
@@ -700,12 +703,12 @@ async function startUpdate() {
   const sure = await ask({
     title: "Update the design pack?", yes: "Update", no: "Keep the current pack",
     now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
-      + "brings the skills in line, then the rule diff, golden pages, calibration replay and a challenger check it. "
-      + "The challenger's findings go back to the updater. This uses AI credits.",
-    then: "Only if every stage passes, it activates the pack, commits design_pack.json, skills/NOTICE.md and "
-      + "the skills the updater changed on its package checkout's current branch and pushes that commit upstream. "
-      + "If the challenge rounds end without a pass, or the challenger upholds a finding the updater rejected, it "
-      + "stops before activating and asks you here.",
+      + "brings the skills, golden pages and detector glue in line, then the golden pages, calibration replay and a "
+      + "challenger check it. The challenger's findings go back to the updater. This uses AI credits.",
+    then: "Only if every stage passes, it activates the pack: it commits design_pack.json, skills/NOTICE.md and "
+      + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
+      + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
+      + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
     after: "Later visual rounds use the new pack. If a stage fails, nothing changes and the stages below say why.",
     instead: "The current pack stays active.",
   });

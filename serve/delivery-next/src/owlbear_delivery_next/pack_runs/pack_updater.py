@@ -1,8 +1,9 @@
-"""The design pack's writing updater (TD-125, TD-177): it edits the candidate's skills, then the challenger's findings.
+"""The design pack's writing updater (TD-125, TD-177): it edits the candidate, then the challenger's findings.
 
-It brings the skills in line with upstream and implements the findings after judging them; Delivery takes only its
-skill edits, and it may write only in its own folder and run no shell (TD-194). Adapter repairs (TD-177) are not built:
-an adapter that cannot read upstream still stops the update at the candidate or diff stage, for the owner.
+It brings the skills, the golden pages and the detector's glue in line with upstream and implements the findings after
+judging them; Delivery takes only changes within the pack (``pack_gates``), and it may write only in its own folder
+and run no shell (TD-194). An adapter that cannot read upstream still stops the update at the candidate or diff
+stage, for the owner.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.design_packs import design_pack
-from owlbear_delivery_next.pack_runs import pack_candidate
+from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import sessions
@@ -32,16 +33,26 @@ if TYPE_CHECKING:
 
 LABEL = "pack-update"
 FINISH = (
-    "Call `submit_result` once with `summary`, skill by skill, and `rejected` for each finding you judge wrong. If the "
-    "golden pages or the calibration rounds would have to change, call `report_wrong_premise`."
+    "Call `submit_result` once with `summary`, file by file, `evidence` when you changed `golden/`, and `rejected` for "
+    "each finding you judge wrong. If the calibration rounds would have to change, call `report_wrong_premise`."
+)
+RULES = (
+    "Change only what the upgrade needs. You may edit the skills' `SKILL.md`, add, edit or remove golden pages and "
+    "`golden/expected.json`, and edit the two files under `code/`; any other change is refused. A change under "
+    "`golden/` changes the pack's expected evidence: the owner accepts it before the checks go on. A change under "
+    "`code/` is not run by this update's checks, which use the running code: the owner approves its diff before the "
+    "pull request, and CI's unit tests must pass."
 )
 
 
 class UpdateResult(tools.Args):
     """``submit_result`` for the design pack updater."""
 
-    summary: str = tools.bounded(
-        2000, "What you changed and why, skill by skill", "owlbear-design-review: checks glow."
+    summary: str = tools.bounded(2000, "What you changed and why, file by file", "owlbear-design-review: checks glow.")
+    evidence: str = Field(
+        default="",
+        max_length=1000,
+        description="Only when you changed `golden/`: why the upgrade needs each changed expectation or page",
     )
     rejected: list[tools.Rejection] = Field(
         default_factory=list,
@@ -64,12 +75,13 @@ def _files(at: Path) -> dict[str, str]:
     return {p.relative_to(at).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in found}
 
 
-def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path) -> dict[str, str]:
-    """The updater's repository: the candidate's skills to edit and upstream's new skill text to read; its files."""
+def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path, package: Path) -> dict[str, str]:
+    """The updater's repository: the candidate's skills, golden pages and glue to edit, upstream's skills to read."""
     subprocess.run(["git", "init", "-q", str(at)], check=True, capture_output=True)  # noqa: S603, S607 - fixed argv
     for name in c.pins["skills"]:
         (at / "skills" / name).mkdir(parents=True, exist_ok=True)
         (at / "skills" / name / "SKILL.md").write_bytes(skill(c, name).read_bytes())
+    pack_gates.lay_out(at, package)
     pack_candidate.upstream_skill(clone, c.pins["upstream"]["commit"], at / "upstream")
     return _files(at)
 
@@ -82,14 +94,15 @@ def skill(c: pack_candidate.Candidate, name: str) -> Path:
     return c.skills / name / "SKILL.md"
 
 
-def taken(at: Path, start: dict[str, str], c: pack_candidate.Candidate) -> list[str]:
-    """Copy the updater's skills into the candidate; any other change stops the update. The skills that changed."""
+def outside(at: Path, start: dict[str, str], skills: list[str]) -> list[str]:
+    """The paths the updater changed that it may not change (TD-194)."""
     now = _files(at)
     changed = sorted(p for p in start.keys() | now.keys() if start.get(p) != now.get(p))
-    allowed = {f"skills/{n}/SKILL.md" for n in c.pins["skills"]}
-    if bad := [p for p in changed if p not in allowed or p not in now]:
-        msg = f"the updater changed {', '.join(bad[:5])}, which it may not change"
-        raise design_pack.PackError(msg)
+    return [p for p in changed if not pack_gates.allowed(p, p in now, skills)]
+
+
+def taken(at: Path, c: pack_candidate.Candidate) -> list[str]:
+    """Copy the updater's skills into the candidate; the skills that changed."""
     moved = []
     for name in c.pins["skills"]:  # every skill, so one restored to its start replaces an earlier edit too
         data = (at / "skills" / name / "SKILL.md").read_bytes()
@@ -99,10 +112,18 @@ def taken(at: Path, start: dict[str, str], c: pack_candidate.Candidate) -> list[
     return moved
 
 
-def prompt(c: pack_candidate.Candidate, diff: str, lines: list[str], earlier: str = "") -> str:
+def prompt(c: pack_candidate.Candidate, diff: str, lines: list[str], earlier: str = "", golden: str = "") -> str:
     """The updater's whole first message: the update, the challenger's findings, an earlier session's work."""
     head = f"You update Delivery's design pack to `{c.pins['pack']}` (upstream `{c.tag}`). Edit the skills under "
-    out = [f"{head}`skills/`; upstream's new skill text is under `upstream/`.", "", "## Rule and skill diff", diff]
+    out = [
+        (
+            f"{head}`skills/`, the golden pages and their expectations under `golden/` and the detector's glue under "
+            "`code/` (`detector.py` calls the engine and reads its findings; `pack_update.py` reads upstream's "
+            "registry and skills). Upstream's new skill text is under `upstream/`."
+        ),
+        "", "## What you may change", RULES, "", "## Rule and skill diff", diff,
+    ]  # fmt: skip
+    out += ["", "## Golden pages with the package's expectations", golden] if golden else []
     out += lines
     out += ["", "## The earlier updater session's work (it could not be resumed)", earlier] if earlier else []
     return "\n".join([*out, "", "## Finish", FINISH])

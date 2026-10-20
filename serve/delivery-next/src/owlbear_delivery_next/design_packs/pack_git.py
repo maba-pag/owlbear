@@ -86,14 +86,18 @@ def _quiet(run: Git, cwd: Path, args: list[str]) -> str:
         return ""
 
 
-def commit(src: Source, files: dict[str, str], message: str, at: Path, run: Git = git) -> str:
-    """Commit exactly *files* (paths in the checkout) on the pinned base, in a disposable worktree at *at*."""
+def commit(src: Source, files: dict[str, str | None], message: str, at: Path, run: Git = git) -> str:
+    """Commit exactly *files* (paths in the checkout; None removes one) on the pinned base, in a disposable worktree."""
     shutil.rmtree(at, ignore_errors=True)
     _quiet(run, src.root, ["worktree", "prune"])
     run(src.root, ["worktree", "add", "--quiet", "--detach", str(at), src.base])
     try:
         for name, text in files.items():
-            (at / name).write_text(text, encoding="utf-8")
+            if text is None:
+                (at / name).unlink(missing_ok=True)
+            else:
+                (at / name).parent.mkdir(parents=True, exist_ok=True)
+                (at / name).write_text(text, encoding="utf-8")
         run(at, ["add", "--", *files])
         run(at, ["commit", "--quiet", "-m", message, "--", *files])
         return run(at, ["rev-parse", "HEAD"])

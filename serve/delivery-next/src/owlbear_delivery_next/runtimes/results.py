@@ -6,7 +6,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_contracts import curation_tools, preparation, tool_schema, tools
+from owlbear_delivery_next.change_contracts import curation_tools, pack_tools, preparation, tool_schema, tools
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.design_packs import design_tools
 from owlbear_delivery_next.local_system import lint
@@ -170,4 +170,6 @@ class Gate:
         found = disputes.check(
             args, tree, cfg.rejectable, cfg.rechecks, settled=cfg.settled, cap=cfg.cap, tasks=cfg.plan_tasks
         )
+        if isinstance(args, pack_tools.PackReview):  # TD-194: one judgement per file the updater changed
+            found += pack_tools.check(args, cfg.changed)
         return errors + found, tree

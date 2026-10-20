@@ -228,8 +228,9 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
       `expected.json`; pages may be added or removed) and `code/` (the glue: `design_packs/detector.py`, how the
       engine is called and read, and `design_packs/pack_update.py`, how upstream's registry and skills are read; edit
       only), plus upstream's skill text under `upstream/` to read. The manifest and the notice stay generated. Any
-      other change is refused at `taken`, which names the paths; the run asks the owner: undo by the updater (a
-      repair round) or discard.
+      other change is refused, with its paths; the run asks the owner: undo it or discard. An undo, here and below,
+      restores the package's version (upstream's text extracted again) and gives the updater the owner's finding to
+      adjust what depended on it, outside the rounds' count.
     - **One candidate identity:** the run's identity covers every publishable path (manifest, notice, skills,
       golden files, code files) by content, a deleted path included; the challenger's pass, the owner's word on an
       unreviewed repair (TD-256), his evidence acceptance and his code approval each bind the identity they saw, and
@@ -240,18 +241,17 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
       mismatch then stops as today.
     - **Expected evidence** (TD-177): when `golden/` differs from the package after an updater session, the owner is
       asked before the replay and the challenger, with the old and new expectations, what the check observed, and the
-      updater's reason: accept, have the updater undo it (a repair round, budgets unchanged), or discard. Accepted
+      updater's reason: accept, undo it, or discard. Accepted
       evidence that does not change again is not asked about again.
     - **Code** (TD-194, TD-414): a `code/` change is never loaded into the running engine; this run's checks use the
       running code. Once the challenger passed or the owner took the unreviewed repair, and before the commit, the
       owner approves the code diff or discards; approved files join the one commit, and CI's unit tests must pass as
       for any pull request.
     - **The challenger's file list:** in a full round (not a rejections-only check or a reconsideration) its message
-      lists every file changed against the package, with the diff and the candidate's text; a pack-only result
+      lists every file changed against the package, with its diff (the skills also in full, as before); a pack-only result
       `PackReview` adds `changes`, exactly one entry per listed path (`path`, `needed`: yes, no or unsure, `what`,
       `suspicious`), validated against the listed paths at its result tool (none missing, repeated or extra). `no`
-      comes with a finding as today. `unsure` goes to the owner before the repair: keep it, or have the updater undo
-      it; a kept path is not asked about again while its content stays the same. The last round's list is in the
+      comes with a finding as today. `unsure` goes to the owner before the repair: keep it, or undo it; a kept path is not asked about again while its content stays the same. The last round's list is in the
       pull request's body.
     - **Out of scope:** an adapter that cannot read upstream still stops at the candidate or diff stage; calibration
       rounds live in the data repository and are never edited by the updater.
