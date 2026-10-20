@@ -283,7 +283,8 @@ def a_read_begun_during_a_save_never_undoes_it(page) -> None:
         page.wait_for_timeout(50)
     page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh while the save runs
     page.wait_for_timeout(300)
-    held[0].continue_()
+    with page.expect_response(lambda r: r.request.method == "PUT"):  # the status already says Saved from before
+        held[0].continue_()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     for route, before in answered:
         route.fulfill(response=before)  # the values from before the save, arriving after it
