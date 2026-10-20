@@ -269,6 +269,7 @@ def _query(
             where.append("(title LIKE ? ESCAPE '\\' OR statement LIKE ? ESCAPE '\\')")
             pattern = "%" + re.sub(r"([\\%_])", r"\\\1", word) + "%"
             params += [pattern, pattern]
-    sql = f"SELECT id, title, statement, scope, project, state, origin FROM entries WHERE {' AND '.join(where)}"  # noqa: S608 - fixed clauses, values bound
+    columns = "id, title, statement, scope, project, state, origin"
+    sql = f"SELECT {columns} FROM entries WHERE {' AND '.join(where)}"  # noqa: S608 - fixed clauses, values bound
     rows = connection.execute(f"{sql} ORDER BY {order} LIMIT ?", (*params, limit)).fetchall()
     return [Hit(*row) for row in rows]
