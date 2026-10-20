@@ -27,12 +27,14 @@ from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from importlib.resources.abc import Traversable
 
     from owlbear_delivery_next.design_packs.design_pack import Installed
 
 RELEASES = "https://api.github.com/repos/{repo}/releases?per_page=100"
 NOTICE = "notice.json"  # beside the installed packs
 STALE = timedelta(days=1)
+PAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.html")  # a golden page: a plain file name in its folder
 SECONDS = 10.0  # the notice's one request: the readiness check at host start never waits long for it
 REGISTRY = "crates/foundation/src/registry.rs"  # upstream's rule registry
 TABLE = "pub static ANTIPATTERNS"  # its rule table, ended by the first line "];"
@@ -153,15 +155,23 @@ def diff(clone: Path, to: str) -> str:
     return "\n".join([*lines, "", f"Skill text: git -C {clone} diff {pinned} {to} -- {SKILL}"])
 
 
-def golden(installed: Installed, *, pages: bool = True) -> dict[str, dict[str, list[str]]]:
+def golden(
+    installed: Installed, folder: Traversable | None = None, *, pages: bool = True
+) -> dict[str, dict[str, list[str]]]:
     """Each fixture page whose rules differ from the expected ones: what was unexpected and what was missing.
 
     The engine scans the pages' source; with *pages*, the pack's bundle also scans them rendered. Keyed by page and
-    mode, such as ``bad.html (page)``.
+    mode, such as ``bad.html (page)``. *folder* holds a candidate's pages and expectations; the package's by default.
     """
-    folder = files("owlbear_delivery_next").joinpath("golden")
+    folder = folder or files("owlbear_delivery_next").joinpath("golden")
     expected: dict[str, dict[str, list[str]]] = json.loads(folder.joinpath("expected.json").read_text("utf-8"))
     names = list(expected["source"])
+    if bad := [n for n in {*names, *(n for mode in expected.values() for n in mode)} if not PAGE.fullmatch(n)]:
+        msg = f"golden/expected.json names pages that are no page file of its folder: {', '.join(sorted(bad)[:5])}"
+        raise design_pack.PackError(msg)  # a candidate's names are read and written only inside the folders
+    if unknown := sorted({n for mode in expected.values() for n in mode} - set(names)):
+        msg = f"golden/expected.json has expectations for pages it does not scan by source: {', '.join(unknown[:5])}"
+        raise design_pack.PackError(msg)
     with tempfile.TemporaryDirectory(prefix="owlbear-golden-") as tmp:
         root = Path(tmp).resolve()
         for name in names:

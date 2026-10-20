@@ -190,6 +190,20 @@ def test_golden_pages_report_what_an_engine_missed_or_found_unexpectedly(monkeyp
     assert "side-tab" not in wrong["bad.html (source)"]["missing"]
 
 
+@pytest.mark.parametrize("name", ["../code/detector.py", "/etc/hosts", "sub/page.html", ".hidden.html"])
+def test_a_candidates_expectations_name_only_page_files_of_its_own_folder(tmp_path, name) -> None:
+    """TD-194: the updater writes expected.json; a name never reaches outside the folders before the owner sees it."""
+    (tmp_path / "expected.json").write_text(json.dumps({"source": {name: []}, "page": {}}))
+    with pytest.raises(design_pack.PackError, match="no page file of its folder"):
+        pack_update.golden(object(), tmp_path, pages=False)
+
+
+def test_a_candidates_expectations_cover_only_the_pages_it_scans(tmp_path) -> None:
+    (tmp_path / "expected.json").write_text(json.dumps({"source": {"a.html": []}, "page": {"b.html": []}}))
+    with pytest.raises(design_pack.PackError, match=r"does not scan by source: b\.html"):
+        pack_update.golden(object(), tmp_path, pages=False)
+
+
 @pytest.mark.browser
 def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypatch, machine_home) -> None:
     monkeypatch.setattr(local_home, "root", lambda: machine_home / ".owlbear")  # this machine's pack, read only

@@ -61,7 +61,7 @@ the table lists the items in their order.
 | --- | --- | --- | --- | --- |
 | 1 | TD-358's rest: none; built: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | TD-330 in [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) §3.4; TD-334 in [machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | Done |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | §3.3 | Done |
-| 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Pull request route built; C-15 alignment open |
+| 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Done |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Not started |
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Not started |
 | 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Not started |
@@ -105,14 +105,13 @@ first open; the clone keeps its id and a format marker that every older runtime 
 
 ### 3.2 Items 2 to 4: the self-update
 
-[Self-update §8](self-update-build.md) "Step 3c build" is the plan for item 2. Its pull request route is built: a
-pack update commits on `pack/<run>` from a clean checkout of `main`, opens a labelled pull request, waits for the
-required checks, brings the branch up to date and merges it; whatever stops it asks the owner, and a host restart
-during publication waits for him instead of failing. What remains brings the updater and
-challenger in line with C-15: the updater may change its whole candidate in its own folder, a detector code change
-waits for the owner's approval (TD-194); a change to expected evidence asks the owner instead of failing the run
-(TD-177); the challenger checks that each change is needed and lists every changed file (TD-194). Steps 4 and 5 are
-§3–§5 and §7 there.
+Item 2, [self-update §8](self-update-build.md) "Step 3c build", is built. A pack update commits on `pack/<run>`
+from a clean checkout of `main`, opens a labelled pull request, waits for the required checks, brings the branch up to
+date and merges it; whatever stops it asks the owner, and a host restart during publication waits for him instead of
+failing. In line with C-15 the updater may change the pinned skills, the golden pages and the detector's glue; anything
+else, changed expected evidence, a change the challenger is unsure the upgrade needs and a glue change go to the owner,
+the glue checked with the running code (TD-414); the challenger judges every changed file. Steps 4 and 5 are §3–§5 and
+§7 there.
 
 ### 3.3 Items 6 and 7: research moved, then (after the self-update) the old engine
 
@@ -167,10 +166,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |
 | C-14 | Bounded delegation, the "weaker" rule, the amendment process, fields and baseline | Partly; blocked by the open design TD-185 | keep | not placed |
-| C-15 | The updater may change its whole candidate; a code change waits for approval (TD-194) | It may edit only skills | align | 2 |
-| C-15 | A change to expected evidence asks the owner (TD-177) | The run ends failed | align | 2 |
-| C-15 | The challenger checks each change is needed, listing every file (TD-194) | Missing | align | 2 |
-| C-15, C-16 | Every pack update opens a labelled PR, merges on green and becomes a version | Pushes a branch | build | 2 |
+| C-15, C-16 | Every pack update opens a labelled PR, merges on green and becomes a version | No versions yet | build | 3 |
 | C-16 | OwlBear's own project sets `release:minor` | OwlBear is not a registered project | keep | 10 |
 | C-16 | Chat-authored PRs get `release:minor` for runtime changes (TD-314) | Written nowhere agents read | align | — |
 | C-16 | v1.0 after the self-update and the old engine's removal, docs rewritten (TD-393) | Not yet | build | 12 |

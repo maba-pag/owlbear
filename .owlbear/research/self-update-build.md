@@ -217,11 +217,45 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
     and show the pull request's link and state.
   - **Taking the version** is step 4's: until it exists no machine takes any version by itself, so the merge becomes a
     version by its labels as every merge does, and step 4 takes it at once when paused (TD-325, TD-368).
-  - **C-15 alignment** (added 2026-10-19 from the decision audit of [the plan](owlbear-plan.md) §4; not yet
-    challenged): the updater may change any file of its candidate in its own folder, and a detector code change waits
-    for the owner's approval before the pull request (TD-194); a change to expected evidence asks the owner instead of
-    ending the run failed (TD-177); the challenger checks that each change is needed by the upgrade, listing every
-    changed file with one line on what changed and why it is suspicious, and asks the owner when unsure (TD-194).
+  - **C-15 alignment** (added 2026-10-19 from the decision audit of [the plan](owlbear-plan.md) §4): the updater may
+    change any file of its candidate in its own folder, and a detector code change waits for the owner's approval
+    before the pull request (TD-194); a change to expected evidence asks the owner instead of ending the run failed
+    (TD-177); the challenger checks that each change is needed by the upgrade, listing every changed file with one
+    line on what changed and why it is suspicious, and asks the owner when unsure (TD-194). Build design (2026-10-20,
+    revised after Sol's challenge, REVISE 93%, and the owner's TD-414):
+    - **The candidate's files:** the updater's folder holds a copy of everything the pack consists of in the package,
+      by kind: `skills/<name>/SKILL.md` for each pinned skill (edit only), `golden/` (the golden pages and
+      `expected.json`; pages may be added or removed) and `code/` (the glue: `design_packs/detector.py`, how the
+      engine is called and read, and `design_packs/pack_update.py`, how upstream's registry and skills are read; edit
+      only), plus upstream's skill text under `upstream/` to read. The manifest and the notice stay generated: the
+      challenger judges them too, and one it is unsure about the owner keeps or discards the update for. A link is
+      never followed and always outside. Any other change is refused, with its paths; the run asks the owner: undo it
+      or discard. An undo, here and below, restores the package's version (upstream's text extracted again) and gives
+      the updater the owner's finding to adjust what depended on it, outside the rounds' count.
+    - **One candidate identity:** the run's identity covers every publishable path (manifest, notice, skills,
+      golden files, code files) by content, a deleted path included; the challenger's pass, the owner's word on an
+      unreviewed repair (TD-256), his evidence acceptance and his code approval each bind the identity they saw, and
+      the commit checks them all against the candidate it writes, after a restart too. None stands in for another.
+    - **Golden pages** move into the loop: the first check before the updater no longer stops the run on a
+      mismatch; its result goes to the updater as evidence (a failure to run still stops). After each updater
+      session the check runs against the candidate's expectations and pages, with the running code (TD-414); a
+      mismatch then stops as today.
+    - **Expected evidence** (TD-177): when `golden/` differs from the package after an updater session, the owner is
+      asked before the replay and the challenger, with the old and new expectations, what the check observed, and the
+      updater's reason: accept, undo it, or discard. Accepted
+      evidence that does not change again is not asked about again.
+    - **Code** (TD-194, TD-414): a `code/` change is never loaded into the running engine; this run's checks use the
+      running code. Once the challenger passed or the owner took the unreviewed repair, and before the commit, the
+      owner approves the code diff or discards; approved files join the one commit, and CI's unit tests must pass as
+      for any pull request.
+    - **The challenger's file list:** in a full round (not a rejections-only check or a reconsideration) its message
+      lists every file changed against the package, with its diff (the skills also in full, as before); a pack-only result
+      `PackReview` adds `changes`, exactly one entry per listed path (`path`, `needed`: yes, no or unsure, `what`,
+      `suspicious`), validated against the listed paths at its result tool (none missing, repeated or extra). `no`
+      comes with a finding as today. `unsure` goes to the owner before the repair: keep it, or undo it; a kept path is not asked about again while its content stays the same. The last round's list is in the
+      pull request's body.
+    - **Out of scope:** an adapter that cannot read upstream still stops at the candidate or diff stage; calibration
+      rounds live in the data repository and are never edited by the updater.
 - **Pull request labels and marker** (TD-308): a global setting `pr_labels` lists the labels OwlBear adds
   to every pull request it opens, Delivery's and the design pack update's; a project's value replaces the
   list whole (TD-243); empty at first. OwlBear's own project sets `release:minor`. A project setting

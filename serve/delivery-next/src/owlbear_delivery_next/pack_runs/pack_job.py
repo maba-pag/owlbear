@@ -28,7 +28,7 @@ from owlbear_delivery_next.design_packs import design_pack, pack_git, pack_updat
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.pack_runs import pack_candidate, pack_publish, pack_replay, pack_rounds, pack_run
+from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_publish, pack_replay, pack_rounds, pack_run
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -85,7 +85,7 @@ class Live:
     releases: Callable[[str], bytes] | None = None  # the notice's release list; None reads GitHub
     sync: Callable[[Path, str], None] = pack_candidate.sync
     download: Callable[[str], bytes] = design_pack.fetch
-    golden: Callable[[design_pack.Installed], dict[str, dict[str, list[str]]]] = pack_update.golden
+    golden: Callable[..., dict[str, dict[str, list[str]]]] = pack_update.golden  # (installed, folder=None)
     replay: Callable[[Store, pack_candidate.Candidate | None], Replay] = pack_replay.replay
     challenge: Callable[[Store, Any], Run] = sessions.run
     update: Callable[[Store, Any], Run] = sessions.run  # the writing updater (TD-125)
@@ -385,7 +385,7 @@ class Job:
 
         src, c = self.do("candidate", candidate, lambda out: _pack(*out))
         diff = self.do("diff", lambda: pack_update.diff(live.clone, tag))
-        golden = self.do("golden", lambda: _golden(live.golden(c.installed)))
+        golden = self.do("golden", lambda: pack_gates.checked(live.golden(c.installed)))  # the updater's evidence
         why = f"design pack: {old['pack']} to {c.pins['pack']} (upstream {old['upstream']['tag']} to {tag})"
         return pack_run.begin(self, c, src, diff=diff, golden=golden, why=why)
 
@@ -421,6 +421,8 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
     if q["kind"] == "publish":  # trying again reconciles with GitHub before anything is repeated
         ctx.next = "activate"
         return []
+    if q["kind"] in pack_gates.KINDS:
+        return pack_run.gated(asked, q, option, ctx, lp)
     if option == pack_rounds.ANOTHER:
         lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
     else:
@@ -431,15 +433,6 @@ def _decided(  # noqa: PLR0913 - the open questions, the answered one, the answe
 def _pack(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
     up = c.pins["upstream"]
     return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
-
-
-def _golden(wrong: dict[str, dict[str, list[str]]]) -> str:
-    if wrong:
-        pages = "; ".join(f"{p}: missing {', '.join(w['missing']) or 'none'}, unexpected "
-                          f"{', '.join(w['unexpected']) or 'none'}" for p, w in wrong.items())  # fmt: skip
-        msg = f"golden pages differ: {pages}"
-        raise Stopped(msg)
-    return "as expected"
 
 
 def last(store: Store) -> dict[str, Any] | None:
