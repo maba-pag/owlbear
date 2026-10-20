@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import stat
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -57,10 +58,21 @@ def layers(global_folder: Path | None, project_folders: Iterable[Path]) -> list[
 
 
 def _change_folders(project: Path) -> list[Path]:
+    """The Change folders holding decisions; a `changes` path or Change folder that is not a real folder raises."""
     changes = project / CHANGES_DIR
-    if not is_folder(changes):
+    if (mode := kind(changes)) is None:
         return []
-    return [c for c in sorted(changes.iterdir()) if is_folder(c) and kind(c / DECISIONS_DIR) is not None]
+    if not stat.S_ISDIR(mode):
+        msg = f"{changes} is not a real folder: its Change decisions cannot be read"
+        raise NotADirectoryError(msg)
+    found = []
+    for held in sorted(changes.iterdir()):
+        if stat.S_ISLNK(kind(held) or 0):
+            msg = f"{held} is a symlink: a Change folder must be a real folder"
+            raise NotADirectoryError(msg)
+        if is_folder(held) and kind(held / DECISIONS_DIR) is not None:
+            found.append(held)
+    return found
 
 
 def project_folders(root: Path) -> list[Path]:

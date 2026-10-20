@@ -89,7 +89,7 @@ def _checkout(shared: DataRepo | None) -> DataRepo:
 
 def _head(shared: DataRepo) -> str:
     said = shared.git("rev-parse", "--show-toplevel", "HEAD")
-    lines = said.stdout.split()
+    lines = said.stdout.splitlines()
     if said.returncode or len(lines) != 2 or lines[0] != str(shared.root.resolve()):  # noqa: PLR2004 - top, HEAD
         why = said.stderr.strip()[:200] or "it is not the top folder of a Git checkout with a commit"
         msg = f"Git cannot read the shared data repository {shared.root}: {why}"

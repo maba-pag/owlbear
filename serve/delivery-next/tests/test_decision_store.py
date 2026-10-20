@@ -330,3 +330,61 @@ def test_refresh_reports_uncommitted_work_instead_of_pulling(shared) -> None:
 def indexed(shared, monkeypatch) -> DataRepo:
     monkeypatch.setenv("OWLBEAR_DATA", str(shared.root))
     return shared
+
+
+def test_a_commit_a_hook_added_is_never_taken_back(shared_repo, shared, tmp_path, monkeypatch) -> None:
+    decision, second = held(shared, shared_repo[1], tmp_path / "second")
+    withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
+    assert save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn").published
+    hook = second.root / ".git" / "hooks" / "post-commit"
+    hook.write_text("#!/bin/sh\n[ -f .git/hooked ] && exit 0\ntouch .git/hooked\ngit commit -q --allow-empty -m hook\n")
+    hook.chmod(0o755)
+    monkeypatch.setattr(decision_sync, "catch_up", lambda *_: "")
+
+    edited = decision.model_copy(update={"rationale": EDITED})
+    said = save(second, edited, expected_revision=decision.revision, message="decisions: edited")
+
+    assert (said.saved and said.published, "not provably its own" in said.notice) == (False, True), said.notice
+    assert git(second.root, "log", "-2", "--format=%s").splitlines() == ["hook", "decisions: edited"]
+
+
+def test_no_rebase_of_the_checkout_combines_two_versions_of_a_decision(shared_repo, shared, tmp_path) -> None:
+    decision, second = held(shared, shared_repo[1], tmp_path / "second")
+    path = second.root / PROJECT / "decisions" / f"{decision.id}.md"
+    edited = decision.model_copy(update={"rationale": EDITED})
+    with second.locked():
+        write(edited, second.root / PROJECT, expected_revision=decision.revision)
+        assert second.commit(path, "decisions: edited offline") == ""  # committed here, never pushed
+    withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
+    assert save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn").published
+
+    settings = second.root / PROJECT / "config.json"
+    settings.write_text("{}\n")
+    with second.locked():
+        notice = second.publish(settings, "settings: a save of something else")
+
+    assert "could not be merged" in notice
+    assert decision_sync.revision_at(second, "HEAD", path.relative_to(second.root).as_posix(), 5) == edited.revision
+    assert not (second.root / ".git" / "rebase-merge").exists()
+
+
+@pytest.mark.parametrize("broken", ["file", "symlink"])
+def test_a_changes_path_that_is_not_a_real_folder_stops_loading(shared, tmp_path, broken) -> None:
+    set_up(shared)
+    changes = shared.root / PROJECT / "changes"
+    if broken == "file":
+        changes.write_text("not a folder\n")
+    else:
+        elsewhere = tmp_path / "elsewhere" / "decisions"
+        elsewhere.mkdir(parents=True)
+        changes.mkdir()
+        (changes / "20261021-090000-notes").symlink_to(elsewhere.parent)
+    with pytest.raises(DecisionsUnavailable):
+        load(shared, PROJECT)
+
+
+def test_a_data_repository_path_with_spaces_loads_and_saves(tmp_path) -> None:
+    local = set_up(checkout(tmp_path / "owlbear data"))
+    said = save(local, make(), expected_revision=None, message="decisions: notes")
+    assert (said.saved, said.committed) == (True, True)
+    assert len(load(local, PROJECT).snapshot.entries) == 1

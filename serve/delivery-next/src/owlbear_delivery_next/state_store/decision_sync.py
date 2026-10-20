@@ -87,21 +87,30 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> 
     before = _rev(shared, "HEAD", until)
     if failed := shared.commit(paths, message, until):
         return Sent(notice=failed)
-    after = _rev(shared, "HEAD", until)
+    rels = {p.relative_to(shared.root).as_posix() for p in paths}
+    made = _ours(shared, before, rels, until)
     pushed = shared.git("push", "-q", until=until)
     if pushed.returncode == 0:
         return Sent()
-    rels = {p.relative_to(shared.root).as_posix() for p in paths}
-    return _rejected(shared, rels, after if after != before else "", pushed.stderr, until)
+    return _rejected(shared, rels, (before, made), pushed.stderr, until)
 
 
-def _rejected(shared: DataRepo, rels: set[str], made: str, why: str, until: float) -> Sent:
+def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str:
+    """HEAD when it is the commit this call made: child of *before*, changing exactly *rels*; else nothing."""
+    after = _rev(shared, "HEAD", until)
+    if not after or after == before or _rev(shared, f"{after}~1", until) != before:
+        return ""  # no commit, or a hook added another one: never ours to take back
+    said = shared.git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", after, until=until)
+    return after if not said.returncode and set(said.stdout.splitlines()) == rels else ""
+
+
+def _rejected(shared: DataRepo, rels: set[str], commits: tuple[str, str], why: str, until: float) -> Sent:
     where = f"saved and committed in {shared.root}"
     if shared.git("fetch", "-q", until=until).returncode or (sides := _diverged(shared, until)) is None:
         return Sent(notice=f"{where}, but the push failed: {why.strip()[:200]}")
     ours, theirs = sides
     if stale := theirs & rels:
-        return _take_back(shared, made, stale, until)
+        return _take_back(shared, commits, stale, until)
     if both := ours & theirs:
         listed = ", ".join(sorted(both))
         return Sent(notice=f"{where}, but not published: {listed} changed here and on the remote; the owner decides")
@@ -113,14 +122,20 @@ def _rejected(shared: DataRepo, rels: set[str], made: str, why: str, until: floa
     return Sent()
 
 
-def _take_back(shared: DataRepo, made: str, stale: set[str], until: float) -> Sent:
-    """Undo the commit this call made (only that one), then rebase: the expected revision was stale."""
+def _take_back(shared: DataRepo, commits: tuple[str, str], stale: set[str], until: float) -> Sent:
+    """Undo the verified commit this call made (only that one), then rebase: the expected revision was stale."""
+    before, made = commits
     ids = ", ".join(sorted(Path(r).stem for r in stale))
     notice = f"another checkout changed {ids} first, so this save was taken back; reload it and save again"
-    if made and _rev(shared, "HEAD", until) != made:
-        return Sent(stale=True, notice=f"{notice}; its commit {made[:9]} is no longer the checkout's last: fix by hand")
-    if made and (reset := shared.git("reset", "-q", "--keep", "HEAD~1", until=until)).returncode:
-        return Sent(stale=True, notice=f"{notice}; its commit {made[:9]} stays: {reset.stderr.strip()[:200]}")
+    if not made and _rev(shared, "HEAD", until) != before:
+        return Sent(stale=True, notice=f"another checkout changed {ids} first; this save's commit is not provably "
+                    "its own, so it stays unpublished: fix by hand")  # fmt: skip
+    if made:  # the branch moves back only if it still points at our commit; our files return to their parent's
+        moved = shared.git("update-ref", "-m", "owlbear: take back a stale decision save", "HEAD", before, made,
+                           until=until)  # fmt: skip
+        if moved.returncode:
+            return Sent(stale=True, notice=f"{notice}; its commit {made[:9]} stays: {moved.stderr.strip()[:200]}")
+        shared.git("restore", f"--source={before}", "--staged", "--worktree", "--", *sorted(stale), until=until)
     if failed := rebase(shared, until):
         notice += f"; not rebased on the remote: {failed}"
     return Sent(stale=True, notice=notice)

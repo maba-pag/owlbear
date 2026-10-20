@@ -33,6 +33,8 @@ POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
 VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
+# Git never combines two versions of one decision file, in any rebase of the checkout: such a rebase stops (TD-424)
+ATTRIBUTES = ("**/decisions/*.md -merge",)
 GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a save answers within the page's 60 s
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
@@ -144,11 +146,12 @@ class DataRepo:
             os.close(fd)
 
     def _exclude(self, admin: Path) -> None:
-        path = admin / "info" / "exclude"
-        text = path.read_text() if path.exists() else ""
-        if missing := [p for p in EXCLUDE if p not in text.splitlines()]:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(missing) + "\n")
+        for name, lines in (("exclude", EXCLUDE), ("attributes", ATTRIBUTES)):
+            path = admin / "info" / name
+            text = path.read_text() if path.exists() else ""
+            if missing := [p for p in lines if p not in text.splitlines()]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(missing) + "\n")
 
     def claim(self, name: str, identity: str) -> bool:
         """Bind the project folder to one repository; True when this call wrote the claim.
