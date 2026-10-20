@@ -37,6 +37,7 @@ def _initialize(
         owlbear_dir,
         interactive=False,
         refresh_configs=refresh_configs,
+        yes=True,
     )
 
 
@@ -311,7 +312,7 @@ def test_cli_rejects_uninstall_only_flags_in_other_modes(tmp_path: Path) -> None
     target_dir.mkdir()
 
     yes_result = subprocess.run(  # noqa: S603
-        [sys.executable, str(_INIT_PATH), "--yes"],
+        [sys.executable, str(_INIT_PATH), "--check-configs", "--yes"],
         cwd=target_dir,
         capture_output=True,
         text=True,
@@ -326,9 +327,10 @@ def test_cli_rejects_uninstall_only_flags_in_other_modes(tmp_path: Path) -> None
     )
 
     assert yes_result.returncode != 0
-    assert "--yes requires --uninstall" in yes_result.stderr
+    assert "cannot be combined with --check-configs" in yes_result.stderr
     assert replace_result.returncode != 0
     assert "--replace-hooks cannot be combined" in replace_result.stderr
+    assert list(target_dir.iterdir()) == []
 
 
 def test_uninstall_preserves_non_mergeable_settings_values(tmp_path: Path) -> None:
@@ -369,21 +371,66 @@ def test_uninstall_preserves_empty_mergeable_settings_values(tmp_path: Path) -> 
     assert remaining_settings["files.exclude"] == {}
 
 
-def test_uninstall_preserves_retired_lines_in_nested_gitignore(tmp_path: Path) -> None:
+def test_uninstall_still_removes_legacy_managed_gitignore_section(tmp_path: Path) -> None:
     module = _load_init_module()
     target_dir = tmp_path / "project"
     target_dir.mkdir()
     _initialize(module, target_dir)
-    nested_gitignore = target_dir / ".owlbear" / ".gitignore"
-    nested_gitignore.write_text(
-        nested_gitignore.read_text(encoding="utf-8")
-        + "\n# Host-local Delivery worktrees and mutable capacity ledger\n",
+    gitignore = target_dir / ".gitignore"
+    gitignore.write_text(
+        f"consumer-rule/\n\n{module._OWLBEAR_GITIGNORE_MARKER}\nlegacy-owlbear-rule/\n",  # noqa: SLF001
         encoding="utf-8",
     )
+    manifest_path = target_dir / ".owlbear" / "install-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"][".gitignore"] = {
+        "kind": "gitignore",
+        "created": False,
+        "installed_sha256": "",
+        "added_lines": ["legacy-owlbear-rule/"],
+        "marker_added": True,
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     assert module.uninstall(target_dir, _REPO_ROOT, confirm=False).completed is True
 
-    assert "# Host-local Delivery worktrees and mutable capacity ledger" in nested_gitignore.read_text(encoding="utf-8")
+    assert gitignore.read_text(encoding="utf-8") == "consumer-rule/\n"
+
+
+def _git_project(tmp_path: Path) -> Path:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=target_dir, check=True)  # noqa: S607
+    return target_dir
+
+
+def test_uninstall_removes_exclude_block_and_keeps_other_lines(tmp_path: Path) -> None:
+    module = _load_init_module()
+    target_dir = _git_project(tmp_path)
+    exclude = target_dir / ".git" / "info" / "exclude"
+    exclude.write_text(exclude.read_text(encoding="utf-8") + "local-notes/\n", encoding="utf-8")
+    before = exclude.read_text(encoding="utf-8")
+    _initialize(module, target_dir)
+    assert module._workspace_git.markers("")[0] in exclude.read_text(encoding="utf-8")  # noqa: SLF001
+
+    result = module.uninstall(target_dir, _REPO_ROOT, confirm=False)
+
+    assert exclude.read_text(encoding="utf-8") == before
+    assert any(action.startswith("removed: OwlBear block") for action in result.actions)
+
+
+def test_uninstall_preserves_an_edited_exclude_block(tmp_path: Path) -> None:
+    module = _load_init_module()
+    target_dir = _git_project(tmp_path)
+    _initialize(module, target_dir)
+    exclude = target_dir / ".git" / "info" / "exclude"
+    edited = exclude.read_text(encoding="utf-8").replace("/.owlbear/\n", "/.owlbear/\nuser-added/\n")
+    exclude.write_text(edited, encoding="utf-8")
+
+    result = module.uninstall(target_dir, _REPO_ROOT, confirm=False)
+
+    assert exclude.read_text(encoding="utf-8") == edited
+    assert any(action.startswith("preserve: OwlBear block") for action in result.actions)
 
 
 def test_uninstall_refuses_the_owlbear_checkout() -> None:

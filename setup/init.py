@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -24,6 +25,30 @@ import warnings
 from collections import Counter
 from contextlib import suppress
 from pathlib import Path
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+
+def _load_workspace_git() -> ModuleType:
+    """Load the sibling Git-exclude helper whether run as a script or loaded by path."""
+    spec = importlib.util.spec_from_file_location(
+        "owlbear_setup_workspace_git", Path(__file__).with_name("workspace_git.py")
+    )
+    if spec is None or spec.loader is None:
+        message = "setup/workspace_git.py is missing next to setup/init.py"
+        raise ImportError(message)
+    module = importlib.util.module_from_spec(spec)
+    caching, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # no write in the runtime before consent
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = caching
+    return module
+
+
+_workspace_git = _load_workspace_git()
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -75,6 +100,11 @@ _REFRESHABLE_CONFIG_REL = frozenset(
     }
 )
 
+_MERGED_REL = frozenset({".vscode/settings.json", ".vscode/mcp.json"})
+_ACTION_LABELS = {"create": "create", "merge": "merge into existing", "replace": "replace"}
+_TRACKED_NOTE = " (tracked: your change will show as modified)"
+
+# Older installs wrote this section into the project's .gitignore; uninstall still removes it.
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _INSTALL_MANIFEST_PATH = Path(".owlbear/install-manifest.json")
@@ -286,45 +316,6 @@ def _merge_claims(old: dict, new: dict) -> dict:
     return merged
 
 
-def _write_gitignore(src: Path, dest: Path) -> None:
-    """Write .gitignore, appending owlbear-managed section to existing file.
-
-    If the destination file does not exist, copies the full seed .gitignore.
-    If it exists but has no owlbear marker, appends the owlbear-managed section.
-    If the marker is already present, adds missing current rules.
-    """
-    seed_content = src.read_text(encoding="utf-8")
-
-    if not dest.exists():
-        dest.write_text(seed_content, encoding="utf-8")
-        return
-
-    existing = dest.read_text(encoding="utf-8")
-    if _OWLBEAR_GITIGNORE_MARKER in existing:
-        prefix, marker, managed = existing.partition(_OWLBEAR_GITIGNORE_MARKER)
-        retained = managed.splitlines()
-        while retained and not retained[0].strip():
-            retained.pop(0)
-        seed_managed = seed_content.partition(_OWLBEAR_GITIGNORE_MARKER)[2].splitlines()
-        retained_values = {line.strip() for line in retained}
-        additions = [line for line in seed_managed if line.strip() and line.strip() not in retained_values]
-        merged = "\n".join((*retained, *additions)).rstrip()
-        updated = prefix + marker + ("\n" + merged + "\n" if merged else "\n")
-        if updated != existing:
-            dest.write_text(updated, encoding="utf-8")
-        return
-
-    # Extract the owlbear-managed section from the seed
-    marker_pos = seed_content.find(_OWLBEAR_GITIGNORE_MARKER)
-    if marker_pos < 0:
-        return  # seed has no marker — nothing to append
-    owlbear_section = seed_content[marker_pos:]
-
-    # Append with a blank line separator
-    separator = "" if existing.endswith("\n") else "\n"
-    dest.write_text(existing + separator + "\n" + owlbear_section, encoding="utf-8")
-
-
 def _write_settings(
     src: Path,
     dest: Path,
@@ -447,31 +438,14 @@ def _record_seed_install(
     dest: Path,
     *,
     created: bool,
-    kind: str = "file",
-    **extra: object,
 ) -> None:
     """Record one copied seed surface after installation."""
     record: dict[str, object] = {
-        "kind": kind,
+        "kind": "file",
         "created": created,
         "installed_sha256": _sha256_bytes(dest.read_bytes()),
-        **extra,
     }
     _merge_manifest_record(manifest, relative, record)
-
-
-def _gitignore_section_lines(content: str) -> list[str]:
-    """Return non-empty managed-section lines from one gitignore document."""
-    if _OWLBEAR_GITIGNORE_MARKER not in content:
-        return []
-    return [line.strip() for line in content.partition(_OWLBEAR_GITIGNORE_MARKER)[2].splitlines() if line.strip()]
-
-
-def _gitignore_added_lines(before: str, after: str) -> list[str]:
-    """Return the managed lines added by one installation pass."""
-    before_counts = Counter(_gitignore_section_lines(before))
-    after_counts = Counter(_gitignore_section_lines(after))
-    return list((after_counts - before_counts).elements())
 
 
 class UninstallResult:
@@ -1398,31 +1372,247 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def init(  # noqa: C901
+class _PlannedFile(NamedTuple):
+    """One seed file and what installing it does to the target."""
+
+    src: Path
+    relative: str
+    dest: Path
+    action: str
+
+
+class _InstallPlan(NamedTuple):
+    """Everything one setup run would create, merge or replace, computed before writing."""
+
+    files: list[_PlannedFile]
+    directories: list[str]
+    tracked: set[str]
+    manifest_exists: bool
+    exclude_path: Path | None
+    exclude_lines: list[str]
+
+
+def _planned_action(
+    src: Path,
+    relative: str,
+    dest: Path,
+    replacements: dict[str, str],
+    *,
+    refresh_configs: bool,
+) -> str | None:
+    """Return create, merge, replace, replace-hook or unchanged; None when setup leaves the file."""
+    if not dest.exists():
+        return "create"
+    if relative in _MERGED_REL:
+        return "merge"
+    if relative in _SKIP_IF_EXISTS_REL and not (refresh_configs and relative in _REFRESHABLE_CONFIG_REL):
+        return None
+    if relative.startswith(_HOOKS_REL_PREFIX):
+        return None if _hook_files_match(src, dest) else "replace-hook"
+    return "unchanged" if dest.read_bytes() == _render_seed_file(src, replacements) else "replace"
+
+
+def _plan_seed_files(
+    seed_dir: Path,
+    target_dir: Path,
+    replacements: dict[str, str],
+    *,
+    refresh_configs: bool,
+) -> list[_PlannedFile]:
+    """Walk the seed tree in install order and plan each file."""
+    plan: list[_PlannedFile] = []
+    for src in sorted(seed_dir.rglob("*")):
+        if src.is_dir() or src.name in _SKIP_NAMES:
+            continue
+        relative = src.relative_to(seed_dir).as_posix()
+        dest = target_dir / relative
+        action = _planned_action(src, relative, dest, replacements, refresh_configs=refresh_configs)
+        if action is not None:
+            plan.append(_PlannedFile(src, relative, dest, action))
+    return plan
+
+
+def _missing_directories(paths: list[Path], target_dir: Path) -> list[str]:
+    """Return the target-relative directories that writing *paths* would create."""
+    missing: set[str] = set()
+    for path in paths:
+        current = path.parent
+        while current != target_dir and not current.exists():
+            missing.add(current.relative_to(target_dir).as_posix())
+            current = current.parent
+    return sorted(missing)
+
+
+def _created_paths(manifest: dict[str, object]) -> tuple[set[str], set[str]]:
+    """Return the directories and files the install receipt records as created by setup."""
+    created_directories = manifest.get("created_directories")
+    directories = {value for value in created_directories or [] if isinstance(value, str)}
+    records = manifest.get("files")
+    files = {
+        relative
+        for relative, record in (records.items() if isinstance(records, dict) else ())
+        if isinstance(record, dict) and record.get("created") is True
+    }
+    files.add(_INSTALL_MANIFEST_PATH.as_posix())
+    return directories, files
+
+
+def _exclude_lines_for(target_dir: Path, prefix: str, directories: set[str], files: set[str]) -> list[str]:
+    """Return the exclude block for created paths, leaving out files Git already tracks."""
+    tracked = _workspace_git.tracked_paths(target_dir, sorted(files))
+    return _workspace_git.exclude_lines(prefix, directories, files - tracked)
+
+
+def _build_install_plan(
+    seed_dir: Path,
+    target_dir: Path,
+    replacements: dict[str, str],
+    manifest: dict[str, object],
+    *,
+    refresh_configs: bool,
+) -> _InstallPlan:
+    """Compute every path setup would write and how it would be hidden from Git."""
+    files = _plan_seed_files(seed_dir, target_dir, replacements, refresh_configs=refresh_configs)
+    manifest_dest = target_dir / _INSTALL_MANIFEST_PATH
+    directories = _missing_directories([*(item.dest for item in files), manifest_dest], target_dir)
+    existing = [item.relative for item in files if item.action not in {"create", "unchanged"}]
+    if manifest_dest.exists():
+        existing.append(_INSTALL_MANIFEST_PATH.as_posix())
+    tracked = _workspace_git.tracked_paths(target_dir, existing)
+    location = _workspace_git.locate(target_dir)
+    exclude_lines: list[str] = []
+    if location is not None:
+        created_directories, created_files = _created_paths(manifest)
+        created_files |= {item.relative for item in files if item.action == "create"}
+        exclude_lines = _exclude_lines_for(
+            target_dir, location[1], created_directories | set(directories), created_files
+        )
+    exclude_path = location[0] if location is not None else None
+    return _InstallPlan(files, directories, tracked, manifest_dest.exists(), exclude_path, exclude_lines)
+
+
+def _hook_label(*, replace_hooks: bool, interactive: bool) -> str:
+    """Describe what setup does with an existing hook file that differs from the seed."""
+    if replace_hooks:
+        return "replace"
+    if interactive:
+        return "replace if you choose (differs from seed)"
+    return "keep (differs from seed; --replace-hooks replaces it)"
+
+
+def _inventory_lines(target_dir: Path, plan: _InstallPlan, *, replace_hooks: bool, interactive: bool) -> list[str]:
+    """Render the paths setup would create, merge or replace, and what it hides from Git."""
+    lines = [f"OwlBear agent workspace setup for {target_dir.resolve()}:"]
+    lines.extend(f"  create directory: {directory}/" for directory in plan.directories)
+    entries = [(item.relative, item.action) for item in plan.files if item.action != "unchanged"]
+    entries.append((_INSTALL_MANIFEST_PATH.as_posix(), "replace" if plan.manifest_exists else "create"))
+    for relative, action in entries:
+        label = _ACTION_LABELS.get(action) or _hook_label(replace_hooks=replace_hooks, interactive=interactive)
+        note = _TRACKED_NOTE if relative in plan.tracked and not label.startswith("keep") else ""
+        lines.append(f"  {label}: {relative}{note}")
+    if plan.exclude_path is None:
+        lines.append("Not a Git repository: setup hides nothing from Git.")
+    else:
+        lines.append(f"Hidden from Git in {plan.exclude_path} (one OwlBear block):")
+        lines.extend(f"  {line}" for line in plan.exclude_lines)
+    return lines
+
+
+def _confirm_install(target_dir: Path, *, yes: bool, dry_run: bool, interactive: bool) -> bool:
+    """Return whether setup may write, asking once in an interactive session."""
+    if dry_run:
+        print("OwlBear setup dry-run; no files changed.")
+        return False
+    if yes:
+        return True
+    if not interactive:
+        message = "Refusing non-interactive setup without consent; rerun with --yes or use --dry-run."
+        raise RuntimeError(message)
+    try:
+        answer = input(f"Write the OwlBear agent workspace into {target_dir.resolve()}? [y/N] ").strip().lower()
+    except EOFError:
+        answer = ""
+    if answer in {"y", "yes"}:
+        return True
+    print("OwlBear setup cancelled; nothing was written.")
+    return False
+
+
+def _install_seed_files(  # noqa: PLR0913 - the plan, its target and receipt, and the two hook-conflict choices
+    files: list[_PlannedFile],
+    target_dir: Path,
+    replacements: dict[str, str],
+    manifest: dict[str, object],
+    *,
+    replace_hooks: bool,
+    interactive: bool,
+) -> None:
+    """Write each planned seed file and record it in the install receipt."""
+    for item in files:
+        _ensure_parent_dirs(item.dest.parent, target_dir, manifest)
+        if item.relative == ".vscode/settings.json":
+            _write_settings(item.src, item.dest, replacements, manifest=manifest)
+        elif item.relative == ".vscode/mcp.json":
+            _write_mcp(item.src, item.dest, replacements, manifest=manifest)
+        elif item.action != "replace-hook" or _should_replace_hook_file(
+            item.dest, src=item.src, replace_hooks=replace_hooks, interactive=interactive
+        ):
+            created = not item.dest.exists()
+            _write_seed_file(item.src, item.dest, replacements)
+            _record_seed_install(manifest, item.relative, item.dest, created=created)
+
+
+def _hide_from_git(target_dir: Path, manifest: dict[str, object]) -> None:
+    """Write the OwlBear block into the local exclude file and record it in the receipt."""
+    location = _workspace_git.locate(target_dir)
+    if location is None:
+        manifest.pop("git_exclude", None)
+        return
+    exclude_path, prefix = location
+    lines = _exclude_lines_for(target_dir, prefix, *_created_paths(manifest))
+    previous = manifest.get("git_exclude")
+    try:
+        _workspace_git.write_block(exclude_path, prefix, lines, previous if isinstance(previous, list) else None)
+    except OSError as exc:
+        message = f"Could not update the Git exclude file {exclude_path}: {exc}"
+        raise RuntimeError(message) from exc
+    manifest["git_exclude"] = lines
+
+
+def init(  # noqa: PLR0913 - one keyword per command-line flag
     target_dir: Path,
     owlbear_dir: Path,
     *,
     replace_hooks: bool = False,
     refresh_configs: bool = False,
     interactive: bool | None = None,
-) -> None:
-    """Initialise an OwlBear workspace in *target_dir*.
+    yes: bool = False,
+    dry_run: bool = False,
+) -> bool:
+    """Initialise an OwlBear workspace in *target_dir* after one consent.
 
-    Walks the seed/ tree inside *owlbear_dir*, copies static files, and
-    replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
+    Plans every path the seed/ tree inside *owlbear_dir* would create, merge or
+    replace, prints that inventory and asks once before the first write
+    (``yes`` consents, ``dry_run`` only prints). Copies static files and
+    replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates;
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
     Existing refreshable consumer configs are preserved unless
-    ``refresh_configs`` is true.
-    A successful run records its copied and merged surfaces in
+    ``refresh_configs`` is true. Created paths are hidden from Git in one
+    block of the repository's local exclude file. A successful run records
+    its copied and merged surfaces and that block in
     ``.owlbear/install-manifest.json`` for conservative uninstall.
-    Also receipt-activates an empty target authority store for fresh workspaces.
 
     Args:
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         replace_hooks: Overwrite differing existing hook runtime files.
         refresh_configs: Replace existing refreshable consumer configs from seed/.
-        interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
+        interactive: Whether setup may prompt. Defaults to TTY detect.
+        yes: Consent to writing without the prompt.
+        dry_run: Print the inventory and write nothing.
+
+    Returns:
+        Whether setup wrote the workspace.
     """
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
@@ -1432,85 +1622,20 @@ def init(  # noqa: C901
     if manifest is None:
         manifest = _new_install_manifest()
 
-    for src in sorted(seed_dir.rglob("*")):
-        if src.is_dir():
-            continue
+    plan = _build_install_plan(seed_dir, target_dir, replacements, manifest, refresh_configs=refresh_configs)
+    for line in _inventory_lines(target_dir, plan, replace_hooks=replace_hooks, interactive=interactive_mode):
+        print(line)
+    if not _confirm_install(target_dir, yes=yes, dry_run=dry_run, interactive=interactive_mode):
+        return False
 
-        rel = src.relative_to(seed_dir)
-        rel_posix = rel.as_posix()
-
-        if src.name in _SKIP_NAMES:
-            continue
-
-        dest = target_dir / rel
-        _ensure_parent_dirs(dest.parent, target_dir, manifest)
-
-        # --- per-file dispatch ---
-
-        if rel_posix == ".vscode/settings.json":
-            _write_settings(src, dest, replacements, manifest=manifest)
-            continue
-
-        if rel_posix == ".vscode/mcp.json":
-            _write_mcp(src, dest, replacements, manifest=manifest)
-            continue
-
-        if rel_posix == ".gitignore":
-            before = dest.read_text(encoding="utf-8") if dest.exists() else ""
-            created = not dest.exists()
-            _write_gitignore(src, dest)
-            _record_seed_install(
-                manifest,
-                rel_posix,
-                dest,
-                created=created,
-                kind="gitignore",
-                added_lines=_gitignore_added_lines(before, dest.read_text(encoding="utf-8")),
-                marker_added=_OWLBEAR_GITIGNORE_MARKER not in before
-                and _OWLBEAR_GITIGNORE_MARKER in dest.read_text(encoding="utf-8"),
-            )
-            continue
-
-        if rel_posix == ".owlbear/.gitignore":
-            before = dest.read_text(encoding="utf-8") if dest.exists() else ""
-            created = not dest.exists()
-            _write_gitignore(src, dest)
-            _record_seed_install(
-                manifest,
-                rel_posix,
-                dest,
-                created=created,
-                kind="gitignore",
-                added_lines=_gitignore_added_lines(before, dest.read_text(encoding="utf-8")),
-                marker_added=_OWLBEAR_GITIGNORE_MARKER not in before
-                and _OWLBEAR_GITIGNORE_MARKER in dest.read_text(encoding="utf-8"),
-            )
-            continue
-
-        if (
-            rel_posix in _SKIP_IF_EXISTS_REL
-            and dest.exists()
-            and not (refresh_configs and rel_posix in _REFRESHABLE_CONFIG_REL)
-        ):
-            continue
-
-        if rel_posix.startswith(_HOOKS_REL_PREFIX) and dest.exists():
-            if _hook_files_match(src, dest):
-                continue
-            if not _should_replace_hook_file(
-                dest,
-                src=src,
-                replace_hooks=replace_hooks,
-                interactive=interactive_mode,
-            ):
-                continue
-
-        created = not dest.exists()
-        _write_seed_file(src, dest, replacements)
-        _record_seed_install(manifest, rel_posix, dest, created=created)
-
+    _install_seed_files(
+        plan.files, target_dir, replacements, manifest, replace_hooks=replace_hooks, interactive=interactive_mode
+    )
+    _ensure_parent_dirs(manifest_path.parent, target_dir, manifest)
+    _hide_from_git(target_dir, manifest)
     _configure_copilot_profile(target_dir, interactive=interactive_mode)
     _write_install_manifest(manifest_path, manifest)
+    return True
 
 
 def _has_owlbear_surface(target_dir: Path) -> bool:
@@ -1584,6 +1709,23 @@ def _remove_seed_surfaces(seed_dir: Path, options: _UninstallOptions) -> None:
             _remove_manifest_file(dest, record, options)
 
 
+def _remove_git_exclude(options: _UninstallOptions) -> None:
+    """Remove the OwlBear exclude block when it still holds the lines the receipt records."""
+    recorded = options.manifest.get("git_exclude") if isinstance(options.manifest, dict) else None
+    if not isinstance(recorded, list):
+        return
+    location = _workspace_git.locate(options.target_dir)
+    if location is None:
+        return
+    try:
+        action = _workspace_git.remove_block(location[0], location[1], recorded, dry_run=options.dry_run)
+    except OSError as exc:
+        message = f"Could not update the Git exclude file during uninstall: {location[0]}"
+        raise RuntimeError(message) from exc
+    if action is not None:
+        options.actions.append(f"{action}: OwlBear block in {location[0]}")
+
+
 def uninstall(
     target_dir: Path,
     owlbear_dir: Path,
@@ -1643,6 +1785,7 @@ def uninstall(
     )
     try:
         _remove_seed_surfaces(seed_dir, options)
+        _remove_git_exclude(options)
         _remove_install_manifest(manifest_path, manifest_bytes, options)
     except RuntimeError as exc:
         raise UninstallError(str(exc), tuple(options.actions)) from exc
@@ -1688,22 +1831,20 @@ if __name__ == "__main__":  # pragma: no cover
     parser.add_argument(
         "--yes",
         action="store_true",
-        help="Confirm an uninstall without prompting.",
+        help="Consent to setup or uninstall without prompting.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show uninstall changes without modifying files.",
+        help="Show what setup or uninstall would change without modifying files.",
     )
     args = parser.parse_args()
 
     _target = Path.cwd()
     # Not resolved: run from the ~/.owlbear/runtime alias, seeded paths keep the alias across updates.
     _owlbear = Path(__file__).absolute().parent.parent
-    if args.yes and not args.uninstall:
-        parser.error("--yes requires --uninstall")
-    if args.dry_run and not args.uninstall:
-        parser.error("--dry-run requires --uninstall")
+    if (args.yes or args.dry_run) and args.check_configs:
+        parser.error("--yes and --dry-run cannot be combined with --check-configs")
     if args.replace_hooks and args.uninstall:
         parser.error("--replace-hooks cannot be combined with --uninstall")
     if args.uninstall:
@@ -1743,12 +1884,15 @@ if __name__ == "__main__":  # pragma: no cover
         print("Consumer lint/editor configs are aligned with the owlbear seed.")
         raise SystemExit(0)
     try:
-        init(
+        completed = init(
             _target,
             _owlbear,
             replace_hooks=args.replace_hooks,
             refresh_configs=args.refresh_configs,
+            yes=args.yes,
+            dry_run=args.dry_run,
         )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
-    print(f"OwlBear workspace initialised in '{_target.name}'.")
+    if completed:
+        print(f"OwlBear workspace initialised in '{_target.name}'.")

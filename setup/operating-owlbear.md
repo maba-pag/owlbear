@@ -115,27 +115,34 @@ uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
 ## What Setup Creates
 
 The optional agent workspace setup (`setup/init.py`, see the
-[setup guide](setup-guide.md#optional-agent-workspace)) writes the following files into your project
-directory:
+[setup guide](setup-guide.md#optional-agent-workspace)) lists the following files and asks before
+writing them into your project directory:
 
 | File / Directory | Purpose | Idempotency |
 | --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 4 MCP servers (3 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
-| `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
+| `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, setup-created directories and the Git exclude lines for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/scripts/test-root.py` | Test-root resolver — discovers toolchain and CWD for a given test file | Always written |
-| `.owlbear/.gitignore` | Ignores OwlBear-local scratch, runtime, database, vector, and lock artifacts | Managed rules are merged on rerun; custom rules are preserved |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
-| `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and merges current managed rules on rerun |
 | `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.yamllint.yml` | YAML linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
+
+Setup does not edit the project's `.gitignore`. In a Git repository it writes one block, between
+`# OwlBear agent workspace (setup/init.py) — begin` and `— end`, into the local exclude file that
+`git rev-parse --git-path info/exclude` names (worktrees included). The block lists each file and
+directory setup created, so `git status` shows nothing new; when `.owlbear/` already existed it
+also keeps OwlBear's runtime files there (scratch, knowledge and memory databases, vectors, Delivery
+runtime folders and lock files) out of Git. Reruns replace the block rather than adding another.
+A file Git already tracks cannot be hidden; the list before the question marks it
+`tracked: your change will show as modified`. Outside a Git repository setup hides nothing.
 
 Review `.vscode/settings.json` as part of trusting the workspace. The seeded settings include an
 additional read-access path for the OwlBear checkout, a list of terminal commands that VS Code may
@@ -199,8 +206,9 @@ current seed versions, run:
 uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py --refresh-configs
 ```
 
-`--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
-project-specific files that are outside the refreshable set.
+`--refresh-configs` asks the same question before writing unless you add `--yes`. It does not
+overwrite `.github/copilot-instructions.md`, hook files, or other project-specific files that are
+outside the refreshable set.
 
 ## Uninstalling
 
@@ -248,7 +256,10 @@ The command uses `.owlbear/install-manifest.json` to distinguish surfaces create
 files that existed before it ran. A receipt-owned file is removed only when its installed digest is
 unchanged. Receipt-claimed settings and MCP values are removed only when the complete merged file
 still matches the post-install digest; later edits, including JSONC comments, preserve the whole
-file. Managed ignore rules are removed by recorded line additions, so unrelated rules remain.
+file. Uninstall removes the OwlBear block from the local exclude file when it still holds the lines
+the receipt records, leaving your other exclude lines; an edited block stays. The managed
+`.gitignore` section that older installs wrote is removed by its recorded line additions, so
+unrelated rules remain.
 Freshly created editor and lint configuration files are removed; pre-existing files remain even
 when their content happens to equal the seed. Setup-created empty directories are removed only when
 the receipt records them as created.
@@ -256,7 +267,7 @@ the receipt records them as created.
 If the receipt is absent, uninstall takes the conservative path and preserves recognized surfaces;
 it refuses to operate in a directory with no receipt or recognizable OwlBear surface. It also
 refuses the OwlBear checkout and any descendant of that checkout. A non-interactive call requires
-`--yes` or `--dry-run`, and `--yes` and `--dry-run` are valid only with `--uninstall`.
+`--yes` or `--dry-run`, as setup itself does; `--check-configs` takes neither.
 
 Custom seed files, unrelated VS Code settings and MCP servers, custom ignore rules, Delivery
 state, runtime data, knowledge and memory data, and user-local VS Code profile settings are

@@ -140,8 +140,8 @@ keeps the runtime and your projects. **Remove project** on the page stops OwlBea
 See [Uninstalling](setup/operating-owlbear.md#uninstalling) for removing everything.
 
 OwlBear's own agents, skills and tool servers can also be loaded into a project's VS Code
-workspace for your own chats; that is an optional, separate setup in
-[the setup guide](setup/setup-guide.md#optional-agent-workspace).
+workspace for your own chats; that is an optional, separate setup that asks first and hides its
+files from Git, in [the setup guide](setup/setup-guide.md#optional-agent-workspace).
 
 ## Status and expectations
 
