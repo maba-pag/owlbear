@@ -602,19 +602,6 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "owlbear-memory/commit_memory_batch" in agent
 
 
-@pytest.mark.parametrize(
-    ("relative_path", "phrase"),
-    [
-        ("serve/delivery/README.md", "digests prove content integrity, not that a procedure ran"),
-    ],
-)
-def test_finalization_and_proof_guidance_pins_each_procedure_step(relative_path: str, phrase: str) -> None:
-    """Each evidence procedure step stays in the skill or agent that owns it."""
-    content = " ".join((_REPO_ROOT / relative_path).read_text(encoding="utf-8").split())
-
-    assert phrase in content
-
-
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     """Manual review cannot infer named scope from an entry's own provenance."""
     prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")

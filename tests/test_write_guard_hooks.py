@@ -13,10 +13,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_DENY_WRITES_CASES = [
-    ("dev", _REPO_ROOT / ".owlbear" / "hooks" / "deny-writes.py"),
-    ("seed", _REPO_ROOT / "seed" / ".owlbear" / "hooks" / "deny-writes.py"),
-]
 _DENY_SRC_CASES = [
     ("dev", _REPO_ROOT / ".owlbear" / "hooks" / "deny-src-writes.py"),
     ("seed", _REPO_ROOT / "seed" / ".owlbear" / "hooks" / "deny-src-writes.py"),
@@ -73,155 +69,10 @@ def _is_denied(result: dict[str, Any]) -> bool:
     return result.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
 
 
-@pytest.fixture(params=_DENY_WRITES_CASES, ids=[case[0] for case in _DENY_WRITES_CASES])
-def deny_writes_module(request: pytest.FixtureRequest) -> types.ModuleType:
-    label, path = request.param
-    return _load_hook(path, f"deny_writes_{label}")
-
-
 @pytest.fixture(params=_DENY_SRC_CASES, ids=[case[0] for case in _DENY_SRC_CASES])
 def deny_src_module(request: pytest.FixtureRequest) -> types.ModuleType:
     label, path = request.param
     return _load_hook(path, f"deny_src_{label}")
-
-
-class TestDenyWrites:
-    @pytest.mark.parametrize("raw", [b"", b"{", b"[]", b"null"])
-    def test_malformed_or_non_object_input_fails_open(
-        self,
-        deny_writes_module: types.ModuleType,
-        raw: bytes,
-    ) -> None:
-        assert _invoke_raw(deny_writes_module, raw) == {}
-
-    def test_unknown_tool_fails_open(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "future/write_tool",
-            "tool_input": {"filePath": "README.md"},
-        }
-        assert _is_allowed(_invoke(deny_writes_module, payload))
-
-    def test_allows_scratch_file(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/scratch/report.txt"},
-        }
-        assert _is_allowed(_invoke(deny_writes_module, payload))
-
-    def test_denies_non_scratch_file(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {"tool_name": "create_file", "tool_input": {"filePath": "README.md"}}
-        assert _is_denied(_invoke(deny_writes_module, payload))
-
-    def test_allows_apply_patch_in_scratch(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "apply_patch",
-            "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: .owlbear/scratch/reviewer.md\n@@\n-old\n+new\n*** End Patch"
-            },
-        }
-        assert _is_allowed(_invoke(deny_writes_module, payload))
-
-    def test_allows_rename_within_scratch(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "edit/rename",
-            "tool_input": {
-                "oldPath": ".owlbear/scratch/old.txt",
-                "newPath": ".owlbear/scratch/new.txt",
-            },
-        }
-        assert _is_allowed(_invoke(deny_writes_module, payload))
-
-    @pytest.mark.parametrize("path", ["../outside/.owlbear/scratch/escape.txt", "serve/.owlbear/scratch/../../app.py"])
-    def test_denies_traversal_rename(self, deny_writes_module: types.ModuleType, path: str) -> None:
-        payload = {
-            "tool_name": "edit/rename",
-            "tool_input": {"oldPath": path, "newPath": ".owlbear/scratch/new.txt"},
-        }
-        assert _is_denied(_invoke(deny_writes_module, payload))
-
-    def test_denies_apply_patch_outside_scratch(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "apply_patch",
-            "tool_input": {"input": "*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+new\n*** End Patch"},
-        }
-        assert _is_denied(_invoke(deny_writes_module, payload))
-
-    def test_denies_research_without_explicit_mode(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/research/target-design.md"},
-        }
-        assert _is_denied(_invoke(deny_writes_module, payload))
-
-    def test_allows_research_in_explicit_mode(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/research/target-design.md"},
-        }
-        argv = [str(deny_writes_module.__file__), "--allow-research"]
-        assert _is_allowed(_invoke(deny_writes_module, payload, argv=argv))
-
-
-class TestReadOnlyTerminalGuard:
-    @pytest.mark.parametrize(
-        "command",
-        [
-            "git commit --allow-empty -m accepted",
-            "git -C /tmp/proof reset --hard HEAD^",
-            "git checkout --detach HEAD^",
-            "git update-ref HEAD HEAD^",
-            "git -c alias.move=reset move --hard HEAD^",
-            "git diff --output=tracked.patch HEAD^ HEAD",
-            "git branch feature",
-            "git branch -D feature",
-            "git branch -m renamed",
-            "git branch --list -d feature",
-            "git branch --show-current feature",
-            "git branch --set-upstream-to=origin/dev",
-            "chmod u+w tracked.py",
-            "printf changed > tracked.py",
-            "pytest &> tracked.log",
-            "python -c \"from pathlib import Path; Path('tracked.py').write_text('changed')\"",
-        ],
-    )
-    def test_denies_terminal_mutation(self, deny_writes_module: types.ModuleType, command: str) -> None:
-        payload = {"tool_name": "execute/runInTerminal", "tool_input": {"command": command}}
-
-        result = _invoke(
-            deny_writes_module,
-            payload,
-            argv=[str(deny_writes_module.__file__), "--terminal-read-only"],
-        )
-
-        assert _is_denied(result)
-
-    @pytest.mark.parametrize(
-        "command",
-        [
-            "git rev-parse --verify HEAD && uv run pytest tests/test_contract.py -q",
-            "git branch --show-current",
-            "git -C /tmp/proof branch",
-            "git branch --list 'redesign/*'",
-        ],
-    )
-    def test_allows_read_only_proof_command(self, deny_writes_module: types.ModuleType, command: str) -> None:
-        payload = {"tool_name": "execute/runInTerminal", "tool_input": {"command": command}}
-
-        result = _invoke(
-            deny_writes_module,
-            payload,
-            argv=[str(deny_writes_module.__file__), "--terminal-read-only"],
-        )
-
-        assert _is_allowed(result)
-
-    def test_terminal_guard_is_opt_in(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {
-            "tool_name": "execute/runInTerminal",
-            "tool_input": {"command": "git commit --allow-empty -m accepted"},
-        }
-
-        assert _is_allowed(_invoke(deny_writes_module, payload))
 
 
 class TestDenySrcWrites:

@@ -82,7 +82,7 @@ OwlBear supports macOS and Linux (Ubuntu). Windows is unsupported.
 
 No platform-specific configuration is required:
 
-- **Hooks** — all 5 hooks are Python scripts (`allow-stances-only.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
+- **Hooks** — the seeded hook `deny-src-writes.py` is a Python script executed by VS Code's extension host — no shell dependency
 - **MCP servers** — started via `uv run` on macOS and Linux
 
 ## What's Shared vs. Project-Local
@@ -95,9 +95,7 @@ No platform-specific configuration is required:
 | Prompts (`*.prompt.md`) | `../owlbear/share/prompts/` | Yes — shared baseline |
 | MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
-| Delivery package authority | `.owlbear/delivery/packages/` in project | No — tracked per-project |
-| Delivery runtime and worktrees | `.owlbear/delivery/runtime/` and `.owlbear/delivery/worktrees/` in project | No — ignored and host-local |
-| Completed history receipts | `.owlbear/delivery/runtime/completions/` in project | No — read-only search source |
+| Delivery state | `~/.owlbear/projects/<id>/`, one folder per project | No — per machine |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 

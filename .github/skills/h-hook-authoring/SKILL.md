@@ -59,7 +59,7 @@ an actual affected file from an edit request that contains no supported path.
 - Agent hook declarations belong in the owning `.agent.md` frontmatter.
 - Agent hook contracts are checked by `.owlbear/scripts/validate_agents.py`.
 - Behavioral guarantees belong in focused tests beside the existing hook tests, such as
-  `tests/test_write_guard_hooks.py` and `tests/test_lint_changed_hook.py`.
+  `tests/test_write_guard_hooks.py`.
 - A portable consumer hook also needs its corresponding `seed/.owlbear/hooks/` copy and setup
   coverage. A developer-only hook does not gain consumer wiring implicitly.
 - Keep hook authoring guidance here; do not copy the same contract into every agent or into

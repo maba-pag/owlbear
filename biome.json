@@ -24,8 +24,7 @@
       "!**/.owlbear/memory",
       "!**/.owlbear/research",
       "!**/.owlbear/sources",
-      "!**/.owlbear/target",
-      "!serve/delivery/tests/fixtures/state_formats/golden"
+      "!**/.owlbear/target"
     ]
   },
   "linter": {

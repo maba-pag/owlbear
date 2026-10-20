@@ -59,7 +59,6 @@ _SKIP_IF_EXISTS_REL = frozenset(
         ".github/copilot-instructions.md",
         ".editorconfig",
         ".gitattributes",
-        ".owlbear/delivery/runtime/host.json",
         ".markdownlint-cli2.jsonc",
         ".markdownlint.json",
         ".markdownlintignore",
@@ -1521,7 +1520,7 @@ def _has_owlbear_surface(target_dir: Path) -> bool:
     return any(
         (target_dir / relative).exists()
         for relative in (
-            ".owlbear/hooks/deny-writes.py",
+            ".owlbear/hooks/deny-src-writes.py",
             ".owlbear/.gitignore",
             ".vscode/mcp.json",
         )
