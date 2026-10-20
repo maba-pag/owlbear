@@ -27,6 +27,8 @@ NOT_RUNNING = (
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 _STATE: dict[str, Chat] = {}
 OK = 200
+UPDATED = "OwlBear updated: reload this VS Code window"  # a chat server older than the host (self-update §5.6)
+STALE = 409
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
 PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every Change: 16 rows were 77 KB with them
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
@@ -45,6 +47,8 @@ class Chat:
         down = NOT_RUNNING.format(repo=self.repo)
         if rec is None or not rec.token:
             return 503, {"error": down}
+        if host.stale(rec):  # it reads no state either: a newer version may have written it
+            return STALE, {"error": UPDATED}
         headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json"}
         data = None if body is None else json.dumps(body).encode()
         url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{path}"  # the machine host's (TD-242)
@@ -68,6 +72,8 @@ class Chat:
     def show_status(self, change: str = "") -> dict[str, Any]:
         """Every Change (or one) with its line, next action and open question; read from the state when down."""
         code, rows = self.call("GET", "/changes")
+        if code == STALE:
+            return {"running": False, "error": UPDATED}
         rec = host.running(self.store)
         out: dict[str, Any] = {"running": code == OK, "changes_page": api.link(rec) if code == OK else None}
         if code == OK and rec:
@@ -127,6 +133,8 @@ class Chat:
 
     def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:
         """Answer one worker question; recovery decisions are refused with the Changes page (T6)."""
+        if host.stale(host.running(self.store)):
+            return {"answered": False, "error": UPDATED}
         handle, _, qid = question.partition(".")
         for slug in self.store.slugs():
             try:

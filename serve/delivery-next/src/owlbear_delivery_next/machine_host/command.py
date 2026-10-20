@@ -132,6 +132,14 @@ def logs(*, lines: Annotated[int, Parameter(name=["--lines", "-n"])] = 40) -> in
 
 
 @app.command
+def update() -> int:
+    """Run updates now: take the newest version of this machine's channel once no step runs."""
+    from owlbear_delivery_next.machine_host import control  # noqa: PLC0415
+
+    return control.update(say)
+
+
+@app.command
 def versions(*, prepare: bool = False) -> int:
     """The version OwlBear runs and the one it would take next.
 

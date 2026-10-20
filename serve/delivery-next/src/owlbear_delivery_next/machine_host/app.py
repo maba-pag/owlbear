@@ -69,8 +69,11 @@ class Dispatcher:
         if not secrets.compare_digest(headers.get(b"authorization", b""), self.expected):
             await JSONResponse({"detail": "token required"}, 401)(scope, receive, send)
             return
-        if self.machine.stopping.is_set():
-            await JSONResponse({"detail": "OwlBear is stopping"}, 503)(scope, receive, send)
+        if self.machine.stopping.is_set() or (self.machine.updating and scope.get("method") != "GET"):
+            said = (
+                "OwlBear is stopping" if self.machine.stopping.is_set() else self.machine.updating
+            )  # reads only (§5.3)
+            await JSONResponse({"detail": said}, 503)(scope, receive, send)
             return
         p = self.machine.projects.get(found[1])
         if p is None or p.app is None or p.state != "loaded":
@@ -135,6 +138,7 @@ def _routes(machine: Machine) -> APIRouter:
             "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
             "left": machine.left() if machine.ending else [],
             "update_while_paused": registry.load().settings.update_while_paused,
+            "update": machine.updater.read(), "updated": machine.updated,
         }  # fmt: skip
 
     @routes.post("/projects")
@@ -194,3 +198,12 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
     def stop() -> dict[str, bool]:
         machine.on_stop()
         return {"stopping": True}
+
+    @routes.get("/update")
+    def update_state() -> dict[str, Any]:
+        return machine.updater.read()
+
+    @routes.post("/update")
+    def update_now() -> dict[str, Any]:
+        """Run updates now (TD-352, TD-353): no waiting for idle time; it still waits for running steps."""
+        return machine.updater.run_now()

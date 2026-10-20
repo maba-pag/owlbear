@@ -27,6 +27,8 @@ def admitted(host: Host) -> Iterator[None]:
     with host.launching:
         if host.closed():
             raise HTTPException(503, STOPPING)
+        if said := host.updating():
+            raise HTTPException(503, said)
         if host.draining():
             raise HTTPException(409, ENDING)
         yield

@@ -13,7 +13,7 @@ import sys
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system.slots import Slots
@@ -65,12 +65,18 @@ class Machine:
         """Start paused or running, with no project loaded yet."""
         self.record, self.paused = record, paused
         self.ending = False  # the owner's stop when idle; held in memory, so a restart never stops again
+        self.updating = ""  # the update's fence (self-update §5.3): why nothing starts now
+        self.handover: tuple[Any, Any] | None = None  # the standby and what it takes over, once the alias names it
+        self.updated = ""  # the version this host took over as, said once on the pages (TD-299)
         self.projects: dict[str, Project] = {}
         self.lock = threading.RLock()
         self.stopping = threading.Event()
         self.on_stop: Callable[[], None] = lambda: None
         self.total = Settings().sessions
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
+        from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
+
+        self.updater = Updater(self)
 
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
@@ -93,6 +99,7 @@ class Machine:
             h.machine = lambda: [o.store for o in list(self.projects.values()) if o.store]  # a failed host's too
             h.draining = lambda: self.ending
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
+            h.updating = lambda: self.updating
             h.slots = self.slots
 
         try:
@@ -215,6 +222,22 @@ class Machine:
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
         return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
+
+    def fence(self, text: str) -> list[str]:
+        """An update's fence (self-update §5.3): nothing starts from now on; what still runs, which lifts it."""
+        with self.lock:
+            self.updating = text
+            for p in list(self.projects.values()):
+                if p.host:
+                    with p.host.launching:  # a launch admitted before the fence is counted from now on
+                        pass
+        projects = list(self.projects.values())
+        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
+
+    def unfence(self) -> None:
+        """Lift the fence: the update waits, and work starts again."""
+        self.updating = ""
+        self._wake()
 
     def idle_stop(self) -> bool:
         """Stop OwlBear when a stop when idle is asked for and nothing runs; whether it stopped."""
