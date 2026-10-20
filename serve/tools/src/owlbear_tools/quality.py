@@ -23,6 +23,7 @@ from owlbear_tools.quality_runtime import (
     _parse_options,
     _require_development,
 )
+from owlbear_tools.todo import run_todo
 
 BIOME = Path("node_modules/@biomejs/biome/bin/biome")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
@@ -43,7 +44,9 @@ _PRECOMMIT_CHECK_HOOKS = {
     "lint-editorconfig": "editorconfig-checker",
 }
 # Config hooks whose tool a named leaf runs without pre-commit.
-_DIRECT_HOOKS = {"biome-check": "lint-biome"}
+_DIRECT_HOOKS = {"biome-check": "lint-biome", "todo-check": "todo"}
+# Config hooks the agent-ecosystem workflow runs with the full workspace they import; Static installs tools only.
+ELSEWHERE_HOOKS = frozenset({"validate-skills", "validate-agents", "validate-prompts"})
 # `lint` also runs every config hook no leaf claims, so the config is the one list (TD-409).
 _AGGREGATES: dict[str, tuple[str, ...]] = {
     "lint": (
@@ -57,7 +60,7 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
     ),
     "lint-actions": ("lint-actionlint", "lint-zizmor"),
     "format": ("format-python", "format-biome", "format-whitespace", "format-eof"),
-    "quality": ("format", "lint"),  # lint ends with the config's todo-check hook
+    "quality": ("format", "lint"),  # lint ends with todo, the config's todo-check run in-process
 }
 
 
@@ -129,7 +132,7 @@ def _precommit_hook_names() -> tuple[str, ...]:
 
 
 def _unclaimed_hooks() -> tuple[str, ...]:
-    claimed = {*_PRECOMMIT_CHECK_HOOKS.values(), *_DIRECT_HOOKS}
+    claimed = {*_PRECOMMIT_CHECK_HOOKS.values(), *_DIRECT_HOOKS, *ELSEWHERE_HOOKS}
     claimed |= {hook for hooks in _PRECOMMIT_FIX_HOOKS.values() for hook in hooks if hook}
     return tuple(name for name in _precommit_hook_names() if name not in claimed)
 
@@ -183,6 +186,8 @@ def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
     elif name in {"lint-biome", "format-biome"}:
         result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
+    elif name == "todo":
+        result = run_todo()
     elif name in _unclaimed_hooks():
         result = _precommit_hook(name, staged=staged)
     else:
@@ -196,7 +201,7 @@ def _run_named(name: str, *, staged: bool, fix_mode: FixMode) -> int:
     if children is None:
         return _run_leaf(name, staged=staged, fix_mode=fix_mode)
     if name == "lint":
-        children = (*children, *_unclaimed_hooks())
+        children = (*children, *_unclaimed_hooks(), "todo")
     failures = 0
     for child in children:
         failures += int(bool(_run_named(child, staged=staged, fix_mode=fix_mode)))
