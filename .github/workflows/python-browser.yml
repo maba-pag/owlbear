@@ -103,7 +103,7 @@ jobs:
         id: fingerprint
         run: |
           value="$(git ls-files -s -- .github/workflows/python-browser.yml .python-version conftest.py \
-            pyproject.toml uv.lock serve/delivery-next serve/memory | sha256sum | cut -c1-40)"
+            pyproject.toml uv.lock serve/delivery-next serve/decisions serve/memory | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
       - name: Look up passing result for identical inputs

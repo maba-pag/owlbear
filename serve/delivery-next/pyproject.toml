@@ -8,6 +8,7 @@ dependencies = [
   "fastapi>=0.142.2",
   "github-copilot-sdk==1.0.22",
   "mcp>=2,<2.4",
+  "owlbear-decisions",
   "owlbear-memory",
   "playwright>=1.60.0",
   "psutil>=7.2.2",
@@ -22,6 +23,7 @@ owlbear-next = "owlbear_delivery_next.commands.dispatch:main"
 owlbear = "owlbear_delivery_next.machine_host.command:main"
 
 [tool.uv.sources]
+owlbear-decisions = { workspace = true }
 owlbear-memory = { workspace = true }
 
 [build-system]

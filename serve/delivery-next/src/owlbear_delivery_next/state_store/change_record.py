@@ -2,6 +2,7 @@
 
 Only finished Changes leave one; live state stays in the clone's store. The file is named after the second the brief
 was approved and the slug, so a cleanup that runs again rewrites the same record and two clones' records stay apart.
+Its decisions become decision files in the same commit (TD-419, `decision_archive`).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.state_store import decision_archive
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -23,7 +25,7 @@ BRIEF = {"version", "title", "outcome", "scope", "non_goals", "decisions", "crit
 
 
 def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
-    """Write and publish the record of *c*; what the owner should know when that fails, else nothing.
+    """Write and publish the record of *c* and its decisions; what the owner should know when that fails, else nothing.
 
     A Change never approved leaves none: it has no approved brief, and no stable name for a record.
     """
@@ -41,11 +43,14 @@ def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
         "decisions": [d.model_dump(mode="json", include={"text", "origin", "at"}) for d in c.decisions],
         "spend": c.spend.model_dump(mode="json", exclude={"last"}),
     }
-    path = store.shared.root / store.name / "changes" / f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}.json"
+    stem = f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}"
+    path = store.shared.root / store.name / decision_archive.CHANGES / f"{stem}.json"
     try:
         with store.shared.locked():
             path.parent.mkdir(parents=True, exist_ok=True)
             atomic_write(path, json.dumps(record, indent=1) + "\n")
-            return store.shared.publish(path, f"changes: {store.name}: {c.slug} {outcome}")
+            files, left = decision_archive.archive(store.shared.root, store.name, c, stem, outcome)
+            said = store.shared.publish([path, *files], f"changes: {store.name}: {c.slug} {outcome}")
     except (DataRepoError, OSError) as exc:
         return f"the record of {c.slug} was not saved: {exc}"[:300]
+    return "; ".join(filter(None, [said, *left]))[:1000]

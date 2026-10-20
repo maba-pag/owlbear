@@ -36,7 +36,12 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
   and, for Global, `decisions/` at the repository root, where Global settings already live. Git history is the audit
   trail.
 - **A running Change's drafts** stay in its database until the Change ends; then they go to `owlbear-data` with the
-  finished-Change record (TD-148), whether the Change merged, was abandoned or ended unchanged.
+  finished-Change record (TD-148), whether the Change merged, was abandoned or ended unchanged. The Change's folder is
+  named after its record file (`<approval second>-<slug>`). Merged or unchanged, its Change decisions are spent and
+  its project decisions in force (the brief approval activated them); abandoned, the Change decisions are withdrawn
+  and the project decisions drafts the owner may still activate. A decision keeps its identity across brief versions
+  by its question; once approved, a changed answer is a successor that replaces it. One decision that cannot be
+  written keeps all of the Change's out (the record still publishes) and is reported.
 - **OwlBear's repository** keeps a generated, read-only full view (OwlBear's and the applicable Global decisions, with
   provenance, mandatory rules apart from history) so Copilot's cloud agent, Copilot code review and CodeRabbit read
   it (TD-425). It pins the data commit it came from; the lead chat regenerates it by pull request; CI checks equality

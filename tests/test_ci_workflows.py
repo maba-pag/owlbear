@@ -304,8 +304,9 @@ def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> Non
     job = _jobs("python-browser.yml")["delivery-next-browser"]
     runs = _runs(job)
 
-    assert {"serve/delivery-next/**", "serve/memory/**"} <= set(ci_scope.SUITES["python-browser"])
-    assert "serve/delivery-next serve/memory" in next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
+    assert {"serve/delivery-next/**", "serve/decisions/**", "serve/memory/**"} <= set(ci_scope.SUITES["python-browser"])
+    fingerprint = next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
+    assert "serve/delivery-next serve/decisions serve/memory" in fingerprint
     assert "uv sync --locked --package owlbear-delivery-next --group dev" in runs
     assert "uv run --no-sync playwright install --with-deps chromium" in runs
     assert "pytest serve/delivery-next -m browser" in runs

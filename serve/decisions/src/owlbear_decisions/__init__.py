@@ -14,7 +14,7 @@ from owlbear_decisions.models import (
     State,
     new_id,
 )
-from owlbear_decisions.storage import FileError, Loaded, load_folder, read, write
+from owlbear_decisions.storage import FileError, Loaded, check_write, decision_path, load_folder, read, write
 from owlbear_decisions.validate import Finding, validate, validate_repo
 
 __all__ = [
@@ -33,6 +33,8 @@ __all__ = [
     "OwnerWords",
     "Scope",
     "State",
+    "check_write",
+    "decision_path",
     "load_folder",
     "new_id",
     "read",

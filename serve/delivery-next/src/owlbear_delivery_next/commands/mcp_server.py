@@ -106,7 +106,8 @@ class Chat:
         except StoreError:
             return None
         b = change.brief
-        out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals", "decisions"})
+        out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals"})
+        out["decisions"] = [d.model_dump(mode="json", exclude={"id", "replaces"}) for d in b.decisions]  # as drafted
         owner = set(b.specified)  # sent back as saved, so a resave keeps who stated what
         states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]
         checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in change.checks]
