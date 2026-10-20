@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-20, status at `main` after #528, decisions to TD-416
+> **Date:** 2026-10-20, status at `main` after v1.0, decisions to TD-416
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -26,7 +26,8 @@ both), through pull requests to `main` with the required `CI` check, strictly up
 itself to each new tag when idle, or at once with `owlbear update` or Run updates now (TD-415, items 3 and 4).
 
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
-passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags from `v0.1` exist (`v0.28` is #527). The
+passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags from `v0.1` exist; v1.0 is the merge of the
+pull request that marked item 12 done, tagged `v1.0` and `v1`. The
 walk creates tags through the REST API with the owner's fine-grained token `RELEASE_TOKEN` (Contents and Workflows
 write, TD-404), since GitHub refuses the workflow token tags on commits whose workflow files differ from every branch
 tip; a major gets `vN.0` and `vN` (TD-392). The token expires; the owner renews it.
@@ -38,17 +39,19 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | --- | --- | --- |
 | The engine and the whole journey, shaping to cleanup, visual check, design pack | [architecture](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-architecture.md), [design skill](delivery-next-design-skill.md) | #449 |
 | Review and challenge rounds for every role (TD-208, steps 1 to 8) | [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | #449; steps 6 to 8 as commits before the PR route |
-| Pull requests with required CI (TD-278) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | #455 to #458 |
-| Merge-queue support (TD-226) | [PR, CI, merge queue](pr-ci-merge-queue-build.md) | commits before the PR route, `0d4272eef` and its repairs |
+| Pull requests with required CI (TD-278) | [PR, CI, merge queue](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/pr-ci-merge-queue-build.md) | #455 to #458 |
+| Merge-queue support (TD-226) | [PR, CI, merge queue](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/pr-ci-merge-queue-build.md) | commits before the PR route, `0d4272eef` and its repairs |
 | Per-role session time limits, doubled (TD-286) | — | #460 |
 | Pages on lit-html (TD-264), machine host, one UI, Global memory, SQLite stores, settings across projects | [machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | #461 to #469, #471 |
-| Self-update steps 1 to 3b: machine settings, Pause, paused maintenance, PR labels, push CI, release walk | [self-update](self-update-build.md) | #473, #476, #478, #480 to #482 |
+| Self-update steps 1 to 3b: machine settings, Pause, paused maintenance, PR labels, push CI, release walk | [self-update](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | #473, #476, #478, #480 to #482 |
 | Test curation of delivery-next (TD-311, TD-312) | — | #477 |
 | Decision review TD-319..TD-381: Snyk Code and Renovate, Cyclopts, subagents per role, owner notes as written | the record | #483, #487 to #489, #492, #494, #495 |
 | The machine preference layer and session limits (TD-336) | [settings scopes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/settings-scopes-build.md) | #496, #497 |
 | The test review from the Maintenance page (C-26) | [test review](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/test-review-build.md) | #498, #499 |
-| Self-update steps 3c to 5: pack updates through a PR, versions, standby and handover, idle updates | [self-update](self-update-build.md) | #516 to #520, #525 |
+| Self-update steps 3c to 5: pack updates through a PR, versions, standby and handover, idle updates | [self-update](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | #516 to #520, #525 |
 | The old engine's removal in five batches, documentation for v1.0 | [transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | #521 to #524, #526 |
+| Cockpit's memory purge on the Memory page, Cockpit deleted (TD-416) | — | #527 |
+| Pages on the design system's CDN only, split into modules under the line limit (TD-39, TD-398, TD-401) | [visual baseline §3.6](delivery-next-visual-baseline.md) | #529, #530 |
 
 ## 2. The Plan
 
@@ -61,13 +64,13 @@ the table lists the items in their order.
 | --- | --- | --- | --- | --- |
 | 1 | TD-358's rest: none; built: TD-328, TD-330, TD-334, TD-335, TD-341, TD-345 (with TD-405, TD-406), TD-347's skill, TD-350, TD-392, TD-396, TD-397, TD-399 (§3.1) | TD-358, TD-403 | TD-330 in [challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) §3.4; TD-334 in [machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | Done |
 | 6 | Research move: OwlBear's research into `owlbear-data`; the decision record, this plan and build designs of unbuilt work stay (§3.3) | TD-227, TD-347, TD-395, TD-394 | §3.3 | Done |
-| 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Done |
-| 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Done (#517 to #519; this machine's first update to v0.20 on 2026-10-20, TD-415) |
-| 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Done (#520) |
+| 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) "Step 3c build" | Done |
+| 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | Done (#517 to #519; this machine's first update to v0.20 on 2026-10-20, TD-415) |
+| 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | Done (#520) |
 | 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | Done: tag `delivery-v1-final`, batches 1 to 5 (#521 to #524), its issues and pull requests closed, the documentation rewritten for v1.0 (#526) |
-| 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Done: the fallback is removed; the pages split into modules under `web/pages/` |
+| 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Done (#529, #530): the fallback is removed; the pages split into modules under `web/pages/` |
 | 13 | Cockpit: audit `serve/cockpit` for what the machine UI lacks (design-system components and workarounds, memory purge, the ideas editor), port what is worth it, delete Cockpit | TD-416 | none | Done (#527): memory purge ported to the Memory page; the ideas editor, theme toggle and workspace health dropped; one lesson for item 11 in [visual baseline §3.6](delivery-next-visual-baseline.md) |
-| 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](self-update-build.md) | After items 1, 6, 2, 3, 4, 7, 11 and 13 |
+| 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | Done: the first `release:major` merge (2026-10-20) |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | none yet | Not started; no design |
 | 9 | Watcher: TD-27's benchmark, then the design session (O1–O6) with the owner, then the build and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Not started; the draft needs revising (§3.5) |
@@ -106,7 +109,7 @@ first open; the clone keeps its id and a format marker that every older runtime 
 
 ### 3.2 Items 2 to 4: the self-update
 
-Item 2, [self-update §8](self-update-build.md) "Step 3c build", is built. A pack update commits on `pack/<run>`
+Item 2, [self-update §8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) "Step 3c build", is built. A pack update commits on `pack/<run>`
 from a clean checkout of `main`, opens a labelled pull request, waits for the required checks, brings the branch up to
 date and merges it; whatever stops it asks the owner, and a host restart during publication waits for him instead of
 failing. In line with C-15 the updater may change the pinned skills, the golden pages and the detector's glue; anything
@@ -118,9 +121,9 @@ the glue checked with the running code (TD-414); the challenger judges every cha
 
 The research moved on 2026-10-20: 1,156 documents went to `owlbear-data/owlbear/research/`, with a README there that
 says how their relative links resolve. Here stay the decision record, this plan and the build designs of work not
-yet built (TD-395): self-update, PR/CI/merge queue (its pack route), design skill (judge conflicts), visual
-baseline, watcher design and options. A design moves there once its work is built; the transfer ledger and cutover
-followed with item 7. Links from what stays point at the moved
+yet built (TD-395): design skill (judge conflicts), visual baseline, watcher design and options. A design moves
+there once its work is built; the transfer ledger and cutover followed with item 7, the self-update and PR/CI/merge
+queue designs with v1.0. Links from what stays point at the moved
 documents' GitHub pages. Agents write research to the project's folder in the data repository (`w-research` Step 6,
 `r-workspace-governance`), OwlBear's included; `.owlbear/research/` takes only the record, the plan and new build
 designs. The old engine's designer went with batch 3 of item 7.
@@ -143,7 +146,8 @@ screenshot viewer are `p-modal`s, and the browser tests let `cdn.ui.porsche.com`
 script became ES modules under `web/pages/<page>/`, served from a list fixed at startup as `/assets/page/<page>/<name>`.
 `changes.html` went from 1496 lines to 128, `config.html` from 1102 to 39, `backlog.html` from 524 to 55; no module
 has more than 259.
-v1.0 is the first merge labelled `release:major` after items 1, 6, 2, 3, 4, 7 and 11; it is tagged `v1.0` and `v1`.
+v1.0 is the first merge labelled `release:major`, after items 1, 6, 2, 3, 4, 7, 11 and 13; it is tagged `v1.0` and `v1`.
+Next is item 5.
 
 ### 3.5 Items 8 and 9: gate, then watcher
 
@@ -211,11 +215,11 @@ since item 6; the others are in this folder.
 | --- | --- | --- |
 | [Decision record](delivery-liveness-first-rebuild.md) | The owner's decisions in force, by topic | Current; the authority for intent |
 | This file | Status, order, gaps, open questions | Current |
-| [Self-update](self-update-build.md) | Build design of items 2 to 4 and the v1.0 tags | Steps 1 to 5 built; v1.0 (item 12) left |
+| [Self-update](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | Build design of items 2 to 4 and the v1.0 tags | Built (steps 1 to 5, v1.0) |
 | [Settings scopes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/settings-scopes-build.md) | Machine layer and session limits | Built (#496, #497) |
 | [Test review](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/test-review-build.md) | C-26's test review | Built (#499) |
 | [Machine host](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/machine-host-build.md) | One host, one UI, SQLite, settings scopes | Built |
-| [PR, CI, merge queue](pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its pack route with item 2 |
+| [PR, CI, merge queue](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/pr-ci-merge-queue-build.md) | Pull request route and queue support | Built; its pack route with item 2 |
 | [Challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | Review and challenge loops | Built |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
 | [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; its PDS part (§3.6) built with item 11, the rest not built and not placed |
