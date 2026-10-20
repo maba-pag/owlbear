@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK = "machine.json", "machine.lock"
-MACHINE_FORMAT = 3  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions at once (TD-336)
+MACHINE_FORMAT = 4  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`
 STALE = "the machine settings changed since this page loaded them"
 
 
@@ -60,6 +60,7 @@ class Machine(Record):
     projects: list[Project] = Field(default_factory=list)
     resumed_at: datetime | None = None
     settings: Settings = Field(default_factory=Settings)  # format 1 had none: the defaults
+    active: str = ""  # the highest version ever active here: never backwards (self-update build §4)
 
 
 def _home() -> Path:
