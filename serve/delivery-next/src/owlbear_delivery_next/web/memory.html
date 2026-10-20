@@ -214,7 +214,7 @@ async function purge(old) {
   try {
     const r = await call(`/memory/purge${place.where === "global" ? "?where=global" : ""}`,
       { body: { min_age_days: PURGE_DAYS }, timeout: 60000, of: place.of });
-    state.error = "";
+    state.error = r.failed ? `${many(r.failed)} could not be removed; try again.` : "";
     state.status = `Removed ${many(r.purged)} from ${place.label}.${r.notice ? ` ${r.notice}` : ""}`;
     state.pending = null;
     await refresh();
@@ -224,8 +224,9 @@ async function purge(old) {
   }
 }
 
-function purges(deleted) {
-  const groups = purgeable(deleted);
+// Every deleted entry counts, filtered or not: the purge removes all of a folder's old ones.
+function purges() {
+  const groups = purgeable(state.loaded.entries.filter((m) => m.state === "deleted"));
   return groups.length ? html`<div class="row">${groups.map((old) => button(
     `Remove ${many(old.length)} older than ${PURGE_DAYS} days from ${old[0].place.label}`, () => purge(old),
     { variant: "secondary", icon: "delete", aria: DIALOG, busy: state.pending === `${old[0].place.key}:purge` }))}
@@ -322,7 +323,7 @@ function entries(shown) {
     if (!mine.length) return nothing;
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
-        : nothing}${states.includes("deleted") ? purges(mine) : nothing}</div>
+        : nothing}${states.includes("deleted") ? purges() : nothing}</div>
       <ul class="entries">${repeat(mine, (m) => m.key, card)}</ul></section>`;
   });
   const empty = state.loaded.entries.length ? "No memory matches these filters."

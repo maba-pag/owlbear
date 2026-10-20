@@ -188,6 +188,22 @@ def test_a_duplicate_repair_publishes_every_file_it_touched(shared):
     assert git(root, "status", "--porcelain") == f"?? {store.name}/memory/{other.id}.md"
 
 
+def test_a_purge_publishes_what_its_duplicate_repair_touched(shared):
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    curated = seed(folder, "Run ruff first", curated=True)
+    (folder / "copy.md").write_text((folder / f"{curated.id}.md").read_text().replace("what to know", "a twin"))
+    git(root, "add", "--", f"{store.name}/memory")
+    git(root, "commit", "-qm", "differing duplicates")
+    git(root, "push", "-q")
+
+    purged = client(store).post("/api/next/memory/purge", json={})
+
+    assert purged.status_code == 200
+    assert git(root, "status", "--porcelain") == ""  # the repair's files are published with it
+
+
 def test_no_agent_can_write_the_memory_until_the_owners_action_is_published(shared, monkeypatch):
     root, _, repo = shared
     store = Store.open(repo)
@@ -349,19 +365,24 @@ def test_the_deleted_section_removes_entries_deleted_long_ago(shared):
     store = Store.open(repo)
     folder = root / store.name / "memory"
     engine = MemoryEngine(folder)
-    for title in ("Old lesson", "Recent lesson"):
+    for title in ("Old lesson", "Old process", "Recent lesson"):
         entry = seed(folder, title, curated=True)
+        if title == "Old process":  # hidden by the category filter below, but removed all the same
+            entry = engine.edit(entry.id, {"categories": [MemoryCategory.PROCESS]}, expected_revision=entry.revision)
         approved = engine.approve(entry.id, entry.updated_at)
         engine.delete(entry.id, approved.updated_at)
-    old = next(p for p in folder.glob("*.md") if "Old lesson" in p.read_text())
-    stamp = next(e.updated_at for e in MemoryEngine(folder).get_entries() if e.title == "Old lesson")
-    old.write_text(old.read_text().replace(stamp, "2020-01-01T00:00:00+00:00"))
+    for title in ("Old lesson", "Old process"):
+        old = next(p for p in folder.glob("*.md") if f"title: {title}" in p.read_text())
+        stamp = next(e.updated_at for e in MemoryEngine(folder).get_entries() if e.title == title)
+        old.write_text(old.read_text().replace(stamp, "2020-01-01T00:00:00+00:00"))
     with memory_page(store) as page:
         page.get_by_label("State").select_option("any")
+        page.get_by_label("Category").select_option("pitfall")
         deleted = page.locator("section", has_text="Deleted (history kept)")
-        deleted.get_by_role("button", name=f"Remove 1 deleted entry older than 30 days from {store.name}").click()
+        expect(deleted.locator(".entry")).to_have_count(2)
+        deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 30 days from {store.name}").click()
         page.locator("dialog").get_by_role("button", name="Remove them").click()
-        expect(page.locator("#status")).to_contain_text(f"Removed 1 deleted entry from {store.name}.")
+        expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
         expect(deleted.locator(".entry")).to_have_count(1)
     assert [e.title for e in MemoryEngine(folder).get_entries()] == ["Recent lesson"]
 

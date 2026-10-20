@@ -159,8 +159,9 @@ def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
         with shared.locked(), writer_lock(folder):
             before = _files(folder)
             done = MemoryEngine(folder).purge(days)
-            gone = sorted(p for p in before if not p.exists())
-            notice = shared.publish(gone, f"memory {label}: purge {len(gone)} deleted", until) if gone else ""
+            after = _files(folder)  # a duplicate repair on the way may add a recovered entry: publish it too
+            changed = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+            notice = shared.publish(changed, f"memory {label}: purge {done.purged} deleted", until) if changed else ""
     except tuple(e for e, _, _ in REFUSED) as exc:
         raise _refused(exc) from exc
     return {"purged": done.purged, "skipped": done.skipped, "failed": done.failed, "notice": notice}
