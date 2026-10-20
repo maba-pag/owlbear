@@ -146,14 +146,9 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
         ".owlbear/adapters",
         ".owlbear/target-cutover-request.json",
         ".owlbear/target-cutover.json",
-        ".owlbear/delivery/config.json",
-        ".owlbear/delivery/runtime/capacity-ledger.json",
-        ".owlbear/delivery/runtime/changes",
-        ".owlbear/delivery/runtime/coordination",
-        ".owlbear/delivery/worktrees",
+        ".owlbear/delivery",
     ):
         assert not (target_dir / retired_path).exists()
-    assert (target_dir / ".owlbear/delivery/runtime/host.json").is_file()
     assert not (target_dir / ".owlbear/changes").exists()
     assert not (target_dir / ".owlbear/kanban").exists()
     assert not (target_dir / "openspec").exists()
@@ -199,13 +194,6 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
     assert "/.owlbear/delivery/runtime/" not in gitignore
     nested_gitignore = (target_dir / ".owlbear/.gitignore").read_text(encoding="utf-8")
     assert "delivery/runtime/*" in nested_gitignore
-    assert "!delivery/runtime/host.json" in nested_gitignore
-    host_config = json.loads((target_dir / ".owlbear/delivery/runtime/host.json").read_text(encoding="utf-8"))
-    assert host_config == {
-        "schema_version": 1,
-        "execution_capacity": 8,
-        "claim_timeout_seconds": 3600,
-    }
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in target_dir.rglob("*")
@@ -217,7 +205,7 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
     package_install.assert_not_called()
 
 
-def test_init_rerun_preserves_user_settings_and_current_runtime_config(
+def test_init_rerun_preserves_user_settings_and_gitignore_rules(
     tmp_path: Path,
     init_module: types.ModuleType,
     run_init_without_test_surface: Callable[..., None],
@@ -231,13 +219,9 @@ def test_init_rerun_preserves_user_settings_and_current_runtime_config(
     settings["example.userSetting"] = "preserved"
     settings["chat.tools.terminal.autoApprove"]["example-command"] = False
     settings_path.write_text(json.dumps(settings), encoding="utf-8")
-    host_local_config_path = target_dir / ".owlbear/delivery/runtime/host.local.json"
-    host_local_config_path.write_text('{"claim_timeout_seconds": 5}\n', encoding="utf-8")
     nested_gitignore_path = target_dir / ".owlbear/.gitignore"
     nested_gitignore_path.write_text(
-        nested_gitignore_path.read_text(encoding="utf-8").replace(
-            "delivery/runtime/*\n!delivery/runtime/host.json", "delivery/runtime/"
-        )
+        nested_gitignore_path.read_text(encoding="utf-8").replace("delivery/runtime/*", "delivery/runtime/")
         + "\ncustom-consumer-rule/\n",
         encoding="utf-8",
     )
@@ -250,10 +234,8 @@ def test_init_rerun_preserves_user_settings_and_current_runtime_config(
     merged_settings = json.loads(settings_path.read_text(encoding="utf-8"))
     assert merged_settings["example.userSetting"] == "preserved"
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
-    assert json.loads(host_local_config_path.read_text(encoding="utf-8"))["claim_timeout_seconds"] == 5
     nested_gitignore = nested_gitignore_path.read_text(encoding="utf-8")
     assert "delivery/runtime/*" in nested_gitignore
-    assert "!delivery/runtime/host.json" in nested_gitignore
     assert "custom-consumer-rule/" in nested_gitignore
     assert second_rerun == first_rerun
 

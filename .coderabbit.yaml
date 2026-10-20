@@ -22,7 +22,6 @@ reviews:
     - "!serve/cockpit/web/public/porsche-design-system/**"
     - "!serve/delivery-next/src/owlbear_delivery_next/web/vendor/**"
     - "!serve/delivery-next/src/owlbear_delivery_next/web/pds/**"
-    - "!serve/delivery/tests/fixtures/state_formats/golden/**"
   path_instructions:
     - path: ".owlbear/research/**"
       instructions: >-

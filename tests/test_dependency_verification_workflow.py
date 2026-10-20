@@ -388,7 +388,7 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
     [
         ("pyproject.toml", "python"),
         ("uv.lock", "python"),
-        ("serve/delivery/pyproject.toml", "python"),
+        ("serve/delivery-next/pyproject.toml", "python"),
         ("serve/web-content/pyproject.toml", "python"),
         ("serve/cockpit/web/package.json", "node"),
         ("serve/cockpit/web/package-lock.json", "node"),
@@ -417,7 +417,7 @@ def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> No
     "path",
     [
         "conftest.py",
-        "serve/delivery/src/owlbear_delivery/example.py",
+        "serve/delivery-next/src/owlbear_delivery_next/example.py",
         "tests/test_example.py",
     ],
 )

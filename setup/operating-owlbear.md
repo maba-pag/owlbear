@@ -27,14 +27,8 @@ Running `init.py` writes the following files into your project directory:
 | --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 4 MCP servers (3 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 8`; existing values are preserved on rerun |
-| `.owlbear/delivery/runtime/host.local.json` | Optional per-host overrides for any `host.json` setting | Not seeded; ignored by Git and preserved when present |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
-| `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
-| `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
-| `.owlbear/hooks/lint-changed.py` | Lint feedback hook — runs `uv run ruff check` on edited `.py` files; silently no-ops if `ruff` is not in your project's deps | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
-| `.owlbear/hooks/session-context.py` | Injects current git branch + recent commits into agent prompts; silently no-ops if `git` is unavailable | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/scripts/test-root.py` | Test-root resolver — discovers toolchain and CWD for a given test file | Always written |
 | `.owlbear/.gitignore` | Ignores OwlBear-local scratch, runtime, database, vector, and lock artifacts | Managed rules are merged on rerun; custom rules are preserved |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
@@ -60,17 +54,8 @@ project. Setup skips this file on later runs so those project-specific instructi
 The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testing; replace it with
 exact hostnames before using Browser against production or sensitive sites.
 
-For a fresh workspace, `init.py` writes the visible default
-`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 8`).
-Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
-Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
-is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
-profiles, or retired task, decision, board, accept, or audit stores.
-
-Finalization evidence is collected for the exact reviewed Change head in its managed worktree. The
-checks and procedures may differ by Change; Delivery retains their typed observations and an
-independent exact-commit review. This evidence does not claim that GitHub can merge the Change or
-that the merged result passes.
+Setup does not create Delivery state, worktrees, verification profiles, or retired task, decision,
+board, accept, or audit stores; the Delivery engine keeps its own settings and state.
 
 ### Where these files come from
 
