@@ -42,11 +42,16 @@ REVIEW = tools.Spec(
 
 
 def check(result: PackReview, changed: tuple[str, ...]) -> list[str]:
-    """Errors of ``changes``: one entry for each listed path, none missing, repeated or unlisted."""
+    """Errors of ``changes``: one entry for each listed path, none missing, repeated or unlisted; no unneeded pass."""
     seen = Counter(c.path for c in result.changes)
     missing = [p for p in changed if p not in seen]
     extra = sorted(p for p in seen if p not in changed)
     twice = sorted(p for p, n in seen.items() if n > 1)
     errors = [f"changes: no entry for {', '.join(missing)}"] if missing else []
     errors += [f"changes: {', '.join(extra)} is not listed as changed"] if extra else []
-    return errors + ([f"changes: {', '.join(twice)} answered more than once"] if twice else [])
+    errors += [f"changes: {', '.join(twice)} answered more than once"] if twice else []
+    if (unneeded := [c.path for c in result.changes if c.needed == "no"]) and (
+        result.verdict == "pass" or not result.findings
+    ):
+        errors.append(f"changes: {', '.join(unneeded)} judged not needed - raise a finding to undo it, verdict fix")
+    return errors

@@ -270,7 +270,7 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
         ctx.unsure = {
             x.path: f"{x.what}; suspicious: {x.suspicious}"
             for x in changes
-            if x.needed == "unsure" and ctx.kept.get(x.path) != pack_gates.content(at, x.path)
+            if x.needed == "unsure" and ctx.kept.get(x.path) != pack_gates.content(c, at, x.path)
         }
     if then != "pass":
         said = "; ".join(f"{f.id}: {f.text}" for f in lp.findings if f.raised == lp.round - 1) or "rejections judged"
@@ -311,7 +311,7 @@ def _asked(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -
     if ctx.unsure:
         shown = pack_gates.diffs(c, at, job.live.package.resolve(), edits)
         return [
-            pack_gates.unsure(run, p, said, shown.get(p, "(unchanged)"), pack_gates.content(at, p))
+            pack_gates.unsure(run, p, said, shown.get(p, "(unchanged)"), pack_gates.content(c, at, p))
             for p, said in ctx.unsure.items()
         ], "challenger"
     return pack_rounds.questions(lp, run, pack_gates.identity(c, edits)), "challenger"

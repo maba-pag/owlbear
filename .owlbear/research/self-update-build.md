@@ -227,7 +227,7 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
       by kind: `skills/<name>/SKILL.md` for each pinned skill (edit only), `golden/` (the golden pages and
       `expected.json`; pages may be added or removed) and `code/` (the glue: `design_packs/detector.py`, how the
       engine is called and read, and `design_packs/pack_update.py`, how upstream's registry and skills are read; edit
-      only), plus upstream's skill text under `upstream/` to read. The manifest and the notice stay generated. Any
+      only), plus upstream's skill text under `upstream/` to read. The manifest and the notice stay generated: the challenger judges them too, and one it is unsure about the owner keeps or discards the update for. Links are never followed and always outside. Any
       other change is refused, with its paths; the run asks the owner: undo it or discard. An undo, here and below,
       restores the package's version (upstream's text extracted again) and gives the updater the owner's finding to
       adjust what depended on it, outside the rounds' count.

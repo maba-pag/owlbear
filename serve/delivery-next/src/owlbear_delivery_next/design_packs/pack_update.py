@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 RELEASES = "https://api.github.com/repos/{repo}/releases?per_page=100"
 NOTICE = "notice.json"  # beside the installed packs
 STALE = timedelta(days=1)
+PAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.html")  # a golden page: a plain file name in its folder
 SECONDS = 10.0  # the notice's one request: the readiness check at host start never waits long for it
 REGISTRY = "crates/foundation/src/registry.rs"  # upstream's rule registry
 TABLE = "pub static ANTIPATTERNS"  # its rule table, ended by the first line "];"
@@ -165,6 +166,12 @@ def golden(
     folder = folder or files("owlbear_delivery_next").joinpath("golden")
     expected: dict[str, dict[str, list[str]]] = json.loads(folder.joinpath("expected.json").read_text("utf-8"))
     names = list(expected["source"])
+    if bad := [n for n in {*names, *(n for mode in expected.values() for n in mode)} if not PAGE.fullmatch(n)]:
+        msg = f"golden/expected.json names pages that are no page file of its folder: {', '.join(sorted(bad)[:5])}"
+        raise design_pack.PackError(msg)  # a candidate's names are read and written only inside the folders
+    if unknown := sorted({n for mode in expected.values() for n in mode} - set(names)):
+        msg = f"golden/expected.json has expectations for pages it does not scan by source: {', '.join(unknown[:5])}"
+        raise design_pack.PackError(msg)
     with tempfile.TemporaryDirectory(prefix="owlbear-golden-") as tmp:
         root = Path(tmp).resolve()
         for name in names:

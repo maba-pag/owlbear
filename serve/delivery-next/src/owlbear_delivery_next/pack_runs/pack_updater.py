@@ -71,7 +71,9 @@ def new_id() -> str:
 
 
 def _files(at: Path) -> dict[str, str]:
-    found = (p for p in sorted(at.rglob("*")) if p.is_file() and ".git" not in p.relative_to(at).parts)
+    found = (
+        p for p in sorted(at.rglob("*")) if p.is_file() and not p.is_symlink() and ".git" not in p.relative_to(at).parts
+    )
     return {p.relative_to(at).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in found}
 
 
@@ -95,10 +97,10 @@ def skill(c: pack_candidate.Candidate, name: str) -> Path:
 
 
 def outside(at: Path, start: dict[str, str], skills: list[str]) -> list[str]:
-    """The paths the updater changed that it may not change (TD-194)."""
+    """The paths the updater changed that it may not change, and every link it made (TD-194)."""
     now = _files(at)
     changed = sorted(p for p in start.keys() | now.keys() if start.get(p) != now.get(p))
-    return [p for p in changed if not pack_gates.allowed(p, p in now, skills)]
+    return sorted({*(p for p in changed if not pack_gates.allowed(p, p in now, skills)), *pack_gates.links(at)})
 
 
 def taken(at: Path, c: pack_candidate.Candidate) -> list[str]:

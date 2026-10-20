@@ -12,18 +12,19 @@ import difflib
 import hashlib
 import json
 import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.pack_runs import pack_rounds
+from owlbear_delivery_next.pack_runs.pack_candidate import MANIFEST, NOTICE
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.pack_runs.pack_candidate import Candidate
 
 GOLDEN, CODE = "golden/", "code/"
 GLUE = {"code/detector.py": "design_packs/detector.py", "code/pack_update.py": "design_packs/pack_update.py"}
+GENERATED = frozenset({MANIFEST, NOTICE})  # written by the update, never by the updater: kept or discarded
 KINDS = frozenset({"scope", "evidence", "unsure", "code"})
 DELETED = "deleted"
 AS_EXPECTED = "as expected"
@@ -34,7 +35,7 @@ def _sha(data: bytes | None) -> str:
 
 
 def _read(path: Path) -> bytes | None:
-    return path.read_bytes() if path.is_file() else None
+    return path.read_bytes() if path.is_file() and not path.is_symlink() else None
 
 
 def package_path(path: str) -> str:
@@ -45,9 +46,10 @@ def package_path(path: str) -> str:
 def restore(at: Path, paths: list[str], package: Path, c: Candidate) -> None:
     """Put back what the owner had undone: the package's file, or none where it has none; ``golden`` is every page.
 
-    Upstream's text is extracted again by the caller.
+    Links are removed, never followed. Upstream's text is extracted again by the caller.
     """
     for path in paths:
+        _unlinked(at, path)
         if path == GOLDEN.rstrip("/"):
             shutil.rmtree(at / "golden", ignore_errors=True)
             lay_out_golden(at, package)
@@ -64,6 +66,22 @@ def restore(at: Path, paths: list[str], package: Path, c: Candidate) -> None:
         else:
             (at / path).parent.mkdir(parents=True, exist_ok=True)
             (at / path).write_bytes(data)
+
+
+def _unlinked(at: Path, path: str) -> None:
+    """Remove any link on the way to *path*, or at it, so nothing is written or removed through one."""
+    here = at
+    for part in Path(path).parts:
+        here /= part
+        if here.is_symlink():
+            here.unlink()
+            return
+
+
+def links(at: Path) -> list[str]:
+    """Every link in the updater's folder: never followed, always the owner's to undo (TD-194)."""
+    found = (p for p in at.rglob("*") if p.is_symlink() and ".git" not in p.relative_to(at).parts)
+    return sorted(p.relative_to(at).as_posix() for p in found)
 
 
 def lay_out_golden(at: Path, package: Path) -> None:
@@ -111,16 +129,15 @@ def digest(changed: dict[str, bytes | None], prefix: str = "") -> str:
 
 
 def identity(c: Candidate, changed: dict[str, bytes | None]) -> str:
-    """The whole candidate's identity: its manifest and skills, and every golden or glue file it changed (TD-194)."""
+    """The whole candidate's identity: its manifest, notice and skills, and every golden or glue change (TD-194)."""
     pack = design_pack.identity(c.manifest, c.skills)
-    if not changed:
-        return pack
-    return hashlib.sha256(f"{pack}\n{digest(changed)}".encode()).hexdigest()
+    return hashlib.sha256(f"{pack}\n{_sha(c.notice.encode())}\n{digest(changed)}".encode()).hexdigest()
 
 
-def content(at: Path, path: str) -> str:
-    """One updater file's digest now, or ``deleted``."""
-    return _sha(_read(at / path))
+def content(c: Candidate, at: Path, path: str) -> str:
+    """One candidate file's digest now, or ``deleted``."""
+    made = {MANIFEST: c.manifest, NOTICE: c.notice}
+    return _sha(made[path].encode()) if path in made else _sha(_read(at / path))
 
 
 def diff(path: str, old: bytes | None, new: bytes | None, context: int = 5) -> str:
@@ -132,8 +149,11 @@ def diff(path: str, old: bytes | None, new: bytes | None, context: int = 5) -> s
 
 
 def diffs(c: Candidate, at: Path, package: Path, changed: dict[str, bytes | None]) -> dict[str, str]:
-    """Every file the updater changed, by updater path, with its diff against the package."""
-    out = {}
+    """Every file the update changes, by updater path, with its diff against the package: the generated ones first."""
+    out = {
+        MANIFEST: diff(MANIFEST, _read(package / MANIFEST), c.manifest.encode()),
+        NOTICE: diff(NOTICE, _read(package / NOTICE), c.notice.encode()),
+    }
     for name in c.pins["skills"]:
         path = f"skills/{name}/SKILL.md"
         if (now := (at / path).read_bytes()) != c.baseline.get(name):
@@ -170,7 +190,7 @@ def evidence(run: str, shown: str, said: str, golden: str, mark: str) -> dict[st
 def unsure(run: str, path: str, said: str, shown: str, mark: str) -> dict[str, Any]:
     """The owner's question on one change the challenger could not judge (TD-194), bound to its content."""
     text = f"The challenger is unsure whether the upgrade needs the change to {path}: {said} Keep it, or undo it?"
-    options = [pack_rounds.KEEP, pack_rounds.UNDO]
+    options = [pack_rounds.KEEP, pack_rounds.DISCARD if path in GENERATED else pack_rounds.UNDO]
     return pack_rounds.question(f"{run}:unsure:{path}:{mark[:12]}", "unsure", text, options, path=path, digest=mark,
                                 diff=shown)  # fmt: skip
 
