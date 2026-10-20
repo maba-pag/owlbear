@@ -9,10 +9,15 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_tools.quality import (
+    _DIRECT_HOOKS,
+    _PRECOMMIT_FIX_HOOKS,
     FixMode,
     _consumer_lint,
+    _precommit_hook_names,
     _run_biome,
+    _run_leaf,
     _run_named,
+    format_commands,
     format_eof,
     format_whitespace,
     lint,
@@ -21,6 +26,53 @@ from owlbear_tools.quality import (
     quality,
 )
 from owlbear_tools.quality_runtime import _call
+
+_ROOT = Path(__file__).resolve().parents[3]
+_UNCLAIMED = (
+    "check-yaml",
+    "check-merge-conflict",
+    "check-added-large-files",
+    "validate-skills",
+    "validate-agents",
+    "validate-prompts",
+    "todo-check",
+)
+
+
+def _static_ci_hooks(monkeypatch: pytest.MonkeyPatch) -> tuple[set[str], set[str]]:
+    """Return the hooks CI's Static suite passes to pre-commit and those it covers, fixers via check twins."""
+    monkeypatch.chdir(_ROOT)
+    with (
+        patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
+        patch("owlbear_tools.quality._check_text_files", return_value=0),
+        patch("owlbear_tools.quality._run_leaf", wraps=_run_leaf) as leaf,
+    ):
+        for command in (lint, format_commands):
+            with patch.object(sys, "argv", ["command", "--no-fix"]), pytest.raises(SystemExit, match="0"):
+                command()
+
+    passed = {item.args[0][2] for item in call.call_args_list if item.args[0][:2] == ["pre-commit", "run"]}
+    leaves = {item.args[0] for item in leaf.call_args_list}
+    covered = set(passed) | {hook for hook, owner in _DIRECT_HOOKS.items() if owner in leaves}
+    for name, (fixer, check, _unsafe) in _PRECOMMIT_FIX_HOOKS.items():
+        if (check in passed) or (not check and name in leaves):
+            covered.add(fixer)
+    return passed, covered
+
+
+def test_static_ci_runs_every_precommit_hook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hook added to the config runs in CI without a second list (TD-409); unsafe fixes never do."""
+    _, covered = _static_ci_hooks(monkeypatch)
+
+    assert set(_precommit_hook_names()) - covered == {"ruff-unsafe-fix"}
+
+
+def test_static_ci_runs_only_hooks_the_config_defines(monkeypatch: pytest.MonkeyPatch) -> None:
+    passed, _ = _static_ci_hooks(monkeypatch)
+
+    assert passed <= set(_precommit_hook_names())
+    assert set(_DIRECT_HOOKS) <= set(_precommit_hook_names())
+    assert not passed & {fixer for fixer, _check, _unsafe in _PRECOMMIT_FIX_HOOKS.values()}
 
 
 def test_lint_runs_the_normal_local_suite() -> None:
@@ -42,6 +94,7 @@ def test_lint_runs_the_normal_local_suite() -> None:
         ["pre-commit", "run", "zizmor", *manual],
         ["pre-commit", "run", "editorconfig-checker", *manual],
         ["node", "node_modules/@biomejs/biome/bin/biome", "check", ".", "--write"],
+        *(["pre-commit", "run", hook, *manual] for hook in _UNCLAIMED),
     ]
 
 
@@ -143,7 +196,7 @@ def test_quality_executes_todo_last() -> None:
     with patch("owlbear_tools.quality._run_leaf", side_effect=record):
         assert _run_named("quality", staged=False, fix_mode=FixMode.SAFE) == 0
 
-    assert executed[-1] == "todo"
+    assert executed[-1] == "todo-check"
     assert executed == [
         "format-python",
         "format-biome",
@@ -157,7 +210,7 @@ def test_quality_executes_todo_last() -> None:
         "lint-zizmor",
         "lint-editorconfig",
         "lint-biome",
-        "todo",
+        *_UNCLAIMED,
     ]
 
 
