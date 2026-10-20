@@ -180,12 +180,13 @@ def _read_precommit_hook(config: dict[str, object], hook_id: str) -> dict[str, o
     raise AssertionError(message)
 
 
-def test_every_hook_the_lint_runner_calls_runs_in_the_manual_stage() -> None:
+def test_every_hook_the_lint_runner_calls_runs_in_the_manual_stage(monkeypatch: pytest.MonkeyPatch) -> None:
     """The runner passes `--hook-stage manual`; a hook absent from that stage fails `uv run lint` (TD-204)."""
+    monkeypatch.chdir(_ROOT)
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     default_stages = config.get("default_stages")
     hooks = [hook for repository in config["repos"] for hook in repository["hooks"]]
-    called = {*quality._PRECOMMIT_CHECK_HOOKS.values()}  # noqa: SLF001
+    called = {*quality._PRECOMMIT_CHECK_HOOKS.values(), *quality._unclaimed_hooks()}  # noqa: SLF001
     called |= {name for names in quality._PRECOMMIT_FIX_HOOKS.values() for name in names if name}  # noqa: SLF001
 
     for name in sorted(called):

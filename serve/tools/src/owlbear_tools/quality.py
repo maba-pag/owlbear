@@ -43,6 +43,11 @@ _PRECOMMIT_CHECK_HOOKS = {
     "lint-zizmor": "zizmor",
     "lint-editorconfig": "editorconfig-checker",
 }
+# Config hooks whose tool a named leaf runs without pre-commit.
+_DIRECT_HOOKS = {"biome-check": "lint-biome", "todo-check": "todo"}
+# Config hooks the agent-ecosystem workflow runs with the full workspace they import; Static installs tools only.
+ELSEWHERE_HOOKS = frozenset({"validate-skills", "validate-agents", "validate-prompts"})
+# `lint` also runs every config hook no leaf claims, so the config is the one list (TD-409).
 _AGGREGATES: dict[str, tuple[str, ...]] = {
     "lint": (
         "lint-python",
@@ -55,7 +60,7 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
     ),
     "lint-actions": ("lint-actionlint", "lint-zizmor"),
     "format": ("format-python", "format-biome", "format-whitespace", "format-eof"),
-    "quality": ("format", "lint", "todo"),
+    "quality": ("format", "lint"),  # lint ends with todo, the config's todo-check run in-process
 }
 
 
@@ -83,19 +88,18 @@ def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> in
     return _precommit_hook(safe_hook, staged=staged)
 
 
-def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]:
-    """Return the exclude patterns pre-commit applies to one hook."""
+def _precommit_config() -> tuple[object, list[dict[str, object]]]:
+    """Return the top-level exclude and the hook entries of the workspace pre-commit config."""
     config_path = Path.cwd() / ".pre-commit-config.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         message = f"{config_path} must contain a YAML mapping"
         raise TypeError(message)
-    top_level = config.get("exclude")
     repos = config.get("repos", [])
     if not isinstance(repos, list):
         message = f"{config_path} repos must be a YAML sequence"
         raise TypeError(message)
-    scoped: list[str] = []
+    entries: list[dict[str, object]] = []
     for repo in repos:
         if not isinstance(repo, dict):
             message = f"{config_path} repository entries must be YAML mappings"
@@ -104,15 +108,33 @@ def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]:
         if not isinstance(hooks, list):
             message = f"{config_path} hook lists must be YAML sequences"
             raise TypeError(message)
-        scoped.extend(
-            entry["exclude"]
-            for entry in hooks
-            if isinstance(entry, dict)
-            and hook in {entry.get("id"), entry.get("alias")}
-            and isinstance(entry.get("exclude"), str)
-        )
+        entries.extend(entry for entry in hooks if isinstance(entry, dict))
+    return config.get("exclude"), entries
+
+
+def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]:
+    """Return the exclude patterns pre-commit applies to one hook."""
+    top_level, entries = _precommit_config()
+    scoped = [
+        entry["exclude"]
+        for entry in entries
+        if hook in {entry.get("id"), entry.get("alias")} and isinstance(entry.get("exclude"), str)
+    ]
     patterns = ([top_level] if isinstance(top_level, str) else []) + scoped
     return tuple(re.compile(pattern) for pattern in patterns)
+
+
+def _precommit_hook_names() -> tuple[str, ...]:
+    """Return each config hook's `pre-commit run` name: its alias, else its id."""
+    _, entries = _precommit_config()
+    names = (entry.get("alias") or entry.get("id") for entry in entries)
+    return tuple(dict.fromkeys(name for name in names if isinstance(name, str)))
+
+
+def _unclaimed_hooks() -> tuple[str, ...]:
+    claimed = {*_PRECOMMIT_CHECK_HOOKS.values(), *_DIRECT_HOOKS, *ELSEWHERE_HOOKS}
+    claimed |= {hook for hooks in _PRECOMMIT_FIX_HOOKS.values() for hook in hooks if hook}
+    return tuple(name for name in _precommit_hook_names() if name not in claimed)
 
 
 def _check_text_files(name: str, *, staged: bool) -> int:
@@ -166,6 +188,8 @@ def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
         result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
     elif name == "todo":
         result = run_todo()
+    elif name in _unclaimed_hooks():
+        result = _precommit_hook(name, staged=staged)
     else:
         message = f"unknown quality command: {name}"
         raise ValueError(message)
@@ -176,6 +200,8 @@ def _run_named(name: str, *, staged: bool, fix_mode: FixMode) -> int:
     children = _AGGREGATES.get(name)
     if children is None:
         return _run_leaf(name, staged=staged, fix_mode=fix_mode)
+    if name == "lint":
+        children = (*children, *_unclaimed_hooks(), "todo")
     failures = 0
     for child in children:
         failures += int(bool(_run_named(child, staged=staged, fix_mode=fix_mode)))
