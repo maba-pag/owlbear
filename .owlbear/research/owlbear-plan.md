@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-19, status at `main` `8248e1e97` (#500), decisions to TD-403
+> **Date:** 2026-10-20, status at `main` after #524, decisions to TD-416
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -15,24 +15,22 @@ as §7 says.
 
 **Product.** OwlBear Delivery (`serve/delivery-next`, package `owlbear_delivery_next`) is the only Delivery that
 runs: one machine host serves every registered project with one UI (Changes, Backlog, Memory, Settings, Maintenance).
-The old engine is retired (TD-202) but its source is still in the repository: `serve/delivery`, `serve/delivery-mcp`,
-`serve/delivery-github`, the controller tools, Cockpit's Changes surface and the old agents, skills and prompts in
-`share/`. Its deletion is plan item 7.
+The old engine is gone (TD-199, #521 to #524); its source stays at the tag `delivery-v1-final`. The old Cockpit
+(`serve/cockpit`) still serves an ideas editor and a memory page until item 13 deletes it (TD-416).
 
 **Use.** No real project uses OwlBear (TD-338); this laptop is the only instance. Two sandbox projects are
 registered: `owlbear-sandbox` and `owlbear-sandbox-protected`. OwlBear itself is developed in chat (TD-319 allows
 both), through pull requests to `main` with the required `CI` check, strictly up to date, merged as merge commits.
 
-**Runtime.** `~/.owlbear/runtime` is a clone at `origin/main` (the latest runtime merge), deployed by hand after each merge
-(TD-289, TD-309): stop, check out `origin/main`, `uv sync --locked`, start as it was (`owlbear start`, with
-`--paused` if it was paused; TD-350).
+**Runtime.** `~/.owlbear/runtime` is an alias to the active version under `~/.owlbear/versions/`; OwlBear updates
+itself to each new tag when idle, or at once with `owlbear update` or Run updates now (TD-415, items 3 and 4).
 
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
-passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags `v0.1` to `v0.9` exist (`v0.9` is #499). The
+passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags from `v0.1` exist (`v0.21` is #520). The
 walk creates tags through the REST API with the owner's fine-grained token `RELEASE_TOKEN` (Contents and Workflows
 write, TD-404), since GitHub refuses the workflow token tags on commits whose workflow files differ from every branch
 tip; a major gets `vN.0` and `vN` (TD-392). The token expires; the owner renews it.
-Renovate's pull requests are left alone until the old engine is gone (owner, 2026-10-19).
+Renovate's pull requests come back now that the old engine is gone (owner, 2026-10-19).
 
 **Built, by build document:**
 
@@ -49,6 +47,8 @@ Renovate's pull requests are left alone until the old engine is gone (owner, 202
 | Decision review TD-319..TD-381: Snyk Code and Renovate, Cyclopts, subagents per role, owner notes as written | the record | #483, #487 to #489, #492, #494, #495 |
 | The machine preference layer and session limits (TD-336) | [settings scopes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/settings-scopes-build.md) | #496, #497 |
 | The test review from the Maintenance page (C-26) | [test review](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/test-review-build.md) | #498, #499 |
+| Self-update steps 3c to 5: pack updates through a PR, versions, standby and handover, idle updates | [self-update](self-update-build.md) | #516 to #520, #525 |
+| The old engine's removal in five batches, documentation for v1.0 | [transfer ledger](delivery-next-transfer-ledger.md) | #521 to #524, #526 |
 
 ## 2. The Plan
 
@@ -64,9 +64,10 @@ the table lists the items in their order.
 | 2 | Self-update step 3c: design pack updates through a pull request, with C-15's updater and challenger rules | TD-325, TD-357, TD-368, TD-194, TD-177 | [self-update §8](self-update-build.md) "Step 3c build" | Done |
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Done (#517 to #519; this machine's first update to v0.20 on 2026-10-20, TD-415) |
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Done (#520; this machine runs v0.21) |
-| 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Tag `delivery-v1-final` set; batches 1 to 5 built (#521 to #524); the documentation rewrite, closing the old engine's issues and pull requests, and moving the ledger and cutover left |
+| 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](delivery-next-cutover.md) | Tag `delivery-v1-final` set; batches 1 to 5 built (#521 to #524), its issues and pull requests closed, the documentation rewritten for v1.0; moving the ledger and cutover to `owlbear-data` left |
 | 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Not started; any time before item 12 |
-| 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](self-update-build.md) | After items 1, 6, 2, 3, 4, 7 and 11 |
+| 13 | Cockpit: audit `serve/cockpit` for what the machine UI lacks (design-system components and workarounds, memory purge, the ideas editor), port what is worth it, delete Cockpit | TD-416 | none | Not started; at the latest with item 12 |
+| 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](self-update-build.md) | After items 1, 6, 2, 3, 4, 7, 11 and 13 |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | none yet | Not started; no design |
 | 9 | Watcher: TD-27's benchmark, then the design session (O1–O6) with the owner, then the build and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Not started; the draft needs revising (§3.5) |
@@ -126,8 +127,8 @@ designs. The old engine's designer went with batch 3 of item 7.
 
 The removal follows the self-update (TD-394) and the ledger's batches 1 to 5 (the
 `main` sync batch is gone, TD-203) with the tag first; its precondition for batch 2 (the new Changes page reachable)
-holds. It rewrites the documentation v1.0 needs (TD-393). Open issues #225 and #400 and pull requests #405 and #412
-belong to the old engine and close with it; Renovate's pull requests come back after it. Batch 5 also retired the
+holds. It rewrites the documentation v1.0 needs (TD-393). The old engine's issues #225 and #400 and pull requests
+#405 and #412 closed with it; Renovate's pull requests come back after it. Batch 5 also retired the
 four seeded hooks only the old agents registered; `deny-src-writes.py` stays for the test curator. The old live state
 (`.owlbear/delivery/`, `.owlbear/controller/`) stays on disk until D5's endpoint, two consumer Changes merged on the
 new engine (item 10).
@@ -172,9 +173,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-16 | OwlBear's own project sets `release:minor` | OwlBear is not a registered project | keep | 10 |
 | C-16 | Chat-authored PRs get `release:minor` for runtime changes (TD-314) | Written nowhere agents read | align | — |
 | C-16 | v1.0 after the self-update and the old engine's removal, docs rewritten (TD-393) | Not yet | build | 12 |
-| C-19 | Linux and Windows stated as not supported yet | `README-consumer.md` and `setup/setup-guide.md` claim Linux support | align | 7 |
 | C-20 | OwlBear builds itself through its own Delivery (TD-319) | Developed in chat only | keep | 10 |
-| C-21 | Old engine batches with the tag first; three skills retire with batch 3 | Batches built; documentation rewrite left | build | 7 |
 | C-25 | The saver recommends a scope (TD-293) | Missing | align | 5 |
 | C-25 | A Global entry can move back to a project (TD-292) | The page says it does not move back | align | 5 |
 | C-25 | Curator modes and the Global threshold, 95% at first (TD-292, TD-400) | Missing | build | 5 |

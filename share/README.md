@@ -46,6 +46,11 @@ diagnosing a loading problem.
 | `prompts/` | User-invoked one-shot entry points | `{verb}.prompt.md` or `{scope}-{verb}.prompt.md` |
 | `diagrams/` | Shared explanatory visual assets | Descriptive filenames |
 
+Delivery's own role agents and skills are not here: they ship inside the Delivery package
+(`serve/delivery-next/src/owlbear_delivery_next/agents/` and `skills/`) and load only in the agent
+sessions OwlBear starts. `owlbear install` links the shaping agent and its skill into `~/.copilot`
+so **New Change** finds them in any VS Code window.
+
 ## Agents
 
 Start with the agent file when the change concerns a role's identity, tools, hooks, delegation,
@@ -102,7 +107,7 @@ the ordered composition of the active layers below.
 | Agent body | When the role is selected or dispatched | Identity, boundaries, guaranteed dependencies, communication contract | Agent file |
 | Required skill bodies | At agent session start | Knowledge needed in at least 90% of that role's sessions | Agent `<required_reading>` |
 | On-demand skill bodies | When a named condition occurs | Specialist procedure, rules, or domain knowledge | Calling workflow or companion table |
-| Runtime state and tools | When queried or invoked | Current jobs, Memory, Knowledge, schemas, and mutation semantics | Owning runtime service |
+| Runtime state and tools | When queried or invoked | Current Changes, Memory, Knowledge, schemas, and mutation semantics | Owning runtime service |
 
 More specific rules do not automatically erase broader rules. Resolve a conflict by identifying the
 job and its fit authority; do not preserve both versions as competing truths.
@@ -231,7 +236,7 @@ uv run python .owlbear/scripts/validate_prompts.py
 ```
 
 Run ecosystem integrity and write-boundary regressions when changing agent structure, MCP grants,
-delegation, write restrictions, or delivery ownership:
+delegation, or write restrictions:
 
 ```shell
 uv run pytest -q \

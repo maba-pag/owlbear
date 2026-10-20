@@ -1,21 +1,21 @@
 # OwlBear
 
 **A guided workflow that turns a plain-language idea into a reviewed pull request, using GitHub
-Copilot inside VS Code.**
+Copilot on your Mac.**
 
 Copilot is good at writing code and bad at holding on to what it agreed to. OwlBear adds the
 structure around it: one approved scope per change, ordered execution, an independent review of
-every step, evidence that survives a crashed session, and a human decision before anything is
-published. You stay in VS Code, and you still review and merge the pull request yourself.
+every step, evidence that survives a crashed session, and a human decision before any work starts.
 
-OwlBear installs alongside an existing project. It does not replace your source code, your build
-tools, or your GitHub workflow.
+OwlBear runs once on your Mac and serves every project you add to it. It does not replace your
+source code, your build tools, or your GitHub workflow, and the local files its Delivery setup
+writes into a project are kept out of Git.
 
 ## What it looks like
 
-You work on the new Delivery engine's Changes page and in Copilot Chat. **New Change** on that page
-opens a shaping chat that turns your idea into a brief; you approve the brief on the page, and the
-engine plans, builds, reviews and publishes it:
+You work on OwlBear's Changes page in your browser and in Copilot Chat. **New Change** on that page
+opens a shaping chat in VS Code that turns your idea into a brief; you approve the brief on the
+page, and OwlBear plans, builds, reviews and publishes it:
 
 ```mermaid
 flowchart LR
@@ -24,84 +24,88 @@ flowchart LR
     C -->|you approve the merge| D[Done]
 ```
 
-When a step needs a decision or gets stuck, the engine asks on the Changes page instead of guessing.
-When the pull request is ready, you approve the merge there or merge it in GitHub. The Changes page
-replaces the retired `/continue-change` prompt, its exception prompts and Cockpit's old Delivery
-view; Cockpit keeps Memory and Ideas.
+When a step needs a decision or gets stuck, OwlBear asks on the Changes page instead of guessing.
+Once the pull request's checks and your branch rules pass, OwlBear merges it; when it needs your
+consent, it asks on the Changes page and you can also merge in GitHub.
 
 ## Is this for you?
 
 A good fit when:
 
-- You already use VS Code and GitHub Copilot on a Git project hosted on GitHub.
+- You use VS Code and GitHub Copilot on a Mac, on Git projects hosted on GitHub.
 - Your changes are large enough that scope, ordering, and review actually matter.
-- You want a pull request and a human merge at the end, not an agent that pushes to your branch.
-- You are willing to let agents write files and run commands in your working copy.
+- You want every change to arrive as a reviewed pull request, not as an agent's push to your branch.
+- You are willing to let agents write files and run commands in OwlBear's own worktrees of your
+  project.
 
 Probably not a fit when:
 
+- You work on Linux or Windows. OwlBear supports macOS only; Linux and Windows are not supported
+  yet.
 - You want an autonomous agent that ships without you in the loop.
-- You want a hosted service or a CI-side bot; OwlBear runs on your laptop, in your editor.
-- You need a stable, versioned dependency. OwlBear ships from a rolling branch with no releases.
-- You are not using GitHub Copilot in VS Code. The agent format, prompts, and tools are specific
-  to that product.
+- You want a hosted service or a CI-side bot; OwlBear runs on your Mac.
+- You are not using GitHub Copilot. The agents, chats and tools are specific to that product.
 
 ## Before you start
 
 | Requirement | Why |
 | --- | --- |
-| **Python 3.14.8 or later in the 3.14 series** | Runs the OwlBear tool servers. |
-| **macOS or Linux (Ubuntu)** | Supported operating systems. |
-| [uv](https://docs.astral.sh/uv/) | Installs dependencies and launches the tool servers |
-| VS Code + GitHub Copilot extension | The editor and the agents |
-| [GitHub CLI](https://cli.github.com/) | Opens and updates pull requests |
-| Git, and a project with a GitHub `origin` | The change is published to that repository |
+| **macOS** | The only supported system; Linux and Windows are not supported yet |
+| **Python 3.14.8 or later in the 3.14 series** | Runs OwlBear |
+| [uv](https://docs.astral.sh/uv/) | Installs OwlBear's dependencies |
+| Git, with `user.name` and `user.email` set | OwlBear commits each Change's work |
+| [GitHub CLI](https://cli.github.com/), signed in with push access to your project | Opens, updates and merges pull requests |
+| GitHub Copilot CLI (`npm install -g @github/copilot`) | Runs OwlBear's agent sessions |
+| VS Code + GitHub Copilot extension | New Change opens its shaping chat there |
+| A Git project with a GitHub `origin` | Each Change is published to that repository |
 
-Run `gh auth login` once, and check `gh auth status` before your first change. Windows is unsupported.
+Run `gh auth login` once. OwlBear checks these before it works on a project and names the fix for
+anything missing.
 
-Expect agent-scale Copilot usage. A single change runs many chat requests across design, planning,
+Expect agent-scale Copilot usage. A single change runs many agent sessions across planning,
 building, and review.
 
 ## Quick Start
 
-OwlBear is cloned next to your project, not into it. Setup writes relative paths between the two,
-so keep them as siblings:
-
-```text
-~/work/
-├── owlbear/      <- the OwlBear checkout
-└── my-project/   <- your project, where you run setup and open VS Code
-```
-
-Run these from the parent directory. Skip the first clone if your project is already checked out.
+OwlBear installs once per Mac, into `~/.owlbear/runtime`; cloning it is the installation. Your
+projects stay where they are.
 
 ```shell
-# 1. Clone your project.
-git clone https://github.com/OWNER/PROJECT.git my-project
+# 1. Clone OwlBear into its runtime folder and install its dependencies.
+git clone https://github.com/maba-pag/owlbear.git ~/.owlbear/runtime
+cd ~/.owlbear/runtime
+uv sync --locked
 
-# 2. Clone OwlBear beside it. Its default branch is the rolling consumer surface.
-git clone https://github.com/maba-pag/owlbear.git owlbear
+# 2. Install the command; it asks before each change outside ~/.owlbear.
+.venv/bin/owlbear install
 
-# 3. Run setup from the project root.
-cd my-project
-uv run --project ../owlbear python ../owlbear/setup/init.py
-
-# 4. Open the configured project.
-code .
+# 3. Start OwlBear; it prints the address of its pages.
+owlbear start
 ```
 
-**Expected result:** `.vscode/settings.json` and `.vscode/mcp.json` exist in your project.
-Existing project settings are merged, not replaced.
+`owlbear install` asks separately before it links `~/.local/bin/owlbear`, links the shaping agent
+and its skill into `~/.copilot`, and adds a login item. Say yes to the shaping agent: **New Change**
+needs it. Without the command link, run `~/.owlbear/runtime/.venv/bin/owlbear` instead of `owlbear`.
+If the login item already started OwlBear, it runs paused: press **Resume** in the bar at the top.
 
-See the [setup guide](setup/setup-guide.md#quick-start) for the copy-paste variant and every option.
+Open the printed address, choose **Add project** in the bar at the top and enter your project's
+folder. If the page then shows **Setup required**, run the command it names from any terminal:
+
+```shell
+owlbear setup --repo ~/work/my-project
+```
+
+**Expected result:** setup checks readiness, asks you to confirm the project's profile, and asks
+before writing the two local chat files listed under [What setup changes](#what-setup-changes).
+Reload the project's VS Code window afterwards.
+
+See the [setup guide](setup/setup-guide.md#quick-start) for every step's expected output.
 
 ## Verify
 
-1. Run **Chat: Open Customizations** and confirm OwlBear agents, skills, instructions, and prompts
-   are listed.
-2. Run **MCP: List Servers** and confirm four servers are running: `owlbear-knowledge`,
-   `owlbear-memory`, `owlbear-browser`, and `markitdown`.
-3. Run `gh auth status` and confirm an active account.
+1. Run `owlbear status` and confirm your project is listed as `loaded`.
+2. Run `owlbear doctor` and confirm it ends with `all checks passed`.
+3. Confirm the project's Changes page shows no **Setup required** note.
 
 If something is missing, go to [Verify the installation](setup/setup-guide.md#verify-the-installation)
 and [Troubleshooting](setup/setup-guide.md#troubleshooting).
@@ -110,57 +114,50 @@ and [Troubleshooting](setup/setup-guide.md#troubleshooting).
 
 Prove the installation with one small outcome on the Changes page:
 
-1. Run `owlbear start`, open the address it prints, choose **Add project** in the bar and enter the
-   project's folder.
-2. Press **New Change** and describe what you want in the shaping chat it opens.
-3. Approve the brief on the Changes page. The engine plans, builds, reviews and publishes it as a
+1. Press **New Change** and describe what you want in the shaping chat it opens in VS Code.
+2. Approve the brief on the Changes page. OwlBear plans, builds, reviews and publishes it as a
    pull request, and asks on the page when it needs you.
-4. When the page asks for merge consent, review the pull request and approve it there, or merge it
-   in GitHub yourself.
+3. When the page asks you to approve the merge, review the pull request and approve it there, or
+   merge it in GitHub yourself.
 
 The full walkthrough with expected output at each step is in
 [First successful workflow](setup/setup-guide.md#first-successful-workflow).
 
-## What setup changes in your project
+## What setup changes
 
-Setup writes project-local configuration and copied runtime files. It never touches your source
-code.
+OwlBear keeps its runtime, versions, logs and each project's Delivery state under `~/.owlbear/`.
+Only with your yes does it add:
 
-- `.vscode/settings.json` and `.vscode/mcp.json` — merged, with your existing keys preserved.
-- `.owlbear/` — copied hooks and local runtime state.
-- `.github/copilot-instructions.md` — a starter file, only when none exists. Replace its
-  placeholders with your project's own conventions.
-- Editor and lint config (`.editorconfig`, markdownlint, yamllint) — only when absent.
+- `~/.local/bin/owlbear`, a link to the command, and the zsh completion in `~/.owlbear/`.
+- Links to the shaping agent and its skill in `~/.copilot/agents/` and `~/.copilot/skills/`.
+- A login item that starts OwlBear paused at login.
+- In each project: the Delivery chat server in `.mcp.json` and `chat.defaultToCopilotHarness` in
+  `.vscode/settings.json`. Both are listed in `.git/info/exclude`. Setup never writes a file Git
+  tracks; for a tracked `.mcp.json` it prints the entry to add to your user-level MCP configuration.
 
-Three seeded settings are deliberately permissive so the agent workflow is usable, and are worth a
-look before you trust the workspace: an auto-approve list for common `uv run` commands,
-`chat.tools.terminal.blockDetectedFileWrites: "never"`, and a `BROWSER_ALLOWED_DOMAINS: "*"`
-wildcard on the Browser server. Narrow them to your own policy, and replace the browser wildcard
-with exact hostnames before using it against anything sensitive.
+To undo it, run `owlbear uninstall`: it removes the links, the completion and the login item, and
+keeps the runtime and your projects. **Remove project** on the page stops OwlBear serving a project.
+See [Uninstalling](setup/operating-owlbear.md#uninstalling) for removing everything.
 
-To undo everything, run `--uninstall` from the project root. It removes only what it installed and
-you left unmodified, and `--dry-run` shows the plan first:
-
-```shell
-uv run --project ../owlbear python ../owlbear/setup/init.py --uninstall --dry-run
-```
-
-See [Uninstalling](setup/operating-owlbear.md#uninstalling) for exactly what is kept.
+OwlBear's own agents, skills and tool servers can also be loaded into a project's VS Code
+workspace for your own chats; that is an optional, separate setup in
+[the setup guide](setup/setup-guide.md#optional-agent-workspace).
 
 ## Status and expectations
 
-OwlBear has no numbered releases. The rolling `main` branch is the supported consumer surface.
-To update, use **Run updates now** on the new Delivery engine's pages, which replace the retired
-`/upgrade-delivery` prompt; the engine also updates itself when idle. Then rerun setup to refresh
-copied files. See [Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbear).
+OwlBear's versions are Git tags such as `v1.0`. It updates itself to the newest version of its
+channel after 15 minutes without use while nothing runs, announced on open pages first, and never
+moves to an older version. **Run updates now** on a paused page, or `owlbear update`, updates at
+once; `owlbear versions` shows the version it runs and the next one. See
+[Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbear).
 
 | Surface | Status | What it does |
 | --- | --- | --- |
-| Delivery | Core | Plans, executes, reviews, publishes, and recovers one change |
-| Cockpit | Core | The browser view for Memory and Ideas |
-| Memory | Available | Durable, scoped knowledge that carries across sessions |
+| Delivery | Core | Shapes, plans, builds, reviews, publishes, and recovers one change; pages for Changes, Backlog, Memory, Settings, and Maintenance |
+| Memory | Available | Durable, scoped agent knowledge that carries across sessions and projects |
 | Knowledge | Alpha | Searchable documents and knowledge graphs; needs field validation |
 | Browser | Alpha | Authenticated web acquisition; needs field validation |
+| Cockpit | Optional | A separate browser view of one project's local memory and ideas files; needs a Node build |
 
 ## Learn more
 

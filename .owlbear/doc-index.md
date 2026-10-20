@@ -8,7 +8,7 @@
 - ## `Quick Start`
 - ## `Verify`
 - ## `Your first change`
-- ## `What setup changes in your project`
+- ## `What setup changes`
 - ## `Status and expectations`
 - ## `Learn more`
 - ## `Security`
@@ -16,11 +16,13 @@
 ### Outbound links
 - [uv](https://docs.astral.sh/uv/)
 - [GitHub CLI](https://cli.github.com/)
+- [What setup changes](../README-consumer.md#what-setup-changes)
 - [setup guide](../setup/setup-guide.md#quick-start)
 - [Verify the installation](../setup/setup-guide.md#verify-the-installation)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 - [First successful workflow](../setup/setup-guide.md#first-successful-workflow)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
+- [the setup guide](../setup/setup-guide.md#optional-agent-workspace)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
@@ -67,7 +69,7 @@
 
 ## SECURITY.md
 - # `Security Policy`
-- ## `Supported Branches`
+- ## `Supported Versions`
 - ## `Reporting a Vulnerability`
 - ## `Disclosure Policy`
 
@@ -192,6 +194,7 @@
 - ## `What belongs elsewhere`
 
 ### Outbound links
+- [What OwlBear Installs](../setup/operating-owlbear.md#what-owlbear-installs)
 - [`setup/init.py`](../setup/init.py)
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
@@ -304,6 +307,7 @@
 - [Project README](../README.md)
 - [Setup authority](../setup/setup-guide.md)
 - [Delivery engine](../serve/delivery-next)
+- [Operating OwlBear](../setup/operating-owlbear.md#running-owlbear)
 - [Cockpit](../serve/cockpit/README.md)
 - [Memory MCP](../serve/memory-mcp/README.md)
 - [Memory core](../serve/memory/README.md)
@@ -311,9 +315,11 @@
 - [Knowledge core](../serve/knowledge/README.md)
 - [Browser MCP](../serve/browser-mcp/README.md)
 - [Browser core](../serve/browser/README.md)
+- [Web content](../serve/web-content/README.md)
 - [Tools](../serve/tools/README.md)
 - [setup guide](../setup/setup-guide.md)
 - [Operating OwlBear](../setup/operating-owlbear.md)
+- [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
@@ -648,12 +654,16 @@
 
 ## setup/operating-owlbear.md
 - # `Operating OwlBear`
+- ## `What OwlBear Installs`
+- ## `Running OwlBear`
+- ## `Upgrading OwlBear`
 - ## `What Setup Creates`
 - ### `Where these files come from`
 - ## `Shared vs Copied`
 - ## `Refreshing Consumer Configs`
-- ## `Upgrading OwlBear`
 - ## `Uninstalling`
+- ### `Removing OwlBear from your Mac`
+- ### `Removing the agent workspace from a project`
 - ## `Delivery Workflow`
 - ## `Cockpit details`
 - ## `Project-Specific Customization`
@@ -665,34 +675,45 @@
 ### Outbound links
 - [setup guide](../setup/setup-guide.md)
 - [sharing guide](../setup/sharing-guide.md)
+- [What OwlBear Installs](../setup/operating-owlbear.md#what-owlbear-installs)
+- [Running OwlBear](../setup/operating-owlbear.md#running-owlbear)
+- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
+- [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
 - [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
 - [Shared vs Copied](../setup/operating-owlbear.md#shared-vs-copied)
-- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
-- [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
 - [Cockpit details](../setup/operating-owlbear.md#cockpit-details)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
+- [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
+- [setup guide](../setup/setup-guide.md#optional-agent-workspace)
+- [What OwlBear Installs](../setup/operating-owlbear.md#what-owlbear-installs)
 - [`seed/`](../seed)
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
-- [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
+- [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
 ## setup/setup-guide.md
 - # `OwlBear Setup Guide`
 - ## `Prerequisites`
 - ## `Quick Start`
-- ### `1. Put both repositories side by side`
+- ### `1. Clone OwlBear into its runtime folder`
+- ### `2. Install the command`
+- ### `3. Start OwlBear`
+- ### `4. Add your project`
+- ### `5. Connect the project's chats`
+- ## `Verify the installation`
+- ## `First successful workflow`
+- ## `Optional agent workspace`
+- ### `1. Open a terminal in the project root`
 - ### `2. Run setup from the project root`
 - ### `3. Open the project in VS Code`
 - ### `4. Confirm it loaded`
-- ## `Verify the installation`
 - ### `Browser readiness`
-- ## `macOS Copilot profile settings`
-- ## `Managed Mac browser pilot`
-- ## `First successful workflow`
+- ### `Copilot profile settings`
+- ### `Managed Mac browser pilot`
 - ## `Troubleshooting`
 - ## `Next`
 
@@ -702,19 +723,18 @@
 - [python.org](https://www.python.org/downloads/)
 - [uv](https://docs.astral.sh/uv/)
 - [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
-- [code.visualstudio.com](https://code.visualstudio.com/)
+- [git-scm.com](https://git-scm.com/)
 - [GitHub CLI](https://cli.github.com/)
 - [Installation guide](https://cli.github.com/manual/installation)
-- [git-scm.com](https://git-scm.com/)
-- [Verify the installation](../setup/setup-guide.md#verify-the-installation)
-- [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
+- [code.visualstudio.com](https://code.visualstudio.com/)
+- [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
+- [Quick Start](../setup/setup-guide.md#quick-start)
 - [What Setup Creates](../setup/operating-owlbear.md#what-setup-creates)
-- [Verify the installation](../setup/setup-guide.md#verify-the-installation)
+- [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Browser MCP guide](../serve/browser-mcp/README.md)
 - [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md)
 - [Browser-to-Knowledge vertical test](../tests/test_browser_knowledge_vertical.py)
 - [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
-- [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
 - [Adding local agents](../setup/operating-owlbear.md#adding-local-agents)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
@@ -725,11 +745,13 @@
 ## setup/sharing-guide.md
 - # `Sharing OwlBear with Teammates`
 - ## `Sharing Model`
+- ## `Prerequisites`
 - ## `Set Up for a Teammate`
 - ### `1. Clone the project repository`
-- ### `2. Clone OwlBear as a sibling`
-- ### `3. Bootstrap OwlBear into the project workspace`
-- ### `4. Open the project in VS Code`
+- ### `2. Install and start OwlBear`
+- ### `3. Point OwlBear at the shared settings repository`
+- ### `4. Add the project and connect its chats`
+- ### `5. Optional: set up the agent workspace`
 - ## `Platform Notes`
 - ## `What's Shared vs. Project-Local`
 - ## `Team Conventions`
@@ -740,7 +762,10 @@
 - ## `Troubleshooting`
 
 ### Outbound links
-- [installation verification](../setup/setup-guide.md#verify-the-installation)
+- [Prerequisites](../setup/setup-guide.md#prerequisites)
+- [Quick Start](../setup/setup-guide.md#quick-start)
+- [Quick Start](../setup/setup-guide.md#quick-start)
+- [the setup guide](../setup/setup-guide.md#4-confirm-it-loaded)
 - [Cockpit packaging](../serve/cockpit/README.md#delivery-packaging)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
