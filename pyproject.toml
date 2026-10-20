@@ -43,6 +43,7 @@ markers = [
 target-version = "py314"
 line-length = 120
 src = [
+  "serve/decisions/src",
   "serve/delivery-next/src",
   "serve/knowledge/src",
   "serve/knowledge-mcp/src",
@@ -149,6 +150,7 @@ quote-style = "double"
 
 [tool.coverage.run]
 source_pkgs = [
+  "owlbear_decisions",
   "owlbear_knowledge",
   "owlbear_browser_mcp",
   "owlbear_knowledge_mcp",

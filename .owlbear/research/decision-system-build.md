@@ -32,7 +32,9 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
 ## 3. Where it lives (TD-424, TD-425)
 
 - **Authority:** every lasting decision of OwlBear and of every project is one Markdown file with validated front
-  matter in `owlbear-data`: `<project folder>/decisions/` and `global/decisions/`. Git history is the audit trail.
+  matter in `owlbear-data`: `<project folder>/decisions/` (a Change's: `<project folder>/changes/<slug>/decisions/`)
+  and, for Global, `decisions/` at the repository root, where Global settings already live. Git history is the audit
+  trail.
 - **A running Change's drafts** stay in its database until the Change ends; then they go to `owlbear-data` with the
   finished-Change record (TD-148), whether the Change merged, was abandoned or ended unchanged.
 - **OwlBear's repository** keeps a generated, read-only full view (OwlBear's and the applicable Global decisions, with

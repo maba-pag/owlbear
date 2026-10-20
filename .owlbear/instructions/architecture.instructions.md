@@ -12,8 +12,10 @@ agents/*.agent.md             (agent definitions — pure markdown, no Python)
     use tools from the MCP servers below
 
 serve/delivery-next/           (Delivery engine: Change loop, MCP tools, GitHub publication, pages)
-    import from memory
+    import from memory and decisions
 serve/tools/                   (repository tools: quality, testing, and indexing)
+
+serve/decisions/                (core library: decision files, validator, record migration)
 
 serve/memory-mcp/              (MCP server: persistent agent memory)
     import from
@@ -43,7 +45,7 @@ constant in that file maps each package namespace to its permitted owlbear-names
 
 - When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise.
 - Core libraries do not import applications, MCP servers, or repository tools.
-- Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab, and nothing else.
+- Delivery Next (`serve/delivery-next/`) may import Memory for its Memory tab and Decisions, and nothing else.
 - Each MCP server may import its corresponding core package, but MCP servers must not import other
   MCP servers.
 - Repository tools import no other OwlBear package, and product packages must not import repository tools.
@@ -58,6 +60,7 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | Domain | Scope |
 | --- | --- |
 | delivery | `serve/delivery-next/` (Delivery engine: Change loop, MCP tools, GitHub publication, pages) |
+| decisions | `serve/decisions/` (decision files, validator, and record migration preview) |
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | knowledge-mcp | `serve/knowledge-mcp/` |
 | memory | `serve/memory/` (memory state, scoring, and storage) |

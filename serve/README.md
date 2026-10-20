@@ -12,6 +12,7 @@ owns it. Start with the job, then open the package guide for commands and config
 | Turn an idea into reviewed work | [Delivery engine](delivery-next/) | The machine host, its pages, the `owlbear` command, and the chat server; run it as [Operating OwlBear](../setup/operating-owlbear.md#running-owlbear) describes |
 | Give agents durable institutional memory | [Memory MCP](memory-mcp/README.md) | The VS Code tool boundary for scoped, curated memory |
 | Change memory storage or lifecycle rules | [Memory core](memory/README.md) | File-backed entries, states, scoring, and engine primitives |
+| Record, validate, or migrate decisions | [Decisions core](decisions/README.md) | One file per decision, the validator, and the record's migration preview |
 | Search documents and knowledge graphs | [Knowledge MCP](knowledge-mcp/README.md) | Ingestion, search, sources, graph lookup, and enrichment tools |
 | Extend the knowledge engine | [Knowledge core](knowledge/README.md) | Documents, chunks, vectors, graph data, and query services |
 | Fetch authenticated web content | [Browser MCP](browser-mcp/README.md) | Allowlisted browser actions and Markdown accessibility snapshots |
@@ -46,6 +47,7 @@ and recovery.
 | --- | --- |
 | Delivery | `delivery-next` |
 | Agent memory | `memory`, `memory-mcp` |
+| Decisions | `decisions` |
 | Knowledge | `knowledge`, `knowledge-mcp` |
 | Browser | `browser`, `browser-mcp`, `web-content` |
 | Repository maintenance | `tools` |
