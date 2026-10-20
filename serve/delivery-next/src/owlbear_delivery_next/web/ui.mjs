@@ -295,12 +295,12 @@ if (bar.data) {
   const counted = () => { until = bar.data?.announce ? Date.now() + bar.data.announce.left * 1000 : 0; };
   counted();
   setInterval(async () => {
-    // never under the owner's typing, unless an update is announced: its countdown must stay true (§7)
-    if (bar.busy || (document.activeElement?.closest?.("#machine") && !bar.data?.announce)) return;
-    const was = bar.data?.paused;
-    bar.data = await machine().catch(() => bar.data);
+    if (bar.busy) return;
+    const was = bar.data?.paused, before = Boolean(bar.data?.announce);
+    bar.data = await machine().catch(() => bar.data);  // always read: an announcement must reach every page (§7)
     counted();
-    showBar();
+    // never re-rendered under the owner's typing, unless an announcement starts or runs: its countdown stays true
+    if (!document.activeElement?.closest?.("#machine") || before || bar.data?.announce) showBar();
     if (bar.data?.paused !== was) changed();
   }, 5000);
   setInterval(() => { if (bar.data?.announce) showBar(); }, 1000);

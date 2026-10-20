@@ -15,6 +15,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.machine_host import registry, versions
+from owlbear_delivery_next.machine_host.update import ATTEMPTS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,6 +39,7 @@ class Auto:
         self.machine, self.wall, self.mono = machine, wall, mono
         self.lock = threading.Lock()
         self.last_use = mono()
+        self.uses = 0  # counted, so an automatic update learns of use after it started
         self.deadline: float | None = None
         self.target, self.next_look = "", 0.0
         self.clocks = (wall(), mono())
@@ -45,7 +47,7 @@ class Auto:
     def use(self) -> None:
         """The owner is at it: idle time starts again and an announcement is cancelled (Postpone too)."""
         with self.lock:
-            self.last_use, self.deadline = self.mono(), None
+            self.last_use, self.deadline, self.uses = self.mono(), None, self.uses + 1
 
     def read(self) -> dict[str, Any] | None:
         """The announcement the pages show: the version and the seconds left; None while none runs."""
@@ -54,15 +56,19 @@ class Auto:
                 return None
             return {"version": self.target, "left": max(0, round(self.deadline - self.mono()))}
 
-    def _allowed(self) -> bool:
+    def permitted(self) -> bool:
+        """Whether the machine's settings let it update by itself now (TD-288)."""
         try:
             settings = registry.load().settings
         except registry.RegistryError:
             return False
+        return settings.update_when_idle and (not self.machine.paused or settings.update_while_paused)
+
+    def _allowed(self) -> bool:
         m = self.machine
         if m.stopping.is_set() or m.ending or m.updating or m.handover is not None:
             return False
-        return settings.update_when_idle and (not m.paused or settings.update_while_paused)
+        return self.permitted()
 
     def _looked(self, now: float) -> str:
         if now >= self.next_look:
@@ -72,21 +78,22 @@ class Auto:
             except versions.VersionError, registry.RegistryError:
                 choice = None
             self.target = choice.tag if choice else ""
-        return self.target
+        failed = self.machine.updater.attempts.get(self.target, 0) >= ATTEMPTS  # tried enough: a later version
+        return "" if failed else self.target
 
     def tick(self) -> None:
         """One look: announce when due, run the update when the announcement ends with the machine still idle."""
         wall, now = self.wall(), self.mono()
-        jumped = (wall - self.clocks[0]) - (now - self.clocks[1]) > JUMP
+        jumped = abs((wall - self.clocks[0]) - (now - self.clocks[1])) > JUMP  # a sleep, or the clock set back
         self.clocks = (wall, now)
         busy = self.machine.updater.thread is not None and self.machine.updater.thread.is_alive()
-        if busy or not self._allowed() or not self._looked(now):
+        idle = now - self.last_use >= IDLE_FOR and not busy and self._allowed() and not self.machine.busy()
+        if not (idle and self._looked(now)):  # versions are fetched only once the machine is idle
             with self.lock:
                 self.deadline = None
             return
         with self.lock:
-            idle = now - self.last_use >= IDLE_FOR and not self.machine.busy()
-            if not idle:
+            if now - self.last_use < IDLE_FOR:  # used while it looked
                 self.deadline = None
                 return
             if self.deadline is None or jumped:  # a sleep restarts the announcement: the owner may be back
@@ -96,7 +103,7 @@ class Auto:
             if now < self.deadline:
                 return
             self.deadline = None
-        self.machine.updater.run_now()
+        self.machine.updater.run_now(auto=True)
 
     def loop(self) -> None:
         """Thread: look every ``TICK`` seconds until the machine stops."""

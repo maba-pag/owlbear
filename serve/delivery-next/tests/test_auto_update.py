@@ -36,7 +36,7 @@ def idle(monkeypatch) -> SimpleNamespace:
     machine = Machine(record, paused=False)
     machine.auto = auto_update.Auto(machine, wall=lambda: clock.wall, mono=lambda: clock.mono)
     started: list[bool] = []
-    machine.updater.run_now = lambda: started.append(True) or machine.updater.read()
+    machine.updater.run_now = lambda *, auto=False: started.append(auto) or machine.updater.read()
     return SimpleNamespace(machine=machine, auto=machine.auto, clock=clock, started=started, looks=looks)
 
 
@@ -50,7 +50,7 @@ def settings(**values: bool) -> None:
 def test_after_15_minutes_without_use_the_update_is_announced_for_2_minutes_then_runs(idle):
     idle.clock.step(auto_update.IDLE_FOR - 1)
     idle.auto.tick()
-    assert idle.auto.read() is None
+    assert (idle.auto.read(), idle.looks) == (None, [])  # not idle yet: nothing fetched either
 
     idle.clock.step(1)
     idle.auto.tick()
@@ -61,8 +61,8 @@ def test_after_15_minutes_without_use_the_update_is_announced_for_2_minutes_then
     assert (idle.auto.read(), idle.started) == ({"version": "v0.2", "left": 1}, [])
     idle.clock.step(1)
     idle.auto.tick()
-    assert (idle.auto.read(), idle.started) == (None, [True])
-    assert idle.looks == [1]  # one fetch for the whole of it
+    assert (idle.auto.read(), idle.started) == (None, [True])  # an automatic update
+    assert idle.looks == [1]  # one fetch for the whole of it, and only once idle
 
 
 def test_postpone_or_any_use_cancels_the_announcement_and_starts_the_idle_time_again(idle):
@@ -155,3 +155,39 @@ def test_the_machines_answer_carries_the_announcement(idle):
     listed = client.get("/api/next/projects", headers={"authorization": f"Bearer {TOKEN}"}).json()
 
     assert listed["announce"] == {"version": "v0.2", "left": 120}
+
+
+def test_the_clock_set_back_restarts_the_announcement_too(idle):
+    idle.clock.step(auto_update.IDLE_FOR)
+    idle.auto.tick()
+    idle.clock.step(60)
+    idle.auto.tick()
+    idle.clock.wall -= 600  # the wall clock corrected backwards
+
+    idle.auto.tick()
+
+    assert idle.auto.read() == {"version": "v0.2", "left": 120}
+
+
+def test_a_version_that_failed_its_tries_is_not_announced_again(idle):
+    idle.machine.updater.attempts["v0.2"] = 3
+    idle.clock.step(auto_update.IDLE_FOR)
+
+    idle.auto.tick()
+
+    assert idle.auto.read() is None
+
+
+def test_an_automatic_update_gives_way_to_use_to_its_settings_and_to_new_work_a_manual_one_does_not(idle):
+    """TD-301: the owner's use or his settings end an automatic update; Run updates now waits on (TD-353)."""
+    u, m = idle.machine.updater, idle.machine
+    u.auto, u.uses = True, m.auto.uses
+    assert u._cancelled() == ""  # noqa: SLF001
+    assert u._cancelled(working=True) == "postponed: work started"  # noqa: SLF001
+    m.auto.use()
+    assert u._cancelled() == "postponed: you used OwlBear"  # noqa: SLF001
+    u.uses = m.auto.uses
+    settings(update_when_idle=False)
+    assert u._cancelled() == "postponed: updating by itself is off now"  # noqa: SLF001
+    u.auto = False
+    assert u._cancelled(working=True) == ""  # noqa: SLF001
