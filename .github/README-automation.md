@@ -113,9 +113,9 @@ workflow token a tag on a commit whose workflow files differ from every branch t
 
 [Renovate](renovate.json) is the only updater (TD-382, TD-408): routine updates arrive grouped per ecosystem on
 Friday, majors on Sunday after 72 hours. Ruff, Biome and every pre-commit hook share one weekly **lint toolchain**
-pull request with a three-day minimum age, so the Ruff pin, its hook and the installed Ruff that
-[`check_ruff_toolchain.py`](scripts/check_ruff_toolchain.py) compares move together (TD-409). The schema URL in
-[`biome.json`](../biome.json) follows Biome through the `customManagers:biomeVersions` preset.
+pull request with a three-day minimum age, and their majors share one on Sunday, so the Ruff pin, its hook and the
+installed Ruff that [`check_ruff_toolchain.py`](scripts/check_ruff_toolchain.py) compares move together (TD-409).
+The schema URL in [`biome.json`](../biome.json) follows Biome through the `customManagers:biomeVersions` preset.
 
 GitHub's Dependabot alerts are on and feed Renovate's security pull requests, which open at once, grouped per
 ecosystem. Dependabot opens no pull requests itself: there is no `dependabot.yml` and its security updates stay
@@ -123,7 +123,7 @@ off (TD-408). pre-commit.ci is not installed, since its hook updates cannot be s
 
 ## Reviews
 
-CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, as
+CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413), as
 [`.coderabbit.yaml`](../.coderabbit.yaml) sets, with the [review brief](instructions/code-review.instructions.md)
 as its guideline (TD-411). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
 pull requests, so agents or workflows add the label only to a code or CI pull request whose CI passed; a

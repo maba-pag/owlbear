@@ -771,14 +771,16 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
 
 
 def test_renovate_updates_the_lint_toolchain_in_one_pull_request() -> None:
-    """Ruff's pin and every hook move together, so `check_ruff_toolchain.py` sees one version (TD-409)."""
+    """Ruff's pin and every hook move together, majors in their own Sunday PR, so the Ruff parity holds (TD-409)."""
     renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
     rules = renovate["packageRules"]
     lint = [rule for rule in rules if rule.get("groupName") == "lint toolchain"]
     weekly = [rule.get("groupName") for rule in rules].index("{{datasource}} minor/patch updates")
+    majors = [rule.get("matchUpdateTypes") for rule in rules].index(["major"])
 
     assert "customManagers:biomeVersions" in renovate["extends"]
     assert [rule.get("matchManagers") for rule in lint] == [["pre-commit"], None]
     assert lint[1]["matchPackageNames"] == ["ruff", "@biomejs/biome"]
-    assert all(rules.index(rule) > weekly for rule in lint)
+    assert all("matchUpdateTypes" not in rule for rule in lint)
+    assert all(weekly < rules.index(rule) < majors for rule in lint)
     assert all(rule.get("enabled", True) for rule in rules)
