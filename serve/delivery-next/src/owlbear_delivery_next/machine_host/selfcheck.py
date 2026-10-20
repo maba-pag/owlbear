@@ -15,6 +15,7 @@ from importlib import import_module
 from importlib.resources import files
 from pathlib import Path
 
+IMPORT = r"""(?:\bfrom|\bimport)\s*\(?\s*["']\./([^"'/]+)["']"""  # a page module's import of a sibling module
 MODULES = (
     "machine_host.serve", "machine_host.app", "commands.runner", "commands.mcp_server", "project_host.api",
     "project_host.pages",
@@ -78,9 +79,10 @@ def _pages() -> list[str]:
         names = [("pds", n) for n in pages.PDS] + [(pages.LIT, *n.split("/")) for n in pages.lit_files()]
         pages.lit_version()
         own = pages.page_files()
-        for page, name in own:
-            web.joinpath("pages", page, name).read_bytes()
         named = {tuple(n) for html in listed.values() for n in re.findall(r'"/assets/page/([^/"]+)/([^/"]+)"', html)}
+        for page, name in own:
+            module = web.joinpath("pages", page, name).read_text(encoding="utf-8")
+            named |= {(page, n) for n in re.findall(IMPORT, module)}  # a module's own imports must be there too
         missing = ["/".join(n) for n in [*names, ("ui.mjs",)] if not web.joinpath(*n).is_file()]
         missing += [f"pages/{p}/{n}" for p, n in sorted(named - set(own))]
     except Exception as exc:  # noqa: BLE001 - reported

@@ -10,6 +10,12 @@ from owlbear_delivery_next.project_host import api, pages
 from owlbear_delivery_next.state_store.store import Store
 
 LIT = files("owlbear_delivery_next").joinpath("web", "vendor", "lit-html")
+# A module's static import or re-export, a bare import, or a dynamic import of a literal, in either quote.
+IMPORTS = re.compile(
+    r"""^\s*(?:import|export)\s[^"';]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']"""
+    r"""|\bimport\(\s*["']([^"']+)["']\s*\)""",
+    re.MULTILINE,
+)
 
 
 def test_the_vendored_lit_html_is_exactly_the_recorded_release():
@@ -59,7 +65,7 @@ def test_every_module_a_page_loads_is_served_and_nothing_else_under_its_folder(t
         got = c.get(url)
         assert (got.status_code, got.headers["cache-control"]) == (200, "no-cache"), url
         assert got.headers["content-type"].split(";")[0] == pages.OWN[url.rpartition(".")[2]], url
-        for named in re.findall(r'(?:from|import) "([^"]+)"', got.text):
+        for named in ["".join(m) for m in re.findall(IMPORTS, got.text)]:
             assert named.startswith(("./", "/assets/")), (url, named)
             if named.startswith("./"):
                 todo.append(f"{url.rpartition('/')[0]}/{named[2:]}")
