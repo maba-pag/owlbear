@@ -13,6 +13,7 @@ import contextlib
 import ctypes
 import os
 import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import local_home
@@ -23,11 +24,17 @@ if TYPE_CHECKING:
 
 NEW = "runtime.new"
 RENAME_SWAP = 0x2  # macOS renamex_np: exchange the two names atomically (APFS; TD-262 Mac first)
+RENAME_EXCHANGE, AT_FDCWD = 0x2, -100  # Linux renameat2, where CI runs the same exchange
 
 
 def _swap(first: Path, second: Path) -> None:
     libc = ctypes.CDLL(None, use_errno=True)
-    if libc.renamex_np(os.fsencode(first), os.fsencode(second), RENAME_SWAP) != 0:
+    a, b = os.fsencode(first), os.fsencode(second)
+    if sys.platform == "darwin":
+        done = libc.renamex_np(a, b, RENAME_SWAP)
+    else:
+        done = libc.renameat2(AT_FDCWD, a, AT_FDCWD, b, RENAME_EXCHANGE)
+    if done != 0:
         err = ctypes.get_errno()
         raise OSError(err, os.strerror(err), str(first))
 
