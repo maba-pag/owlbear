@@ -554,7 +554,7 @@ TD-65.
 
 ## C-15 Design pack update
 
-**Rows:** decided TD-76, TD-101, TD-125, TD-177, TD-194, TD-256, TD-325, TD-357, TD-368; autonomous TD-270,
+**Rows:** decided TD-76, TD-101, TD-125, TD-177, TD-194, TD-256, TD-325, TD-357, TD-368, TD-414; autonomous TD-270,
   TD-273, TD-290, TD-381.
 
 - Extract Impeccable once into Delivery's own design skill; do not install it [TD-76, TD-101].
@@ -564,6 +564,8 @@ TD-65.
   [TD-123, TD-125].
 - The updater may change its whole candidate, but only in its own folder and without shell access; read upstream
   skills at the pinned revision [TD-194, TD-273].
+- A change to the detector's or adapter's code is checked with the running code; the owner approves its diff and
+  CI's unit tests must pass [TD-194, TD-414].
 - Affected checks rerun after its edits; changing expected evidence (golden expectations, calibration) asks the
   owner [TD-177].
 - The challenger checks each change is needed by the upgrade and asks the owner when unsure, with every changed file
@@ -588,6 +590,8 @@ TD-65.
 - TD-325, 2026-10-18: "it runs fully end to end, including merge"
 - TD-357, 2026-10-18: "Activation is the merge"
 - TD-368, 2026-10-18: "It merges itself once CI passes, paused or not"
+- TD-414, 2026-10-20: "A: the run checks with the running code; you approve the glue diff; CI's unit tests
+  must pass"
 
 **Replaced:** TD-76 by TD-101; TD-101 by TD-302, TD-357; TD-125 by TD-302, TD-357; TD-177 by TD-194; TD-194 by
   TD-357; TD-273 by TD-357; TD-302 by TD-307.
