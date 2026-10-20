@@ -3,10 +3,12 @@
 Each entry is one GitHub issue in the shared repository (``backlog_issues``); this module is the view over them. A
 finding names the project it was found in, none outside any; an entry names its triaged projects, else its origin. A
 finding that repeats an entry naming the same projects counts it up; otherwise it is a new entry, linked at once to
-every entry with the same finding (TD-345, TD-405, TD-406). Untriaged entries form the inbox. Saving is
-online-only: when GitHub cannot be reached the save fails with GitHub's reason, nothing is kept locally. Reads are
-cached for a few seconds since the page refreshes often; every write reads afresh under the shared repository's lock,
-and reads each issue it changes directly first, so an edit made on GitHub meanwhile is kept.
+every entry with the same finding (TD-345, TD-405, TD-406); links hold on both entries. The only limit on links is
+the length of an issue body: a link that would not fit is refused with the full entries named, before anything is
+written. Untriaged entries form the inbox. Saving is online-only: when GitHub cannot be reached the save fails with
+GitHub's reason, nothing is kept locally. Reads are cached for a few seconds since the page refreshes often; every
+write reads afresh under the shared repository's lock, and reads each issue it changes directly first, so an edit made
+on GitHub meanwhile is kept.
 """
 
 from __future__ import annotations
@@ -32,7 +34,8 @@ if TYPE_CHECKING:
 
 ID = r"^[1-9]\d{0,8}$"  # the issue's number
 EVIDENCE = 50  # references kept per entry, the newest
-LINKS = 50  # connected entries kept per entry, the newest
+LINKS = backlog_issues.LONGEST // 10  # more than an issue body holds: each link takes 10 characters or more
+PROBE = "9" * 9  # the longest id, for the room a new entry's link takes before GitHub numbers it
 READ_SECONDS = 10.0  # how long a listing is reused
 RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later; until then the write's answer counts
 type Source = Literal["owner", "watcher", "assistant", "review", "run"]
@@ -70,7 +73,7 @@ class Entry(BaseModel):
     projects: list[Folder] | None = Field(default=None, max_length=50)  # what it concerns: [] Global, None untriaged
     origin: str = Field(default="", max_length=100)  # the project it was found in, kept as attribution (TD-241)
     notes: str = Field(default="", max_length=4000)  # the owner's context
-    links: list[Annotated[str, Field(pattern=ID)]] = Field(default_factory=list, max_length=50)
+    links: list[Annotated[str, Field(pattern=ID)]] = Field(default_factory=list, max_length=LINKS)
     evidence: list[Ref] = Field(default_factory=list, max_length=EVIDENCE)
     change: str = ""  # the Change it went into: ``{clone id}/{slug}``, or an older entry's bare slug
     launch: str = ""  # the New Change launch that took the entry
@@ -187,8 +190,9 @@ class Backlog:
             listed = [e.id for e in found.values() if key(e.source, e.title) == match]  # read again: the listing lags
             fresh = [e for e in (self._fetch(found, i) for i in listed) if e and key(e.source, e.title) == match]
             same = next((e for e in fresh if repeats(e, self.project, source, title)), None)
-            if same is None:  # TD-405: linked both ways at once, to every match with room for one more link
-                alike = sorted((e for e in fresh if len(e.links) < LINKS), key=lambda e: int(e.id))[-LINKS:]
+            if same is None:  # TD-405: linked both ways at once, to every match
+                alike = sorted(fresh, key=lambda e: int(e.id))
+                self._room([_linked(e, PROBE, now) for e in alike])
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
                 fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project, "links": [e.id for e in alike]}
                 entry = self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now}))
@@ -197,9 +201,11 @@ class Backlog:
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}
             entry = _valid(same.model_dump() | seen | {"evidence": (same.evidence + new)[-EVIDENCE:]})
-            others = [self._fetch(found, i) for i in entry.links]  # a link a failed save left one-sided is completed
-            lacking = [e for e in others if e and entry.id not in e.links and len(e.links) < LINKS]
-            self._save(entry, *(_linked(e, entry.id, now) for e in lacking))
+            read = {e.id: e for e in fresh}  # each issue is read once per add: many matches cost no second read
+            others = [read.get(i) or self._fetch(found, i) for i in entry.links]  # a one-sided link is completed
+            lacking = [_linked(e, entry.id, now) for e in others if e and entry.id not in e.links]
+            self._room(lacking)
+            self._save(entry, *lacking)
             if new:
                 said = "\n".join(f"- {' '.join(r.split())}" for r in new)
                 self._github("save", lambda: self.issues.comment(int(entry.id), f"New evidence:\n\n{said}"))
@@ -257,12 +263,19 @@ class Backlog:
             self._remember(self._github("save", lambda: self.issues.edit(issue["number"], wanted)))
         return entry.model_copy(update={"id": str(issue["number"])})
 
+    def _room(self, entries: list[Entry]) -> None:
+        """Refuse the write when an entry's issue has no room for its new link, naming each full one."""
+        if full := [f"#{e.id}" for e in entries if len(backlog_issues.body(e.model_dump())) > backlog_issues.LONGEST]:
+            said = ", ".join(full)
+            raise BacklogError(422, f"no room for another link in the GitHub issue of {said}: unlink or shorten it")
+
     def _save(self, *entries: Entry) -> None:
-        """Write each entry over its issue, keeping the labels OwlBear does not own."""
-        for entry in entries:
+        """Write each entry over its issue, keeping the labels OwlBear does not own; none when one is too long."""
+        bodies = [self._body(entry.model_dump()) for entry in entries]
+        for entry, text in zip(entries, bodies, strict=True):
             fields = entry.model_dump()
             names = backlog_issues.labels(fields)
-            change = {"title": entry.title, "body": self._body(fields), **backlog_issues.state(entry.status)}
+            change = {"title": entry.title, "body": text, **backlog_issues.state(entry.status)}
             change["labels"] = backlog_issues.kept_labels(self.raw.get(entry.id, {})) + names
             self._github("save", lambda names=names: self.issues.ensure_labels(names))
             self._remember(self._github("save", lambda change=change, n=int(entry.id): self.issues.edit(n, change)))

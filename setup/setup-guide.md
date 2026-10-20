@@ -138,8 +138,8 @@ See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operat
 
 OwlBear's shared agents, skills, instructions and prompts, and its Memory, Knowledge and Browser
 tool servers, can be loaded into a project's VS Code workspace for your own Copilot chats. Delivery
-does not need this. `setup/init.py` writes it into the project; unlike Delivery's setup, the files
-it creates are ordinary project files that Git will show as new.
+does not need this. `setup/init.py` writes it into the project only after you agree, and hides the
+files it creates from Git, so nothing shows as new.
 
 Run setup through the runtime alias `~/.owlbear/runtime`. Setup writes its paths through that alias
 rather than the version folder behind it, so OwlBear's self-updates keep them valid.
@@ -159,10 +159,20 @@ cd ~/work/my-project
 uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
 ```
 
-Interactive setup may ask about differing hook files and user-local Copilot profile settings.
+Setup first lists every path it would create, merge into or replace, and the lines it would add to
+the repository's local exclude file, then asks
+`Write the OwlBear agent workspace into <project>? [y/N]`. Add `--dry-run` to see the list without
+writing anything, or `--yes` to agree without the question; a non-interactive run without `--yes`
+writes nothing and exits with status 1. After you agree, interactive setup may still ask about
+differing hook files and user-local Copilot profile settings.
 
 **Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json` and
-copies the project-local hooks and runtime templates.
+copies the project-local hooks and runtime templates. It lists the paths it created in one
+OwlBear block of the repository's local exclude file (`git rev-parse --git-path info/exclude`), so
+`git status` shows nothing new; it does not edit the project's `.gitignore`. A file Git already
+tracks, such as a committed `.vscode/settings.json`, cannot be hidden: the list marks it
+`tracked: your change will show as modified`. Outside a Git repository setup hides nothing and
+says so.
 The complete inventory is in
 [What Setup Creates](operating-owlbear.md#what-setup-creates).
 

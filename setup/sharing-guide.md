@@ -73,7 +73,8 @@ uv run --project ~/.owlbear/runtime python ~/.owlbear/runtime/setup/init.py
 code .
 ```
 
-**Expected result:** VS Code opens `~/Dev/my-project` with the shared OwlBear customization roots
+**Expected result:** setup lists what it would write and asks first; after `y`, VS Code opens
+`~/Dev/my-project` with the shared OwlBear customization roots
 and the four seeded MCP servers; check them as
 [the setup guide](setup-guide.md#4-confirm-it-loaded) describes.
 
