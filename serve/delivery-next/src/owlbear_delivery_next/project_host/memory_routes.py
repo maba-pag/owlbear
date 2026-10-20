@@ -61,6 +61,14 @@ class EditBody(Shown):
     categories: list[MemoryCategory] | None = Field(default=None, min_length=1)
 
 
+class PurgeBody(BaseModel):
+    """Remove the files of entries deleted at least this many days ago; Git history keeps them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_age_days: int = Field(default=30, ge=0, le=3650)
+
+
 def _shown(entry: MemoryEntry) -> dict[str, Any]:
     return entry.model_dump(mode="json", exclude={"assessment_receipts"})
 
@@ -140,6 +148,24 @@ def _globalize(store: Store, entry_id: str, shown: str) -> dict[str, Any]:
     return {"entry": _shown(entry), "notice": notice}
 
 
+def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
+    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal (the old Cockpit's purge)."""
+    folder = folder_of(store, where)
+    if not folder.is_dir():
+        return {"purged": 0, "skipped": 0, "failed": 0, "notice": ""}
+    shared, until = store.shared, time.monotonic() + data_repo.SAVE_SECONDS
+    label = "global" if where == "global" else store.name
+    try:
+        with shared.locked(), writer_lock(folder):
+            before = _files(folder)
+            done = MemoryEngine(folder).purge(days)
+            gone = sorted(p for p in before if not p.exists())
+            notice = shared.publish(gone, f"memory {label}: purge {len(gone)} deleted", until) if gone else ""
+    except tuple(e for e, _, _ in REFUSED) as exc:
+        raise _refused(exc) from exc
+    return {"purged": done.purged, "skipped": done.skipped, "failed": done.failed, "notice": notice}
+
+
 def router(store: Store) -> APIRouter:
     """The memory routes; the caller adds the token check."""
     routes = APIRouter()
@@ -181,5 +207,9 @@ def router(store: Store) -> APIRouter:
     @routes.post("/memory/{entry_id}/delete")
     def delete(entry_id: str, body: Shown, where: Where = "project") -> dict[str, Any]:
         return _act(store, entry_id, "delete", lambda e: e.delete(entry_id, body.updated_at), where)
+
+    @routes.post("/memory/purge")
+    def purge(body: PurgeBody, where: Where = "project") -> dict[str, Any]:
+        return _purge(store, body.min_age_days, where)
 
     return routes

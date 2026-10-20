@@ -188,6 +188,50 @@ async function globalize(m) {
   if (sure) act(m, "make-global");
 }
 
+const PURGE_DAYS = 30;  // as the old Cockpit's purge: an entry deleted this long ago is removed
+const many = (n) => `${n} deleted ${n === 1 ? "entry" : "entries"}`;
+
+// The deleted entries old enough to remove, grouped by the place they are kept in.
+function purgeable(deleted) {
+  const cutoff = Date.now() - PURGE_DAYS * 86_400_000, by = new Map();
+  for (const m of deleted.filter((d) => Date.parse(d.updated_at) <= cutoff)) {
+    by.set(m.place.key, [...(by.get(m.place.key) ?? []), m]);
+  }
+  return [...by.values()];
+}
+
+async function purge(old) {
+  const place = old[0].place;
+  const sure = await ask({
+    title: `Remove ${many(old.length)} from ${place.label}?`, yes: "Remove them", no: "Keep them",
+    now: `The files of entries deleted ${PURGE_DAYS} days ago or earlier leave the folder; later ones stay.`,
+    after: "The shared repository's Git history keeps them; this page cannot bring them back.",
+    instead: "They stay listed as deleted.",
+  });
+  if (!sure) return;
+  state.pending = `${place.key}:purge`;
+  show();
+  try {
+    const r = await call(`/memory/purge${place.where === "global" ? "?where=global" : ""}`,
+      { body: { min_age_days: PURGE_DAYS }, timeout: 60000, of: place.of });
+    state.error = "";
+    state.status = `Removed ${many(r.purged)} from ${place.label}.${r.notice ? ` ${r.notice}` : ""}`;
+    state.pending = null;
+    await refresh();
+  } catch (e) {
+    state.pending = null;
+    notify(e.message);
+  }
+}
+
+function purges(deleted) {
+  const groups = purgeable(deleted);
+  return groups.length ? html`<div class="row">${groups.map((old) => button(
+    `Remove ${many(old.length)} older than ${PURGE_DAYS} days from ${old[0].place.label}`, () => purge(old),
+    { variant: "secondary", icon: "delete", aria: DIALOG, busy: state.pending === `${old[0].place.key}:purge` }))}
+    </div>` : nothing;
+}
+
 function edit(m) {
   state.editing = { id: m.key, draft: { title: m.title, content: m.content, categories: [...m.categories] } };
   show();
@@ -278,7 +322,7 @@ function entries(shown) {
     if (!mine.length) return nothing;
     return html`<section class=${states.includes("deleted") ? "quiet" : ""}>
       <div><p-heading size="lg"><h2>${title} (${mine.length})</h2></p-heading>${hint ? html`<p-text>${hint}</p-text>`
-        : nothing}</div>
+        : nothing}${states.includes("deleted") ? purges(mine) : nothing}</div>
       <ul class="entries">${repeat(mine, (m) => m.key, card)}</ul></section>`;
   });
   const empty = state.loaded.entries.length ? "No memory matches these filters."

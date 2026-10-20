@@ -116,6 +116,25 @@ def test_the_owner_approves_edits_and_deletes_and_each_action_is_committed(share
     assert log == [f"memory {store.name}: edit Run ruff before tests", f"memory {store.name}: approve Run ruff first"]
 
 
+def test_purge_removes_only_old_deleted_entries_and_publishes_their_removal(shared):
+    root, remote, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    gone, kept = seed(folder, "Old lesson", curated=True), seed(folder, "Still used", curated=True)
+    c = client(store)
+    approved = c.post(f"/api/next/memory/{gone.id}/approve", json={"updated_at": gone.updated_at}).json()["entry"]
+    c.post(f"/api/next/memory/{gone.id}/delete", json={"updated_at": approved["updated_at"]})
+
+    recent = c.post("/api/next/memory/purge", json={}).json()
+    purged = c.post("/api/next/memory/purge", json={"min_age_days": 0}).json()
+
+    assert (recent["purged"], recent["skipped"], recent["notice"]) == (0, 1, "")
+    assert (purged["purged"], purged["skipped"], purged["failed"]) == (1, 0, 0)
+    assert [p.stem for p in folder.glob("*.md")] == [kept.id]
+    assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: purge 1 deleted"
+    assert c.post("/api/next/memory/purge", json={"min_age_days": -1}).status_code == 422
+
+
 def test_refused_memory_actions_say_why(shared):
     root, _, repo = shared
     store = Store.open(repo)
@@ -319,6 +338,32 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
         page.get_by_role("button", name="Save").click()
         expect(page.locator("#status")).to_have_text('Saved "Name the release after its tag".')
     assert {e.id: e.title for e in MemoryEngine(folder).get_entries()}[above.id] == "Name the release after its tag"
+
+
+@pytest.mark.browser
+def test_the_deleted_section_removes_entries_deleted_long_ago(shared):
+    """TD-416: the old Cockpit's purge, on the Memory page; only entries deleted 30 days ago or earlier go."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    engine = MemoryEngine(folder)
+    for title in ("Old lesson", "Recent lesson"):
+        entry = seed(folder, title, curated=True)
+        approved = engine.approve(entry.id, entry.updated_at)
+        engine.delete(entry.id, approved.updated_at)
+    old = next(p for p in folder.glob("*.md") if "Old lesson" in p.read_text())
+    stamp = next(e.updated_at for e in MemoryEngine(folder).get_entries() if e.title == "Old lesson")
+    old.write_text(old.read_text().replace(stamp, "2020-01-01T00:00:00+00:00"))
+    with memory_page(store) as page:
+        page.get_by_label("State").select_option("any")
+        deleted = page.locator("section", has_text="Deleted (history kept)")
+        deleted.get_by_role("button", name=f"Remove 1 deleted entry older than 30 days from {store.name}").click()
+        page.locator("dialog").get_by_role("button", name="Remove them").click()
+        expect(page.locator("#status")).to_contain_text(f"Removed 1 deleted entry from {store.name}.")
+        expect(deleted.locator(".entry")).to_have_count(1)
+    assert [e.title for e in MemoryEngine(folder).get_entries()] == ["Recent lesson"]
 
 
 @pytest.mark.browser
