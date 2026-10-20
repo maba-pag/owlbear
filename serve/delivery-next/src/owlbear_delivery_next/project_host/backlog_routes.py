@@ -16,7 +16,17 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.runtimes.step_input import DETAIL, _quote
-from owlbear_delivery_next.state_store.backlog import ID, Backlog, BacklogError, Entry, Folder, Kind, Status, ordered
+from owlbear_delivery_next.state_store.backlog import (
+    ID,
+    LINKS,
+    Backlog,
+    BacklogError,
+    Entry,
+    Folder,
+    Kind,
+    Status,
+    ordered,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -51,7 +61,7 @@ class PatchBody(Body):
     status: Status | None = None
     projects: list[Folder] | None = Field(default=None, max_length=50)  # [] is Global (TD-241)
     notes: str | None = Field(default=None, max_length=4000)
-    links: list[Annotated[str, Field(pattern=ID)]] | None = Field(default=None, max_length=50)
+    links: list[Annotated[str, Field(pattern=ID)]] | None = Field(default=None, max_length=LINKS)
     change: str | None = Field(default=None, max_length=81)  # a slug of this clone, or ``{this clone's id}/{slug}``
 
 
