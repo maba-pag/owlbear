@@ -14,6 +14,7 @@ import contextlib
 import hmac
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -115,6 +116,17 @@ class Standby:
             self.proc.wait(10)
         if self.proc.poll() is None:
             self.proc.kill()
+        self.file.unlink(missing_ok=True)
+
+    def kill(self) -> None:
+        """End the process whatever it does now, a host that took over included; its steps run on (TD-282)."""
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(self.proc.pid, signal.SIGTERM)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            self.proc.wait(30)
+        if self.proc.poll() is None:
+            self.proc.kill()
+            self.proc.wait(10)
         self.file.unlink(missing_ok=True)
 
 

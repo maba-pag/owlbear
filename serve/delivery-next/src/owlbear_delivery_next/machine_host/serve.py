@@ -73,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     if "--standby" in args:  # an update's new version: it takes over once the old host says so (§5.2)
         version = args[args.index("--standby") + 1] if len(args) > args.index("--standby") + 1 else ""
         return serve(handing=True) if handover.standby(version) else 0
+    if "--takeover" in args:  # an update's forward restart: the handover file still names the old address (§5.5)
+        return serve(handing=True)
     return serve(run="--run" in args)
 
 
@@ -175,10 +177,12 @@ def _handed(machine: Machine, standby: handover.Standby, given: handover.Handove
         machine.say(f"handed over to {given.version}")
         return
     machine.say(f"{given.version} did not take over within {handover.HEALTH:.0f} s; starting it again from the alias")
+    standby.kill()  # a candidate that holds the lock but serves nothing must not keep it
+    handover.write(given)  # it may have read the file: the forward restart takes over the same address and state
     python = local_home.root() / local_home.RUNTIME / ".venv" / "bin" / "python"
     with (local_home.root() / "host.log").open("ab") as out:
         subprocess.Popen(  # noqa: S603 - the alias's interpreter and a fixed module
-            [str(python), "-m", "owlbear_delivery_next", "machine", *([] if given.paused else ["--run"])],
+            [str(python), "-m", "owlbear_delivery_next", "machine", "--takeover"],
             cwd=local_home.root(), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
             start_new_session=True,
         )  # fmt: skip

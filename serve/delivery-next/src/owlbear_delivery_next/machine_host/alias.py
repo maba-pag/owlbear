@@ -9,6 +9,7 @@ opens, so the machine never moves backwards.
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import os
 import subprocess
@@ -32,7 +33,11 @@ def _swap(first: Path, second: Path) -> None:
 
 
 def activate(folder: Path, tag: str) -> None:
-    """Make *folder*, the installed version *tag*, the active one: the rename of the alias, then the mark."""
+    """Make *folder*, the installed version *tag*, the active one: the rename of the alias, then the mark.
+
+    Raises only before the rename; what follows it (putting the legacy folder away, the mark) every start completes,
+    so a failure there never sends the update back to the older version.
+    """
     home = local_home.root()
     runtime, new = home / local_home.RUNTIME, home / NEW
     new.unlink(missing_ok=True)
@@ -41,8 +46,9 @@ def activate(folder: Path, tag: str) -> None:
         new.replace(runtime)  # a link renamed over the alias
     else:
         _swap(new, runtime)  # the first update: the legacy folder now has the name runtime.new
-    complete()
-    _marked(tag)
+    with contextlib.suppress(OSError, registry.RegistryError):
+        complete()
+        _marked(tag)
 
 
 def complete() -> None:

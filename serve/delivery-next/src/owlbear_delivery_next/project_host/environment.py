@@ -36,7 +36,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         return loop.apply(c, check.failed("; ".join(errors)), now)
     log = h.store.root / "changes" / c.slug / "env.log"
     with h.launching:  # a project's stop or a folder rename waits; once paused or stopping, nothing starts
-        if h.paused():
+        if h.paused() or h.updating():  # an update's fence holds it too
             return c
         c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
         h.store.write(lock, c)

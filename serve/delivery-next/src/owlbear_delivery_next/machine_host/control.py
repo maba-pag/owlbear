@@ -119,9 +119,13 @@ def _api(path: str, method: str = "GET") -> dict[str, Any] | None:
 
 
 def update(say: Say, wait: float = 1800.0) -> int:
-    """Run updates now (TD-352, TD-353) and follow the update until it ends or the new version took over."""
+    """Run updates now (TD-352, TD-353) and follow the update until it ends or the new version took over.
+
+    It waits on while the update waits for running steps; another process answering at the address is the new one.
+    """
+    before = serve.running()
     state = _api("update", "POST")
-    if state is None:
+    if state is None or before is None:
         say("OwlBear is not running; `owlbear start` starts it")
         return 1
     seen, deadline = "", time.monotonic() + wait
@@ -130,14 +134,14 @@ def update(say: Say, wait: float = 1800.0) -> int:
         if line != seen:
             say(line)
             seen = line
-        if state["phase"] in {"current", "waiting", "failed", "refused"}:
+        if state["phase"] in {"current", "failed", "refused"}:
             return 0 if state["phase"] == "current" else 1
         time.sleep(1)
-        listed = projects()  # once the new version took over, it answers at the same address
-        if listed is not None and state.get("version") and listed.get("updated") == state["version"]:
+        rec = serve.running()
+        if rec is not None and rec.pid not in {before.pid, 0} and (listed := projects()) and listed.get("updated"):
             say(f"OwlBear now runs {listed['updated']}")
             return 0
-        if (now := _api("update")) is not None:
+        if rec is not None and rec.pid == before.pid and (now := _api("update")) is not None:
             state = now
     say("the update still runs; see `owlbear logs`")
     return 1

@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import alias, app, control, handover, registry, serve, update, versions
-from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host.host import HostRecord
 
@@ -185,16 +185,54 @@ def test_an_update_with_nothing_running_activates_the_version_and_hands_over(upd
     assert m.updating == update.FENCED
 
 
-def test_an_update_waits_for_running_work_and_lifts_its_fence(updating):
-    updating.left = ["p: c1: a running step (process 9)"]
+def test_an_update_waits_for_running_work_then_goes_on_and_lifts_its_fence_for_work_that_slipped_in(
+    updating, monkeypatch
+):
+    """TD-353: Run updates now waits for running steps; work found under the fence lifts it and it waits again."""
     m = updating.machine
+    busy = [["p: c1: a running step (process 9)"], [], []]
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(m, "busy", lambda: busy.pop(0))
+    monkeypatch.setattr(update, "RECHECK", 0.0)
+    fences = [["p: c2: a check environment"], []]
+    monkeypatch.setattr(m, "fence", lambda text: (setattr(m, "updating", text), fences.pop(0))[1])
+    said = m.updater._set  # noqa: SLF001
+    monkeypatch.setattr(m.updater, "_set", lambda phase, detail="", version=None: (
+        seen.append((phase, detail)), said(phase, detail, version)))  # fmt: skip
+
+    m.updater._update()  # noqa: SLF001
+
+    assert ("waiting", "waits for p: c1: a running step (process 9)") in seen
+    assert [p for p, _ in seen].count("standby") == 2  # the first standby stopped when the fence found work
+    assert FakeStandby.made[0].stopped
+    assert not FakeStandby.made[1].stopped
+    assert updating.activated == [(updating.folder, "v0.2")]
+    assert m.updater.read()["phase"] == "handing over"
+
+
+def test_a_stop_when_idle_asked_for_while_an_update_waits_cancels_it(updating, monkeypatch):
+    m = updating.machine
+
+    def busy() -> list[str]:
+        m.ending = True
+        return ["p: c1: a running step (process 9)"]
+
+    monkeypatch.setattr(m, "busy", busy)
+    monkeypatch.setattr(update, "RECHECK", 0.0)
 
     m.updater._update()  # noqa: SLF001
 
     state = m.updater.read()
-    assert (state["phase"], state["detail"]) == ("waiting", "waits for p: c1: a running step (process 9)")
+    assert (state["phase"], state["detail"]) == ("refused", "OwlBear stops once the running steps end")
     assert (m.updating, m.handover, updating.activated) == ("", None, [])
-    assert FakeStandby.made[0].stopped
+
+
+def test_a_project_is_neither_registered_adopted_nor_removed_while_the_fence_holds(updating, tmp_path):
+    m = updating.machine
+    m.updating = update.FENCED
+
+    with pytest.raises(MachineError, match="OwlBear is updating"):
+        m.register(tmp_path)
 
 
 def test_a_standby_that_never_answers_keeps_the_running_version_and_counts_an_attempt(updating):
@@ -303,3 +341,21 @@ def test_run_updates_now_hands_a_running_host_over_to_the_new_version_end_to_end
         assert lines[-1] == "OwlBear now runs v0.2"
     finally:
         control.stop(lambda _s: None)
+
+
+def test_a_standby_that_does_not_take_over_is_ended_and_the_version_restarts_forward_with_the_handover(
+    updating, monkeypatch
+):
+    """§5.5, TD-305: the forward restart takes over the old address and state; never the older version."""
+    started: list[list[str]] = []
+    monkeypatch.setattr(serve.subprocess, "Popen", lambda argv, **_kw: started.append(argv))
+    standby = SimpleNamespace(take_over=lambda: False, killed=False)
+    standby.kill = lambda: setattr(standby, "killed", True)
+    given = handover.Handover(port=4321, token=TOKEN, paused=False, ending=True, version="v0.2", loaded=[])
+
+    serve._handed(updating.machine, standby, given)  # noqa: SLF001
+
+    assert standby.killed
+    python = local_home.root() / local_home.RUNTIME / ".venv" / "bin" / "python"
+    assert started == [[str(python), "-m", "owlbear_delivery_next", "machine", "--takeover"]]
+    assert handover.taken() == given

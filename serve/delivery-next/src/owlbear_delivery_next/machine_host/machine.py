@@ -131,10 +131,10 @@ class Machine:
         self.slots.open()  # a project that failed to load counts its live steps once it loads
 
     def retry(self) -> None:
-        """Load again each project that failed or was replaced."""
+        """Load again each project that failed or was replaced; not while an update's fence holds."""
         with self.lock:
             for p in [p for p in self.projects.values() if p.state in {"failed", "replaced"}]:
-                if not self.stopping.is_set():
+                if not (self.stopping.is_set() or self.updating):
                     self._load(p.entry)
 
     def retry_loop(self) -> None:
@@ -154,6 +154,7 @@ class Machine:
     def register(self, path: Path) -> Project:
         """Register the clone at *path* and load it."""
         with self.lock:
+            self.fenced()
             try:
                 entry = registry.register(path)
             except registry.RegistryError as exc:
@@ -163,6 +164,7 @@ class Machine:
     def remove(self, pid: str) -> None:
         """Stop and forget a project; refused, naming them, while its steps or admitted work still run."""
         with self.lock:
+            self.fenced()
             p = self.get(pid)
             if p.state == "failed" and (live := recorded(Path(p.entry.path))):  # no host confirms them gone (TD-336)
                 msg = f"{p.name} has steps of {', '.join(live)} not confirmed ended; it must load again to check them"
@@ -177,6 +179,7 @@ class Machine:
     def adopt(self, pid: str) -> Project:
         """Let the clone now at a replaced project's path take its place."""
         with self.lock:
+            self.fenced()
             p = self.get(pid)
             if p.state != "replaced":
                 raise MachineError(409, f"{p.name} is {p.state}, not replaced")
@@ -231,8 +234,21 @@ class Machine:
                 if p.host:
                     with p.host.launching:  # a launch admitted before the fence is counted from now on
                         pass
+        return self.busy()
+
+    def busy(self) -> list[str]:
+        """What an update waits for: each project's running steps, environments and admitted work."""
         projects = list(self.projects.values())
         return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
+
+    def fenced(self) -> None:
+        """Refuse a project change while an update's fence holds.
+
+        Raises:
+            MachineError: The fence holds.
+        """
+        if self.updating:
+            raise MachineError(503, self.updating)
 
     def unfence(self) -> None:
         """Lift the fence: the update waits, and work starts again."""

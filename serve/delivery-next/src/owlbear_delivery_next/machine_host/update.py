@@ -17,11 +17,13 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import alias, handover, registry, versions
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from owlbear_delivery_next.machine_host.machine import Machine
 
 ATTEMPTS = 3  # tries per version before it waits for a newer one (§5.1)
+RECHECK = 5.0  # seconds between looks whether the steps an update waits for ended
 FENCED = "OwlBear is updating; try again in a minute"
-FINAL = frozenset({"idle", "current", "waiting", "failed"})
 
 
 class Updater:
@@ -47,21 +49,28 @@ class Updater:
         self.machine.say(f"update: {phase}" + (f" {version}" if version else "") + (f": {detail}" if detail else ""))
 
     def run_now(self) -> dict[str, Any]:
-        """Run updates now (TD-352, TD-353): start an update unless one runs or OwlBear stops when idle."""
+        """Run updates now (TD-352, TD-353): start an update unless one runs or OwlBear stops."""
         with self.lock:
             if self.thread is not None and self.thread.is_alive():
                 return dict(self.state)
-            if self.machine.ending:
-                return dict(self.state) | {"phase": "refused", "detail": "OwlBear stops once the running steps end"}
+            if why := self._cancelled():
+                return dict(self.state) | {"phase": "refused", "detail": why}
             self.thread = threading.Thread(target=self._run, name="update", daemon=True)
             self.thread.start()
         return self.read()
+
+    def _cancelled(self) -> str:
+        """Why the update may not go on: a stop, or a stop when idle the owner asked for (a stop wins, §5)."""
+        if self.machine.stopping.is_set():
+            return "OwlBear is stopping"
+        return "OwlBear stops once the running steps end" if self.machine.ending else ""
 
     def _run(self) -> None:
         try:
             self._update()
         except Exception as exc:  # noqa: BLE001 - the page learns how it ended; the running version stays
-            self.machine.unfence()
+            if self.machine.handover is None:  # after the rename nothing goes back to the older version
+                self.machine.unfence()
             self._set("failed", f"{type(exc).__name__}: {exc}"[:600])
 
     def _update(self) -> None:
@@ -85,25 +94,40 @@ class Updater:
             self.attempts[tag] = self.attempts.get(tag, 0) + 1
             self._set("failed", str(exc), tag)
             return
+        while not (why := self._cancelled()):
+            if left := self.machine.busy():  # the request stays: it goes on once they end (TD-353)
+                self._set("waiting", f"waits for {'; '.join(left[:5])}", tag)
+                self.machine.stopping.wait(RECHECK)
+                continue
+            try:
+                if self._switch(folder, tag):
+                    return
+            except versions.VersionError as exc:
+                self._set("failed", str(exc), tag)
+                return
+        self._set("refused", why, tag)
+
+    def _switch(self, folder: Path, tag: str) -> bool:
+        """A standby, the fence, a last look that nothing runs, the rename and the handover; False to wait again.
+
+        Raises:
+            versions.VersionError: The standby never answered; the running version stays.
+        """
         self._set("standby", "starting it beside the running version", tag)
         standby = handover.Standby(folder / ".venv" / "bin" / "python", folder, tag, local_home.root() / "host.log")
         if standby.healthy() is None:
             standby.stop()
             self.attempts[tag] = self.attempts.get(tag, 0) + 1
-            self._set("failed", f"{tag} did not answer within {handover.HEALTH:.0f} s; the running version stays", tag)
-            return
-        self._switch(standby, folder, tag)
-
-    def _switch(self, standby: handover.Standby, folder: Any, tag: str) -> None:  # noqa: ANN401 - a Path
-        """Fence, check that nothing runs, rename the alias and hand over; or wait with what runs."""
-        if left := self.machine.fence(FENCED):
+            msg = f"{tag} did not answer within {handover.HEALTH:.0f} s; the running version stays"
+            raise versions.VersionError(msg)
+        left = self.machine.fence(FENCED)
+        if left or self._cancelled():
             standby.stop()
             self.machine.unfence()
-            self._set("waiting", f"waits for {'; '.join(left[:5])}", tag)
-            return
+            return False
         self._set("activating", "switching the runtime to it", tag)
         try:
-            alias.activate(folder, tag)
+            alias.activate(folder, tag)  # the one activation point: raises only before the rename
         except Exception:
             standby.stop()
             self.machine.unfence()
@@ -116,3 +140,4 @@ class Updater:
         ))  # fmt: skip
         self._set("handing over", f"OwlBear now hands over to {tag}", tag)
         self.machine.on_stop()
+        return True
