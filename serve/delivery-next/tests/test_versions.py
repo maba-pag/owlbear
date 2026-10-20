@@ -4,6 +4,7 @@ Git runs on disposable local repositories; the environment step is replaced, the
 """
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,9 @@ import pytest
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import registry, selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
+from owlbear_delivery_next.project_host import pages
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT
+from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.database import STORE_FORMAT
 
 
@@ -195,7 +199,7 @@ def test_the_selfcheck_refuses_a_store_or_settings_newer_than_it_reads(tmp_path)
     found = selfcheck.problems()
 
     assert f"{clone}: its store has format 99, newer than this version's {STORE_FORMAT}" in found
-    assert any("its settings have format 99" in line for line in found)
+    assert any("have format 99, newer" in line for line in found)
 
 
 def test_the_selfcheck_runs_as_its_own_process_and_says_it_passed():
@@ -203,3 +207,60 @@ def test_the_selfcheck_runs_as_its_own_process_and_says_it_passed():
         [sys.executable, "-m", "owlbear_delivery_next", "selfcheck"], capture_output=True, text=True, check=False
     )
     assert (done.returncode, done.stdout) == (0, "selfcheck passed\n")
+
+
+def test_the_selfcheck_creates_nothing_on_a_machine_without_owlbear():
+    home = local_home.root()
+    shutil.rmtree(home)
+
+    assert selfcheck.problems() == []
+    assert not home.exists()
+
+
+def test_the_selfcheck_refuses_a_missing_page_asset(monkeypatch):
+    monkeypatch.setattr(pages, "lit_files", lambda: {"lit-html.js": "x", "gone.js": "y"})
+
+    assert selfcheck.problems() == ["the pages' assets are missing: vendor/lit-html/gone.js"]
+
+
+def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp_path):
+    clone = registered(tmp_path)
+    folder = project_home.clone_dir(clone)
+    folder.mkdir(exist_ok=True)
+    (folder / "config.json").write_text(json.dumps({"format": 99}))
+
+    found = selfcheck.problems()
+
+    said = f"its settings in {folder / 'config.json'} have format 99, newer than this version's {CONFIG_FORMAT}"
+    assert found == [f"{clone}: {said}"]
+
+
+@pytest.mark.usefixtures("origin")
+def test_a_runtime_whose_commit_cannot_be_read_takes_nothing():
+    (local_home.root() / local_home.RUNTIME).mkdir()
+
+    with pytest.raises(versions.VersionError, match="rev-parse"):
+        versions.target()
+
+
+def test_a_tag_of_a_tag_is_peeled_to_its_commit(origin):
+    git(origin, "tag", "-a", "v0.3", "v0.2", "-m", "v0.3 names v0.2's tag")
+
+    tags = versions.fetch(versions.repo())
+
+    assert tags["v0.3"] == git(origin, "rev-parse", "v0.2^{commit}")
+
+
+def test_an_install_at_another_commit_is_made_again(origin, installing):
+    old, new = git(origin, "rev-parse", "v0.1^{commit}"), git(origin, "rev-parse", "v0.2^{commit}")
+    folder = versions.install(Choice("v0.2", old))
+
+    assert versions.install(Choice("v0.2", new)) == folder
+    assert git(folder, "rev-parse", "HEAD") == new
+    assert len(installing.synced) == 2
+
+
+def test_a_format_3_machine_json_reads_with_no_version_ever_active():
+    (local_home.root() / registry.MACHINE).write_text(json.dumps({"format": 3, "projects": []}))
+
+    assert registry.load().active == ""

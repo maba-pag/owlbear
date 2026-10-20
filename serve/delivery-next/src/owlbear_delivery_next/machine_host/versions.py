@@ -95,16 +95,17 @@ def choose(
 
 def _git(*args: str, cwd: Path | None = None, timeout: float = FETCH) -> str:
     env = os.environ | {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
+    verb = args[2] if args[0] == "-C" else args[0]
     try:
         done = subprocess.run(  # noqa: S603 - a fixed git argument vector
             [shutil.which("git") or "git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True,
             timeout=timeout,
         )  # fmt: skip
     except subprocess.CalledProcessError as exc:
-        msg = f"git {args[0]} failed: {(exc.stderr or exc.stdout).strip()[:400]}"
+        msg = f"git {verb} failed: {(exc.stderr or exc.stdout).strip()[:400]}"
         raise VersionError(msg) from exc
     except (OSError, subprocess.TimeoutExpired) as exc:
-        msg = f"git {args[0]} failed: {exc}"
+        msg = f"git {verb} failed: {exc}"
         raise VersionError(msg) from exc
     return done.stdout.strip()
 
@@ -120,13 +121,15 @@ def repo() -> Path:
 
 
 def fetch(path: Path) -> dict[str, str]:
-    """Fetch ``main`` and every tag; each annotated tag's name and the commit it names."""
+    """Fetch ``main`` and every tag; each annotated version tag's name and the commit it peels to."""
     _git("-C", str(path), "fetch", "--quiet", "--force", "--tags", "origin", "+refs/heads/main:refs/heads/main")
-    listed = _git(
-        "-C", str(path), "for-each-ref", "refs/tags", "--format=%(refname:short) %(objecttype) %(*objectname)"
-    )
-    pairs = (line.split() for line in listed.splitlines())
-    return {p[0]: p[2] for p in pairs if len(p) == 3 and p[1] == "tag"}  # noqa: PLR2004 - name, type, commit
+    listed = _git("-C", str(path), "for-each-ref", "refs/tags", "--format=%(refname:short) %(objecttype)")
+    named = [p[0] for p in (line.split() for line in listed.splitlines()) if p[1:] == ["tag"] and number(p[0])]
+    found = {}
+    for tag in named:  # peeled through every tag level; one naming no commit is no version
+        with contextlib.suppress(VersionError):
+            found[tag] = _git("-C", str(path), "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}")
+    return found
 
 
 def descends(path: Path) -> Descends:
@@ -143,14 +146,18 @@ def descends(path: Path) -> Descends:
 
 
 def active() -> tuple[str, str]:
-    """The active version's tag (empty for a runtime that is no installed version) and commit."""
+    """The active version's tag (empty for a runtime that is no installed version) and commit; none without one.
+
+    Raises:
+        VersionError: A runtime is there but its commit cannot be read: nothing may be taken then.
+    """
     runtime = local_home.root() / local_home.RUNTIME
+    if not runtime.exists():
+        return "", ""
     target = runtime.resolve()
     folder = local_home.root() / local_home.VERSIONS
     tag = target.name if runtime.is_symlink() and target.parent == folder.resolve() else ""
-    with contextlib.suppress(VersionError):
-        return tag, _git("-C", str(runtime), "rev-parse", "HEAD")
-    return tag, ""
+    return tag, _git("-C", str(runtime), "rev-parse", "HEAD")
 
 
 def mark(tag: str) -> Number | None:
@@ -177,12 +184,12 @@ def install(choice: Choice) -> Path:
     """
     home = local_home.root()
     folder = home / local_home.VERSIONS / choice.tag
-    if (folder / ".venv").is_dir() and selfcheck(folder) == "":
+    if _installed(folder, choice.commit) and selfcheck(folder) == "":
         return folder  # installed and checked before
+    remove(folder)  # a partial or other install first, so it never holds the disk an install needs
     if shutil.disk_usage(home).free < FREE:
         msg = f"an update needs {FREE // 1024**3} GB free on {home}; it waits until there is"
         raise VersionError(msg)
-    remove(folder)
     folder.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         _build(choice, folder)
@@ -190,6 +197,18 @@ def install(choice: Choice) -> Path:
         remove(folder)
         raise
     return folder
+
+
+def _installed(folder: Path, commit: str) -> bool:
+    """Whether *folder* is a worktree of ``repo.git`` at *commit* with its environment."""
+    if not (folder / ".venv").is_dir():
+        return False
+    try:
+        listed = _git("-C", str(local_home.root() / REPO), "worktree", "list", "--porcelain")
+        head = _git("-C", str(folder), "rev-parse", "HEAD")
+    except VersionError:
+        return False
+    return head == commit and f"worktree {folder.resolve()}" in listed.splitlines()
 
 
 def _build(choice: Choice, folder: Path) -> None:
