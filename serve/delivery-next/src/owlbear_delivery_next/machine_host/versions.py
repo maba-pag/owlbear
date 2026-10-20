@@ -225,9 +225,9 @@ def _sync(folder: Path) -> None:
         msg = "uv is not on this machine's PATH"
         raise VersionError(msg)
     env = {k: v for k, v in os.environ.items() if k not in {"VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT"}}
+    command = [uv, "sync", "--locked", "--quiet"]  # every workspace member, as the runtime is deployed
     try:
-        subprocess.run([uv, "sync", "--locked", "--quiet"], cwd=folder, env=env, capture_output=True, text=True,  # noqa: S603
-                       check=True, timeout=SYNC)  # fmt: skip
+        subprocess.run(command, cwd=folder, env=env, capture_output=True, text=True, check=True, timeout=SYNC)  # noqa: S603
     except subprocess.CalledProcessError as exc:
         msg = f"its environment could not be made: {(exc.stderr or exc.stdout).strip()[-400:]}"
         raise VersionError(msg) from exc
