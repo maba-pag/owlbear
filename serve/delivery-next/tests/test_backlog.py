@@ -135,7 +135,7 @@ def test_a_repeat_merges_only_with_an_entry_naming_the_same_projects_and_is_link
 
 
 @pytest.mark.usefixtures("github")
-def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_skips_a_full_entry(shared, monkeypatch):
+def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_links_an_entry_with_many(shared, monkeypatch):
     """Sol: a lagging listing never merges into an entry the owner re-scoped; a save that failed is completed later."""
     root, title = shared[0], "Status line hides the step"
     shop, docs = view(root), Backlog(DataRepo(root), "docs-site", Clock())
@@ -152,14 +152,31 @@ def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_skips_
     assert (new, third.id, shop.current("1").count) == (True, "3", 1)
     monkeypatch.setattr(Backlog, "read", real)
 
-    full = [str(n) for n in range(100, 150)]
-    shop._save(shop.current("2").model_copy(update={"links": full}))  # noqa: SLF001 - fifty connected entries
+    many = [str(n) for n in range(100, 150)]
+    shop._save(shop.current("2").model_copy(update={"links": many}))  # noqa: SLF001 - fifty connected entries
     fourth = Backlog(DataRepo(root), "api-site", Clock()).add(title, source="watcher")[0]
-    assert (fourth.links, shop.current("2").links) == (["1", "3"], full)
+    assert (fourth.links, shop.current("2").links) == (["1", "2", "3"], [*many, "4"])
 
     shop._save(shop.current("4").model_copy(update={"links": ["3"]}))  # noqa: SLF001 - #1's side of the unlink failed
     shop.update("4", {"links": ["3"]})  # the owner tries again
-    assert "4" not in shop.current("1").links
+    assert "4" not in shop.current("1").links + shop.current("2").links
+
+
+def test_a_link_an_issue_has_no_room_for_refuses_the_new_entry_naming_the_full_one(shared, github, monkeypatch):
+    """TD-405: no match is left unlinked silently; nothing is written, so no link is one-sided."""
+    root, title = shared[0], "Status line hides the step"
+    view(root).add(title, source="watcher")
+    docs = Backlog(DataRepo(root), "docs-site", Clock())
+    docs.add(title, source="watcher")
+    docs.update("2", {"notes": "x" * 100})
+    monkeypatch.setattr(backlog_issues, "LONGEST", len(github.issues[2]["body"]) + 10)  # #2 is full, #1 is not
+    before = copy.deepcopy(github.issues)
+
+    with pytest.raises(BacklogError) as caught:
+        Backlog(DataRepo(root), "api-site", Clock()).add(title, source="watcher")
+
+    said = "no room for another link in the GitHub issue of #2: unlink or shorten it"
+    assert (caught.value.status, caught.value.text, github.issues) == (422, said, before)
 
 
 def test_missing_labels_are_created_once_in_owlbears_colour_and_other_labels_are_left_alone(shared, github):
