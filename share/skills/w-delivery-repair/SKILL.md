@@ -32,8 +32,8 @@ route and keep each one's owner and resume condition verbatim:
 | --- | --- |
 | `offline` (C01, C02, C03) | Propose it in Step 2 |
 | `offline` / `migrate` journal routes (C04) | Run the named `delivery-repair` command, or the delegated `delivery-migrate resume` or `verify`, with the named ID in Step 3; ask the user before `delivery-migrate abort` |
-| `migrate` (`state-migration-required`) | Not delegated: name `/upgrade-delivery`, or ask the user through `vscode_askQuestions` and run `delivery-migrate propose`, `apply`, `verify` only after an explicit yes |
-| `upgrade` (C05) | Name `/upgrade-delivery`; never downgrade or rewrite newer state |
+| `migrate` (`state-migration-required`) | Not delegated: ask the user through `vscode_askQuestions` and run `delivery-migrate propose`, `apply`, `verify` only after an explicit yes |
+| `upgrade` (C05) | Never downgrade or rewrite newer state |
 | `online` (C06) | Name the MCP tool; it runs after Delivery starts, with that tool's own confirmation |
 | `environment` (C08) | Give the exact `setup/init.py` instruction for the named locator |
 | `contained` (C07) | Report the owner; the state stays preserved and refused |
@@ -54,7 +54,7 @@ proposal: operation, policy, every path it changes, the consequence and the back
 - `engine-replay` (C03 `transaction-replay`) and the delegated `delivery-migrate resume` and
   `verify` commands are applied by the agent after it has shown the proposal; no further question.
   An initial migration (`delivery-migrate propose`, `apply`) is never delegated by this policy: it
-  belongs to `/upgrade-delivery`, or runs only after the user explicitly approves it.
+  runs only after the user explicitly approves it.
 - `user-confirmed` (C01 `host-local-reset`, C02 `tracked-record-restore`) replaces user-owned or
   tracked bytes. Ask through `vscode_askQuestions` once per proposal, naming the paths, the
   consequence and the backup location, with the options *Apply this repair* and *Do not apply*.

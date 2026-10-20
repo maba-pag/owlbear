@@ -175,10 +175,9 @@ See [Uninstalling](setup/operating-owlbear.md#uninstalling) for exactly what is 
 ## Status and expectations
 
 OwlBear has no numbered releases. The rolling `main` branch is the supported consumer surface.
-To update, run `/upgrade-delivery` in each project instead of a plain `git pull`: it moves the
-OwlBear checkout forward, migrates the project's Delivery state and checks every Change. Then rerun
-setup to refresh copied files. To stay on a reviewed commit, name it: `/upgrade-delivery <commit>`.
-See [Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbear).
+To update, use **Run updates now** on the new Delivery engine's pages, which replace the retired
+`/upgrade-delivery` prompt; the engine also updates itself when idle. Then rerun setup to refresh
+copied files. See [Upgrading OwlBear](setup/operating-owlbear.md#upgrading-owlbear).
 
 | Surface | Status | What it does |
 | --- | --- | --- |

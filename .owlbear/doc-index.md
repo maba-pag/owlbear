@@ -749,7 +749,6 @@
 - [WIRING.md](../share/WIRING.md)
 - [Cockpit package guide](../serve/cockpit/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
-- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
 ## setup/setup-guide.md
@@ -788,7 +787,6 @@
 - [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Exceptional entries](../setup/operating-owlbear.md#exceptional-entries)
 - [Delivery workflow reference](../setup/operating-owlbear.md#delivery-workflow)
-- [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
 - [Adding local agents](../setup/operating-owlbear.md#adding-local-agents)
 - [Operating OwlBear](../setup/operating-owlbear.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
@@ -1017,8 +1015,6 @@
 
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`
-
-## share/prompts/upgrade-delivery.prompt.md
 
 ## share/skills/h-ac-quality/SKILL.md
 - # `AC Quality Schema`

@@ -124,46 +124,16 @@ project-specific files that are outside the refreshable set.
 
 ## Upgrading OwlBear
 
-Delivery records its state format in `.owlbear/delivery/runtime/format.json`. A newer OwlBear may
-need a newer format: its Delivery MCP server and Cockpit then refuse to start with
-`state-migration-required` until the state is migrated, and an older OwlBear that has this check
-refuses newer state with `state-newer-than-controller`. Neither refusal changes your state. Upgrade
-from the project, in a VS Code chat:
+The new Delivery engine's pages replace the retired `/upgrade-delivery` prompt: **Run updates now**
+takes the newest version, and the engine also updates itself when idle. Then rerun setup from the
+project root to refresh copied files:
 
-1. Run `/upgrade-delivery`, optionally naming an OwlBear commit or ref.
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py
+```
 
-   **Expected result:** the agent reports Delivery health and every Change, and asks you to let
-   running work finish first.
-2. When asked, stop `owlbear-delivery` (**MCP: List Servers** → **Stop**) and Cockpit.
-
-   **Expected result:** the agent moves the OwlBear checkout forward with `git pull --ff-only`, then
-   runs `delivery-controller preflight` and `backup` and `delivery-migrate` `propose`, `apply` and
-   `verify` from the new code. The backup is written to a directory outside the project.
-3. When asked, start `owlbear-delivery` and Cockpit again.
-
-   **Expected result:** the agent confirms that Delivery is healthy and that every Change is still
-   available.
-4. Rerun setup from the project root to refresh copied files:
-
-   ```shell
-   uv run --project ../owlbear python ../owlbear/setup/init.py
-   ```
-
-   **Expected result:** setup preserves your edits and existing Delivery configuration; see
-   [Refreshing Consumer Configs](#refreshing-consumer-configs) for the editor and lint files.
-
-The OwlBear checkout is shared: once it moves, every project that uses it runs the new code. Run
-`/upgrade-delivery` in each of them before starting its Delivery again. If a project's
-`owlbear-delivery` already refuses with `state-migration-required` because the checkout was pulled
-directly, run `/upgrade-delivery` there; it skips the online check and continues with the offline
-preflight.
-
-The upgrade refuses while a Delivery MCP server or Cockpit still runs for the project, and changes
-nothing. To go back after a migration, the backup has to be restored first, which is your decision;
-moving the checkout back alone is safe only when no migration was needed. The upgrade also leaves
-`.owlbear/controller/` (its lock) and `.owlbear/delivery-migrations/` (the migration journal and the
-previous bytes of the migrated records) in the project; the setup rerun in step 4 ignores both in
-`.owlbear/.gitignore`.
+**Expected result:** setup preserves your edits and existing Delivery configuration; see
+[Refreshing Consumer Configs](#refreshing-consumer-configs) for the editor and lint files.
 
 ## Uninstalling
 
@@ -295,7 +265,6 @@ the arguments shown there.
 | `/inspect-change <change-id>` | A read-only explanation of a Change, for example after retries are exhausted or when readiness is unavailable | The readiness prompt of that Change |
 | `/finalize-change <change-id>` | The continuation chat cannot dispatch the Finalizer in this host | The continuation chat names it; `/address-pr-feedback start` hands off to it |
 | `/repair-delivery [change-id]` | Delivery MCP is unavailable or refuses to start, or an activation failed or custody is retained | The continuation chat and the readiness prompt name it |
-| `/upgrade-delivery [commit]` | Upgrading OwlBear and migrating this project's Delivery state | Maintenance; see [Upgrading OwlBear](#upgrading-owlbear) |
 
 ### Correction And Recovery
 
@@ -516,7 +485,7 @@ every release file and directory read-only and refuses a release it cannot seal;
 report a modified release. Starts do not re-verify the release. It is not a security boundary
 against root or another process running as your user.
 
-Upgrade only through `/upgrade-delivery`, which drives `delivery-controller` and `delivery-migrate`:
+An old-engine upgrade drives `delivery-controller` and `delivery-migrate`:
 install, online preflight, stop, offline `preflight`, `backup`, migration, `switch`, `verify` and
 `prune` while both controllers are still stopped, then restart and online verification. `preflight`,
 `backup`, `pin`, `switch` and `prune` hold the controller lock

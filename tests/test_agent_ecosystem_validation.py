@@ -539,50 +539,6 @@ def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     assert "raw Git" in content
 
 
-def test_upgrade_delivery_prompt_follows_the_rehearsed_upgrade_procedure() -> None:
-    path = _PROMPTS_ROOT / "upgrade-delivery.prompt.md"
-    metadata = _frontmatter(path)
-    prompt = " ".join(path.read_text(encoding="utf-8").split())
-
-    assert metadata["agent"] == "agent"
-    assert metadata["tools"] == [
-        "execute/runInTerminal",
-        "owlbear-delivery/delivery_health",
-        "owlbear-delivery/list_changes",
-        "owlbear-delivery/get_change",
-        "owlbear-delivery/list_work_items",
-        "vscode/askQuestions",
-    ]
-    assert _PROMPT_VALIDATOR.validate_prompt(path) == []
-    steps = (
-        "install <revision>",
-        "preflight",
-        "backup --destination",
-        "delivery-migrate",
-        "switch <new commit>",
-        "<root> verify",
-        "<root> prune",
-        "ask the user to start `owlbear-delivery`",
-        "`delivery_health`, which must be `healthy`",
-    )
-    positions = [prompt.index(step) for step in steps]
-    assert positions == sorted(positions)
-    unpinned = ("*Stop*", "git -C <owlbear> pull --ff-only` (or", "<root> preflight")
-    assert [prompt.index(step) for step in unpinned] == sorted(prompt.index(step) for step in unpinned)
-    assert "`NEW/<tool>` is `uv --project <owlbear> run <tool>`" in prompt
-    assert "install `HEAD`" in prompt
-    assert "git -C <owlbear> archive <revision> serve/cockpit/dist" in prompt
-    assert "install `<revision>` with `--bundle-source <that directory>/serve/cockpit/dist`" in prompt
-    assert "no per-Change baseline exists, and continue; steps 3 and 5 still apply" in prompt
-    assert "where step 2 recorded one" in prompt
-    assert "safe only when step 7 reported `migration-not-required`" in prompt
-    assert "Do not stop or kill processes yourself" in prompt
-    assert "previous release's own gate accepts the migrated state" in prompt
-    assert "Restoring the step-6 backup is the user's decision" in prompt
-    assert "never run checkout code" in prompt
-    assert "upgrade-delivery" in (_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8")
-
-
 def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path) -> None:
     path = _write_prompt(
         tmp_path / "prompts",
