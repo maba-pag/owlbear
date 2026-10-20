@@ -193,7 +193,7 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
   pull request and checked by CI, becomes a version as its labels say; machines take it at their next idle
   time.
 - **Step 3c build (before step 4's `repo.git`), after Sol's challenge (REVISE, 96%):** built 2026-10-20 as below
-  (`design_packs/pack_git.py`, `pack_runs/pack_publish.py`), except the C-15 alignment, which is still open.
+  (`design_packs/pack_git.py`, `pack_runs/pack_publish.py`), the C-15 alignment with it (#516).
   - **Source:** the package's own Git checkout stands in for `repo.git`: its `origin` must be `maba-pag/owlbear`,
     its tracked files clean, and its `HEAD`, pinned at the candidate stage as the running version, an ancestor of
     the freshly fetched `origin/main`; anything else is refused before any session, with what to do. The machine's
@@ -249,11 +249,12 @@ One update at a time (`~/.owlbear/update.lock`); a stop intent (§6) wins over i
       owner approves the code diff or discards; approved files join the one commit, and CI's unit tests must pass as
       for any pull request.
     - **The challenger's file list:** in a full round (not a rejections-only check or a reconsideration) its message
-      lists every file changed against the package, with its diff (the skills also in full, as before); a pack-only result
-      `PackReview` adds `changes`, exactly one entry per listed path (`path`, `needed`: yes, no or unsure, `what`,
-      `suspicious`), validated against the listed paths at its result tool (none missing, repeated or extra). `no`
-      comes with a finding as today. `unsure` goes to the owner before the repair: keep it, or undo it; a kept path is not asked about again while its content stays the same. The last round's list is in the
-      pull request's body.
+      lists every file changed against the package, with its diff (the skills also in full, as before); a
+      pack-only result `PackReview` adds `changes`, exactly one entry per listed path (`path`, `needed`: yes, no or
+      unsure, `what`, `suspicious`), validated against the listed paths at its result tool (none missing, repeated or
+      extra). `no` comes with a finding as today. `unsure` goes to the owner before the repair: keep it, or undo it;
+      a kept path is not asked about again while its content stays the same. The last round's list is in the pull
+      request's body.
     - **Out of scope:** an adapter that cannot read upstream still stops at the candidate or diff stage; calibration
       rounds live in the data repository and are never edited by the updater.
 - **Pull request labels and marker** (TD-308): a global setting `pr_labels` lists the labels OwlBear adds
@@ -288,6 +289,8 @@ the pull request labels and marker settings (TD-308).
 | 4 | `repo.git`, versions, leases, never backwards, selfcheck, standby, fence, alias activation with first migration, handover, watch, Run updates now (§3–§5) | disposable macOS processes with two local tags: success, selfcheck and standby failure, a crash injected at each ownership step and around the alias rename, an open page and a chat server across it, a second update, disk refusal |
 | 5 | Idle, use, announcement, automatic updates (§7) | clock-driven tests: polls never count, Postpone, cancel, sleep |
 
-Status 2026-10-20: step 1 #473; step 2 #476 and #478; step 3 #480 to #482 and the design pack's pull request (3c, §8),
-except 3c's C-15 alignment; steps 4 and 5 not built. After step 5, steps run with the project's agents and skills switched off
+Status 2026-10-20: step 1 #473; step 2 #476 and #478; step 3 #480 to #482 and the design pack's pull request (3c, §8)
+with its C-15 alignment (#515, #516); step 4's first part (4a): `repo.git`, choosing the version (§4), installing it
+beside the others and its `selfcheck` (§5.1), with `owlbear versions [--prepare]`; the rest of step 4 (leases,
+standby, fence, activation, handover, watch, Run updates now) and step 5 not built. After step 5, steps run with the project's agents and skills switched off
 (TD-274's gap, TD-317, TD-329), the plan's item 5.

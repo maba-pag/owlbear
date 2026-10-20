@@ -15,6 +15,7 @@ PROCESSES = {  # started by Delivery itself
     "mcp": "commands.mcp_server",
     "step-mcp": "commands.step_mcp",
     "machine": "machine_host.serve",
+    "selfcheck": "machine_host.selfcheck",  # a new version's check before it takes over (self-update §5.1)
 }
 
 

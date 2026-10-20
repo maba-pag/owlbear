@@ -132,6 +132,18 @@ def logs(*, lines: Annotated[int, Parameter(name=["--lines", "-n"])] = 40) -> in
 
 
 @app.command
+def versions(*, prepare: bool = False) -> int:
+    """The version OwlBear runs and the one it would take next.
+
+    Args:
+        prepare: Install that version beside the running one and check it, without switching to it.
+    """
+    from owlbear_delivery_next.machine_host import versions as installed  # noqa: PLC0415
+
+    return installed.report(say, prepare=prepare)
+
+
+@app.command
 def doctor() -> int:
     """Check git, gh and each project's readiness from OwlBear's environment."""
     from owlbear_delivery_next.machine_host import install as installer  # noqa: PLC0415
