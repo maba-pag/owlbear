@@ -62,6 +62,6 @@ least three parallel design explorations with different goals: minimum interface
 flexibility, and trivial common case. Compare results by depth, locality, seam placement, and
 dependency cost, then recommend one design or a deliberate hybrid.
 
-Finish with the confirmed Refined Idea Summary. Tell the user that `/design` resumes or creates the
-native Specification session and carries the reviewed idea through explicit admission. Do not create
-a second specification format or Delivery work manually.
+Finish with the confirmed Refined Idea Summary. Tell the user that a selected change is shaped on the
+new Delivery engine's Changes page with New Change, which carries the reviewed idea into Delivery.
+Do not create a second specification format or Delivery work manually.

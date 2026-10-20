@@ -114,7 +114,7 @@ keep future implementation proof explicit rather than presenting it as already e
 
 Use `runSubagent` for a new challenge on every invocation, with these exact choices:
 
-- Omit `agentName`. Do not use `Explore`, `planner-challenger`, `build-reviewer`, or any other
+- Omit `agentName`. Do not use `Explore` or any other
  named/prepared role. This creates a fresh, un-specialized subagent, but it still receives active
  workspace instructions; do not describe it as context-free or assume it has the caller's full
  context.

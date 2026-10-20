@@ -92,8 +92,9 @@ Inspect the scoped surface and collect an internal finding queue for all categor
        and adapters when they meet the same evidence rule. A keyword match alone is never a finding.
 
 The audit discovers candidates; it does not decide architectural removal. Use `/test-curation` for
-current test-suite quality work, `/arch-audit` for module or boundary deletion questions, and
-`/ideate` or `/design` to turn an accepted cleanup proposal into a governed Delivery Change.
+current test-suite quality work, `/arch-audit` for module or boundary deletion questions, and the
+new Delivery engine's Changes page with New Change to shape an accepted cleanup proposal into a
+governed Delivery Change.
 
 ## Step 3 - Produce ranked cleanup report
 
@@ -113,7 +114,7 @@ For every accepted entry, record:
 - file path and line or symbol;
 - task ID when applicable;
 - concrete evidence and the reason the item appears stale;
-- recommended next route: `inspect`, `test-curation`, `arch-audit`, `ideate`, `design`, or `none`.
+- recommended next route: `inspect`, `test-curation`, `arch-audit`, `new-change`, or `none`.
 
 Use these calibration rules:
 

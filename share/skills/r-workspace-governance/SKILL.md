@@ -46,7 +46,7 @@ without behavior change).
   `dispatch_failure` alone does not grant custody. With an exact normal-return or
   `ended-without-result`, `worker-host-lost`, or `worker-released-stuck` settlement receipt and fresh
   `builder_handoff_context` and Build context,
-  the next same-task Builder may triage under `w-packet-building` using `prior_attempts`; adopt only
+  the next same-task Builder may triage using `prior_attempts`; adopt only
   compatible task work and discard only attributable, explicitly scoped disposable work. Foreign,
   private, or ambiguous content stays intact and is named. Unknown or contained invocations still
   forbid adoption: an unreturned dispatch or possibly running mutating job remains held.

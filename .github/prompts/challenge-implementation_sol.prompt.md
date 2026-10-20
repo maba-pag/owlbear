@@ -13,7 +13,7 @@ scope, contextual judgment, dispositions, and the final recommendation.
 
 This is a read-only review. Proposed repairs are findings, not permission to edit files, commit,
 publish, release, finalize, or perform lifecycle transitions. This prompt does not replace a
-Delivery `build-reviewer`, exact-head finalization review, security audit, or other required gate.
+Delivery reviewer, exact-head finalization review, security audit, or other required gate.
 These instructions guide behavior; they are not a deterministic write guard.
 These instructions guide behavior; they are not a deterministic write guard.
 
@@ -143,7 +143,7 @@ The caller must normalize invalid labels before reporting the result.
 
 Use `runSubagent` for a new review on every invocation, with these exact choices:
 
-- Omit `agentName`. Do not use `Explore`, `planner-challenger`, `build-reviewer`, or another named or
+- Omit `agentName`. Do not use `Explore` or another named or
   prepared role. The fresh, un-specialized subagent still inherits active workspace instructions;
   never describe it as context-free.
 - Set `model` to exactly `GPT-6.1 Sol (copilot)`.

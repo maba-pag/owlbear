@@ -43,46 +43,20 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 | --- | --- | --- | --- | --- |
-| designer | Claude Opus 5.5 (copilot) | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
-| conceptual-design-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
-| designer-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | Claude Opus 5.5 (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
-| planner-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-6 Luna | `w-orchestration` | see below | Session-start claim check; user-confirmed stopped claims use one exact release; window loss is engine-settled after the write/process guard. |
-| repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
-| builder | GPT-6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned Change worktree only; successful Build uses the claim-bound submit-result facade; normally returned retry/block/Planning-or-Design-return transitions are settled by Orchestrator, while other supported transitions are forwarded; `SessionStart`: repository context; `PostToolUse`: lint changed files |
-| build-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
-| finalizer | GPT-6 Luna | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
 | test-curator | GPT-6.1 Sol (copilot) | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
 | memory-curator | GPT-6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
-| Explore (built-in) | default | None declared by OwlBear | None | VS Code built-in delegate; no OwlBear-specific model override or hook |
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
-Orchestrator continues one selected Change (its `/continue-change` prompt is retired): it acquires and dispatches at
-most one Change action at a time, then forwards ordinary transitions and routes typed attention and
-admitted Change repair proposals. Before dispatching, it inspects only that Change's running
-Planner/Builder/Finalizer claims through `get_change` and asks once with `vscode/askQuestions`
-whether each exact prior run was stopped. Only a confirmed stop uses one exact
-`release_stuck_worker` call. A `worker-stall-wait` needs no question and yields with its retry time
-or bounded process details. Delivery records each claim's issuing VS Code window PID and process
-start time, then settles a previous-session loss on acquisition only after that window is gone, no
-worktree write occurred for 30 seconds, and the worktree/Git-admin process guard passes. An
-MCP-server restart while the window is alive does not qualify. Orchestrator triggers no memory
-curation and has no repository write tools. Returned Planner/Builder no-results use
-`ended-without-result` only after dispatch return and owned mutators settle. `worker-host-lost` and
-`worker-released-stuck` are engine-only and never go through Orchestrator settlement. A lost or
-released Finalizer without a report receives `finalizer-ended-without-report` with unknown checks,
-not proof.
+The new Delivery engine ships its own agents and skills in its package; they are not part of this
+shared map.
 
 ## Prompt Entry Map
 
 | Prompt | Entry route | Initial loading behavior |
 | --- | --- | --- |
-| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
-| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
 | `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
@@ -98,7 +72,7 @@ Project-local prompts are outside the portable inventory. They may select built-
 project-local skills in addition to the shared surface.
 
 The new Delivery engine's Changes page (New Change, the shaping chat) replaces the retired
-`continue-change`, `finalize-change`, `inspect-change`, `address-pr-feedback`,
+`ideate`, `design`, `continue-change`, `finalize-change`, `inspect-change`, `address-pr-feedback`,
 `resolve-target-conflict`, `repair-delivery` and `resolve-delivery-attention` prompts.
 
 ## Conditional Skill Loading
@@ -107,15 +81,11 @@ The named caller owns each on-demand condition and timing.
 
 | Caller or trigger | Conditional skill | Load condition |
 | --- | --- | --- |
-| Planner or Builder context | `h-decision-requests` | Fresh context contains a request, or routing identifies an authority-compatible stakeholder choice or external action |
-| native design/planning | `w-research` | Local evidence cannot resolve a material claim and the owning workflow permits research |
-| native design/planning | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, packet boundaries, or acceptance drafting requires the specialist boundary |
 | universal memory governance | `h-memory-structure`, `h-mcp-memory` | A save-capable role has a qualifying reusable insight |
 | Python instruction | `h-python-conventions` | The active file matches the Python instruction scope |
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
 | frontend conventions | package-provided `pds-knowledge-{framework}` | The project declares a PDS wrapper and its generated companion link resolves |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
-| Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
 
 ## Required Skill Consumers
 
@@ -123,56 +93,28 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Skill | Required by |
 | --- | --- |
-| `w-design-session` | designer |
-| `w-frontier-planning` | planner |
-| `w-packet-building` | builder |
-| `r-challenger-protocol` | conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer |
-| `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer, finalizer |
-| `h-module-design` | designer-challenger, planner-challenger |
-| `h-frontend-design` | conceptual-design-reviewer |
-| `h-ac-quality` | planner-challenger |
-| `w-orchestration` | orchestrator |
-| `h-decision-requests` | repairer |
-| `w-change-finalization` | finalizer |
 | `w-test-curation` | test-curator |
-| `r-workspace-governance` | builder, test-curator |
+| `r-workspace-governance` | test-curator |
 | `w-mem-curation` | memory-curator |
 | `h-knowledge-ops` | knowledge-ingestor, knowledge-enricher |
 | `w-knowledge-enrichment` | knowledge-enricher |
 
 ## Delegation And Nesting
 
-| Delegate | Caller | Runtime consequence if unavailable |
-| --- | --- | --- |
-| conceptual-design-reviewer | designer | A consequential product, workflow, or interaction concept proceeds without independent conceptual challenge |
-| designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
-| planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
-| planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
-| builder | orchestrator | Settled no-result preserves same-task work; unreturned/live work stays held |
-| finalizer | orchestrator | An issued finalization launch is dispatched intact; normal failures settle only with its actual stored report and issued identities, while success is recorded without another API call; if the capability is unavailable, the orchestrator reports the exceptional `/finalize-change <change_id>` fallback, a prompt that is now retired |
-| repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
-| build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
-| build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
-| Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
+No shared agent delegates to a subagent. No agent triggers `memory-curator`; the user runs it or
+reviews pending entries in Cockpit.
 
-`recover_claim` refusals report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retain custody; Cockpit's
-recovery controls and `/resolve-delivery-attention` are retired. The user-stopped release route is
-separate. No agent triggers `memory-curator`; the user runs it or reviews pending entries in Cockpit.
-
-The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
-`h-agent-structure` for the nesting rules.
+The agent validator enforces frontmatter-to-`<agents>` alignment; see `h-agent-structure` for the
+nesting rules.
 
 ## Hard-Control Map
 
 | Control | Attached roles | Enforcement job |
 | --- | --- | --- |
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer, finalizer | Rejects writes outside the configured scratch/research boundary; read-only terminal mode is enabled for reviewers, planner, and finalizer inspection |
 | `deny-src-writes.py` | test-curator | Restricts recognized file-tool writes to tests and scratch; manually invoked terminal execution is trusted |
-| `session-context.py` | builder | Adds repository context at session start |
-| `lint-changed.py` | builder | Runs changed-file checks after tool use |
 | MCP schemas and stores | Tool-capable roles | Validate arguments, transitions, and persisted state |
-| `validate_agents.py` | Repository validation | Checks frontmatter, required sections, tools, delegation, and nesting-depth metadata |
+| `validate_agents.py` | Repository validation | Checks frontmatter, required sections, tools, hooks, and delegation |
 | `validate_skills.py` | Repository validation | Checks skill metadata and structure |
 | `validate_prompts.py` | Repository validation | Checks prompt metadata, routing targets, and explicit skill references |
 | `test_agent_ecosystem_validation.py` | Repository regression | Exercises validators and resolves declared OwlBear MCP tools against live registries |

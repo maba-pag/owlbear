@@ -32,8 +32,8 @@ file schemas, required sections, naming grammar, extraction criteria, and anti-p
 
 ### Precedent
 
-`build-reviewer` qualifies through its independent exact-commit task-result review, distinct model, and hard
-read-only boundary.
+The new Delivery engine's `owlbear-reviewer` qualifies through its independent review, distinct model, and
+read-only role.
 
 ## Principles
 
@@ -171,7 +171,7 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Agent | When | Example |
 |---|---|---|
-| planner-challenger | Task-chain review before publication | `Challenge Plan: change=cache, outcome=OUT-004, claim=claim-7` |
+| code-reviewer | Exact-commit review before publication | `Review commit: commit=abc123` |
 ```
 
 The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). The `validate-agents` pre-commit hook enforces alignment through `.owlbear/scripts/validate_agents.py`.
@@ -197,7 +197,7 @@ Agent files must NOT contain:
   agent catalog is unavailable at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:** build-reviewer, conceptual-design-reviewer, planner-challenger.
+**Current ND3 agents:** none.
 
 Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
@@ -231,7 +231,7 @@ user-invocable: {true|false}
 
 ### Naming Grammar
 
-- **Agent names** are **role nouns** or role compounds (builder, memory-curator, build-reviewer).
+- **Agent names** are **role nouns** or role compounds (memory-curator, test-curator, knowledge-ingestor).
 - **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `test-curation` not `test-curations`, `decision-routing` not `decision-requests`, `task-decomposition` not `task-workflow`.
 - The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-test-curation` not `w-test-curation-workflow`).
 
@@ -260,7 +260,7 @@ Commit per `r-workspace-governance` → Commit Discipline.
 
 **Step 0 applies to:** Workflows that consume an engine-started job or immutable candidate.
 
-**No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped review, not archive-scoped).
+**No Step 0:** w-test-curation (suite-scoped review, not archive-scoped).
 
 **Workflow skills must NOT contain:**
 

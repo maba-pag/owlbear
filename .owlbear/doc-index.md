@@ -247,9 +247,6 @@
 ## .owlbear/prompts/agent-audit.prompt.md
 - # `Agent Ecosystem Audit`
 
-## .owlbear/prompts/deviation-audit.prompt.md
-- # `Deviation Audit`
-
 ## .owlbear/prompts/doc-audit.prompt.md
 - # `Documentation Audit`
 - ## `1. Preamble`
@@ -296,16 +293,6 @@
 - ### `Analyze Behavioral Blocks`
 - ### `Return One Coherent Finding Set`
 - ## `Implementation Handoff - Second Pass Only`
-
-## .owlbear/skills/w-deviation-audit/SKILL.md
-- # `Deviation Audit`
-- ## `Boundary`
-- ## `Step 1 - Resolve The Scope`
-- ## `Step 2 - Reconstruct The Evidence Boundary`
-- ## `Step 3 - Classify The Owning Surface`
-- ## `Step 4 - Decide The Follow-Up`
-- ## `Output Template`
-- ## `Known Pitfalls`
 
 ## serve/README.md
 - # `OwlBear Packages`
@@ -861,18 +848,6 @@
 - [README.md](../share/README.md)
 - [setup guide](../setup/setup-guide.md)
 
-## share/agents/build-reviewer.agent.md
-
-## share/agents/builder.agent.md
-
-## share/agents/conceptual-design-reviewer.agent.md
-
-## share/agents/designer-challenger.agent.md
-
-## share/agents/designer.agent.md
-
-## share/agents/finalizer.agent.md
-
 ## share/agents/knowledge-enricher.agent.md
 - ### `Channel A`
 - ### `Channel B`
@@ -887,16 +862,6 @@
 ## share/agents/memory-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
-
-## share/agents/orchestrator.agent.md
-- ### `Channel A`
-- ### `Session Output`
-
-## share/agents/planner-challenger.agent.md
-
-## share/agents/planner.agent.md
-
-## share/agents/repairer.agent.md
 
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
@@ -933,8 +898,6 @@
 - ## `Step 3 - Present Candidates`
 - ## `Step 4 - Explore the Selected Design`
 
-## share/prompts/design.prompt.md
-
 ## share/prompts/frontend-audit.prompt.md
 - # `Frontend Audit`
 - ## `Interaction Protocol`
@@ -943,8 +906,6 @@
 - ## `Step 3 - Execute audit`
 - ## `Step 4 - Present and close`
 - ## `Guardrails`
-
-## share/prompts/ideate.prompt.md
 
 ## share/prompts/kb-enrich.prompt.md
 - ## `Execution Contract`
@@ -989,26 +950,6 @@
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`
 
-## share/skills/h-ac-quality/SKILL.md
-- # `AC Quality Schema`
-- ## `Meta-Rule`
-- ## `Proof Selection And Signal Quality`
-- ## `Tier 1 - Behavior AC (Code Changes)`
-- ### `B1 - Boundary-Scoped`
-- ### `B2 - Input -> Output Pairs`
-- ### `B3 - No Naked Quantifiers`
-- ### `B4 - Boundary-Valid Proof`
-- ## `Tier 2 - Process AC (Workflow Changes)`
-- ### `P1 - Agent/Stage-Scoped`
-- ### `P2 - Observable Artifact or State Change`
-- ### `P3 - Verification Method Stated`
-- ## `Ordered Validation`
-- ## `Bad -> Good Transformations`
-- ## `Canonical Literal Verification`
-- ### `Bad -> Good Examples`
-- ### `Authority Discovery`
-- ### `Review Procedure`
-
 ## share/skills/h-agent-structure/SKILL.md
 - # `Agent Ecosystem Structure`
 - ## `Foundation`
@@ -1051,12 +992,6 @@
 - ## `Semble`
 - ## `Discovery Is Not Proof`
 - ## `Companion Skills`
-
-## share/skills/h-decision-requests/SKILL.md
-- # `Decision And Action Requests`
-- ## `Choose The Request Kind`
-- ## `Embed A Request In A Block`
-- ## `Resolution And Resume`
 
 ## share/skills/h-frontend-conventions/SKILL.md
 - # `Frontend Conventions`
@@ -1174,13 +1109,6 @@
 - ## `Dependency Classification`
 - ## `Applying the Diagnostics`
 
-## share/skills/h-process-observations/SKILL.md
-- # `Process Observations`
-- ## `Boundary`
-- ## `Triggers`
-- ## `Placement And Identity`
-- ## `Note Template`
-
 ## share/skills/h-pytest-and-linting/SKILL.md
 - # `pytest, ruff, and coverage Reference`
 - ## `Discover Project Configuration`
@@ -1264,83 +1192,6 @@
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
-## share/skills/w-address-pr-feedback/SKILL.md
-- # `Address Pull-Request Feedback`
-- ## `Step 0 - Derive The Phase Before Mutation`
-- ## `Step 1 - Bind The Change And Pull Request`
-- ## `Step 2 - Critically Triage Every Thread`
-- ### `Start Re-entry`
-- ### `First-Entry Start`
-- ## `Step 3 - Prepare The Provider And Delivery State`
-- ## `Step 4 - Repair One Thread At A Time`
-- ## `Step 5 - Hand Off To Finalization`
-- ## `Step 6 - Publish Then Reply And Resolve Threads`
-- ### `Resume Order`
-- ### `No-Fix First-Entry Start`
-- ### `Shared Reply And Resolve Procedure`
-- ## `Output Template`
-- ## `Known Pitfalls`
-
-## share/skills/w-change-finalization/SKILL.md
-- # `Change Finalization`
-- ## `Step 0 - Resolve Current Authority`
-- ## `Step 0a - Bind One Issued Finalization Attempt`
-- ## `Step 1 - Establish Exact Managed Custody`
-- ## `Step 2 - Capture Exact-Head Observations`
-- ## `Step 2a - Retain A Trusted Failure`
-- ## `Step 3 - Obtain Independent Exact-Commit Review`
-- ## `Step 4 - Construct Exact Evidence`
-- ## `Step 5 - Re-check And Finalize`
-- ## `Optional Process Observation`
-- ## `Output Template`
-- ## `Known Pitfalls`
-
-## share/skills/w-delivery-attention-resolution/SKILL.md
-- # `Delivery Attention Resolution`
-- ## `Lifecycle Status`
-- ## `Step 0 - Bind The Exact Current Attention Or Blocked Outcome`
-- ## `Step 1 - Diagnose Current State Read-Only`
-- ## `Step 2 - Present One Decision`
-- ## `Step 3 - Apply Only Existing Authority`
-- ## `Step 4 - Verify And Close`
-- ## `Known Pitfalls`
-
-## share/skills/w-delivery-repair/SKILL.md
-- # `Delivery Repair`
-- ## `Step 0 - Bootstrap`
-- ## `Step 1 - Present Every Finding`
-- ## `Step 2 - Propose and Confirm (U1)`
-- ## `Step 3 - Stop, Apply, Verify`
-- ## `Step 4 - Restart and Report`
-
-## share/skills/w-design-session/SKILL.md
-- # `Target Design Session`
-- ## `Companion Skills`
-- ## `Authority Boundary`
-- ## `Step 1 - Select Or Create One Session`
-- ## `Step 2 - Rehydrate Before Revision`
-- ## `Step 3 - Persist Authored Revisions By Compare-And-Swap`
-- ## `Step 4 - Discover Intent And Preserve The Product Promise`
-- ### `Operating Context`
-- ## `Step 5 - Ground Claims And Use Qualified Memory`
-- ## `Step 6 - Resolve One Material Decision`
-- ## `Step 7 - Review Adaptive Architecture`
-- ## `Step 8 - Build Complete Delivery Contract`
-- ## `Step 9 - Challenge, Baseline, Checkpoint, And Validate`
-- ## `Step 10 - Obtain Explicit Approval And Admit`
-- ## `Revise An Admitted Change`
-- ## `Session Output`
-- ## `Known Pitfalls`
-
-## share/skills/w-frontier-planning/SKILL.md
-- # `Frontier Planning`
-- ## `Step 0 - Validate Launch And Context`
-- ## `Step 1 - Ground The Task Chain`
-- ### `Requests And Resumed Context`
-- ## `Step 2 - Obtain Advisory Review`
-- ## `Step 3 - Publish Pass Or Route Finding`
-- ## `Known Pitfalls`
-
 ## share/skills/w-idea-refinement/SKILL.md
 - # `Idea Refinement`
 - ## `When to Use`
@@ -1385,34 +1236,6 @@
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
 
-## share/skills/w-orchestration/SKILL.md
-- # `Delivery Orchestration`
-- ## `Change Continuation Entry`
-- ### `Continuation Bindings`
-- ### `Continuation Observation`
-- ### `Continuation Dispatch`
-- ### `Continuation Dispositions`
-- ### `Merge Offer And Unknown Merge`
-- ### `Continuation Refresh And Output`
-- ## `Step 2 - Dispatch Or Recover Each Launch`
-- ### `Release A User-Stopped Worker`
-- ## `Step 3 - Route One Completed Worker Result`
-- ## `Step 4 - Preserve Typed Integration Attention`
-- ## `Known Pitfalls`
-
-## share/skills/w-packet-building/SKILL.md
-- # `Packet Building`
-- ## `Step 0 - Validate Launch, Context, And Custody`
-- ### `Triage An Unclean Worktree`
-- ## `Step 1 - Fix The Task Boundary`
-- ## `Step 2 - Implement And Commit`
-- ## `Step 3 - Obtain Advisory Exact-Commit Review`
-- ### `Triage Review Findings Before Repair`
-- ## `Step 4 - Publish Pass Or Route Finding`
-- ## `Memory assessment policy`
-- ## `Optional Process Observation`
-- ## `Known Pitfalls`
-
 ## share/skills/w-research/SKILL.md
 - # `Research`
 - ## `Step 1 — Frame The Question`
@@ -1422,16 +1245,6 @@
 - ## `Step 5 — Analyze And Compare`
 - ## `Step 6 — Preserve Durable Findings When Useful`
 - ## `Step 7 — Return Evidence To The Caller`
-
-## share/skills/w-target-conflict-resolution/SKILL.md
-- # `Target Conflict Resolution`
-- ## `Step 0 - Bind Current Authority`
-- ## `Step 1 - Resolve In Managed Custody`
-- ### `Pre-commit resolution preflight`
-- ### `Post-commit cleanliness`
-- ## `Step 2 - Handoff`
-- ## `Output Template`
-- ## `Known Pitfalls`
 
 ## share/skills/w-test-curation/SKILL.md
 - # `Test Curation`
