@@ -13,9 +13,46 @@ import os
 import sys
 from pathlib import Path
 
+import psutil
+
 from owlbear_delivery_next.local_system import local_home, processes
 
 LEASES = "leases"
+
+
+def physical(executable: Path) -> Path:
+    """*executable* named by its own version's folder rather than through the alias.
+
+    So a later switch never changes the code a running process loads (§3); the file itself may be a link (a venv's
+    python), so only its folder is resolved.
+    """
+    return executable.parent.resolve() / executable.name
+
+
+def pinned(argv: list[str]) -> None:
+    """Run on from the version's own folder when started through the alias, before any lease or code is taken.
+
+    The process is replaced, so its lease and the code it loads name the same version.
+    """
+    exe = Path(sys.executable)
+    if (own := physical(exe)) != exe and own.exists():
+        os.execv(own, [str(own), "-m", "owlbear_delivery_next", *argv])  # noqa: S606 - this interpreter, re-pinned
+
+
+def unpinned() -> list[int]:
+    """This user's processes started through the alias and never pinned: what still runs the kept legacy runtime.
+
+    Every process since leases existed runs on from its version's own folder, so one whose command still names the
+    alias was started before, from the runtime the first update put away; it holds no lease.
+    """
+    alias, found = str(local_home.root() / local_home.RUNTIME) + os.sep, []
+    for proc in psutil.process_iter(["cmdline", "uids"]):
+        with contextlib.suppress(psutil.Error, OSError):
+            if proc.pid == os.getpid() or (proc.info["uids"] and proc.info["uids"].real != os.getuid()):
+                continue
+            if any(part.startswith(alias) for part in (proc.info["cmdline"] or [])[:2]):
+                found.append(proc.pid)
+    return found
 
 
 def version_of(executable: Path) -> Path | None:

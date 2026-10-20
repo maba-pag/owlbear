@@ -20,7 +20,6 @@ import sys
 import threading
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import uvicorn
@@ -33,6 +32,7 @@ from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from types import FrameType
 
 
@@ -63,13 +63,10 @@ def running() -> HostRecord | None:
 def main(argv: list[str] | None = None) -> int:
     """``python -m owlbear_delivery_next machine [--run | --standby]``: ``owlbear start``, the login item, an update.
 
-    A host started through the runtime alias runs on from its version's own folder, so a later switch of the alias
-    never changes the code it loads (self-update §3).
+    The dispatcher re-executed a host started through the runtime alias from its version's own folder, so a later
+    switch of the alias never changes the code it loads (self-update §3).
     """
     args = argv or []
-    exe = Path(sys.executable)
-    if (own := alias.physical(exe)) != exe and own.exists():
-        os.execv(own, [str(own), "-m", "owlbear_delivery_next", "machine", *args])  # noqa: S606 - this interpreter
     if "--standby" in args:  # an update's new version: it takes over once the old host says so (§5.2)
         version = args[args.index("--standby") + 1] if len(args) > args.index("--standby") + 1 else ""
         return serve(handing=True) if handover.standby(version) else 0

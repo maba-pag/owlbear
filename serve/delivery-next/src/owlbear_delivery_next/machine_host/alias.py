@@ -97,12 +97,3 @@ def _marked(tag: str) -> None:
         if (versions.number(saved.active) or (-1, -1)) < found:
             saved.active = tag
             registry.save(saved)
-
-
-def physical(executable: Path) -> Path:
-    """*executable* named by its own version's folder rather than through the alias.
-
-    So a later switch never changes the code a running process loads (§3); the file itself may be a link (a venv's
-    python), so only its folder is resolved.
-    """
-    return executable.parent.resolve() / executable.name

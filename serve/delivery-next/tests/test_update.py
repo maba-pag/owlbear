@@ -283,7 +283,7 @@ def test_a_host_started_through_the_alias_runs_on_from_its_versions_own_folder()
     link = local_home.root() / local_home.RUNTIME
     link.symlink_to(folder)
 
-    assert alias.physical(link / "bin" / "python") == folder.resolve() / "bin" / "python"
+    assert leases.physical(link / "bin" / "python") == folder.resolve() / "bin" / "python"
 
 
 def wait_for(check, timeout: float = 10.0) -> bool:
@@ -388,7 +388,8 @@ def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(mo
     (held / f"{os.getpid()}-{processes.started(os.getpid())!r}").touch()
 
     assert versions.prune() == ["v0.1"]  # v0.2 is held; v0.3 has one newer; v0.4 runs
-    assert removed == ["v0.1"]
+    assert removed == [".v0.1-removing"]  # renamed first: a process starting from it now finds nothing
+    assert not (local_home.root() / local_home.VERSIONS / "v0.1").exists()
 
 
 def test_the_old_runtime_is_removed_only_on_the_owners_word():
@@ -406,3 +407,31 @@ def test_the_old_runtime_is_removed_only_on_the_owners_word():
     assert (said.status_code, said.json()["legacy"]) == (200, [])
     assert not kept[0].exists()
     assert runtime.resolve().name == "v0.3"
+
+
+def test_the_old_runtime_stays_while_a_process_still_runs_it(monkeypatch):
+    legacy()
+    alias.activate(version("v0.3"), "v0.3")
+    monkeypatch.setattr(leases, "unpinned", lambda: [4242])
+    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
+    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
+
+    said = client.post("/api/next/machine/legacy/remove", headers={"authorization": f"Bearer {TOKEN}"})
+
+    assert said.status_code == 409
+    assert "processes 4242 still run it" in said.json()["detail"]
+    assert len(versions.legacy()) == 1
+
+
+def test_a_process_started_through_the_alias_and_never_pinned_is_found():
+    runtime = version("v0.3")
+    (local_home.root() / local_home.RUNTIME).symlink_to(runtime)
+    sleeper = local_home.root() / local_home.RUNTIME / "sleep.py"
+    sleeper.write_text("import time\ntime.sleep(30)\n")
+    proc = subprocess.Popen([sys.executable, str(sleeper)])  # noqa: S603 - this interpreter and a test script
+    try:
+        assert wait_for(lambda: proc.pid in leases.unpinned())
+    finally:
+        proc.kill()
+        proc.wait()
+    assert proc.pid not in leases.unpinned()

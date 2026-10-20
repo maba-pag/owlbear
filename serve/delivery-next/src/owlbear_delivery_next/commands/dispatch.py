@@ -26,8 +26,9 @@ def main(argv: list[str] | None = None) -> int:
     """
     from owlbear_delivery_next.local_system import leases  # noqa: PLC0415 - before the command's own imports
 
-    leases.take()
     args = sys.argv[1:] if argv is None else argv
+    leases.pinned(args)  # through the alias: run on from the version's own folder first
+    leases.take()
     if args and args[0] in PROCESSES:
         name, rest = PROCESSES[args[0]], args[1:]
     else:

@@ -271,7 +271,12 @@ def prune() -> list[str]:
     for path, found in sorted(installed.items(), key=lambda item: item[1]):
         if path.resolve() == current or sum(n > found for n in active) < 2 or leases.held(path):  # noqa: PLR2004
             continue
-        remove(path)
+        retired = path.with_name(f".{path.name}-removing")  # a process starting from it from now on finds nothing
+        path.rename(retired)
+        if leases.held(retired):  # a lease taken between the look and the rename keeps it
+            retired.rename(path)
+            continue
+        remove(retired)
         removed.append(path.name)
     return removed
 
@@ -279,6 +284,12 @@ def prune() -> list[str]:
 def legacy() -> list[Path]:
     """The runtime folders the first update put away; the owner removes them (§3)."""
     return sorted(p for p in (local_home.root() / local_home.VERSIONS).glob("legacy-*") if p.is_dir())
+
+
+def running() -> str:
+    """The installed version the alias names, without asking git; empty for a runtime that is no such version."""
+    runtime = local_home.root() / local_home.RUNTIME
+    return runtime.resolve().name if runtime.is_symlink() and number(runtime.resolve().name) else ""
 
 
 def report(say: Callable[[str], None], *, prepare: bool = False) -> int:
