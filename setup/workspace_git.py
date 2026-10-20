@@ -5,8 +5,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-BLOCK_BEGIN = "# OwlBear agent workspace (setup/init.py) — begin"
-BLOCK_END = "# OwlBear agent workspace (setup/init.py) — end"
+BLOCK_BEGIN = "# OwlBear agent workspace (setup/init.py) /{scope} — begin"
+BLOCK_END = "# OwlBear agent workspace (setup/init.py) /{scope} — end"
+OWNED = ".owlbear"  # the only created directory excluded whole: everything below it is OwlBear's
+_SPECIAL = set("\\*?[]")
 
 # OwlBear runtime files below a project-owned .owlbear/ directory.
 _RUNTIME_PATTERNS = (
@@ -66,56 +68,75 @@ def tracked_paths(target_dir: Path, relatives: list[str]) -> set[str]:
     return {path for path in completed.stdout.split("\0") if path}
 
 
+def markers(prefix: str) -> tuple[str, str]:
+    """Return the begin and end lines of the block of the installation at *prefix*."""
+    return BLOCK_BEGIN.format(scope=prefix), BLOCK_END.format(scope=prefix)
+
+
+def literal(path: str) -> str:
+    """Escape a literal path so Git's ignore syntax reads no wildcard, comment or negation in it."""
+    escaped = "".join(f"\\{char}" if char in _SPECIAL else char for char in path)
+    if escaped[:1] in {"#", "!"}:
+        escaped = f"\\{escaped}"
+    stripped = escaped.rstrip(" ")
+    return stripped + "\\ " * (len(escaped) - len(stripped))
+
+
 def exclude_lines(prefix: str, created_dirs: set[str], created_files: set[str]) -> list[str]:
-    """Return anchored exclude patterns for the top-most created paths and runtime files."""
-    created = {(path, True) for path in created_dirs} | {(path, False) for path in created_files}
-    lines = [
-        f"/{prefix}{path}/" if is_dir else f"/{prefix}{path}"
-        for path, is_dir in sorted(created)
-        if not any(parent.as_posix() in created_dirs for parent in Path(path).parents)
+    """Return anchored exclude patterns: each created file, `.owlbear/` whole when created, runtime files."""
+    base = literal(prefix)
+    owned = OWNED in created_dirs
+    lines = [f"/{base}{OWNED}/"] if owned else []
+    lines += [
+        f"/{base}{literal(path)}"
+        for path in sorted(created_files)
+        if not (owned and (path == OWNED or path.startswith(f"{OWNED}/")))
     ]
-    if ".owlbear" not in created_dirs:
-        lines.extend(_runtime_line(prefix, pattern) for pattern in _RUNTIME_PATTERNS)
+    if not owned:
+        lines.extend(_runtime_line(base, pattern) for pattern in _RUNTIME_PATTERNS)
     return lines
 
 
-def _runtime_line(prefix: str, pattern: str) -> str:
+def _runtime_line(base: str, pattern: str) -> str:
     """Anchor one runtime pattern below the project's .owlbear/ directory."""
     negation, body = ("!", pattern[1:]) if pattern.startswith("!") else ("", pattern)
-    return f"{negation}/{prefix}.owlbear/{body}"
+    return f"{negation}/{base}{OWNED}/{body}"
 
 
-def _split_block(text: str) -> tuple[str, list[str] | None, str]:
-    """Split exclude text into before, the OwlBear block's lines (None if absent), and after."""
+def _split_block(text: str, prefix: str) -> tuple[str, list[str] | None, str]:
+    """Split exclude text into before, this installation's block lines (None if absent), and after."""
+    begin, end_marker = markers(prefix)
     lines = text.splitlines(keepends=True)
     stripped = [line.rstrip("\r\n") for line in lines]
-    if BLOCK_BEGIN not in stripped:
+    if begin not in stripped:
         return text, None, ""
-    start = stripped.index(BLOCK_BEGIN)
-    end = stripped.index(BLOCK_END, start) if BLOCK_END in stripped[start:] else len(lines)
+    start = stripped.index(begin)
+    end = stripped.index(end_marker, start) if end_marker in stripped[start:] else len(lines)
     return "".join(lines[:start]), stripped[start + 1 : end], "".join(lines[end + 1 :])
 
 
-def write_block(exclude_path: Path, lines: list[str]) -> None:
-    """Replace or append the one OwlBear block in the local exclude file."""
+def write_block(exclude_path: Path, prefix: str, lines: list[str], previous: list[str] | None) -> None:
+    """Replace or append this installation's block, keeping lines the owner added to it since *previous*."""
     current = exclude_path.read_text(encoding="utf-8") if exclude_path.is_file() else ""
-    before, _, after = _split_block(current)
+    before, existing, after = _split_block(current, prefix)
+    added = [line for line in existing or [] if line not in (previous or lines) and line not in lines]
     rest = before + after
     if rest and not rest.endswith("\n"):
         rest += "\n"
-    block = "".join(f"{line}\n" for line in (BLOCK_BEGIN, *lines, BLOCK_END)) if lines else ""
+    body = [*lines, *added]
+    block = "".join(f"{line}\n" for line in (markers(prefix)[0], *body, markers(prefix)[1])) if body else ""
     updated = rest + block
     if updated != current:
         exclude_path.parent.mkdir(parents=True, exist_ok=True)
         exclude_path.write_text(updated, encoding="utf-8")
 
 
-def remove_block(exclude_path: Path, recorded: list[str], *, dry_run: bool) -> str | None:
-    """Remove the OwlBear block when it still holds *recorded*; return the action taken."""
+def remove_block(exclude_path: Path, prefix: str, recorded: list[str], *, dry_run: bool) -> str | None:
+    """Remove this installation's block when it still holds *recorded*; return the action taken."""
     if not exclude_path.is_file():
         return None
     current = exclude_path.read_text(encoding="utf-8")
-    before, block, after = _split_block(current)
+    before, block, after = _split_block(current, prefix)
     if block is None:
         return None
     if block != recorded:

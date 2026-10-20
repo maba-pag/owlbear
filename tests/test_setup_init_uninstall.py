@@ -411,7 +411,7 @@ def test_uninstall_removes_exclude_block_and_keeps_other_lines(tmp_path: Path) -
     exclude.write_text(exclude.read_text(encoding="utf-8") + "local-notes/\n", encoding="utf-8")
     before = exclude.read_text(encoding="utf-8")
     _initialize(module, target_dir)
-    assert module._workspace_git.BLOCK_BEGIN in exclude.read_text(encoding="utf-8")  # noqa: SLF001
+    assert module._workspace_git.markers("")[0] in exclude.read_text(encoding="utf-8")  # noqa: SLF001
 
     result = module.uninstall(target_dir, _REPO_ROOT, confirm=False)
 

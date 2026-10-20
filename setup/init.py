@@ -40,7 +40,11 @@ def _load_workspace_git() -> ModuleType:
         message = "setup/workspace_git.py is missing next to setup/init.py"
         raise ImportError(message)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    caching, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # no write in the runtime before consent
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = caching
     return module
 
 
@@ -1566,8 +1570,9 @@ def _hide_from_git(target_dir: Path, manifest: dict[str, object]) -> None:
         return
     exclude_path, prefix = location
     lines = _exclude_lines_for(target_dir, prefix, *_created_paths(manifest))
+    previous = manifest.get("git_exclude")
     try:
-        _workspace_git.write_block(exclude_path, lines)
+        _workspace_git.write_block(exclude_path, prefix, lines, previous if isinstance(previous, list) else None)
     except OSError as exc:
         message = f"Could not update the Git exclude file {exclude_path}: {exc}"
         raise RuntimeError(message) from exc
@@ -1713,7 +1718,7 @@ def _remove_git_exclude(options: _UninstallOptions) -> None:
     if location is None:
         return
     try:
-        action = _workspace_git.remove_block(location[0], recorded, dry_run=options.dry_run)
+        action = _workspace_git.remove_block(location[0], location[1], recorded, dry_run=options.dry_run)
     except OSError as exc:
         message = f"Could not update the Git exclude file during uninstall: {location[0]}"
         raise RuntimeError(message) from exc

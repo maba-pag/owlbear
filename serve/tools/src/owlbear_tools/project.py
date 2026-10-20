@@ -34,11 +34,14 @@ def setup_project() -> None:
     parser = argparse.ArgumentParser(prog="setup-project")
     parser.add_argument("path", nargs="?", type=Path, default=Path.cwd())
     parser.add_argument("--replace-hooks", action="store_true")
+    parser.add_argument("--yes", action="store_true", help="consent to writing the agent workspace without asking")
+    parser.add_argument("--dry-run", action="store_true", help="list what setup would write and write nothing")
     args = parser.parse_args()
     target = args.path.expanduser().resolve()
     command = [sys.executable, str(_REPOSITORY_ROOT / "setup/init.py")]
-    if args.replace_hooks:
-        command.append("--replace-hooks")
+    for flag, given in (("--replace-hooks", args.replace_hooks), ("--yes", args.yes), ("--dry-run", args.dry_run)):
+        if given:
+            command.append(flag)
     _finish(_run(command, cwd=target))
 
 

@@ -346,13 +346,48 @@ def test_rerun_keeps_one_exclude_block(tmp_path: Path, init_module: types.Module
     second = exclude.read_text(encoding="utf-8")
 
     manifest = json.loads((target_dir / ".owlbear/install-manifest.json").read_text(encoding="utf-8"))
-    block = second.split(f"{init_module._workspace_git.BLOCK_BEGIN}\n")[1].split(
-        f"{init_module._workspace_git.BLOCK_END}\n"
-    )[0]
+    begin, end = init_module._workspace_git.markers("")
+    block = second.split(f"{begin}\n")[1].split(f"{end}\n")[0]
     assert second == first
-    assert second.count(init_module._workspace_git.BLOCK_BEGIN) == 1
+    assert second.count(begin) == 1
     assert block.splitlines() == manifest["git_exclude"]
     assert "/.owlbear/" in manifest["git_exclude"]
+
+
+def test_a_later_user_file_beside_the_workspace_files_stays_visible(
+    tmp_path: Path, init_module: types.ModuleType
+) -> None:
+    target_dir = _git_project(tmp_path)
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+    (target_dir / ".vscode/extensions.json").write_text("{}\n", encoding="utf-8")
+
+    assert _git(target_dir, "status", "--porcelain", "--untracked-files=all") == "?? .vscode/extensions.json\n"
+
+
+def test_two_installs_in_one_repository_keep_their_own_blocks_and_literal_paths(
+    tmp_path: Path, init_module: types.ModuleType
+) -> None:
+    repository = _git_project(tmp_path)
+    for name in ("a", "[demo]"):
+        (repository / "apps" / name).mkdir(parents=True)
+        init_module.init(repository / "apps" / name, _REPO_ROOT, interactive=False, yes=True)
+
+    exclude = (repository / ".git/info/exclude").read_text(encoding="utf-8")
+    assert _git(repository, "status", "--porcelain", "--untracked-files=all") == ""
+    assert exclude.count(" — begin") == 2
+    assert "/apps/\\[demo\\]/.owlbear/" in exclude
+
+
+def test_a_rerun_keeps_lines_the_owner_added_to_the_block(tmp_path: Path, init_module: types.ModuleType) -> None:
+    target_dir = _git_project(tmp_path)
+    exclude = target_dir / ".git/info/exclude"
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+    end = init_module._workspace_git.markers("")[1]
+    exclude.write_text(exclude.read_text(encoding="utf-8").replace(end, f"/private-notes/\n{end}"), encoding="utf-8")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+
+    assert "/private-notes/\n" in exclude.read_text(encoding="utf-8")
 
 
 def test_install_outside_git_says_nothing_is_hidden(
