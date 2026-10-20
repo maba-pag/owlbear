@@ -26,7 +26,8 @@ applyTo: "**"
   decision goes to the user. Classify unlabelled records best-effort: a user-decision label, an
   answered question or request, or the user's own wording means `decided`; content of an approved
   collection means `approved`; anything else is `autonomous`. Choices inside one task chain or
-  implementation are not recorded decisions.
+  implementation are not recorded decisions, except choices the owner would notice on a page, which
+  are recorded as `autonomous` (TD-418).
 - **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
@@ -35,27 +36,26 @@ applyTo: "**"
   can act on the work, what reaches it from outside, and what failure costs. Review findings are
   claims to weigh against that context, not work orders; follow `r-challenger-protocol` when
   handling them.
-- **Goal-driven.** Delivery implementation traces to an engine-selected native job and admitted
-  packet. Audits, research, ideation, and exploration may remain jobless until they produce admitted
-  Delivery work.
+- **Goal-driven.** Delivery work traces to a Change and its approved brief. Audits, research,
+  ideation, and exploration need no Change until they produce Delivery work.
 
 ## 2. System Awareness
 
 - **Runtime.** Python 3.14 only (the patch version is pinned in `.python-version`) with `uv` (never
-  bare `pip`). VS Code/Copilot custom agents, MCP tools, and a Delivery execution board.
-- **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
-  history and audit logs provide review and recovery.
-- **Delivery.** `design → plan → sequential build → completed`. Independent review is
-  nested in each transformation attempt. The engine owns readiness, claims, receipts, typed
-  correction, and recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed
-  artifact placement.
+  bare `pip`). VS Code/Copilot custom agents, MCP tools, and Delivery's machine host with its pages.
+- **Distribution and safety.** Clone = install (`owlbear install`); OwlBear updates itself from
+  version tags; `setup/init.py` adds the optional agent workspace. Git history and audit logs
+  provide review and recovery.
+- **Delivery.** A Change runs shape → plan → build → review → publish → merge → cleanup, with
+  independent reviews and challenge rounds in its loops. The engine owns readiness, retries and
+  recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed artifact placement.
 
 ## 3. Memory Governance
 
 | Store | What goes here |
 | --- | --- |
 | memory-mcp `owlbear-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
-| Native changes, jobs, and requests | Change-specific context, blockers, decisions, and actions |
+| Delivery's Changes and questions | Change-specific context, blockers, decisions, and actions |
 | `owlbear-data/<folder>/research/` | Research findings and source-grounded analysis (`w-research`) |
 | Project knowledge MCP | Domain knowledge and external-source knowledge |
 
