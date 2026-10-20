@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-20, status at `main` after v1.0, decisions to TD-416
+> **Date:** 2026-10-20, status at `main` after v1.0, decisions to TD-434
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -57,7 +57,7 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 
 The order is the owner's (TD-394): TD-358's build work, the research move, self-update steps 3c to 5, the old
 engine's removal, v1.0, TD-318's memory work, the window-step gate, the watcher; TD-403 places the build work of
-TD-392..TD-402; TD-338 puts the watcher before any real project. TD-419 puts the decision system's design next,
+TD-392..TD-402; TD-338 puts the watcher before any real project. TD-419 puts the decision system next,
 before item 5; TD-422 puts the amendment design session before item 10, after the watcher. Item numbers are stable
 names, not positions: the table lists the items in their order.
 
@@ -72,12 +72,13 @@ names, not positions: the table lists the items in their order.
 | 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Done (#529, #530): the fallback is removed; the pages split into modules under `web/pages/` |
 | 13 | Cockpit: audit `serve/cockpit` for what the machine UI lacks (design-system components and workarounds, memory purge, the ideas editor), port what is worth it, delete Cockpit | TD-416 | none | Done (#527): memory purge ported to the Memory page; the ideas editor, theme toggle and workspace health dropped; one lesson for item 11 in [visual baseline §3.6](delivery-next-visual-baseline.md) |
 | 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | Done: the first `release:major` merge (2026-10-20) |
-| 14 | Decision system: decisions as their own system for OwlBear's work and Delivery's projects, scoped like memory (project, Global); design by the assistant and by Sol blind, merged, Sol-challenged, to the owner | TD-419, TD-418 | none yet | Design in progress; its build's place is the owner's after he sees it |
-| 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started |
+| 14 | Decision system: decisions as their own system for OwlBear's work and every project, in `owlbear-data`, scoped Change, project and Global; Decisions page with read-backs; impact of a change of mind | TD-419, TD-418, TD-424..TD-430 | [decision system](decision-system-build.md) | Designed (owner's answers 2026-10-20); build next, slices 1 to 6 |
+| 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once; from the closed memory issues: a test for two writes in the same microsecond (#238), dispute history in the memory tools' answers (#244), the memory handbook's revision parameter (#249) | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | none yet | Not started; no design |
 | 9 | Watcher: TD-27's benchmark, then the design session (O1–O6) with the owner, then the build and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Not started; the draft needs revising (§3.5) |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
+| 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
 
 **Not yet placed** (decided or planned, no position in the order):
 
@@ -85,9 +86,8 @@ names, not positions: the table lists the items in their order.
   repair plan of 2026-10-11 put it after the watcher, because its live proof needs a runtime the owner can follow.
   [Plan](delivery-next-visual-baseline.md), nothing built.
 - The amendment design (TD-185) is item 16 now (TD-422).
-- New project from zero (TD-421, item 15): Add project creates a folder, Git repository and identity, optionally a
-  GitHub repository, then the chat tools, the agent workspace and the first commit and push; the installer may open
-  it. Design by the assistant and by Sol, merged, Sol-challenged, to the owner before it is built.
+- New project from zero (TD-421, TD-431..TD-433, item 15): [design](new-project-build.md), answered by the owner;
+  it pulls TD-402's per-project GitHub account forward; a project created this way waits for the watcher.
 - The quality service (TD-89): [research](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md), not built.
 - Contradicting findings of the two visual judges go to the owner ([design skill §3.5](delivery-next-design-skill.md));
   they are not detected (§3.7 there).
@@ -211,8 +211,9 @@ Ask each with the question tool in the owner's format (workspace instructions, "
 test review while paused, the research move's timing and scope, the PDS fallback, which roles save memory, the
 curator's threshold, what the line limit covers and the GitHub account.
 
-1. None open. Answered on 2026-10-20 as TD-417..TD-422: the step-kind cap, the recording rule and the decision
-   system, the agent workspace, a new project from zero, the amendment session's timing.
+1. None open. Answered on 2026-10-20 as TD-417..TD-434: the step-kind cap, the recording rule and the decision
+   system, the agent workspace, a new project from zero, the amendment session's timing, the browser and knowledge
+   rebuild.
 
 ## 6. Documents
 
@@ -231,6 +232,8 @@ since item 6; the others are in this folder.
 | [Challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | Review and challenge loops | Built |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
 | [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; its PDS part (§3.6) built with item 11, the rest not built and not placed |
+| [Decision system](decision-system-build.md) | Item 14 | Designed; not built |
+| [New project from zero](new-project-build.md) | Item 15 | Designed; not built, not placed |
 | [Watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | The watcher | Draft for the owner's session; to revise (§3.5) |
 | [Transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Built (item 7) |
 | [Cutover](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Built (item 7), as TD-199 and TD-203 changed it |
