@@ -1,11 +1,14 @@
 import json
 import os
+import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import parse_qsl
 
 import pytest
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.design_packs import design_pack
@@ -20,6 +23,25 @@ MACHINE_HOME = Path.home()  # read before any test replaces HOME
 def machine_home() -> Path:
     """This machine's real home, for a test that reads what is installed there and never writes."""
     return MACHINE_HOME
+
+
+@pytest.fixture
+def page_source() -> Callable[[TestClient, str], str]:
+    """A page as served, then each of its own modules it loads, followed through their relative imports (C-28)."""
+
+    def read(client: TestClient, path: str) -> str:
+        texts = [client.get(path).text]
+        todo, seen = re.findall(r'"(/assets/page/[^"]+)"', texts[0]), set()
+        while todo:
+            url = todo.pop(0)
+            if url not in seen:
+                seen.add(url)
+                texts.append(client.get(url).text)
+                base = url.rpartition("/")[0]
+                todo += [f"{base}/{n}" for n in re.findall(r'from "\./([^"]+)"', texts[-1])]
+        return "\n".join(texts)
+
+    return read
 
 
 @pytest.fixture(autouse=True)

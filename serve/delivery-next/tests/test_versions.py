@@ -223,6 +223,20 @@ def test_the_selfcheck_refuses_a_missing_page_asset(monkeypatch):
     assert selfcheck.problems() == ["the pages' assets are missing: vendor/lit-html/gone.js"]
 
 
+def test_the_selfcheck_refuses_a_page_module_a_page_names_but_the_version_lacks(monkeypatch):
+    own = pages.page_files()
+    monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "main.mjs")})
+
+    assert selfcheck.problems() == ["the pages' assets are missing: pages/changes/main.mjs"]
+
+
+def test_the_selfcheck_refuses_a_module_only_another_module_imports(monkeypatch):
+    own = pages.page_files()
+    monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "list.mjs")})
+
+    assert selfcheck.problems() == ["the pages' assets are missing: pages/changes/list.mjs"]
+
+
 def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp_path):
     clone = registered(tmp_path)
     folder = project_home.clone_dir(clone)
