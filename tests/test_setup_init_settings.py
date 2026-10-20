@@ -378,6 +378,21 @@ def test_two_installs_in_one_repository_keep_their_own_blocks_and_literal_paths(
     assert "/apps/\\[demo\\]/.owlbear/" in exclude
 
 
+def test_a_rerun_keeps_an_exception_written_after_the_block_in_force(
+    tmp_path: Path, init_module: types.ModuleType
+) -> None:
+    target_dir = _git_project(tmp_path)
+    exclude = target_dir / ".git/info/exclude"
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+    exclude.write_text(exclude.read_text(encoding="utf-8") + "!/.vscode/mcp.json\n", encoding="utf-8")
+    shown = _git(target_dir, "status", "--porcelain", "--untracked-files=all")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False, yes=True)
+
+    assert shown == "?? .vscode/mcp.json\n"
+    assert _git(target_dir, "status", "--porcelain", "--untracked-files=all") == shown
+
+
 def test_a_rerun_keeps_lines_the_owner_added_to_the_block(tmp_path: Path, init_module: types.ModuleType) -> None:
     target_dir = _git_project(tmp_path)
     exclude = target_dir / ".git/info/exclude"

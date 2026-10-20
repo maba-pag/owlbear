@@ -120,12 +120,13 @@ def write_block(exclude_path: Path, prefix: str, lines: list[str], previous: lis
     current = exclude_path.read_text(encoding="utf-8") if exclude_path.is_file() else ""
     before, existing, after = _split_block(current, prefix)
     added = [line for line in existing or [] if line not in (previous or lines) and line not in lines]
-    rest = before + after
-    if rest and not rest.endswith("\n"):
-        rest += "\n"
     body = [*lines, *added]
     block = "".join(f"{line}\n" for line in (markers(prefix)[0], *body, markers(prefix)[1])) if body else ""
-    updated = rest + block
+    if existing is not None:  # in place: Git's last matching rule wins, so the block keeps its position
+        updated = before + block + after
+    else:
+        updated = before if not before or before.endswith("\n") else f"{before}\n"
+        updated += block
     if updated != current:
         exclude_path.parent.mkdir(parents=True, exist_ok=True)
         exclude_path.write_text(updated, encoding="utf-8")
