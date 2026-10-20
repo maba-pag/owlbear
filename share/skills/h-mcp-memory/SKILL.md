@@ -16,9 +16,9 @@ For curation workflow, see `w-mem-curation`.
 
 | Role | Agents | Available Tools |
 | --- | --- | --- |
-| Outcome owners | designer, planner, builder, orchestrator, finalizer | `recall_memory`, `save_memory` (`builder` also assesses) |
+| Outcome owners | the new Delivery engine's builder, planner, preparer, updater, shaper | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
-| Read-only reviewers | build-reviewer, planner-challenger, designer-challenger, conceptual-design-reviewer | `recall_memory`; return candidates to their parent |
+| Read-only reviewers | the new Delivery engine's reviewer, challenger, design-judge, test-reviewer | `recall_memory`; return candidates to their parent |
 | Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch`, agent lifecycle tools |
 
 These profiles are intentionally asymmetric. Producers save unscoped pending candidates with any
@@ -488,7 +488,7 @@ save_memory(
 ```text
 list_memories(states=["pending"], categories=["tool-usage"])
 entry = read_memory(entry_id="...")
-curate_memory(entry_id=entry["id"], revision=entry["revision"], scope_agents=["builder", "build-reviewer"])
+curate_memory(entry_id=entry["id"], revision=entry["revision"], scope_agents=["builder", "reviewer"])
 ```
 
 ```text
@@ -512,7 +512,7 @@ pending = read_memory(entry_id="...")
 delete_memory(entry_id=pending["id"], revision=pending["revision"])
 curated = read_memory(entry_id="...")
 approve_memory(entry_id=curated["id"], revision=curated["revision"])
-rename_agent_memories(old_name="old-reviewer", new_name="build-reviewer")
+rename_agent_memories(old_name="old-reviewer", new_name="reviewer")
 delete_agent_memories(agent="retired-agent")
 ```
 

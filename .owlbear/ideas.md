@@ -1,8 +1,8 @@
 # Delivery implementation audit and improvement plan
 
-**Status:** Active improvement plan. This section supersedes the retired Kanban decomposition
-proposal after a source-level review of the current `owlbear-delivery` and `owlbear-delivery-mcp`
-implementations on 2026-08-07.
+**Status:** Superseded history. This plan audited the old engine (`owlbear-delivery` and
+`owlbear-delivery-mcp`) on 2026-08-07; the new engine replaced it and its removal retires these actions
+(TD-199). The memory and code-index sections below still apply.
 
 ## Why the old proposal no longer applies directly
 

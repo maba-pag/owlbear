@@ -191,7 +191,7 @@ frontmatter `agents:` list and body `<agents>` table therefore form a load-beari
 agree. Agents callable at nesting depth three or deeper also require the product-specific invocation
 setting documented in `h-agent-structure`.
 
-The agent validator enforces the current delegation alignment and nesting-depth rule. Do not copy
+The agent validator enforces the current delegation alignment. Do not copy
 the current set of nested agents into this README; consult [WIRING.md](WIRING.md) for the derived
 inventory and the agent files for authority.
 

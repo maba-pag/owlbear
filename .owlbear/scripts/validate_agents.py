@@ -9,7 +9,6 @@ Checks each agents/*.agent.md file for:
   - Unknown tool names not in the canonical registry
   - Frontmatter agents: ↔ body <agents> table alignment
     - Hook declaration shape, script paths, and required role contracts
-  - ND3 agents have disable-model-invocation: false
 
 Usage:
     python .owlbear/scripts/validate_agents.py [<agent_file> ...]
@@ -36,13 +35,10 @@ _TOOL_SEARCH_QUERY_RE = re.compile(r'`"?(OwlBear (?:Delivery|Memory)\s+[^`"]+)"?
 _REQUIRED_AGENT_TOOLS = frozenset({"vscode/toolSearch"})
 _MCP_SERVER_MODULES: dict[str, tuple[str, str]] = {
     "owlbear-browser": ("owlbear_browser_mcp.server", "mcp"),
-    "owlbear-delivery": ("owlbear_delivery_mcp.server", "mcp"),
     "owlbear-knowledge": ("owlbear_knowledge_mcp.server", "mcp"),
     "owlbear-memory": ("owlbear_memory_mcp.server", "mcp"),
 }
 _EXTERNAL_MCP_SERVERS = frozenset({"markitdown"})
-# TD-183 Q3: no workspace registers the old Delivery server; its agents' grants stay checked until TD-199 deletes them.
-_UNREGISTERED_MCP_SERVERS = frozenset({"owlbear-delivery"})
 _DEFAULT_MCP_SERVERS: frozenset[str] = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
 
 # Canonical VS Code built-in toolset prefixes.
@@ -80,45 +76,10 @@ _INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlb
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _HOOK_EVENTS = frozenset({"SessionStart", "PreToolUse", "PostToolUse"})
 _REQUIRED_HOOKS: dict[str, dict[str, frozenset[str]]] = {
-    "build-reviewer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
-    },
-    "builder": {
-        "SessionStart": frozenset({"uv run python .owlbear/hooks/session-context.py"}),
-        "PostToolUse": frozenset({"uv run python .owlbear/hooks/lint-changed.py"}),
-    },
-    "conceptual-design-reviewer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
-    },
-    "designer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --allow-research --terminal-read-only"}),
-    },
-    "designer-challenger": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
-    },
-    "finalizer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
-    },
-    "planner": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
-    },
-    "planner-challenger": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
-    },
     "test-curator": {
         "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-src-writes.py"}),
     },
 }
-
-# Known ND3 agents — must have disable-model-invocation: false.
-# See share/WIRING.md § "Nesting Depth" for the canonical list.
-ND3_AGENTS: frozenset[str] = frozenset(
-    {
-        "build-reviewer",
-        "conceptual-design-reviewer",
-        "planner-challenger",
-    }
-)
 
 _BUILTINS = frozenset({"Explore", "General Purpose"})
 _AGENT_TABLE_MIN_CELLS = 2
@@ -189,7 +150,7 @@ def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]:
     """Validate MCP configuration keys against enumerable and external servers."""
     configured, errors = _configured_mcp_servers()
     if configured:
-        expected = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS}) - _UNREGISTERED_MCP_SERVERS
+        expected = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
         missing = sorted(expected - configured)
         unexpected = sorted(configured - expected)
         if missing:
@@ -262,20 +223,11 @@ def _is_valid_tool(name: str, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS
         prefix = name.split("/", 1)[0]
         if prefix in KNOWN_TOOLSETS:
             return True
-        # (e) prefix is a known MCP server — e.g. 'owlbear-delivery/transition_delivery'
+        # (e) prefix is a known MCP server — e.g. 'owlbear-memory/recall_memory'
         if prefix in mcp_servers:
             return True
     # (c) exact match in KNOWN_STANDALONE_TOOLS
     return name in KNOWN_STANDALONE_TOOLS
-
-
-def _fm_scalar(fm_lines: list[str], key: str) -> str | None:
-    """Get a scalar frontmatter value by key."""
-    for line in fm_lines:
-        if line.startswith(f"{key}:"):
-            _, _, val = line.partition(":")
-            return val.strip()
-    return None
 
 
 def _fm_agents(fm_lines: list[str]) -> list[str]:
@@ -476,7 +428,6 @@ def _check_tool_search_queries() -> list[str]:
 def _check_mcp_surface(agent_files: list[Path]) -> tuple[frozenset[str], list[str]]:
     """Validate configuration, live grants, and explicit MCP bootstrap queries."""
     configured_servers, errors = _validate_mcp_configuration()
-    configured_servers |= _UNREGISTERED_MCP_SERVERS
     errors.extend(_check_tool_search_queries())
     try:
         registries = _load_live_mcp_tool_registries()
@@ -595,23 +546,16 @@ def _check_required_reading(content: str, agent_file: Path) -> list[str]:
 
 
 def validate_agent(agent_file: Path, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> list[str]:
-    """Validate one agent's structure, tools, delegation, and nesting metadata."""
+    """Validate one agent's structure, tools, hooks, and delegation."""
     content = Path(agent_file).read_text(encoding="utf-8")
     fm_lines = _frontmatter_lines(content)
-    errors = [
+    return [
         *_check_structure(content, fm_lines, agent_file),
         *_check_tool_policy(content, fm_lines, agent_file, mcp_servers),
         *_check_hooks(fm_lines, agent_file),
         *_check_delegation(content, fm_lines, agent_file),
         *_check_required_reading(content, agent_file),
     ]
-
-    name = agent_file.stem.replace(".agent", "")
-    dmi = _fm_scalar(fm_lines, "disable-model-invocation")
-    if name in ND3_AGENTS and dmi != "false":
-        errors.append(f"{agent_file}: ND3 agent must have disable-model-invocation: false (currently: {dmi})")
-
-    return errors
 
 
 def _discover_agent_files() -> list[Path]:

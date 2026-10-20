@@ -41,7 +41,7 @@ For every finding really think if this is a REAL problem or a hypothetical one. 
 
 Do the audit, then present one finding at a time, then let me select what to do with each one of them. Give me high level info, not file names and lines, give me abstract descriptions and the big picture. Do not implement without my explicit approval per finding.
 
-Small changes can be made by you directly and immediately after a short presentation and approval, for bigger ones we should probably use the planner agent and have it create tasks on the kanban board. Really big things might even need a whole ideation session, so propose appropriate fixes and their responsible implementer with each.
+Small changes can be made by you directly and immediately after a short presentation and approval, for bigger ones we should probably shape a Change on the new Delivery engine's Changes page (New Change). Really big things might even need a whole ideation session, so propose appropriate fixes and their responsible implementer with each.
 
 ## Additional Instructions
 
