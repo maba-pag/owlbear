@@ -19,10 +19,13 @@ ASKING = {"/", "/backlog", "/memory", "/config"}  # pages with consequential but
 
 
 @pytest.mark.parametrize(("path", "title"), TABS)
-def test_every_page_shares_the_tab_bar_stylesheet_and_confirmation_and_ignores_a_query(tmp_path, path, title):
+def test_every_page_shares_the_tab_bar_stylesheet_and_confirmation_and_ignores_a_query(
+    tmp_path, path, title, page_source
+):
     c = TestClient(api.create_app(Store(tmp_path), "t", None), base_url="http://127.0.0.1")
 
     page = c.get(path)
+    source = page_source(c, path)  # with its own modules (C-28)
 
     assert page.status_code == 200
     nav = re.search(r'<nav aria-label="Delivery pages">.*?</nav>', page.text, re.DOTALL)
@@ -39,9 +42,9 @@ def test_every_page_shares_the_tab_bar_stylesheet_and_confirmation_and_ignores_a
 
     if path in ASKING:
         assert "<!-- ask -->" not in page.text
-        assert "window.confirm" not in page.text
-        assert "function confirmed(" not in page.text
-        assert page.text.index("function ask(") < page.text.index("await ask(")
+        assert "window.confirm" not in source
+        assert "function confirmed(" not in source
+        assert source.index("function ask(") < source.index("await ask(")
 
     attacked = c.get(path, params={"html": "<script>alert(1)</script>"})
 

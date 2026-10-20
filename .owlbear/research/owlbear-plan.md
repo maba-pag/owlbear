@@ -65,7 +65,7 @@ the table lists the items in their order.
 | 3 | Self-update step 4: `repo.git`, versions, never backwards, selfcheck, standby, handover, Run updates now | TD-239, TD-299, TD-300, TD-352..TD-354, TD-369 | [self-update §3–§5, §11](self-update-build.md) | Done (#517 to #519; this machine's first update to v0.20 on 2026-10-20, TD-415) |
 | 4 | Self-update step 5: idle, use, announcement, automatic updates | TD-301, TD-288 | [self-update §7, §11](self-update-build.md) | Done (#520) |
 | 7 | Old engine removal: tag `delivery-v1-final`, five dependency-closed batches, three skills retired with batch 3, docs rewritten | TD-199, TD-201, TD-203, TD-394 | [transfer ledger §3.4](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md), [cutover §3.3, §3.6, §3.7](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | Done: tag `delivery-v1-final`, batches 1 to 5 (#521 to #524), its issues and pull requests closed, the documentation rewritten for v1.0 (#526) |
-| 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | In progress: the fallback is removed; the split is next |
+| 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Done: the fallback is removed; the pages split into modules under `web/pages/` |
 | 13 | Cockpit: audit `serve/cockpit` for what the machine UI lacks (design-system components and workarounds, memory purge, the ideas editor), port what is worth it, delete Cockpit | TD-416 | none | Done (#527): memory purge ported to the Memory page; the ideas editor, theme toggle and workspace health dropped; one lesson for item 11 in [visual baseline §3.6](delivery-next-visual-baseline.md) |
 | 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](self-update-build.md) | After items 1, 6, 2, 3, 4, 7, 11 and 13 |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started |
@@ -127,8 +127,8 @@ designs. The old engine's designer went with batch 3 of item 7.
 
 The removal follows the self-update (TD-394) and the ledger's batches 1 to 5 (the
 `main` sync batch is gone, TD-203) with the tag first; its precondition for batch 2 (the new Changes page reachable)
-holds. It rewrites the documentation v1.0 needs (TD-393). The old engine's issues #225 and #400 and pull requests
-#405 and #412 closed with it; Renovate's pull requests come back after it. Batch 5 also retired the
+holds. It rewrites the documentation v1.0 needs (TD-393). The old engine's issues #225 and #400 and pull requests #405
+and #412 closed with it; Renovate's pull requests come back after it. Batch 5 also retired the
 four seeded hooks only the old agents registered; `deny-src-writes.py` stays for the test curator. The old live state
 (`.owlbear/delivery/`, `.owlbear/controller/`) stays on disk until D5's endpoint, two consumer Changes merged on the
 new engine (item 10).
@@ -138,8 +138,11 @@ new engine (item 10).
 The PDS fallback is gone as the [visual-baseline plan §3.6](delivery-next-visual-baseline.md) lists: the 3-second
 decision, the `pds` flag, every native-control branch, the `.no-pds` CSS and its notice; the confirmation and the
 screenshot viewer are `p-modal`s, and the browser tests let `cdn.ui.porsche.com` through instead of aborting it
-(TD-398). Then the module test covers pages, scripts and styles and the large pages split by section (TD-401):
-`changes.html` 1496 lines, `config.html` 1102, `backlog.html` 524.
+(TD-398). The module test now counts every page, script and style the package owns, the vendored `web/vendor/` and
+`web/pds/` aside (TD-401), and the three large pages split by section: each keeps its markup and styles, and its
+script became ES modules under `web/pages/<page>/`, served from a list fixed at startup as `/assets/page/<page>/<name>`.
+`changes.html` went from 1496 lines to 128, `config.html` from 1102 to 39, `backlog.html` from 524 to 55; no module
+has more than 259.
 v1.0 is the first merge labelled `release:major` after items 1, 6, 2, 3, 4, 7 and 11; it is tagged `v1.0` and `v1`.
 
 ### 3.5 Items 8 and 9: gate, then watcher
@@ -181,7 +184,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-25, C-27 | The watcher saves lessons and infers stages | Not built | build | 9 |
 | C-26 | Tests do not assert prose wording | Workspace tests assert skill prose (`tests/test_agent_ecosystem_validation.py`) | align | — |
 | C-28 | Tool use is measured, success rates included (T8) | Success rates are not counted | align | — |
-| C-28 | The 500-line limit covers pages, scripts and styles; tests do not (TD-401) | Only Python sources are checked (`changes.html` has 1517 lines) | align | 11 |
 | C-28 | Default rules guide, never gate | Ruff's complexity rule fails CI; `noqa` is the escape | keep | — |
 | C-30 | Every role may use built-in subagents | Not in window steps | keep | 8 |
 | S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |

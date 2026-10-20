@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sys
 from importlib import import_module
 from importlib.resources import files
@@ -68,7 +69,7 @@ def _registered() -> list[tuple[str, Path]]:
 
 
 def _pages() -> list[str]:
-    """Every page and every asset the pages load: the design system, lit-html as its sums name it, ``ui.mjs``."""
+    """Every page and every asset the pages load: the design system, lit-html, ``ui.mjs`` and each page's modules."""
     from owlbear_delivery_next.project_host import pages  # noqa: PLC0415 - checked above
 
     web = files("owlbear_delivery_next").joinpath("web")
@@ -76,7 +77,12 @@ def _pages() -> list[str]:
         listed = pages.pages()
         names = [("pds", n) for n in pages.PDS] + [(pages.LIT, *n.split("/")) for n in pages.lit_files()]
         pages.lit_version()
+        own = pages.page_files()
+        for page, name in own:
+            web.joinpath("pages", page, name).read_bytes()
+        named = {tuple(n) for html in listed.values() for n in re.findall(r'"/assets/page/([^/"]+)/([^/"]+)"', html)}
         missing = ["/".join(n) for n in [*names, ("ui.mjs",)] if not web.joinpath(*n).is_file()]
+        missing += [f"pages/{p}/{n}" for p, n in sorted(named - set(own))]
     except Exception as exc:  # noqa: BLE001 - reported
         return [f"the pages cannot be read: {type(exc).__name__}: {exc}"]
     if not listed:

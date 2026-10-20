@@ -13,12 +13,19 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepK
 from owlbear_delivery_next.commands import mcp_server
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
+WEB = SRC / "web"
+VENDORED = (WEB / "vendor", WEB / "pds")  # third-party releases, not the package's own code
 LIMIT = 500
 FIELDS = 6  # T5: about six fields per object
 WIDER = {"save_brief": 9}  # decisions and non_goals (reuse study v2, Sol finding 6); specified (TD-179 rule 1)
+OWNED = [  # C-28: pages, scripts and styles count like modules
+    p
+    for p in WEB.rglob("*")
+    if p.suffix in {".html", ".mjs", ".js", ".css"} and not any(p.is_relative_to(v) for v in VENDORED)
+]
 
 
-@pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=lambda p: str(p.relative_to(SRC)))
+@pytest.mark.parametrize("path", sorted([*SRC.rglob("*.py"), *OWNED]), ids=lambda p: str(p.relative_to(SRC)))
 def test_module_within_limit(path: Path) -> None:
     count = len(path.read_text(encoding="utf-8").splitlines())
     assert count <= LIMIT, f"{path.relative_to(SRC)} has {count} lines; split it by use case"

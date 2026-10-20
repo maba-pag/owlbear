@@ -1399,10 +1399,10 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     assert json.loads((store.root / pack_job.FILE).read_text())["state"] == "failed"  # kept on disk
 
 
-def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path):
+def test_settings_shows_the_design_pack_section_and_its_update_button(tmp_path, page_source):
     c = TestClient(api.create_app(Store(tmp_path), "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
 
-    page = c.get("/config").text
+    page = page_source(c, "/config")
 
     assert '<section id="pack" class="panel" aria-labelledby="pack-title">' in page
     assert '<h2 id="pack-title">Design pack</h2>' in page

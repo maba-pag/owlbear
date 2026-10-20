@@ -22,6 +22,19 @@ BASE = "<!-- base -->"  # where each page takes the shared stylesheet, before it
 ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared confirmation, before its script
 PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the vendored Porsche Design System 4.8.0 files
 LIT = "vendor/lit-html"  # the vendored lit-html release; its SHA256SUMS names every file it serves (TD-264)
+OWN = {"mjs": "text/javascript", "css": "text/css"}  # a page's own modules and styles under web/pages/<page>/ (C-28)
+
+
+def page_files() -> dict[tuple[str, str], str]:
+    """Each page's own module or stylesheet, as (page, file name), with its media type."""
+    root = files("owlbear_delivery_next").joinpath("web", "pages")
+    return {
+        (page.name, f.name): OWN[f.name.rpartition(".")[2]]
+        for page in root.iterdir()
+        if page.is_dir()
+        for f in page.iterdir()
+        if f.is_file() and f.name.rpartition(".")[2] in OWN and not f.name.startswith(".")
+    }
 
 
 def lit_files() -> dict[str, str]:
@@ -37,8 +50,8 @@ def lit_version() -> str:
 
 
 def assets(app: FastAPI) -> None:
-    """Serve the design system, lit-html and the pages' shared module: fixed names only, never a path from the URL."""
-    web, lit, release = files("owlbear_delivery_next").joinpath("web"), lit_files(), lit_version()
+    """Serve the design system, lit-html and the pages' scripts: fixed names only, never a path from the URL."""
+    web, lit, release, own = files("owlbear_delivery_next").joinpath("web"), lit_files(), lit_version(), page_files()
 
     @app.get("/assets/pds/{name}")
     def pds(name: str) -> Response:
@@ -58,6 +71,13 @@ def assets(app: FastAPI) -> None:
     def ui() -> Response:
         body = web.joinpath("ui.mjs").read_bytes()  # changes with Delivery's code, so always revalidated
         return Response(body, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/assets/page/{page}/{name}")
+    def page_asset(page: str, name: str) -> Response:
+        if (page, name) not in own:
+            raise HTTPException(404, "no such asset")
+        body = web.joinpath("pages", page, name).read_bytes()  # changes with Delivery's code, like ui.mjs
+        return Response(body, media_type=own[page, name], headers={"Cache-Control": "no-cache"})
 
 
 def nav(current: int) -> str:
