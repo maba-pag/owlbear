@@ -395,9 +395,9 @@ MAINTENANCE_PROMPT = """The offline inspection is structural evidence only. Revi
 diagnostic codes and the responsible Delivery owner before continuing the ordinary session.
 Do not infer healthy execution, user confirmation, provenance, worker termination, approval,
 or merge readiness from this report. Do not edit, delete, copy, unlock, recover, upgrade, or
-repair the inspected files by hand. Supported repair writes run only through `/repair-delivery`
-(`delivery-repair`: classify, a fenced proposal, the user's confirmation where its policy needs it,
-apply and verify); migrations through `delivery-migrate` and upgrades through `/upgrade-delivery`.
+repair the inspected files by hand. Supported repair writes run only through `delivery-repair`
+(classify, a fenced proposal, the user's confirmation where its policy needs it, apply and verify)
+and migrations through `delivery-migrate`; this old engine is retired and gets no upgrades.
 Anything without such a route stays contained for its owner. Do not use Git, network, provider,
 process, or manual filesystem repair commands."""
 _ENTRY_LIMIT_MAINTENANCE_PROMPT = (

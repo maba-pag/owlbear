@@ -398,7 +398,6 @@
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 - [serve/delivery-mcp/README.md](../serve/delivery-mcp/README.md)
-- [operating guide](../setup/operating-owlbear.md#correction-and-recovery)
 
 ## serve/delivery-github/README.md
 - # `owlbear-delivery-github — GitHub Publication Adapter`

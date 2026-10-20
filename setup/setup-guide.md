@@ -247,14 +247,19 @@ the repository, Delivery requests, or status.
 After verification, prove the installation with one small outcome on the new Delivery engine's
 Changes page:
 
-1. Press **New Change** and describe the outcome in the shaping chat it opens.
+1. Start OwlBear with `owlbear start` (or `~/.owlbear/runtime/.venv/bin/owlbear start` before the
+   command is linked); it prints the address of its pages, and `owlbear status` prints it again.
+   Open it, choose **Add project** in the bar at the top and enter the project's folder.
+
+   **Expected result:** the project is listed as loaded and its Changes page opens.
+2. Press **New Change** and describe the outcome in the shaping chat it opens.
 
    **Expected result:** the chat asks what it needs and saves a brief for your approval.
-2. Approve the brief on the Changes page.
+3. Approve the brief on the Changes page.
 
    **Expected result:** the engine plans, builds, reviews and publishes the Change as a pull
    request; when it needs you, it asks on the Changes page.
-3. When the Changes page asks for merge consent, review the pull request and approve it there, or
+4. When the Changes page asks for merge consent, review the pull request and approve it there, or
    merge it in GitHub.
 
    **Expected result:** the Change shows as done.

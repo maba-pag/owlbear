@@ -119,10 +119,12 @@ and [Troubleshooting](setup/setup-guide.md#troubleshooting).
 
 Prove the installation with one small outcome on the Changes page:
 
-1. Press **New Change** and describe what you want in the shaping chat it opens.
-2. Approve the brief on the Changes page. The engine plans, builds, reviews and publishes it as a
+1. Run `owlbear start`, open the address it prints, choose **Add project** in the bar and enter the
+   project's folder.
+2. Press **New Change** and describe what you want in the shaping chat it opens.
+3. Approve the brief on the Changes page. The engine plans, builds, reviews and publishes it as a
    pull request, and asks on the page when it needs you.
-3. When the page asks for merge consent, review the pull request and approve it there, or merge it
+4. When the page asks for merge consent, review the pull request and approve it there, or merge it
    in GitHub yourself.
 
 The full walkthrough with expected output at each step is in
