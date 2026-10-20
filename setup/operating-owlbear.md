@@ -87,7 +87,7 @@ project's Changes while that project's VS Code window is closed.
 A shared settings repository is a local clone of a Git repository you choose, set with
 `owlbear data PATH` and used after `owlbear restart`. When one is set, project settings, agent
 memory and the backlog live there, and OwlBear commits and pushes each save, so they follow you
-across clones and machines. Without one, settings stay in each clone.
+across clones and machines. Without one, they stay on this Mac in `~/.owlbear/projects/<id>/`.
 
 ## Upgrading OwlBear
 
@@ -207,14 +207,9 @@ project-specific files that are outside the refreshable set.
 
 ### Removing OwlBear from your Mac
 
-1. Stop OwlBear:
-
-   ```shell
-   owlbear stop
-   ```
-
-   **Expected result:** OwlBear stops once its running steps finish; `owlbear status` reports
-   `OwlBear is not running`.
+1. On the page, press **Pause Delivery**, then **Pause and stop when idle**, and wait until
+   `owlbear status` reports `OwlBear is not running`. Plain `owlbear stop` stops the host but lets
+   running agent steps finish on their own, and deleting their folders under them loses their work.
 2. Remove the command link, the shaping agent links, the completion and the login item:
 
    ```shell

@@ -86,6 +86,7 @@ owlbear start
 `owlbear install` asks separately before it links `~/.local/bin/owlbear`, links the shaping agent
 and its skill into `~/.copilot`, and adds a login item. Say yes to the shaping agent: **New Change**
 needs it. Without the command link, run `~/.owlbear/runtime/.venv/bin/owlbear` instead of `owlbear`.
+If the login item already started OwlBear, it runs paused: press **Resume** in the bar at the top.
 
 Open the printed address, choose **Add project** in the bar at the top and enter your project's
 folder. If the page then shows **Setup required**, run the command it names from any terminal:

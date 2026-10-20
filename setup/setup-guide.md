@@ -70,7 +70,8 @@ owlbear start
 
 **Expected result:** `OwlBear started, running: http://127.0.0.1:<port>/#token=…`. Open that
 address; `owlbear status` prints it again. OwlBear listens only on this Mac's loopback address, on a
-free port it picks at start.
+free port it picks at start. If the login item already started it, it runs paused: the bar at the top
+says **Delivery is paused**; press **Resume** so your Changes advance.
 
 ### 4. Add your project
 
