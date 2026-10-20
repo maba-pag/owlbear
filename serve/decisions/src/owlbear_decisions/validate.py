@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import stat
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_decisions.models import STATEMENT_LIMIT, Decision, LinkType, Origin, Scope, State
-from owlbear_decisions.storage import DECISIONS_DIR, load_folder
+from owlbear_decisions.storage import DECISIONS_DIR, is_folder, kind, load_folder
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -20,11 +21,12 @@ CHANGES_DIR = "changes"
 
 @dataclass(frozen=True, order=True)
 class Finding:
-    """One rule a file breaks."""
+    """One rule a file breaks, and the decisions it involves: none for a file that did not load."""
 
     path: str
     rule: str
     message: str
+    involves: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -51,21 +53,40 @@ def layers(global_folder: Path | None, project_folders: Iterable[Path]) -> list[
     found = [Layer(global_folder, Scope.GLOBAL)] if global_folder else []
     for folder in sorted(project_folders):
         found.append(Layer(folder, Scope.PROJECT, folder.name))
-        found.extend(
-            Layer(held.parent, Scope.CHANGE, folder.name, held.parent.name)
-            for held in sorted((folder / CHANGES_DIR).glob(f"*/{DECISIONS_DIR}"))
-        )
+        found.extend(Layer(held, Scope.CHANGE, folder.name, held.name) for held in _change_folders(folder))
     return found
 
 
-def _project_folders(root: Path) -> list[Path]:
+def _change_folders(project: Path) -> list[Path]:
+    """The Change folders holding decisions; a `changes` path or Change folder that is not a real folder raises."""
+    changes = project / CHANGES_DIR
+    if (mode := kind(changes)) is None:
+        return []
+    if not stat.S_ISDIR(mode):
+        msg = f"{changes} is not a real folder: its Change decisions cannot be read"
+        raise NotADirectoryError(msg)
+    found = []
+    for held in sorted(changes.iterdir()):
+        if stat.S_ISLNK(kind(held) or 0):
+            msg = f"{held} is a symlink: a Change folder must be a real folder"
+            raise NotADirectoryError(msg)
+        if is_folder(held) and kind(held / DECISIONS_DIR) is not None:
+            found.append(held)
+    return found
+
+
+def project_folders(root: Path) -> list[Path]:
+    """The folders under a data repository's *root* that hold project or Change decisions.
+
+    A folder that cannot be looked into raises `OSError`: it is never taken for one without decisions.
+    """
     return [
         child
         for child in sorted(root.iterdir())
-        if child.is_dir()
-        and not child.name.startswith(".")
+        if not child.name.startswith(".")
         and child.name != DECISIONS_DIR
-        and ((child / DECISIONS_DIR).is_dir() or any((child / CHANGES_DIR).glob(f"*/{DECISIONS_DIR}")))
+        and is_folder(child)
+        and (kind(child / DECISIONS_DIR) is not None or _change_folders(child))
     ]
 
 
@@ -97,16 +118,34 @@ def _visible(source: Entry, target: Entry, link: LinkType) -> bool:
     return source.decision.scope is not Scope.GLOBAL and source.decision.project == target.decision.project
 
 
-def _links(entry: Entry, by_id: dict[str, Entry]) -> list[tuple[str, str]]:
-    found: list[tuple[str, str]] = []
+def _same_or_narrower(source: Decision, target: Decision) -> bool:
+    """Global replaces Global only; a project its own project's or Changes' decisions; a Change its own."""
+    if source.scope is Scope.GLOBAL:
+        return target.scope is Scope.GLOBAL
+    if target.scope is Scope.GLOBAL or target.project != source.project:
+        return False
+    return source.scope is Scope.PROJECT or target.change == source.change
+
+
+def _links(entry: Entry, by_id: dict[str, Entry]) -> list[Finding]:
+    path, source = str(entry.path), entry.decision.id
+    found: list[Finding] = []
     for link in entry.decision.links:
         target = by_id.get(link.target)
-        if link.target == entry.decision.id:
-            found.append(("link-target", f"{link.type} links to itself"))
+        if link.target == source:
+            found.append(Finding(path, "link-target", f"{link.type} links to itself", (source,)))
         elif target is None or not _visible(entry, target, link.type):
-            found.append(("link-target", f"{link.type} target {link.target} is missing or out of reach"))
+            message = f"{link.type} target {link.target} is missing or out of reach"
+            found.append(Finding(path, "link-target", message, (source,)))
         elif link.type is LinkType.EXCEPTION_TO and target.decision.scope is not Scope.GLOBAL:
-            found.append(("exception-target", f"exception_to {link.target}, which is not a Global decision"))
+            message = f"exception_to {link.target}, which is not a Global decision"
+            found.append(Finding(path, "exception-target", message, (source,)))
+        elif link.type is LinkType.REPLACES and not _same_or_narrower(entry.decision, target.decision):
+            message = (
+                f"replaces {link.target}, a {target.decision.scope} decision of a wider or other layer; "
+                "widen by promoted_from, depart from Global by exception_to"
+            )
+            found.append(Finding(path, "replace-scope", message, (source, link.target)))
     return found
 
 
@@ -118,15 +157,15 @@ def _successors(entries: list[Entry]) -> list[Finding]:
                 successors[link.target][entry.decision.id] = entry  # a repeated link is still one successor
     findings = []
     for target, by_source in successors.items():
-        active = sorted(str(e.path) for e in by_source.values() if e.decision.state is State.IN_FORCE)
+        active = sorted((str(e.path), e.decision.id) for e in by_source.values() if e.decision.state is State.IN_FORCE)
         if len(active) > 1:
-            findings.extend(
-                Finding(p, "two-successors", f"{len(active)} in-force decisions replace {target}") for p in active
-            )
+            message = f"{len(active)} in-force decisions replace {target}"
+            findings.extend(Finding(p, "two-successors", message, (i, target)) for p, i in active)
     for entry in entries:
         named = [e for e in successors.get(entry.decision.id, {}).values() if e.decision.state is not State.DRAFT]
         if entry.decision.state is State.REPLACED and not named:
-            findings.append(Finding(str(entry.path), "no-successor", "replaced, but no decision replaces it"))
+            message = "replaced, but no decision replaces it"
+            findings.append(Finding(str(entry.path), "no-successor", message, (entry.decision.id,)))
     return findings
 
 
@@ -136,7 +175,7 @@ def _duplicates(entries: list[Entry]) -> list[Finding]:
     for entry in entries:
         ids[entry.decision.id].append(entry)
     return [
-        Finding(str(e.path), "duplicate-id", f"id {key} is used by {len(group)} files")
+        Finding(str(e.path), "duplicate-id", f"id {key} is used by {len(group)} files", (key,))
         for key, group in ids.items()
         if len(group) > 1
         for e in group
@@ -146,21 +185,33 @@ def _duplicates(entries: list[Entry]) -> list[Finding]:
 def check(entries: list[Entry]) -> list[Finding]:
     """Every rule over loaded entries."""
     by_id = {e.decision.id: e for e in entries}
-    findings = [Finding(str(e.path), rule, m) for e in entries for rule, m in (*_single(e), *_links(e, by_id))]
+    findings = [Finding(str(e.path), rule, m, (e.decision.id,)) for e in entries for rule, m in _single(e)]
+    findings += [f for e in entries for f in _links(e, by_id)]
     return sorted([*findings, *_duplicates(entries), *_successors(entries)])
+
+
+def read_layers(found: Iterable[Layer]) -> tuple[list[Entry], list[tuple[Layer, Finding]]]:
+    """The decisions of *found* layers, and each file that did not load as a finding with its layer."""
+    entries: list[Entry] = []
+    failed: list[tuple[Layer, Finding]] = []
+    for layer in found:
+        loaded = load_folder(layer.folder)
+        for error in loaded.errors:
+            rule = "link-type" if any(_is_link_type(loc) for loc in error.locations) else "schema"
+            failed.append((layer, Finding(str(error.path), rule, error.message)))
+        entries.extend(Entry(path, layer, decision) for path, decision in loaded.decisions.items())
+    return entries, failed
+
+
+def collect(found: Iterable[Layer]) -> tuple[list[Entry], list[Finding]]:
+    """The decisions of *found* layers and every finding over them, unreadable files included."""
+    entries, failed = read_layers(found)
+    return entries, sorted([*(f for _, f in failed), *check(entries)])
 
 
 def validate(global_folder: Path | None, project_folders: Iterable[Path]) -> list[Finding]:
     """Findings for the Global folder and the project folders, unreadable files included."""
-    entries: list[Entry] = []
-    findings: list[Finding] = []
-    for layer in layers(global_folder, project_folders):
-        loaded = load_folder(layer.folder)
-        for error in loaded.errors:
-            rule = "link-type" if any(_is_link_type(loc) for loc in error.locations) else "schema"
-            findings.append(Finding(str(error.path), rule, error.message))
-        entries.extend(Entry(path, layer, decision) for path, decision in loaded.decisions.items())
-    return sorted([*findings, *check(entries)])
+    return collect(layers(global_folder, project_folders))[1]
 
 
 def _is_link_type(location: str) -> bool:
@@ -170,7 +221,7 @@ def _is_link_type(location: str) -> bool:
 
 def validate_repo(root: Path) -> list[Finding]:
     """Findings for a data repository: Global at `root`, every project folder holding decisions."""
-    return validate(root, _project_folders(root))
+    return validate(root, project_folders(root))
 
 
 def main(argv: Sequence[str] | None = None) -> int:

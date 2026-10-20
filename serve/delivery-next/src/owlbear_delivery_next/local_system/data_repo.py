@@ -33,6 +33,8 @@ POINTER, OLD_POINTER = local_home.POINTER, local_home.OLD_POINTER
 VIEW = "OWLBEAR_DATA"  # the host's view for its runners: the repository's path, or empty for none
 # Delivery's locks, temporary files, calibration screenshots and the backlog migration's journal
 EXCLUDE = (".*.lock", ".tmp-*", "*/visual/*/*.png", ".backlog-migration.json")
+# Git never combines two versions of one decision file, in any rebase of the checkout: such a rebase stops (TD-424)
+ATTRIBUTES = ("**/decisions/*.md -merge",)
 GIT_SECONDS, LOCK_SECONDS, SAVE_SECONDS, PENDING_SECONDS = 10, 20, 45, 4  # a save answers within the page's 60 s
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
@@ -113,6 +115,10 @@ class DataRepo:
         """A project's agent memory, beside its layer (TD-72); memory curation commits it."""
         return self.root / name / MEMORY
 
+    def git(self, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
+        """One git command in the checkout; a timeout or a missing folder is a failed command."""
+        return _git(self.root, *args, until=until)
+
     @contextlib.contextmanager
     def locked(self, wait: float | None = None) -> Iterator[None]:
         """Hold the repository-wide lock that serializes every write, commit, push and rebase; wait a bounded time."""
@@ -140,11 +146,12 @@ class DataRepo:
             os.close(fd)
 
     def _exclude(self, admin: Path) -> None:
-        path = admin / "info" / "exclude"
-        text = path.read_text() if path.exists() else ""
-        if missing := [p for p in EXCLUDE if p not in text.splitlines()]:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(missing) + "\n")
+        for name, lines in (("exclude", EXCLUDE), ("attributes", ATTRIBUTES)):
+            path = admin / "info" / name
+            text = path.read_text() if path.exists() else ""
+            if missing := [p for p in lines if p not in text.splitlines()]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(missing) + "\n")
 
     def claim(self, name: str, identity: str) -> bool:
         """Bind the project folder to one repository; True when this call wrote the claim.
@@ -206,33 +213,55 @@ class DataRepo:
         The caller holds ``locked``. Unpushed earlier commits are pushed too, so an unchanged save retries them.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
+        return self.commit(paths, message, until) or self._push(until)
+
+    def commit(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
+        """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``."""
+        until = time.monotonic() + SAVE_SECONDS if until is None else until
         rels = [p.relative_to(self.root).as_posix() for p in ([paths] if isinstance(paths, Path) else paths)]
         rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
         if not rels:
-            return self._push(until)  # removed before it was ever committed: nothing to commit
+            return ""  # removed before it was ever committed: nothing to commit
         if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
             return f"saved, but not committed: {added.stderr.strip()[:200]}"
         staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until).returncode
         if staged and (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode:
             return f"saved, but not committed: {made.stderr.strip()[:200]}"
-        return self._push(until)
+        return ""
 
     def _tracked(self, rel: str, until: float) -> bool:
         return _git(self.root, "ls-files", "--error-unmatch", "--", rel, until=until).returncode == 0
 
     def _push(self, until: float) -> str:
-        """Push; once rejected, rebase on the remote and push again; a failed rebase is undone, never left half done."""
+        """Push; once rejected, rebase on the remote and push again."""
         if _git(self.root, "push", "-q", until=until).returncode == 0:
             return ""
-        if _git(self.root, "-c", "rebase.autoStash=false", "pull", "-q", "--rebase", until=until).returncode:
-            admin = Path(_git(self.root, "rev-parse", "--absolute-git-dir", until=until).stdout.strip() or self.root)
-            if any((admin / d).exists() for d in ("rebase-merge", "rebase-apply")):
-                _git(self.root, "rebase", "--abort", until=until + PENDING_SECONDS)
+        if self.pull(until):
             return f"saved and committed in {self.root}, but it could not be merged with the remote; push it by hand"
         sent = _git(self.root, "push", "-q", until=until)
         if sent.returncode:
             return f"saved and committed in {self.root}, but the push failed: {sent.stderr.strip()[:200]}"
         return ""
+
+    def pull(self, until: float | None = None) -> str:
+        """Rebase on the remote; a failed rebase is undone, never left half done. Why it failed, else nothing."""
+        until = time.monotonic() + SAVE_SECONDS if until is None else until
+        pulled = _git(self.root, "-c", "rebase.autoStash=false", "pull", "-q", "--rebase", until=until)
+        return self._settle(pulled, "git pull failed", until)
+
+    def rebase(self, until: float | None = None) -> str:
+        """Rebase on the upstream as last fetched, without fetching; a failed rebase is undone. Why it failed."""
+        until = time.monotonic() + SAVE_SECONDS if until is None else until
+        done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
+        return self._settle(done, "git rebase failed", until)
+
+    def _settle(self, done: subprocess.CompletedProcess[str], failed: str, until: float) -> str:
+        if done.returncode == 0:
+            return ""
+        admin = Path(_git(self.root, "rev-parse", "--absolute-git-dir", until=until).stdout.strip() or self.root)
+        if any((admin / d).exists() for d in ("rebase-merge", "rebase-apply")):
+            _git(self.root, "rebase", "--abort", until=until + PENDING_SECONDS)
+        return done.stderr.strip()[:200] or failed
 
     def pending(self) -> str:
         """What in the shared checkout is not yet committed or pushed, as a notice; nothing when all is published."""

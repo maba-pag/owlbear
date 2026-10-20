@@ -6,6 +6,7 @@ import contextlib
 import fcntl
 import os
 import re
+import stat
 import threading
 from dataclasses import dataclass, field
 from io import StringIO
@@ -127,19 +128,36 @@ def read(path: Path) -> Decision:
     return decision
 
 
+def kind(path: Path) -> int | None:
+    """The `lstat` mode of *path*, None when it does not exist; any other failure (a permission) raises `OSError`."""
+    try:
+        return path.lstat().st_mode
+    except FileNotFoundError, NotADirectoryError:
+        return None
+
+
+def is_folder(path: Path) -> bool:
+    """*path* is a real folder, not a symlink; raises `OSError` when that cannot be told."""
+    return stat.S_ISDIR(kind(path) or 0)
+
+
 def load_folder(folder: Path) -> Loaded:
-    """Every entry of `<folder>/decisions/`; anything that is not a valid decision file is an error."""
+    """Every entry of `<folder>/decisions/`; anything that is not a valid decision file is an error.
+
+    A missing `decisions/` is an empty layer; a folder that cannot be listed raises `OSError`, never loads as empty.
+    """
     loaded = Loaded()
     directory = folder / DECISIONS_DIR
-    if not directory.exists() and not directory.is_symlink():
+    if (mode := kind(directory)) is None:
         return loaded
-    if directory.is_symlink() or not directory.is_dir():
+    if not stat.S_ISDIR(mode):
         loaded.errors.append(FileError(directory, "not a folder: decisions must be a real folder"))
         return loaded
     for path in sorted(directory.iterdir()):
         if path.name in _IGNORED or _TEMPORARY.match(path.name):
             continue
-        if path.suffix != ".md" or not path.is_file():
+        mode = path.lstat().st_mode
+        if path.suffix != ".md" or not (stat.S_ISREG(mode) or stat.S_ISLNK(mode)):
             loaded.errors.append(FileError(path, "not a decision file (expected <id>.md)"))
             continue
         try:

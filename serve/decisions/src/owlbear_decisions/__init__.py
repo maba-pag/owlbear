@@ -14,8 +14,9 @@ from owlbear_decisions.models import (
     State,
     new_id,
 )
+from owlbear_decisions.snapshot import Snapshot, snapshot
 from owlbear_decisions.storage import FileError, Loaded, check_write, decision_path, load_folder, read, write
-from owlbear_decisions.validate import Finding, validate, validate_repo
+from owlbear_decisions.validate import Entry, Finding, Layer, validate, validate_repo
 
 __all__ = [
     "Applicability",
@@ -23,21 +24,25 @@ __all__ = [
     "Decision",
     "DecisionError",
     "DecisionFileError",
+    "Entry",
     "FileError",
     "Finding",
     "ImmutableError",
+    "Layer",
     "Link",
     "LinkType",
     "Loaded",
     "Origin",
     "OwnerWords",
     "Scope",
+    "Snapshot",
     "State",
     "check_write",
     "decision_path",
     "load_folder",
     "new_id",
     "read",
+    "snapshot",
     "validate",
     "validate_repo",
     "write",
