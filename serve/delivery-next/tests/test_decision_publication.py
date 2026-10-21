@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, LinkType, Origin, Scope, State, new_id, read, validate_repo, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, validate_repo, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
-from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_flow import loop, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store import change_record, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import decisions_gate, pick
+from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -252,6 +252,78 @@ def test_an_approval_interrupted_after_its_commit_stays_and_its_next_step_saves(
     assert (p.committed, p.published, p.revision, ran) == (True, True, rule.revision, [picking.slug])
     assert commits(remote, rel(lasting.id)) == [APPROVED.format(1)]  # saved again without another commit
     assert c.decisions_baseline.revisions[lasting.id] == rule.rule_revision
+
+
+def test_a_recovery_that_fails_waits_with_its_reason_and_the_next_step_saves_before_work(
+    picking, shared_repo, monkeypatch
+):
+    root, remote = shared_repo
+    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    real, tries = decision_store.save_all, []
+
+    def crashed(*_args, **_kwargs):
+        raise Crash
+
+    def held_once(*args, **kwargs):
+        tries.append(args)
+        if len(tries) == 1:
+            msg = "the shared data repository is held by another save"
+            raise decision_store.DecisionsUnavailable(msg)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(1)  # recorded with its saves planned, then the host dies before Git
+    monkeypatch.setattr(decision_store, "save_all", held_once)
+    ran: list[str] = []
+    monkeypatch.setattr(runner, "_run", lambda _s, _l, c, _st, _r: ran.append(c.slug))
+
+    waiting = stepped(picking, picking.slug)
+
+    assert (ran, waiting.stop, waiting.outcome.exit) == ([], None, Exit.PENDING)  # no worker, and never stopped
+    assert list((root / PROJECT).rglob("D-*.md")) == []
+    line = status.status(waiting, Activity(host_up=True), waiting.outcome.at).line
+    assert decision_publication.UNSAVED in line
+    assert "held by another save" in line
+    assert loop.next_step(waiting, waiting.outcome.at) is None
+
+    woken = waiting.outcome.wake_at
+    runner._step(picking.store, Lock(picking.slug), waiting, loop.next_step(waiting, woken), picking.repo)  # noqa: SLF001
+
+    (p,) = picking.store.read(picking.slug).decisions_published
+    assert (p.committed, p.published, len(tries), ran) == (True, True, 2, [picking.slug])
+    assert commits(remote, rel(lasting.id)) == [APPROVED.format(1)]
+
+
+def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_approval(picking, shared_repo):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    picking.approved()
+    reshape(picking)
+    rival = Decision(id=new_id(), title="Notes live in files", statement="A note is a file.", scope=Scope.PROJECT,
+                     project=PROJECT, origin=Origin.APPROVED, actor="shaper", state=State.IN_FORCE, created_at=AT,
+                     links=(Link(type=LinkType.REPLACES, target=first.id),))  # fmt: skip
+    assert decision_store.save(picking.shared, rival, expected_revision=None, message="decisions: rival").published
+    (later,) = shape(picking, 2, LASTING | {"answer": "Notes live in Postgres."}).brief.decisions
+    hook = root / ".git" / "hooks" / "commit-msg"  # refuses only the conflict flags, after the approval's commit
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text('#!/bin/sh\nif grep -q "conflict on" "$1"; then echo flags refused >&2; exit 1; fi\n')
+    hook.chmod(0o755)
+
+    assert picking.approve(2).status_code == 200
+
+    assert git(root, "log", "-1", "--format=%s") == APPROVED.format(2)
+    assert git(root, "status", "--porcelain", "--untracked-files=all", "--", f"{PROJECT}/decisions") == ""
+    seen = decision_store.load(picking.shared, PROJECT).snapshot
+    assert not any(seen.get(d).decision.conflict for d in (rival.id, later.id))  # no flag Git does not hold
+    assert [seen.active(rival.id), seen.active(later.id)] == [False, False]  # the conflict still fails closed
+    a = picking.approved()
+    p = next(p for p in a.decisions_published if p.id == later.id)
+    assert (a.brief.approved_version, p.saved, p.committed) == (2, True, True)
+    assert p.revision == seen.get(later.id).decision.revision
+    assert "conflict flags" in p.notice
+    assert "put back" in p.notice
 
 
 def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versions_pick_stale(picking, shared_repo):

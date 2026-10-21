@@ -12,12 +12,13 @@ demotes them (`decision_archive`).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionError, State, applies, decision_path, read
 from owlbear_delivery_next.change_contracts.decision_records import Published, Said
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Stop
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.state_store import decision_archive, decision_store
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
 
 REFUSED = "the brief's project decisions were not saved, so it is not approved; approve it again"
 UNSAVED = "the approved brief's project decisions were not saved"
-SAVE = "Let the shared data repository save and commit again (see the reason), then resume"
 
 
 def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str:
@@ -64,7 +64,11 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
 
 
 def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
-    """*c* with an interrupted approval's saves done again before its next step, or None once that stopped it."""
+    """*c* with an interrupted approval's saves done again before its next step, or None while it waits to retry.
+
+    A failure waits out like any environment episode, its reason on the card, and the next step tries again; the
+    owner is asked only after a day of it. No step works until they are saved.
+    """
     if all(p.committed for p in c.decisions_published):
         return c
     try:
@@ -74,9 +78,10 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
     if not why:
         store.write(lock, done)
         return done
-    reason = f"{UNSAVED}: {why}"[:600]
-    stop = Stop(kind=ErrorKind.STATE, reason=reason, action=SAVE, resume="They are saved", at=now)
-    store.write(lock, loop.apply(c, StepResult(exit=Exit.STOP, reason=reason, stop=stop), now))
+    reason = f"{UNSAVED}: {why}"[:300]
+    cause = cause_key(ErrorKind.NETWORK, c.step.kind, "decisions")
+    retry = StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
+    store.write(lock, loop.apply(c, retry, now))
     return None
 
 
@@ -98,7 +103,7 @@ def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str]
             receipts = decision_store.save_all(store.shared, items, message=message)
         except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
             return c, str(exc)
-        if failed := [r for r in receipts if not r.committed]:
+        if failed := [r for r in receipts if not r.batch]:  # a conflict flag left uncommitted is in the notice
             return c, "; ".join(_failed(r) for r in failed)
         at = c.brief.approved_at or datetime.now(UTC)
         saved = {d.id: _record(d, r, at) for (d, _), r in zip(items, receipts, strict=True)}
@@ -141,7 +146,7 @@ def _record(d: Decision, r: Receipt | None, at: datetime) -> Published:
     """*d*'s save with its receipt; without one, planned and not yet saved."""
     if r is None:
         return Published(id=d.id, title=d.title, state=d.state.value, at=at)
-    fields = {"revision": r.revision, "saved": r.saved, "committed": r.committed, "published": r.published}
+    fields = {"revision": r.revision, "saved": r.saved, "committed": r.batch, "published": r.published}
     return Published(id=d.id, title=d.title, state=d.state.value, notice=r.notice, at=at, **fields)
 
 
