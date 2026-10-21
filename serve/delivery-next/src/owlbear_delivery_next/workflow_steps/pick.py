@@ -47,22 +47,41 @@ CHANGED = f"the decisions in force changed since they were picked; {picks.RETRY}
 
 
 def listed(seen: Snapshot, c: Change) -> list[Decision]:
-    """The active Global and project decisions, by id; other Changes' own and *c*'s brief decisions are not on it.
+    """The active Global and project decisions, by id; other Changes' own and *c*'s published ones are not on it.
 
-    *c*'s project decisions are in force once its approval published them (TD-453): leaving them out keeps the list
-    a pick was made from the one a retried approval checks.
+    *c*'s project decisions are in force once its approval published them (TD-453): leaving them out while their
+    files hold what it published keeps the list a pick was made from the one a retried approval checks. One changed
+    outside the Change since is on it like any other rule.
     """
     own = {d.id for b in [*c.brief.approved, c.brief] for d in b.decisions if d.id}
+    held = {p.id: p.revision for p in c.decisions_published}
     found = (e.decision for e in seen.entries)
     return sorted(
-        (d for d in found if d.state is State.IN_FORCE and d.scope is not Scope.CHANGE and d.id not in own),
+        (
+            d
+            for d in found
+            if d.state is State.IN_FORCE
+            and d.scope is not Scope.CHANGE
+            and not (d.id in own and held.get(d.id) == d.revision)
+        ),
         key=lambda d: d.id,
     )
 
 
-def digest(found: list[Decision]) -> str:
-    """The list's identity: every id with its rule revision."""
-    return hashlib.sha256("\n".join(f"{d.id} {d.rule_revision}" for d in found).encode()).hexdigest()
+def moved(seen: Snapshot, c: Change) -> list[str]:
+    """*c*'s published decisions whose files no longer hold what its approval wrote: changed or retired outside it."""
+    found = []
+    for p in c.decisions_published:
+        e = seen.get(p.id)
+        if (now := e.decision.revision if e else "") != p.revision:
+            found.append(f"{p.id} {now or 'gone'}")
+    return found
+
+
+def digest(found: list[Decision], changed: list[str]) -> str:
+    """The list's identity: every id with its rule revision, and the Change's publications changed since (`moved`)."""
+    lines = [*(f"{d.id} {d.rule_revision}" for d in found), *changed]
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
 def corrections(root: Path, project: str) -> str:
@@ -110,7 +129,7 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
         store.write(lock, c)
         return c
     found = listed(view.snapshot, c)
-    base = base.model_copy(update={"commit": view.commit, "listed": digest(found)})
+    base = base.model_copy(update={"commit": view.commit, "listed": digest(found, moved(view.snapshot, c))})
     if not found:  # nothing in force: nothing to pick, and no session
         c.brief.picked = base.model_copy(update={"status": "ok"})
         store.write(lock, c)
@@ -187,4 +206,6 @@ def unapproved(store: Store, c: Change, view: DataView | None) -> str:
         return f"the decisions brief v{c.brief.version} must follow were not picked; {picks.RETRY}"
     if why := picks.unready(c):
         return why
-    return CHANGED if view is not None and digest(listed(view.snapshot, c)) != p.listed else ""
+    if view is None:
+        return ""
+    return CHANGED if digest(listed(view.snapshot, c), moved(view.snapshot, c)) != p.listed else ""

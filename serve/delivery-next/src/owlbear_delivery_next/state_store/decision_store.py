@@ -203,10 +203,15 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     until = time.monotonic() + SAVE_SECONDS
     behind = decision_sync.catch_up(shared, until)
     behind = f"not checked against the remote: {behind}" if behind else ""
-    decisions = [d for d, _, _ in items]
+    decisions, paths = [d for d, _, _ in items], [decision_path(d, folder) for d, folder, _ in items]
+    before = {path: _content(path) for path in paths}
     if refused := _refusals(items) or write_batch(items):
         return _refused(shared, decisions, refused, behind)
-    sent = decision_sync.publish(shared, [decision_path(d, folder) for d, folder, _ in items], message, until)
+    sent = decision_sync.publish(shared, paths, message, until)
+    if sent.uncommitted:  # files no commit holds would be read as rules by every Change here: put back
+        _unstage(shared, before, until)
+        notice = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
+        return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
     if sent.stale:
         return [Receipt(d.id, saved=False, commit=_head(shared), notice=sent.notice[:300]) for d in decisions]
     said = [sent.notice]
@@ -253,6 +258,14 @@ def _put_back(path: Path, text: bytes | None) -> None:
         path.unlink(missing_ok=True)
     elif _content(path) != text:
         path.write_bytes(text)
+
+
+def _unstage(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> None:
+    """Put the batch's files back as they were and their index entries back to `HEAD`'s."""
+    for path, text in before.items():
+        _put_back(path, text)
+    rels = [p.relative_to(shared.root).as_posix() for p in before]
+    shared.git("reset", "-q", "--", *rels, until=until)
 
 
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:

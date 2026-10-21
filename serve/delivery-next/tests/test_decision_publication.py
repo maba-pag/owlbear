@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, LinkType, Origin, Scope, State, new_id, read, validate_repo
+from owlbear_decisions import Decision, LinkType, Origin, Scope, State, new_id, read, validate_repo, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
@@ -18,7 +18,7 @@ from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store import change_record, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import decisions_gate
+from owlbear_delivery_next.workflow_steps import decisions_gate, pick
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -104,7 +104,7 @@ def test_approval_publishes_in_force_at_once_and_another_change_meets_it_before_
     ran: list[str] = []
     monkeypatch.setattr(runner, "_run", lambda _s, _l, c, _st, _r: ran.append(c.slug))
 
-    tags = stepped(picking, "tags")  # its approving Change's runner has not run: the approval is still queued
+    tags = stepped(picking, "tags")  # its approving Change's runner has not run yet
 
     assert ran == []
     assert f"new: {lasting.id} {WHERE}" in loop.open_question(tags).text  # its gate asks, as for any new rule
@@ -155,6 +155,11 @@ def test_a_failed_push_lets_approval_proceed_shows_on_the_card_and_the_next_save
     (line,) = api.summary(picking.store, picking.slug, Activity(host_up=True), AT)["decisions"]
     assert line.startswith(f"Project decisions not yet pushed: {WHERE}: saved and committed")
     assert line.endswith("the data repository's next save pushes them")
+    with picking.store.lock(picking.slug) as lock:
+        done = picking.store.read(picking.slug)
+        done.finished_at = AT  # its cleanup never pushes them: the line stays
+        picking.store.write(lock, done)
+    assert api.summary(picking.store, picking.slug, Activity(host_up=True), AT)["decisions"] == [line]
 
     away.rename(remote)
     other = Decision(id=new_id(), title="Tags are free text", statement="A tag is any text.", scope=Scope.PROJECT,
@@ -177,6 +182,96 @@ def test_approving_the_same_version_again_rewrites_the_same_file_without_a_commi
     assert ((root / rel(lasting.id)).read_text(), commits(remote)) == (written, before)
     (p,) = picking.approved().decisions_published
     assert (p.id, p.published, p.revision) == (lasting.id, True, read(root / rel(lasting.id)).revision)
+
+
+def test_a_commit_a_hook_refuses_puts_the_files_back_and_refuses_the_approval(picking, shared_repo):
+    root, _ = shared_repo
+    shape(picking, 1, LASTING)
+    hook = root / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text("#!/bin/sh\necho refused by policy >&2\nexit 1\n")
+    hook.chmod(0o755)
+    state = (git(root, "rev-parse", "HEAD"), git(root, "status", "--porcelain"), git(root, "diff", "--cached"))
+
+    said = picking.approve(1)
+
+    assert said.status_code == 409
+    assert "refused by policy" in said.json()["detail"]
+    assert list((root / PROJECT).rglob("D-*.md")) == []  # no rule the commit refused is read by other Changes
+    assert (git(root, "rev-parse", "HEAD"), git(root, "status", "--porcelain"), git(root, "diff", "--cached")) == state
+    a = picking.approved()
+    assert (a.brief.approved_version, a.step.kind, a.decisions_published) == (None, StepKind.SHAPE, [])
+
+
+def test_the_brief_cannot_change_while_its_approval_publishes(picking, monkeypatch):
+    shape(picking, 1, LASTING)
+    real, said = decision_store.save_all, []
+
+    def saving(*args, **kwargs):
+        said.append(picking.save(title="Add a farewell page"))  # the shaper saves v2 during the Git work
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(decision_store, "save_all", saving)
+
+    assert picking.approve(1).status_code == 200
+
+    assert "try again" in said[0]["errors"][0]
+    a = picking.approved()
+    assert (a.brief.version, a.brief.approved_version, a.step.kind) == (1, 1, StepKind.PLAN)
+
+
+class Crash(Exception):  # noqa: N818 - the host process dies
+    pass
+
+
+def test_an_approval_interrupted_after_its_commit_stays_and_its_next_step_saves(picking, shared_repo, monkeypatch):
+    root, remote = shared_repo
+    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    real = decision_store.save_all
+
+    def crashed(*args, **kwargs):
+        real(*args, **kwargs)
+        raise Crash
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(1)
+    monkeypatch.setattr(decision_store, "save_all", real)
+
+    a = picking.approved()
+    (p,) = a.decisions_published
+    assert (a.brief.approved_version, p.id, p.committed) == (1, lasting.id, False)  # recorded before Git, planned
+    assert picking.save(title="Add a farewell page")["errors"]  # an approved answer is never reused for another
+    ran: list[str] = []
+    monkeypatch.setattr(runner, "_run", lambda _s, _l, c, _st, _r: ran.append(c.slug))
+
+    c = stepped(picking, picking.slug)
+
+    rule = read(root / rel(lasting.id))
+    (p,) = c.decisions_published
+    assert (p.committed, p.published, p.revision, ran) == (True, True, rule.revision, [picking.slug])
+    assert commits(remote, rel(lasting.id)) == [APPROVED.format(1)]  # saved again without another commit
+    assert c.decisions_baseline.revisions[lasting.id] == rule.rule_revision
+
+
+def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versions_pick_stale(picking, shared_repo):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    picking.approve(1)
+    picking.approved()
+    reshape(picking)
+    assert shape(picking, 2, LASTING, OWN).brief.decisions[0].id == first.id  # picked while it stands as published
+    rule = read(root / rel(first.id))
+    write(rule.model_copy(update={"state": State.WITHDRAWN}), root / PROJECT, rule.revision)  # the Decisions page
+
+    said = picking.approve(2)
+
+    assert said.status_code == 409
+    assert pick.CHANGED in said.json()["detail"]
+    assert picking.ask(2, retry=True).status_code == 200
+    picking.step()
+    assert picking.approve(2).status_code == 200  # picked again with the withdrawal: it stands
+    assert read(root / rel(first.id)).state == State.WITHDRAWN
 
 
 @pytest.mark.parametrize("pr", [None, MERGED], ids=["abandoned", "merged"])
