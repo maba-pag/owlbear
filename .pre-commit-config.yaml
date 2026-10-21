@@ -165,6 +165,12 @@ repos:
         entry: uv run --frozen python .owlbear/scripts/validate_prompts.py
         files: '^(?:share|\.owlbear)/(?:agents|prompts|skills)/.*|^\.owlbear/scripts/validate_prompts\.py$'
         pass_filenames: false
+      # The generated decisions view is unedited; stdlib only, no owlbear-data token (TD-436)
+      - id: decisions-view-hash
+        name: Decisions view hash
+        language: unsupported
+        entry: python3 .github/scripts/decisions_view_hash.py
+        files: ^\.owlbear/decisions\.md$
       # TODO marker scan — warning only (always exit 0, output always shown)
       - id: todo-check
         name: TODO marker scan

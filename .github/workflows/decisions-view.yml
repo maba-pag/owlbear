@@ -1,0 +1,56 @@
+---
+name: Decisions view
+
+# The only workflow holding owlbear-data's read-only token; pull requests check the view's own hash (TD-436).
+"on":
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "23 5 * * *"  # daily: owlbear-data changes without a push here
+
+concurrency:
+  group: decisions-view-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fresh:
+    name: Decisions view is fresh
+    if: github.repository == 'maba-pag/owlbear'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout OwlBear
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout owlbear-data read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: maba-pag/owlbear-data
+          token: ${{ secrets.OWLBEAR_DATA_TOKEN }}
+          path: owlbear-data
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+          cache-suffix: decisions-view
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install the decisions package
+        run: |
+          uv python install
+          uv sync --locked --package owlbear-decisions --no-dev
+
+      - name: Compare the view with owlbear-data's decisions
+        run: uv run --no-sync decisions-view owlbear-data --project owlbear --out .owlbear/decisions.md --check
