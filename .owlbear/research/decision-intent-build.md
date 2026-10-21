@@ -94,7 +94,7 @@ project. Project folders therefore never meet, only Global is shared, and no dis
 | --- | --- | --- | --- | --- | --- |
 | The owner's words | Nowhere | Never | Nowhere | — | TD-449 |
 | Shaping drafts | The Change's database (`~/.owlbear/projects/<id>`) | Each brief save | Nowhere | — | Survive a broken session; only that Change needs them |
-| Lead-chat drafts | The conversation | — | Nowhere | — | Saved only once confirmed |
+| Lead-chat drafts | The owner's unconfirmed answers: the conversation; an agent's own proposal: `owlbear-data`, as a draft | The proposal, when made | The proposal: GitHub | Pushed at once | His answers are saved only once confirmed; an agent's proposal stays a draft until he activates it (TD-451) |
 | Active decisions | `owlbear-data`: Global at the root, `<project>/decisions/`, `<project>/changes/<change>/decisions/` | At activation and retirement | GitHub | Pushed at once; pulled at host start, step start or resume, before publishing or merging | One place every agent and both machines read; history |
 | Picked revisions | The Change's baseline; archived with its finished-Change record | At approval and accepted updates | `owlbear-data` | Change end | Reproducible work; impact reports |
 | Search index | Local SQLite | After each pull or save | Nowhere | — | Fast search |

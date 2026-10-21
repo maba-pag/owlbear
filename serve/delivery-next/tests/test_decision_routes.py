@@ -70,7 +70,8 @@ def after(old: Decision, **changes) -> Decision:
 def seed(shared: DataRepo, *decisions: Decision) -> None:
     """Write *decisions* in their layers and publish them as one commit."""
     for d in decisions:
-        write(d, shared.root if d.scope is Scope.GLOBAL else shared.root / d.project)
+        folder = shared.root if d.scope is Scope.GLOBAL else shared.root / d.project
+        write(d, folder / "changes" / d.change if d.scope is Scope.CHANGE else folder)
     git(shared.root, "add", "-A")
     git(shared.root, "commit", "-qm", "seed")
     git(shared.root, "push", "-q", "origin", "HEAD")
@@ -280,6 +281,7 @@ def test_a_second_reversal_is_the_owners_re_decision_only(owner, store, shared):
     seed(shared, first, second)
 
     again = {"title": "Notes", "statement": "A file.", "replaces": second.id, "reason": "r"}
+    again["revision"] = second.revision
     refused = chat.post("/api/next/decisions/propose", json=again)
     unworded = after(second, state=State.DRAFT, statement="A JSON file.")
     seed(shared, unworded)
@@ -315,8 +317,12 @@ def test_a_chat_proposal_is_a_draft_unless_confirmed_and_never_replaces_a_decide
     plain = chat.post("/api/next/decisions/propose", json={"title": "Tags", "statement": "Tags are free."}).json()
     worded = chat.post("/api/next/decisions/propose", json={"title": "Tags", "statement": "Tags are free.",
                                                              "confirmed": True}).json()  # fmt: skip
-    on_decided = chat.post("/api/next/decisions/propose", json={"title": "x", "statement": "x", "replaces": rule.id})
-    on_global = chat.post("/api/next/decisions/propose", json={"title": "x", "statement": "x", "replaces": wide.id})
+
+    def replacing(old: Decision) -> Any:
+        body = {"title": "x", "statement": "x", "replaces": old.id, "revision": old.revision, "reason": "r"}
+        return chat.post("/api/next/decisions/propose", json=body)
+
+    on_decided, on_global = replacing(rule), replacing(wide)
     with_words = chat.post("/api/next/decisions/propose",
                            json={"title": "x", "statement": "x", "words": "Ada's secret wording"})  # fmt: skip
 
@@ -540,6 +546,34 @@ def test_a_confirmed_replacement_retires_its_predecessor_in_one_commit_and_shows
 
 
 @pytest.mark.usefixtures("chat")
+def test_a_draft_replacement_naming_a_stale_revision_is_refused_and_nothing_is_written(shared):
+    rule = make()
+    seed(shared, rule)
+    head = git(shared.root, "rev-parse", "HEAD")
+
+    got = tool("record_decision", title="Notes", statement="Postgres.", rationale="It grew.",
+               replaces={"decision": rule.id, "revision": "0" * 64})  # fmt: skip
+
+    assert (got["saved"], got["receipts"][0]["saved"]) == (False, False)
+    assert "changed since it was read" in got["receipts"][0]["notice"]
+    assert (git(shared.root, "rev-parse", "HEAD"), now(shared, rule.id)) == (head, rule)
+
+
+@pytest.mark.usefixtures("chat")
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_a_chat_replacement_of_a_change_decision_stays_in_its_change(shared, confirmed):
+    rule = make(scope=Scope.CHANGE, change="c1")
+    seed(shared, rule)
+
+    got = tool("record_decision", title="Notes", statement="Postgres.", rationale="It grew.", confirmed=confirmed,
+               replaces={"decision": rule.id, "revision": rule.revision})  # fmt: skip
+
+    new = now(shared, got["receipts"][0]["id"])
+    assert (new.scope, new.project, new.change) == (Scope.CHANGE, PROJECT, "c1")
+    assert new.state is (State.IN_FORCE if confirmed else State.DRAFT)
+
+
+@pytest.mark.usefixtures("chat")
 def test_a_chat_replaces_a_global_decision_only_with_a_global_one(shared):
     wide, local = worldwide(), make()
     seed(shared, wide, local)
@@ -567,7 +601,9 @@ def test_retire_decision_needs_the_owners_confirmation_and_a_decided_one_his_re_
     unconfirmed, unsaid = retire(rule), retire(held, confirmed=True)
     assert (unconfirmed["saved"], unsaid["saved"], git(shared.root, "rev-parse", "HEAD")) == (False, False, head)
     assert "confirmed=true" in unconfirmed["error"]
-    assert retire(rule, confirmed=True)["saved"] is True
+    retired = retire(rule, confirmed=True)
+    assert retired["saved"] is True
+    assert (retired["impact"]["old"]["id"], retired["impact"]["effect"]) == (rule.id, "withdrawn")
     assert retire(held, confirmed=True, redecide=True)["saved"] is True
     assert (now(shared, rule.id).state, now(shared, held.id).state) == (State.WITHDRAWN, State.WITHDRAWN)
 

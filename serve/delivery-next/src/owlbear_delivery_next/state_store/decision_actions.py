@@ -419,17 +419,23 @@ def propose(  # noqa: PLR0913 - the proposal's fields
             reason=reason, redecided=redecided, effect=effect, scope=scope, by=CHAT,
         )  # fmt: skip
     links: tuple[Link, ...] = ()
+    layer = {"scope": scope, "project": "" if scope is Scope.GLOBAL else project}
     if replaces:
-        old = _entry(decision_store.load(shared, project), replaces).decision
+        why = _reason(reason, "a draft that replaces a decision")
+        view = decision_store.load(shared, project)
+        old = _entry(view, replaces).decision
+        if stale := _stale(view, old, revision):
+            return stale
         _in_force(old, "replaced")
         _scoped(old, scope)
         authorise(old, owner=False)
         second(every(shared), old, decided=False, owner=False)
-        rationale = _because(rationale, CHANGED, _reason(reason, "a draft that replaces a decision"))
+        rationale = _because(rationale, CHANGED, why)
         links = (Link(type=LinkType.REPLACES, target=old.id),)
+        layer = {"scope": old.scope, "project": old.project, "change": old.change}  # as a confirmed one keeps it
     made = _new(
-        None, title=title, topic=topic, statement=statement, rationale=rationale, scope=scope,
-        project="" if scope is Scope.GLOBAL else project, origin=Origin.DECIDED if confirmed else Origin.AUTONOMOUS,
+        None, title=title, topic=topic, statement=statement, rationale=rationale, **layer,
+        origin=Origin.DECIDED if confirmed else Origin.AUTONOMOUS,
         actor=CHAT, source=CHAT, read_back=_today() if confirmed else "none",
         state=State.IN_FORCE if confirmed else State.DRAFT, links=links,
     )  # fmt: skip

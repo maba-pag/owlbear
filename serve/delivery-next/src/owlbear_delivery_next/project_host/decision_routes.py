@@ -271,11 +271,11 @@ def project(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
         known = repo() if repo else None
         return [decision_impact.Place(store.name, known, store, "" if known else "this host does not know its clone")]
 
-    return router(lambda: store.shared, store.name, here, store)
+    return router(lambda: store.shared, lambda: store.name, here, store)  # Settings may rename the folder
 
 
-def router(shared: Shared, folder: str, places: Places, store: Store | None = None) -> APIRouter:
-    """The decision routes over *folder*'s view; the caller adds the token check.
+def router(shared: Shared, folder: Callable[[], str], places: Places, store: Store | None = None) -> APIRouter:
+    """The decision routes over the view of the folder *folder* names at each call; the caller adds the token check.
 
     Without a project *store* (OwlBear's own decisions on the machine host) ignored read-backs and the Changes
     pinning a decision are left out.
@@ -284,7 +284,7 @@ def router(shared: Shared, folder: str, places: Places, store: Store | None = No
     mine: list[Any] = [Depends(owner)]
 
     def at(scope: str) -> str:
-        return scope or folder
+        return scope or folder()
 
     routes.include_router(impact_routes.router(shared, places, mine))
 
@@ -443,9 +443,12 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
     def retire(decision_id: str, body: RetireBody, project: In) -> dict[str, Any]:
         if not body.confirmed:
             raise HTTPException(422, UNCONFIRMED)
-        return _receipts(lambda: decision_actions.withdraw(
+        out = _receipts(lambda: decision_actions.withdraw(
             shared(), at(project), decision_id, body.revision, reason=body.reason, redecided=body.redecide,
         ))  # fmt: skip
+        if out["saved"]:
+            out["impact"] = _impact(shared(), at(project), decision_id, places)
+        return out
 
     @routes.post("/decisions/{decision_id}/queue-read-back")
     def queue_read_back(decision_id: str, body: QueueBody, project: In) -> dict[str, Any]:

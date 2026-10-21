@@ -181,7 +181,7 @@ def _routes(machine: Machine) -> APIRouter:
         if machine.stopping.is_set() or (machine.updating and request.method != "GET"):
             raise HTTPException(503, "OwlBear is stopping" if machine.stopping.is_set() else machine.updating)
 
-    owlbear = decision_routes.router(_shared, decision_routes.OWLBEAR, lambda: _places(machine))
+    owlbear = decision_routes.router(_shared, lambda: decision_routes.OWLBEAR, lambda: _places(machine))
     routes.include_router(owlbear, prefix="/owlbear", dependencies=[Depends(fenced)])  # chats in OwlBear's workspace
     _machine_routes(routes, machine)
     _update_routes(routes, machine)

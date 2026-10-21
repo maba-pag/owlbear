@@ -410,7 +410,10 @@ def retire_decision(
         bool, Field(description="True only when the owner confirmed retiring it in this chat after you read it back")
     ] = False,
 ) -> dict[str, Any]:
-    """Withdraw a decision or draft the owner confirmed retiring; it stays in history, hidden by default."""
+    """Withdraw a decision or draft the owner confirmed retiring; it stays in history, hidden by default.
+
+    The reply shows its impact on existing work.
+    """
     path = f"/decisions/{urllib.parse.quote(decision, safe='')}/retire"
     body = {"revision": revision, "reason": reason, "redecide": redecide, "confirmed": confirmed}
     return _STATE["chat"].write(path, body)
