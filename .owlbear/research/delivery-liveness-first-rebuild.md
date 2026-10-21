@@ -142,8 +142,8 @@ TD-342, TD-365, TD-366, TD-367; autonomous TD-48, TD-67, TD-267, TD-316.
   built-in exclusion, project hooks, judge shell, read-only containment [TD-137, TD-129].
 - Window steps reopen only when windows keep repository hooks and user MCP servers out, subagents are detected and
   counted, and judge effects beyond refs are contained or sandboxed [TD-145, TD-223].
-- The whole watcher is built right after the window-step gate; its design is decided with the owner when window
-  steps are about to return, not before [TD-224, TD-316].
+- The whole watcher is built right after the window-step gate [TD-224].
+- The watcher's design is decided with the owner when window steps are about to return, not before [TD-316].
 - Suspended while window steps are paused, reviewed when the gate passes: runtime and visibility routing, window start,
   the per-project window switch, the read-only worktree [TD-342, TD-34, TD-35, TD-48, TD-67, TD-86].
 - Suspended routing: a step uses its agent's default runtime unless its required tools need another
@@ -183,6 +183,8 @@ TD-159, TD-166, TD-167, TD-169, TD-170, TD-329, TD-343; autonomous TD-274, TD-31
   for good parts, ideas and structure as a base to improve [TD-58].
 - Every role has its own agent file; reusing one for several roles needs a recorded decision; the shaper's
   interview depth scales with the Change's size [TD-106, TD-107, TD-93].
+- Every role's agent file is `agents/owlbear-<role>.agent.md`, flat, its name matching; Delivery keeps short role
+  keys [TD-169].
 - Agent files list their tools; each runtime offers exactly those plus Delivery's result tools; nothing is added
   per task [TD-69, TD-99, TD-343].
 - The plan challenger and the visual judges do not question the owner; they answer with their verdict, `unsure`
@@ -425,7 +427,7 @@ TD-65.
   kept. The final review covers a task's last repair, CI and the PR the final loop's [TD-71, TD-74, TD-332].
 - Build, final, plan, pack and brief loops have per-role settings: 3 rounds, 10 new findings per round, last round at 4
   or fewer, owner at 7 or more [TD-209, TD-211, TD-213, TD-220, TD-221].
-- The final review uses the builder's round settings unless its own are set [TD-209, TD-211, TD-213, TD-220, TD-221].
+- The final review uses the builder's round settings unless its own are set [TD-211].
 - Repairs, progress and failures never reset a subject's round limit. From round 2, judge prior rejections and new
   findings, no other earlier ones; disputed rejections go to the owner before repair [TD-208, TD-323, TD-330].
 - A worker's reasoned rejection gets one independent fresh-session recheck, counted apart from repair rounds,
@@ -435,7 +437,8 @@ TD-65.
 - Repairs after the last round stay unreviewed and are shown with standing rejections. Only at max rounds with the
   owner threshold of new findings does he choose another round or reject and retry [TD-208, TD-233].
 - The producing session gets one repair chance (final review: a fresh one, reused once), then a fresh session;
-  an unresumable one is replaced, recorded, budgets unchanged; fresh ones get records [TD-123, TD-175, TD-187, TD-322].
+  an unresumable one is replaced, recorded, budgets unchanged [TD-123, TD-175].
+- A fresh session that takes over a repair gets Delivery's own records, never the transcript [TD-187, TD-322].
 - The planner may reject plan-challenge findings with reasons, the same way as the builder and the pack updater
   [TD-190, TD-220].
 - For an upheld rejection the owner chooses per finding Fix, Reconsider or Drop, never Pause; Reconsider needs a
@@ -492,6 +495,8 @@ TD-65.
   or rejections, and settled findings [TD-217].
 - Finding details must work by keyboard and touch, not hover alone; show unreviewed repairs and standing
   rejections [TD-217, TD-252].
+- After a rebuild, the last rebuilt task's builder runs every kept task's checks and fixes failures, reviewed in its
+  rounds; CI stays the second net [TD-246, TD-324].
 
 **Owner's words:**
 
@@ -576,6 +581,10 @@ TD-65.
 - Its PR gets OwlBear's PR labels and becomes a version as they say [TD-307, TD-308].
 - Owner-started pack updates run at once and end to end, paused or not: commit, PR, CI, merge on green; failure asks
   the owner. Started paused, the machine takes the version at once [TD-287, TD-325, TD-368].
+- One design pack update runs at a time on the machine; every project's pack page shows it and names who started it
+  [TD-290].
+- A pack update whose package skill changed since it started stops, so its PR holds only what was challenged
+  [TD-381].
 
 **Owner's words:**
 
@@ -659,6 +668,8 @@ TD-65.
   hand (recommendation taken once step 4 was built and rehearsed) [TD-299, TD-309, TD-350, TD-415].
 - Deploying sessions need not re-review merges from the owner's other sessions; report which such merges are
   included [TD-309].
+- A self-update switches only after the new version answered in a standby; a later failure restarts it once and tells
+  the owner [TD-305].
 
 **Owner's words:**
 
@@ -716,7 +727,7 @@ TD-65.
 ## C-19 Machine host and UI
 
 **Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321, TD-416, TD-420,
-  TD-421, TD-431, TD-432, TD-433; autonomous TD-294.
+  TD-421, TD-431, TD-432, TD-433, TD-443; autonomous TD-294.
 
 - One Delivery host per machine serves every registered project (one dashboard, one process); registered projects
   keep advancing while their folders are closed [TD-104, TD-242].
@@ -743,6 +754,8 @@ TD-65.
 - Mac first: Linux and Windows are clearly stated as not supported yet before OwlBear goes to a colleague [TD-262].
 - The machine host's web UI is the one UI (TD-85's "cockpit" meant it); the old Cockpit was audited, its memory purge
   ported and Cockpit deleted before v1.0 [TD-416].
+- TD-85's module tabs are done; its end-to-end review of the pages' user flows and information and their visual
+  overhaul are one backlog entry [TD-443].
 - Keep live Change data in per-project SQLite databases under `~/.owlbear`; git-shared owlbear-data remains files
   [TD-265, TD-334].
 
@@ -763,14 +776,15 @@ TD-65.
 - TD-431, 2026-10-20: "we first ask if repo should be private or public, and in that choice we already warn"
 - TD-432, 2026-10-20: "Offered in the dialog, ticked by default"
 - TD-433, 2026-10-20: "no" (Delivery does not work on a new project before the watcher)
+- TD-443, 2026-10-21: "Tabs done; the UX review and the visual overhaul become one backlog entry"
 
-**Replaced:** TD-11 by TD-281; TD-242 by TD-281.
+**Replaced:** TD-11 by TD-281; TD-242 by TD-281; TD-85 by TD-416 and TD-443.
 
 ## C-20 Repository policy
 
 **Rows:** decided TD-10, TD-15, TD-16, TD-25, TD-26, TD-30, TD-155, TD-203, TD-204, TD-222, TD-226, TD-229, TD-230,
   TD-231, TD-238, TD-251, TD-319, TD-326, TD-362, TD-363, TD-379, TD-382, TD-407, TD-408, TD-409, TD-410, TD-411,
-  TD-412, TD-413; approved TD-280; autonomous TD-22, TD-278, TD-360, TD-361.
+  TD-412, TD-413, TD-447; approved TD-280; autonomous TD-22, TD-278, TD-360, TD-361.
 
 - One long-lived default branch, `main`, holds all source; consumers clone it and versions are tags
   [TD-203, TD-231].
@@ -799,8 +813,10 @@ TD-65.
   and Renovate updates the linters together in one weekly pull request [TD-409].
 - pre-commit.ci is not installed: its hook updates cannot be switched off and would compete with Renovate [TD-410].
 - CodeRabbit reviews quietly as `.coderabbit.yaml` sets, the review brief its guideline, early access off [TD-411].
-- CodeRabbit reviews a PR once, when it gets the `coderabbit` label, whoever opened it; agents or workflows add it to
-  code or CI PRs whose CI passed, docs-only PRs get it by hand; CodeRabbit never replies on its own [TD-412, TD-413].
+- CodeRabbit reviews a PR once, when it gets the `coderabbit` label, whoever opened it; CodeRabbit never replies on
+  its own [TD-412, TD-413].
+- Agents label a PR that changes runtime code or CI workflows once its CI passed and merge it only after the review is
+  in and handled, or after 60 minutes without one, said in the PR; others merge after CI and Sol's review [TD-447].
 - Snyk is required CI for OwlBear only, never consumer projects: only Snyk Code, high severity and above, no
   monitor or report writes, findings logged actionably [TD-360, TD-363, TD-382].
 - Snyk does only what it specialises in or what is free: no dependency scan; Renovate alone updates dependencies,
@@ -841,8 +857,10 @@ TD-65.
 - TD-411, 2026-10-19: "coderabbit config looks good … early access off, good call"
 - TD-412, 2026-10-19: "agents or workflows may set the tag" (on code or CI PRs once CI passes; no auto-reply)
 - TD-413, 2026-10-20: "Remove the exclusion, so the label alone decides for every author"
+- TD-447, 2026-10-21: "A and B: wait only for runtime code PRs" (wait up to 60 minutes, then merge with a note)
 
 **Replaced:** TD-10 by TD-238, TD-319, TD-337; TD-16 by TD-379; TD-22 by TD-226; TD-204 by TD-230, TD-280, TD-360;
+  TD-412's labelling by TD-447;
   TD-222 by TD-360; TD-230 by TD-360; TD-238 by TD-278, TD-326; TD-251 by TD-280; TD-278 by TD-326;
   TD-360 and TD-362 by TD-382.
 
@@ -882,6 +900,8 @@ TD-197.
 
 - Group files by responsibility or kind, named for their readers; keep role agents and skills top-level, without a
   content umbrella [TD-133, TD-168].
+- Each package folder holds one responsibility and imports only folders before it in the layer order; a test enforces
+  it [TD-171].
 
 **Owner's words:**
 
@@ -957,6 +977,8 @@ TD-197.
   asks (interactive mode) or skips (automatic mode); interactive sessions propose Make global [TD-292, TD-293, TD-400].
 - The watcher may save pending, role-scoped lessons about observed agent behaviour, curated like other memory
   [TD-100].
+- With a project chosen, the Memory page shows its memory and Global memory, each labelled where it is kept
+  [TD-291].
 
 **Owner's words:**
 
@@ -1092,8 +1114,10 @@ TD-197.
 
 - Every role may start any built-in subagent, in read-only steps too under the same read-only guard, which a live run
   proved reaches a subagent's writes (2026-10-19) [TD-82, TD-374, TD-375].
-- Each subagent stays monitored (agent, model, tokens, credits, duration) and use is measured per role on the
-  Maintenance page; Settings switch it per role, on by default [TD-129, TD-195, TD-344, TD-374, TD-376].
+- Each subagent stays monitored (agent, model, tokens, credits, duration) and its use is measured
+  [TD-129, TD-195, TD-344, TD-374].
+- Use shows per role on the Maintenance page; a Settings switch per role, on by default, turns subagents on or off
+  [TD-376].
 - A subagent may use any named model; one on Auto voids the step; other models are logged. The main agent is
   checked against its own model [TD-53, TD-377].
 
@@ -1133,16 +1157,15 @@ TD-344; TD-344 by TD-374.
 - Lint may refuse 5 builder submits per session; later submits pass marked `lint-unresolved` [TD-88, decided].
 - A quality service separate from Delivery runs linters; agents request changes to lint/format configs, CI workflows
   and Git hooks, the owner approves, refused from the start; no suppression grandfathered [TD-89, decided].
-- The memory MCP server stays for now; fixing memory publication and curation (F17), if still open, comes after M4
-  and before M5 [TD-90, decided, partly].
+- The memory MCP server stays [TD-90, decided].
+- Fixing memory publication and curation (F17) follows the plan's order; M4 and M5 no longer exist
+  [TD-444, autonomous].
 - The old Knowledge agents are not Delivery roles [TD-114, decided].
 - The nine ECC adoptions stay agent rules, among them: never weaken tests or checks to get green; failing-before
   proof where feasible; shapers never infer business constraints from code [TD-115, decided; TD-112].
 - Watcher lessons need evidence that agent behaviour caused the signal; merging lessons belongs to the curator
   [TD-115, decided].
 - delivery-next's browser tests run in CI [TD-127, decided; TD-280].
-- The night-2 choices N2–N9, N11–N14, N18, N20–N23, N25–N27, N30, N31, N33, N34 stand; N10, N16 and N32 follow later
-  decisions [TD-132, decided, partly; TD-163, TD-165, TD-344, TD-130, TD-336].
 - Every SDK session runs with repository agent hooks (`.github/hooks`) off; Git hooks are unaffected
   [TD-142, decided].
 - The owner's user MCP servers stay as they are in SDK steps (steps cannot see or call them); no separate Copilot
@@ -1199,15 +1222,16 @@ TD-344; TD-344 by TD-374.
 - TD-434, 2026-10-20: "once delivery is stable we will work on browser and knowledge packages … saving the ideas"
 - TD-438, 2026-10-20: "Merge each reviewed, green pull request overnight; the runtime updates itself as usual"
 
-**Replaced:** TD-17 by TD-402; TD-250 by TD-394.
+**Replaced:** TD-17 by TD-402; TD-250 by TD-394; TD-90's timing by TD-444.
 
 **Spent:** TD-6, TD-8, TD-18, TD-28, TD-37, TD-62, TD-68, TD-141, TD-180, TD-188, TD-206, TD-232, TD-234, TD-248,
-TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
+TD-261, TD-264, TD-268, TD-269, TD-271, TD-279; TD-132 and TD-445 (autonomous, 2026-10-21: TD-132's choices live in
+their own decisions).
 
 ## C-31 The decision record
 
 **Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419, TD-424, TD-425, TD-427,
-  TD-428, TD-429, TD-430, TD-435, TD-436, TD-437; autonomous TD-389, TD-426.
+  TD-428, TD-429, TD-430, TD-435, TD-436, TD-437, TD-439, TD-440, TD-441, TD-442, TD-446; autonomous TD-389, TD-426.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1243,6 +1267,13 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
   checks the generated view's own hash [TD-436].
 - The record's first migration stops at a preview listing its unclear clauses; the record stays authoritative until
   the owner has reviewed it [TD-437].
+- The migration takes the record as written: it merges no lines, marks no row spent and keeps the origins and quotes
+  the record gives; only the owner's answers of 2026-10-21 changed lines, in their topics [TD-439].
+- Global are C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research
+  kept out of its project, config changes the owner approves and the nine ECC adoptions; all else is OwlBear's
+  [TD-442].
+- The migration proposes per topic the roles and step kinds its rules apply to; the owner confirms one list before
+  it writes [TD-446].
 
 **Owner's words:**
 
@@ -1264,5 +1295,13 @@ TD-261, TD-264, TD-268, TD-269, TD-271, TD-279.
 - TD-435, 2026-10-20: "A fixed \"OwlBear\" scope beside Global on the Decisions page … without registering"
 - TD-436, 2026-10-20: "A read-only token used only by a workflow on pushes to main and a daily schedule"
 - TD-437, 2026-10-20: "the record stays authoritative until you review it in the morning"
+- TD-439, 2026-10-21: "Do none of it: migrate the record exactly as written"
+- TD-440, 2026-10-21: "Split the 4 clear ones; the 4 doubtful ones (3, 4, 5, 8) stay wholly decided"
+- TD-441, 2026-10-21: "Add all 7 as written"
+- TD-442, 2026-10-21: "The asking rules plus the four candidates"
+- TD-446, 2026-10-21: "Tag by topic: the migration proposes roles and steps per topic, I confirm one list"
 
 **Replaced:** TD-359 by TD-383 and TD-388.
+
+**Spent:** TD-440 (four mixed lines split by origin, the doubtful ones kept decided) and TD-441 (seven rows without a
+  line got one), both applied in their topics.

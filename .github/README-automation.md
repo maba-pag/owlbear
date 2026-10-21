@@ -125,5 +125,7 @@ off (TD-408). pre-commit.ci is not installed, since its hook updates cannot be s
 CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413), as
 [`.coderabbit.yaml`](../.coderabbit.yaml) sets, with the [review brief](instructions/code-review.instructions.md)
 as its guideline (TD-411). Its free open-source allowance is about one review an hour for all of `maba-pag`'s
-pull requests, so agents or workflows add the label only to a code or CI pull request whose CI passed; a
-docs-only one gets it by hand. `@coderabbitai review` asks again; CodeRabbit never replies on its own (TD-412).
+pull requests, so agents add the label only to a pull request that changes runtime code or CI workflows, once its CI
+passed, and merge it only after the review is in and handled, or after 60 minutes without one, said in the pull
+request; others merge after CI and Sol's review, and only the owner labels them (TD-447). `@coderabbitai review` asks
+again; CodeRabbit never replies on its own (TD-412).
