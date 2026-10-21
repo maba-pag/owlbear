@@ -205,7 +205,8 @@ def test_the_owner_marks_a_replacement_and_its_successor_records_it(tmp_path, sh
     effect, said = case
     old = make(rationale="Effect on existing work: wording only")  # an inherited mark never counts
     publish(shared, old)
-    body = {"revision": old.revision, "statement": "Notes live in Postgres.", "reason": "Scale.", "effect": effect}
+    body = {"revision": old.revision, "statement": "Notes live in Postgres.", "reason": "Scale.", "effect": effect,
+            "confirmed": True}  # fmt: skip
     assert client(store).post(f"/api/next/decisions/{old.id}/replace", json=body).json()["saved"]
     new = successor(shared, old.id)
     assert (decision_impact.effect(new), new.rationale.count("Effect on existing work")) == (said, int(bool(effect)))

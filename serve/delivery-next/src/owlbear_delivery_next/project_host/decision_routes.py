@@ -322,12 +322,19 @@ def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
     return routes
 
 
+def _confirmed(body: SuccessorBody) -> None:
+    """A successor is the owner's confirmed rule (`decided`, read back today); an unconfirmed one is refused."""
+    if not body.confirmed:
+        raise HTTPException(422, decision_actions.NOT_CONFIRMED)
+
+
 def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
     """The owner's actions; a chat's call is refused."""
     shared, act = store.shared, decision_actions
 
     @routes.post("/decisions/{decision_id}/replace", dependencies=mine)
     def replace(decision_id: str, body: ReplaceBody, project: In) -> dict[str, Any]:
+        _confirmed(body)
         return _receipts(lambda: act.replace(
             shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
             rationale=body.rationale, reason=body.reason, redecided=body.redecide,
@@ -353,6 +360,7 @@ def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
 
     @routes.post("/decisions/{decision_id}/exception", dependencies=mine)
     def exception(decision_id: str, body: SuccessorBody, project: In) -> dict[str, Any]:
+        _confirmed(body)
         return _receipts(lambda: act.exception(
             shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
             rationale=body.rationale,

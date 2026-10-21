@@ -181,14 +181,32 @@ def test_the_owner_replaces_a_decision_with_his_successor_and_gets_its_receipts(
 def test_replacing_an_exception_keeps_its_exception_to_link(owner, shared):
     wide = worldwide()
     seed(shared, wide)
-    mine = now(shared, act(owner, wide, "exception", statement="Build here.").json()["receipts"][0]["id"])
+    made = act(owner, wide, "exception", statement="Build here.", confirmed=True).json()
+    mine = now(shared, made["receipts"][0]["id"])
 
-    got = act(owner, mine, "replace", statement="Build here, minified.", reason="Smaller pages.", redecide=True).json()
+    got = act(owner, mine, "replace", statement="Build here, minified.", reason="Smaller pages.", redecide=True,
+              confirmed=True).json()  # fmt: skip
 
     new = now(shared, got["receipts"][0]["id"])
     assert got["saved"] is True
     assert new.links == (Link(type=LinkType.REPLACES, target=mine.id), Link(type=LinkType.EXCEPTION_TO, target=wide.id))
     assert got["receipts"][0]["active"] is True
+
+
+@pytest.mark.parametrize("action", ["replace", "exception"])
+@pytest.mark.parametrize("confirmed", [None, False])
+def test_a_successor_the_owner_did_not_confirm_is_refused_and_writes_nothing(owner, shared, action, confirmed):
+    rule = worldwide() if action == "exception" else make()
+    seed(shared, rule)
+    head = git(shared.root, "rev-parse", "HEAD")
+    body = {"revision": rule.revision, "statement": "Other.", "reason": "r"}
+    body |= {} if confirmed is None else {"confirmed": confirmed}
+
+    got = owner.post(f"/api/next/decisions/{rule.id}/{action}", json=body)
+
+    assert got.status_code == 422
+    assert got.json()["detail"] == decision_actions.NOT_CONFIRMED
+    assert git(shared.root, "rev-parse", "HEAD") == head
 
 
 @pytest.mark.parametrize("action", ["replace", "withdraw", "activate", "promote", "keep", "propose"])
@@ -199,7 +217,7 @@ def test_a_supersession_without_a_reason_is_refused_and_writes_nothing(owner, st
     head = git(shared.root, "rev-parse", "HEAD")
     target = rule if action in {"activate", "keep"} else old
     body = {"revisions": {rule.id: rule.revision}} if action == "keep" else {"revision": target.revision}
-    body |= {"statement": "Other.", "reason": "  "} if action == "replace" else {}
+    body |= {"statement": "Other.", "reason": "  ", "confirmed": True} if action == "replace" else {}
     if action == "propose":
         got = client(store, CHAT).post("/api/next/decisions/propose",
                                        json={"title": "x", "statement": "x", "replaces": old.id})  # fmt: skip
@@ -231,7 +249,7 @@ def test_a_stale_revision_is_refused_by_its_receipt_and_nothing_is_written(owner
     head = git(shared.root, "rev-parse", "HEAD")
 
     got = owner.post(f"/api/next/decisions/{old.id}/replace",
-                     json={"revision": "0" * 64, "statement": "Other.", "reason": "r"})  # fmt: skip
+                     json={"revision": "0" * 64, "statement": "Other.", "reason": "r", "confirmed": True})  # fmt: skip
 
     assert got.status_code == 200
     assert (got.json()["saved"], got.json()["receipts"][0]["saved"]) == (False, False)
@@ -243,9 +261,10 @@ def test_replacing_or_withdrawing_a_decided_decision_needs_the_owners_re_decisio
     rule = decided()
     seed(shared, rule)
 
-    refused = act(owner, rule, "replace", statement="Notes live in Postgres.", reason="r")
+    refused = act(owner, rule, "replace", statement="Notes live in Postgres.", reason="r", confirmed=True)
     kept = act(owner, rule, "withdraw", reason="moot")
-    redecided = act(owner, rule, "replace", statement="Notes live in Postgres.", redecide=True, reason="r")
+    redecided = act(owner, rule, "replace", statement="Notes live in Postgres.", redecide=True, reason="r",
+                    confirmed=True)  # fmt: skip
 
     assert (refused.status_code, kept.status_code) == (409, 409)
     assert "re-decide" in refused.json()["detail"]
@@ -335,7 +354,7 @@ def test_an_exception_is_recorded_to_a_global_decision_only(owner, shared):
     wide, local = worldwide(), make()
     seed(shared, wide, local)
 
-    refused = act(owner, local, "exception", statement="Here too.")
+    refused = act(owner, local, "exception", statement="Here too.", confirmed=True)
     got = act(owner, wide, "exception", statement="This project builds its pages.", confirmed=True).json()
 
     mine = now(shared, got["receipts"][0]["id"])
