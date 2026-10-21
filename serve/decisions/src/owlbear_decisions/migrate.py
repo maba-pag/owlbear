@@ -77,9 +77,8 @@ def _words(
         if topic.rows.get(td, rows.get(td, ("",))[0]) != Origin.DECIDED:
             continue
         found = [w for w in topic.words if w.alias == td] or every.get(td, [])
-        if not found:
-            unclear.append(f"decided {td} is cited without owner's words")
-        # the record keeps quotes to one line (C-31), so a quote cut with … is normal, not unclear
+        # a row chosen without a quote has none (TD-388), and the record keeps quotes to one line (C-31), so a quote
+        # cut with … is normal too: neither is unclear
         attached.extend(OwnerWords(text=w.text, date=date.fromisoformat(w.date), alias=td) for w in found)
     return tuple(attached), unclear
 

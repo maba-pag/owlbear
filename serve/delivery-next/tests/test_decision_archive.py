@@ -176,8 +176,8 @@ def test_an_older_change_without_ids_loads_and_archives_with_the_same_ids_every_
     assert change_record.save(store, Change.model_validate(old), MERGED, AT) == ""
     assert sorted(p.name for p in (root / "shop-site").rglob("decisions/*.md")) == first
     assert len(first) == 3
-    # an older Change kept no owner's words for Delivery's own decisions: none are claimed, and the validator says so
-    assert [f.rule for f in validate_repo(root)] == ["owner-words"]
+    # an older Change kept no owner's words for Delivery's own decisions: none are claimed (TD-388 allows none)
+    assert validate_repo(root) == []
 
 
 def test_older_changes_of_two_projects_never_share_an_id(shared_repo) -> None:

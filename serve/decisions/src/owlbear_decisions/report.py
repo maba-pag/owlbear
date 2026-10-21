@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 
 _EXPLAINED = {
     "statement-length": "listed under unclear clauses; the wording is kept, never cut",
-    "owner-words": "listed under unclear clauses (a decided row without owner's words in the record)",
 }
 
 

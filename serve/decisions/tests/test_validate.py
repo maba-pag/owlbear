@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from owlbear_decisions.models import Link, LinkType, Origin, Scope, State, new_id
+from owlbear_decisions.models import Link, LinkType, Scope, State, new_id
 from owlbear_decisions.storage import serialize, write
 from owlbear_decisions.validate import main, validate, validate_repo
 
@@ -149,10 +149,9 @@ def test_two_promotions_or_a_promotion_and_a_replacement_of_one_source_are_two_s
     assert rules(tmp_path) == ["two-successors"] * 4
 
 
-def test_decided_without_owner_words(tmp_path, put):
-    put(owner_words=())
-    put(owner_words=(), origin=Origin.AUTONOMOUS)
-    assert rules(tmp_path) == ["owner-words"]
+def test_a_decided_decision_chosen_without_a_quote_is_valid(tmp_path, put):
+    put(owner_words=())  # TD-388: a row chosen without a quote has none
+    assert rules(tmp_path) == []
 
 
 def test_statement_over_240_characters(tmp_path, put):
@@ -180,14 +179,14 @@ def test_exception_to_a_non_global_decision(tmp_path, put):
 
 
 def test_validate_takes_explicit_folders(tmp_path, put):
-    put(owner_words=())
-    assert [f.rule for f in validate(None, [tmp_path / "p"])] == ["owner-words"]
+    put(statement="x" * 241)
+    assert [f.rule for f in validate(None, [tmp_path / "p"])] == ["statement-length"]
     assert validate(tmp_path, []) == []
 
 
 def test_cli_prints_findings_and_fails(tmp_path, put, capsys):
-    put(owner_words=())
+    put(statement="x" * 241)
     assert main([str(tmp_path)]) == 1
     out = capsys.readouterr().out
-    assert "owner-words: a decided decision needs the owner's words" in out
+    assert "statement-length: statement has 241 characters" in out
     assert out.endswith("1 finding(s)\n")
