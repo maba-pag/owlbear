@@ -535,11 +535,13 @@ def test_a_confirmed_replacement_retires_its_predecessor_in_one_commit_and_shows
     assert (stale["saved"], git(shared.root, "rev-parse", "HEAD")) == (False, head)
 
     got = tool("record_decision", title="Notes", statement="A file.", rationale="Smaller.", confirmed=True,
+               topic="Storage",
                replaces={"decision": rule.id, "revision": rule.revision, "effect": "forbids"})  # fmt: skip
 
     new = now(shared, got["receipts"][0]["id"])
     assert (new.state, new.origin, new.read_back, now(shared, rule.id).state) == (
         State.IN_FORCE, Origin.DECIDED, today(), State.REPLACED)  # fmt: skip
+    assert new.topic == "Storage"
     assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: replace {rule.id} with {new.id}"
     assert len(git(shared.root, "show", "--name-only", "--format=", "HEAD").splitlines()) == 2  # both or neither
     assert (got["impact"]["old"]["id"], got["impact"]["effect"]) == (rule.id, "forbids")

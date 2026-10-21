@@ -185,11 +185,12 @@ def _new(old: Decision | None, **fields: object) -> Decision:
 def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *,
     title: str, statement: str, rationale: str, reason: str, redecided: bool, effect: Effect = "",
-    scope: Scope | None = None, by: str = OWNER,
+    scope: Scope | None = None, by: str = OWNER, topic: str = "",
 ) -> list[Receipt]:  # fmt: skip
     """The owner's successor, in force and `decided`, confirmed today, keeping the old one's other links.
 
-    *by*: where he confirmed it, on the page or in a chat (TD-450); *scope*: the layer a chat named for it.
+    *by*: where he confirmed it, on the page or in a chat (TD-450); *scope*: the layer a chat named for it; *topic*:
+    the successor's, else the old one's.
     """
     why = _reason(reason, "replacing a decision")
     view = decision_store.load(shared, project)
@@ -201,7 +202,7 @@ def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     authorise(old, owner=True, redecided=redecided)  # his successor is decided: no second() needed
     kept = tuple(link for link in old.links if link.type not in LINEAGE)  # exception_to, refines, depends on, related
     new = _new(
-        old, title=title.strip() or old.title, statement=statement,
+        old, title=title.strip() or old.title, topic=topic.strip() or old.topic, statement=statement,
         rationale=_marked(_because(rationale or old.rationale, CHANGED, why), effect), scope=old.scope,
         project=old.project,
         change=old.change, origin=Origin.DECIDED, actor=by, source=PAGE if by == OWNER else by, read_back=_today(),
@@ -416,7 +417,7 @@ def propose(  # noqa: PLR0913 - the proposal's fields
     if confirmed and replaces:
         return replace(
             shared, project, replaces, revision, title=title, statement=statement, rationale=rationale,
-            reason=reason, redecided=redecided, effect=effect, scope=scope, by=CHAT,
+            reason=reason, redecided=redecided, effect=effect, scope=scope, by=CHAT, topic=topic,
         )  # fmt: skip
     links: tuple[Link, ...] = ()
     layer = {"scope": scope, "project": "" if scope is Scope.GLOBAL else project}
