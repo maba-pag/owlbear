@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import re
 import socket
 import subprocess
@@ -31,6 +32,7 @@ PROJECT = "shop-site"
 
 class Host:
     wake = SimpleNamespace(set=lambda: None)
+    repo = None  # the impact report then says it cannot read the clone
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
 
@@ -199,3 +201,34 @@ def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions
     held = in_force(store)["Exports are CSV."]
     assert (held.read_back, held.read_back_why, held.origin) == (
         datetime.now(UTC).date().isoformat(), "A partner asked for JSON.", Origin.AUTONOMOUS)  # fmt: skip
+
+
+@pytest.mark.browser
+def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, pds, github):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    old = make(title="Exports are CSV", statement="Exports are CSV.", state=State.REPLACED)
+    new = make(title="Exports are JSON", statement="Exports are JSON.", links=(Link(type=LinkType.REPLACES,
+               target=old.id),), rationale="Effect on existing work: it forbids existing behaviour")  # fmt: skip
+    for d in (old, new):
+        write(d, store.shared.root / PROJECT)
+    record = {"slug": "c1", "outcome": "merged", "pr": {"url": "https://github.com/acme/shop-site/pull/7"},
+              "brief": {"title": "Exports", "decisions": [{"id": old.id}]}}  # fmt: skip
+    (store.shared.root / PROJECT / "changes").mkdir()
+    (store.shared.root / PROJECT / "changes" / "20261020-090000-c1.json").write_text(json.dumps(record))
+    with decisions_page(store, pds) as page:
+        card = page.locator(".entry", has_text="Exports are JSON")
+        card.get_by_role("button", name="Open").click()
+        card.get_by_role("button", name="Check the impact").click()
+        impact = card.locator("#impact")
+        expect(impact.locator(".old")).to_contain_text("Exports are CSV.")
+        expect(impact.locator(".divergence")).to_contain_text("forbids existing behaviour")
+        expect(impact.locator(".impact-project")).to_contain_text("https://github.com/acme/shop-site/pull/7")
+        impact.get_by_role("button", name="Schedule fixes").click()
+        dialog = pds.modal(page)
+        expect(dialog).to_contain_text("shop-site: unknown")
+        dialog.get_by_role("button", name="Schedule fixes").click()
+        expect(impact).to_contain_text(f"#1 Apply decision {new.id} in {PROJECT}: Exports are JSON")
+    [issue] = github.issues.values()
+    assert f"Old rule ({old.id}, revision {old.revision})" in issue["body"]
+    assert "- [ ] Change c1: Exports (https://github.com/acme/shop-site/pull/7)" in issue["body"]

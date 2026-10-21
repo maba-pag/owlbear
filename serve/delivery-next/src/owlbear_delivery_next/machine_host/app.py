@@ -20,10 +20,11 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
-from owlbear_delivery_next.local_system import leases, local_home
+from owlbear_delivery_next.local_system import data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import control, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
-from owlbear_delivery_next.project_host import api, decision_routes, pages
+from owlbear_delivery_next.project_host import api, decision_routes, impact_routes, pages
+from owlbear_delivery_next.state_store import decision_impact
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -169,13 +170,31 @@ def _routes(machine: Machine) -> APIRouter:
             c | {"project": p.name, "pid": p.entry.id}
             for p in list(machine.projects.values())
             if p.store is not None and p.state == "loaded"
-            for c in decision_routes.pinning(p.store, decision_id)
+            for c in decision_impact.pinning(p.store, decision_id)
         ]
         return {"changes": listed}
 
+    routes.include_router(impact_routes.router(_shared, lambda: _places(machine), [Depends(decision_routes.owner)]))
     _machine_routes(routes, machine)
     _update_routes(routes, machine)
     return routes
+
+
+def _shared() -> data_repo.DataRepo | None:
+    try:
+        return data_repo.locate()
+    except data_repo.DataRepoError:
+        return None
+
+
+def _places(machine: Machine) -> list[decision_impact.Place]:
+    """Every project the machine serves, for a decision's impact; one not loaded says why (TD-428)."""
+    return [
+        decision_impact.Place(p.name, Path(p.entry.path), p.store)
+        if p.store is not None and p.state == "loaded"
+        else decision_impact.Place(p.name, why=f"{p.name} is {p.state}" + (f": {p.reason}" if p.reason else ""))
+        for p in list(machine.projects.values())
+    ]
 
 
 def _machine_routes(routes: APIRouter, machine: Machine) -> None:

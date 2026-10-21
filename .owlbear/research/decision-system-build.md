@@ -160,6 +160,25 @@ personal data is purged, with the owner's consent.
 3. Fixes are ordinary backlog entries grouped by what one Change can do, carrying the exact decision revisions as
    evidence and tracking partial coverage; a Change closes only what it verified. No automatic code change, no issue
    per item, and nothing for a wording-only change.
+- **Built in slice 5b part 2** (choices made while building): the entry of a decision that replaced another, or was
+  withdrawn, shows "Impact": the old rule, the new one, a divergence line and, per project, `confirmed` (a merged
+  finished-Change record whose brief made the old decision or whose `decisions_applied`, now written into each
+  record from its baseline, holds it; or a Change in the project's store whose baseline applied it), `unaffected`
+  (path selectors that match no file tracked at `origin/HEAD`, else `HEAD`, and no such Change) or `unknown` with
+  why: a rule without path selectors, matching files, or a project whose repository this host cannot read. A
+  Change whose baseline only pinned the old decision without applying it does not count: every Change pins every
+  rule in force. A Global rule covers every project the host serves and OwlBear's folder; the machine host's
+  `GET /api/next/decisions/{id}/impact?folder=` covers every project it serves, a project host only its own.
+  Matching files are listed up to 50, with the test files among them, and the rest counted. Replacing and
+  activating take an optional `effect` (`forbids` or `wording`), written as "Effect on existing work: …" into the
+  successor's rationale (an inherited mark is dropped); without one the change counts as possibly forbidding. The
+  pause is the §7 gate's, unchanged. "Schedule fixes" is the owner's click on a rule in force, refused for a
+  wording-only change, a withdrawal, a stale revision or when no project is due: one backlog entry per confirmed
+  or unknown project, split by top-level folder above 20 files into at most five, titled "Apply decision <id>:
+  <title>", with both revisions in the text and the evidence and a checklist of its Changes and files; scheduling
+  again counts the same entries up. "Accept existing code" (grandfathering) is a `decided` project decision with
+  the owner's reason that `refines` the new rule (`exception_to` a Global one), its source marking it; that project
+  then is no longer due. Open: a Change ticking off the checklist items it verified.
 
 ## 10. The owner's view
 

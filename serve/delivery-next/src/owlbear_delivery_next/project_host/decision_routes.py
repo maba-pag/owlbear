@@ -18,11 +18,20 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_decisions import ReadBackKind, State
 from owlbear_decisions.models import ID_PATTERN
-from owlbear_delivery_next.state_store import decision_actions, decision_index, decision_store, read_backs
+from owlbear_delivery_next.project_host import impact_routes
+from owlbear_delivery_next.state_store import (
+    decision_actions,
+    decision_impact,
+    decision_index,
+    decision_store,
+    read_backs,
+)
+from owlbear_delivery_next.state_store.decision_actions import Effect
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_decisions import Entry
     from owlbear_delivery_next.state_store.decision_actions import Receipt
@@ -71,6 +80,18 @@ class SuccessorBody(Redecide):
     statement: Statement
     rationale: Text = ""
     words: Text = ""
+
+
+class ReplaceBody(SuccessorBody):
+    """``effect``: the owner's mark, forbids existing behaviour or wording only; empty is unknown (TD-428)."""
+
+    effect: Effect = ""
+
+
+class ActivateBody(Redecide):
+    """Activating a draft; ``effect`` marks a replacement as for `ReplaceBody`."""
+
+    effect: Effect = ""
 
 
 class KeepBody(BaseModel):
@@ -158,23 +179,6 @@ def _history(store: Store, entry: Entry) -> list[dict[str, str]]:
     return [{"commit": commit[:12], "at": at, "subject": subject} for commit, at, subject in rows]
 
 
-def pinning(store: Store, decision_id: str) -> list[dict[str, Any]]:
-    """The Changes of *store* whose decision baseline pins *decision_id*, and whether it applied to them."""
-    found = []
-    for slug in store.slugs():
-        try:
-            c = store.read(slug)
-        except StoreError:
-            continue
-        pin = c.decisions_baseline
-        if pin and decision_id in pin.revisions:
-            found.append({
-                "slug": slug, "handle": c.handle, "title": c.brief.title, "step": str(c.step.kind),
-                "applies": decision_id in pin.said, "revision": pin.revisions[decision_id],
-            })  # fmt: skip
-    return found
-
-
 def _shown(d: dict[str, Any], where: Where, state: str, read_back: ReadBack, *, retired: bool) -> bool:
     """Within the scope filter, and in the state asked for: by default every one but the retired ones."""
     scope = _within(d, where)
@@ -224,10 +228,16 @@ def _at(store: Store, project: str) -> str:
     return project or store.name
 
 
-def router(store: Store) -> APIRouter:
-    """The decision routes; the caller adds the token check."""
+def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
+    """The decision routes; the caller adds the token check. *repo* is the project's clone, for the impact report."""
     routes = APIRouter()
     mine: list[Any] = [Depends(owner)]
+
+    def here() -> list[decision_impact.Place]:
+        known = repo() if repo else None
+        return [decision_impact.Place(store.name, known, store, "" if known else "this host does not know its clone")]
+
+    routes.include_router(impact_routes.router(lambda: store.shared, here, mine))
 
     @routes.get("/decisions")
     def listed(  # noqa: PLR0913 - the page's filters
@@ -283,7 +293,7 @@ def router(store: Store) -> APIRouter:
         return _row(view, entry) | more | {
             "owner_words": [w.model_dump(mode="json") for w in d.owner_words], "links": links,
             "linked_from": linked_from, "problems": problems, "history": _history(store, entry),
-            "changes": pinning(store, d.id), "rivals": rivals, "redecide": redecide,
+            "changes": decision_impact.pinning(store, d.id), "rivals": rivals, "redecide": redecide,
         }  # fmt: skip
 
     _owner_routes(routes, store, mine)
@@ -296,10 +306,11 @@ def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
     shared, act = store.shared, decision_actions
 
     @routes.post("/decisions/{decision_id}/replace", dependencies=mine)
-    def replace(decision_id: str, body: SuccessorBody, project: In) -> dict[str, Any]:
+    def replace(decision_id: str, body: ReplaceBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.replace(
             shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
             rationale=body.rationale, words=body.words, reason=body.reason, redecided=body.redecide,
+            effect=body.effect,
         ))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/withdraw", dependencies=mine)
@@ -309,10 +320,10 @@ def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
             redecided=body.redecide))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/activate", dependencies=mine)
-    def activate(decision_id: str, body: Redecide, project: In) -> dict[str, Any]:
+    def activate(decision_id: str, body: ActivateBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.activate(
             shared, _at(store, project), decision_id, body.revision, reason=body.reason,
-            redecided=body.redecide))  # fmt: skip
+            redecided=body.redecide, effect=body.effect))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/promote", dependencies=mine)
     def promote(decision_id: str, body: Promotion, project: In) -> dict[str, Any]:

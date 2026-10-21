@@ -18,6 +18,8 @@ export const state = {
   entry: null,  // its details as last read
   form: null,  // { action, draft } of the opened decision's form
   pending: "",  // the action whose request is under way
+  impact: null,  // { id, report | error | busy, scheduled } of the opened decision's impact (TD-428)
+  effect: "",  // the owner's mark on a draft that replaces one, sent when he activates it
 };
 // where: project | global | all | owlbear; state: "" (in force and drafts), a state, or "all" (retired included)
 export const filter = { where: "all", topic: "", origin: "", state: "", read_back: "", text: "" };
