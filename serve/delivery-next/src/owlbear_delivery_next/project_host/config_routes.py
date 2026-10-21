@@ -57,6 +57,7 @@ APPLIED = [
     *(f"agents.{role}.minutes" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
     "agents.preparer.minutes",
     "agents.updater.minutes",
+    "agents.picker.minutes",
     "pr_labels",
     "pr_marker",
     *(f"agents.{role}.subagents" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),

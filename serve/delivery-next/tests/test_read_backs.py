@@ -262,7 +262,8 @@ def test_the_gate_question_lists_at_most_three_applying_read_backs_and_never_blo
     c = Change(slug="c1", brief=brief, plan=plan, names=Names(branch="owlbear/c1", target="main"),
                step=Step(kind=StepKind.BUILD, task="t1"))  # fmt: skip
     store = Store(tmp_path / "gate", shared, PROJECT)
-    c = c.model_copy(update={"decisions_baseline": decisions_gate.pinned(store, c, AT)[0]})
+    pinned = decisions_gate.pinned(store, c, AT, decisions_gate.loaded(store))[0]
+    c = c.model_copy(update={"decisions_baseline": pinned})
 
     assert decisions_gate.check_step(store, c, AT).result is None  # read-backs alone never stop a step
     write(rule.model_copy(update={"state": State.WITHDRAWN}), shared.root / PROJECT, rule.revision)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, NamedTuple
 
-from owlbear_delivery_next.change_contracts import evidence, preparation, tools
+from owlbear_delivery_next.change_contracts import evidence, pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparing
 from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds, round_flow
@@ -66,7 +66,8 @@ CONTINUE = (
 
 def reminder(role: str, *, judging: bool = False) -> str:
     """The one nudge after a turn that ended without a result; a judge or judgement has no question (TD-108)."""
-    return REMINDER.format(ask="ask_question, " if tools.asks(role, judging=judging) else "")
+    ask = "ask_question, " if tools.asks(role, judging=judging) else ""
+    return pick_tools.REMINDER if role == tools.PICKER else REMINDER.format(ask=ask)
 
 
 def _cut(text: str, limit: int = LIMIT) -> str:

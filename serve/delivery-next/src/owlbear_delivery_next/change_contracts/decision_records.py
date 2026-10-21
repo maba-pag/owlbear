@@ -46,6 +46,30 @@ class Decision(_Strict):
         return data
 
 
+class PickedDecision(_Strict):
+    """One decision the picker chose, as the list it read showed it."""
+
+    id: str
+    revision: str  # its rule revision
+    title: str
+    statement: str
+    note: str = ""  # the picker's note on how it governs the work
+
+
+class Pick(_Strict):
+    """The picker's choice for one brief version (TD-459); approval pins it only while the list is as it read it."""
+
+    version: int
+    status: Literal["owed", "ok", "failed"] = "owed"  # owed: a request asked for it and the runner picks next
+    reason: str = ""  # why it failed, or the ids it returned that the list did not hold
+    commit: str = ""  # the data commit the list was read at
+    listed: str = ""  # digest of the list it read: every id with its rule revision
+    at: datetime | None = None
+    decisions: list[PickedDecision] = Field(default_factory=list)
+    dropped: list[str] = Field(default_factory=list)
+    session: str = ""  # the picker's session, recorded before it starts: a killed runner's pick resumes it
+
+
 class Said(BaseModel):
     """What a pinned decision said, kept for those that applied, so a later difference can show the old wording."""
 

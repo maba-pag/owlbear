@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, picks
 from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
@@ -173,11 +173,12 @@ def _left(events: list[dict[str, Any]], since: datetime | None) -> str:
 def passes(c: Change, now: datetime) -> bool:
     """Whether the next step runs while Delivery is paused (TD-287, TD-303).
 
-    A cleanup, or the brief challenge the owner's chat asked for; planning, building, publishing and merging wait for
-    Resume.
+    A cleanup, or the brief challenge the owner's chat asked for and its decision pick; planning, building, publishing
+    and merging wait for Resume.
     """
     step = loop.next_step(c, now)
-    return step is not None and (step.kind == StepKind.CLEANUP or (step.kind == StepKind.SHAPE and step.mode in MODES))
+    shaping = step is not None and step.kind == StepKind.SHAPE and (step.mode in MODES or picks.owed(c))
+    return step is not None and (step.kind == StepKind.CLEANUP or shaping)
 
 
 def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None) -> Status:

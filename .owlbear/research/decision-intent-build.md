@@ -3,7 +3,7 @@
 > **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-448..TD-459 (2026-10-21)
 > **Date:** 2026-10-21
 > **Question:** How should OwlBear record, share and apply decisions so each one is the owner's confirmed intent?
-> **Status:** answered by the owner; slices 1 and 2 built, slices 3 to 6 not. It revises [the decision system](decision-system-build.md), whose
+> **Status:** answered by the owner; slices 1 and 2 built and of slice 4 the picker; the rest not. It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
 

@@ -13,6 +13,7 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
+from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow.status import Activity
@@ -47,6 +48,9 @@ def change() -> m.Change:
         criteria=[m.Criterion(id="AC-1", text=MINE), m.Criterion(id="AC-2", text=LEFT_TO_SHAPER)],
         visual=[m.VisualState(name="flipped", path="/", expect="The hero faces left")], ui=True,
         decisions=decisions, non_goals=["Saving the direction"], specified=["AC-1"],
+        picked=Pick(version=2, status="ok", decisions=[
+            PickedDecision(id="D-1", revision="r1", title="Motion stays subtle", statement="No motion over 300 ms."),
+        ]),
     )  # fmt: skip
     checks = [m.PersonCheck(id="feel", steps=["Flip five times"], expect="No stutter")]
     return m.Change(slug="flip", brief=brief, checks=checks, step=m.Step(kind=m.StepKind.SHAPE))
@@ -107,6 +111,7 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(yours).to_contain_text(MINE)  # an owner-stated criterion is part of his agreement
         expect(brief.locator("section", has_text="Choices proposed by the shaper")).to_contain_text("250 ms")
         expect(brief.locator("section", has_text="Not in this Change")).to_contain_text("Saving the direction")
+        expect(brief.locator("section", has_text="Decisions this work follows")).to_contain_text("Motion stays subtle")
         expect(brief.locator("summary")).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
         expect(page.get_by_text(LEFT_TO_SHAPER, exact=False)).to_be_hidden()  # collapsed until opened
         page.get_by_role("button", name="Approve brief v2").click()

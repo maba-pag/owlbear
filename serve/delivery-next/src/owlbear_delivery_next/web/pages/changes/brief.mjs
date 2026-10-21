@@ -57,6 +57,17 @@ function checkSaid(c) {
   return `${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`;
 }
 
+// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459): titles only.
+function picked(d) {
+  const p = d.brief.picked, title = "Decisions this work follows";
+  if (!p) return nothing;
+  if (p.status === "owed") return part(title, text("Delivery is picking them from the decisions in force."));
+  if (p.status === "failed") {
+    return part(title, text(`The pick failed: ${p.reason}. The shaping chat can ask for it again.`));
+  }
+  return part(title, p.decisions.length ? list(p.decisions) : text("None of the decisions in force governs it."));
+}
+
 // A screen as the owner reads it: what it must show, then where and after which clicks.
 function screenSaid(s) {
   const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
@@ -123,7 +134,7 @@ export function approval(d) {
   const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${technical(d)}${readBacks(d)}</div>`,
+      ${picked(d)}${technical(d)}${readBacks(d)}</div>`,
     d.rounds?.brief?.length ? html`${marks("Brief challenge", d.rounds.brief)}${findingDetails(
       "Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])}` : nothing,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
@@ -167,7 +178,7 @@ export function briefInfo(d) {
   const v = d.brief.approved || d.brief.version;
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
-    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${technical(d)}
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d)}${technical(d)}
     ${part("Changes since you approved", added.length ? saidList(added)
       : text("None. A change to an approved brief comes back to you as a new version to approve."))}
     ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>`);

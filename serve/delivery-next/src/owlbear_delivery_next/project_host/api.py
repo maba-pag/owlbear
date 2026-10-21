@@ -28,7 +28,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
 )
 from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import brief_rounds, loop, rebuilds, round_flow, round_marks
+from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, rebuilds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, status, unloadable
 from owlbear_delivery_next.pack_runs import pack_job
@@ -356,6 +356,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
                     "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
                     "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
+                    "picked": picks.shown(c),  # TD-459: the decisions this version's work follows, by title
                 },
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],

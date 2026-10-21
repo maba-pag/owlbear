@@ -142,7 +142,8 @@ def test_an_entry_shows_provenance_links_both_ways_history_and_the_changes_that_
     plan = Plan(tasks=[Task(id="t1", title="Show notes", scope=["web"], checks=["true"])])
     c = Change(slug="c1", brief=brief, plan=plan, names=Names(branch="owlbear/c1", target="main"),
                step=Step(kind=StepKind.BUILD, task="t1"))  # fmt: skip
-    store.write(Lock("c1"), c.model_copy(update={"decisions_baseline": decisions_gate.pinned(store, c, AT)[0]}))
+    pinned = decisions_gate.pinned(store, c, AT, decisions_gate.loaded(store))[0]
+    store.write(Lock("c1"), c.model_copy(update={"decisions_baseline": pinned}))
 
     got = owner.get(f"/api/next/decisions/{rule.id}").json()
     back = owner.get(f"/api/next/decisions/{old.id}").json()

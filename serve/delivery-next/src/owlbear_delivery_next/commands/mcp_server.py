@@ -22,7 +22,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop
+from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, picks
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.state_store import project_home
@@ -137,9 +137,12 @@ class Chat:
         out |= {"challenge": brief_rounds.status(change)}  # TD-221: the brief challenge's findings by ID
         return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}
 
-    def challenge_brief(self, change: str, version: int, rejected: list[dict[str, str]]) -> dict[str, Any]:
-        """Ask for the version's challenge, then wait a while for its verdict and return the findings by ID."""
-        code, out = self.call("POST", "/briefs/challenge", {"change": change, "version": version, "rejected": rejected})
+    def challenge_brief(
+        self, change: str, version: int, rejected: list[dict[str, str]], *, retry_pick: bool = False
+    ) -> dict[str, Any]:
+        """Ask for the version's challenge or its pick again, then wait a while for the outcome; findings by ID."""
+        body = {"change": change, "version": version, "rejected": rejected, "retry_pick": retry_pick}
+        code, out = self.call("POST", "/briefs/challenge", body)
         if code != OK:
             return {"requested": False, **out}
         if out.get("paused"):  # TD-283: recorded now, judged once the owner resumes Delivery
@@ -151,7 +154,7 @@ class Chat:
                 c = self.store.read(slug)
             except StoreError:
                 break
-            if not brief_rounds.running(c, version, attempt):
+            if not (brief_rounds.running(c, version, attempt) or picks.owed(c)):
                 return {"requested": True, **brief_rounds.status(c)}
             _pause(POLL)
         return {
@@ -320,10 +323,18 @@ def challenge_brief(
             "challenger judges each"
         ),
     ] = None,
+    *,
+    retry_pick: Annotated[
+        bool,
+        Field(
+            description="True only to pick the version's decisions again after the pick failed or the decisions "
+            "changed; it uses no challenge round and needs no new version"
+        ),
+    ] = False,
 ) -> dict[str, Any]:
     """Ask for the brief version's challenge once the draft is ready; waits for its verdict, gives findings by ID."""
     found = [r.model_dump() for r in rejected or []]
-    return _STATE["chat"].challenge_brief(change, version, found)
+    return _STATE["chat"].challenge_brief(change, version, found, retry_pick=retry_pick)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

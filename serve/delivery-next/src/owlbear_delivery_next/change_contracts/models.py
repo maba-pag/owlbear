@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
-from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, Decision, DecisionBaseline
+from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, Decision, DecisionBaseline, Pick
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
@@ -23,7 +23,7 @@ type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
 type Role = Literal[
     "planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater", "test-reviewer",
-    "test-curator",
+    "test-curator", "picker",
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
@@ -138,6 +138,7 @@ class Brief(Record):
     scope: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
     decisions: list[BriefDecision] = Field(default_factory=list)
+    picked: Pick | None = None  # the existing decisions this version's work follows (TD-459)
     criteria: list[Criterion] = Field(default_factory=list)
     ui: bool = False
     visual: list[VisualState] = Field(default_factory=list)

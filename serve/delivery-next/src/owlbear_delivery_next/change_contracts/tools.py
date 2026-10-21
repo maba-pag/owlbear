@@ -327,7 +327,8 @@ MISSING = Spec(
 SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
-JUDGES = frozenset({"challenger", "design-judge", "test-reviewer"})  # they answer with a verdict, never a question
+JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker"})  # a verdict or pick, never a question
+PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
 VERDICTS = frozenset(
     {"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider"}
@@ -344,6 +345,8 @@ def asks(role: str, *, judging: bool = False) -> bool:
 
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the design judge's first look, the UI scan."""
+    if role == PICKER:
+        return [SUBMIT.name]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
 

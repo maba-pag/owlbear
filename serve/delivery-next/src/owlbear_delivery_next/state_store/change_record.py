@@ -42,6 +42,7 @@ def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
         "brief": brief.model_dump(mode="json", include=BRIEF),
         "decisions": [d.model_dump(mode="json", include={"text", "origin", "at"}) for d in c.decisions],
         "decisions_applied": sorted(c.decisions_baseline.said) if c.decisions_baseline else [],  # its impact (TD-428)
+        "decisions_picked": {d.id: d.revision for d in brief.picked.decisions} if brief.picked else {},  # TD-459
         "spend": c.spend.model_dump(mode="json", exclude={"last"}),
     }
     stem = f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}"

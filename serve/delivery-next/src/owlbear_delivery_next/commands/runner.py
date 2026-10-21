@@ -90,12 +90,6 @@ ENGINE: dict[StepKind, engine.Step] = {
 _out = sessions.out
 
 
-def _previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]:
-    """PIDs earlier runners persisted for *session*; they remain in the activity log when a runner is killed."""
-    pids = [e.get("pids", {}) for e in store.events(slug) if e.get("event") == "pids" and e.get("session") == session]
-    return {int(p): c for found in pids for p, c in found.items()}
-
-
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, s, slug = datetime.now(UTC), change.step, change.slug
     profile = store.read_profile() or Profile()
@@ -144,7 +138,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             limit=roles.limit(store.settings(), s.kind),
             context=role.context,
             fresh=told,
-            previous=_previous(store, slug, s.session) if resume else {},
+            previous=sessions.previous(store, slug, s.session) if resume else {},
             journal=sdk_adapter.Journal(
                 lambda e: store.log(lock, slug, e), delivered, replaced, lambda d: store.write_now(lock, slug, d)
             ),
