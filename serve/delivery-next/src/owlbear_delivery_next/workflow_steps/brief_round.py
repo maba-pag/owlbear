@@ -13,12 +13,12 @@ from owlbear_delivery_next.change_contracts import dispute_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK
-from owlbear_delivery_next.change_flow import brief_rounds, loop, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, worktree
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
-from owlbear_delivery_next.workflow_steps import sessions
+from owlbear_delivery_next.workflow_steps import pick, sessions
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -47,11 +47,11 @@ def _legacy(c: Change) -> bool:
 
 
 def due(c: Change) -> bool:
-    """Whether the SHAPE step has work for the host: a session, an owner question a stop replaced, or planning."""
+    """Whether the SHAPE step has work for the host: a pick, a session, a question a stop replaced, or planning."""
     if c.step.kind != StepKind.SHAPE or c.finished_at:
         return False
     lost = brief_rounds.first(c) is not None and not brief_rounds.owned_open(c)
-    return c.step.mode in {*brief_rounds.MODES, brief_rounds.PLANNED} or _legacy(c) or lost
+    return c.step.mode in {*brief_rounds.MODES, brief_rounds.PLANNED} or _legacy(c) or lost or picks.owed(c)
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -66,6 +66,12 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         return
     if _legacy(change):
         brief_rounds.request(change, change.brief.version, {}, rounds.policy(store.settings(), BRIEF, "shaper"), now)
+    if picks.owed(change):  # the version's decisions are picked before its challenger runs (TD-459)
+        change = pick.run(store, lock, change)
+        if change.step.mode not in brief_rounds.MODES:
+            brief_rounds.idle(change, datetime.now(UTC))
+            store.write(lock, change)
+            return
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), now
     store.write(lock, change)

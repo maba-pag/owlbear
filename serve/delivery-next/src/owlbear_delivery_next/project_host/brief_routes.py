@@ -15,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
-from owlbear_delivery_next.change_flow import brief_rounds
+from owlbear_delivery_next.change_flow import brief_rounds, picks
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
-from owlbear_delivery_next.workflow_steps import decisions_gate
+from owlbear_delivery_next.workflow_steps import decisions_gate, pick
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,6 +34,7 @@ class ChallengeBody(BaseModel):
     change: str = Field(min_length=1, max_length=20)
     version: int = Field(ge=1)
     rejected: list[tools.Rejection] = Field(default_factory=list, max_length=20)
+    retry_pick: bool = False  # pick the version's decisions again, without a challenge round (TD-459)
 
 
 class ApproveBody(BaseModel):
@@ -65,12 +66,31 @@ def refused(store: Store, c: Change, body: ApproveBody) -> str:
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
         return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"
+    if why := pick.unapproved(store, c):  # TD-459: approval pins the pick, never picks
+        return f"brief v{brief.version} cannot be approved yet: {why}"
     if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
         return (
             f"The visual states {', '.join(stepped)} have clicks or typing, which run only on a prepared test copy "
             "(TD-96); declare the project's preparation options in its settings first, or revise the brief "
             "without those steps"
         )
+    return ""
+
+
+def asked(store: Store, c: Change, body: ChallengeBody) -> str:
+    """Record the shaper's request on *c*: a challenge, whose first for a version owes its pick, or a pick retry.
+
+    Returns:
+        Why it is refused, or "".
+    """
+    if body.retry_pick:
+        return picks.retry(c, body.version) if store.shared else "there are no decisions to pick here"
+    policy = rounds.policy(store.settings(), BRIEF, "shaper")
+    said = {r.finding: r.reason for r in body.rejected}
+    if why := brief_rounds.request(c, body.version, said, policy, datetime.now(UTC)):
+        return why
+    if store.shared is not None:  # without a data repository there are no decisions to pick
+        picks.owe(c)
     return ""
 
 
@@ -94,7 +114,8 @@ def router(
             raise HTTPException(409, why)
         now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)
         baseline, owed = decisions_gate.pinned(store, c, now)
-        return put(slug, BriefApproval(at=now, version=body.version, baseline=baseline, unpinned=owed))
+        approval = BriefApproval(at=now, version=body.version, baseline=baseline, unpinned=owed, picked=c.brief.picked)
+        return put(slug, approval)
 
     @routes.post("/briefs/challenge")
     def challenge(body: ChallengeBody) -> dict[str, Any]:
@@ -103,12 +124,12 @@ def router(
         keys = [r.finding for r in body.rejected]
         if twice := sorted({k for k in keys if keys.count(k) > 1}):
             raise HTTPException(422, f"rejected: {', '.join(twice)} listed twice - one entry per finding")
+        if body.retry_pick and keys:
+            raise HTTPException(422, "rejected: a pick retry answers no findings - ask for the challenge without it")
         try:
             with store.lock(slug) as lock:
                 c = store.read(slug)
-                policy = rounds.policy(store.settings(), BRIEF, "shaper")
-                said = {r.finding: r.reason for r in body.rejected}
-                if why := brief_rounds.request(c, body.version, said, policy, datetime.now(UTC)):
+                if why := asked(store, c, body):
                     raise HTTPException(409, why)
                 store.write(lock, c)
         except (LockHeldError, StoreError) as exc:

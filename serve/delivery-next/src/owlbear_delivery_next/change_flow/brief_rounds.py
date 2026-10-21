@@ -22,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, UNJUDGED, RoundLoop
+from owlbear_delivery_next.change_flow import picks
 from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
@@ -110,7 +111,7 @@ def approvable(c: Change) -> str:
     """Why the current brief version cannot be approved yet, or "" (TD-249)."""
     b, lp = c.brief, c.loops.get(BRIEF)
     if b.challenged == b.version:
-        return ""
+        return picks.unready(c)
     if c.step.mode in MODES:
         return f"the challenge of brief v{b.version} is running"
     if first(c) is not None or due(c) or owned_open(c):
@@ -184,7 +185,7 @@ def _refusal(c: Change, version: int) -> str:
     if version != b.version:
         return f"brief v{version} is not the current draft v{b.version}"
     if b.challenged == version:
-        return f"brief v{version} is challenged already; the owner may approve it"
+        return picks.unready(c) or f"brief v{version} is challenged already; the owner may approve it"
     if c.step.mode in MODES or first(c) is not None or owned_open(c):
         return "its challenge runs or waits for the owner's decision; ask again after it"
     return ""
@@ -213,6 +214,13 @@ def _mode(c: Change, mode: str | None) -> None:
 
 def _wait(c: Change, reason: str, now: datetime) -> None:
     c.outcome = Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=reason, at=now)
+
+
+def idle(c: Change, now: datetime) -> None:
+    """With no session left to run, a version its loop ended on waits for the approval again (after a pick)."""
+    b = c.brief
+    if c.outcome is None and c.step.mode is None and b.challenged == b.version != b.approved_version:
+        _wait(c, f"approve brief v{b.version}", now)
 
 
 def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None:
@@ -373,7 +381,7 @@ def status(c: Change) -> dict[str, object]:
     out: dict[str, object] = {
         "version": c.brief.version, "challenged": c.brief.challenged, "round": lp.round if lp else 0,
         "attempt": lp.attempt if lp else 0, "findings": found, "approvable": not why, "next": why or (
-            f"the owner may approve brief v{c.brief.version} in the Changes page"),
+            f"the owner may approve brief v{c.brief.version} in the Changes page"), "picked": picks.shown(c),
     }  # fmt: skip
     if lp and lp.round == 0 and lp.history and (old := lp.history[-1]).ended == "retried":
         said = "; ".join(f"{f.id}: {_flat(f.text, 600)}" for f in old.findings if f.raised == old.round)

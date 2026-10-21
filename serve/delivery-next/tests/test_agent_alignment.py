@@ -25,7 +25,7 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
-    "test-curator",
+    "test-curator", "picker",
 )  # fmt: skip
 PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
@@ -97,7 +97,7 @@ def audit(granted: Sequence[str], body: str) -> list[str]:
 
 
 def granted(role: str) -> list[str]:
-    launcher = [subagents.LAUNCHER]  # offered while the role's subagent setting is on (TD-376)
+    launcher = [] if role == tools.PICKER else [subagents.LAUNCHER]  # offered while the role's setting is on (TD-376)
     return [*preload.tools(role), *tools.results(role, ui=True), *tools.results(role, ui=False), *launcher]
 
 
@@ -120,7 +120,8 @@ def test_each_agent_explains_exactly_its_grants_and_names_only_granted_tools(rol
 @pytest.mark.parametrize("role", AGENTS)
 def test_conditional_tools_say_their_condition_and_the_window_offers_the_same_tools(role, tmp_path) -> None:
     _, body = preload.agent_file(role)
-    assert "while your role's subagent setting is on" in entry(body, subagents.LAUNCHER)
+    if role != tools.PICKER:  # the picker's session never starts a subagent
+        assert "while your role's subagent setting is on" in entry(body, subagents.LAUNCHER)
     for name in set(tools.results(role, ui=True)) - set(tools.results(role, ui=False)):
         assert "UI Changes only" in entry(body, name)
     if role in {roles.SESSIONS[label] for label in tools.VERDICTS}:
@@ -140,9 +141,9 @@ def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> 
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer"}), (
+        assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer", "picker"}), (
             role
-        )  # the updater's stops are the job's; a test reviewer only reports (TD-339)
+        )  # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
         assert (tools.ASK.name in wf.tools_note(role)) == asks
         assert (tools.ASK.name in step_input.reminder(role)) == asks
     for label in tools.VERDICTS:

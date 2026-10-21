@@ -204,6 +204,7 @@ def test_status_reads_the_host_lock_and_shows_host_down(store, tmp_path):
         "  updater: claude-opus-5.5 effort high",
         "  test-reviewer: gpt-6.1-sol effort medium",
         "  test-curator: claude-opus-5.5 effort high",
+        "  picker: gpt-6.1-sol effort medium",
     ]
 
 

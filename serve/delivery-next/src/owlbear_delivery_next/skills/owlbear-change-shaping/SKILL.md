@@ -61,6 +61,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    its ID, with your evidence, in the next `challenge_brief` call. A finding marked as the owner's is never
    rejected. Then ask for the next round the same way. The next challenger judges your rejections; one it
    does not accept goes to the owner in the Changes page, and nothing can be saved until he decides.
+   Before a version's first round Delivery picks the decisions in force that its work must follow; the
+   reply's `picked` shows them by title. If the pick failed, or the approval says the decisions changed
+   since, call `challenge_brief` for the same version with `retry_pick` true: it uses no round.
 9. When the challenge says the brief is approvable, tell the owner to approve that version in the Changes
    page, using the link exactly as given (it carries the page's access token), and name the rejections
    that stand and a last revision no round reviewed (the owner ticks that he accepts it). Nothing starts

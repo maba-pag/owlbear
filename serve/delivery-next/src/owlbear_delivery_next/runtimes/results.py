@@ -64,6 +64,8 @@ class Gate:
     @property
     def specs(self) -> tuple[tools.Spec, ...]:
         """The step's tools: its submit tool, a first look if it has one, its helpers, a question unless a judge's."""
+        if self.cfg.role == tools.PICKER:
+            return (self.cfg.submit,)
         first = (self.cfg.first_look,) if self.cfg.first_look else ()
         helpers = tuple(spec for spec, _ in self.cfg.helpers)
         ask = (tools.ASK,) if tools.asks(self.cfg.role, judging=self.cfg.judging) else ()

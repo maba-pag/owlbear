@@ -216,6 +216,7 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
             case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
                 c.brief.approved_version, c.brief.approved_at = version, item.at
                 decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
+                c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
                 if all(b.version != version for b in c.brief.approved):
                     c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
                 if c.step.kind == StepKind.SHAPE:
