@@ -308,6 +308,7 @@ def test_the_standby_file_names_only_a_loopback_address_and_is_the_owners_alone(
     assert wait_for(lambda: not (local_home.root() / handover.STANDBY).exists())
 
 
+@pytest.mark.timeout(120)  # two real hosts start and hand over; its own waits allow more than a loaded CI's 30 s
 def test_run_updates_now_hands_a_running_host_over_to_the_new_version_end_to_end(monkeypatch):
     """§5: the old host runs here, the new version is a real process of this code; open pages keep their address."""
     folder = version("v0.2")
