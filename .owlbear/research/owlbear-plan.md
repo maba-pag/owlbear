@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-20, status at `main` after #533, decisions to TD-438
+> **Date:** 2026-10-21, status at `main` after #548, decisions to TD-438
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -176,7 +176,8 @@ script became ES modules under `web/pages/<page>/`, served from a list fixed at 
 `changes.html` went from 1496 lines to 128, `config.html` from 1102 to 39, `backlog.html` from 524 to 55; no module
 has more than 259.
 v1.0 is the first merge labelled `release:major`, after items 1, 6, 2, 3, 4, 7, 11 and 13; it is tagged `v1.0` and `v1`.
-Next is item 14, the decision system (TD-419), then item 5.
+Item 14, the decision system (TD-419), is built (#538 to #547); its migration waits for the owner's review of the
+preview (TD-437). Item 5's three residuals from closed issues are built (#548); the rest of item 5 needs a design.
 
 ### 3.5 Items 8 and 9: gate, then watcher
 
