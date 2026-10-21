@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -173,3 +174,25 @@ def test_check_fails_on_a_missing_or_hand_edited_view(tmp_path, capsys):
     out.write_text(out.read_text(encoding="utf-8").replace("None.", "Nothing.", 1), encoding="utf-8")
     assert main([str(tmp_path / "data"), "--commit", "none", "--out", str(out), "--check"]) == 1
     assert "edited by hand" in capsys.readouterr().err
+
+
+def test_a_rehashed_line_that_only_looks_like_the_commit_line_is_still_compared(tmp_path, capsys):
+    out = tmp_path / "decisions.md"
+    (tmp_path / "data").mkdir()
+    assert main([str(tmp_path / "data"), "--commit", "none", "--out", str(out)]) == 0
+    body = out.read_text(encoding="utf-8").rsplit("<!--", 1)[0].replace("None.", "None.\nData commit: Use tabs.", 1)
+    out.write_text(f"{body}<!-- decisions-view sha256:{hashlib.sha256(body.encode()).hexdigest()} -->\n")
+
+    assert hash_problem(out.read_text(encoding="utf-8")) == ""  # the pull-request check cannot tell
+    assert main([str(tmp_path / "data"), "--commit", "none", "--out", str(out), "--check"]) == 1  # main's can
+    assert "is stale" in capsys.readouterr().err
+
+
+def test_a_promoted_decision_shows_its_global_successor_in_history(tmp_path, make):
+    source = put(tmp_path, make, "source", title="Local rule", state=State.REPLACED)
+    wide = put(tmp_path, make, "wide", Scope.GLOBAL, title="Wide rule",
+               links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))  # fmt: skip
+
+    history = render(snapshot(tmp_path, "owlbear"), COMMIT).split("## History")[1]
+
+    assert f"- `{source.id}` (TD-417) replaced by `{wide.id}` (TD-417): Local rule" in history

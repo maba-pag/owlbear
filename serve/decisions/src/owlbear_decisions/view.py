@@ -31,6 +31,8 @@ COMMIT_PREFIX = "Data commit: "
 NO_COMMIT = "none"
 HASH_LINE = re.compile(r"<!-- decisions-view sha256:([0-9a-f]{64}) -->")
 _COMMIT = re.compile(r"[0-9a-f]{7,40}")
+_COMMIT_LINE = re.compile(re.escape(COMMIT_PREFIX) + r"(`[0-9a-f]{7,40}`|none \(no decisions migrated yet\))")
+_COMMIT_AT = 6  # the data commit's line in a rendered view: after the marker, the title and the two-line note
 _HISTORY = (State.REPLACED, State.WITHDRAWN, State.SPENT)
 
 
@@ -111,7 +113,7 @@ def _history(seen: Snapshot, names: dict[str, str]) -> list[str]:
     successors: dict[str, list[str]] = defaultdict(list)
     for entry in seen.entries:
         for link in entry.decision.links:
-            if link.type is LinkType.REPLACES:
+            if link.type in {LinkType.REPLACES, LinkType.PROMOTED_FROM}:  # a promotion succeeds its source too
                 successors[link.target].append(entry.decision.id)
     lines = ["## History", "", "Replaced, withdrawn and spent decisions; none of them is in force.", ""]
     retired = sorted((e for e in seen.entries if e.decision.state in _HISTORY), key=_rank)
@@ -181,8 +183,16 @@ def hash_problem(text: str) -> str:
 
 
 def _comparable(text: str) -> list[str]:
-    """The view's lines without the data commit and the hash: a new data commit alone never makes it stale."""
-    return [line for line in text.splitlines() if not line.startswith(COMMIT_PREFIX) and not HASH_LINE.fullmatch(line)]
+    """The view's lines without its one data-commit line and its hash: a new data commit alone never makes it stale.
+
+    Only the line where the generator writes the commit, in its exact form, is left out; any other line counts.
+    """
+    lines = text.splitlines()
+    if lines and HASH_LINE.fullmatch(lines[-1]):
+        lines = lines[:-1]
+    if len(lines) > _COMMIT_AT and _COMMIT_LINE.fullmatch(lines[_COMMIT_AT]):
+        del lines[_COMMIT_AT]
+    return lines
 
 
 def _head(root: Path) -> str:
