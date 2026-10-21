@@ -39,7 +39,7 @@ decision under review, ask one decision per question with the structured questio
 decisions TD-41..43, TD-150 and TD-156 in
 [the decision record](../.owlbear/research/delivery-liveness-first-rebuild.md) define:
 
-- The message shows the decision's record (its words and origin) and what changed since.
+- The message shows the decision's record (its statement and origin) and what changed since.
 - Options: three close variants of the decision (fewer only when fewer really differ, never padded),
   the matching one at a varying position and never verbatim; one or two other directions, the opposite
   among them; then, in this order,
@@ -50,11 +50,14 @@ decisions TD-41..43, TD-150 and TD-156 in
   choice. "Explain first" (his shorthand "nmdpcro": details, pro, con, risk, opinion) explains each
   option neutrally, then asks again.
 - Free text is never recorded as written: offer two to five readings that fill its gaps differently,
-  plus "your words as written", "show me more readings" and "explain first".
+  plus "your words as written", "show me more readings" and "explain first". Read back free text and
+  unclear answers at once; a chosen option counts as confirmed; end the session with one check of
+  everything you record (TD-448).
 - Before asking, challenge the proposal against his intent: what it lacks and what it overdoes,
   not only what is wrong (TD-150).
-- Record each answer as C-31 of the decision record says: edit its topic in the same change, never
-  append history rows; number it after the highest TD number in the record on a freshly fetched `main`.
+- Record each answer as C-31 of the decision record says: his confirmed intent, never his words
+  (TD-449); edit its topic in the same change, never append history rows; number it after the highest
+  TD number in the record on a freshly fetched `main`.
 
 ## Directory Structure
 

@@ -9,7 +9,7 @@ the remaining work and where the code differs from these decisions are in [the p
 
 ## C-01 Asking the owner
 
-**Rows:** decided TD-41, TD-42, TD-43, TD-150, TD-156, TD-340, TD-364.
+**Rows:** decided TD-41, TD-42, TD-43, TD-150, TD-156, TD-340, TD-364, TD-448.
 
 - A read-back offers three close variants of the decision, fewer only when fewer really differ, never padded, the
   matching one at varying positions, plus one or two other directions, the opposite among them [TD-41, TD-156, TD-364].
@@ -27,6 +27,8 @@ the remaining work and where the code differs from these decisions are in [the p
   never applied [TD-340, TD-79, TD-153, TD-193].
 - Every challenge of owner input extracts intent and reports what is missing and what is overdone, not only what is
   wrong; the owner's words are evidence of intent, not a literal spec [TD-150].
+- Free text and unclear answers are read back at once; a chosen paraphrase counts as confirmed; a session ends with
+  one check of everything it records [TD-448].
 
 **Owner's words:**
 
@@ -1231,7 +1233,8 @@ their own decisions).
 ## C-31 The decision record
 
 **Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419, TD-424, TD-425, TD-427,
-  TD-428, TD-429, TD-430, TD-435, TD-436, TD-437, TD-439, TD-440, TD-441, TD-442, TD-446; autonomous TD-389, TD-426.
+  TD-428, TD-429, TD-430, TD-435, TD-436, TD-437, TD-439, TD-440, TD-441, TD-442, TD-446, TD-449, TD-450, TD-451,
+  TD-452, TD-453, TD-454, TD-455; autonomous TD-389, TD-426.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1239,10 +1242,10 @@ their own decisions).
   into C-03 [TD-383, TD-384].
 - In-force lines state intent in at most two lines each; how something is built lives in code, tests and
   pull request texts, not here [TD-385, TD-389].
-- Every `decided` row keeps its quote, cut to its decisive words in one line, with its date; a row chosen
-  without a quote has none [TD-359, TD-388].
-- A new decision edits its topic in the same change: its number on the rows line under its origin, an in-force
-  line, and for a `decided` one the owner's words with number and date; nothing is appended elsewhere [TD-389].
+- A decision records only the owner's confirmed intent; his words are never stored, in decision files, this record
+  or commit messages; the record's existing quotes stay as history until the migration [TD-449].
+- A new decision edits its topic in the same change: its number on the rows line under its origin and an in-force
+  line; nothing is appended elsewhere [TD-389, TD-449].
 - Implementation choices go to the pull request text only; an autonomous choice that changes a rule is
   recorded in its topic. New numbers continue after the highest one in this file [TD-389].
 - Until a decision system replaces this record, implementation choices the owner would notice on a page are
@@ -1267,12 +1270,20 @@ their own decisions).
   checks the generated view's own hash [TD-436].
 - The record's first migration stops at a preview listing its unclear clauses; the record stays authoritative until
   the owner has reviewed it [TD-437].
-- The migration takes the record as written: it merges no lines, marks no row spent and keeps the origins and quotes
-  the record gives; only the owner's answers of 2026-10-21 changed lines, in their topics [TD-439].
+- Today's rules come over as inherited: their recorded authority, marked never read back, without quotes; one is
+  read back only when work relies on it and its meaning is unclear [TD-454].
 - Global: C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research out of
   its project, config changes the owner approves, the nine ECC adoptions; all else is OwlBear's [TD-442].
-- The migration proposes per topic the roles and step kinds its rules apply to; the owner confirms one list before
-  it writes [TD-446].
+- No per-topic targeting list: shaping assigns the decisions that apply to each Change and its challenger checks;
+  agents may tag topics for search without asking [TD-455].
+- In a lead chat a decision is confirmed and saved in the chat; the Decisions page is for looking up and changing,
+  never a required stop [TD-450].
+- Within approved work or a delegation agents decide reversible details and record consequential ones as theirs;
+  anything lasting, wider, contrary to an owner decision or committing outside asks first [TD-451].
+- Workers get the decisions assigned to their work and may look up more in Global and their project; challengers
+  check the complete list [TD-452].
+- Shaping decisions apply from brief approval, project-wide ones to the project's other Changes at once; chat and
+  page decisions apply at confirmation [TD-453].
 
 **Owner's words:**
 
@@ -1300,7 +1311,7 @@ their own decisions).
 - TD-442, 2026-10-21: "The asking rules plus the four candidates"
 - TD-446, 2026-10-21: "Tag by topic: the migration proposes roles and steps per topic, I confirm one list"
 
-**Replaced:** TD-359 by TD-383 and TD-388.
+**Replaced:** TD-359 by TD-383 and TD-388; TD-388 by TD-449; TD-439 by TD-454; TD-446 by TD-455.
 
 **Spent:** TD-440 (four mixed lines split by origin, the doubtful ones kept decided) and TD-441 (seven rows without a
   line got one), both applied in their topics.

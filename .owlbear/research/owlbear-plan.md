@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-21, status at `main` after #553 (v1.11), decisions to TD-447
+> **Date:** 2026-10-21, status at `main` after #554 (v1.11), decisions to TD-455
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -76,7 +76,7 @@ names, not positions: the table lists the items in their order.
 | 11 | Pages: the PDS fallback and notice removed, browser tests on the real CDN; then pages, scripts and styles split to the 500-line limit (§3.4) | TD-39, TD-398, TD-401, TD-403 | [visual baseline §3.6](delivery-next-visual-baseline.md) for the removal | Done (#529, #530): the fallback is removed; the pages split into modules under `web/pages/` |
 | 13 | Cockpit: audit `serve/cockpit` for what the machine UI lacks (design-system components and workarounds, memory purge, the ideas editor), port what is worth it, delete Cockpit | TD-416 | none | Done (#527): memory purge ported to the Memory page; the ideas editor, theme toggle and workspace health dropped; one lesson for item 11 in [visual baseline §3.6](delivery-next-visual-baseline.md) |
 | 12 | v1.0: the first `release:major` merge, tagged `v1.0` and `v1` | TD-393, TD-392 | [self-update §4, §8](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/self-update-build.md) | Done: the first `release:major` merge (2026-10-20) |
-| 14 | Decision system: decisions as their own system for OwlBear's work and every project, in `owlbear-data`, scoped Change, project and Global; Decisions page with read-backs; impact of a change of mind | TD-419, TD-418, TD-424..TD-430 | [decision system](decision-system-build.md) | Built: slices 1 to 4 and 5a (#538 to #542: file contract and validator, Change decisions archived, store with receipts and index, step context with the runner's gate, Decisions tab with owner actions and chat tools), 6 (#543: generated `.owlbear/decisions.md`, its hash checked on pull requests and against owlbear-data by `decisions-view.yml`, TD-436) and 5b part 1 (the read-back queue on the Decisions tab, at most three at a checkpoint, `queue_read_back`, and OwlBear's own decisions as a fixed scope, TD-427, TD-435) and 5b part 2 (an impact report per project for a replaced or withdrawn decision, the owner's "forbids existing behaviour" or "wording only" mark, scheduling fixes as grouped backlog entries and accepting a project's existing code, each the owner's click, TD-428). Next: the owner reviewed the migration preview on 2026-10-21 (TD-439 to TD-446; the record stays authoritative until the migration), then asked the same day for decision management to be rethought end to end, the agents' use included, before anything migrates (§5) |
+| 14 | Decision system: decisions as their own system for OwlBear's work and every project, in `owlbear-data`, scoped Change, project and Global; Decisions page with read-backs; impact of a change of mind | TD-419, TD-418, TD-424..TD-430 | [decision system](decision-system-build.md) | Built: slices 1 to 4 and 5a (#538 to #542: file contract and validator, Change decisions archived, store with receipts and index, step context with the runner's gate, Decisions tab with owner actions and chat tools), 6 (#543: generated `.owlbear/decisions.md`, its hash checked on pull requests and against owlbear-data by `decisions-view.yml`, TD-436) and 5b part 1 (the read-back queue on the Decisions tab, at most three at a checkpoint, `queue_read_back`, and OwlBear's own decisions as a fixed scope, TD-427, TD-435) and 5b part 2 (an impact report per project for a replaced or withdrawn decision, the owner's "forbids existing behaviour" or "wording only" mark, scheduling fixes as grouped backlog entries and accepting a project's existing code, each the owner's click, TD-428). Next: the owner reviewed the migration preview on 2026-10-21 (TD-439 to TD-446), then had decision management rethought end to end and decided it the same day (TD-448 to TD-455): decisions record his confirmed intent only, a lead chat saves at confirmation, workers get their assigned decisions while challengers check all, today's rules come over as inherited. Next: the six slices of [decisions as confirmed intent](decision-intent-build.md), the migration being the last |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once; from the closed memory issues: a test for two writes in the same microsecond (#238), dispute history in the memory tools' answers (#244), the memory handbook's revision parameter (#249) | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400 | none yet | Not started, except the three residuals from #238, #244 and #249, which are built |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | none yet | Not started; no design |
 | 9 | Watcher: TD-27's benchmark, then the design session (O1–O6) with the owner, then the build and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Not started; the draft needs revising (§3.5) |
@@ -105,7 +105,7 @@ names, not positions: the table lists the items in their order.
 flowchart LR
   A402["TD-402: GitHub account per project"] --> I15["15 New project from zero"]
   A402 --> I10["10 First real project"]
-  I14["14 Decision system: rethink, then migration"] -.-> I5["5 Memory work"]
+  I14["14 Decisions as confirmed intent, then migration"] -.-> I5["5 Memory work"]
   I5 -.-> I8["8 Window-step gate"]
   I8 -.-> I9["9 Watcher"]
   B27["TD-27 benchmark"] --> I9
@@ -181,7 +181,8 @@ script became ES modules under `web/pages/<page>/`, served from a list fixed at 
 has more than 259.
 v1.0 is the first merge labelled `release:major`, after items 1, 6, 2, 3, 4, 7, 11 and 13; it is tagged `v1.0` and `v1`.
 Item 14, the decision system (TD-419), is built (#538 to #547); the owner reviewed the migration preview (TD-439 to
-TD-446) and then asked for decision management to be rethought end to end before anything migrates. Item 5's three
+TD-446), then had decision management rethought and decided it (TD-448 to TD-455, [design](decision-intent-build.md));
+its six slices come before anything migrates. Item 5's three
 residuals from closed issues are built (#548); the rest of item 5 needs a design.
 
 ### 3.5 Items 8 and 9: gate, then watcher
@@ -204,7 +205,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |
 | C-01 | Read-backs offer close variants and other directions, the opposite among them, then "take your recommendation (…)" | `w-idea-refinement` offers no opposite and no named recommendation | align | — |
-| C-01 | A question shows the record's words and what changed | The shaping skill and `w-idea-refinement` say never to quote the record | align | — |
+| C-01 | A question shows the decision's record (statement and origin) and what changed | The shaping skill and `w-idea-refinement` say never to quote the record | align | — |
 | C-01 | In doubt, ask about the direction first and say why | The shaper does not say why | align | — |
 | C-01 | "Take your recommendation" is recorded `autonomous` with its reason | Brief decisions have no reason field | align | — |
 | C-03 | TD-27's benchmark, then the watcher's model | Not run | build | 9 |
@@ -229,8 +230,9 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-30 | Every role may use built-in subagents | Not in window steps | keep | 8 |
 | S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |
 | S | A quality service runs linters and judges exceptions (TD-89) | Not built | build | not placed |
-| C-31 | Working chats find, record and read back decisions on the same records (TD-427); OwlBear's own decisions without registering its repository (TD-435) | The Decisions tab reaches OwlBear's decisions, but OwlBear's own workspace has no decision chat tools: its chats edit the record, which the migration turns into a generated view | build | 14 |
-| C-31 | The migration marks Global (TD-442) and targets rules by topic (TD-446) | The migrator proposes every entry for OwlBear, with no roles or step kinds | build | 14 |
+| C-01 | A session ends with one check of everything it records (TD-448) | The asking skills read back before saving a brief, but no closing check; lead chats have none | align | 14 |
+| C-31 | Decisions hold confirmed intent only, saved in a lead chat at confirmation, active from brief approval, workers get their assignment and challengers all (TD-449..TD-453, TD-455) | Files keep `owner_words`; chat decisions are drafts the owner activates; a brief's project decisions publish at Change end; every step gets every applying decision; OwlBear's own workspace has no decision tools | build | 14 |
+| C-31 | Today's rules come over as inherited (TD-454) | The converter keeps quotes and has no inherited mark | build | 14 |
 
 Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent,
 dropped C-21's lines for TD-199 and TD-201 and cut TD-318's schedule to one of its four parts; they are back in force.
@@ -242,12 +244,10 @@ Ask each with the question tool in the owner's format (workspace instructions, "
 test review while paused, the research move's timing and scope, the PDS fallback, which roles save memory, the
 curator's threshold, what the line limit covers and the GitHub account. Answered on 2026-10-20 as TD-417..TD-438:
 the step-kind cap, the recording rule and the decision system, the agent workspace, a new project from zero, the
-amendment session's timing, the browser and knowledge rebuild; on 2026-10-21 as TD-439..TD-447: the migration
-preview and CodeRabbit.
+amendment session's timing, the browser and knowledge rebuild; on 2026-10-21 as TD-439..TD-455: the migration
+preview, CodeRabbit, and decisions as confirmed intent.
 
-1. Decision management end to end (owner's request, 2026-10-21): how the owner and every agent set, read, curate and
-   keep decisions current, earlier choices about decisions set aside while it is thought through; the migration, the
-   per-topic list of TD-446 and decision tools for OwlBear's own chats wait for the direction he chooses.
+1. None open.
 
 ## 6. Documents
 
@@ -266,7 +266,8 @@ since item 6; the others are in this folder.
 | [Challenge rounds](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/challenge-rounds-build.md) | Review and challenge loops | Built |
 | [Design skill](delivery-next-design-skill.md) | Design pack and screenshot judges | Built; contradicting findings not detected |
 | [Visual baseline](delivery-next-visual-baseline.md) | TD-38 to TD-40 | Plan; its PDS part (§3.6) built with item 11, the rest not built and not placed |
-| [Decision system](decision-system-build.md) | Item 14 | Built (#538 to #547, #550) except the migration (§11 there) |
+| [Decision system](decision-system-build.md) | Item 14 | Built (#538 to #547, #550) except the migration; revised by the next row |
+| [Decisions as confirmed intent](decision-intent-build.md) | Item 14: TD-448..TD-455 | Answered by the owner; not built |
 | [New project from zero](new-project-build.md) | Item 15 | Designed; not built, not placed |
 | [Watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | The watcher | Draft for the owner's session; to revise (§3.5), with the owner's "You should know" input (§3.4b there) |
 | [Transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Built (item 7) |
