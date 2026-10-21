@@ -30,7 +30,7 @@ titles, as the owner asks of every report.
 
 | Where | Path |
 | --- | --- |
-| Shaping a Change | Asked in the owner's format; free text and unclear answers read back at once, a chosen paraphrase counts as confirmed; one closing check of everything to be saved before the brief is saved (TD-448). The brief also names the existing decisions that apply to the Change (TD-455). Drafts until approval; active from approval (TD-453) |
+| Shaping a Change | Asked in the owner's format; free text and unclear answers read back at once, a chosen paraphrase counts as confirmed; one closing check of everything to be saved before the brief is saved (TD-448). The brief also names the existing decisions the picker found for the Change (TD-455, TD-459). Drafts until approval; active from approval (TD-453) |
 | Requests during the work | Pause, retry, rounds, task selection, setup, pack choices stay events of the Change. A clarification within the brief is confirmed like any answer and becomes a Change decision, active at confirmation. An answer that changes the approved brief is an amendment: the work stops and asks, until item 16 designs amendments |
 | Lead chats outside Delivery | OwlBear's own decisions and ad-hoc project chats: asked and read back the same way, saved at confirmation through decision tools that find the project by its repository (TD-450); the closing check ends the session |
 | Decisions page | Look up, change, retire, widen scope: each change is shown as a plain statement and confirmed like an answer; impact report (TD-428); inherited decisions read back when work relies on an unclear one (TD-454, TD-427) |
@@ -69,12 +69,13 @@ follows the owner's path.
   the Change's baseline (TD-459). Measured on 13 past pull requests against a reference list: 94% of the task's own
   rules and 97% of the general ones, 4 consequential misses, about 6 credits and a minute per pick. Sol high found
   96% and 98% at 15.6 credits and about 5 minutes; Haiku, Luna and Opus found less.
-- **Later decisions:** the Change's own decisions attach automatically; a rule replaced or withdrawn elsewhere, or a
-  widened scope, is reassessed at the next step boundary; an answer that changes the brief still stops the work
-  (TD-456).
-- **Workers** get the whole picked set, untrimmed and the same for every role: no tags, no role views (TD-457,
-  TD-458). Measured: Opus trimming halved the set but lost 2 to 3 rules that mattered, and as its own call cost about
-  what it saved.
+- **Later decisions:** the Change's own decisions attach automatically. A project or Global decision activated
+  elsewhere applies at once (TD-453); like a rule replaced or withdrawn elsewhere, or a widened scope, the picker
+  reassesses it for the running Change at its next step boundary. An answer that changes the brief still stops the
+  work (TD-456).
+- **Workers** get the whole picked set, untrimmed and the same for every role: no role or kind tags, no per-role
+  views; topics stay search tags (TD-455, TD-457, TD-458). Measured: Opus trimming halved the set but lost 2 to 3
+  rules that mattered, and as its own call cost about what it saved.
 - **Lookup:** workers and lead chats ask the same picker, which reads the complete list; a failed lookup shows as
   failed, never as "no rules apply" (TD-456, TD-459).
 - **Challengers** (brief, plan, review) check the complete list (TD-452).
@@ -95,7 +96,7 @@ project. Project folders therefore never meet, only Global is shared, and no dis
 | Shaping drafts | The Change's database (`~/.owlbear/projects/<id>`) | Each brief save | Nowhere | — | Survive a broken session; only that Change needs them |
 | Lead-chat drafts | The conversation | — | Nowhere | — | Saved only once confirmed |
 | Active decisions | `owlbear-data`: Global at the root, `<project>/decisions/`, `<project>/changes/<change>/decisions/` | At activation and retirement | GitHub | Pushed at once; pulled at host start, step start or resume, before publishing or merging | One place every agent and both machines read; history |
-| Assigned revisions | The Change's baseline; archived with its finished-Change record | At approval and accepted updates | `owlbear-data` | Change end | Reproducible work; impact reports |
+| Picked revisions | The Change's baseline; archived with its finished-Change record | At approval and accepted updates | `owlbear-data` | Change end | Reproducible work; impact reports |
 | Search index | Local SQLite | After each pull or save | Nowhere | — | Fast search |
 | OwlBear's generated view | OwlBear's repository | On change, by pull request | GitHub | — | GitHub's cloud reviewers; a dated copy, supplementary |
 
@@ -108,7 +109,7 @@ two machines can only be in Global and becomes a conflict for the owner.
 Every in-force line becomes an inherited decision: its statement, its recorded origin, Global as TD-442 lists, topics
 as search tags, no quotes, nothing reviewed up front (TD-454, TD-455). An inherited decision is read back when work
 relies on it and its meaning is unclear. Before the switch, a test on past Changes and lead-chat tasks checks that
-assignment plus the challenger finds every governing decision; then the record becomes a generated view and its
+the picker plus the challenger finds every governing decision; then the record becomes a generated view and its
 quotes live on only in Git history.
 
 ## 7. Reused and changed
@@ -129,7 +130,7 @@ the agents' boundary in their agent files (TD-451); the page in plain words with
 | --- | --- | --- |
 | 1 | Model: `owner_words` removed, `inherited` added, `read_back` set by confirmation; page without ids | Old files load; no new write or migrated decision carries words (Git history keeps what it has) |
 | 2 | Decision tools in every workspace by repository identity, OwlBear's included: find, record confirmed, change, retire; active at once; the closing check in the asking rules and both asking skills | A decision confirmed in an unregistered workspace is found after a restart from another workspace |
-| 3 | Shaping assigns existing decisions in the brief; a brief's project decisions published at approval; abandonment revokes nothing | A project decision approved in one Change reaches a parallel Change at its next step |
+| 3 | The brief lists the picked decisions; a brief's project decisions published at approval; abandonment revokes nothing | A project decision approved in one Change reaches a parallel Change at its next step |
 | 4 | The picker on Sol medium at shaping and for every lookup; the whole picked set to every worker; challengers' complete list; the correction log; the agents' boundary in their files | A rule the picker left out is caught by the challenger in a fixture; a failed lookup is reported as failed |
 | 5 | Requests classified as event, clarification or amendment | A clarification becomes a Change decision; a brief-changing answer stops the work |
 | 6 | Migration as inherited, the past-work test, the switch | The test finds every governing decision; the record becomes a generated view |

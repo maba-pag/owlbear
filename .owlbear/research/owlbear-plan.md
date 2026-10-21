@@ -231,7 +231,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |
 | S | A quality service runs linters and judges exceptions (TD-89) | Not built | build | not placed |
 | C-01 | A session ends with one check of everything it records (TD-448) | The asking skills read back before saving a brief, but no closing check; lead chats have none | align | 14 |
-| C-31 | Decisions hold confirmed intent only, saved in a lead chat at confirmation, active from brief approval, workers get their assignment and challengers all (TD-449..TD-453, TD-455) | Files keep `owner_words`; chat decisions are drafts the owner activates; a brief's project decisions publish at Change end; every step gets every applying decision; OwlBear's own workspace has no decision tools | build | 14 |
+| C-31 | Decisions hold confirmed intent only, saved in a lead chat at confirmation, active from brief approval, workers get the whole picked set and challengers all (TD-449..TD-453, TD-455..TD-459) | Files keep `owner_words`; chat decisions are drafts the owner activates; a brief's project decisions publish at Change end; every step gets every applying decision; OwlBear's own workspace has no decision tools | build | 14 |
 | C-31 | Today's rules come over as inherited (TD-454) | The converter keeps quotes and has no inherited mark | build | 14 |
 
 Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent,

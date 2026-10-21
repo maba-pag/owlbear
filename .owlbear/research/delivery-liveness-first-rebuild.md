@@ -1319,8 +1319,8 @@ their own decisions).
 - TD-442, 2026-10-21: "The asking rules plus the four candidates"
 - TD-446, 2026-10-21: "Tag by topic: the migration proposes roles and steps per topic, I confirm one list"
 
-**Replaced:** TD-359 by TD-383 and TD-388; TD-388 by TD-449; TD-439 by TD-454; TD-446 by TD-455; TD-456's brief
-challenger as picker by TD-459.
+**Replaced:** TD-359 by TD-383 and TD-388; TD-388 by TD-449; TD-439 by TD-454; TD-446 by TD-455; TD-456 in part by
+TD-459.
 
 **Spent:** TD-440 (four mixed lines split by origin, the doubtful ones kept decided) and TD-441 (seven rows without a
   line got one), both applied in their topics.
