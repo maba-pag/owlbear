@@ -295,14 +295,16 @@ def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_th
 
 def test_queueing_and_answering_a_read_back_after_approval_never_makes_the_gate_ask(tmp_path, shared, ran):
     rule = put(shared, make())
+    old = put(shared, make(title="Notes are plain text", statement="Notes are plain text.", inherited=True))
     store = stored(tmp_path, shared, change())
     held = read_backs.ask(store, PROJECT, rule.id, why="A partner asked for JSON.", kind="uncertain",
                           revision=rule.revision)  # fmt: skip
     assert held[0].saved
 
     assert step(store, tmp_path).outcome is None
-    read_backs.answer(store, PROJECT, rule.id, held[0].revision, said="Still right.", by="owner")
-    assert step(store, tmp_path).outcome is None
+    read_backs.answer(store, PROJECT, rule.id, held[0].revision, confirmed=True, by="owner")
+    assert read_backs.answer(store, PROJECT, old.id, old.revision, confirmed=True, by="owner")[0].saved
+    assert step(store, tmp_path).outcome is None  # confirming an inherited decision is no rule change
     assert ran == [K.BUILD, K.BUILD]
 
 

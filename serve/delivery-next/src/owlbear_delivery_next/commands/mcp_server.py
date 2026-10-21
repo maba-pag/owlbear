@@ -294,26 +294,38 @@ def record_decision(  # noqa: PLR0913 - the proposal's fields
         ),
     ] = "",
     topic: Annotated[str, Field(description="Topic it belongs to, if any", max_length=80)] = "",
-    owner_words: Annotated[
-        str, Field(description="The owner's own words deciding it in this chat, quoted; empty for your proposal")
-    ] = "",
+    confirmed: Annotated[
+        bool,
+        Field(
+            description="True only when the owner confirmed this exact statement in this chat after it was read back "
+            "to him; then it is his decision. Never pass his words."
+        ),
+    ] = False,
     replaces: Annotated[str, Field(description="Id of the decision it would replace, if any")] = "",
 ) -> dict[str, Any]:
     """Propose a decision for this project: always a draft the owner activates on the Decisions page."""
     why = {"rationale": "", "reason": rationale} if replaces else {"rationale": rationale}  # a successor says why
     body = {"title": title, "topic": topic, "statement": statement} | why
-    return _STATE["chat"].write("/decisions/propose", body | {"words": owner_words, "replaces": replaces})
+    return _STATE["chat"].write("/decisions/propose", body | {"confirmed": confirmed, "replaces": replaces})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
 def read_back_decision(
+    *,
     decision: Annotated[str, Field(description="Decision id from find_decisions")],
     revision: Annotated[str, Field(description="Its revision from find_decisions")],
-    answer: Annotated[str, Field(description="The owner's answer when you read it back to him", max_length=2000)],
+    confirmed: Annotated[
+        bool,
+        Field(
+            description="True only when the owner confirmed the statement as it stands after you read it back to "
+            "him. A different intent is no read-back: record it as a replacement draft with record_decision. Never "
+            "pass his words."
+        ),
+    ] = False,
 ) -> dict[str, Any]:
-    """Record that the owner had a decision read back; a change of mind is his replacement on the Decisions page."""
+    """Record that the owner confirmed a decision read back to him; a change of mind is a replacement, not this."""
     path = f"/decisions/{urllib.parse.quote(decision, safe='')}/read-back"
-    return _STATE["chat"].write(path, {"revision": revision, "answer": answer})
+    return _STATE["chat"].write(path, {"revision": revision, "confirmed": confirmed})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))

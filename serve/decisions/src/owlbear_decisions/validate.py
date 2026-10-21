@@ -110,7 +110,7 @@ def _single(entry: Entry) -> list[tuple[str, str]]:
         found.append(("placement", message))
     if len(d.statement) > STATEMENT_LIMIT:
         found.append(("statement-length", f"statement has {len(d.statement)} characters, at most {STATEMENT_LIMIT}"))
-    return found  # a decided decision chosen without a quote has none (TD-388): its words are not required
+    return found
 
 
 def _visible(source: Entry, target: Entry, link: LinkType) -> bool:

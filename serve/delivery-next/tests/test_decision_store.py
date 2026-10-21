@@ -249,7 +249,7 @@ def test_a_replacement_whose_predecessor_changed_remotely_writes_neither_file(sh
     remote = git(shared_repo[1], "rev-parse", "main")
 
     said = decision_actions.replace(second, PROJECT, decision.id, decision.revision, title="", statement="Postgres.",
-                                    rationale="", words="", reason="It grew.", redecided=False)  # fmt: skip
+                                    rationale="", reason="It grew.", redecided=False)  # fmt: skip
 
     assert [r.saved for r in said] == [False, False]
     assert git(shared_repo[1], "rev-parse", "main") == remote  # nothing published

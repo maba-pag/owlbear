@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, Scope, State, new_id
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id
 from owlbear_decisions.models import STATEMENT_LIMIT
 from owlbear_delivery_next.state_store import decision_impact, decision_store
 from owlbear_delivery_next.state_store.backlog import EVIDENCE, Backlog, named
@@ -124,8 +124,8 @@ def _head(report: Report, new: Decision, impact: Impact, area: str) -> str:
     old = report.old
     return "\n".join([
         f"The rule changed: {new.title}.", "",
-        f"Old rule ({old.id}, revision {old.revision}): {old.statement}",
-        f"New rule ({new.id}, revision {new.revision}): {new.statement}", "", DIVERGENCE[report.effect], "",
+        f"Old rule \u201c{old.title}\u201d: {old.statement}",
+        f"New rule \u201c{new.title}\u201d: {new.statement}", "", DIVERGENCE[report.effect], "",
         f"Impact in {impact.project}{f' ({area})' if area else ''}: {impact.status}: {impact.why}", "",
         "Tick each item once a Change has verified that it follows the new rule; a Change ticks only what it verified:",
     ])  # fmt: skip
@@ -335,14 +335,14 @@ def accept(shared: DataRepo, report: Report, project: str, revision: str, reason
     now = datetime.now(UTC)
     kept = Decision(
         id=new_id(), title=_short(f"{project} keeps existing code under: {new.title}", TITLE), topic=new.topic,
-        statement=_short(f"Code in {project} built before {new.id} stays as it is; new work follows {new.id}.",
+        statement=_short(f"Code in {project} built before \u201c{new.title}\u201d stays as it is; new work follows it.",
                          STATEMENT_LIMIT),
         rationale=f"Why: {why}\n\nImpact when kept: {impact.status}: {impact.why}", applies_to=new.applies_to,
         scope=Scope.PROJECT, project=project, origin=Origin.DECIDED, actor="owner", source=ACCEPTED,
-        owner_words=(OwnerWords(text=why, date=now.date()),), state=State.IN_FORCE, created_at=now,
+        read_back=now.date().isoformat(), state=State.IN_FORCE, created_at=now,
         links=(Link(type=LinkType.EXCEPTION_TO if new.scope is Scope.GLOBAL else LinkType.REFINES, target=new.id),),
     )  # fmt: skip
-    said = f"decisions: {project} keeps its existing code under {new.id}"
+    said = f"decisions: accept-existing {new.id} ({project})"
     # the rule rides along unchanged: under the lock, after catching up, a rule replaced or withdrawn meanwhile refuses
     rule, done = decision_store.save_all(shared, [(new, new.revision), (kept, None)], message=said)
     if not rule.saved:

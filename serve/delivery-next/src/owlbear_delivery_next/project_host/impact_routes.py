@@ -11,7 +11,9 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from owlbear_decisions.models import FOLDER_PATTERN
@@ -20,7 +22,7 @@ from owlbear_delivery_next.state_store.backlog import BacklogError
 from owlbear_delivery_next.state_store.decision_actions import Refused
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Awaitable, Callable, Sequence
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.state_store.decision_impact import Place, Report
@@ -28,6 +30,23 @@ if TYPE_CHECKING:
 NO_SHARED = "No shared repository is set up, so there are no decisions; set one with `owlbear-next data PATH`"
 Revision = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Folder = Annotated[str, Query(pattern=FOLDER_PATTERN)]  # the data folder whose view holds the decision
+
+
+class Quiet(APIRoute):
+    """A decision route whose 422 gives each problem's place and message, never the value sent (TD-449)."""
+
+    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+        """FastAPI's handler, its validation error retold without the inputs."""
+        handler = super().get_route_handler()
+
+        async def quiet(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except RequestValidationError as exc:
+                said = [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+                raise HTTPException(422, said) from None
+
+        return quiet
 
 
 class ScheduleBody(BaseModel):
@@ -58,7 +77,7 @@ def _answer[T](work: Callable[[], T]) -> T:
 
 def router(shared: Callable[[], DataRepo | None], places: Callable[[], Sequence[Place]], mine: list[Any]) -> APIRouter:
     """The impact routes over *places*; *mine* refuses a chat's call to the owner's actions."""
-    routes = APIRouter()
+    routes = APIRouter(route_class=Quiet)
 
     def read(folder: str, decision_id: str) -> tuple[DataRepo, Report]:
         if (repo := shared()) is None:

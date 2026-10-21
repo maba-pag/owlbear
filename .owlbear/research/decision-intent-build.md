@@ -3,7 +3,7 @@
 > **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-448..TD-455 (2026-10-21)
 > **Date:** 2026-10-21
 > **Question:** How should OwlBear record, share and apply decisions so each one is the owner's confirmed intent?
-> **Status:** answered by the owner; not built. It revises [the decision system](decision-system-build.md), whose
+> **Status:** answered by the owner; slice 1 built, slices 2 to 6 not. It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
 
@@ -19,7 +19,7 @@ titles, as the owner asks of every report.
 | statement | The confirmed intent, at most two lines |
 | scope | Global, project or Change; the owner sets it (shaping already asks) |
 | origin | `decided` (the owner confirmed it), `approved` (it came with a brief he approved), `autonomous` (an agent's) |
-| confirmed | When the owner last confirmed the statement; empty for agents' choices and inherited ones |
+| read_back | The date the owner last confirmed the statement, `pending` while a read-back waits, `none` for agents' choices and inherited ones |
 | inherited | Brought over from the record and never read back (TD-454) |
 | topics | Search tags agents set without asking (TD-455) |
 | state | Draft, active, retired (replaced, withdrawn or done) |
@@ -113,7 +113,7 @@ the agents' boundary in their agent files (TD-451); the page in plain words with
 
 | # | Content | Proof |
 | --- | --- | --- |
-| 1 | Model: `owner_words` removed, `inherited` added, `confirmed` set by confirmation; page without ids | Old files load; no new write or migrated decision carries words (Git history keeps what it has) |
+| 1 | Model: `owner_words` removed, `inherited` added, `read_back` set by confirmation; page without ids | Old files load; no new write or migrated decision carries words (Git history keeps what it has) |
 | 2 | Decision tools in every workspace by repository identity, OwlBear's included: find, record confirmed, change, retire; active at once; the closing check in the asking rules and both asking skills | A decision confirmed in an unregistered workspace is found after a restart from another workspace |
 | 3 | Shaping assigns existing decisions in the brief; a brief's project decisions published at approval; abandonment revokes nothing | A project decision approved in one Change reaches a parallel Change at its next step |
 | 4 | Worker assignment plus lookup; challengers' complete list; the agents' boundary in their files | A rule left out of the assignment is caught by the challenger in a fixture |

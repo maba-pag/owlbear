@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_decisions import Applicability, Decision, Origin, OwnerWords, Scope, State, new_id, write
+from owlbear_decisions import Applicability, Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import mcp_server
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -121,7 +121,7 @@ def test_the_queue_leads_the_list_by_kind_then_oldest_and_a_conflict_queues_itse
 
 @pytest.mark.usefixtures("chat")
 def test_queue_read_back_sets_pending_with_why_and_kind_and_never_touches_origin_wording_or_state(shared):
-    rule = make(origin=Origin.DECIDED, owner_words=(OwnerWords(text="Keep it so.", date=AT.date()),))
+    rule = make(origin=Origin.DECIDED, read_back=AT.date().isoformat(), inherited=True)
     put(shared, rule)
 
     got = tool("queue_read_back", decision=rule.id, revision=rule.revision, why="A second team now edits notes.",
@@ -131,8 +131,10 @@ def test_queue_read_back_sets_pending_with_why_and_kind_and_never_touches_origin
     held = now(shared, rule.id)
     assert (held.read_back, held.read_back_why, held.read_back_kind) == ("pending", "A second team now edits notes.",
                                                                        "uncertain")  # fmt: skip
-    assert (held.origin, held.statement, held.state, held.owner_words) == (
-        rule.origin, rule.statement, rule.state, rule.owner_words)  # fmt: skip
+    assert (held.origin, held.statement, held.state, held.inherited) == (
+        rule.origin, rule.statement, rule.state, rule.inherited)  # fmt: skip
+    said = shared.git("log", "-1", "--format=%B").stdout.strip()
+    assert said == f"decisions: queue-read-back {rule.id} (uncertain)"  # the reason stays in the file only
 
 
 @pytest.mark.usefixtures("chat")
@@ -181,7 +183,7 @@ def test_still_right_records_the_date_keeps_the_reason_answered_and_keeps_origin
     put(shared, rule)
 
     said = owner.post(f"/api/next/decisions/{rule.id}/read-back", json={"revision": rule.revision,
-                                                                          "answer": "Still right."}).json()  # fmt: skip
+                                                                          "confirmed": True}).json()  # fmt: skip
 
     assert said["saved"] is True
     held = now(shared, rule.id)

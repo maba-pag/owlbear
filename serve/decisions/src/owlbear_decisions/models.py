@@ -70,18 +70,13 @@ class ReadBackKind(enum.StrEnum):
 
 
 READ_BACK_EXTRAS = ("read_back_why", "read_back_kind")  # left out of a decision's content while empty
+OMITTED_WHEN_EMPTY = (*READ_BACK_EXTRAS, "inherited")
+# files hashed an empty `owner_words` before TD-449 removed it; hashing it again keeps their revisions
+_LEGACY_HASHED = {"owner_words": []}
 
 
 class _Frozen(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class OwnerWords(_Frozen):
-    """The owner's words behind a `decided` decision, with their date and the row they came from."""
-
-    text: NonBlank
-    date: date
-    alias: Annotated[str, StringConstraints(pattern=f"{ALIAS_PATTERN}|^$")] = ""
 
 
 class Link(_Frozen):
@@ -112,8 +107,10 @@ class Applicability(_Frozen):
 class Decision(_Frozen):
     """One decision; `revision` is the sha256 of its canonical content.
 
-    Statement length and the owner's words of a `decided` decision are validator findings, not
-    construction errors, so a faulty file still loads and is reported (see `validate`).
+    Statement length is a validator finding, not a construction error, so a faulty file still loads and is
+    reported (see `validate`). The owner's words are never stored (TD-449); an older file's are dropped on reading.
+    `read_back` is the date the owner last confirmed the statement; `inherited` marks a decision brought over from
+    the old record and never read back (TD-454).
     """
 
     id: Annotated[str, StringConstraints(pattern=ID_PATTERN)]
@@ -130,7 +127,7 @@ class Decision(_Frozen):
     origin: Origin
     actor: NonBlank
     source: str = ""
-    owner_words: tuple[OwnerWords, ...] = ()
+    inherited: bool = False
     state: State = State.DRAFT
     links: tuple[Link, ...] = ()
     conflict: bool = False
@@ -138,6 +135,13 @@ class Decision(_Frozen):
     read_back_why: str = ""
     read_back_kind: ReadBackKind | None = None
     created_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_owner_words(cls, data: object) -> object:
+        if isinstance(data, dict) and "owner_words" in data:
+            return {k: v for k, v in data.items() if k != "owner_words"}
+        return data
 
     @field_validator("rationale", "read_back_why")
     @classmethod
@@ -181,24 +185,28 @@ class Decision(_Frozen):
     def content(self) -> dict[str, object]:
         """The canonical content: every field in declaration order, JSON-typed, without `revision`.
 
-        An empty read-back reason is left out, so files written before it existed keep their revision.
+        An empty read-back reason and `inherited` false are left out, so files written before they existed keep
+        their revision.
         """
         found = self.model_dump(mode="json", exclude={"revision"})
-        return {k: v for k, v in found.items() if k not in READ_BACK_EXTRAS or v}
+        return {k: v for k, v in found.items() if k not in OMITTED_WHEN_EMPTY or v}
 
     @computed_field
     @property
     def revision(self) -> str:
         """Sha256 of the canonical JSON of `content()`."""
-        canonical = json.dumps(self.content(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        return hashlib.sha256(canonical.encode()).hexdigest()
+        return _digest(self.content())
 
     @property
     def rule_revision(self) -> str:
-        """Sha256 of the content without its read-back: what a Change pins, since a read-back never changes a rule."""
-        rule = {k: v for k, v in self.content().items() if k not in {"read_back", *READ_BACK_EXTRAS}}
-        canonical = json.dumps(rule, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        return hashlib.sha256(canonical.encode()).hexdigest()
+        """Sha256 of the content but its read-back and `inherited`: what a Change pins; confirming changes no rule."""
+        return _digest({k: v for k, v in self.content().items()
+                        if k not in {"read_back", "inherited", *READ_BACK_EXTRAS}})  # fmt: skip
+
+
+def _digest(content: dict[str, object]) -> str:
+    canonical = json.dumps(content | _LEGACY_HASHED, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def new_id(at: datetime | None = None, seed: str | None = None) -> str:

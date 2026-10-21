@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from owlbear_decisions.models import Applicability, Decision, Origin, OwnerWords, Scope, State, new_id
+from owlbear_decisions.models import Applicability, Decision, Origin, Scope, State, new_id
 
 AT = datetime(2026, 10, 20, tzinfo=UTC)
 
@@ -23,7 +23,6 @@ def build(**changes) -> Decision:
         "origin": Origin.DECIDED,
         "actor": "owner",
         "source": "chat 2026-10-20",
-        "owner_words": (OwnerWords(text="lint once — “quoted” … cut", date="2026-10-14", alias="TD-87"),),
         "state": State.IN_FORCE,
         "read_back": "2026-10-20",
         "created_at": AT,

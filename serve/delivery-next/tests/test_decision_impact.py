@@ -205,7 +205,8 @@ def test_the_owner_marks_a_replacement_and_its_successor_records_it(tmp_path, sh
     effect, said = case
     old = make(rationale="Effect on existing work: wording only")  # an inherited mark never counts
     publish(shared, old)
-    body = {"revision": old.revision, "statement": "Notes live in Postgres.", "reason": "Scale.", "effect": effect}
+    body = {"revision": old.revision, "statement": "Notes live in Postgres.", "reason": "Scale.", "effect": effect,
+            "confirmed": True}  # fmt: skip
     assert client(store).post(f"/api/next/decisions/{old.id}/replace", json=body).json()["saved"]
     new = successor(shared, old.id)
     assert (decision_impact.effect(new), new.rationale.count("Effect on existing work")) == (said, int(bool(effect)))
@@ -235,8 +236,9 @@ def test_scheduling_makes_one_grouped_entry_per_project_with_revisions_and_a_che
         (OTHER, f"Apply decision {new.id} in {OTHER} (api/): Notes live in Postgres"),
     ]  # the unaffected project gets none
     first = github.issues[1]
-    assert f"Old rule ({old.id}, revision {old.revision})" in first["body"]
-    assert f"New rule ({new.id}, revision {new.revision})" in first["body"]
+    assert f"Old rule \u201c{old.title}\u201d: {old.statement}" in first["body"]
+    assert f"New rule \u201c{new.title}\u201d: {new.statement}" in first["body"]
+    assert f"({old.id}" not in first["body"].split("Tick each item")[0]  # its readable head names titles
     assert "- [ ] web/a.js" in first["body"]
     assert f"decision {new.id} revision {new.revision}" in first["body"]  # the evidence list
     assert "**Projects:** shop-site" in first["body"]
@@ -273,6 +275,9 @@ def test_only_the_owner_schedules_fixes_and_accepts_existing_code(tmp_path, shar
     held = decision_store.load(shared, PROJECT).snapshot.get(after["projects"][0]["accepted"]).decision
     assert (held.origin, held.links, held.source) == (
         Origin.DECIDED, (Link(type=LinkType.REFINES, target=new.id),), decision_impact.ACCEPTED)  # fmt: skip
+    kept_code = f"Code in {PROJECT} built before \u201c{new.title}\u201d stays as it is; new work follows it."
+    assert held.statement == kept_code
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: accept-existing {new.id} ({PROJECT})"
     assert after["fixes"] is False
     nothing = owner.post(f"{base}/schedule-fixes?folder={PROJECT}", json={"revision": new.revision})
     assert (nothing.status_code, github.issues) == (409, {})
@@ -435,8 +440,8 @@ def test_scheduling_again_reconciles_the_same_entry_keeping_ticks_and_its_groupi
     assert (second["id"], second["new"], second["added"], len(github.issues)) == (first["id"], False, 1, 1)
     assert checks(number) == ["- [x] notes/a.py", "- [ ] notes/b.py", "- [ ] notes/c.py"]
     body = github.issues[number]["body"]
-    assert f"Old rule ({old.id}, revision {old.revision})" in body
-    assert f"New rule ({new.id}, revision {new.revision})" in body
+    assert f"Old rule \u201c{old.title}\u201d: {old.statement}" in body
+    assert f"New rule \u201c{new.title}\u201d: {new.statement}" in body
 
     (repo / "web").mkdir()
     for n in range(30):  # past the split threshold, spread over two folders: the project's entry keeps them all

@@ -75,9 +75,10 @@ def _rule(entry: Entry, seen: Snapshot, names: dict[str, str]) -> list[str]:
     ]
     if selectors:
         lines.append(f"  - Applies to: {'; '.join(selectors)}")
-    lines.extend(
-        f'  - Owner\'s words ({w.date}{f", {w.alias}" if w.alias else ""}): "{_line(w.text)}"' for w in d.owner_words
-    )
+    if d.read_back not in {"none", "pending"}:
+        lines.append(f"  - Read back: confirmed {d.read_back}")
+    elif d.inherited:
+        lines.append("  - Read back: inherited, never read back")
     if d.links:
         lines.append(f"  - Links: {'; '.join(f'{link.type} {_name(names, link.target)}' for link in d.links)}")
     rules = sorted({f.rule for f in seen.findings_for(d.id)})

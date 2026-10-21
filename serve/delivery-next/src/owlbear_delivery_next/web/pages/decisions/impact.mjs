@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, loaded } from "/assets/ui.mjs";
-import { DIALOG, notify, show, state, WRITE } from "./state.mjs";
+import { DIALOG, notify, show, state, untagged, WRITE } from "./state.mjs";
 import { button, listed } from "./widgets.mjs";
 
 // The owner's mark on a replacement (TD-428); not saying it counts as possibly forbidding.
@@ -63,8 +63,8 @@ async function schedule(e, r) {
 
 async function accept(e, r, p) {
   const why = await window.ask({ title: `Keep ${p.project}'s existing code under “${r.new.title}”?`,
-    yes: "Accept existing code", now: `Your decision records that code in ${p.project} built before ${r.new.id} stays `
-      + "as it is; new work follows the new rule.", instead: "Its existing code stays to be fixed or checked.",
+    yes: "Accept existing code", now: `Your decision records that code in ${p.project} built before “${r.new.title}” `
+      + "stays as it is; new work follows the new rule.", instead: "Its existing code stays to be fixed or checked.",
     after: "Withdraw that decision to schedule fixes for it after all.", reason: "Why it stays (recorded with it)" });
   if (!why) return;
   await write(`accept-${p.project}`, async () => {
@@ -87,8 +87,10 @@ function place(p, e, r) {
     : ""}` : "";
   const open = r.fixes && p.status !== "unaffected" && !p.accepted;
   return html`<li class="impact-project" data-project=${p.project}>
-    <p-text size="sm"><strong>${p.project}</strong>: <span class="status">${p.status}</span> · ${p.why}</p-text>
-    ${p.accepted ? html`<p-text size="sm">Existing code kept by your decision ${p.accepted}.</p-text>` : nothing}
+    <p-text size="sm"><strong>${p.project}</strong>: <span class="status">${p.status}</span> · ${untagged(p.why)}
+    </p-text>
+    ${p.accepted ? html`<p-text size="sm">Existing code kept by your decision ${untagged(p.accepted)}.</p-text>`
+      : nothing}
     ${listed("Built under the old rule", p.changes, change)}
     ${listed("Records that cannot rule it out", records, (x) => x)}
     ${listed("Matching files", files, (f) => f)}
@@ -101,15 +103,15 @@ function place(p, e, r) {
 function report(e, r) {
   const made = state.impact.scheduled;
   return html`<dl class="facts">
-      <dt>Old rule</dt><dd class="old">${r.old.statement} · ${r.old.id}</dd>
-      <dt>New rule</dt><dd class="new">${r.new ? `${r.new.statement} · ${r.new.id}` : "none: withdrawn"}</dd>
+      <dt>Old rule</dt><dd class="old">${r.old.statement}</dd>
+      <dt>New rule</dt><dd class="new">${r.new ? r.new.statement : "none: withdrawn"}</dd>
     </dl>
-    <p-text size="sm" class="divergence">${r.divergence}</p-text>
+    <p-text size="sm" class="divergence">${untagged(r.divergence)}</p-text>
     <ul class="impacts">${r.projects.map((p) => place(p, e, r))}</ul>
     ${r.fixes ? html`<div class="row">${button("Schedule fixes", () => schedule(e, r), { aria: DIALOG,
       busy: state.pending === "schedule" })}</div>` : nothing}
-    ${made ? listed("Backlog entries", made,
-      (x) => `#${x.id} ${x.title} · ${x.project}${x.new ? "" : ` · updated, ${x.added} new item(s)`}`) : nothing}`;
+    ${made ? listed("Backlog entries", made, (x) =>
+      `#${x.id} ${untagged(x.title)} · ${x.project}${x.new ? "" : ` · updated, ${x.added} new item(s)`}`) : nothing}`;
 }
 
 export function impact(e) {

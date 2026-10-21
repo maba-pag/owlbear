@@ -2,20 +2,20 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
 import { refresh } from "./list.mjs";
 import { EFFECTS } from "./impact.mjs";
-import { at, DIALOG, KINDS, notify, show, state, WRITE } from "./state.mjs";
+import { at, DIALOG, KINDS, notify, readBack, show, state, untagged, WRITE } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
-const SUBMIT = { replace: "Replace", exception: "Record the exception", "read-back": "Record the read-back",
-  "queue-read-back": "Queue the read-back" };
+const SUBMIT = { replace: "Replace", exception: "Record the exception", "queue-read-back": "Queue the read-back" };
 const WIDER = { change: "the project", project: "Global" };
 const WHY = "Why it changes (recorded with the new rule)";
 
-// One receipt in words: each step the save reached, or why it was not saved.
+// One receipt in words: each step the save reached, or why it was not saved; the decision named by its title.
 export function said(r) {
-  if (!r.saved) return `${r.id}: not saved. ${r.notice}`;
+  const name = untagged(r.id);
+  if (!r.saved) return `${name}: not saved. ${untagged(r.notice)}`;
   const steps = ["saved", r.committed ? "committed" : "not committed", r.committed && (r.published ? "published"
     : "not published"), r.active ? "active" : r.conflict ? "in conflict, not active" : "not active"];
-  return `${r.id}: ${steps.filter(Boolean).join(" · ")}${r.notice ? `. ${r.notice}` : ""}`;
+  return `${name}: ${steps.filter(Boolean).join(" · ")}${r.notice ? `. ${untagged(r.notice)}` : ""}`;
 }
 
 export function receipts() {
@@ -48,14 +48,14 @@ async function act(e, action, body = {}) {
 // A decided decision changes only once the owner re-decides it: he ticks that he does.
 function redecide(e) {
   if (e.origin !== "decided") return {};
-  const words = e.owner_words.map((w) => `“${w.text}” (${w.date})`).join("; ");
-  return { tick: "I re-decide this decision", items: [`You decided it: ${words}`] };
+  return { tick: "I re-decide this decision", items: [`You decided it · ${readBack(e)}`] };
 }
 
 const ASKS = {
   replace: (e, d) => ({
     title: `${e.origin === "decided" ? "Re-decide" : "Replace"} “${e.title}”?`, yes: "Replace",
-    now: "A successor in your words comes into force; this decision is marked replaced and stays in history.",
+    now: "Your successor comes into force as your decision, confirmed today; this decision is marked replaced and "
+      + "stays in history.",
     items: [`Now: ${e.statement}`, `Then: ${d.statement}`, `Existing work: ${effect(d.effect)}`,
       ...(redecide(e).items ?? [])],
     then: "A running Change that pinned it stops at its next step and asks whether to continue on the new rule.",
@@ -68,16 +68,10 @@ const ASKS = {
       + "project.", items: [`Global: ${e.statement}`, `Here: ${d.statement}`],
     instead: "The Global decision applies here too.",
   }),
-  "read-back": (e) => ({
-    title: `Record the read-back of “${e.title}”?`, yes: "Record the read-back",
-    now: "Today's read-back and your answer are recorded; the decision and its origin stay as they are.",
-    after: "To change the rule, replace it.", instead: "Nothing is recorded.",
-  }),
 };
 
 function begin(action) {
-  state.form = { action, draft: { title: "", statement: "", rationale: "", words: "", answer: "", why: "",
-    kind: "uncertain", effect: "" } };
+  state.form = { action, draft: { title: "", statement: "", rationale: "", why: "", kind: "uncertain", effect: "" } };
   show();
 }
 
@@ -86,17 +80,16 @@ function effect(value) {
 }
 
 function body(action, d) {
-  if (action === "read-back") return { answer: d.answer.trim() };
   if (action === "queue-read-back") return { why: d.why.trim(), kind: d.kind };
+  // the owner acting on his page confirms the rule he writes (TD-449: no words are sent)
   const rule = { title: d.title.trim(), statement: d.statement.trim(), rationale: d.rationale.trim(),
-    words: d.words.trim() };
+    confirmed: true };
   return action === "replace" ? { ...rule, effect: d.effect } : rule;
 }
 
 async function submit(e) {
   const { action, draft } = state.form;
   if (["replace", "exception"].includes(action) && !draft.statement.trim()) return notify("Write the new rule.");
-  if (action === "read-back" && !draft.answer.trim()) return notify("Write the owner's answer.");
   if (action === "queue-read-back") {  // asks nothing yet: it waits in the queue for the owner's answer
     return draft.why.trim() ? act(e, action, body(action, draft)) : notify("Say what makes it worth asking again.");
   }
@@ -113,10 +106,7 @@ export function form(e) {
     replace: () => [field("Title", draft.title, set("title"), { description: `Empty keeps “${e.title}”` }),
       field("New rule", draft.statement, set("statement"), { multiline: true, max: 240 }),
       field("Why", draft.rationale, set("rationale"), { multiline: true, max: 4000 }),
-      field("Your words", draft.words, set("words"), { multiline: true, max: 4000,
-        description: "As you decide it; empty records the new rule as your words" }),
       select("Effect on existing work", EFFECTS, draft.effect, (v) => { draft.effect = v; show(); })],
-    "read-back": () => [field("Your answer", draft.answer, set("answer"), { multiline: true, max: 2000 })],
     "queue-read-back": () => [field("Why ask again", draft.why, set("why"), { multiline: true, max: 600,
       description: "Only ambiguity, new evidence, a conflict or changed consequences" }),
     select("How urgent", Object.entries(KINDS), draft.kind, (v) => { draft.kind = v; show(); })],
@@ -129,7 +119,7 @@ export function form(e) {
 
 async function promote(e) {
   const why = await ask({ title: `Promote “${e.title}” to ${WIDER[e.scope]}?`, yes: "Promote",
-    now: `A linked copy comes into force for ${WIDER[e.scope]}, with this decision's origin and words; this one is `
+    now: `A linked copy comes into force for ${WIDER[e.scope]} as your decision, confirmed today; this one is `
       + "marked replaced and stays in history.", after: "Every widening is yours; it is never narrowed back here.",
     instead: "It stays where it applies now.", reason: "Why it widens (recorded with the wider copy)" });
   if (why) act(e, "promote", { reason: why });
@@ -148,12 +138,22 @@ async function activate(e) {
   const replaces = e.links.filter((l) => l.type === "replaces");
   const answer = await ask({ title: `Activate “${e.title}”?`, yes: "Activate",
     now: e.redecide ? "It replaces a decided or already reversed decision: it comes into force as your re-decision."
-      : "The proposal comes into force as you approve it.", items: [...replaces.map((l) => `It replaces ${l.title}`),
-      ...(replaces.length ? [`Existing work: ${effect(state.effect)}`] : [])],
+      : "It comes into force as your decision, confirmed today.", items: [e.statement,
+      ...replaces.map((l) => `It replaces ${l.title}`), ...(replaces.length ? [`Existing work: ${effect(state.effect)}`]
+        : [])],
     then: "Running Changes it applies to stop at their next step and ask.", instead: "It stays a draft.",
     tick: e.redecide ? "I re-decide what it replaces" : "", reason: replaces.length ? WHY : "" });
   if (answer) act(e, "activate", { ...(replaces.length ? { reason: answer, effect: state.effect } : {}),
     ...(e.redecide ? { redecide: true } : {}) });
+}
+
+// A read-back records only that the owner confirms the statement as it reads; a different intent is a replacement.
+async function stillRight(e) {
+  const yes = await ask({ title: `Is “${e.title}” still what you want?`, yes: "Confirm as it reads",
+    now: "Today is recorded as the day you confirmed it; the statement and its origin stay as they are.",
+    items: [e.statement], after: "If you want something different, replace it instead.",
+    instead: "Nothing is recorded." });
+  if (yes) act(e, "read-back", { confirmed: true });
 }
 
 async function keep(e) {
@@ -170,7 +170,8 @@ export function actions(e) {
   const opens = (label, action) => button(label, () => begin(action), { variant: "secondary" });
   const asks = (label, work, action) => button(label, () => work(e), { aria: DIALOG, busy: busy(action) });
   if (e.state === "in_force") {
-    parts.push(opens("Read back", "read-back"), opens("Replace", "replace"), asks("Withdraw", withdraw, "withdraw"));
+    parts.push(asks("Read back", stillRight, "read-back"), opens("Replace", "replace"),
+      asks("Withdraw", withdraw, "withdraw"));
     parts.push(e.scope === "global" ? opens("Record an exception", "exception") : asks("Promote", promote, "promote"));
     if (e.conflict || e.rivals.length) parts.push(asks("Keep this one", keep, "keep"));
   }

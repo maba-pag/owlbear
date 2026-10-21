@@ -63,7 +63,7 @@ function card(d) {
       <p-tag compact="true" variant=${TAGS[d.state]} class="state">${STATES[d.state]}</p-tag>
       ${d.conflict ? html`<p-tag compact="true" variant="error" class="conflict">conflict</p-tag>` : nothing}
       ${d.findings && !d.conflict ? html`<p-tag compact="true" variant="warning">problem</p-tag>` : nothing}
-      ${d.read_back === "none" ? nothing : html`<p-tag compact="true" class="read-back">${readBack(d.read_back)}
+      ${d.read_back === "none" && !d.inherited ? nothing : html`<p-tag compact="true" class="read-back">${readBack(d)}
         </p-tag>`}</div>
     <p-text class="said" size="sm">${d.statement}</p-text>
     <div class="row">${button(opened ? "Close" : "Open", () => open(d.id), { variant: "secondary",

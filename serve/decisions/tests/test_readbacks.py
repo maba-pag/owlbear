@@ -43,8 +43,10 @@ def test_the_rule_revision_ignores_the_read_back_and_the_revision_does_not(make)
     rule = make()
     held = make(id=rule.id, read_back="pending", read_back_why="New data.", read_back_kind="safety")
     answered = held.model_copy(update={"read_back": "2026-10-20"})
-    assert {rule.rule_revision, held.rule_revision, answered.rule_revision} == {rule.rule_revision}
-    assert len({rule.revision, held.revision, answered.revision}) == 3
+    inherited = make(id=rule.id, inherited=True)
+    assert {rule.rule_revision, held.rule_revision, answered.rule_revision, inherited.rule_revision} == {
+        rule.rule_revision}  # fmt: skip
+    assert len({rule.revision, held.revision, answered.revision, inherited.revision}) == 4
     assert make(id=rule.id, statement="Something else.").rule_revision != rule.rule_revision
 
 

@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_decisions.models import Scope, new_id
-from owlbear_decisions.storage import parse, serialize
+from owlbear_decisions.storage import parse, read, serialize, write
 
 AT = datetime(2026, 10, 20, tzinfo=UTC)
 
@@ -63,9 +63,39 @@ def test_schema_refusals(make, changes):
         make(**changes)
 
 
-def test_long_statement_and_missing_words_still_load(make):
-    decision = make(statement="x" * 300, owner_words=())
+def test_long_statement_still_loads(make):
+    decision = make(statement="x" * 300)
     assert parse(serialize(decision)) == decision
+
+
+def test_revision_of_a_file_without_owner_words_is_unchanged(make):
+    # computed by the model before TD-449 removed `owner_words`: pinned Changes and read revisions stay valid
+    assert make().revision == "4d7cce702b8ca504ca7ed249a9236d5b34ca29adf317077d84602ac884c6a451"
+    assert make().rule_revision == "3e369545593ece1036a7e81af34dd98d01bf10107974ca6069f6258ae7eb2c60"
+
+
+def test_an_old_file_with_owner_words_loads_and_is_written_back_without_them(make, tmp_path):
+    old = serialize(make()).replace(
+        "state: in_force\n", "owner_words:\n- text: lint once\n  date: 2026-10-14\n  alias: TD-87\nstate: in_force\n"
+    )
+    assert "owner_words" in old
+    loaded = parse(old)
+    assert loaded == make()
+    assert "owner_words" not in loaded.content()
+    path = tmp_path / "decisions" / f"{loaded.id}.md"
+    path.parent.mkdir()
+    path.write_text(old, encoding="utf-8")
+    assert read(path).revision == make().revision
+    write(loaded.model_copy(update={"read_back": "2026-10-21"}), tmp_path, expected_revision=loaded.revision)
+    assert "owner_words" not in path.read_text(encoding="utf-8")
+
+
+def test_inherited_is_written_only_when_true(make):
+    assert "inherited" not in serialize(make())
+    inherited = make(inherited=True, read_back="none")
+    assert "inherited: true\n" in serialize(inherited)
+    assert parse(serialize(inherited)) == inherited
+    assert inherited.revision != make(read_back="none").revision
 
 
 def test_a_change_folder_holds_a_delivery_record_stem(make):

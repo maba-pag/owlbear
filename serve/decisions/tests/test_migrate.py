@@ -82,7 +82,7 @@ def test_parse_topics_rows_and_words():
     assert [t.unparsed for t in topics] == [[], []]
 
 
-def test_one_entry_per_bullet_with_statement_aliases_and_words():
+def test_one_entry_per_bullet_with_statement_and_aliases_inherited_without_words():
     result = preview(_synthetic())
     clauses = result.clauses
     assert len(clauses) == 7
@@ -90,7 +90,10 @@ def test_one_entry_per_bullet_with_statement_aliases_and_words():
     assert first.statement == "Ask with three options."
     assert first.aliases == ("TD-1",)
     assert first.origin is Origin.DECIDED
-    assert [(w.alias, w.text, str(w.date)) for w in first.owner_words] == [("TD-1", "three options", "2026-10-11")]
+    assert all(c.decision.inherited and c.decision.read_back == "none" for c in clauses)  # TD-454
+    assert "owner_words" not in first.content()
+    quotes = ("keep … the rest", 'old "quoted" words', "bound to copilot")  # the record's quotes, not statements
+    assert not [q for c in clauses for q in quotes if q in str(c.decision.content())]  # TD-449
     assert first.topic == "C-01 Asking"
     assert (first.scope, first.project, first.state) == ("project", "owlbear", "in_force")
     assert clauses[0].unclear == []
@@ -104,12 +107,12 @@ def test_unclear_clauses():
     clauses = preview(_synthetic()).clauses
     assert any("mixed origins" in reason for reason in clauses[1].unclear)
     assert clauses[1].decision.origin is Origin.DECIDED
-    assert clauses[2].unclear == []  # a quote cut with … is normal in the record
+    assert clauses[2].unclear == []
     assert clauses[3].unclear == ["TD-9 is in no Rows line"]
     assert clauses[3].decision.origin is Origin.AUTONOMOUS
     assert any("over 240" in reason for reason in clauses[4].unclear)
     assert clauses[5].unclear == ["origin qualified as 'partly' in the record"]  # TD-1 is C-01's row: not unclear
-    assert clauses[6].unclear == []  # a decided row chosen without a quote has none (TD-388)
+    assert clauses[6].unclear == []  # no quote is ever needed (TD-449)
 
 
 def test_orphans_exclude_cited_replaced_and_spent():
@@ -141,6 +144,9 @@ def test_write_preview_files_and_report(tmp_path):
     loaded = load_folder(out / "owlbear")
     assert loaded.errors == []
     assert sorted(d.id for d in loaded.decisions.values()) == sorted(c.decision.id for c in result.clauses)
+    assert all(d.inherited for d in loaded.decisions.values())
+    files = [p.read_text(encoding="utf-8") for p in (out / "owlbear" / "decisions").iterdir()]
+    assert not [f for f in files if "owner_words" in f or "bound to copilot" in f]
     report = (out / "REPORT.md").read_text(encoding="utf-8")
     for heading in ("Counts", "Unclear clauses", "Orphan rows", "Proposed scope", "Validator findings", "Concordance"):
         assert f"## {heading}" in report
