@@ -191,7 +191,11 @@ personal data is purged, with the owner's consent.
   <title>", with both revisions in the text and the evidence and a checklist of its Changes and files; scheduling
   again counts the same entries up. "Accept existing code" (grandfathering) is a `decided` project decision with
   the owner's reason that `refines` the new rule (`exception_to` a Global one), its source marking it; that project
-  then is no longer due. Open: a Change ticking off the checklist items it verified.
+  then is no longer due. Built: a Change's cleanup ticks, in the fix entries that went into it, the file items its
+  merged pull request changed (`git diff` of the merge commit against its first parent; a folder item when a changed
+  file lies under it, never a Change item), names itself and the PR in the text, and makes each entry done when
+  nothing is left, else open again; an abandoned or unchanged Change ticks nothing and reopens them, and a failure
+  only logs a notice.
 
 ## 10. The owner's view
 

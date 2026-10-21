@@ -15,10 +15,13 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, Stop, Waiting
 from owlbear_delivery_next.change_flow import budgets, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.git.remote_git import run_remote_git
+from owlbear_delivery_next.git.remote_git import RemoteGitError, run_remote_git
 from owlbear_delivery_next.github.provider import classify_checks
+from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store import briefs, change_record
+from owlbear_delivery_next.state_store import briefs, change_record, decision_fixes, project_home
+from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.workflow_steps import disposable, engine, pullback
 
 if TYPE_CHECKING:
@@ -256,12 +259,35 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
         out.write(json.dumps(line) + "\n")
     if notice := change_record.save(ctx.store, c, pr, ctx.now):
         ctx.log(c.slug, "change-record", notice=notice)
+    fixes(ctx, c, pr)
     if pr and pr.merged and c.step.mode != "abandon":
         c.pullback = pullback.run(ctx.repo, c.names.target, ctx.now)
         ctx.log(c.slug, "pullback", **c.pullback.model_dump(mode="json", exclude={"at"}))
     reason = f"worktree removed; {len(saved)} preservation file(s)"
     reason = f"workspace kept: large ignored files ({path})" if kept else reason
     return c, StepResult(exit=Exit.DONE, reason=reason, preserved=[str(s) for s in saved])
+
+
+def merged_files(repo: Path, target: str, sha: str) -> frozenset[str]:
+    """The files the merge commit changed against its first parent; the target is fetched when it is missing."""
+    if not engine.git_ok(repo, "cat-file", "-e", f"{sha}^{{commit}}"):
+        engine.fetch(repo, target)
+    out = _bytes(repo, "diff", "--name-only", "--no-renames", "-z", f"{sha}^1", sha)
+    return frozenset(p.decode(errors="surrogateescape") for p in out.split(b"\0") if p)
+
+
+def fixes(ctx: Ctx, c: Change, pr: PullRequest | None) -> None:
+    """Settle the decision fix entries that went into *c* (TD-428); a failure is a logged notice, never a stop."""
+    if ctx.store.shared is None:
+        return
+    # an abandoning Change credits nothing, even when its PR merged before cleanup read it: it reopens its entries
+    sha = pr.merge_commit_sha if pr and pr.merged and c.step.mode != "abandon" else None
+    try:
+        files = merged_files(ctx.repo, c.names.target, sha) if sha else None
+        clone = project_home.clone_id(project_home.clone_dir(ctx.repo))
+        decision_fixes.verified(Backlog.of(ctx.store), c.slug, clone, files, pr.url if pr and sha else "")
+    except (BacklogError, DataRepoError, RemoteGitError, StoreError, OSError, subprocess.SubprocessError) as exc:
+        ctx.log(c.slug, "decision-fixes", notice=f"the decision fixes of {c.slug} were not updated: {exc}"[:300])
 
 
 def _retire(ctx: Ctx, c: Change, path: Path, inv: Inventory) -> tuple[list[Path], StepResult | None]:
