@@ -70,7 +70,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
 | `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |
-| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket`, or `success=False` with `error` |
+| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket` (plus `state` and `challenges` for a challenged entry), or `success=False` with `error` |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session; return the commit SHA or a no-op result, and any deferred duplicate deletions |
 
 All mutating tools return a `hint` field describing the transition or action taken.
@@ -126,7 +126,7 @@ remove receipts for the previous revision.
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |
-| `challenges` | list of `{task_id, revision, recorded_at}` | Ordered records for the current dispute cycle; at most two; retained on delete and cleared on resolve |
+| `challenges` | list of `{task_id, revision, recorded_at}` | Ordered records for the current dispute cycle; at most two; retained on delete and cleared on resolve; omitted when empty |
 
 ## Agent Identity
 

@@ -203,6 +203,13 @@ def _validate_limit(limit: int | None) -> int | None:
     return limit
 
 
+def _challenges(entry: MemoryEntry) -> dict[str, object]:
+    """The entry's challenge history, or nothing when no task has challenged it."""
+    if not entry.challenges:
+        return {}
+    return {"challenges": [challenge.model_dump(mode="json") for challenge in entry.challenges]}
+
+
 def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
     return {
         "id": entry.id,
@@ -221,14 +228,7 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
-        "challenges": [
-            {
-                "task_id": challenge.task_id,
-                "revision": challenge.revision,
-                "recorded_at": challenge.recorded_at,
-            }
-            for challenge in entry.challenges
-        ],
+        **_challenges(entry),
     }
 
 
@@ -715,6 +715,8 @@ async def assess_memories(
                     "success": True,
                     "already_applied": outcome.already_applied,
                     "recorded_bucket": outcome.recorded_bucket,
+                    **({"state": str(outcome.entry.state)} if outcome.entry.challenges else {}),
+                    **_challenges(outcome.entry),
                 }
             )
         except (

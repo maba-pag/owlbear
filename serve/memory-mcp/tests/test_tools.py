@@ -143,3 +143,33 @@ async def test_agents_read_global_memory_beside_their_projects_and_write_only_th
     )
     assert sorted(p.name for p in (tmp_path / "memory").iterdir()) == before
     assert (tmp_path / "shop" / "memory" / f"{saved['id']}.md").is_file()
+
+
+@pytest.mark.asyncio
+async def test_disputed_entry_answers_carry_both_challenges_and_unchallenged_ones_omit_them(tmp_path: Path) -> None:
+    """A curator sees both reports and the challenged revision; an unchallenged entry's answer stays small."""
+    engine = MemoryEngine(tmp_path)
+    disputed, quiet = _approved(engine, "Disputed guidance"), _approved(engine, "Quiet guidance")
+    revision = engine.get_entry(disputed).revision
+    context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=SimpleNamespace(engine=engine)))
+
+    answers = [
+        (await tools.assess_memories(context, assessments=[item], task_id=task))["results"][0]
+        for task, item in (
+            ("task-a", {"entry_id": disputed, "revision": revision, "bucket": "factually_wrong"}),
+            ("task-b", {"entry_id": disputed, "revision": revision, "bucket": "factually_wrong"}),
+            ("task-c", {"entry_id": quiet, "revision": engine.get_entry(quiet).revision, "bucket": "outstanding"}),
+        )
+    ]
+    read = await tools.read_memory(context, entry_id=disputed)
+    listed = {entry["id"]: entry for entry in await tools.list_memories(context)}
+
+    history = [(c["task_id"], c["revision"]) for c in read["challenges"]]
+    assert history == [("task-a", revision), ("task-b", revision)]
+    assert listed[disputed]["challenges"] == read["challenges"]
+    assert (answers[0]["state"], answers[1]["state"]) == ("contested", "disputed")
+    assert [(c["task_id"], c["revision"]) for c in answers[1]["challenges"]] == history
+    assert "challenges" not in answers[2]
+    assert "state" not in answers[2]
+    assert "challenges" not in listed[quiet]
+    assert "challenges" not in await tools.read_memory(context, entry_id=quiet)
