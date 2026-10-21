@@ -65,7 +65,7 @@ def shared_root() -> Path | None:
 def identity(workspace: Path) -> str:
     """The workspace as Delivery names a project: its origin without scheme, user and ``.git``, else its path."""
     if url := _git(workspace, "config", "--get", "remote.origin.url"):
-        bare = re.sub(r"^[a-z+]+://", "", url).split("@", 1)[-1].replace(":", "/", 1)
+        bare = re.sub(r"^[^/@]*@", "", re.sub(r"^[a-z+]+://", "", url)).replace(":", "/", 1)  # user-info only
         return bare.removesuffix("/").removesuffix(".git")
     common = _git(workspace, "rev-parse", "--path-format=absolute", "--git-common-dir")
     return str(Path(common).parent) if common else str(workspace.resolve())

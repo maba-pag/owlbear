@@ -28,11 +28,16 @@ def _claim(data: Path, folder: str, who: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "origin",
-    ["https://github.com/acme/shop.git", "https://me@github.com/acme/shop", "git@github.com:acme/shop.git"],
+    ("origin", "who"),
+    [
+        ("https://github.com/acme/shop.git", "github.com/acme/shop"),
+        ("https://me:secret@github.com/acme/shop", "github.com/acme/shop"),
+        ("git@github.com:acme/shop.git", "github.com/acme/shop"),
+        ("https://example.org/a@acme/shop.git", "example.org/a@acme/shop"),  # an @ in the path is no user
+    ],
 )
-def test_identity_is_the_origin_as_delivery_names_it(tmp_path: Path, origin: str) -> None:
-    assert identity(_workspace(tmp_path / "shop", origin)) == "github.com/acme/shop"
+def test_identity_is_the_origin_as_delivery_names_it(tmp_path: Path, origin: str, who: str) -> None:
+    assert identity(_workspace(tmp_path / "shop", origin)) == who
 
 
 def test_identity_without_origin_is_the_main_checkout(tmp_path: Path) -> None:

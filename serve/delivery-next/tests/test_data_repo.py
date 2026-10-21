@@ -77,6 +77,11 @@ def test_a_project_is_named_after_its_repository(repo: Path) -> None:
     assert data_repo.project_name(repo) == "shop"
 
 
+def test_a_projects_identity_drops_only_the_user_before_its_host(repo: Path) -> None:
+    git(repo, "remote", "set-url", "origin", "https://me:secret@example.org/a@acme/shop.git")
+    assert data_repo.identity(repo) == "example.org/a@acme/shop"
+
+
 def test_agents_remember_in_the_projects_folder_of_the_shared_repository(shared, repo) -> None:
     root, _ = shared
     store = Store.open(repo)
