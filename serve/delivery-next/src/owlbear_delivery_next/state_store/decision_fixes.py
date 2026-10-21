@@ -5,9 +5,10 @@ work (§7). It makes ordinary backlog entries: one group per project whose impac
 top-level folder when its matching files are many and spread (at most five groups per project). A group's title holds
 its identity (decision, project, area); a checklist longer than one entry's text takes several entries, `(part k of
 n)`, so every item stays listed, up to PARTS. Each names the old and new decisions' exact revisions as evidence and
-lists its Changes and files as a checklist, so partial coverage is ticked off; a Change ticks only what it verified.
-Scheduling again reconciles the same entries: ticked items stay ticked, items no longer found stay listed, new ones
-are added unticked, and a project's grouping stays as first scheduled (see `_route`). A wording-only change schedules
+lists its Changes and files as a checklist, so partial coverage is ticked off; a Change ticks only what it verified:
+its cleanup ticks the file items its merged pull request changed (`verified`). Scheduling again reconciles the same
+entries: ticked items stay ticked, items no longer found stay listed, new ones are added unticked, and a project's
+grouping stays as first scheduled (see `_route`). A wording-only change schedules
 nothing. Keeping a project's existing code is the owner's `decided` project decision that refines the new rule (an
 exception to a Global one): a durable record in the data repository that agents read too, saved only while the new
 rule is still at the revision the report showed.
@@ -38,12 +39,14 @@ if TYPE_CHECKING:
 SPLIT = 20  # matching files above which a project's entry splits by top-level folder
 GROUPS = 5  # groups per project at most
 PARTS = 20  # entries one group's checklist takes at most
-TEXT = 3900  # room for the checklist under the backlog's 4000-character text
+TEXT = 3700  # room for the checklist under the backlog's 4000-character text, and for a "Verified by" line
 TITLE = 200
 LABEL = 40  # characters of a folder's name in a title
 PRS = 10  # pull requests kept as evidence
 OTHER = "other folders"
 CHECK = re.compile(r"^- \[([ xX])\] (.+)$")
+FIX = re.compile(r"^Apply decision \S+ in ")
+LONGEST = 4000  # an entry's text
 type Line = tuple[str, str, bool]  # an item's key, its text, and whether it is ticked
 
 
@@ -254,6 +257,65 @@ def schedule(
         evidence += [c["pr"] for c in impact.changes if c["pr"]][:PRS]
         made += [_put(backlog, part, evidence) for part in parts]
     return made
+
+
+def _covered(item: str, files: frozenset[str]) -> bool:
+    """Whether a merged file is the item's path or lies under the folder it names; a Change item never is."""
+    if item.startswith("Change "):
+        return False
+    path = item.rstrip("/")
+    return path in files or any(f.startswith(f"{path}/") for f in files)
+
+
+def _verify(
+    files: frozenset[str], changes: set[str], project: str, said: tuple[str, str]
+) -> Callable[[Entry, str], dict[str, Any]]:
+    """Tick the items *files* cover over the entry as it is now, ticks made meanwhile kept; done when none is left.
+
+    The entry is checked again under the lock: one reassigned to another Change meanwhile is left as it is.
+    """
+    change, pr = said
+
+    def fields(entry: Entry, body: str) -> dict[str, Any]:
+        if entry.status in {"done", "dropped"} or not _mine(entry, changes, project):
+            return {}
+        owner = {k for k, _, t in checklist(body) if t}  # ticked on GitHub
+        lines, covered = [], 0
+        for line in entry.text.splitlines():
+            m = CHECK.match(line)
+            hit = bool(m) and _covered(m[2], files)
+            if m and (hit or (m[1] == " " and _key(m[2]) in owner)):
+                covered += hit
+                line = f"- [x] {m[2]}"  # noqa: PLW2901 - the ticked line replaces it
+            lines.append(line)
+        text = "\n".join(lines)
+        said = f"Verified by Change {change}{f' ({pr})' if pr else ''}: {covered} item(s) ticked."
+        if covered and said not in text and len(text) + len(said) + 2 <= LONGEST:
+            text += f"\n\n{said}"
+        left = any(not t for _, _, t in checklist(text))
+        refs = [*entry.evidence, pr] if covered and pr and pr not in entry.evidence else entry.evidence
+        return {"text": text, "status": "open" if left else "done", "evidence": refs[-EVIDENCE:]}
+
+    return fields
+
+
+def verified(backlog: Backlog, slug: str, clone: str | None, files: frozenset[str] | None, pr: str = "") -> list[Entry]:
+    """Settle the project's fix entries that went into the finished Change *slug* of the clone *clone*.
+
+    A merged Change ticks the items its merged *files* cover, never a Change item, and names itself and *pr* in the
+    text; None (abandoned or unchanged) ticks nothing. Each entry is then done when nothing is left, else open again.
+    """
+    changes = {slug, f"{clone}/{slug}"} if clone else {slug}  # as `backlog_routes.named` stores it
+    found, _ = backlog.read(fresh=True)
+    mine = sorted((e.id for e in found.values() if _mine(e, changes, backlog.project)
+                   and e.status not in {"done", "dropped"}), key=int)  # fmt: skip
+    settle = _verify(files or frozenset(), changes, backlog.project, (slug, pr))
+    return [backlog.revise(i, settle) for i in mine]
+
+
+def _mine(entry: Entry, changes: set[str], project: str) -> bool:
+    """*entry* is a decision fix of *project* that went into one of *changes*."""
+    return entry.change in changes and bool(FIX.match(entry.title)) and project in named(entry)
 
 
 def accept(shared: DataRepo, report: Report, project: str, revision: str, reason: str) -> Receipt:
