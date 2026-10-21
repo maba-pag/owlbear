@@ -60,6 +60,18 @@ class LinkType(enum.StrEnum):
     PROMOTED_FROM = "promoted_from"
 
 
+class ReadBackKind(enum.StrEnum):
+    """Why a read-back waits, most urgent first: the queue's order (TD-427, §8)."""
+
+    SAFETY = "safety"  # imminent safety or irreversible effects
+    BLOCKED = "blocked"  # blocked work
+    UNCERTAIN = "uncertain"  # consequential uncertainty
+    IMPROVEMENT = "improvement"  # deferred improvement
+
+
+READ_BACK_EXTRAS = ("read_back_why", "read_back_kind")  # left out of a decision's content while empty
+
+
 class _Frozen(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -123,9 +135,11 @@ class Decision(_Frozen):
     links: tuple[Link, ...] = ()
     conflict: bool = False
     read_back: str = Field(default="none", pattern=r"^(none|pending|\d{4}-\d{2}-\d{2})$")
+    read_back_why: str = ""
+    read_back_kind: ReadBackKind | None = None
     created_at: datetime
 
-    @field_validator("rationale")
+    @field_validator("rationale", "read_back_why")
     @classmethod
     def _strip(cls, value: str) -> str:
         return value.strip()
@@ -152,17 +166,38 @@ class Decision(_Frozen):
             raise ValueError(msg)
         if self.read_back not in {"none", "pending"}:
             date.fromisoformat(self.read_back)
+        return self._read_back_reason()
+
+    def _read_back_reason(self) -> Decision:
+        pending = self.read_back == "pending"
+        if pending and not (self.read_back_why and self.read_back_kind):
+            msg = "a pending read-back needs read_back_why and read_back_kind"
+            raise ValueError(msg)
+        if self.read_back == "none" and (self.read_back_why or self.read_back_kind):
+            msg = "read_back_why and read_back_kind belong to a read-back: pending, or the one answered on its date"
+            raise ValueError(msg)
         return self
 
     def content(self) -> dict[str, object]:
-        """The canonical content: every field in declaration order, JSON-typed, without `revision`."""
-        return self.model_dump(mode="json", exclude={"revision"})
+        """The canonical content: every field in declaration order, JSON-typed, without `revision`.
+
+        An empty read-back reason is left out, so files written before it existed keep their revision.
+        """
+        found = self.model_dump(mode="json", exclude={"revision"})
+        return {k: v for k, v in found.items() if k not in READ_BACK_EXTRAS or v}
 
     @computed_field
     @property
     def revision(self) -> str:
         """Sha256 of the canonical JSON of `content()`."""
         canonical = json.dumps(self.content(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(canonical.encode()).hexdigest()
+
+    @property
+    def rule_revision(self) -> str:
+        """Sha256 of the content without its read-back: what a Change pins, since a read-back never changes a rule."""
+        rule = {k: v for k, v in self.content().items() if k not in {"read_back", *READ_BACK_EXTRAS}}
+        canonical = json.dumps(rule, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         return hashlib.sha256(canonical.encode()).hexdigest()
 
 

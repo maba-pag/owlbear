@@ -172,3 +172,30 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
         expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
         expect(page.locator("#error")).to_be_hidden()
     assert sorted(in_force(store)) == ["Exports are XML.", "No build step.", "Notes live in one SQLite table."]
+
+
+@pytest.mark.browser
+def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
+                read_back_why="A partner asked for JSON.", read_back_kind="uncertain")  # fmt: skip
+    write(rule, store.shared.root / PROJECT)
+    write(make(project="owlbear", title="Lint once", statement="Linted once."), store.shared.root / "owlbear")
+    with decisions_page(store, pds) as page:
+        queue = page.locator("#queue")
+        item = queue.locator(".queued", has_text="Exports are CSV")
+        expect(item).to_contain_text("A partner asked for JSON.")
+        expect(item).to_contain_text("Uncertain")
+        item.get_by_role("button", name="Still right").click()
+        expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+        expect(queue.locator(".queued")).to_have_count(0)
+        expect(queue).to_contain_text("No decision waits to be read back.")
+        pds.pick(page, "Show", "owlbear")
+        expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
+        expect(page.locator(".entry", has_text="Pages are plain HTML")).to_have_count(1)
+        expect(page.locator(".entry", has_text="Notes live in SQLite")).to_have_count(0)
+        expect(page.locator(".entry", has_text="Lint once").locator(".scope")).to_have_text("OwlBear")
+    held = in_force(store)["Exports are CSV."]
+    assert (held.read_back, held.read_back_why, held.origin) == (
+        datetime.now(UTC).date().isoformat(), "A partner asked for JSON.", Origin.AUTONOMOUS)  # fmt: skip

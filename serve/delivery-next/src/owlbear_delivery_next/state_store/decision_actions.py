@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, Scope, State, new_id
+from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, ReadBackKind, Scope, State, new_id
 from owlbear_decisions.validate import layers, project_folders, read_layers
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, Receipt
@@ -311,7 +311,7 @@ def keep(
 def read_back(  # noqa: PLR0913 - who answered and the revision read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *, answer: str, by: str
 ) -> list[Receipt]:
-    """Record the owner's read-back today; the decision, its origin included, stays as it is."""
+    """Record the owner's read-back today and take it off the queue; the decision and its origin stay as they are."""
     view = decision_store.load(shared, project)
     decision = _entry(view, decision_id).decision
     if stale := _stale(view, decision, revision):
@@ -319,9 +319,40 @@ def read_back(  # noqa: PLR0913 - who answered and the revision read
     if decision.state in RETIRED:
         msg = f"{decision.id} is {decision.state}: only a draft or a decision in force is read back"
         raise Refused(msg)
-    read = decision.model_copy(update={"read_back": _now().date().isoformat()})
+    update = {"read_back": _now().date().isoformat()}  # its reason stays: the evidence this answer settled
     said = f"decisions: read back {decision.id} ({by}): {_line(answer)}"
-    return [decision_store.save(shared, read, expected_revision=decision.revision, message=said)]
+    return [decision_store.save(shared, decision.model_copy(update=update), expected_revision=decision.revision,
+                                message=said)]  # fmt: skip
+
+
+def _same(one: str, other: str) -> bool:
+    """Two reasons alike but for case and spacing."""
+    return " ".join(one.split()).casefold() == " ".join(other.split()).casefold()
+
+
+def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the caller read
+    shared: DataRepo | None, project: str, decision_id: str, *, why: str, kind: ReadBackKind, revision: str
+) -> list[Receipt]:
+    """Queue the decision's read-back with why and how urgent (TD-427); its origin, wording and state stay.
+
+    Consent already given is not asked again: the reason a read-back waits on, or was answered on, stays in the
+    decision's file, and the same reason never queues it again; only a new one does.
+    """
+    said = _reason(why, "queueing a read-back")
+    view = decision_store.load(shared, project)
+    decision = _entry(view, decision_id).decision
+    if stale := _stale(view, decision, revision):
+        return stale
+    if decision.state in RETIRED:
+        msg = f"{decision.id} is {decision.state}: only a draft or a decision in force is read back"
+        raise Refused(msg)
+    if decision.read_back != "none" and _same(decision.read_back_why, said):
+        msg = f"{decision.id} was already read back or waits for this reason: only a new one asks again"
+        raise Refused(msg)
+    update = {"read_back": "pending", "read_back_why": said, "read_back_kind": kind}
+    queued = Decision.model_validate(decision.content() | update)
+    message = f"decisions: queue the read-back of {decision.id} ({kind}): {_line(said)}"
+    return [decision_store.save(shared, queued, expected_revision=decision.revision, message=message)]
 
 
 def propose(  # noqa: PLR0913 - the proposal's fields

@@ -3,10 +3,12 @@ import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { call } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
+import { queue } from "./queue.mjs";
 import { filter, readBack, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
-const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"]];
+const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"],
+  ["owlbear", "OwlBear"]];
 const SHOWN = [["", "In force and drafts"], ...Object.entries(STATES), ["all", "All, retired included"]];
 const ORIGINS = [["", "Any"], ["decided", "decided"], ["approved", "approved"], ["autonomous", "autonomous"]];
 const READ = [["", "Any"], ["none", "Not read back"], ["pending", "Waiting to be read back"], ["done", "Read back"]];
@@ -53,7 +55,7 @@ function filters() {
 }
 
 function card(d) {
-  const opened = state.opened === d.id;
+  const opened = state.opened === d.id && state.from === "list";
   return html`<li class="entry" data-id=${d.id}>
     <div class="title"><p-text weight="semibold">${d.title}</p-text>
       <p-tag compact="true" class="scope">${scopeOf(d)}</p-tag>
@@ -82,6 +84,7 @@ export function view() {
       dismiss-button="false" ?hidden=${!loaded || available}>${loaded && !available ? loaded.reason : ""}
     </p-inline-notification>
     ${receipts()}
+    ${available ? queue() : nothing}
     ${available ? filters() : nothing}
     ${available && rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id, card)}</ul>`
       : nothing}

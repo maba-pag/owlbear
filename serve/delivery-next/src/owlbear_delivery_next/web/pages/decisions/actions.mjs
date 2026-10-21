@@ -1,10 +1,11 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
 import { refresh } from "./list.mjs";
-import { DIALOG, notify, show, state, WRITE } from "./state.mjs";
-import { button, field } from "./widgets.mjs";
+import { at, DIALOG, KINDS, notify, show, state, WRITE } from "./state.mjs";
+import { button, field, select } from "./widgets.mjs";
 
-const SUBMIT = { replace: "Replace", exception: "Record the exception", "read-back": "Record the read-back" };
+const SUBMIT = { replace: "Replace", exception: "Record the exception", "read-back": "Record the read-back",
+  "queue-read-back": "Queue the read-back" };
 const WIDER = { change: "the project", project: "Global" };
 const WHY = "Why it changes (recorded with the new rule)";
 
@@ -26,10 +27,11 @@ export function receipts() {
 // replace the last ones, and a refused write stays said after the refresh.
 async function act(e, action, body = {}) {
   state.pending = action;
+  state.notice = "";
   show();
   let failed = "";
   try {
-    const r = await call(`/decisions/${encodeURIComponent(e.id)}/${action}`,
+    const r = await call(at(`/decisions/${encodeURIComponent(e.id)}/${action}`),
       { body: action === "keep" ? body : { revision: e.revision, ...body }, timeout: WRITE });
     state.receipts = r.receipts;
     if (r.saved) state.form = null;
@@ -72,12 +74,14 @@ const ASKS = {
 };
 
 function begin(action) {
-  state.form = { action, draft: { title: "", statement: "", rationale: "", words: "", answer: "" } };
+  state.form = { action, draft: { title: "", statement: "", rationale: "", words: "", answer: "", why: "",
+    kind: "uncertain" } };
   show();
 }
 
 function body(action, d) {
   if (action === "read-back") return { answer: d.answer.trim() };
+  if (action === "queue-read-back") return { why: d.why.trim(), kind: d.kind };
   return { title: d.title.trim(), statement: d.statement.trim(), rationale: d.rationale.trim(), words: d.words.trim() };
 }
 
@@ -85,6 +89,9 @@ async function submit(e) {
   const { action, draft } = state.form;
   if (["replace", "exception"].includes(action) && !draft.statement.trim()) return notify("Write the new rule.");
   if (action === "read-back" && !draft.answer.trim()) return notify("Write the owner's answer.");
+  if (action === "queue-read-back") {  // asks nothing yet: it waits in the queue for the owner's answer
+    return draft.why.trim() ? act(e, action, body(action, draft)) : notify("Say what makes it worth asking again.");
+  }
   const told = ASKS[action](e, draft), answer = await ask(told);
   if (!answer) return;
   act(e, action, { ...body(action, draft), ...(told.reason ? { reason: answer } : {}),
@@ -101,6 +108,9 @@ export function form(e) {
       field("Your words", draft.words, set("words"), { multiline: true, max: 4000,
         description: "As you decide it; empty records the new rule as your words" })],
     "read-back": () => [field("Your answer", draft.answer, set("answer"), { multiline: true, max: 2000 })],
+    "queue-read-back": () => [field("Why ask again", draft.why, set("why"), { multiline: true, max: 600,
+      description: "Only ambiguity, new evidence, a conflict or changed consequences" }),
+    select("How urgent", Object.entries(KINDS), draft.kind, (v) => { draft.kind = v; show(); })],
   };
   fields.exception = () => [...fields.replace().slice(1)];
   return html`<section class="form" aria-label=${SUBMIT[action]}>${fields[action]()}
@@ -155,6 +165,7 @@ export function actions(e) {
     if (e.conflict || e.rivals.length) parts.push(asks("Keep this one", keep, "keep"));
   }
   if (e.state === "draft") parts.push(asks("Activate", activate, "activate"), asks("Withdraw", withdraw, "withdraw"));
+  if (["in_force", "draft"].includes(e.state)) parts.push(opens("Queue a read-back", "queue-read-back"));
   return parts.length && !state.form ? html`<div class="row" role="group" aria-label="Actions">${parts}</div>`
     : nothing;
 }

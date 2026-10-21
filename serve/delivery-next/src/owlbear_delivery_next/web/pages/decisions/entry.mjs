@@ -1,20 +1,21 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, loaded } from "/assets/ui.mjs";
 import { actions, form } from "./actions.mjs";
-import { readBack, STATES, show, state } from "./state.mjs";
+import { at, readBack, STATES, show, state } from "./state.mjs";
 import { listed } from "./widgets.mjs";
 
-// Open one decision in full (or close it); *again* reads the opened one afresh and keeps its form.
-export async function open(id, { again = false } = {}) {
-  if (state.opened === id && !again) {
+// Open one decision in full (or close it), under its read-back (*from* "queue") or in the list; *again* reads the
+// opened one afresh and keeps its form.
+export async function open(id, { again = false, from = "list" } = {}) {
+  if (state.opened === id && !again && state.from === from) {
     Object.assign(state, { opened: null, entry: null, form: null });
     return show();
   }
-  if (!again) Object.assign(state, { opened: id, entry: null, form: null });
+  if (!again) Object.assign(state, { opened: id, from, entry: null, form: null });
   show();
   const path = `/decisions/${encodeURIComponent(id)}`;
   try {
-    const entry = await call(path);
+    const entry = await call(at(path));
     if (loaded()) entry.changes = (await call(`${path}/changes`, { machine: true })).changes;  // every project's
     if (state.opened === id) state.entry = entry;
   } catch (error) {

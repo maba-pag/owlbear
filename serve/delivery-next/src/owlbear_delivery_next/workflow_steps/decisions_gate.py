@@ -21,13 +21,14 @@ from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.runtimes import step_decisions
-from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store import decision_store, read_backs
 from owlbear_delivery_next.workflow_steps import before, check, engine, prepare
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
+    from typing import Any
 
-    from owlbear_decisions import Decision, Entry, Snapshot
+    from owlbear_decisions import Decision, Entry, Queued, Snapshot
     from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
@@ -52,6 +53,8 @@ UNPINNED = (
     "The decisions could not be read when this Change's brief was approved. "
     "Decisions in force now (not pinned at approval) that apply to it:"
 )
+SHOWN = 3  # read-backs a checkpoint shows; the rest wait on the Decisions page (TD-427)
+WAITING = "Read-backs waiting that apply to this Change (optional: answer them on the Decisions page):"
 
 
 @dataclass(frozen=True)
@@ -99,7 +102,7 @@ def baseline(view: DataView, c: Change, now: datetime, found: list[Applied] | No
     seen = view.snapshot
     found = applying(seen, c) if found is None else found
     said = {d.id: Said(title=d.title, statement=d.statement) for d in (a.entry.decision for a in found)}
-    revisions = {e.decision.id: e.decision.revision for e in seen.entries if _own(e.decision, c)}
+    revisions = {e.decision.id: e.decision.rule_revision for e in seen.entries if _own(e.decision, c)}
     return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said)
 
 
@@ -125,9 +128,9 @@ def differences(seen: Snapshot, pinned_at: DecisionBaseline, now: DecisionBaseli
     lines = []
     for key in sorted(now.said.keys() | pinned_at.said.keys()):
         old, new = pinned_at.revisions.get(key), now.revisions.get(key)
-        if old == new:
-            continue
         entry = seen.get(key)
+        if old == new or (old is not None and new is not None and entry and old == entry.decision.revision):
+            continue  # unchanged; a pin from before rule revisions holds the whole revision
         title = " ".join((entry.decision.title if entry else pinned_at.said[key].title).split())
         was = _quoted(pinned_at.said[key].statement) if key in pinned_at.said else "(its wording was not pinned)"
         if new is None:
@@ -165,13 +168,44 @@ def _stopped(kind: ErrorKind, reason: str, action: str, resume: str, now: dateti
     return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
 
-def _asked(c: Change, now: DecisionBaseline, head: str, lines: list[str]) -> Gate:
-    """The owner's question: Continue pins *now*, the set shown; Pause keeps what the Change holds."""
+def _asked(c: Change, now: DecisionBaseline, head: str, lines: list[str], shown: Sequence[str] = ()) -> Gate:
+    """The owner's question: Continue pins *now*, the set shown; Pause keeps what the Change holds.
+
+    The read-backs waiting (*shown*) are listed after it, never part of what Continue accepts nor of its identity.
+    """
     digest = hashlib.sha256("\n".join([head, *lines]).encode()).hexdigest()[:12]
     text = "\n".join([head, *lines])
     text += "\nContinue works by the decisions now in force; the approved brief stays as it is."
+    text += "".join(f"\n{line}" for line in shown)
     asked = engine.ask(c.step.kind, text, f"{PREFIX}{c.step.kind}:{digest}", OPTIONS)
     return Gate(c.model_copy(update={"decisions_offered": now}), asked)
+
+
+def waiting(store: Store, view: DataView, c: Change) -> list[Queued]:
+    """The read-backs waiting that apply to the Change, in queue order; they never block it."""
+    paths, own = scope(c), stem(c)
+    found = read_backs.waiting(store, view)
+    return [q for q in found if applies(q.decision, paths=paths, role=None, step=None, change=own) is not False]
+
+
+def _waiting_lines(store: Store, view: DataView, c: Change) -> list[str]:
+    found = waiting(store, view, c)
+    if not found:
+        return []
+    lines = [WAITING, *(f"- {q.kind}: {q.decision.id} {_quoted(q.decision.title)}: {q.why}" for q in found[:SHOWN])]
+    return lines + ([f"{len(found) - SHOWN} more wait on the Decisions page."] if len(found) > SHOWN else [])
+
+
+def checkpoint(store: Store, c: Change) -> dict[str, Any] | None:
+    """At most SHOWN read-backs that apply and how many more wait, while the brief awaits approval; else None."""
+    if store.shared is None or c.step.kind is not StepKind.SHAPE or c.brief.approved_version == c.brief.version:
+        return None
+    try:
+        view = decision_store.load(store.shared, store.name)
+    except decision_store.DecisionsUnavailable:
+        return None
+    found, ignored = waiting(store, view, c), read_backs.marks(store)["ignored"]
+    return {"items": [read_backs.item(q, ignored) for q in found[:SHOWN]], "more": max(0, len(found) - SHOWN)}
 
 
 def context(c: Change, found: list[Applied], in_force: int) -> list[str]:
@@ -196,10 +230,10 @@ def check_step(store: Store, c: Change, now: datetime) -> Gate:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
         return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc)[:600], stop=exc.stop(now)))
-    return _judged(view, c, now)
+    return _judged(view, c, now, store)
 
 
-def _judged(view: DataView, c: Change, now: datetime) -> Gate:
+def _judged(view: DataView, c: Change, now: datetime, store: Store) -> Gate:
     """The loaded decisions against the Change: faults stop it, differences ask, the rest is its section."""
     found = applying(view.snapshot, c)
     if bad := _faulty(view.snapshot, found):
@@ -207,12 +241,12 @@ def _judged(view: DataView, c: Change, now: datetime) -> Gate:
         return Gate(c, _stopped(ErrorKind.STATE, reason, FAULTY, "The decisions that apply are valid", now))
     current = baseline(view, c, now, found)
     if c.decisions_baseline is None and c.decisions_unpinned_at is not None:  # its approval could not pin them
-        return _asked(c, current, UNPINNED, unpinned(current))
+        return _asked(c, current, UNPINNED, unpinned(current), _waiting_lines(store, view, c))
     pinning = c.decisions_baseline is None  # a Change approved before this gate
     if pinning:
         c = c.model_copy(update={"decisions_baseline": current})
     elif lines := differences(view.snapshot, c.decisions_baseline, current):
-        return _asked(c, current, CHANGED, lines)
+        return _asked(c, current, CHANGED, lines, _waiting_lines(store, view, c))
     lines = context(c, found, len(current.revisions))
     if step_decisions.size(lines) > step_decisions.BUDGET:
         return Gate(c, _stopped(ErrorKind.STATE, SPLIT, "Split the Change", "The decisions that apply fit", now))

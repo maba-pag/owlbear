@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { here } from "/assets/ui.mjs";
 import { DIALOG, state, send } from "./state.mjs";
 import { button, hd, text, list, panel, info } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
@@ -98,6 +99,20 @@ function technical(d) {
     ? html`<span class="count">${said}</span>` : nothing}</summary>${inside}</details>`;
 }
 
+const KINDS = { safety: "Safety or irreversible", blocked: "Blocks work", uncertain: "Uncertain",
+  improvement: "Improvement" };
+
+// Read-backs waiting that apply to this Change (TD-427): at most three, optional; the rest wait on the Decisions page.
+function readBacks(d) {
+  const r = d.brief.read_backs;
+  if (!r?.items.length) return nothing;
+  const rows = r.items.map((i) => [`${KINDS[i.kind] ?? i.kind}: ${i.title}`, `${i.statement} — ${i.why}`]);
+  return html`<section class="read-backs">${hd(4, "Decisions waiting to be read back", "sm")}
+    ${text("Optional: approving does not wait on them, and each rule stays in force as recorded until you answer.")}
+    ${saidList(rows)}<p-text size="sm"><a href=${here({}, "/decisions")}>Answer them on the Decisions page</a>${
+      r.more ? ` (${r.more} more wait there)` : ""}</p-text></section>`;
+}
+
 export function approval(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`;
   const start = async () => {
@@ -108,7 +123,7 @@ export function approval(d) {
   const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${technical(d)}</div>`,
+      ${technical(d)}${readBacks(d)}</div>`,
     d.rounds?.brief?.length ? html`${marks("Brief challenge", d.rounds.brief)}${findingDetails(
       "Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])}` : nothing,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "

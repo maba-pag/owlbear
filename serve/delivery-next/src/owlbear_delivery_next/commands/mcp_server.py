@@ -197,7 +197,7 @@ def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # n
 mcp = MCPServer(
     "owlbear-delivery",
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
-    "worker's question, find decisions, propose one and record a read-back.",
+    "worker's question, find decisions, propose one, queue a read-back and record one.",
 )
 
 
@@ -314,6 +314,35 @@ def read_back_decision(
     """Record that the owner had a decision read back; a change of mind is his replacement on the Decisions page."""
     path = f"/decisions/{urllib.parse.quote(decision, safe='')}/read-back"
     return _STATE["chat"].write(path, {"revision": revision, "answer": answer})
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def queue_read_back(
+    decision: Annotated[str, Field(description="Decision id from find_decisions")],
+    revision: Annotated[str, Field(description="The revision find_decisions showed for it", pattern=r"^[0-9a-f]{64}$")],
+    why: Annotated[
+        str,
+        Field(
+            description="What makes it worth asking again: the ambiguity, new evidence, conflict or changed "
+            "consequences, in one or two sentences",
+            min_length=1,
+            max_length=600,
+        ),
+    ],
+    kind: Annotated[
+        Literal["safety", "blocked", "uncertain", "improvement"],
+        Field(
+            description="How urgent: safety (imminent safety or irreversible effects), blocked (work waits on it), "
+            "uncertain (consequential uncertainty), improvement (can wait)"
+        ),
+    ],
+) -> dict[str, Any]:
+    """Queue a decision for the owner's read-back on the Decisions page; its origin, wording and state stay.
+
+    Only on real ambiguity, new evidence, a conflict or changed consequences; never for consent he already gave.
+    """
+    path = f"/decisions/{urllib.parse.quote(decision, safe='')}/queue-read-back"
+    return _STATE["chat"].write(path, {"why": why, "kind": kind, "revision": revision})
 
 
 def main(argv: list[str] | None = None) -> None:

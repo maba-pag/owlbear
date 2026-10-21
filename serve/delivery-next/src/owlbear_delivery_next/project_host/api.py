@@ -51,7 +51,7 @@ from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check, decision, held, visual
+from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -355,6 +355,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     "visual": [s.model_dump() for s in c.brief.visual],
                     "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
                     "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
+                    "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
                 },
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],

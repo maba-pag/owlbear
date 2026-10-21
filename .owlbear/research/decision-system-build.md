@@ -137,6 +137,17 @@ personal data is purged, with the owner's consent.
   consequential uncertainty, deferred improvement.
 - Working chats (shaping, OwlBear's development) may read back on the same records when the topic comes up, in the
   owner's question format (C-01).
+- **Built in slice 5b part 1** (choices made while building): a decision carries `read_back_why` and
+  `read_back_kind` (`safety`, `blocked`, `uncertain`, `improvement`) only while its read-back is `pending`, left out
+  of its content when empty so older files keep their revision. A decision flagged `conflict` is in the queue as
+  `blocked` without anything written. The queue orders by kind, then by the decision's creation, oldest first. A chat
+  queues one with `queue_read_back` (why and kind; the page names the revision it read); it never changes origin,
+  wording or state and is refused without a reason, for a decision already waiting for the same reason and kind, and
+  for one read back today on the reason it waited for (the host keeps that reason). "Still right" records the
+  read-back's date and clears the reason; "ignore for now" writes nothing to the decision: the host's database keeps
+  the ignored revision, which sorts the item last until the decision changes. The brief approval view (while the
+  brief awaits approval) and the decisions gate's question list at most three waiting read-backs that apply to the
+  Change in queue order and count the rest; the question's identity and Continue ignore them.
 
 ## 9. A change of mind with built effect (TD-428)
 
@@ -179,6 +190,11 @@ Brief approval foregrounds new, changed and inherited decisions (C-14).
   undoes every file of it. Replace, withdraw, promote, keep and activating or proposing a draft that replaces one need
   a reason, recorded in the successor's rationale ("Why it changed: …") or the withdrawn one's; a replacement keeps
   the predecessor's `exception_to`, `refines`, `depends_on` and `related_to` links.
+- **Built in slice 5b part 1** (choices made while building): the read-back queue is the tab's first section (§8),
+  each item with "Still right", "Replace or withdraw" (the entry's own actions) and "Ignore for now"; the owner queues
+  one from an entry too. An "OwlBear" filter (`where=owlbear`) beside This project, Global and All reads
+  owlbear-data's `owlbear/` folder with Global (TD-435), and every entry action takes the same `where`, so the owner
+  acts on OwlBear's decisions from any project's host without OwlBear's repository being registered.
 
 ## 11. Migration
 
