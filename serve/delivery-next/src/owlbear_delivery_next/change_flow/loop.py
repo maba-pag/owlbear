@@ -44,6 +44,7 @@ from owlbear_delivery_next.change_flow import (
     brief_rounds,
     budgets,
     curation_flow,
+    decision_baseline,
     disputes,
     plan_rounds,
     rebuilds,
@@ -214,6 +215,7 @@ def fold(change: Change, items: Iterable[InboxItem], now: datetime) -> Change:  
         match item:
             case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
                 c.brief.approved_version, c.brief.approved_at = version, item.at
+                decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
                 if all(b.version != version for b in c.brief.approved):
                     c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
                 if c.step.kind == StepKind.SHAPE:
@@ -343,6 +345,8 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
         plan_rounds.decided(c, q, target, item.text, item.at)
     elif brief_rounds.owned(q):  # TD-221: the brief loop's disputes and its last round
         brief_rounds.decided(c, q, target, item.text, item.at)
+    elif decision_baseline.owned(q):  # TD-419: continue on the decisions now in force
+        decision_baseline.decided(c, target)
     elif (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
         kept = c.visual_rounds[-1] if c.visual_rounds else None
         if kept and kept.outcome == "model":

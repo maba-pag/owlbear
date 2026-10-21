@@ -18,6 +18,7 @@ from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.change_flow import brief_rounds
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
+from owlbear_delivery_next.workflow_steps import decisions_gate
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -89,9 +90,11 @@ def router(
 
     @routes.post("/changes/{slug}/approve-brief")
     def approve(slug: str, body: ApproveBody) -> dict[str, str]:
-        if why := refused(store, read(slug), body):
+        if why := refused(store, c := read(slug), body):
             raise HTTPException(409, why)
-        return put(slug, BriefApproval(at=datetime.now(UTC), version=body.version))
+        now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)
+        baseline, owed = decisions_gate.pinned(store, c, now)
+        return put(slug, BriefApproval(at=now, version=body.version, baseline=baseline, unpinned=owed))
 
     @routes.post("/briefs/challenge")
     def challenge(body: ChallengeBody) -> dict[str, Any]:

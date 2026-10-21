@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import Recipe
 from owlbear_delivery_next.change_flow import loop, worktree
-from owlbear_delivery_next.workflow_steps import before, check, prepare
+from owlbear_delivery_next.workflow_steps import before, check, decisions_gate, prepare
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
@@ -24,6 +24,9 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         return c  # the runner renders the "before" states, then prepares the test copy (TD-24, TD-96)
     if (left := h.clear(c, e)) is None or left:
         h.mark(c, left, now)  # never a second group beside one that may still run
+        return c
+    c, going = decisions_gate.launch(h.store, c, now)  # after disposal: a stop or question holds only the launch
+    if not going:
         return c
     root = Path(c.names.worktree)
     recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")

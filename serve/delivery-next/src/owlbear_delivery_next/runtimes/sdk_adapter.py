@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.permissions import decide, identitie
 from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
-from owlbear_delivery_next.runtimes import sdk_teardown, step_input, subagents
+from owlbear_delivery_next.runtimes import sdk_teardown, step_decisions, step_input, subagents
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -400,7 +400,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     if cfg.effort and not await _efforts(client, cfg.model):
         opts.pop("reasoning_effort")  # the runtime refuses any effort for such a model
         st.log(event="effort-omitted", model=cfg.model, effort=cfg.effort)
-    sid, message, resumed = cfg.session_id, cfg.message, False
+    sid, message, resumed, resent = cfg.session_id, cfg.message, False, True
     if cfg.resume and await _call(client.get_session_metadata(sid), "session lookup") is not None:
         session = await _call(client.resume_session(sid, **opts), "session resume", START)
         st.session, resumed = session, True
@@ -410,7 +410,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             st.finish("unread", detail=f"transcript read failed ({type(exc).__name__}); the answer was not resent")
             return session
         if sent(events, message):
-            message = step_input.CONTINUE
+            message, resent = step_decisions.resumed(step_input.CONTINUE), False
     else:
         if cfg.resume:
             if (new := st.replace()) is None:
@@ -419,7 +419,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             st.run.session_id = sid
         session = await _call(client.create_session(session_id=sid, **opts), "session create", START)
         st.session, st.created = session, True
-    st.log(event="session", id=sid, resumed=resumed, resent=message != step_input.CONTINUE, runtime=st.run.runtime_pid)
+    st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
     extra = {"attachments": list(cfg.attachments)} if cfg.attachments else {}  # e.g. visual screenshots
     st.sending = True
