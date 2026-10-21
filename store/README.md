@@ -20,7 +20,7 @@ truth for their own content; do not use this directory as a substitute for regis
 | Concern | Canonical location |
 | --- | --- |
 | Knowledge runtime state and registered sources | `.owlbear/knowledge/` |
-| Durable agent memory entries | `.owlbear/memory/` |
+| Durable agent memory entries | the project's `memory/` folder in the shared data repository ([memory server](../serve/memory-mcp/README.md#configuration)) |
 | Delivery state of a registered project | `~/.owlbear/projects/<id>/`, outside the repository |
 | Knowledge implementation and MCP tools | `serve/knowledge/` and `serve/knowledge-mcp/` |
 | Cross-package regression tests | `tests/` |

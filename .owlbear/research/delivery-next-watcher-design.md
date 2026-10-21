@@ -8,7 +8,8 @@
 > **Status 2026-10-19:** draft, nothing decided or built (the plan's item 9). It predates TD-320 and TD-365: nothing
 > blocks outside writes any more and the watcher judges each one afterwards, so the TD-45 guard it assumes for SDK
 > steps is gone. Revise it before the owner's session, which comes when window steps are about to return (TD-224,
-> TD-316); TD-27's benchmark runs first (TD-378). See [the plan](owlbear-plan.md) §3.5.
+> TD-316); TD-27's benchmark runs first (TD-378). See [the plan](owlbear-plan.md) §3.5. The owner's input of
+> 2026-10-21 for the revision is §3.4b.
 
 ## 1. Context and Question
 
@@ -211,6 +212,33 @@ long tier costs more per token needs stronger evidence before it is recommended.
 - whether a window session can be pinned to a tier.
 
 Without the first two, advice covers SDK main agents only.
+
+### 3.4b Owner heads-ups (owner's input, 2026-10-21)
+
+Claude Code 2.1.292 ships a "You should know" observer. This summary rests on an unofficial extraction of it,
+[wassname/cc-plugin-you-should-know](https://github.com/wassname/cc-plugin-you-should-know), and OwlBear copies
+neither its prompt nor its code.
+
+- Every few main-agent steps (six in that version) a separate request with the session's model, no tools and the
+  conversation including tool results asks: is there one consequential thing the user very likely missed, such as a
+  trade-off, a quiet decision or a doubtful result? It answers "none" unless the cost of missing it is real (money,
+  time, wasted work, a wrong result, a decision in progress).
+- It never interrupts or steers the main agent. A one-line note with a short plain-language title appears above the
+  input; "Learn more" shows at most about 120 words written for a reader with no context, and "Know this already"
+  and "Dismiss" are recorded so the topic is not offered again; ignored notes make it check less often.
+- It skips what the user already engaged with and what the session states plainly, but not a point made in passing
+  inside a long answer.
+
+**Fit with the decided watcher.** TD-55 makes the watcher multi-purpose and lets reasoning prompt a closer look or
+feed learning, never stop a step; heads-ups are such a purpose. The judging of outside writes (§3.2) protects the
+machine; heads-ups protect the owner's understanding of unattended work, from the same feed (§3.1). Candidate
+surfaces: a note on the Change's row of the Changes page, and a read-back on the Decisions page when the point is a
+decision (TD-427 queues one only for ambiguity, new evidence, a conflict or changed consequences). The style rules
+match what the owner asks of reports: plain words, no hashes or line references, no context assumed.
+
+**For the session:** whether heads-ups belong to the watcher or are a separate observer; window and SDK steps only,
+or the owner's chats too (VS Code offers no surface above the chat input); cadence and backoff against credits; the
+model, after TD-27's benchmark.
 
 ### 3.5 Placement, concurrency and lifecycle
 
