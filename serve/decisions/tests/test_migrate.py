@@ -109,7 +109,7 @@ def test_unclear_clauses():
     assert clauses[3].decision.origin is Origin.AUTONOMOUS
     assert any("over 240" in reason for reason in clauses[4].unclear)
     assert clauses[5].unclear == ["origin qualified as 'partly' in the record"]  # TD-1 is C-01's row: not unclear
-    assert clauses[6].unclear == ["decided TD-8 is cited without owner's words"]
+    assert clauses[6].unclear == []  # a decided row chosen without a quote has none (TD-388)
 
 
 def test_orphans_exclude_cited_replaced_and_spent():
@@ -146,7 +146,7 @@ def test_write_preview_files_and_report(tmp_path):
         assert f"## {heading}" in report
     assert "- TD-4 (decided, C-01 Asking)" in report
     assert "| C-01 Asking | 5 | owlbear | |" in report
-    assert {f.rule for f in result.findings} == {"statement-length", "owner-words"}
+    assert {f.rule for f in result.findings} == {"statement-length"}
     with pytest.raises(FileExistsError):
         write_preview(record, out)
 
@@ -155,7 +155,7 @@ def test_cli(tmp_path, capsys):
     record = tmp_path / "record.md"
     record.write_text(_synthetic(), encoding="utf-8")
     assert main([str(record), str(tmp_path / "out")]) == 0
-    assert capsys.readouterr().out.startswith("7 entries, 5 unclear clauses, 1 orphan rows")
+    assert capsys.readouterr().out.startswith("7 entries, 4 unclear clauses, 1 orphan rows")
 
 
 def _in_force_bullets(text: str) -> int:
@@ -178,7 +178,7 @@ def test_real_record_migrates_every_in_force_bullet(tmp_path):
     assert len({c.decision.id for c in result.clauses}) == len(result.clauses)
     assert [item for topic in result.topics for item in topic.unparsed] == []
     assert len(load_folder(tmp_path / "owlbear").decisions) == len(result.clauses)
-    assert {f.rule for f in result.findings} <= {"statement-length", "owner-words"}
+    assert {f.rule for f in result.findings} <= {"statement-length"}
     unclear = {c.decision.id for c in result.clauses if c.unclear}
     flagged = {Path(f.path).stem for f in result.findings}
     assert flagged <= unclear

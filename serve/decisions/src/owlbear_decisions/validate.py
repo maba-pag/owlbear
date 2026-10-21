@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_decisions.models import STATEMENT_LIMIT, Decision, LinkType, Origin, Scope, State
+from owlbear_decisions.models import STATEMENT_LIMIT, Decision, LinkType, Scope, State
 from owlbear_decisions.storage import DECISIONS_DIR, is_folder, kind, load_folder
 
 if TYPE_CHECKING:
@@ -107,9 +107,7 @@ def _single(entry: Entry) -> list[tuple[str, str]]:
         found.append(("placement", message))
     if len(d.statement) > STATEMENT_LIMIT:
         found.append(("statement-length", f"statement has {len(d.statement)} characters, at most {STATEMENT_LIMIT}"))
-    if d.origin is Origin.DECIDED and not d.owner_words:
-        found.append(("owner-words", "a decided decision needs the owner's words"))
-    return found
+    return found  # a decided decision chosen without a quote has none (TD-388): its words are not required
 
 
 def _visible(source: Entry, target: Entry, link: LinkType) -> bool:
