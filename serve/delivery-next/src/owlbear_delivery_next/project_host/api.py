@@ -37,6 +37,7 @@ from owlbear_delivery_next.project_host import (
     backlog_routes,
     brief_routes,
     config_routes,
+    decision_routes,
     memory_routes,
     pack_routes,
     pages,
@@ -125,10 +126,7 @@ class IntentBody(Body):
 
 
 def link(rec: HostRecord | None) -> str | None:
-    """The Changes-page URL with its token, as the host prints it; None until the host has one.
-
-    Under the machine host it opens the page on the record's project (TD-242).
-    """
+    """The Changes-page URL with its token, on the record's project under the machine host (TD-242); else None."""
     if not (rec and rec.token):
         return None
     return f"{rec.url}{f'?project={rec.project}' if rec.project else ''}#token={rec.token}"
@@ -489,6 +487,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(brief_routes.router(store, read, put, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
+    router.include_router(decision_routes.router(store))
     job = session_slots.packed(host, pack or pack_job.Job(store))  # its sessions count as the project's (TD-336)
     router.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
     app.include_router(router)

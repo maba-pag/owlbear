@@ -3,10 +3,11 @@
 The files in ``owlbear-data`` are the authority. A repository or project folder that is missing or unreadable, or a
 file in the project's view that is not a usable decision, raises `DecisionsUnavailable`, never an empty or partial
 rule set. A save, under the repository-wide lock, catches up with the remote, writes with an expected revision,
-commits and pushes the file alone (`decision_sync`), reloads and validates, and reads its receipt back before the
-lock is released. Neither a Git merge nor a timestamp decides authority: when the reloaded snapshot shows two
-in-force successors of one decision, every successor of it is flagged ``conflict`` and published, and the owner
-resolves them.
+commits and pushes its files alone (`decision_sync`), reloads and validates, and reads its receipt back before the
+lock is released; a save of several files (a successor and what it retires) writes all of them or none, in one
+commit. Neither a Git merge nor a timestamp decides authority: when the reloaded snapshot shows two
+in-force successors of one decision (a widening promotion counts), every successor of it is flagged ``conflict`` and
+published, and the owner resolves them.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_decisions import DecisionError, LinkType, Scope, decision_path, snapshot, write
+from owlbear_decisions import DecisionError, LinkType, Scope, check_write, decision_path, read, snapshot, write
 from owlbear_decisions.snapshot import CONFLICT
 from owlbear_decisions.storage import kind
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
@@ -24,16 +25,20 @@ from owlbear_delivery_next.state_store import decision_sync
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from owlbear_decisions import Decision, Entry, Snapshot
     from owlbear_delivery_next.local_system.data_repo import DataRepo
+
+    type Placed = tuple[Decision, Path, str | None]  # a decision, its layer's folder and its expected revision
 
 SET_UP = "Set the shared data repository: `owlbear-next data PATH`"
 SET_UP_PROJECT = "Set up the project so the shared data repository holds its folder: `owlbear-next setup`"
 REPAIR = "Repair the shared data repository's checkout so Git can read it"
 READ = "Make the decision folders and files in the shared data repository readable and valid"
 ROUNDS = 3  # flag-and-publish rounds before a conflict is reported unresolved
+SUCCEEDS = (LinkType.REPLACES, LinkType.PROMOTED_FROM)  # the links that make a successor (TD-426)
 
 
 class DecisionsUnavailable(StoreError):  # noqa: N818 - the design's name for it
@@ -172,54 +177,101 @@ def save(shared: DataRepo | None, decision: Decision, *, expected_revision: str 
 
     The receipt is read back before the repository's lock is released.
     """
+    return save_all(shared, [(decision, expected_revision)], message=message)[0]
+
+
+def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None]], *, message: str) -> list[Receipt]:
+    """Write every decision of *items* at its expected revision, or none; publish them as one commit and validate.
+
+    Any file not at its expected revision refuses the whole batch before one is written, and a publication the remote
+    overtook is taken back whole, so a transition never leaves half of it in force. The receipts are read back before
+    the repository's lock is released.
+    """
     shared = _checkout(shared)
-    folder = _layer(shared.root, decision)
     try:
         with shared.locked():
-            return _save(shared, decision, folder, expected_revision, message)
+            return _save_all(shared, [(d, _layer(shared.root, d), expected) for d, expected in items], message)
     except DataRepoError as exc:
         raise DecisionsUnavailable(str(exc)) from exc
     except OSError as exc:
-        msg = f"{decision.id} could not be written in {shared.root}: {exc}"
+        msg = f"{', '.join(d.id for d, _ in items)} could not be written in {shared.root}: {exc}"
         raise DecisionsUnavailable(msg, READ) from exc
 
 
-def _save(shared: DataRepo, decision: Decision, folder: Path, expected: str | None, message: str) -> Receipt:
+def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Receipt]:
     until = time.monotonic() + SAVE_SECONDS
     behind = decision_sync.catch_up(shared, until)
     behind = f"not checked against the remote: {behind}" if behind else ""
-    try:
-        write(decision, folder, expected)
-    except DecisionError as exc:
-        return Receipt(decision.id, saved=False, commit=_head(shared), notice=_join(str(exc), behind)[:300])
-    path = decision_path(decision, folder)
-    sent = decision_sync.publish(shared, [path], message, until)
+    decisions = [d for d, _, _ in items]
+    if refused := _refusals(items) or _write(shared, items):
+        return _refused(shared, decisions, refused, behind)
+    sent = decision_sync.publish(shared, [decision_path(d, folder) for d, folder, _ in items], message, until)
     if sent.stale:
-        return Receipt(decision.id, saved=False, commit=_head(shared), notice=sent.notice[:300])
+        return [Receipt(d.id, saved=False, commit=_head(shared), notice=sent.notice[:300]) for d in decisions]
     said = [sent.notice]
-    view = _reconcile(shared, decision, said, until)
-    return _receipt(shared, view, decision, _join(*said, behind), until)
+    view = _reconcile(shared, decisions, said, until)
+    return [_receipt(shared, view, d, _join(*said, behind), until) for d in decisions]
 
 
-def _reconcile(shared: DataRepo, decision: Decision, said: list[str], until: float) -> DataView:
+def _refusals(items: list[Placed]) -> dict[str, str]:
+    """Why each file of the batch would be refused, checked before any is written."""
+    found = {}
+    for decision, folder, expected in items:
+        path = decision_path(decision, folder)
+        try:
+            check_write(read(path) if path.exists() else None, decision, expected)
+        except DecisionError as exc:
+            found[decision.id] = str(exc)
+    return found
+
+
+def _write(shared: DataRepo, items: list[Placed]) -> dict[str, str]:
+    """Write the batch; a refused file puts back the files already written and says why."""
+    done: list[tuple[Path, bool]] = []
+    for decision, folder, expected in items:
+        try:
+            write(decision, folder, expected)
+        except DecisionError as exc:
+            for path, new in done:
+                if new:
+                    path.unlink(missing_ok=True)
+                else:
+                    shared.git("restore", "--source=HEAD", "--staged", "--worktree", "--", str(path))
+            return {decision.id: str(exc)}
+        done.append((decision_path(decision, folder), expected is None))
+    return {}
+
+
+def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
+    others = f"not saved: {', '.join(sorted(refused))} was refused, and these saves go together or not at all"
+    commit = _head(shared)
+    return [
+        Receipt(d.id, saved=False, commit=commit, notice=_join(refused.get(d.id, others), behind)[:300])
+        for d in decisions
+    ]
+
+
+def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView:
     """Flag competing successors and publish the flags, reloading until none is left unflagged (ROUNDS at most).
 
     A flag publication the remote overtook is taken back, and the next round reloads and flags again.
     """
+    project = next((d.project for d in decisions if d.project), "")
     for _ in range(ROUNDS):
-        view = _view(shared, decision.project)
-        if not (competing := _competitors(view.snapshot, decision)):
+        view = _view(shared, project)
+        competing = {e.decision.id: e for d in decisions for e in _competitors(view.snapshot, d)}
+        if not competing:
             return view
-        if flagged := [path for entry in competing if (path := _flag(entry))]:
+        if flagged := [path for _, entry in sorted(competing.items()) if (path := _flag(entry))]:
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until)
             said.append("" if sent.stale else sent.notice)
-    return _view(shared, decision.project)
+    return _view(shared, project)
 
 
 def _competitors(seen: Snapshot, written: Decision) -> list[Entry]:
-    """The unflagged in-force successors competing with *written*, or with it for what it replaces."""
-    touched = {written.id, *(link.target for link in written.links if link.type is LinkType.REPLACES)}
+    """The unflagged in-force successors competing with *written*, or with it for what it replaces or promotes."""
+    touched = {written.id, *(link.target for link in written.links if link.type in SUCCEEDS)}
     ids = {f.involves[0] for f in seen.findings if f.rule == CONFLICT and touched.intersection(f.involves[1:])}
     return [e for i in sorted(ids) if (e := seen.get(i)) is not None and not e.decision.conflict]
 

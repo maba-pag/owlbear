@@ -10,7 +10,7 @@ import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.state_store import decision_index, decision_store, decision_sync
+from owlbear_delivery_next.state_store import decision_actions, decision_index, decision_store, decision_sync
 from owlbear_delivery_next.state_store.decision_store import (
     READ,
     SET_UP_PROJECT,
@@ -218,6 +218,64 @@ def test_a_save_the_remote_overtook_is_taken_back_never_merged(shared_repo, shar
     assert "decisions: edited" not in git(second.root, "log", "--format=%s").splitlines()
     assert git(second.root, "status", "--porcelain") == ""
     assert load(second, PROJECT).snapshot.get(decision.id).decision == withdrawn  # never a textual merge of both
+
+
+@pytest.mark.parametrize("moved", ["before", "during"])
+def test_a_save_of_several_files_writes_all_or_none(shared_repo, shared, tmp_path, monkeypatch, moved) -> None:
+    decision, second = held(shared, shared_repo[1], tmp_path / "second")
+    withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
+    assert save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn").published
+    if moved == "during":  # the remote moves after the check: the push is rejected and the commit taken back whole
+        monkeypatch.setattr(decision_sync, "catch_up", lambda *_: "")
+    successor = replacing(decision)
+    retired = decision.model_copy(update={"state": State.REPLACED})
+
+    said = decision_store.save_all(
+        second, [(successor, None), (retired, decision.revision)], message="decisions: replace"
+    )
+
+    assert [(r.id, r.saved, r.committed, r.published) for r in said] == [
+        (successor.id, False, False, False), (decision.id, False, False, False)]  # fmt: skip
+    assert git(second.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
+    assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
+    seen = load(second, PROJECT).snapshot
+    assert [e.decision for e in seen.entries] == [withdrawn]  # no successor, the remote's version kept
+
+
+def test_a_replacement_whose_predecessor_changed_remotely_writes_neither_file(shared_repo, shared, tmp_path) -> None:
+    decision, second = held(shared, shared_repo[1], tmp_path / "second")
+    edited = decision.model_copy(update={"rationale": EDITED})
+    assert save(shared, edited, expected_revision=decision.revision, message="decisions: edited").published
+    remote = git(shared_repo[1], "rev-parse", "main")
+
+    said = decision_actions.replace(second, PROJECT, decision.id, decision.revision, title="", statement="Postgres.",
+                                    rationale="", words="", reason="It grew.", redecided=False)  # fmt: skip
+
+    assert [r.saved for r in said] == [False, False]
+    assert git(shared_repo[1], "rev-parse", "main") == remote  # nothing published
+    assert [e.decision for e in load(second, PROJECT).snapshot.entries] == [edited]  # no successor, edit kept
+    assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
+
+
+def test_two_promotions_of_one_source_are_a_conflict_the_owner_resolves(shared) -> None:
+    source = make(state=State.REPLACED)
+    promoted = (Link(type=LinkType.PROMOTED_FROM, target=source.id),)
+    first, second = (make(scope=Scope.GLOBAL, project="", title=t, links=promoted) for t in ("Wide", "Wider"))
+    set_up(shared)
+    for decision in (source, first):
+        assert save(shared, decision, expected_revision=None, message="m").published
+
+    said = save(shared, second, expected_revision=None, message="decisions: a second promotion")
+    view = load(shared, PROJECT)
+    rivals = decision_actions.rivals(view, view.snapshot.get(second.id).decision)
+    shown = {d.id: d.revision for d in (view.snapshot.get(second.id).decision, *rivals)}
+    kept = decision_actions.keep(shared, PROJECT, second.id, shown, reason="Wider reads better.")
+
+    assert (said.saved, said.conflict, said.active) == (True, True, False)
+    assert [d.id for d in rivals] == [first.id]
+    assert [r.saved for r in kept] == [True, True]
+    seen = load(shared, PROJECT).snapshot
+    assert (seen.get(first.id).decision.state, seen.active(second.id)) == (State.WITHDRAWN, True)
 
 
 def test_the_receipt_is_read_back_under_the_lock(shared, monkeypatch) -> None:
