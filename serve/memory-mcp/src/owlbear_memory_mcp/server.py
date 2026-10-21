@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
 from pydantic import Field, StrictStr
 
+from owlbear_memory_mcp.store import shared_stores
 from owlbear_memory_mcp.tools import (
     AssessmentItem,
     AssessmentTaskId,
@@ -99,10 +100,12 @@ class AppContext:
 
 
 def memory_dir() -> Path:
-    """The memory store: ``OWLBEAR_MEMORY_DIR`` when set, else the current OwlBear workspace's."""
+    """The store: ``OWLBEAR_MEMORY_DIR``, else the workspace's shared folder (TD-72), else ``.owlbear/memory``."""
     if explicit := os.environ.get(MEMORY_DIR_ENV):
         return Path(explicit).expanduser().resolve()
     workspace_root = Path.cwd().resolve()
+    if shared := shared_stores(workspace_root):
+        return shared[0]
     if not (workspace_root / _WORKSPACE_MARKER).is_dir():
         message = f"OwlBear workspace marker not found: {_WORKSPACE_MARKER}"
         raise RuntimeError(message)
@@ -110,9 +113,13 @@ def memory_dir() -> Path:
 
 
 def global_dir() -> Path | None:
-    """Global memory (``OWLBEAR_MEMORY_GLOBAL_DIR``), read beside the store and never written; None when unset."""
-    explicit = os.environ.get(MEMORY_GLOBAL_ENV)
-    return Path(explicit).expanduser().resolve() if explicit else None
+    """Global memory, read and never written: ``OWLBEAR_MEMORY_GLOBAL_DIR``, else the shared store's (TD-241)."""
+    if explicit := os.environ.get(MEMORY_GLOBAL_ENV):
+        return Path(explicit).expanduser().resolve()
+    if os.environ.get(MEMORY_DIR_ENV):
+        return None
+    shared = shared_stores(Path.cwd().resolve())
+    return shared[1] if shared else None
 
 
 @asynccontextmanager
