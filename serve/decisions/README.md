@@ -18,6 +18,7 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 ```bash
 uv run decisions-validate <data-repo-root>
 uv run decisions-migrate-preview <record.md> <out-dir> [--project owlbear]
+uv run decisions-view <data-repo-root> [--project owlbear] [--out .owlbear/decisions.md] [--commit SHA] [--check]
 ```
 
 `decisions-validate` prints one line per finding (`path: rule: message`) and exits 1 on any. The Global layer is
@@ -28,6 +29,14 @@ Change's layer `<root>/<project>/changes/<slug>/decisions/`, as in Delivery's da
 and a `REPORT.md` with counts, unclear clauses, orphan rows, a proposed-scope table for the owner to mark Global
 topics, the validator's findings with their explanation and the row-to-entry concordance. It refuses a folder that
 already holds a preview and never changes the record (TD-437).
+
+`decisions-view` writes OwlBear's generated, read-only view of the Global and the project's decisions (slice 6,
+TD-425): a header naming the data commit (`--commit`, default the root's `HEAD`; `none` only for a data repository
+without decisions) and that the record stays authoritative (TD-437), the rules in force by layer and topic, history,
+the validator's findings, and a last line `<!-- decisions-view sha256:... -->` over everything above it. `--check`
+writes nothing and exits 1 when the view is missing, edited by hand, or shows other decisions than the data; a new
+data commit alone never makes it stale. Pull-request CI checks only the hash (`.github/scripts/decisions_view_hash.py`,
+a config hook); `.github/workflows/decisions-view.yml` runs `--check` with the read-only data token (TD-436).
 
 ```python
 from owlbear_decisions import Decision, load_folder, snapshot, validate_repo, write

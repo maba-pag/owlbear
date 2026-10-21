@@ -26,6 +26,8 @@ where the code differs from [the decisions](../.owlbear/research/delivery-livene
 you start or resume work and after a context compaction; a pull request that changes what it says updates it. The
 old Delivery redesign programme and
 [its execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md) are superseded history (TD-202).
+[.owlbear/decisions.md](../.owlbear/decisions.md) is the generated, read-only view of the decisions in owlbear-data;
+until the owner has reviewed their migration, the decision record stays authoritative (TD-437).
 
 ### Asking the Owner
 
