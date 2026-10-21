@@ -66,6 +66,18 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
   project folder that is missing, a folder that cannot be read, or a file in the project's view that is not a usable
   decision stops loading. The index rebuilds a project's rows when the data commit or the digest of its decision
   files' revisions changes, so uncommitted files count; creating or replacing its file is serialized by a lock file.
+- **Built in slice 6** (choices made while building): the view is `.owlbear/decisions.md`, written by
+  `uv run decisions-view <owlbear-data> --project owlbear`. Its header says the record stays authoritative until the
+  owner has reviewed the migration (TD-437); rules in force come Global first, then OwlBear's (its Changes' included),
+  grouped by topic; drafts are counted, not listed; replaced, withdrawn and spent ones are one line each in History,
+  and the validator's findings are listed. Its last line is the sha256 of everything above it. Freshness means the
+  rendered decisions differ: `--check` compares the view without its data commit line and hash, so new owlbear-data
+  commits that leave the decisions alone never fail it, and the pinned commit names the data the view was last
+  generated from. A data repository without any `decisions/` folder is an empty set; until the migration the view
+  says "Data commit: none (no decisions migrated yet)", which `--commit none` allows only without decisions or
+  findings. Pull-request CI checks the hash alone, through a stdlib config hook Static runs (TD-409); only
+  `decisions-view.yml`, on pushes to main and daily, holds the read-only data token and runs `--check`. It never
+  writes: on a failure the lead chat regenerates the view by pull request. It is not part of the required `CI` check.
 
 ## 4. Scopes (TD-426)
 

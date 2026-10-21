@@ -8,6 +8,7 @@ dependencies = ["pydantic>=2.13.4", "ruamel.yaml>=0.19.1"]
 [project.scripts]
 decisions-validate = "owlbear_decisions.validate:main"
 decisions-migrate-preview = "owlbear_decisions.migrate:main"
+decisions-view = "owlbear_decisions.view:main"
 
 [build-system]
 requires = ["hatchling"]
