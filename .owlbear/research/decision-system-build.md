@@ -3,7 +3,8 @@
 > **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-418, TD-419, TD-424..TD-430
 > **Date:** 2026-10-20
 > **Question:** How do decisions become their own system for OwlBear and every project Delivery works on?
-> **Status:** design answered by the owner on 2026-10-20; not built. Made from the assistant's draft, Sol's blind
+> **Status:** design answered by the owner on 2026-10-20; built except the migration (#538 to #547, #550). Made
+> from the assistant's draft, Sol's blind
 > proposal and the owner's intent, then challenged by Sol twice (decision system: REVISE 87%; read-backs and
 > changes of mind: REVISE 93%); every correction is folded in below.
 
@@ -237,6 +238,14 @@ Brief approval foregrounds new, changed and inherited decisions (C-14).
 A clause-level, many-to-many concordance from today's record: origin, qualifications, dates and quotes kept; partial
 replacements preserved; "Replaced" lists never read as whole-row retirement. Only genuinely unclear interpretations go
 to the owner. The record file becomes the generated view of §3; the old file stays in Git history.
+
+- **The owner's review of the preview** (2026-10-21, TD-439..TD-446): the record migrates as written, with the lines
+  his answers changed in their topics; Global holds C-01's asking rules and the four agent-conduct rules TD-442 names;
+  the migrator proposes per topic the roles and step kinds its rules apply to and the owner confirms one list
+  (TD-446). Neither is built yet.
+- **Before the switch:** chats in OwlBear's own workspace have no decision tools (§10 reaches OwlBear's decisions
+  from the tab only), so once the record is a generated view they could not record a decision. On 2026-10-21 the
+  owner asked for decision management to be rethought end to end before anything migrates (the plan's §5).
 
 ## 12. Slices and proof
 

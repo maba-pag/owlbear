@@ -133,7 +133,7 @@ Before returning, commit reviewed MCP memory mutations with the dedicated MCP op
 owlbear-memory/commit_memory_batch(session_type="curation")
 ```
 
-The MCP operation stages only non-pending `.owlbear/memory/*.md` entries and returns the commit SHA or a no-op result. Do not use a terminal or broad-add `.owlbear/memory`.
+The MCP operation stages only non-pending entries of the memory store and returns the commit SHA or a no-op result. Do not use a terminal or broad-add the memory folder.
 
 ## Step 7 — Return Channel A Signal
 
@@ -150,7 +150,7 @@ Return the verdict:
 - [ ] Noise removals are truly low-signal, not merely unfamiliar
 - [ ] Conflicts were deferred in periodic mode or resolved with user input in manual mode
 - [ ] No `/memories/` file store was used for curation
-- [ ] No broad `git add .owlbear/memory` command was used
+- [ ] No broad `git add` of the memory folder was used
 - [ ] Did not call `approve_memory`
 
 ## Known Pitfalls

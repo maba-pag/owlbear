@@ -15,7 +15,8 @@ check must pass on a branch that is up to date with `main`, and it merges with a
 (TD-278). Once its CI passes, a pull request that changes runtime code or CI workflows gets the `coderabbit` label,
 which buys one CodeRabbit review from a free allowance of about one an hour; it merges only after that review is in
 and handled, or after 60 minutes without one, said in the pull request. Others merge after CI and Sol's review, without
-the label (TD-447). Target delivery
+the label (TD-447). A chat-authored pull request that changes runtime code gets `release:minor`, one that changes only
+docs or tests none, and `release:major` only on the owner's word (TD-314). Target delivery
 uses the branch, worktree, and
 integration target in its per-change coordination record; never substitute `main` by convention.
 Consumers clone the same branch ("clone = install"); versions will be git tags. There is no

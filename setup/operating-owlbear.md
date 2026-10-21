@@ -279,9 +279,10 @@ user's control.
 updated, while customized files, unrelated configuration, Delivery state, runtime data, knowledge,
 memory, and user-local profile settings remain in place.
 
-MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
-`owlbear-memory` server creates that directory when it starts or writes the first
-entry, so setup does not seed a separate memory store.
+MCP memory entries are markdown files in the project's folder of the shared data repository (`<folder>/memory/`),
+with Global memory at that repository's `memory/`; a workspace no folder there claims keeps them in
+`.owlbear/memory/` ([memory server configuration](../serve/memory-mcp/README.md#configuration)). The
+`owlbear-memory` server creates the directory when it starts, so setup does not seed a memory store.
 
 ---
 

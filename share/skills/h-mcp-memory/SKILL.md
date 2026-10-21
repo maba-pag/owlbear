@@ -64,7 +64,7 @@ them to `approved`; `delete_memory` may soft-delete them when the user chooses r
 ### Batch commits
 
 Pending entries are not committed. After curation or review, use the state-aware
-Memory MCP operation instead of direct Git commands or broad-adding `.owlbear/memory`:
+Memory MCP operation instead of direct Git commands or broad-adding the memory folder:
 
 ```text
 owlbear-memory/commit_memory_batch(session_type="curation")
@@ -263,7 +263,7 @@ does not implement F01-F10 or F13-F15.
 
 ## save_memory
 
-Creates a new `pending` entry in `.owlbear/memory/*.md`.
+Creates a new `pending` entry in the memory store (see Configuration).
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -542,8 +542,10 @@ Recommended category mapping for post-task reflection bullets:
 
 ## Configuration
 
-Memory entries are stored at `.owlbear/memory` under the current initialized workspace. Active agent
-identities are discovered from workspace agent locations; the server has no environment configuration.
+The store is the project's folder in the shared data repository (`<folder>/memory`), Global memory beside it at the
+repository's `memory`, read and never written; Delivery's steps name both with `OWLBEAR_MEMORY_DIR` and
+`OWLBEAR_MEMORY_GLOBAL_DIR`. A workspace no folder claims keeps `.owlbear/memory`. Active agent
+identities are discovered from workspace agent locations.
 
 ## Error Behavior
 

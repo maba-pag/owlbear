@@ -53,9 +53,10 @@ delete_entry(entry_path, memory_dir=memory_dir)
 ## Configuration
 
 The package reads no environment variables and has no standalone launch command. Pass the
-workspace memory directory to `MemoryEngine` or the storage functions explicitly. Consumer
-workspaces conventionally use `.owlbear/memory`; the directory is created when the engine first
-starts or writes an entry. The `owlbear-memory-mcp` adapter owns MCP configuration and user-facing
+workspace memory directory to `MemoryEngine` or the storage functions explicitly; the
+`owlbear-memory-mcp` adapter chooses it (the project's folder in the shared data repository, else
+`.owlbear/memory`). The engine creates the directory when it is constructed. The adapter owns MCP
+configuration and user-facing
 lifecycle operations.
 
 ---

@@ -1269,9 +1269,8 @@ their own decisions).
   the owner has reviewed it [TD-437].
 - The migration takes the record as written: it merges no lines, marks no row spent and keeps the origins and quotes
   the record gives; only the owner's answers of 2026-10-21 changed lines, in their topics [TD-439].
-- Global are C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research
-  kept out of its project, config changes the owner approves and the nine ECC adoptions; all else is OwlBear's
-  [TD-442].
+- Global: C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research out of
+  its project, config changes the owner approves, the nine ECC adoptions; all else is OwlBear's [TD-442].
 - The migration proposes per topic the roles and step kinds its rules apply to; the owner confirms one list before
   it writes [TD-446].
 
