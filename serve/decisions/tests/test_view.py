@@ -164,6 +164,21 @@ def test_check_passes_on_equal_fails_on_a_changed_decision_and_ignores_unrelated
     assert out.read_text(encoding="utf-8").count(pinned) == 1  # --check never writes
 
 
+def test_a_rules_rationale_and_consequences_are_listed_so_check_compares_them(tmp_path, make):
+    root, out = tmp_path / "data", tmp_path / "decisions.md"
+    rule = put(root, make, "rule", consequences="Reviews\n wait  for lint.")
+    assert main([str(root), "--out", str(out), "--commit", COMMIT]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "  - Rationale: Why: **speed**. Second paragraph.\n  - Consequences: Reviews wait for lint.\n" in text
+
+    for changed in ({"rationale": "Why: cost."}, {"consequences": "Reviews never wait."}):
+        held = rule
+        rule = rule.model_copy(update=changed)
+        write(rule, root / "owlbear", held.revision)
+        assert main([str(root), "--out", str(out), "--commit", COMMIT, "--check"]) == 1, changed
+        assert main([str(root), "--out", str(out), "--commit", COMMIT]) == 0
+
+
 def test_check_fails_on_a_missing_or_hand_edited_view(tmp_path, capsys):
     out = tmp_path / "decisions.md"
     (tmp_path / "data").mkdir()

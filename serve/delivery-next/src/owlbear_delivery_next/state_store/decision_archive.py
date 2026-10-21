@@ -2,7 +2,9 @@
 
 Change-scope decisions go to `<project>/changes/<record stem>/decisions/`: spent once the Change merged or ended
 unchanged, withdrawn when it was abandoned. Project-scope ones go to `<project>/decisions/`: in force once merged or
-unchanged (the owner's brief approval activated them), a draft the owner may still activate when abandoned.
+unchanged (the owner's brief approval activated them), a draft the owner may still activate when abandoned. An
+approved project decision a later approved version narrowed to the Change is withdrawn, and its successor relates to
+it: a `replaces` link may not narrow a layer.
 """
 
 from __future__ import annotations
@@ -11,17 +13,22 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from owlbear_decisions import DecisionError, LinkType, Scope, State, check_write, decision_path, new_id, read, write
+from owlbear_decisions import DecisionError, LinkType, Scope, State, check_write, decision_path, new_id, read
 from owlbear_decisions.models import STATEMENT_LIMIT, Decision
+from owlbear_decisions.snapshot import read_repo
+from owlbear_decisions.validate import Entry, Layer, check
+from owlbear_delivery_next.state_store import decision_store
 
 if TYPE_CHECKING:
     from datetime import datetime
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import BriefDecision, Change
+    from owlbear_delivery_next.state_store.decision_store import Placed
 
 CHANGES = "changes"
 TITLE = 120
+WHOLE = "Whole wording: "  # a cut statement's whole text in the rationale
 _STATES = {  # (lasting, the Change's work stays) -> state
     (False, True): State.SPENT,
     (False, False): State.WITHDRAWN,
@@ -33,12 +40,28 @@ _STATES = {  # (lasting, the Change's work stays) -> state
 def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Path], list[str]]:
     """Write the decisions of the finished *c*; the files to publish, and what kept them from being written.
 
-    Every decision is built and checked against its file first; one that cannot be written keeps all of them out,
-    so a published record never comes with part of its decisions. A file that already holds the same decision stays
-    untouched, so a cleanup run again writes nothing new and publishes the same files. The caller holds the data
-    repository's lock.
+    Every decision is built and checked against its file and, with the decisions already in the data repository,
+    against the graph's rules first; one that cannot be written keeps all of them out, so a published record never
+    comes with part of its decisions, and a write failing midway puts every file back as it was. A file that already
+    holds the same decision stays untouched, so a cleanup run again writes nothing new and publishes the same files.
+    The caller holds the data repository's lock.
     """
-    planned: list[tuple[Decision, Path, str | None]] = []
+    planned, problems = _planned(root, project, c, stem, outcome)
+    problems = problems or _graph(root, project, c, planned)
+    if not problems:
+        try:
+            refused = decision_store.write_batch([(d, layer, rev) for d, layer, rev in planned if rev != d.revision])
+        except OSError as exc:
+            refused = {"files": f"cannot be written, all put back: {exc}"}
+        problems = [f"decision {key} of {c.slug}: {' '.join(why.split())}"[:240] for key, why in refused.items()]
+    if problems:
+        return [], [f"no decision of {c.slug} was archived", *problems]
+    return [decision_path(decision, layer) for decision, layer, _ in planned], []
+
+
+def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Placed], list[str]]:
+    """Each decision of *c* with its layer and its file's revision, and why any cannot be written over its file."""
+    planned: list[Placed] = []
     problems: list[str] = []
     for fields in [*_brief(project, c, stem, outcome), *_changed(project, c, stem, outcome)]:
         try:
@@ -51,14 +74,24 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
             planned.append((decision, layer, current.revision if current else None))
         except (DecisionError, ValidationError, OSError) as exc:
             problems.append(f"decision {fields['id']} of {c.slug}: {' '.join(str(exc).split())}"[:240])
-    if problems:
-        return [], [f"no decision of {c.slug} was archived", *problems]
-    paths = []
-    for decision, layer, revision in planned:
-        if revision != decision.revision:
-            write(decision, layer, expected_revision=revision)
-        paths.append(decision_path(decision, layer))
-    return paths, []
+    return planned, problems
+
+
+def _graph(root: Path, project: str, c: Change, planned: list[Placed]) -> list[str]:
+    """The validator's findings involving a planned decision, judged with every decision already in the repository."""
+    try:
+        found = read_repo(root, project)
+    except OSError as exc:
+        return [f"the decisions of {c.slug} cannot be checked against {root}: {exc}"[:240]]
+    placed = [Entry(decision_path(d, layer), Layer(layer, d.scope, d.project, d.change), d) for d, layer, _ in planned]
+    paths = {e.path for e in placed}
+    entries = [e for e in found.entries if e.path not in paths] + placed
+    ids = {d.id for d, _, _ in planned}
+    return [
+        f"decision {', '.join(f.involves)} of {c.slug}: {f.rule}: {' '.join(f.message.split())}"[:240]
+        for f in check(entries)
+        if ids.intersection(f.involves)
+    ]
 
 
 def _approved(c: Change) -> list[BriefDecision]:
@@ -77,15 +110,18 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
         return []
     source = f"Change {c.slug}, brief v{brief.version} approved {at.isoformat(timespec='seconds')}"
     final = {d.id for d in brief.decisions}
-    successors = {d.replaces for d in _approved(c) if d.replaces}
+    approved = _approved(c)
+    lasting = {d.id for d in approved if d.id and d.scope == "project"}
+    narrowing = {d.replaces for d in approved if d.replaces in lasting and d.scope != "project"}
+    successors = {d.replaces for d in approved if d.replaces} - narrowing
     kept = outcome != "abandoned"
     found = []
-    for i, d in enumerate(_approved(c)):
-        lasting = d.scope == "project"
+    for i, d in enumerate(approved):
         fields = _said(d.answer, d.origin, at, f"From Change {c.slug} ({outcome}).")
-        fields |= _placed(project, stem, lasting=lasting, kept=kept)
+        fields |= _placed(project, stem, lasting=d.scope == "project", kept=kept)
         if d.id and d.id not in final:  # approved once, then replaced or dropped by a later approval
             fields["state"] = State.REPLACED if kept and d.id in successors else State.WITHDRAWN
+        link = LinkType.RELATED_TO if d.replaces in narrowing and d.scope != "project" else LinkType.REPLACES
         fields |= {
             "id": d.id or new_id(at, seed=f"{project}\n{stem}\nbrief\n{i}\n{d.question}"),
             "title": _short(d.question),
@@ -93,7 +129,7 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
             "origin": d.origin,
             "actor": "owner" if d.origin == "decided" else "shaper",
             "source": source,
-            "links": [{"type": LinkType.REPLACES, "target": d.replaces}] if d.replaces else [],
+            "links": [{"type": link, "target": d.replaces}] if d.replaces else [],
             "created_at": at,
         }
         found.append(fields)
@@ -137,7 +173,7 @@ def _said(text: str, origin: str, at: datetime, note: str, words: str | None = N
     statement = text[: STATEMENT_LIMIT - 1].rstrip() + "\u2026" if long else text
     said = text if words is None else words.strip()
     owned = [{"text": said, "date": at.date()}] if origin == "decided" and said else []
-    return {"statement": statement, "rationale": f"{note}\n\nWhole wording: {text}" if long else note,
+    return {"statement": statement, "rationale": f"{note}\n\n{WHOLE}{text}" if long else note,
             "owner_words": owned}  # fmt: skip
 
 

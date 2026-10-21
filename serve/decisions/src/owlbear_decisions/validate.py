@@ -80,14 +80,17 @@ def project_folders(root: Path) -> list[Path]:
 
     A folder that cannot be looked into raises `OSError`: it is never taken for one without decisions.
     """
-    return [
-        child
-        for child in sorted(root.iterdir())
-        if not child.name.startswith(".")
+    return [child for child in sorted(root.iterdir()) if holds_decisions(child)]
+
+
+def holds_decisions(child: Path) -> bool:
+    """*child* of a data repository's root is a project folder holding decisions; raises `OSError` when unknown."""
+    return (
+        not child.name.startswith(".")
         and child.name != DECISIONS_DIR
         and is_folder(child)
-        and (kind(child / DECISIONS_DIR) is not None or _change_folders(child))
-    ]
+        and (kind(child / DECISIONS_DIR) is not None or bool(_change_folders(child)))
+    )
 
 
 def _placement(entry: Entry) -> str:

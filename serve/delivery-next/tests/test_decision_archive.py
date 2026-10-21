@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Scope, State, new_id, read, validate_repo
+from owlbear_decisions import Decision as Rule
+from owlbear_decisions import Link, LinkType, Origin, Scope, State, new_id, read, storage, validate_repo, write
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision
 from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -258,3 +259,67 @@ def test_an_invalid_decision_is_a_notice_and_nothing_is_archived(store, shared_r
     assert c.decisions[1].id in notice
     assert list(root.rglob("decisions/*.md")) == []
     assert (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+
+
+def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the_record_publishes(
+    store, shared_repo
+) -> None:
+    root, _ = shared_repo
+    said = {"title": "Notes", "statement": "Notes live in SQLite.", "scope": Scope.PROJECT, "project": "shop-site",
+            "origin": Origin.AUTONOMOUS, "actor": "shaper", "created_at": AT}  # fmt: skip
+    old = Rule(id=new_id(AT), state=State.REPLACED, **said)
+    later = Rule(id=new_id(AT), state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id),), **said)
+    for d in (old, later):
+        write(d, root / "shop-site")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "replaced in another Change")
+    c = finished()
+    decisions = c.brief.approved[0].decisions
+    decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
+
+    notice = change_record.save(store, c, MERGED, AT)
+
+    assert notice.startswith("no decision of notes was archived"), notice
+    assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
+    assert sorted(p.stem for p in root.rglob("decisions/*.md")) == sorted([old.id, later.id])
+    assert (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_project_answer_narrowed_to_the_change_is_withdrawn_and_its_successor_relates_to_it(store, shared_repo):
+    root, _ = shared_repo
+    first = BriefDecision(id=new_id(AT), question=WHERE, answer="One SQLite table", origin="decided", scope="project")
+    second = BriefDecision(id=new_id(AT), question=WHERE, answer="SQLite for this Change only", origin="decided",
+                           replaces=first.id)  # fmt: skip
+    versions = [Brief(version=n, title="Notes", decisions=[d]) for n, d in ((1, first), (2, second))]
+    c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=AT, approved=versions))
+
+    assert change_record.save(store, c, MERGED, AT) == ""
+
+    old, new = (read(next(root.rglob(f"decisions/{d.id}.md"))) for d in (first, second))
+    assert (old.scope, old.state, new.scope, new.state) == (Scope.PROJECT, State.WITHDRAWN, Scope.CHANGE, State.SPENT)
+    assert [(link.type, link.target) for link in new.links] == [(LinkType.RELATED_TO, first.id)]
+    assert validate_repo(root) == []
+
+
+def test_a_write_failing_midway_puts_every_file_back_and_the_record_still_publishes(store, shared_repo, monkeypatch):
+    root, _ = shared_repo
+    replaced, real = [], storage._replace
+
+    def full(path: Path, text: str) -> None:
+        if replaced:
+            msg = "disk full"
+            raise OSError(msg)
+        replaced.append(path)
+        real(path, text)
+
+    monkeypatch.setattr(storage, "_replace", full)
+
+    notice = change_record.save(store, finished(), MERGED, AT)
+
+    assert notice.startswith("no decision of notes was archived"), notice
+    assert "disk full" in notice
+    assert len(replaced) == 1  # one file was in place before the second failed
+    assert list(root.rglob("decisions/*.md")) == []
+    assert json.loads((root / "shop-site" / "changes" / f"{STEM}.json").read_text())["outcome"] == "merged"
+    assert git(root, "status", "--porcelain") == ""
