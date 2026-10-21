@@ -26,7 +26,7 @@ def put(root, make, seed, scope=Scope.PROJECT, **changes):
 
 def data(root, make):
     """Global and owlbear decisions in force and retired, a draft, a conflict, a finding and another project's."""
-    autonomous = {"origin": Origin.AUTONOMOUS, "owner_words": (), "applies_to": {}}
+    autonomous = {"origin": Origin.AUTONOMOUS, "applies_to": {}}
     found = {
         "rule": put(root, make, "rule", Scope.GLOBAL, aliases=("TD-1",), topic="Global rules", **autonomous),
         "old": put(root, make, "old", aliases=("TD-2",), title="Old lint", state=State.REPLACED),
@@ -64,7 +64,8 @@ def test_the_view_lists_global_then_the_projects_rules_by_topic_and_retired_ones
     assert "  - Statement: The builder's code is linted once, at submission." in rules
     assert "  - Origin: decided by owner, chat 2026-10-20, 2026-10-20; scope: project `owlbear`" in rules
     assert "  - Applies to: paths `serve/**/*.py`; roles `builder`" in rules
-    assert '  - Owner\'s words (2026-10-14, TD-87): "lint once — “quoted” … cut"' in rules
+    assert "  - Read back: confirmed 2026-10-20" in rules
+    assert "words" not in rules
     assert f"  - Links: replaces `{found['old'].id}` (TD-2)" in rules
     assert "Applies to" not in rules[rules.index(found["rule"].id) : rules.index("### `owlbear`")]
     assert "Drafts (proposed, not in force) are not listed: 1." in rules
@@ -79,6 +80,19 @@ def test_the_view_lists_global_then_the_projects_rules_by_topic_and_retired_ones
     assert found["other"].id not in text
     assert f"Data commit: `{COMMIT}`" in text
     assert "`.owlbear/research/delivery-liveness-first-rebuild.md` stays authoritative" in text
+
+
+def test_an_inherited_decision_shows_it_was_never_read_back(tmp_path, make):
+    root = tmp_path / "data"
+    inherited = put(root, make, "inherited", title="Inherited", inherited=True, read_back="none")
+    unread = put(root, make, "unread", title="Unread", read_back="none")
+
+    rules = render(snapshot(root, "owlbear"), COMMIT).split("## History")[0]
+
+    blocks = {d.id: rules[rules.index(d.id) :].split("\n- ")[0] for d in (inherited, unread)}
+    assert "  - Read back: inherited, never read back" in blocks[inherited.id]
+    assert "confirmed" not in rules
+    assert "Read back" not in blocks[unread.id]
 
 
 def test_conflicts_and_findings_are_marked_and_listed_never_hidden(tmp_path, make):

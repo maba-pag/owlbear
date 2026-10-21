@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, Scope, State, new_id, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_decisions.validate import validate_repo
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import mcp_server
@@ -51,8 +51,11 @@ def make(**changes) -> Decision:
 
 
 def decided(**changes) -> Decision:
-    words = (OwnerWords(text="Keep it so.", date=AT.date()),)
-    return make(origin=Origin.DECIDED, owner_words=words, **changes)
+    return make(origin=Origin.DECIDED, read_back=AT.date().isoformat(), **changes)
+
+
+def today() -> str:
+    return datetime.now(UTC).date().isoformat()
 
 
 def worldwide(**changes) -> Decision:
@@ -112,8 +115,8 @@ def test_without_a_shared_repository_the_tab_says_so(tmp_path):
 
 
 def test_the_list_filters_by_scope_state_origin_topic_read_back_and_text(owner, shared):
-    seed(shared, make(title="Notes in SQLite", topic="storage"), worldwide(origin=Origin.DECIDED, owner_words=(
-        OwnerWords(text="No build.", date=AT.date()),), read_back="2026-10-20"),
+    seed(shared, make(title="Notes in SQLite", topic="storage"), worldwide(origin=Origin.DECIDED,
+        read_back="2026-10-20"),
         make(title="Tags are free text", statement="Any tag.", state=State.DRAFT),
         make(title="Old export", state=State.WITHDRAWN))  # fmt: skip
 
@@ -143,10 +146,12 @@ def test_an_entry_shows_provenance_links_both_ways_history_and_the_changes_that_
     back = owner.get(f"/api/next/decisions/{old.id}").json()
 
     assert (got["origin"], got["actor"], got["source"]) == ("autonomous", "shaper", "chat")
+    assert (got["inherited"], "owner_words" in got) == (False, False)
     assert got["revision"] == rule.revision
     assert [(link["type"], link["id"], link["state"]) for link in got["links"]] == [("replaces", old.id, "replaced")]
     assert [(link["type"], link["id"]) for link in back["linked_from"]] == [("replaces", rule.id)]
-    assert [h["subject"] for h in got["history"]] == ["seed"]
+    assert [h["action"] for h in got["history"]] == ["changed"]  # "seed" is no known action
+    assert all(set(h) == {"commit", "at", "action"} for h in got["history"])
     assert [(p["slug"], p["applies"], p["revision"]) for p in got["changes"]] == [("c1", True, rule.rule_revision)]
     assert owner.get(f"/api/next/decisions/{new_id()}").status_code == 404
 
@@ -155,7 +160,7 @@ def test_the_owner_replaces_a_decision_with_his_successor_and_gets_its_receipts(
     old = make()
     seed(shared, old)
 
-    got = act(owner, old, "replace", statement="Notes live in Postgres.", words="Use Postgres.", reason="It grew.")
+    got = act(owner, old, "replace", statement="Notes live in Postgres.", confirmed=True, reason="It grew.")
     got = got.json()
 
     new_id_ = got["receipts"][0]["id"]
@@ -164,12 +169,11 @@ def test_the_owner_replaces_a_decision_with_his_successor_and_gets_its_receipts(
     assert [(r["id"], r["saved"], r["committed"], r["published"]) for r in got["receipts"]] == [
         (new.id, True, True, True), (old.id, True, True, True)]  # fmt: skip
     assert got["receipts"][0]["active"] is True
-    assert (new.state, new.origin) == (State.IN_FORCE, Origin.DECIDED)
-    assert [w.text for w in new.owner_words] == ["Use Postgres."]
+    assert (new.state, new.origin, new.read_back) == (State.IN_FORCE, Origin.DECIDED, today())
     assert new.links == (Link(type=LinkType.REPLACES, target=old.id),)
     assert (new.title, new.actor, new.rationale) == (old.title, "owner", "Why it changed: It grew.")
     assert now(shared, old.id).state is State.REPLACED  # kept, never deleted
-    assert git(shared_repo[1], "log", "-1", "--format=%s", "main").startswith(f"decisions: {new.id} replaces {old.id}")
+    assert git(shared_repo[1], "log", "-1", "--format=%B", "main") == f"decisions: replace {old.id} with {new.id}"
     one_commit = git(shared_repo[1], "show", "--name-only", "--format=", "main").splitlines()
     assert sorted(one_commit) == sorted(f"{PROJECT}/decisions/{d.id}.md" for d in (old, new))
 
@@ -207,16 +211,18 @@ def test_a_supersession_without_a_reason_is_refused_and_writes_nothing(owner, st
     assert git(shared.root, "rev-parse", "HEAD") == head
 
 
-def test_a_withdrawal_and_a_promotion_record_why(owner, shared):
+def test_a_withdrawal_and_a_promotion_record_why_in_the_rationale_never_in_the_commit(owner, shared):
     rule, source = make(rationale="Small data."), make(title="Tags", statement="Free tags.")
     seed(shared, rule, source)
 
     act(owner, rule, "withdraw", reason="No notes any more.")
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: withdraw {rule.id}"
     wide = now(shared, act(owner, source, "promote", reason="Every project wants it.").json()["receipts"][0]["id"])
 
     assert now(shared, rule.id).rationale == "Small data.\n\nWhy it was withdrawn: No notes any more."
     assert wide.rationale == "Why it changed: Every project wants it."
-    assert "No notes any more." in git(shared.root, "log", "--format=%s")
+    said = git(shared.root, "log", "--format=%B")
+    assert ("No notes any more" in said, "Every project wants it" in said) == (False, False)
 
 
 def test_a_stale_revision_is_refused_by_its_receipt_and_nothing_is_written(owner, shared):
@@ -249,18 +255,13 @@ def test_replacing_or_withdrawing_a_decided_decision_needs_the_owners_re_decisio
 
 def test_a_second_reversal_is_the_owners_re_decision_only(owner, store, shared):
     chat = client(store, CHAT)
-    first = make()
-    seed(shared, first)
-    proposal = {"title": "Notes", "statement": "Postgres.", "replaces": first.id, "reason": "r"}
-    proposed = chat.post("/api/next/decisions/propose", json=proposal).json()
-    draft = now(shared, proposed["receipts"][0]["id"])
-    assert act(owner, draft, "activate", reason="r").json()["saved"] is True  # the first reversal: his approval
-    second = now(shared, draft.id)
-    assert (second.state, second.origin) == (State.IN_FORCE, Origin.APPROVED)
+    first = make(state=State.REPLACED)
+    second = after(first, title="Notes", statement="Postgres.", origin=Origin.APPROVED)  # the first reversal
+    seed(shared, first, second)
 
     again = {"title": "Notes", "statement": "A file.", "replaces": second.id, "reason": "r"}
     refused = chat.post("/api/next/decisions/propose", json=again)
-    worded = chat.post("/api/next/decisions/propose", json=again | {"words": "Go back to a file."}).json()
+    worded = chat.post("/api/next/decisions/propose", json=again | {"confirmed": True}).json()
     unworded = after(second, state=State.DRAFT, statement="A JSON file.")
     seed(shared, unworded)
     unconfirmed = act(owner, unworded, "activate", reason="r")
@@ -268,10 +269,11 @@ def test_a_second_reversal_is_the_owners_re_decision_only(owner, store, shared):
 
     assert refused.status_code == 409
     assert "second reversal" in refused.json()["detail"]
-    assert now(shared, worded["receipts"][0]["id"]).state is State.DRAFT  # in his words, still his to activate
+    assert now(shared, worded["receipts"][0]["id"]).state is State.DRAFT  # confirmed in the chat, still his to activate
     assert unconfirmed.status_code == 409
     assert confirmed["saved"] is True
     assert now(shared, unworded.id).origin is Origin.DECIDED
+    assert now(shared, unworded.id).read_back == today()
     assert decision_actions.reversals({d.id: d for d in (first, second)}, now(shared, unworded.id)) == 2
 
 
@@ -294,15 +296,21 @@ def test_a_chat_proposal_is_always_a_draft_and_never_replaces_a_decided_or_globa
 
     plain = chat.post("/api/next/decisions/propose", json={"title": "Tags", "statement": "Tags are free."}).json()
     worded = chat.post("/api/next/decisions/propose", json={"title": "Tags", "statement": "Tags are free.",
-                                                             "words": "Free tags."}).json()  # fmt: skip
+                                                             "confirmed": True}).json()  # fmt: skip
     on_decided = chat.post("/api/next/decisions/propose", json={"title": "x", "statement": "x", "replaces": rule.id})
     on_global = chat.post("/api/next/decisions/propose", json={"title": "x", "statement": "x", "replaces": wide.id})
+    with_words = chat.post("/api/next/decisions/propose",
+                           json={"title": "x", "statement": "x", "words": "Ada's secret wording"})  # fmt: skip
 
     one, two = now(shared, plain["receipts"][0]["id"]), now(shared, worded["receipts"][0]["id"])
-    assert (one.state, one.origin) == (State.DRAFT, Origin.AUTONOMOUS)
-    assert (two.state, two.origin) == (State.DRAFT, Origin.DECIDED)
+    assert (one.state, one.origin, one.read_back) == (State.DRAFT, Origin.AUTONOMOUS, "none")
+    assert (two.state, two.origin, two.read_back) == (State.DRAFT, Origin.DECIDED, today())
     assert plain["receipts"][0]["active"] is False
-    assert (on_decided.status_code, on_global.status_code) == (409, 422)
+    assert (on_decided.status_code, on_global.status_code, with_words.status_code) == (409, 422, 422)
+    assert "secret wording" not in with_words.text  # a refused value is never echoed (TD-449)
+    assert with_words.json()["detail"] == [
+        {"loc": ["body", "words"], "msg": "Extra inputs are not permitted", "type": "extra_forbidden"}
+    ]
 
 
 def test_promotion_makes_a_linked_global_successor_and_keeps_the_source(owner, shared):
@@ -314,8 +322,8 @@ def test_promotion_makes_a_linked_global_successor_and_keeps_the_source(owner, s
     wide = now(shared, got["receipts"][0]["id"])
     kept = now(shared, source.id)
     assert got["saved"] is True
-    assert (wide.scope, wide.state, wide.origin, wide.owner_words) == (
-        Scope.GLOBAL, State.IN_FORCE, Origin.DECIDED, source.owner_words)  # fmt: skip
+    assert (wide.scope, wide.state, wide.origin, wide.read_back) == (
+        Scope.GLOBAL, State.IN_FORCE, Origin.DECIDED, today())  # fmt: skip
     assert wide.links == (Link(type=LinkType.PROMOTED_FROM, target=source.id),)
     assert (kept.state, kept.statement) == (State.REPLACED, source.statement)
     assert validate_repo(shared.root) == []
@@ -328,12 +336,12 @@ def test_an_exception_is_recorded_to_a_global_decision_only(owner, shared):
     seed(shared, wide, local)
 
     refused = act(owner, local, "exception", statement="Here too.")
-    got = act(owner, wide, "exception", statement="This project builds its pages.", words="Build them here.").json()
+    got = act(owner, wide, "exception", statement="This project builds its pages.", confirmed=True).json()
 
     mine = now(shared, got["receipts"][0]["id"])
     assert refused.status_code == 422
     assert (mine.scope, mine.project) == (Scope.PROJECT, PROJECT)
-    assert (mine.origin, mine.state) == (Origin.DECIDED, State.IN_FORCE)
+    assert (mine.origin, mine.state, mine.read_back) == (Origin.DECIDED, State.IN_FORCE, today())
     assert mine.links == (Link(type=LinkType.EXCEPTION_TO, target=wide.id),)
     assert now(shared, wide.id).state is State.IN_FORCE
 
@@ -356,23 +364,32 @@ def test_resolving_a_conflict_leaves_exactly_one_successor_in_force(owner, share
     view = decision_store.load(shared, PROJECT).snapshot
     assert [e.decision.title for e in view.entries if e.decision.state is State.IN_FORCE] == ["Ours"]
     assert (view.get(theirs.id).decision.state, view.get(ours.id).decision.conflict) == (State.WITHDRAWN, False)
-    assert view.get(theirs.id).decision.rationale == f"Why it was withdrawn: {ours.id} was kept: Ours is simpler."
+    assert view.get(theirs.id).decision.rationale == "Why it was withdrawn: “Ours” was kept: Ours is simpler."
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: keep {ours.id}"
     assert view.active(ours.id)
     assert owner.post(f"/api/next/decisions/{ours.id}/keep", json={"revisions": {}, "reason": "r"}).status_code == 409
 
 
-def test_a_read_back_records_its_date_and_never_changes_the_origin(store, shared):
-    rule, gone = make(), make(state=State.WITHDRAWN)
+def test_a_read_back_records_only_the_owners_confirmation_and_never_changes_the_origin(store, shared):
+    rule, gone = make(inherited=True), make(state=State.WITHDRAWN)
     seed(shared, rule, gone)
+    head = git(shared.root, "rev-parse", "HEAD")
 
-    got = act(client(store, CHAT), rule, "read-back", answer="Still right.").json()
+    unconfirmed = [act(client(store, CHAT), rule, "read-back", **body) for body in ({}, {"confirmed": False})]
+    answered = act(client(store, CHAT), rule, "read-back", confirmed=True, answer="Yes, keep the table.")
+    assert [r.status_code for r in [*unconfirmed, answered]] == [422, 422, 422]
+    assert "replacement" in unconfirmed[0].json()["detail"]
+    assert "keep the table" not in answered.text
+    assert (git(shared.root, "rev-parse", "HEAD"), now(shared, rule.id)) == (head, rule)  # nothing written
+
+    got = act(client(store, CHAT), rule, "read-back", confirmed=True).json()
 
     read = now(shared, rule.id)
     assert got["saved"] is True
-    assert (read.read_back, read.origin, read.statement) == (
-        datetime.now(UTC).date().isoformat(), Origin.AUTONOMOUS, rule.statement)  # fmt: skip
-    assert "(chat): Still right." in git(shared.root, "log", "-1", "--format=%s")
-    assert act(client(store, CHAT), gone, "read-back", answer="x").status_code == 409
+    assert (read.read_back, read.origin, read.statement, read.inherited) == (
+        today(), Origin.AUTONOMOUS, rule.statement, False)  # fmt: skip
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: read-back {rule.id} (chat)"
+    assert act(client(store, CHAT), gone, "read-back", confirmed=True).status_code == 409
 
 
 def test_withdrawing_a_draft_or_a_decision_in_force_keeps_it_in_history(owner, shared):
@@ -434,23 +451,27 @@ def test_find_decisions_counts_what_it_leaves_out(shared, monkeypatch):
 
 
 @pytest.mark.usefixtures("chat")
-def test_record_decision_is_always_a_draft_decided_only_in_the_owners_words(shared):
+def test_record_decision_is_always_a_draft_decided_only_when_the_owner_confirmed_it(shared):
     plain = tool("record_decision", title="Tags", statement="Tags are free text.")
-    worded = tool("record_decision", title="Tags", statement="Tags are free text.", owner_words="Free tags, yes.")
+    confirmed = tool("record_decision", title="Tags", statement="Tags are free text.", confirmed=True)
 
-    one, two = now(shared, plain["receipts"][0]["id"]), now(shared, worded["receipts"][0]["id"])
+    one, two = now(shared, plain["receipts"][0]["id"]), now(shared, confirmed["receipts"][0]["id"])
     assert plain["saved"] is True
-    assert (one.state, one.origin, one.actor) == (State.DRAFT, Origin.AUTONOMOUS, "chat")
-    assert (two.state, two.origin) == (State.DRAFT, Origin.DECIDED)
-    assert [w.text for w in two.owner_words] == ["Free tags, yes."]
+    assert (one.state, one.origin, one.actor, one.read_back) == (State.DRAFT, Origin.AUTONOMOUS, "chat", "none")
+    assert (two.state, two.origin, two.read_back) == (State.DRAFT, Origin.DECIDED, today())
     assert "decisions_page" in plain
+    found = tool("find_decisions", text="tags")
+    assert "owner_words" not in str([plain, confirmed, found])
+    params = asyncio.run(mcp_server.mcp.list_tools())
+    record = next(t for t in params if t.name == "record_decision").input_schema["properties"]
+    assert ("confirmed" in record, "owner_words" in record) == (True, False)
 
 
 @pytest.mark.usefixtures("chat")
 def test_record_decision_never_replaces_a_decided_decision(shared):
     rule = decided()
     seed(shared, rule)
-    got = tool("record_decision", title="Notes", statement="Postgres.", replaces=rule.id, owner_words="Postgres.")
+    got = tool("record_decision", title="Notes", statement="Postgres.", replaces=rule.id, confirmed=True)
     assert got["saved"] is False
     assert "re-decides it on the Decisions page" in got["error"]
     assert now(shared, rule.id) == rule
@@ -467,15 +488,21 @@ def test_record_decision_says_why_a_draft_replaces_one(shared):
 
 
 @pytest.mark.usefixtures("chat")
-def test_read_back_decision_records_the_date_and_a_stale_revision_is_refused(shared):
+def test_read_back_decision_records_only_a_confirmation_and_a_stale_revision_is_refused(shared):
     rule = make()
     seed(shared, rule)
 
-    stale = tool("read_back_decision", decision=rule.id, revision="0" * 64, answer="Still right.")
-    got = tool("read_back_decision", decision=rule.id, revision=rule.revision, answer="Still right.")
+    stale = tool("read_back_decision", decision=rule.id, revision="0" * 64, confirmed=True)
+    unconfirmed = tool("read_back_decision", decision=rule.id, revision=rule.revision)
+    assert (unconfirmed["saved"], "replacement draft" in unconfirmed["error"]) == (False, True)
+    assert now(shared, rule.id) == rule
+    got = tool("read_back_decision", decision=rule.id, revision=rule.revision, confirmed=True)
 
     assert (stale["saved"], got["saved"]) == (False, True)
     assert now(shared, rule.id).read_back == datetime.now(UTC).date().isoformat()
+    params = asyncio.run(mcp_server.mcp.list_tools())
+    read_back = next(t for t in params if t.name == "read_back_decision").input_schema["properties"]
+    assert ("confirmed" in read_back, "answer" in read_back) == (True, False)
 
 
 def test_the_tools_say_why_when_the_host_is_down(chat):
@@ -491,3 +518,30 @@ def test_a_draft_naming_its_predecessor_twice_activates_and_retires_it_once(owne
     seed(shared, old, draft)
     assert act(owner, draft, "activate", reason="It grew.").json()["saved"] is True
     assert (now(shared, old.id).state, now(shared, draft.id).state) == (State.REPLACED, State.IN_FORCE)
+
+
+def test_the_owner_activating_a_draft_on_the_page_confirms_it_as_his_decision(owner, shared):
+    draft = make(state=State.DRAFT, inherited=True)
+    seed(shared, draft)
+
+    assert act(owner, draft, "activate").json()["saved"] is True
+
+    active = now(shared, draft.id)
+    assert (active.state, active.origin, active.read_back, active.inherited) == (
+        State.IN_FORCE, Origin.DECIDED, today(), False)  # fmt: skip
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: activate {draft.id}"
+
+
+def test_history_shows_only_the_action_of_each_commit_never_the_rest_of_its_subject(owner, shared):
+    rule = make()
+    seed(shared, rule)
+    for n, subject in enumerate((f'decisions: withdraw {rule.id}: "Ada said drop it"', "decisions: read back x (owner)",
+                                 'decisions: a quote "keep it"', 'notes "his words"')):  # fmt: skip
+        held = now(shared, rule.id)
+        write(held.model_copy(update={"rationale": f"Take {n}."}), shared.root / PROJECT, held.revision)
+        git(shared.root, "commit", "-qam", subject)
+
+    got = owner.get(f"/api/next/decisions/{rule.id}")
+
+    assert [h["action"] for h in got.json()["history"]] == ["changed", "changed", "read-back", "withdraw", "changed"]
+    assert not [w for w in ("Ada said", "keep it", "his words") if w in got.text]

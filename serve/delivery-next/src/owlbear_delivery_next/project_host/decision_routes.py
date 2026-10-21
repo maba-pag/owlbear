@@ -46,6 +46,11 @@ Statement = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 type Where = Literal["project", "global", "all", "owlbear"]
 type ReadBack = Literal["", "none", "pending", "done"]
 OWLBEAR = "owlbear"  # OwlBear's own folder in owlbear-data, shown beside Global without registering it (TD-435)
+ACTIONS = {  # a commit subject's first word after "decisions: " -> the action shown; older subjects' words included
+    **{a: a for a in ("replace", "withdraw", "activate", "promote", "exception", "keep", "read-back",
+                      "queue-read-back", "propose", "accept-existing", "conflict")},
+    "proposed": "propose", "queue": "queue-read-back",
+}  # fmt: skip
 
 
 class Shown(BaseModel):
@@ -74,12 +79,15 @@ class Promotion(Shown):
 
 
 class SuccessorBody(Redecide):
-    """The owner's new rule: a successor that replaces the decision, or an exception to a Global one."""
+    """The owner's new rule: a successor that replaces the decision, or an exception to a Global one.
+
+    Made on the page, it is his and confirmed today; ``confirmed`` says so and carries no words (TD-449).
+    """
 
     title: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)] = ""
     statement: Statement
     rationale: Text = ""
-    words: Text = ""
+    confirmed: bool = False
 
 
 class ReplaceBody(SuccessorBody):
@@ -104,9 +112,9 @@ class KeepBody(BaseModel):
 
 
 class ReadBackBody(Shown):
-    """The owner's answer when the decision was read back to him."""
+    """``confirmed``: the owner confirmed the statement as it stands, read back to him; no answer is sent."""
 
-    answer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+    confirmed: bool = False
 
 
 class QueueBody(BaseModel):
@@ -120,7 +128,10 @@ class QueueBody(BaseModel):
 
 
 class ProposalBody(BaseModel):
-    """A chat's proposed decision: always a draft the owner activates."""
+    """A chat's proposed decision: always a draft the owner activates.
+
+    ``confirmed``: the owner confirmed this exact statement in the chat, so it is his (`decided`).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -128,7 +139,7 @@ class ProposalBody(BaseModel):
     topic: Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)] = ""
     statement: Statement
     rationale: Text = ""
-    words: Text = ""
+    confirmed: bool = False
     replaces: Annotated[str, StringConstraints(pattern=f"{ID_PATTERN}|^$")] = ""
     reason: Text = ""
 
@@ -142,7 +153,8 @@ def owner(request: Request) -> None:
 def _row(view: DataView, entry: Entry) -> dict[str, Any]:
     d = entry.decision
     out = d.model_dump(mode="json", include={"id", "aliases", "title", "topic", "statement", "scope", "project"})
-    out |= d.model_dump(mode="json", include={"change", "origin", "state", "conflict", "read_back", "created_at"})
+    out |= d.model_dump(mode="json", include={"change", "origin", "state", "conflict", "read_back", "inherited"})
+    out |= d.model_dump(mode="json", include={"created_at"})
     found = view.snapshot.findings_for(d.id)
     return out | {"revision": d.revision, "active": view.snapshot.active(d.id), "findings": len(found)}
 
@@ -167,7 +179,7 @@ def _linked(view: DataView, entry: Entry) -> tuple[list[dict[str, str]], list[di
 
 
 def _history(store: Store, entry: Entry) -> list[dict[str, str]]:
-    """The data repository's commits of the decision's file, newest first."""
+    """The data repository's commits of the decision's file, newest first, each by its action word only."""
     shared = store.shared
     if shared is None:
         return []
@@ -176,7 +188,16 @@ def _history(store: Store, entry: Entry) -> list[dict[str, str]]:
     if said.returncode:
         return []
     rows = (line.split("\x1f", 2) for line in said.stdout.splitlines() if line.count("\x1f") == 2)  # noqa: PLR2004
-    return [{"commit": commit[:12], "at": at, "subject": subject} for commit, at, subject in rows]
+    return [{"commit": commit[:12], "at": at, "action": _action(subject)} for commit, at, subject in rows]
+
+
+def _action(subject: str) -> str:
+    """A commit's known action word, else "changed": an older subject may hold words a person typed (TD-449)."""
+    if not subject.startswith(prefix := "decisions: "):
+        return "changed"
+    rest = subject.removeprefix(prefix)
+    word = "read-back" if rest.startswith("read back ") else rest.split(" ", 1)[0]
+    return ACTIONS.get(word, "changed")
 
 
 def _shown(d: dict[str, Any], where: Where, state: str, read_back: ReadBack, *, retired: bool) -> bool:
@@ -230,7 +251,7 @@ def _at(store: Store, project: str) -> str:
 
 def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
     """The decision routes; the caller adds the token check. *repo* is the project's clone, for the impact report."""
-    routes = APIRouter()
+    routes = APIRouter(route_class=impact_routes.Quiet)
     mine: list[Any] = [Depends(owner)]
 
     def here() -> list[decision_impact.Place]:
@@ -291,7 +312,7 @@ def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
         except decision_store.DecisionsUnavailable as exc:
             raise HTTPException(409, f"{exc} ({exc.action})") from exc
         return _row(view, entry) | more | {
-            "owner_words": [w.model_dump(mode="json") for w in d.owner_words], "links": links,
+            "links": links,
             "linked_from": linked_from, "problems": problems, "history": _history(store, entry),
             "changes": decision_impact.pinning(store, d.id), "rivals": rivals, "redecide": redecide,
         }  # fmt: skip
@@ -309,7 +330,7 @@ def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
     def replace(decision_id: str, body: ReplaceBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.replace(
             shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
-            rationale=body.rationale, words=body.words, reason=body.reason, redecided=body.redecide,
+            rationale=body.rationale, reason=body.reason, redecided=body.redecide,
             effect=body.effect,
         ))  # fmt: skip
 
@@ -334,7 +355,7 @@ def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
     def exception(decision_id: str, body: SuccessorBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.exception(
             shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
-            rationale=body.rationale, words=body.words,
+            rationale=body.rationale,
         ))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/keep", dependencies=mine)
@@ -359,7 +380,7 @@ def _shared_routes(routes: APIRouter, store: Store) -> None:
     def propose(body: ProposalBody) -> dict[str, Any]:
         return _receipts(lambda: decision_actions.propose(
             store.shared, store.name, title=body.title, topic=body.topic, statement=body.statement,
-            rationale=body.rationale, words=body.words, replaces=body.replaces, reason=body.reason,
+            rationale=body.rationale, confirmed=body.confirmed, replaces=body.replaces, reason=body.reason,
         ))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/queue-read-back")
@@ -371,4 +392,4 @@ def _shared_routes(routes: APIRouter, store: Store) -> None:
     def read_back(decision_id: str, body: ReadBackBody, request: Request, project: In) -> dict[str, Any]:
         by = "chat" if request.headers.get("x-owlbear-use", "").lower() == "chat" else "owner"
         return _receipts(lambda: read_backs.answer(
-            store, _at(store, project), decision_id, body.revision, said=body.answer, by=by))  # fmt: skip
+            store, _at(store, project), decision_id, body.revision, confirmed=body.confirmed, by=by))  # fmt: skip

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, Scope, State, new_id, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 PROJECT = "shop-site"
+AN_ID = re.compile(r"D-[0-9A-Z]{26}")  # titles identify decisions on the page, never ids
 
 
 class Host:
@@ -108,21 +109,30 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
         card = page.locator(".entry", has_text="Notes live in SQLite")
         card.get_by_role("button", name="Open").click()
         expect(card.locator("#detail")).to_contain_text("autonomous")
-        expect(card.locator("#detail")).to_contain_text("seed")  # its file's history
+        expect(card.locator("#detail")).to_contain_text("changed")  # its file's history, by action only
+        expect(card.locator("#detail")).not_to_contain_text("seed")
+        expect(card.locator("#detail")).not_to_contain_text(AN_ID)
         card.get_by_role("button", name="Replace").click()
         page.get_by_label("New rule").fill("Notes live in Postgres.")
+        expect(page.get_by_label("Your words")).to_have_count(0)
         card.get_by_role("button", name="Replace").click()
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("Then: Notes live in Postgres.")
         confirm = dialog.get_by_role("button", name="Replace")
         expect(confirm).to_be_disabled()  # a supersession says why
         dialog.get_by_label("Why it changes").fill("The notes outgrew one table.")
-        confirm.click()
+        with page.expect_request(lambda r: r.url.endswith("/replace")) as sent:
+            confirm.click()
         expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+        expect(page.locator("#receipts")).not_to_contain_text(AN_ID)
         page.get_by_label("Search").fill("")
         page.get_by_label("Search").press("Enter")
-        expect(page.locator(".entry", has_text="Notes live in Postgres.")).to_have_count(1)
+        successor = page.locator(".entry", has_text="Notes live in Postgres.")
+        expect(successor).to_have_count(1)
+        expect(successor.locator(".read-back")).to_have_text(f"Confirmed {datetime.now(UTC).date().isoformat()}")
         expect(page.locator(".entry", has_text="Notes live in one SQLite table.")).to_have_count(0)  # replaced, hidden
+        body = sent.value.post_data_json
+    assert (body["confirmed"], "words" in body) == (True, False)
     assert in_force(store)["Notes live in Postgres."].origin is Origin.DECIDED
     assert "Why it changed: The notes outgrew one table." in in_force(store)["Notes live in Postgres."].rationale
 
@@ -131,17 +141,17 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
 def test_a_decided_decision_is_replaced_only_once_the_owner_ticks_that_he_re_decides_it(store, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    words = (OwnerWords(text="Tags stay free.", date=AT.date()),)
-    rule = make(title="Tags are free text", statement="Any tag.", origin=Origin.DECIDED, owner_words=words)
+    rule = make(title="Tags are free text", statement="Any tag.", origin=Origin.DECIDED, read_back="2026-10-20")
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         card = page.locator(".entry", has_text="Tags are free text")
+        expect(card.locator(".read-back")).to_have_text("Confirmed 2026-10-20")
         card.get_by_role("button", name="Open").click()
         card.get_by_role("button", name="Replace").click()
         page.get_by_label("New rule").fill("Tags come from a list.")
         card.get_by_role("button", name="Replace").click()
         dialog = pds.modal(page)
-        expect(dialog).to_contain_text("Tags stay free.")
+        expect(dialog).to_contain_text("Confirmed 2026-10-20")
         confirm = dialog.get_by_role("button", name="Replace")
         expect(confirm).to_be_disabled()
         dialog.get_by_label("I re-decide this decision").check()
@@ -183,7 +193,8 @@ def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions
     rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
                 read_back_why="A partner asked for JSON.", read_back_kind="uncertain")  # fmt: skip
     write(rule, store.shared.root / PROJECT)
-    write(make(project="owlbear", title="Lint once", statement="Linted once."), store.shared.root / "owlbear")
+    write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
+          store.shared.root / "owlbear")  # fmt: skip
     with decisions_page(store, pds) as page:
         queue = page.locator("#queue")
         item = queue.locator(".queued", has_text="Exports are CSV")
@@ -193,14 +204,42 @@ def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions
         expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
         expect(queue.locator(".queued")).to_have_count(0)
         expect(queue).to_contain_text("No decision waits to be read back.")
+        expect(page.locator(".entry", has_text="Exports are CSV").locator(".read-back")).to_have_text(
+            f"Confirmed {datetime.now(UTC).date().isoformat()}")  # fmt: skip
         pds.pick(page, "Show", "owlbear")
         expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
+        expect(page.locator(".entry", has_text="Lint once").locator(".read-back")).to_have_text(
+            "Inherited, never read back")  # fmt: skip
         expect(page.locator(".entry", has_text="Pages are plain HTML")).to_have_count(1)
         expect(page.locator(".entry", has_text="Notes live in SQLite")).to_have_count(0)
         expect(page.locator(".entry", has_text="Lint once").locator(".scope")).to_have_text("OwlBear")
     held = in_force(store)["Exports are CSV."]
     assert (held.read_back, held.read_back_why, held.origin) == (
         datetime.now(UTC).date().isoformat(), "A partner asked for JSON.", Origin.AUTONOMOUS)  # fmt: skip
+
+
+@pytest.mark.browser
+def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_record_rows(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = make(title="Exports are CSV", statement="Exports are CSV.", aliases=("TD-12",), inherited=True)
+    write(rule, store.shared.root / PROJECT)
+    with decisions_page(store, pds) as page:
+        card = page.locator(".entry", has_text="Exports are CSV")
+        card.get_by_role("button", name="Open").click()
+        expect(card.locator("#detail")).to_contain_text("autonomous")
+        expect(card.locator("#detail")).not_to_contain_text("TD-12")
+        expect(card.locator("#detail")).not_to_contain_text("Record rows")
+        card.get_by_role("button", name="Read back").click()
+        dialog = pds.modal(page)
+        expect(dialog).to_contain_text("Exports are CSV.")
+        with page.expect_request(lambda r: r.url.endswith("/read-back")) as sent:
+            dialog.get_by_role("button", name="Confirm as it reads").click()
+        expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+        body = sent.value.post_data_json
+    assert body == {"revision": rule.revision, "confirmed": True}
+    held = in_force(store)["Exports are CSV."]
+    assert (held.read_back, held.inherited) == (datetime.now(UTC).date().isoformat(), False)
 
 
 @pytest.mark.browser
@@ -228,7 +267,8 @@ def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, p
         dialog = pds.modal(page)
         expect(dialog).to_contain_text("shop-site: unknown")
         dialog.get_by_role("button", name="Schedule fixes").click()
-        expect(impact).to_contain_text(f"#1 Apply decision {new.id} in {PROJECT}: Exports are JSON")
+        expect(impact).to_contain_text(f"#1 Apply decision “Exports are JSON” in {PROJECT}: Exports are JSON")
+        expect(card.locator("#detail")).not_to_contain_text(AN_ID)
     [issue] = github.issues.values()
-    assert f"Old rule ({old.id}, revision {old.revision})" in issue["body"]
+    assert f"Old rule \u201c{old.title}\u201d: {old.statement}" in issue["body"]
     assert "- [ ] Change c1: Exports (https://github.com/acme/shop-site/pull/7)" in issue["body"]

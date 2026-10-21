@@ -71,15 +71,16 @@ rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename
 | `applies_to` | `paths` (repository-relative globs), `roles`, `steps`; all empty means the whole scope |
 | `scope`, `project`, `change` | `global` (no project), `project` (its folder name), `change` (project and the Change's folder, up to 96 characters: Delivery's record stem) |
 | `origin`, `actor`, `source` | `decided`, `approved` or `autonomous`; who made it; where (chat, Change, PR, question) |
-| `owner_words` | `{text, date, alias}` items; required for `decided` |
+| `inherited` | Brought over from the old decision record and never read back (TD-454); written only when true |
 | `state` | `draft`, `in_force`, `replaced`, `withdrawn`, `spent`; nothing is deleted |
 | `links` | `{type, target}`; types `replaces`, `refines`, `exception_to`, `depends_on`, `related_to`, `promoted_from` |
-| `conflict`, `read_back` | A flag the owner resolves; `none`, `pending` or the ISO date of the last read-back |
+| `conflict`, `read_back` | A flag the owner resolves; `none`, `pending` or the ISO date the owner last confirmed the statement |
 | `read_back_why`, `read_back_kind` | Only while `read_back` is `pending`, then both required: why it is asked again and how urgent (`safety`, `blocked`, `uncertain`, `improvement`); written only when set, so older files keep their revision |
 | `created_at` | Time-zone-aware timestamp |
 
 `revision` is not stored: it is the sha256 of the canonical JSON of every other field, so any content change
-gives a new one. `write` refuses a stale `expected_revision` and never edits the statement of an in-force
+gives a new one. The owner's words are never stored (TD-449): an older file's `owner_words` is dropped when it is
+read and never written back. `write` refuses a stale `expected_revision` and never edits the statement of an in-force
 decision. A malformed file is reported by `load_folder`, never skipped.
 
 ### Validator rules
@@ -93,8 +94,7 @@ change decision outside a change folder), `exception-target` (`exception_to` a n
 `replace-scope` (`replaces` reaches only the same or a narrower layer: Global only Global, a project its own project's
 and Changes' decisions, a Change its own; widening goes through `promoted_from`, departing from Global through
 `exception_to`).
-Statement length is a validator finding rather than a load error, so such a file still loads and is reported. A
-`decided` decision chosen without a quote has no owner's words (TD-388); that is no finding.
+Statement length is a validator finding rather than a load error, so such a file still loads and is reported.
 
 ---
 

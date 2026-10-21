@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 type Origin = Literal["decided", "approved", "autonomous"]
 
@@ -35,8 +35,15 @@ class Decision(_Strict):
     text: str
     origin: Origin
     at: datetime
-    words: str = ""  # the owner's own answer behind a decided one; empty in Changes older than TD-419
     paths: list[str] = Field(default_factory=list)  # the UI paths a "Not a UI change" answer covers
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_words(cls, data: object) -> object:
+        """A Change recorded before TD-449 held the owner's words: dropped, so they are never written back."""
+        if isinstance(data, dict) and "words" in data:
+            return {k: v for k, v in data.items() if k != "words"}
+        return data
 
 
 class Said(BaseModel):

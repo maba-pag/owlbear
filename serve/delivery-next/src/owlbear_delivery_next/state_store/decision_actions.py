@@ -7,7 +7,9 @@ the owner re-decides it. A reversal is a `replaces` link; the reversals of a lin
 owner's. Each action names the revision the owner (or chat) read: a stale one is refused before anything is written.
 A transition's files (a successor and what it retires, a kept decision and its withdrawn rivals) are saved together or
 not at all. Every supersession says why: replace, withdraw, promote, keep and activating or proposing a draft that
-replaces one need a reason, recorded in the successor's (or withdrawn decision's) rationale.
+replaces one need a reason, recorded in the successor's (or withdrawn decision's) rationale. The owner's words are
+never stored (TD-449): what he confirmed is `decided` and its `read_back` is the day he confirmed it. A commit message
+names the action and the decisions' ids only, never text a person typed.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, ReadBackKind, Scope, State, new_id
+from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Scope, State, new_id
 from owlbear_decisions.validate import layers, project_folders, read_layers
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, Receipt
@@ -36,6 +38,10 @@ CHANGED, GONE = "Why it changed: ", "Why it was withdrawn: "
 EFFECT = "Effect on existing work: "  # the owner's mark on a replacement (TD-428), read by `decision_impact`
 EFFECTS = {"forbids": "it forbids existing behaviour", "wording": "wording only"}
 type Effect = Literal["", "forbids", "wording"]  # empty: not said, treated as possibly forbidding
+NOT_CONFIRMED = (
+    "a read-back records only the owner's confirmation of the statement as it stands; a different intent is a "
+    f"replacement on {PAGE}, or a replacement draft the chat records with record_decision"
+)
 
 
 class Refused(Exception):  # noqa: N818 - says what happened
@@ -50,12 +56,8 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _line(text: str, limit: int = 200) -> str:
-    return " ".join(text.split())[:limit]
-
-
-def _words(text: str) -> tuple[OwnerWords, ...]:
-    return (OwnerWords(text=text, date=_now().date()),) if text.strip() else ()
+def _today() -> str:
+    return _now().date().isoformat()
 
 
 def _reason(reason: str, action: str) -> str:
@@ -130,7 +132,8 @@ def authorise(old: Decision, *, owner: bool, redecided: bool = False) -> None:
 def second(by_id: Mapping[str, Decision], old: Decision, *, decided: bool, owner: bool) -> None:
     """Raise `Refused` when replacing *old* reverses its lineage a second time and the successor is not *decided*."""
     if not decided and reversals(by_id, old):
-        how = "confirm that you re-decide it" if owner else "give the owner's own words, or he replaces it on " + PAGE
+        chat = f"the owner confirms it in the chat, or replaces it on {PAGE}"
+        how = "confirm that you re-decide it" if owner else chat
         msg = f"{old.id} was reversed before: a second reversal is the owner's re-decision; {how}"
         raise Refused(msg)
 
@@ -166,25 +169,25 @@ def _new(old: Decision | None, **fields: object) -> Decision:
 
 def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *,
-    title: str, statement: str, rationale: str, words: str, reason: str, redecided: bool, effect: Effect = "",
+    title: str, statement: str, rationale: str, reason: str, redecided: bool, effect: Effect = "",
 ) -> list[Receipt]:  # fmt: skip
-    """The owner's successor, in force and `decided` in his words, keeping the old one's other links; it is replaced."""
+    """The owner's successor, in force and `decided`, confirmed today, keeping the old one's other links."""
     why = _reason(reason, "replacing a decision")
     view = decision_store.load(shared, project)
     old = _entry(view, decision_id).decision
     if stale := _stale(view, old, revision):
         return stale
     _in_force(old, "replaced")
-    authorise(old, owner=True, redecided=redecided)  # his successor is decided in his words: no second() needed
+    authorise(old, owner=True, redecided=redecided)  # his successor is decided: no second() needed
     kept = tuple(link for link in old.links if link.type not in LINEAGE)  # exception_to, refines, depends on, related
     new = _new(
         old, title=title.strip() or old.title, statement=statement,
         rationale=_marked(_because(rationale or old.rationale, CHANGED, why), effect), scope=old.scope,
         project=old.project,
-        change=old.change, origin=Origin.DECIDED, actor=OWNER, source=PAGE, owner_words=_words(words or statement),
+        change=old.change, origin=Origin.DECIDED, actor=OWNER, source=PAGE, read_back=_today(),
         state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
-    return _retire(shared, new, old, f"decisions: {new.id} replaces {old.id}: {_line(new.title, 80)}")
+    return _retire(shared, new, old, f"decisions: replace {old.id} with {new.id}")
 
 
 def withdraw(  # noqa: PLR0913 - the owner's reason and the revision he read
@@ -200,7 +203,7 @@ def withdraw(  # noqa: PLR0913 - the owner's reason and the revision he read
         _in_force(old, "withdrawn")
         authorise(old, owner=True, redecided=redecided)
     update = {"state": State.WITHDRAWN, "conflict": False, "rationale": _because(old.rationale, GONE, why)}
-    said = f"decisions: withdraw {old.id}: {_line(why)}"
+    said = f"decisions: withdraw {old.id}"
     return [decision_store.save(shared, old.model_copy(update=update), expected_revision=old.revision, message=said)]
 
 
@@ -208,7 +211,10 @@ def activate(  # noqa: PLR0913 - the owner's reason and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str = "", redecided: bool,
     effect: Effect = "",
 ) -> list[Receipt]:  # fmt: skip
-    """Put a proposed draft in force: the owner's approval, or his re-decision; what it replaces is replaced with it."""
+    """Put a proposed draft in force; what it replaces is replaced with it.
+
+    The owner activates this one draft on the page: he confirmed its statement, so it is `decided`, confirmed today.
+    """
     view = decision_store.load(shared, project)
     draft = _entry(view, decision_id).decision
     if stale := _stale(view, draft, revision):
@@ -218,25 +224,27 @@ def activate(  # noqa: PLR0913 - the owner's reason and the revision he read
         raise Refused(msg)
     targets = dict.fromkeys(link.target for link in draft.links if link.type is LinkType.REPLACES)  # once each
     olds = [_entry(view, target).decision for target in targets]
-    update: dict[str, object] = {"state": State.IN_FORCE, "origin": Origin.APPROVED}
+    update: dict[str, object] = {"state": State.IN_FORCE, "origin": Origin.DECIDED, "read_back": _today(),
+                                 "inherited": False}  # fmt: skip
     if olds:
         why = _reason(reason, "activating a draft that replaces one")
         update["rationale"] = _marked(_because(draft.rationale, CHANGED, why), effect)
     found = every(shared) if olds else {}
-    in_words = draft.origin is Origin.DECIDED and bool(draft.owner_words)
+    confirmed = draft.origin is Origin.DECIDED  # confirmed in the chat that proposed it
     for old in olds:
         _in_force(old, "replaced")
         authorise(old, owner=True, redecided=redecided)
-        second(found, old, decided=redecided or in_words, owner=True)
-    if redecided or draft.origin is Origin.DECIDED:  # the owner's words, or the rule he confirmed re-deciding
-        update |= {"origin": Origin.DECIDED, "owner_words": draft.owner_words or _words(draft.statement)}
+        second(found, old, decided=redecided or confirmed, owner=True)
     retired = [(old.model_copy(update={"state": State.REPLACED}), old.revision) for old in olds]
-    said = f"decisions: activate {draft.id}: {_line(draft.title, 80)}"
+    said = f"decisions: activate {draft.id}"
     return decision_store.save_all(shared, [(draft.model_copy(update=update), draft.revision), *retired], message=said)
 
 
 def promote(shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str) -> list[Receipt]:
-    """A linked successor one layer wider (Change to project, project to Global); the source stays, replaced."""
+    """A linked successor one layer wider (Change to project, project to Global); the source stays, replaced.
+
+    The widening is the owner's: the successor is `decided`, confirmed today.
+    """
     why = _reason(reason, "promoting a decision")
     view = decision_store.load(shared, project)
     source = _entry(view, decision_id).decision
@@ -248,8 +256,8 @@ def promote(shared: DataRepo | None, project: str, decision_id: str, revision: s
         raise Refused(msg, 422)
     wider = _new(
         source, title=source.title, statement=source.statement, rationale=_because(source.rationale, CHANGED, why),
-        scope=scope, project=source.project if scope is Scope.PROJECT else "", change="", origin=source.origin,
-        actor=OWNER, source=f"{PAGE}: promoted", owner_words=source.owner_words, state=State.IN_FORCE,
+        scope=scope, project=source.project if scope is Scope.PROJECT else "", change="", origin=Origin.DECIDED,
+        actor=OWNER, source=f"{PAGE}: promoted", read_back=_today(), state=State.IN_FORCE,
         links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),),
     )  # fmt: skip
     return _retire(shared, wider, source, f"decisions: promote {source.id} to {scope} as {wider.id}")
@@ -257,7 +265,7 @@ def promote(shared: DataRepo | None, project: str, decision_id: str, revision: s
 
 def exception(  # noqa: PLR0913 - the owner's departure and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *,
-    title: str, statement: str, rationale: str, words: str,
+    title: str, statement: str, rationale: str,
 ) -> list[Receipt]:  # fmt: skip
     """The owner's exception for this project to a Global decision, which stays in force for every other one."""
     view = decision_store.load(shared, project)
@@ -271,10 +279,10 @@ def exception(  # noqa: PLR0913 - the owner's departure and the revision he read
     new = _new(
         None, title=title.strip() or f"Exception to {rule.title}", topic=rule.topic, statement=statement,
         rationale=rationale, scope=Scope.PROJECT, project=project, origin=Origin.DECIDED, actor=OWNER,
-        source=PAGE, owner_words=_words(words or statement), state=State.IN_FORCE,
+        source=PAGE, read_back=_today(), state=State.IN_FORCE,
         links=(Link(type=LinkType.EXCEPTION_TO, target=rule.id),),
     )  # fmt: skip
-    said = f"decisions: {new.id} is {project}'s exception to {rule.id}"
+    said = f"decisions: exception {new.id} to {rule.id}"
     return [decision_store.save(shared, new, expected_revision=None, message=said)]
 
 
@@ -311,18 +319,24 @@ def keep(
     _in_force(kept, "kept")
     gone = [
         (r.model_copy(update={"state": State.WITHDRAWN, "conflict": False,
-                              "rationale": _because(r.rationale, GONE, f"{kept.id} was kept: {why}")}), r.revision)
+                              "rationale": _because(r.rationale, GONE, f"\u201c{kept.title}\u201d was kept: {why}")}),
+         r.revision)
         for r in others
     ]  # fmt: skip
     cleared = (kept.model_copy(update={"conflict": False}), kept.revision)
-    said = f"decisions: {kept.id} stays in force; conflict resolved: {_line(why)}"
+    said = f"decisions: keep {kept.id}"
     return decision_store.save_all(shared, [cleared, *gone], message=said)
 
 
-def read_back(  # noqa: PLR0913 - who answered and the revision read
-    shared: DataRepo | None, project: str, decision_id: str, revision: str, *, answer: str, by: str
+def read_back(  # noqa: PLR0913 - who confirmed and the revision read
+    shared: DataRepo | None, project: str, decision_id: str, revision: str, *, confirmed: bool, by: str
 ) -> list[Receipt]:
-    """Record the owner's read-back today and take it off the queue; the decision and its origin stay as they are."""
+    """Record that the owner confirmed the statement as it stands, read back to him: today, no longer inherited.
+
+    Only his confirmation is recorded, never an answer (TD-449); its statement and origin stay as they are.
+    """
+    if not confirmed:
+        raise Refused(NOT_CONFIRMED, 422)
     view = decision_store.load(shared, project)
     decision = _entry(view, decision_id).decision
     if stale := _stale(view, decision, revision):
@@ -330,8 +344,8 @@ def read_back(  # noqa: PLR0913 - who answered and the revision read
     if decision.state in RETIRED:
         msg = f"{decision.id} is {decision.state}: only a draft or a decision in force is read back"
         raise Refused(msg)
-    update = {"read_back": _now().date().isoformat()}  # its reason stays: the evidence this answer settled
-    said = f"decisions: read back {decision.id} ({by}): {_line(answer)}"
+    update = {"read_back": _today(), "inherited": False}  # its reason stays: the evidence this answer settled
+    said = f"decisions: read-back {decision.id} ({by})"
     return [decision_store.save(shared, decision.model_copy(update=update), expected_revision=decision.revision,
                                 message=said)]  # fmt: skip
 
@@ -362,15 +376,18 @@ def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the ca
         raise Refused(msg)
     update = {"read_back": "pending", "read_back_why": said, "read_back_kind": kind}
     queued = Decision.model_validate(decision.content() | update)
-    message = f"decisions: queue the read-back of {decision.id} ({kind}): {_line(said)}"
+    message = f"decisions: queue-read-back {decision.id} ({kind})"
     return [decision_store.save(shared, queued, expected_revision=decision.revision, message=message)]
 
 
 def propose(  # noqa: PLR0913 - the proposal's fields
-    shared: DataRepo | None, project: str, *, title: str, topic: str, statement: str, rationale: str, words: str,
-    replaces: str, reason: str = "",
+    shared: DataRepo | None, project: str, *, title: str, topic: str, statement: str, rationale: str,
+    confirmed: bool, replaces: str, reason: str = "",
 ) -> list[Receipt]:  # fmt: skip
-    """A chat's draft for this project: `decided` with the owner's words, else `autonomous`; never in force."""
+    """A chat's draft for this project, never in force.
+
+    `decided` and confirmed today when the owner confirmed this exact statement in the chat, else `autonomous`.
+    """
     if not project:
         msg = "decisions are proposed for a project; this host serves none"
         raise Refused(msg, 422)
@@ -382,13 +399,13 @@ def propose(  # noqa: PLR0913 - the proposal's fields
             msg = f"{old.id} is Global: a project departs from it only by an exception the owner records"
             raise Refused(msg, 422)
         authorise(old, owner=False)
-        second(every(shared), old, decided=bool(words.strip()), owner=False)
+        second(every(shared), old, decided=confirmed, owner=False)
         rationale = _because(rationale, CHANGED, _reason(reason, "a draft that replaces a decision"))
         links = (Link(type=LinkType.REPLACES, target=old.id),)
     draft = _new(
         None, title=title, topic=topic, statement=statement, rationale=rationale, scope=Scope.PROJECT,
-        project=project, origin=Origin.DECIDED if words.strip() else Origin.AUTONOMOUS, actor=CHAT, source=CHAT,
-        owner_words=_words(words), state=State.DRAFT, links=links,
+        project=project, origin=Origin.DECIDED if confirmed else Origin.AUTONOMOUS, actor=CHAT, source=CHAT,
+        read_back=_today() if confirmed else "none", state=State.DRAFT, links=links,
     )  # fmt: skip
-    said = f"decisions: proposed {draft.id}: {_line(title, 80)}"
+    said = f"decisions: propose {draft.id}"
     return [decision_store.save(shared, draft, expected_revision=None, message=said)]

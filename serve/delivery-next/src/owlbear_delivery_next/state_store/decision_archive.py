@@ -94,12 +94,17 @@ def _graph(root: Path, project: str, c: Change, planned: list[Placed]) -> list[s
     ]
 
 
-def _approved(c: Change) -> list[BriefDecision]:
-    """Every approved decision, the last approved version's last: earlier ones it dropped or replaced included."""
+def _approved(c: Change) -> list[tuple[BriefDecision, datetime | None]]:
+    """Every approved decision with the approval of the latest version holding it, the last version's last.
+
+    Earlier ones it dropped or replaced are included; a version without its own approval time takes the brief's.
+    """
     versions = c.brief.approved or [c.brief]
     final = {d.id for d in versions[-1].decisions}
-    earlier = {d.id: d for b in versions[:-1] for d in b.decisions if d.id and d.id not in final}
-    return [*earlier.values(), *versions[-1].decisions]
+    earlier = {d.id: (d, b.approved_at or c.brief.approved_at) for b in versions[:-1] for d in b.decisions
+               if d.id and d.id not in final}  # fmt: skip
+    last = versions[-1].approved_at or c.brief.approved_at
+    return [*earlier.values(), *((d, last) for d in versions[-1].decisions)]
 
 
 def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, Any]]:
@@ -111,13 +116,13 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
     source = f"Change {c.slug}, brief v{brief.version} approved {at.isoformat(timespec='seconds')}"
     final = {d.id for d in brief.decisions}
     approved = _approved(c)
-    lasting = {d.id for d in approved if d.id and d.scope == "project"}
-    narrowing = {d.replaces for d in approved if d.replaces in lasting and d.scope != "project"}
-    successors = {d.replaces for d in approved if d.replaces} - narrowing
+    lasting = {d.id for d, _ in approved if d.id and d.scope == "project"}
+    narrowing = {d.replaces for d, _ in approved if d.replaces in lasting and d.scope != "project"}
+    successors = {d.replaces for d, _ in approved if d.replaces} - narrowing
     kept = outcome != "abandoned"
     found = []
-    for i, d in enumerate(approved):
-        fields = _said(d.answer, d.origin, at, f"From Change {c.slug} ({outcome}).")
+    for i, (d, confirmed) in enumerate(approved):
+        fields = _said(d.answer, d.origin, confirmed or at, f"From Change {c.slug} ({outcome}).")
         fields |= _placed(project, stem, lasting=d.scope == "project", kept=kept)
         if d.id and d.id not in final:  # approved once, then replaced or dropped by a later approval
             fields["state"] = State.REPLACED if kept and d.id in successors else State.WITHDRAWN
@@ -141,7 +146,7 @@ def _changed(project: str, c: Change, stem: str, outcome: str) -> list[dict[str,
     title = (c.brief.approved[-1] if c.brief.approved else c.brief).title
     found = []
     for i, d in enumerate(c.decisions):
-        fields = _said(d.text, d.origin, d.at, f"From Change {c.slug} ({outcome}).", words=d.words)
+        fields = _said(d.text, d.origin, d.at, f"From Change {c.slug} ({outcome}).")
         fields |= _placed(project, stem, lasting=False, kept=outcome != "abandoned")
         fields |= {
             "id": d.id or new_id(d.at, seed=f"{project}\n{stem}\nchange\n{i}\n{d.text}"),
@@ -162,19 +167,17 @@ def _placed(project: str, stem: str, *, lasting: bool, kept: bool) -> dict[str, 
     return {"scope": scope, "project": project, "change": "" if lasting else stem, "state": _STATES[lasting, kept]}
 
 
-def _said(text: str, origin: str, at: datetime, note: str, words: str | None = None) -> dict[str, Any]:
-    """Statement, rationale and the owner's words; a longer text keeps its whole wording in the rationale.
+def _said(text: str, origin: str, at: datetime, note: str) -> dict[str, Any]:
+    """Statement and rationale; a longer text keeps its whole wording in the rationale.
 
-    A brief's decided answer is the owner's choice as the shaper recorded it; a Change-level decision brings the
-    owner's own answer as *words* (empty before TD-419: then none are claimed).
+    A `decided` one was confirmed by the owner at *at* (the brief's approval, or the Change-level answer); his words
+    are never stored (TD-449).
     """
     text = text.strip()
     long = len(text) > STATEMENT_LIMIT
     statement = text[: STATEMENT_LIMIT - 1].rstrip() + "\u2026" if long else text
-    said = text if words is None else words.strip()
-    owned = [{"text": said, "date": at.date()}] if origin == "decided" and said else []
     return {"statement": statement, "rationale": f"{note}\n\n{WHOLE}{text}" if long else note,
-            "owner_words": owned}  # fmt: skip
+            "read_back": at.date().isoformat() if origin == "decided" else "none"}  # fmt: skip
 
 
 def _short(text: str) -> str:

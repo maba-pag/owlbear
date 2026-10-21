@@ -3,7 +3,7 @@ import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { call } from "/assets/ui.mjs";
 import { detail, open } from "./entry.mjs";
 import { refresh } from "./list.mjs";
-import { at, KINDS, notify, scopeOf, show, state, WRITE } from "./state.mjs";
+import { at, KINDS, notify, scopeOf, show, state, untagged, WRITE } from "./state.mjs";
 import { button } from "./widgets.mjs";
 
 const VARIANT = { safety: "error", blocked: "warning", uncertain: "info", improvement: "secondary" };
@@ -31,7 +31,7 @@ async function answer(q, action, body = {}) {
 function item(q) {
   const busy = (a) => state.pending === `${a}:${q.id}`, opened = state.opened === q.id && state.from === "queue";
   const choices = [
-    q.derived ? nothing : button("Still right", () => answer(q, "read-back", { answer: "Still right." }),
+    q.derived ? nothing : button("Still right", () => answer(q, "read-back", { confirmed: true }),
       { busy: busy("read-back") }),
     button(opened ? "Close" : q.derived ? "Open to resolve" : "Replace or withdraw", () => open(q.id,
       { from: "queue" }), { variant: "secondary", aria: `{ 'aria-expanded': ${opened} }` }),
@@ -44,7 +44,7 @@ function item(q) {
       <p-tag compact="true" class="origin">${q.origin}</p-tag>
       ${q.ignored ? html`<p-tag compact="true" variant="secondary">ignored for now</p-tag>` : nothing}</div>
     <p-text class="said" size="sm">${q.statement}</p-text>
-    <p-text size="sm" class="why">Asked again because: ${q.why}</p-text>
+    <p-text size="sm" class="why">Asked again because: ${untagged(q.why)}</p-text>
     <div class="row" role="group" aria-label=${`Is “${q.title}” still right?`}>${choices}</div>
     ${opened ? detail() : nothing}
   </li>`;
@@ -56,7 +56,7 @@ export function queue() {
   const waiting = state.loaded.queue ?? [];
   return html`<section id="queue" aria-labelledby="queue-heading">
     <p-heading size="lg"><h2 id="queue-heading">Read-backs (${waiting.length})</h2></p-heading>
-    ${state.notice ? html`<p-text id="notice" role="status" size="sm">${state.notice}</p-text>` : nothing}
+    ${state.notice ? html`<p-text id="notice" role="status" size="sm">${untagged(state.notice)}</p-text>` : nothing}
     ${waiting.length ? html`<ul class="entries" id="read-backs">${repeat(waiting, (q) => q.id, item)}</ul>`
       : html`<p-text size="sm" color="contrast-medium">No decision waits to be read back.</p-text>`}
   </section>`;

@@ -18,6 +18,8 @@ from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import briefs, change_record
+from owlbear_delivery_next.state_store.store import Lock
+from owlbear_delivery_next.state_store.store import Store as LocalStore
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -54,9 +56,7 @@ def finished(*, ids: bool = True, unchanged: bool = False) -> Change:
     approved = Brief(version=2, title="Notes", outcome="Owners keep notes", decisions=[decided, lasting])
     c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=AT, approved=[approved]))
     at = AT + timedelta(hours=1)
-    c.decisions.append(
-        Decision(id=mint(), text=UI, origin="decided", at=at, words="Not a UI change", paths=["web/app.css"])
-    )
+    c.decisions.append(Decision(id=mint(), text=UI, origin="decided", at=at, paths=["web/app.css"]))
     c.tests = TestReview(commit="c" * 40, packages=[], shares=[], unchanged=True) if unchanged else None
     return c
 
@@ -102,17 +102,19 @@ def test_a_merged_change_archives_its_decisions_with_the_record_in_one_commit(st
     }
     limit = read(root / change / "decisions" / f"{c.brief.approved[0].decisions[0].id}.md")
     assert (limit.statement, limit.topic, limit.actor, limit.change) == ("Yes, 800 characters", "Notes", "owner", STEM)
-    assert [(w.text, w.date) for w in limit.owner_words] == [("Yes, 800 characters", AT.date())]
+    assert limit.read_back == AT.date().isoformat()  # decided: confirmed at the brief's approval
     where = read(root / project / "decisions" / f"{c.brief.approved[0].decisions[1].id}.md")
-    assert (where.actor, where.owner_words, where.created_at) == ("shaper", (), AT)
+    assert (where.actor, where.read_back, where.created_at) == ("shaper", "none", AT)
     assert where.source == "Change notes, brief v2 approved 2026-10-15T09:00:00+00:00"
     ui = read(root / change / "decisions" / f"{c.decisions[0].id}.md")
-    assert (ui.applies_to.paths, ui.owner_words[0].date, ui.rationale) == (
+    assert (ui.applies_to.paths, ui.read_back, ui.rationale) == (
         ("web/app.css",),
-        AT.date(),
+        (AT + timedelta(hours=1)).date().isoformat(),
         "From Change notes (merged).",
     )
-    assert ui.owner_words[0].text == "Not a UI change"  # the owner's answer, not Delivery's signature
+    files = "".join(p.read_text(encoding="utf-8") for p in (root / "shop-site").rglob("decisions/*.md"))
+    assert "owner_words" not in files
+    assert "skip the UI review" not in files  # the owner's answer is never stored (TD-449)
     assert validate_repo(root) == []
     commits = {git(remote, "log", "--format=%H", "main", "--", rel) for rel in (f"{change}.json", change, project)}
     assert len(commits) == 1  # the record and every decision file in the same commit
@@ -168,7 +170,6 @@ def test_an_older_change_without_ids_loads_and_archives_with_the_same_ids_every_
         del d["id"]
         d.pop("scope", None)
         d.pop("replaces", None)
-        d.pop("words", None)
     c = Change.model_validate(old)
     assert [d.id for d in c.brief.approved[0].decisions] == ["", ""]
 
@@ -177,7 +178,6 @@ def test_an_older_change_without_ids_loads_and_archives_with_the_same_ids_every_
     assert change_record.save(store, Change.model_validate(old), MERGED, AT) == ""
     assert sorted(p.name for p in (root / "shop-site").rglob("decisions/*.md")) == first
     assert len(first) == 3
-    # an older Change kept no owner's words for Delivery's own decisions: none are claimed (TD-388 allows none)
     assert validate_repo(root) == []
 
 
@@ -193,6 +193,37 @@ def test_older_changes_of_two_projects_never_share_an_id(shared_repo) -> None:
     names = [p.name for p in root.rglob("decisions/*.md")]
     assert len(names) == len(set(names)) == 6
     assert not [f for f in validate_repo(root) if f.rule == "duplicate-id"]
+
+
+def test_an_older_changes_words_are_dropped_on_loading_and_never_written_back(tmp_path) -> None:
+    old = json.loads(finished().model_dump_json())
+    old["decisions"][0]["words"] = "Right, skip the UI review"
+    c = Change.model_validate(old)
+    local = LocalStore(tmp_path / "store")
+
+    local.write(Lock(c.slug), c)
+
+    assert "words" not in c.decisions[0].model_dump()
+    written = [p.read_bytes() for p in (tmp_path / "store").rglob("*") if p.is_file()]
+    assert not [b for b in written if b"skip the UI review" in b]
+    assert local.read(c.slug).decisions[0].text == UI
+
+
+def test_each_decided_answer_is_confirmed_on_the_approval_of_the_latest_version_holding_it(store, shared_repo):
+    root, _ = shared_repo
+    one, two, three = AT - timedelta(days=5), AT - timedelta(days=2), AT
+    dropped = BriefDecision(id=new_id(AT), question=LIMIT, answer="Yes, 800 characters", origin="decided")
+    kept = BriefDecision(id=new_id(AT), question=WHERE, answer="One SQLite table", origin="decided", scope="project")
+    versions = [Brief(version=1, title="Notes", approved_at=one, decisions=[dropped, kept]),
+                Brief(version=2, title="Notes", approved_at=two, decisions=[dropped, kept]),
+                Brief(version=3, title="Notes", approved_at=three, decisions=[kept])]  # fmt: skip
+    c = Change(slug="notes", handle="c4", brief=Brief(version=3, approved_at=three, approved=versions))
+
+    assert change_record.save(store, c, MERGED, AT) == ""
+
+    early, late = (read(next(root.rglob(f"decisions/{d.id}.md"))) for d in (dropped, kept))
+    assert (early.read_back, late.read_back) == (two.date().isoformat(), three.date().isoformat())
+    assert early.created_at == late.created_at == three  # its record's time stays the brief's approval
 
 
 def test_a_changed_answer_after_approval_is_a_successor_and_both_are_archived(store, shared_repo) -> None:

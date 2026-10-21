@@ -36,7 +36,8 @@ export function show() {
 }
 
 export function notify(message = "") {
-  state.error = message ? message.charAt(0).toUpperCase() + message.slice(1) : "";
+  const said = untagged(message);
+  state.error = said ? said.charAt(0).toUpperCase() + said.slice(1) : "";
   show();
 }
 
@@ -46,7 +47,26 @@ export function scopeOf(d) {
   return d.change ? `${project} · Change ${d.change}` : project;
 }
 
-export function readBack(value) {
-  if (value === "none") return "not read back";
-  return value === "pending" ? "waiting to be read back" : `read back ${value}`;
+// When the owner last confirmed the statement (TD-449), or that it was inherited and never read back (TD-454).
+export function readBack(d) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d.read_back)) return `Confirmed ${d.read_back}`;
+  if (d.read_back === "pending") return "waiting to be read back";
+  return d.inherited ? "Inherited, never read back" : "not read back";
+}
+
+// Titles identify decisions on this page; ids stay in attributes and requests.
+const ID = /\bD-[0-7][0-9A-HJKMNP-TV-Z]{25}\b/g;
+
+function titles() {
+  const e = state.entry, found = new Map();
+  const seen = [...(state.loaded?.decisions ?? []), ...(state.loaded?.queue ?? []),
+    ...(e ? [e, ...e.links.map((l) => ({ id: l.id, title: l.title })), ...e.linked_from.map((l) => ({ id: l.id,
+      title: l.title })), ...e.rivals] : [])];
+  for (const d of seen) if (d.title && d.title !== "not in this view") found.set(d.id, d.title);
+  return found;
+}
+
+export function untagged(text = "") {
+  const known = titles();
+  return String(text).replace(ID, (id) => (known.has(id) ? `“${known.get(id)}”` : "a decision"));
 }

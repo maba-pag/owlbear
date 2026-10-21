@@ -70,11 +70,11 @@ def ask(  # noqa: PLR0913 - why, how urgent and the revision the caller read
     )
 
 
-def answer(  # noqa: PLR0913 - who answered, his words and the revision read
-    store: Store, project: str, decision_id: str, revision: str, *, said: str, by: str
+def answer(  # noqa: PLR0913 - who confirmed and the revision read
+    store: Store, project: str, decision_id: str, revision: str, *, confirmed: bool, by: str
 ) -> list[Receipt]:
-    """Record the owner's read-back ("still right"); the reason it waited on stays in the decision as settled."""
-    return decision_actions.read_back(store.shared, project, decision_id, revision, answer=said, by=by)
+    """Record the owner's confirmation ("still right"); the reason it waited on stays in the decision as settled."""
+    return decision_actions.read_back(store.shared, project, decision_id, revision, confirmed=confirmed, by=by)
 
 
 def ignore(store: Store, project: str, decision_id: str, revision: str) -> dict[str, Any]:

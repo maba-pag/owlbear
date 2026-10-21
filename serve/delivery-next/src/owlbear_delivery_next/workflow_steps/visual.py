@@ -230,9 +230,7 @@ def decide(c: Change, ui: Sequence[str], now: datetime) -> Change:
     asked = next((q for q in c.questions if q.cause == cause and q.answer and q.answer.option == NOT_UI), None)
     if asked and asked.answer and not not_ui(c, ui):
         text = f"Not a UI change (brief v{c.brief.version}, UI paths {digest(ui)})"
-        label = next((o.label for o in asked.options if o.id == NOT_UI), NOT_UI)
-        words = f"{label}: {asked.answer.text}" if asked.answer.text else label  # the owner's answer, not our text
-        decision = Decision(id=new_id(now), text=text, origin="decided", at=now, words=words, paths=sorted(set(ui)))
+        decision = Decision(id=new_id(now), text=text, origin="decided", at=now, paths=sorted(set(ui)))
         c.decisions.append(decision)
     return c
 
