@@ -13,7 +13,7 @@ replaces one need a reason, recorded in the successor's (or withdrawn decision's
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, OwnerWords, ReadBackKind, Scope, State, new_id
 from owlbear_decisions.validate import layers, project_folders, read_layers
@@ -33,6 +33,9 @@ RETIRED = (State.REPLACED, State.WITHDRAWN, State.SPENT)
 LINEAGE = (LinkType.REPLACES, LinkType.PROMOTED_FROM)
 WIDER = {Scope.CHANGE: Scope.PROJECT, Scope.PROJECT: Scope.GLOBAL}
 CHANGED, GONE = "Why it changed: ", "Why it was withdrawn: "
+EFFECT = "Effect on existing work: "  # the owner's mark on a replacement (TD-428), read by `decision_impact`
+EFFECTS = {"forbids": "it forbids existing behaviour", "wording": "wording only"}
+type Effect = Literal["", "forbids", "wording"]  # empty: not said, treated as possibly forbidding
 
 
 class Refused(Exception):  # noqa: N818 - says what happened
@@ -68,6 +71,12 @@ def _because(rationale: str, label: str, reason: str) -> str:
     return rationale if line in rationale else "\n\n".join(filter(None, (rationale.strip(), line)))
 
 
+def _marked(rationale: str, effect: Effect) -> str:
+    """*rationale* with the owner's effect mark, an inherited one dropped: only this replacement's counts."""
+    kept = "\n\n".join(p for p in rationale.split("\n\n") if not p.startswith(EFFECT))
+    return _because(kept, EFFECT, EFFECTS[effect]) if effect else kept
+
+
 def _entry(view: DataView, decision_id: str) -> Entry:
     entry = view.snapshot.get(decision_id)
     if entry is None:
@@ -83,7 +92,7 @@ def _stale(view: DataView, decision: Decision, revision: str) -> list[Receipt]:
     return [Receipt(decision.id, saved=False, commit=view.commit, notice=notice)]
 
 
-def _every(shared: DataRepo | None) -> dict[str, Decision]:
+def every(shared: DataRepo | None) -> dict[str, Decision]:
     """Every decision of the data repository by id, every project's included: lineages cross projects."""
     if shared is None:
         return {}
@@ -132,8 +141,8 @@ def redecision(shared: DataRepo | None, view: DataView, draft: Decision) -> bool
     olds = [e.decision for e in found if e is not None]
     if any(old.origin is Origin.DECIDED for old in olds):
         return True
-    every = _every(shared) if olds else {}
-    return any(reversals(every, old) for old in olds)
+    found = every(shared) if olds else {}
+    return any(reversals(found, old) for old in olds)
 
 
 def _in_force(decision: Decision, action: str) -> None:
@@ -157,7 +166,7 @@ def _new(old: Decision | None, **fields: object) -> Decision:
 
 def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *,
-    title: str, statement: str, rationale: str, words: str, reason: str, redecided: bool,
+    title: str, statement: str, rationale: str, words: str, reason: str, redecided: bool, effect: Effect = "",
 ) -> list[Receipt]:  # fmt: skip
     """The owner's successor, in force and `decided` in his words, keeping the old one's other links; it is replaced."""
     why = _reason(reason, "replacing a decision")
@@ -170,7 +179,8 @@ def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     kept = tuple(link for link in old.links if link.type not in LINEAGE)  # exception_to, refines, depends on, related
     new = _new(
         old, title=title.strip() or old.title, statement=statement,
-        rationale=_because(rationale or old.rationale, CHANGED, why), scope=old.scope, project=old.project,
+        rationale=_marked(_because(rationale or old.rationale, CHANGED, why), effect), scope=old.scope,
+        project=old.project,
         change=old.change, origin=Origin.DECIDED, actor=OWNER, source=PAGE, owner_words=_words(words or statement),
         state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
@@ -195,8 +205,9 @@ def withdraw(  # noqa: PLR0913 - the owner's reason and the revision he read
 
 
 def activate(  # noqa: PLR0913 - the owner's reason and the revision he read
-    shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str = "", redecided: bool
-) -> list[Receipt]:
+    shared: DataRepo | None, project: str, decision_id: str, revision: str, *, reason: str = "", redecided: bool,
+    effect: Effect = "",
+) -> list[Receipt]:  # fmt: skip
     """Put a proposed draft in force: the owner's approval, or his re-decision; what it replaces is replaced with it."""
     view = decision_store.load(shared, project)
     draft = _entry(view, decision_id).decision
@@ -210,13 +221,13 @@ def activate(  # noqa: PLR0913 - the owner's reason and the revision he read
     update: dict[str, object] = {"state": State.IN_FORCE, "origin": Origin.APPROVED}
     if olds:
         why = _reason(reason, "activating a draft that replaces one")
-        update["rationale"] = _because(draft.rationale, CHANGED, why)
-    every = _every(shared) if olds else {}
+        update["rationale"] = _marked(_because(draft.rationale, CHANGED, why), effect)
+    found = every(shared) if olds else {}
     in_words = draft.origin is Origin.DECIDED and bool(draft.owner_words)
     for old in olds:
         _in_force(old, "replaced")
         authorise(old, owner=True, redecided=redecided)
-        second(every, old, decided=redecided or in_words, owner=True)
+        second(found, old, decided=redecided or in_words, owner=True)
     if redecided or draft.origin is Origin.DECIDED:  # the owner's words, or the rule he confirmed re-deciding
         update |= {"origin": Origin.DECIDED, "owner_words": draft.owner_words or _words(draft.statement)}
     retired = [(old.model_copy(update={"state": State.REPLACED}), old.revision) for old in olds]
@@ -273,7 +284,7 @@ def rivals(view: DataView, kept: Decision, shared: DataRepo | None = None) -> li
     With *shared*, rivals in other projects count too: a Global decision's successors may lie in any project.
     """
     targets = {link.target for link in kept.links if link.type in LINEAGE}
-    pool = _every(shared).values() if shared else [e.decision for e in view.snapshot.entries]
+    pool = every(shared).values() if shared else [e.decision for e in view.snapshot.entries]
     return [
         d
         for d in pool
@@ -371,7 +382,7 @@ def propose(  # noqa: PLR0913 - the proposal's fields
             msg = f"{old.id} is Global: a project departs from it only by an exception the owner records"
             raise Refused(msg, 422)
         authorise(old, owner=False)
-        second(_every(shared), old, decided=bool(words.strip()), owner=False)
+        second(every(shared), old, decided=bool(words.strip()), owner=False)
         rationale = _because(rationale, CHANGED, _reason(reason, "a draft that replaces a decision"))
         links = (Link(type=LinkType.REPLACES, target=old.id),)
     draft = _new(

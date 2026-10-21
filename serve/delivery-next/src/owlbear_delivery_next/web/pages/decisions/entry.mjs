@@ -1,6 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, loaded } from "/assets/ui.mjs";
 import { actions, form } from "./actions.mjs";
+import { impact } from "./impact.mjs";
 import { at, readBack, STATES, show, state } from "./state.mjs";
 import { listed } from "./widgets.mjs";
 
@@ -11,7 +12,7 @@ export async function open(id, { again = false, from = "list" } = {}) {
     Object.assign(state, { opened: null, entry: null, form: null });
     return show();
   }
-  if (!again) Object.assign(state, { opened: id, from, entry: null, form: null });
+  if (!again) Object.assign(state, { opened: id, from, entry: null, form: null, effect: "" });
   show();
   const path = `/decisions/${encodeURIComponent(id)}`;
   try {
@@ -59,6 +60,7 @@ export function detail() {
     ${listed("Linked from", e.linked_from, link)}
     ${listed("History", e.history, (h) => `${h.at.slice(0, 10)} ${h.commit} ${h.subject}`, "Not committed yet.")}
     ${listed("Changes that pinned it", e.changes, change, "No Change pinned it.")}
+    ${impact(e)}
     ${form(e)}
     ${actions(e)}
   </div>`;

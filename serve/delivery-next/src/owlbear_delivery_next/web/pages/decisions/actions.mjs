@@ -1,6 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
 import { refresh } from "./list.mjs";
+import { EFFECTS } from "./impact.mjs";
 import { at, DIALOG, KINDS, notify, show, state, WRITE } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
@@ -55,7 +56,8 @@ const ASKS = {
   replace: (e, d) => ({
     title: `${e.origin === "decided" ? "Re-decide" : "Replace"} “${e.title}”?`, yes: "Replace",
     now: "A successor in your words comes into force; this decision is marked replaced and stays in history.",
-    items: [`Now: ${e.statement}`, `Then: ${d.statement}`, ...(redecide(e).items ?? [])],
+    items: [`Now: ${e.statement}`, `Then: ${d.statement}`, `Existing work: ${effect(d.effect)}`,
+      ...(redecide(e).items ?? [])],
     then: "A running Change that pinned it stops at its next step and asks whether to continue on the new rule.",
     after: "Replace or withdraw the successor in the same way; nothing is deleted.",
     instead: "The decision stays in force as it reads.", tick: redecide(e).tick, reason: WHY,
@@ -75,14 +77,20 @@ const ASKS = {
 
 function begin(action) {
   state.form = { action, draft: { title: "", statement: "", rationale: "", words: "", answer: "", why: "",
-    kind: "uncertain" } };
+    kind: "uncertain", effect: "" } };
   show();
+}
+
+function effect(value) {
+  return EFFECTS.find(([v]) => v === value)[1].toLowerCase();
 }
 
 function body(action, d) {
   if (action === "read-back") return { answer: d.answer.trim() };
   if (action === "queue-read-back") return { why: d.why.trim(), kind: d.kind };
-  return { title: d.title.trim(), statement: d.statement.trim(), rationale: d.rationale.trim(), words: d.words.trim() };
+  const rule = { title: d.title.trim(), statement: d.statement.trim(), rationale: d.rationale.trim(),
+    words: d.words.trim() };
+  return action === "replace" ? { ...rule, effect: d.effect } : rule;
 }
 
 async function submit(e) {
@@ -106,13 +114,14 @@ export function form(e) {
       field("New rule", draft.statement, set("statement"), { multiline: true, max: 240 }),
       field("Why", draft.rationale, set("rationale"), { multiline: true, max: 4000 }),
       field("Your words", draft.words, set("words"), { multiline: true, max: 4000,
-        description: "As you decide it; empty records the new rule as your words" })],
+        description: "As you decide it; empty records the new rule as your words" }),
+      select("Effect on existing work", EFFECTS, draft.effect, (v) => { draft.effect = v; show(); })],
     "read-back": () => [field("Your answer", draft.answer, set("answer"), { multiline: true, max: 2000 })],
     "queue-read-back": () => [field("Why ask again", draft.why, set("why"), { multiline: true, max: 600,
       description: "Only ambiguity, new evidence, a conflict or changed consequences" }),
     select("How urgent", Object.entries(KINDS), draft.kind, (v) => { draft.kind = v; show(); })],
   };
-  fields.exception = () => [...fields.replace().slice(1)];
+  fields.exception = () => [...fields.replace().slice(1, -1)];
   return html`<section class="form" aria-label=${SUBMIT[action]}>${fields[action]()}
     <div class="row">${button(SUBMIT[action], () => submit(e), { aria: DIALOG, busy: state.pending === action })}
       ${button("Cancel", () => { state.form = null; show(); }, { variant: "secondary" })}</div></section>`;
@@ -139,10 +148,11 @@ async function activate(e) {
   const replaces = e.links.filter((l) => l.type === "replaces");
   const answer = await ask({ title: `Activate “${e.title}”?`, yes: "Activate",
     now: e.redecide ? "It replaces a decided or already reversed decision: it comes into force as your re-decision."
-      : "The proposal comes into force as you approve it.", items: replaces.map((l) => `It replaces ${l.title}`),
+      : "The proposal comes into force as you approve it.", items: [...replaces.map((l) => `It replaces ${l.title}`),
+      ...(replaces.length ? [`Existing work: ${effect(state.effect)}`] : [])],
     then: "Running Changes it applies to stop at their next step and ask.", instead: "It stays a draft.",
     tick: e.redecide ? "I re-decide what it replaces" : "", reason: replaces.length ? WHY : "" });
-  if (answer) act(e, "activate", { ...(replaces.length ? { reason: answer } : {}),
+  if (answer) act(e, "activate", { ...(replaces.length ? { reason: answer, effect: state.effect } : {}),
     ...(e.redecide ? { redecide: true } : {}) });
 }
 
@@ -164,7 +174,12 @@ export function actions(e) {
     parts.push(e.scope === "global" ? opens("Record an exception", "exception") : asks("Promote", promote, "promote"));
     if (e.conflict || e.rivals.length) parts.push(asks("Keep this one", keep, "keep"));
   }
-  if (e.state === "draft") parts.push(asks("Activate", activate, "activate"), asks("Withdraw", withdraw, "withdraw"));
+  if (e.state === "draft") {
+    if (e.links.some((l) => l.type === "replaces")) {
+      parts.push(select("Effect on existing work", EFFECTS, state.effect, (v) => { state.effect = v; show(); }));
+    }
+    parts.push(asks("Activate", activate, "activate"), asks("Withdraw", withdraw, "withdraw"));
+  }
   if (["in_force", "draft"].includes(e.state)) parts.push(opens("Queue a read-back", "queue-read-back"));
   return parts.length && !state.form ? html`<div class="row" role="group" aria-label="Actions">${parts}</div>`
     : nothing;

@@ -238,6 +238,20 @@ class Backlog:
 
         return self._apply(work)
 
+    def revise(self, entry_id: str, change: Callable[[Entry, str], dict[str, Any]]) -> Entry:
+        """Set the fields *change* derives from the entry and its issue's body as they are now; never its links."""
+
+        def work(found: dict[str, Entry], now: datetime) -> Entry:
+            old = self._get(found, entry_id)
+            fields = change(old, str(self.raw.get(entry_id, {}).get("body") or ""))
+            if all(getattr(old, k) == v for k, v in fields.items()):
+                return old
+            entry = _valid(old.model_dump() | fields | {"updated_at": now})
+            self._save(entry)
+            return entry
+
+        return self._apply(work)
+
     def take(self, ids: list[str], launch: str) -> list[Entry]:
         """Mark the entries as going into the Change the launch shapes; each is checked before any is saved."""
 
