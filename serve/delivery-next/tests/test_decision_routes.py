@@ -482,3 +482,12 @@ def test_the_tools_say_why_when_the_host_is_down(chat):
     chat.call = lambda *_a, **_k: (503, {"error": "the host is not running"})
     assert tool("find_decisions") == {"found": False, "error": "the host is not running"}
     assert tool("record_decision", title="x", statement="x")["error"] == "the host is not running"
+
+
+def test_a_draft_naming_its_predecessor_twice_activates_and_retires_it_once(owner, shared):
+    old = make()
+    link = Link(type=LinkType.REPLACES, target=old.id)
+    draft = make(state=State.DRAFT, statement="Postgres.", links=(link, link))
+    seed(shared, old, draft)
+    assert act(owner, draft, "activate", reason="It grew.").json()["saved"] is True
+    assert (now(shared, old.id).state, now(shared, draft.id).state) == (State.REPLACED, State.IN_FORCE)

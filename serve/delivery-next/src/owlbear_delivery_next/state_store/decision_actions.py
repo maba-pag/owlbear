@@ -205,7 +205,8 @@ def activate(  # noqa: PLR0913 - the owner's reason and the revision he read
     if draft.state is not State.DRAFT:
         msg = f"{draft.id} is {draft.state}: only a draft is activated"
         raise Refused(msg)
-    olds = [_entry(view, link.target).decision for link in draft.links if link.type is LinkType.REPLACES]
+    targets = dict.fromkeys(link.target for link in draft.links if link.type is LinkType.REPLACES)  # once each
+    olds = [_entry(view, target).decision for target in targets]
     update: dict[str, object] = {"state": State.IN_FORCE, "origin": Origin.APPROVED}
     if olds:
         why = _reason(reason, "activating a draft that replaces one")
@@ -266,15 +267,19 @@ def exception(  # noqa: PLR0913 - the owner's departure and the revision he read
     return [decision_store.save(shared, new, expected_revision=None, message=said)]
 
 
-def rivals(view: DataView, kept: Decision) -> list[Decision]:
-    """The other in-force successors (replacing or promoting) of what *kept* succeeds: the conflict to resolve."""
+def rivals(view: DataView, kept: Decision, shared: DataRepo | None = None) -> list[Decision]:
+    """The other in-force successors (replacing or promoting) of what *kept* succeeds: the conflict to resolve.
+
+    With *shared*, rivals in other projects count too: a Global decision's successors may lie in any project.
+    """
     targets = {link.target for link in kept.links if link.type in LINEAGE}
+    pool = _every(shared).values() if shared else [e.decision for e in view.snapshot.entries]
     return [
-        e.decision
-        for e in view.snapshot.entries
-        if e.decision.id != kept.id
-        and e.decision.state is State.IN_FORCE
-        and targets.intersection(link.target for link in e.decision.links if link.type in LINEAGE)
+        d
+        for d in pool
+        if d.id != kept.id
+        and d.state is State.IN_FORCE
+        and targets.intersection(link.target for link in d.links if link.type in LINEAGE)
     ]
 
 
@@ -285,7 +290,7 @@ def keep(
     why = _reason(reason, "resolving a conflict")
     view = decision_store.load(shared, project)
     kept = _entry(view, decision_id).decision
-    others = rivals(view, kept)
+    others = rivals(view, kept, shared)
     if not (others or kept.conflict):
         msg = f"{kept.id} is in no conflict"
         raise Refused(msg)

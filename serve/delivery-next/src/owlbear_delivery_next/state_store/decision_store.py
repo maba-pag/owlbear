@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from owlbear_decisions import DecisionError, LinkType, Scope, check_write, decision_path, read, snapshot, write
 from owlbear_decisions.snapshot import CONFLICT
 from owlbear_decisions.storage import kind
+from owlbear_decisions.validate import collect, layers, project_folders
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_sync
 from owlbear_delivery_next.state_store.database import StoreError
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from owlbear_decisions import Decision, Entry, Snapshot
+    from owlbear_decisions import Decision, Entry, Finding, Snapshot
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
     type Placed = tuple[Decision, Path, str | None]  # a decision, its layer's folder and its expected revision
@@ -203,7 +204,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     behind = decision_sync.catch_up(shared, until)
     behind = f"not checked against the remote: {behind}" if behind else ""
     decisions = [d for d, _, _ in items]
-    if refused := _refusals(items) or _write(shared, items):
+    if refused := _refusals(items) or _write(items):
         return _refused(shared, decisions, refused, behind)
     sent = decision_sync.publish(shared, [decision_path(d, folder) for d, folder, _ in items], message, until)
     if sent.stale:
@@ -225,21 +226,33 @@ def _refusals(items: list[Placed]) -> dict[str, str]:
     return found
 
 
-def _write(shared: DataRepo, items: list[Placed]) -> dict[str, str]:
-    """Write the batch; a refused file puts back the files already written and says why."""
-    done: list[tuple[Path, bool]] = []
+def _write(items: list[Placed]) -> dict[str, str]:
+    """Write the batch; a refused or failed file puts back every file of the batch as it was and says why."""
+    before = {decision_path(d, folder): _content(decision_path(d, folder)) for d, folder, _ in items}
     for decision, folder, expected in items:
         try:
             write(decision, folder, expected)
-        except DecisionError as exc:
-            for path, new in done:
-                if new:
-                    path.unlink(missing_ok=True)
-                else:
-                    shared.git("restore", "--source=HEAD", "--staged", "--worktree", "--", str(path))
+        except (DecisionError, OSError) as exc:
+            for path, text in before.items():  # the failing file too: a rename may land before its fsync fails
+                _put_back(path, text)
+            if isinstance(exc, OSError):
+                raise
             return {decision.id: str(exc)}
-        done.append((decision_path(decision, folder), expected is None))
     return {}
+
+
+def _content(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _put_back(path: Path, text: bytes | None) -> None:
+    if text is None:
+        path.unlink(missing_ok=True)
+    elif _content(path) != text:
+        path.write_bytes(text)
 
 
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
@@ -258,10 +271,10 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
     """
     project = next((d.project for d in decisions if d.project), "")
     for _ in range(ROUNDS):
-        view = _view(shared, project)
-        competing = {e.decision.id: e for d in decisions for e in _competitors(view.snapshot, d)}
+        found = whole(shared)
+        competing = {e.decision.id: e for d in decisions for e in _competitors(found, d)}
         if not competing:
-            return view
+            return _view(shared, project)
         if flagged := [path for _, entry in sorted(competing.items()) if (path := _flag(entry))]:
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until)
@@ -269,11 +282,22 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
     return _view(shared, project)
 
 
-def _competitors(seen: Snapshot, written: Decision) -> list[Entry]:
+def whole(shared: DataRepo) -> tuple[dict[str, Entry], list[Finding]]:
+    """Every decision of the data repository by id and every finding: competitors may lie outside a project's view."""
+    try:
+        entries, findings = collect(layers(shared.root, project_folders(shared.root)))
+    except OSError as exc:
+        msg = f"the decisions in {shared.root} cannot be read: {exc}"
+        raise DecisionsUnavailable(msg, READ) from exc
+    return {e.decision.id: e for e in entries}, findings
+
+
+def _competitors(found: tuple[dict[str, Entry], list[Finding]], written: Decision) -> list[Entry]:
     """The unflagged in-force successors competing with *written*, or with it for what it replaces or promotes."""
+    by_id, findings = found
     touched = {written.id, *(link.target for link in written.links if link.type in SUCCEEDS)}
-    ids = {f.involves[0] for f in seen.findings if f.rule == CONFLICT and touched.intersection(f.involves[1:])}
-    return [e for i in sorted(ids) if (e := seen.get(i)) is not None and not e.decision.conflict]
+    ids = {f.involves[0] for f in findings if f.rule == CONFLICT and touched.intersection(f.involves[1:])}
+    return [e for i in sorted(ids) if (e := by_id.get(i)) is not None and not e.decision.conflict]
 
 
 def _flag(entry: Entry) -> Path | None:
@@ -296,7 +320,7 @@ def _receipt(shared: DataRepo, view: DataView, decision: Decision, said: str, un
     committed = ours and decision_sync.revision_at(shared, "HEAD", rel, until) == held
     published = committed and decision_sync.revision_at(shared, decision_sync.UPSTREAM, rel, until) == held
     found = view.snapshot.findings_for(decision.id)
-    unresolved = bool(_competitors(view.snapshot, decision))  # still unflagged after every round
+    unresolved = bool(_competitors(whole(shared), decision))  # still unflagged after every round
     conflict = not ours or unresolved or entry.decision.conflict or any(f.rule == CONFLICT for f in found)
     return Receipt(
         decision.id,

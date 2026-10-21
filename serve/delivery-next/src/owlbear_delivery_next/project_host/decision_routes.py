@@ -236,7 +236,7 @@ def router(store: Store) -> APIRouter:
         more = d.model_dump(mode="json", include={"rationale", "consequences", "applies_to", "actor", "source"})
         problems = [{"rule": f.rule, "message": f.message} for f in view.snapshot.findings_for(d.id)]
         rivals = [r.model_dump(mode="json", include={"id", "title"}) | {"revision": r.revision}
-                  for r in decision_actions.rivals(view, d)]  # fmt: skip
+                  for r in decision_actions.rivals(view, d, store.shared)]  # fmt: skip
         try:
             redecide = d.state is State.DRAFT and decision_actions.redecision(store.shared, view, d)
         except decision_store.DecisionsUnavailable as exc:

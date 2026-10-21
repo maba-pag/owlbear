@@ -257,6 +257,44 @@ def test_a_replacement_whose_predecessor_changed_remotely_writes_neither_file(sh
     assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
 
 
+def test_a_write_that_fails_midway_puts_back_every_file_of_the_batch(shared, monkeypatch) -> None:
+    decision = make()
+    assert save(set_up(shared), decision, expected_revision=None, message="m").published
+    real, calls = decision_store.write, []
+
+    def failing(d, folder, expected):
+        calls.append(d.id)
+        if len(calls) == 2:
+            real(d, folder, expected)  # the rename lands, then the fsync fails
+            raise OSError(5, "I/O error")
+        return real(d, folder, expected)
+
+    monkeypatch.setattr(decision_store, "write", failing)
+    successor, retired = replacing(decision), decision.model_copy(update={"state": State.REPLACED})
+    with pytest.raises(DecisionsUnavailable):
+        decision_store.save_all(shared, [(successor, None), (retired, decision.revision)], message="m")
+
+    assert [e.decision for e in load(shared, PROJECT).snapshot.entries] == [decision]  # neither change stays
+    assert git(shared.root, "status", "--porcelain", "--untracked-files=all", "--", f"{PROJECT}/decisions") == ""
+
+
+def test_a_competitor_outside_the_saving_view_is_flagged_and_resolved(shared) -> None:
+    source = make(state=State.REPLACED)
+    rival = replacing(source, title="Narrow")
+    set_up(shared)
+    for decision in (source, rival):
+        assert save(shared, decision, expected_revision=None, message="m").published
+    promoted = make(scope=Scope.GLOBAL, project="", title="Wide", links=(Link(type=LinkType.PROMOTED_FROM,
+                                                                              target=source.id),))  # fmt: skip
+
+    said = save(shared, promoted, expected_revision=None, message="decisions: promoted")  # a Global-only view
+
+    assert (said.conflict, said.active) == (True, False)
+    assert load(shared, PROJECT).snapshot.get(rival.id).decision.conflict  # flagged though outside that view
+    view = load(shared, "")
+    assert [d.id for d in decision_actions.rivals(view, promoted, shared)] == [rival.id]
+
+
 def test_two_promotions_of_one_source_are_a_conflict_the_owner_resolves(shared) -> None:
     source = make(state=State.REPLACED)
     promoted = (Link(type=LinkType.PROMOTED_FROM, target=source.id),)
