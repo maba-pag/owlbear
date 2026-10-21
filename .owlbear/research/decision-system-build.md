@@ -3,7 +3,8 @@
 > **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-418, TD-419, TD-424..TD-430
 > **Date:** 2026-10-20
 > **Question:** How do decisions become their own system for OwlBear and every project Delivery works on?
-> **Status:** design answered by the owner on 2026-10-20; built except the migration (#538 to #547, #550). Made
+> **Status:** design answered by the owner on 2026-10-20; built except the migration (#538 to #547, #550); revised
+> on 2026-10-21 by [decisions as confirmed intent](decision-intent-build.md) (TD-448..TD-455). Made
 > from the assistant's draft, Sol's blind
 > proposal and the owner's intent, then challenged by Sol twice (decision system: REVISE 87%; read-backs and
 > changes of mind: REVISE 93%); every correction is folded in below.
@@ -244,8 +245,8 @@ to the owner. The record file becomes the generated view of §3; the old file st
   the migrator proposes per topic the roles and step kinds its rules apply to and the owner confirms one list
   (TD-446). Neither is built yet.
 - **Before the switch:** chats in OwlBear's own workspace have no decision tools (§10 reaches OwlBear's decisions
-  from the tab only), so once the record is a generated view they could not record a decision. On 2026-10-21 the
-  owner asked for decision management to be rethought end to end before anything migrates (the plan's §5).
+  from the tab only). On 2026-10-21 the owner had decision management rethought; [decisions as confirmed
+  intent](decision-intent-build.md) replaces this section's migration (TD-454, TD-455).
 
 ## 12. Slices and proof
 
