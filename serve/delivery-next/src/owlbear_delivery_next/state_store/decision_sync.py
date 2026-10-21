@@ -96,12 +96,17 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> 
 
 
 def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str:
-    """HEAD when it is the commit this call made: child of *before*, changing exactly *rels*; else nothing."""
+    """HEAD when it is the commit this call made: child of *before*, changing only files of *rels*; else nothing.
+
+    A batch may name a file it did not change (a rule kept as it is, guarding its revision); the commit then holds
+    only the others, and is still this call's own.
+    """
     after = _rev(shared, "HEAD", until)
     if not after or after == before or _rev(shared, f"{after}~1", until) != before:
         return ""  # no commit, or a hook added another one: never ours to take back
     said = shared.git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", after, until=until)
-    return after if not said.returncode and set(said.stdout.splitlines()) == rels else ""
+    changed = set(said.stdout.splitlines())
+    return after if not said.returncode and changed and changed <= rels else ""
 
 
 def _rejected(shared: DataRepo, rels: set[str], commits: tuple[str, str], why: str, until: float) -> Sent:

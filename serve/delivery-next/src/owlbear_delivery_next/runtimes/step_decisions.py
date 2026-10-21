@@ -9,6 +9,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.state_store.decision_archive import WHOLE
+
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator, Sequence
 
@@ -32,10 +34,13 @@ def shaped(decisions: Sequence[BriefDecision]) -> list[str]:
 
 
 def entry(decision: Decision, *, resolved: bool, replaced: bool = False) -> str:
-    """One decision in full: id and aliases, scope, origin, title and statement."""
+    """One decision in full: id and aliases, scope, origin, title and statement, a cut one's whole wording too."""
     names = ", ".join([decision.id, *decision.aliases])
     note = (UNRESOLVED if not resolved else "") + (" [this Change's brief replaces it]" if replaced else "")
     statement = " ".join(decision.statement.split())
+    whole = " ".join(decision.rationale.partition(WHOLE)[2].split())
+    if statement.endswith("\u2026") and whole.startswith(statement[:-1].rstrip()):
+        statement += f" ({WHOLE}{whole})"  # the archive cut a long answer and kept it whole in the rationale
     return f"- {names} ({decision.scope}, {decision.origin}): {' '.join(decision.title.split())}: {statement}{note}"
 
 

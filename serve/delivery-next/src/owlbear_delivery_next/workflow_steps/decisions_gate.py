@@ -2,7 +2,9 @@
 
 A Change with an approved brief runs a step only on decisions that load (`decision_store.load`), none of those that
 apply conflicted or invalid, and the applying ones unchanged since its baseline; a difference asks the owner, and the
-approved brief is never rewritten (TD-428). A project without a shared data repository runs as before until one of
+approved brief is never rewritten (TD-428). Before judging, the gate catches the checkout up with its remote
+(`decision_store.refresh`); when it cannot, steps go on with the local decisions but publication and merge, the
+irreversible ones, stop. A project without a shared data repository runs as before until one of
 its Changes holds a baseline: Changes from before this gate have no rules to compare with.
 """
 
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 UNGATED = frozenset({StepKind.SHAPE, StepKind.CLEANUP})  # shaping waits for chat; an ending Change always cleans up
+IRREVERSIBLE = frozenset({StepKind.PUBLISH, StepKind.MERGE})  # never on decisions another checkout may have changed
 ROLES: dict[StepKind, tuple[str, ...]] = {  # the sessions a step's inputs are built for
     StepKind.PLAN: ("planner", "challenger"),
     StepKind.TESTS: ("test-reviewer", "test-curator"),
@@ -47,6 +50,10 @@ OPTIONS = [
     Option(id="pause", label="Pause", next="pause"),
 ]
 FAULTY = "Resolve the decision's conflict or finding in the shared data repository"
+STALE = (
+    "Let the shared data repository's checkout catch up with its remote (reach the network, commit or discard its "
+    "local changes, or resolve what refused the rebase), then resume"
+)
 SPLIT = "the decisions that apply do not fit into one step; split the Change"
 CHANGED = "Decisions that apply to this Change changed since its brief was approved:"
 UNPINNED = (
@@ -226,11 +233,22 @@ def check_step(store: Store, c: Change, now: datetime) -> Gate:
         return Gate(c)
     if store.shared is None and c.decisions_baseline is None and c.decisions_unpinned_at is None:
         return Gate(c, lines=[step_decisions.HEAD, step_decisions.NONE])
+    if store.shared is not None and (stale := _refresh(store)) and c.step.kind in IRREVERSIBLE:
+        reason = f"the decisions were not refreshed before {c.step.kind}, which cannot be undone: {stale}"
+        return Gate(c, _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now))
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
         return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc)[:600], stop=exc.stop(now)))
     return _judged(view, c, now, store)
+
+
+def _refresh(store: Store) -> str:
+    """Why the checkout did not catch up with its remote, else nothing: another checkout's change reaches it first."""
+    try:
+        return decision_store.refresh(store.shared)
+    except decision_store.DecisionsUnavailable as exc:
+        return f"not refreshed: {exc}"
 
 
 def _judged(view: DataView, c: Change, now: datetime, store: Store) -> Gate:

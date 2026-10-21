@@ -21,7 +21,7 @@ from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import decision_fixes, decision_impact, decision_store
+from owlbear_delivery_next.state_store import decision_fixes, decision_impact, decision_store, decision_sync
 from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.decision_actions import Refused
 from owlbear_delivery_next.state_store.decision_impact import ACCEPTED, REMOTE, Impact, Place, Report
@@ -383,6 +383,34 @@ def test_keeping_existing_code_is_refused_when_the_rule_changed_after_the_report
 
     assert not [e for e in decision_store.whole(shared)[0].values() if e.decision.source == ACCEPTED]
     assert git(shared.root, "ls-remote", "origin", "HEAD").split()[0] == pushed  # nothing published
+    assert git(shared.root, "status", "--porcelain") == ""
+
+
+def test_keeping_existing_code_is_taken_back_when_the_rule_changed_between_catch_up_and_push(
+    tmp_path, shared_repo, shared, store, monkeypatch
+):
+    old, new = pair()
+    publish(shared, old, new, records={"20261020-090000-c1": merged(old.id)})
+    report = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, clone(tmp_path, "shop", []), store)])
+    peer, caught_up = tmp_path / "peer", decision_sync.catch_up
+    git(tmp_path, "clone", "-q", str(shared_repo[1]), str(peer))
+
+    def overtaken(repo: DataRepo, until: float) -> str:
+        said = caught_up(repo, until)
+        monkeypatch.setattr(decision_sync, "catch_up", caught_up)
+        write(new.model_copy(update={"state": State.WITHDRAWN}), peer / PROJECT, new.revision)
+        git(peer, "commit", "-qam", "withdrawn after the catch-up")
+        git(peer, "push", "-q")
+        return said
+
+    monkeypatch.setattr(decision_sync, "catch_up", overtaken)
+    with pytest.raises(Refused, match="no longer the rule in force"):
+        decision_fixes.accept(shared, report, PROJECT, new.revision, "Old notes stay.")
+
+    pushed = git(peer, "rev-parse", "HEAD")
+    assert not [e for e in decision_store.whole(shared)[0].values() if e.decision.source == ACCEPTED]
+    assert git(shared.root, "ls-remote", "origin", "HEAD").split()[0] == pushed  # nothing published
+    assert git(shared.root, "rev-parse", "HEAD") == pushed  # the acceptance commit taken back, then rebased
     assert git(shared.root, "status", "--porcelain") == ""
 
 
