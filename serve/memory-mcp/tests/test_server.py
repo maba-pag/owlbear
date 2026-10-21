@@ -892,3 +892,37 @@ async def test_live_server_reads_global_memory_named_beside_its_store(
 
     assert (read.is_error, "Global habit" in _text(read), "Global habit" in _text(recalled)) == (False, True, True)
     assert (approved.is_error, "not found" in _text(approved)) == (True, True)  # changed on the Memory page only
+
+
+@pytest.mark.asyncio
+async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A chat's save lands in the folder that claims the workspace, never in the workspace itself (TD-72)."""
+    data, work = tmp_path / "data", tmp_path / "work"
+    (data / "shop").mkdir(parents=True)
+    _git(data, "init", "-q")
+    (data / "shop" / "repository").write_text("github.com/acme/shop\n", encoding="utf-8")
+    common = _create_entry(data / "memory", title="Global habit", state=MemoryState.APPROVED)
+    (work / ".owlbear").mkdir(parents=True)
+    _git(work, "init", "-q")
+    _git(work, "remote", "add", "origin", "git@github.com:acme/shop.git")
+    monkeypatch.setenv("OWLBEAR_DATA", str(data))
+    monkeypatch.chdir(work)
+    args = {
+        "title": "Claimed store",
+        "content": "Saved into the shared repository's project folder.",
+        "categories": ["process"],
+        "confidence": 0.8,
+        "source_agent": "builder",
+    }
+
+    async with mcp.Client(memory_mcp) as client:
+        saved = await client.call_tool("save_memory", args)
+        read = await client.call_tool("read_memory", {"entry_id": common.id})
+
+    assert (saved.is_error, read.is_error) == (False, False)
+    (entry,) = (data / "shop" / "memory").iterdir()
+    assert "title: Claimed store" in entry.read_text(encoding="utf-8")
+    assert not (work / ".owlbear" / "memory").exists()

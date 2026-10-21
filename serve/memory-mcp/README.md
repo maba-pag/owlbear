@@ -2,7 +2,8 @@
 
 MCP server for agent institutional memory. Pipeline and ideation agents record learnings after tasks; a dedicated curator agent reviews, scopes, and promotes entries; the human operator approves. Approved entries surface during agent pre-flight via `recall_memory`.
 
-Storage is file-based: each entry is a markdown file with YAML frontmatter in `.owlbear/memory/`. The MCPServer app name and VS Code registration key are both `owlbear-memory`.
+Storage is file-based: each entry is a markdown file with YAML frontmatter in the memory store that
+[Configuration](#configuration) describes. The MCPServer app name and VS Code registration key are both `owlbear-memory`.
 
 **Use this guide when:** you need to change the seeded `owlbear-memory` tools, scoped retrieval, or
 the human approval and curation lifecycle.
@@ -148,9 +149,15 @@ remain in active relevance scope.
 
 ## Configuration
 
-Memory entries are stored at `.owlbear/memory` under the current initialized workspace. When
-`OWLBEAR_MEMORY_DIR` is set, the server uses that folder instead and needs no initialized workspace;
-Delivery Next sets it to the project's folder in the shared repository.
+Delivery's steps name the store in `OWLBEAR_MEMORY_DIR` (the project's folder in the shared data repository) and
+Global memory in `OWLBEAR_MEMORY_GLOBAL_DIR`, read beside it and never written; the working folder then needs no
+initialized workspace.
+
+Without them, as in a chat, the server finds the shared data repository as Delivery does: `OWLBEAR_DATA` when set
+(empty means none), else the machine's pointer `~/.owlbear/data.json`. The folder whose `repository` file holds the
+workspace's identity (its origin without scheme, user and `.git`) keeps its memory in `memory`, and the repository's
+own `memory` is Global memory (TD-72, TD-241). A pointer or claim that cannot tell the folder stops the server with
+the reason. A workspace no folder claims keeps its memory at `.owlbear/memory` in the initialized workspace.
 
 ## Writer Model and Freshness
 
