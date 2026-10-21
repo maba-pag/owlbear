@@ -17,7 +17,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next.local_system import leases, local_home
+from owlbear_delivery_next.local_system import codebase, leases, local_home
 from owlbear_delivery_next.machine_host import registry
 
 if TYPE_CHECKING:
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
     type Descends = Callable[[str, str], bool]  # (older, newer): whether newer descends from older
 
-URL = "https://github.com/maba-pag/owlbear.git"
 REPO = "repo.git"
 TAG = re.compile(r"v(\d+)(?:\.(\d+))?")
 FREE = 2 * 1024**3  # bytes an install needs free (§3)
@@ -117,7 +116,7 @@ def repo() -> Path:
     if not (path / "HEAD").is_file():
         shutil.rmtree(path, ignore_errors=True)
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        _git("clone", "--bare", "--quiet", URL, str(path), timeout=FETCH * 5)
+        _git("clone", "--bare", "--quiet", codebase.URL, str(path), timeout=FETCH * 5)
     return path
 
 

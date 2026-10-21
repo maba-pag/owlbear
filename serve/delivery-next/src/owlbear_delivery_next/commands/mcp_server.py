@@ -23,9 +23,9 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop
-from owlbear_delivery_next.local_system import codebase, data_repo
-from owlbear_delivery_next.machine_host import registry, serve, versions
+from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import api, brief_routes, host
+from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 if TYPE_CHECKING:
@@ -216,7 +216,7 @@ class OwlBear(Chat):
 
     def record(self) -> host.HostRecord | None:
         """The machine host's record."""
-        return serve.running()
+        return host.running_at(local_home.root())
 
     def save_brief(self, *_args: object, **_kwargs: object) -> dict[str, Any]:  # type: ignore[override]
         """No Change tool works here."""
@@ -236,15 +236,17 @@ class Closed:
 
 
 def workspace(repo: Path) -> Chat | Closed:
-    """The tools for the folder at *repo*, told before any state is made (``Store.open`` makes it)."""
+    """The tools for the folder at *repo*, told before any state is made (``Store.open`` makes it).
+
+    A registered clone has its id and its project folder in ``~/.owlbear``.
+    """
     try:
-        pid = registry.clone_id(registry.store_of(repo))
-        known = pid is not None and any(p.id == pid for p in registry.load().projects)
-    except registry.RegistryError:
-        known = False
-    if known:
+        pid = project_home.clone_id(project_home.clone_dir(repo))
+    except StoreError, OSError:
+        pid = None
+    if pid is not None and project_home.home(pid).is_dir():
         return Chat(repo)
-    if data_repo.identity(repo) == data_repo.remote_identity(versions.URL):
+    if data_repo.identity(repo) == data_repo.remote_identity(codebase.URL):
         return OwlBear(repo)
     return Closed(repo)
 

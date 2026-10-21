@@ -133,7 +133,7 @@ def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and
     """TD-435, TD-450: a chat server on OwlBear's own clone writes OwlBear's folder through the machine host."""
     (shared_repo[0] / "owlbear").mkdir()
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
-    monkeypatch.setattr(serve, "running", lambda: machine.record)
+    monkeypatch.setattr(mcp_server.OwlBear, "record", lambda _self: machine.record)
     monkeypatch.setattr(mcp_server, "_LOCAL", Loopback(http))
     p = add(http, clone(tmp_path / "shop"))
     own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")

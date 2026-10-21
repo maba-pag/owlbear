@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]  # the package, whose data files sit at its root
+URL = "https://github.com/maba-pag/owlbear.git"  # OwlBear's own repository: its versions and its own decisions
 UNREADABLE = "unreadable: "
 SHIPPED = (
     "**/*.py",

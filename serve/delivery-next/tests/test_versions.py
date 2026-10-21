@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.machine_host import registry, selfcheck, versions
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
@@ -80,7 +80,7 @@ def origin(tmp_path, monkeypatch) -> Path:
         if n < 2:
             git(root, "tag", "-a", f"v0.{n + 1}", "-m", f"v0.{n + 1}")
     git(root, "tag", "v0.9")  # lightweight: no version
-    monkeypatch.setattr(versions, "URL", str(root))
+    monkeypatch.setattr(codebase, "URL", str(root))
     return root
 
 
