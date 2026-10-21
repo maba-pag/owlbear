@@ -158,7 +158,17 @@ def card(
         "quiet": quiet or silent(c, activity, now, tool) is not None,
         "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2), "unknown": len(c.spend.unread)},
         "overlaps": [f"overlaps with {o.other}: {', '.join(o.paths[:5])}" for o in c.overlaps],
+        "decisions": unpublished(c),
     }
+
+
+def unpublished(c: Change) -> list[str]:
+    """The brief's project decisions the remote does not hold yet, and why; Delivery saves them again (TD-453)."""
+    left = [p for p in c.decisions_published if not p.settled]
+    if c.finished_at or not left:
+        return []
+    titles, why = ", ".join(p.title for p in left), left[-1].notice or "not saved"
+    return [f"Project decisions not yet published: {titles}: {why}; Delivery saves them again at the next step"]
 
 
 def _left(events: list[dict[str, Any]], since: datetime | None) -> str:

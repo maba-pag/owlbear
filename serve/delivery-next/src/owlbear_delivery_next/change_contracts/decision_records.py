@@ -70,6 +70,26 @@ class Pick(_Strict):
     session: str = ""  # the picker's session, recorded before it starts: a killed runner's pick resumes it
 
 
+class Published(_Strict):
+    """A brief's project decision Delivery publishes from its approval (TD-453), with its last save's receipt."""
+
+    id: str
+    title: str
+    state: str  # in force, or retired by a later approved version
+    revision: str = ""  # the file's revision this Change wrote, once saved
+    saved: bool = False
+    committed: bool = False
+    published: bool = False  # the remote holds it
+    moved: bool = False  # its file changed without this Change since: that change stands, nothing is written over it
+    notice: str = ""
+    at: datetime
+
+    @property
+    def settled(self) -> bool:
+        """Nothing is left to publish: the remote holds it, or a later change does."""
+        return self.published or self.moved
+
+
 class Said(BaseModel):
     """What a pinned decision said, kept for those that applied, so a later difference can show the old wording."""
 

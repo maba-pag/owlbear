@@ -10,7 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
-from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, Decision, DecisionBaseline, Pick
+from owlbear_delivery_next.change_contracts.decision_records import (
+    BriefDecision,
+    Decision,
+    DecisionBaseline,
+    Pick,
+    Published,
+)
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
@@ -477,3 +483,4 @@ class Change(Record):
     decisions_baseline: DecisionBaseline | None = None  # pinned at brief approval (TD-419 slice 4)
     decisions_offered: DecisionBaseline | None = None  # the set the owner's open decisions question would pin
     decisions_unpinned_at: datetime | None = None  # approved while unreadable: the owner confirms the set to pin
+    decisions_published: list[Published] = Field(default_factory=list)  # the brief's project ones (TD-453)
