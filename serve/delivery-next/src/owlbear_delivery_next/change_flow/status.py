@@ -176,7 +176,7 @@ def unpublished(c: Change, pending: Callable[[], str] | None = None) -> list[str
 
     Shown after the Change finished too: its cleanup never pushes them.
     """
-    left = [p for p in c.decisions_published if not p.published]
+    left = [p for p in c.decisions_published if p.committed and not p.published]  # planned ones: resume's line
     if not left or (pending is not None and not pending()):
         return []
     titles, why = ", ".join(p.title for p in left), left[-1].notice or "not pushed"
