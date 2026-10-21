@@ -10,12 +10,13 @@ TABS = [
     ("/", "Changes"),
     ("/backlog", "Backlog"),
     ("/memory", "Memory"),
+    ("/decisions", "Decisions"),
     ("/config", "Settings"),
     ("/maintenance", "Maintenance"),
 ]
 
 
-ASKING = {"/", "/backlog", "/memory", "/config"}  # pages with consequential buttons
+ASKING = {"/", "/backlog", "/memory", "/decisions", "/config"}  # pages with consequential buttons
 
 
 @pytest.mark.parametrize(("path", "title"), TABS)

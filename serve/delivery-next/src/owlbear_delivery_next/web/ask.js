@@ -1,8 +1,9 @@
 "use strict";
 // The confirmation a consequential button opens (owner 2026-10-15): what happens now, what Delivery then does by
 // itself, what the owner can do afterwards, and the way forward if he declines; true only when he confirms. A *tick*
-// is a statement he must tick before confirming (TD-255).
-function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "" }) {
+// is a statement he must tick before confirming (TD-255). A *reason* is the label of the text he must give before
+// confirming; the dialog then answers with that text.
+function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel", tick = "", reason = "" }) {
   const parts = [["Now", now, items], ["Then, by itself", then], ["Afterwards", after], ["If you don't", instead]]
     .filter(([, said]) => said);
   const back = document.activeElement;
@@ -37,21 +38,29 @@ function ask({ title, now, items = [], then, after, instead, yes, no = "Cancel",
       body.append(part);
     }
     const foot = make("div", undefined, { class: "row", slot: "footer" });
-    let ticked = () => true;
-    const choice = (label, answer, variant) => {
+    const checks = [];
+    let answer = () => true;
+    const choice = (label, yes, variant) => {
       const node = make("p-button", label, { type: "button", variant });
-      node.addEventListener("click", () => { if (!answer || ticked()) end(answer); });
+      node.addEventListener("click", () => { if (!yes) end(false); else if (checks.every((c) => c())) end(answer()); });
       return node;
     };
     const decline = choice(no, false, "secondary"), confirm = choice(yes, true, "primary");
+    const set = () => { confirm.disabled = !checks.every((c) => c()); };
+    if (reason) {
+      const why = make("p-textarea", undefined, { label: reason, "max-length": "4000", rows: "3" });
+      checks.push(() => (why.value ?? "").trim() !== "");
+      answer = () => why.value.trim();
+      why.addEventListener("input", set);
+      body.append(why);
+    }
     if (tick) {
       const check = make("p-checkbox", undefined, { label: tick });
-      ticked = () => check.checked === true;
-      const set = () => { confirm.disabled = !ticked(); };
+      checks.push(() => check.checked === true);
       check.addEventListener("change", set);
-      set();
       body.append(check);
     }
+    set();
     foot.append(confirm, decline);
     box.append(heading, body, foot);
     document.body.append(box);

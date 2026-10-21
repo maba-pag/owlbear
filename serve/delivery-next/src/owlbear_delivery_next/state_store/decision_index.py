@@ -82,18 +82,21 @@ def path() -> Path:
     return local_home.root() / FILE
 
 
-def search(text: str, project: str, *, include_retired: bool = False, limit: int = 20) -> list[Hit]:
+def search(
+    text: str, project: str, *, include_retired: bool = False, limit: int = 20, view: DataView | None = None
+) -> list[Hit]:
     """Decisions of *project* and Global whose title or statement holds every word of *text*; all for no words.
 
     Replaced, withdrawn and spent decisions are hidden unless *include_retired*. Raises `DecisionsUnavailable` when
     the decisions cannot be read in full: an unreadable store never searches as an empty or partial one. Raises
-    `IndexBusy` when the index stays busy.
+    `IndexBusy` when the index stays busy. A *view* the caller loaded already is searched as it is.
     """
-    try:
-        shared = data_repo.locate()
-    except data_repo.DataRepoError as exc:
-        raise decision_store.DecisionsUnavailable(str(exc), decision_store.SET_UP) from exc
-    view = decision_store.load(shared, project)
+    if view is None:
+        try:
+            shared = data_repo.locate()
+        except data_repo.DataRepoError as exc:
+            raise decision_store.DecisionsUnavailable(str(exc), decision_store.SET_UP) from exc
+        view = decision_store.load(shared, project)
     words, file = _WORD.findall(text), path()
     file.parent.mkdir(parents=True, exist_ok=True)
     for attempt in range(TRIES):

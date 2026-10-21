@@ -84,8 +84,9 @@ decision. A malformed file is reported by `load_folder`, never skipped.
 
 `schema`, `link-type`, `duplicate-id` (across all layers), `link-target`
 (missing, self, or out of reach: a project may target Global and its own decisions, Global only Global, and
-`promoted_from` anything), `two-successors` (two in-force decisions replace one), `no-successor` (replaced with no
-non-draft successor), `owner-words`, `statement-length`, `placement` (scope fields against the folder, including a
+`promoted_from` anything), `two-successors` (two in-force decisions replace or promote one), `no-successor` (replaced
+with no non-draft successor; a widening promotion counts), `promote-scope` (`promoted_from` must widen: Global from a
+project or Change decision, a project from one of its own Changes'), `owner-words`, `statement-length`, `placement` (scope fields against the folder, including a
 change decision outside a change folder), `exception-target` (`exception_to` a non-Global decision) and
 `replace-scope` (`replaces` reaches only the same or a narrower layer: Global only Global, a project its own project's
 and Changes' decisions, a Change its own; widening goes through `promoted_from`, departing from Global through

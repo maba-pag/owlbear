@@ -157,6 +157,29 @@ provenance, links, history and affected Changes. Actions: read back, replace (a 
 an exception. Chat tools record, find and read back against the same records; each write returns a short receipt.
 Brief approval foregrounds new, changed and inherited decisions (C-14).
 
+- **Built in slice 5a** (choices made while building): the page's writes are the owner's: the host's token admits
+  them and a call marked as a chat's (`X-OwlBear-Use: chat`) is refused for activate, replace, withdraw, promote,
+  exception and conflict resolution; a chat proposes and reads back only. Every write names the revision the page or
+  chat read, and a changed one is refused by its receipt before anything is written. Replacing or withdrawing a
+  `decided` decision, or activating a draft that replaces one, needs the owner's ticked re-decision; the owner's
+  successor is `decided` in his words (the new rule when he gives none). Reversals are counted back through
+  `replaces` and `promoted_from`, so a promotion never resets them; a second reversal is refused unless the
+  successor is `decided` in the owner's words or he confirms re-deciding it on activation. `record_decision` always
+  saves a project draft, `decided` when the owner's words are given, else `autonomous`; it never replaces a `decided`
+  or Global decision, and activating an `autonomous` draft makes it `approved`. Promotion saves a linked successor
+  one layer wider with the source's origin and words and marks the source `replaced` in the same commit: the
+  validator counts a non-draft `promoted_from` that widens (Global from a project or Change decision, a project from
+  its own Change's; any other is a `promote-scope` finding) as the source's successor, in the two-successors rule
+  and conflict flagging too, so a replaced Global rule never stays in force through the
+  project's copy, and the source stays readable in history. An exception is a `decided` project decision
+  `exception_to` a Global one, which stays in force. Resolving a conflict keeps the chosen successor, withdraws its
+  competing successors and clears the flag. A read-back sets today's date and keeps origin and wording. A
+  transition's files (a successor and what it retires, a kept decision and its withdrawn rivals) are checked against
+  their expected revisions together and written, committed and published as one commit, or none is; a stale take-back
+  undoes every file of it. Replace, withdraw, promote, keep and activating or proposing a draft that replaces one need
+  a reason, recorded in the successor's rationale ("Why it changed: …") or the withdrawn one's; a replacement keeps
+  the predecessor's `exception_to`, `refines`, `depends_on` and `related_to` links.
+
 ## 11. Migration
 
 A clause-level, many-to-many concordance from today's record: origin, qualifications, dates and quotes kept; partial

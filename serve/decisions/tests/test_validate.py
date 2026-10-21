@@ -115,6 +115,40 @@ def test_replaced_without_successor(tmp_path, put):
     assert rules(tmp_path) == ["no-successor"]
 
 
+def test_a_promotion_is_the_replaced_sources_successor_but_a_draft_one_is_not(tmp_path, put):
+    source, proposed = put(state=State.REPLACED), put(state=State.REPLACED)
+    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
+    put(Scope.GLOBAL, state=State.DRAFT, links=(Link(type=LinkType.PROMOTED_FROM, target=proposed.id),))
+    assert [(f.rule, f.involves) for f in validate_repo(tmp_path)] == [("no-successor", (proposed.id,))]
+
+
+@pytest.mark.parametrize(
+    ("target", "source", "allowed"),
+    [
+        ({"scope": Scope.PROJECT}, {"scope": Scope.GLOBAL}, True),
+        ({"scope": Scope.CHANGE}, {"scope": Scope.GLOBAL}, True),
+        ({"scope": Scope.CHANGE}, {"scope": Scope.PROJECT}, True),
+        ({"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, False),
+        ({"scope": Scope.PROJECT}, {"scope": Scope.PROJECT}, False),
+        ({"scope": Scope.CHANGE, "project": "q"}, {"scope": Scope.PROJECT}, False),
+        ({"scope": Scope.PROJECT}, {"scope": Scope.CHANGE}, False),
+    ],
+)
+def test_a_promotion_only_widens_and_a_narrowing_one_is_no_successor(tmp_path, put, target, source, allowed):
+    old = put(**target, state=State.REPLACED)
+    put(**source, links=(Link(type=LinkType.PROMOTED_FROM, target=old.id),))
+    assert rules(tmp_path) == ([] if allowed else ["no-successor", "promote-scope"])
+
+
+def test_two_promotions_or_a_promotion_and_a_replacement_of_one_source_are_two_successors(tmp_path, put):
+    source, other = put(state=State.REPLACED), put(state=State.REPLACED)
+    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
+    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
+    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=other.id),))
+    put(links=(Link(type=LinkType.REPLACES, target=other.id),))
+    assert rules(tmp_path) == ["two-successors"] * 4
+
+
 def test_decided_without_owner_words(tmp_path, put):
     put(owner_words=())
     put(owner_words=(), origin=Origin.AUTONOMOUS)

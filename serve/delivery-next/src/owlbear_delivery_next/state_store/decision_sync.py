@@ -110,7 +110,7 @@ def _rejected(shared: DataRepo, rels: set[str], commits: tuple[str, str], why: s
         return Sent(notice=f"{where}, but the push failed: {why.strip()[:200]}")
     ours, theirs = sides
     if stale := theirs & rels:
-        return _take_back(shared, commits, stale, until)
+        return _take_back(shared, commits, stale, rels, until)
     if both := ours & theirs:
         listed = ", ".join(sorted(both))
         return Sent(notice=f"{where}, but not published: {listed} changed here and on the remote; the owner decides")
@@ -122,8 +122,8 @@ def _rejected(shared: DataRepo, rels: set[str], commits: tuple[str, str], why: s
     return Sent()
 
 
-def _take_back(shared: DataRepo, commits: tuple[str, str], stale: set[str], until: float) -> Sent:
-    """Undo the verified commit this call made (only that one), then rebase: the expected revision was stale."""
+def _take_back(shared: DataRepo, commits: tuple[str, str], stale: set[str], rels: set[str], until: float) -> Sent:
+    """Undo the verified commit this call made (only that one, every file of it), then rebase: a revision was stale."""
     before, made = commits
     ids = ", ".join(sorted(Path(r).stem for r in stale))
     notice = f"another checkout changed {ids} first, so this save was taken back; reload it and save again"
@@ -135,7 +135,7 @@ def _take_back(shared: DataRepo, commits: tuple[str, str], stale: set[str], unti
                            until=until)  # fmt: skip
         if moved.returncode:
             return Sent(stale=True, notice=f"{notice}; its commit {made[:9]} stays: {moved.stderr.strip()[:200]}")
-        shared.git("restore", f"--source={before}", "--staged", "--worktree", "--", *sorted(stale), until=until)
+        shared.git("restore", f"--source={before}", "--staged", "--worktree", "--", *sorted(rels), until=until)
     if failed := rebase(shared, until):
         notice += f"; not rebased on the remote: {failed}"
     return Sent(stale=True, notice=notice)

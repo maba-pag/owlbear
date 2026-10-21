@@ -6,10 +6,11 @@ import argparse
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
@@ -41,6 +42,8 @@ WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdi
 PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every Change: 16 rows were 77 KB with them
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 _pause = time.sleep  # the poll's own pause
+FOUND = 20  # decisions a find returns; the rest are counted
+SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "read_back", "revision")
 
 
 class Chat:
@@ -163,6 +166,28 @@ class Chat:
         code, out = self.call("POST", f"/changes/{slug}/answers", body)
         return {"answered": code == OK, **out}
 
+    def page(self) -> str | None:
+        """The Decisions page with its token, where the owner activates, replaces and withdraws."""
+        rec = host.running(self.store)
+        full = api.link(rec)
+        return full and rec and full.replace(rec.url, f"{rec.url}decisions", 1)
+
+    def find_decisions(self, text: str, where: str, *, include_retired: bool) -> dict[str, Any]:
+        """The decisions of this project and Global, matched by the index; at most FOUND of them."""
+        query = urllib.parse.urlencode({"text": text, "where": where, "retired": str(include_retired).lower()})
+        code, out = self.call("GET", f"/decisions?{query}")
+        if code != OK or not out.get("available"):
+            return {"found": False, "error": out.get("reason") or out.get("detail") or out.get("error")}
+        rows = [{k: d[k] for k in SHORT} for d in out["decisions"]]
+        return {"found": True, "decisions": rows[:FOUND], "more": len(rows[FOUND:]), "decisions_page": self.page()}
+
+    def write(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        """One decision write through the host: its receipts, or why it was refused."""
+        code, out = self.call("POST", path, body)
+        if code != OK:
+            return {"saved": False, "error": out.get("detail") or out.get("error"), "decisions_page": self.page()}
+        return out | {"decisions_page": self.page()}
+
 
 def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
     field = model.model_fields[name]
@@ -172,7 +197,7 @@ def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # n
 mcp = MCPServer(
     "owlbear-delivery",
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
-    "worker's question.",
+    "worker's question, find decisions, propose one and record a read-back.",
 )
 
 
@@ -241,6 +266,54 @@ def answer_question(
 ) -> dict[str, Any]:
     """Answer one worker question for the owner; recovery decisions are made in the Changes page."""
     return _STATE["chat"].answer_question(question, option, text)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def find_decisions(
+    *,
+    text: Annotated[str, Field(description="Words the title or statement holds; empty for all", max_length=200)] = "",
+    where: Annotated[
+        Literal["project", "global", "all"], Field(description="This project's decisions, Global ones, or both")
+    ] = "all",
+    include_retired: Annotated[bool, Field(description="Also replaced, withdrawn and spent decisions")] = False,
+) -> dict[str, Any]:
+    """Find the decisions in force (and drafts) of this project and Global, with the revision a read-back names."""
+    return _STATE["chat"].find_decisions(text, where, include_retired=include_retired)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def record_decision(  # noqa: PLR0913 - the proposal's fields
+    *,
+    title: Annotated[str, Field(description="Short name of the decision", max_length=200)],
+    statement: Annotated[str, Field(description="The rule in force, at most two lines", max_length=240)],
+    rationale: Annotated[
+        str,
+        Field(
+            description="Why; leave unknown reasons out. Required when it replaces one: why the rule changes",
+            max_length=4000,
+        ),
+    ] = "",
+    topic: Annotated[str, Field(description="Topic it belongs to, if any", max_length=80)] = "",
+    owner_words: Annotated[
+        str, Field(description="The owner's own words deciding it in this chat, quoted; empty for your proposal")
+    ] = "",
+    replaces: Annotated[str, Field(description="Id of the decision it would replace, if any")] = "",
+) -> dict[str, Any]:
+    """Propose a decision for this project: always a draft the owner activates on the Decisions page."""
+    why = {"rationale": "", "reason": rationale} if replaces else {"rationale": rationale}  # a successor says why
+    body = {"title": title, "topic": topic, "statement": statement} | why
+    return _STATE["chat"].write("/decisions/propose", body | {"words": owner_words, "replaces": replaces})
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def read_back_decision(
+    decision: Annotated[str, Field(description="Decision id from find_decisions")],
+    revision: Annotated[str, Field(description="Its revision from find_decisions")],
+    answer: Annotated[str, Field(description="The owner's answer when you read it back to him", max_length=2000)],
+) -> dict[str, Any]:
+    """Record that the owner had a decision read back; a change of mind is his replacement on the Decisions page."""
+    path = f"/decisions/{urllib.parse.quote(decision, safe='')}/read-back"
+    return _STATE["chat"].write(path, {"revision": revision, "answer": answer})
 
 
 def main(argv: list[str] | None = None) -> None:
