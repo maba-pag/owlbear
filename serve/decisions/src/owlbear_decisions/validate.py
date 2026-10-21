@@ -53,11 +53,11 @@ def layers(global_folder: Path | None, project_folders: Iterable[Path]) -> list[
     found = [Layer(global_folder, Scope.GLOBAL)] if global_folder else []
     for folder in sorted(project_folders):
         found.append(Layer(folder, Scope.PROJECT, folder.name))
-        found.extend(Layer(held, Scope.CHANGE, folder.name, held.name) for held in _change_folders(folder))
+        found.extend(Layer(held, Scope.CHANGE, folder.name, held.name) for held in change_folders(folder))
     return found
 
 
-def _change_folders(project: Path) -> list[Path]:
+def change_folders(project: Path) -> list[Path]:
     """The Change folders holding decisions; a `changes` path or Change folder that is not a real folder raises."""
     changes = project / CHANGES_DIR
     if (mode := kind(changes)) is None:
@@ -89,7 +89,7 @@ def holds_decisions(child: Path) -> bool:
         not child.name.startswith(".")
         and child.name != DECISIONS_DIR
         and is_folder(child)
-        and (kind(child / DECISIONS_DIR) is not None or bool(_change_folders(child)))
+        and (kind(child / DECISIONS_DIR) is not None or bool(change_folders(child)))
     )
 
 

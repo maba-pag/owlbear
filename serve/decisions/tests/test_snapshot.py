@@ -134,6 +134,20 @@ def test_another_projects_unreadable_folder_is_a_finding_outside_the_view_not_a_
     assert {e.decision.id for e in seen.entries} == {rule.id, own.id}
     assert (seen.complete, seen.findings) == (True, ())
     [(layer, finding)] = seen.outside
-    assert (layer.project, layer.scope, finding.rule, finding.path) == ("shop", Scope.PROJECT, "unreadable",
-                                                                         str(tmp_path / "shop"))  # fmt: skip
+    where = tmp_path / ("shop/changes" if locked == "shop/changes" else "shop")  # each layer is read on its own
+    assert (layer.project, layer.scope, finding.rule, finding.path) == ("shop", Scope.PROJECT, "unreadable", str(where))
     assert seen.active(rule.id)
+
+
+def test_a_readable_layer_beside_an_unreadable_one_still_counts(tmp_path, make):
+    rule = put(tmp_path, make, Scope.GLOBAL)
+    put(tmp_path, make, project="shop", links=(Link(type=LinkType.REPLACES, target=rule.id),))
+    put(tmp_path, make, Scope.CHANGE, project="shop", change="20261020-090000-notes")
+    (tmp_path / "shop" / "changes").chmod(0)
+    try:
+        seen = snapshot(tmp_path, "owlbear")
+    finally:
+        (tmp_path / "shop" / "changes").chmod(0o755)
+
+    assert not seen.active(rule.id)  # shop's readable replacement of a Global rule is still a finding here
+    assert "replace-scope" in {f.rule for f in seen.findings}

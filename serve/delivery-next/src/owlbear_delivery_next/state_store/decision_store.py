@@ -157,7 +157,7 @@ def refresh(shared: DataRepo | None) -> str:
             if changed := status.stdout.splitlines():
                 return f"not refreshed: {len(changed)} uncommitted file(s) in {shared.root}; the next save publishes"
             failed = decision_sync.catch_up(shared, time.monotonic() + SAVE_SECONDS)
-    except DataRepoError as exc:
+    except (DataRepoError, OSError) as exc:  # a lock or attributes file that cannot be opened too
         raise DecisionsUnavailable(str(exc)) from exc
     return f"not refreshed from the remote: {failed}" if failed else ""
 

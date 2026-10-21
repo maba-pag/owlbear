@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from owlbear_decisions.models import Scope, State
-from owlbear_decisions.storage import is_folder
-from owlbear_decisions.validate import Entry, Finding, Layer, check, holds_decisions, layers, read_layers
+from owlbear_decisions.storage import DECISIONS_DIR, is_folder, kind
+from owlbear_decisions.validate import CHANGES_DIR, Entry, Finding, Layer, change_folders, check, layers, read_layers
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,21 +37,49 @@ def read_repo(root: Path, project: str) -> Read:
     entries, failed = read_layers(every)
     outside: list[tuple[Layer, Finding]] = []
     for child in sorted(root.iterdir()):
-        try:
-            if not (is_folder(child) if child == own else holds_decisions(child)):
+        if child == own:
+            if not is_folder(child):
                 continue
             found = layers(None, [child])
             got, lost = read_layers(found)
-        except OSError as exc:
-            if child == own:
-                raise
-            finding = Finding(str(child), UNREADABLE, f"cannot be read: {exc}")
-            outside.append((Layer(child, Scope.PROJECT, child.name), finding))
-            continue
+        else:
+            found, got, lost, problems = _foreign(child)
+            outside += problems
         every += found
         entries += got
         failed += lost
     return Read(every, entries, failed, outside)
+
+
+def _unreadable(layer: Layer, path: Path, exc: OSError) -> tuple[Layer, Finding]:
+    return layer, Finding(str(path), UNREADABLE, f"cannot be read: {exc}")
+
+
+def _foreign(child: Path) -> tuple[list[Layer], list[Entry], list[tuple[Layer, Finding]], list[tuple[Layer, Finding]]]:
+    """Another project's layers, each read on its own: one that cannot be read is a finding, the rest still count."""
+    project = Layer(child, Scope.PROJECT, child.name)
+    try:
+        if child.name.startswith(".") or child.name == DECISIONS_DIR or not is_folder(child):
+            return [], [], [], []
+        candidates = [project] if kind(child / DECISIONS_DIR) is not None else []
+    except OSError as exc:
+        return [], [], [], [_unreadable(project, child, exc)]
+    outside = []
+    try:
+        candidates += [Layer(held, Scope.CHANGE, child.name, held.name) for held in change_folders(child)]
+    except OSError as exc:
+        outside.append(_unreadable(project, child / CHANGES_DIR, exc))
+    found, entries, failed = [], [], []
+    for layer in candidates:
+        try:
+            got, lost = read_layers([layer])
+        except OSError as exc:
+            outside.append(_unreadable(layer, layer.folder, exc))
+            continue
+        found.append(layer)
+        entries += got
+        failed += lost
+    return found, entries, failed, outside
 
 
 @dataclass(frozen=True)
