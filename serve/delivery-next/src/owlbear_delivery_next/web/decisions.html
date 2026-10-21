@@ -15,14 +15,16 @@
   .row { align-items: end; }
   #filters > * { flex: 1 1 11rem; }
   .entries { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
-  .entry {
+  .entry, .queued {
     display: grid; gap: var(--p-spacing-static-sm); padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
     background: var(--p-color-surface); border-radius: var(--p-radius-lg);
   }
-  .entry .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
-  .entry .title, .entry li, .entry dd { overflow-wrap: anywhere; }
-  .entry .detail, .entry .form { display: grid; gap: var(--p-spacing-static-md); min-width: 0; }
-  .entry .detail { padding-top: var(--p-spacing-static-sm); border-top: 1px solid var(--p-color-contrast-lower); }
+  :is(.entry, .queued) .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  :is(.entry, .queued) :is(.title, li, dd) { overflow-wrap: anywhere; }
+  :is(.entry, .queued) :is(.detail, .form) { display: grid; gap: var(--p-spacing-static-md); min-width: 0; }
+  :is(.entry, .queued) .detail {
+    padding-top: var(--p-spacing-static-sm); border-top: 1px solid var(--p-color-contrast-lower);
+  }
   dl.facts {
     display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--p-spacing-static-xs)
     var(--p-spacing-static-md); margin: 0; font-size: var(--p-typescale-sm);
@@ -30,6 +32,8 @@
   dl.facts dt { font-weight: 600; }
   dl.facts dd { margin: 0; }
   .said { white-space: pre-wrap; }
+  #queue { display: grid; gap: var(--p-spacing-static-sm); }
+  #queue .why { overflow-wrap: anywhere; }
   #receipts { padding: var(--p-spacing-static-sm) var(--p-spacing-static-md); background: var(--p-color-surface);
     border-radius: var(--p-radius-lg); }
 </style>

@@ -147,7 +147,7 @@ def test_an_entry_shows_provenance_links_both_ways_history_and_the_changes_that_
     assert [(link["type"], link["id"], link["state"]) for link in got["links"]] == [("replaces", old.id, "replaced")]
     assert [(link["type"], link["id"]) for link in back["linked_from"]] == [("replaces", rule.id)]
     assert [h["subject"] for h in got["history"]] == ["seed"]
-    assert [(p["slug"], p["applies"], p["revision"]) for p in got["changes"]] == [("c1", True, rule.revision)]
+    assert [(p["slug"], p["applies"], p["revision"]) for p in got["changes"]] == [("c1", True, rule.rule_revision)]
     assert owner.get(f"/api/next/decisions/{new_id()}").status_code == 404
 
 

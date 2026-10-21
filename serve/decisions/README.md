@@ -30,7 +30,7 @@ topics, the validator's findings with their explanation and the row-to-entry con
 already holds a preview and never changes the record (TD-437).
 
 ```python
-from owlbear_decisions import Decision, load_folder, snapshot, validate_repo, write
+from owlbear_decisions import Decision, load_folder, queue, snapshot, validate_repo, write
 
 revision = write(decision, layer_folder)  # create; refuses an existing file
 write(successor, layer_folder)  # a change of wording is a successor
@@ -38,6 +38,7 @@ write(replaced, layer_folder, expected_revision=revision)  # update; refuses a s
 loaded = load_folder(layer_folder)  # decisions by path, and per-file errors
 seen = snapshot(data_root, "shop-site")  # Global plus one project's layers, and every finding involving them
 seen.active(decision.id)  # in force, not flagged `conflict` and involved in no finding
+waiting = queue(e.decision for e in seen.entries)  # read-backs by kind, then oldest; a conflict queues itself
 ```
 
 `snapshot(root, project)` is file-only: it loads the Global layer and the project's layers (its folder and its
@@ -65,6 +66,7 @@ rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename
 | `state` | `draft`, `in_force`, `replaced`, `withdrawn`, `spent`; nothing is deleted |
 | `links` | `{type, target}`; types `replaces`, `refines`, `exception_to`, `depends_on`, `related_to`, `promoted_from` |
 | `conflict`, `read_back` | A flag the owner resolves; `none`, `pending` or the ISO date of the last read-back |
+| `read_back_why`, `read_back_kind` | Only while `read_back` is `pending`, then both required: why it is asked again and how urgent (`safety`, `blocked`, `uncertain`, `improvement`); written only when set, so older files keep their revision |
 | `created_at` | Time-zone-aware timestamp |
 
 `revision` is not stored: it is the sha256 of the canonical JSON of every other field, so any content change

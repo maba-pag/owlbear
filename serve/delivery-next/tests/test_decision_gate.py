@@ -37,7 +37,7 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import environment
 from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions, step_input
-from owlbear_delivery_next.state_store import decision_archive
+from owlbear_delivery_next.state_store import decision_archive, read_backs
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, curation, decisions_gate, prepare
 
@@ -262,7 +262,7 @@ def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_th
 
     baseline, owed = decisions_gate.pinned(store, c, AT)
     folded = loop.fold(c, [BriefApproval(at=AT, version=1, baseline=baseline, unpinned=owed)], AT)
-    assert (folded.decisions_baseline.revisions, folded.decisions_unpinned_at) == ({rule.id: rule.revision}, None)
+    assert (folded.decisions_baseline.revisions, folded.decisions_unpinned_at) == ({rule.id: rule.rule_revision}, None)
     assert set(folded.decisions_baseline.said) == {rule.id}
 
     away = tmp_path / "away"
@@ -287,9 +287,36 @@ def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_th
     store.write(Lock("c1"), c)
     assert loop.open_question(step(store, tmp_path)) is not None
     c = answer(store, "continue")
-    assert (c.decisions_baseline.revisions, c.decisions_unpinned_at) == ({rule.id: rule.revision}, None)
+    assert (c.decisions_baseline.revisions, c.decisions_unpinned_at) == ({rule.id: rule.rule_revision}, None)
     assert step(store, tmp_path).outcome is None
     assert ran == [K.BUILD]
+
+
+def test_queueing_and_answering_a_read_back_after_approval_never_makes_the_gate_ask(tmp_path, shared, ran):
+    rule = put(shared, make())
+    store = stored(tmp_path, shared, change())
+    held = read_backs.ask(store, PROJECT, rule.id, why="A partner asked for JSON.", kind="uncertain",
+                          revision=rule.revision)  # fmt: skip
+    assert held[0].saved
+
+    assert step(store, tmp_path).outcome is None
+    read_backs.answer(store, PROJECT, rule.id, held[0].revision, said="Still right.", by="owner")
+    assert step(store, tmp_path).outcome is None
+    assert ran == [K.BUILD, K.BUILD]
+
+
+def test_a_change_pinned_with_whole_revisions_does_not_ask_while_they_hold(tmp_path, shared, ran):
+    rule = put(shared, make())
+    c = change()
+    store = stored(tmp_path, shared, c, pin=False)
+    baseline = decisions_gate.pinned(store, c, AT)[0]
+    store.write(Lock("c1"), c.model_copy(update={
+        "decisions_baseline": baseline.model_copy(update={"revisions": {rule.id: rule.revision}})}))  # fmt: skip
+
+    assert step(store, tmp_path).outcome is None
+    assert ran == [K.BUILD]
+    replace(shared, rule, "The pages are plain HTML and CSS with no build step.")
+    assert step(store, tmp_path).outcome.exit == Exit.ASK  # an old pin still sees a real change
 
 
 def checking(**fields) -> Change:
