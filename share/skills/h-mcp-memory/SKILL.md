@@ -295,10 +295,11 @@ Default behavior (when `states` is omitted): includes every non-deleted state.
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
 
-Returns: metadata entries (no `content`) with fields including `id`, `revision`,
-`challenges` (each containing `task_id`, `revision`, and `recorded_at`), `title`,
+Returns: metadata entries (no `content`) with fields including `id`, `revision`, `title`,
 `categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`,
-`updated_at`, and `approved_at`.
+`updated_at`, and `approved_at`. A challenged entry (contested, disputed, or a tombstone of one)
+also carries `challenges`, each with the challenging `task_id`, the challenged `revision`, and
+`recorded_at`; the field is omitted when no task has challenged the entry.
 
 ## read_memory
 
@@ -311,8 +312,9 @@ Reads one full entry by `entry_id`.
 Behavior:
 
 - returns full entry including `content`
-- includes `challenges`, with each record containing `task_id`, `revision`, and
-  `recorded_at`
+- includes `revision`, the token `curate_memory`, `delete_memory`, and `approve_memory` require
+- includes `challenges` when tasks have challenged the entry, with each record containing
+  `task_id`, the challenged `revision`, and `recorded_at`; omitted otherwise
 - errors if the entry is in `deleted` state
 
 ## recall_memory
@@ -369,8 +371,11 @@ Behavior:
 - validly shaped items are processed individually
 - entry-level failures such as a missing entry or invalid state are returned in `results` with
  `success: false`; other valid items may still succeed
+- a stale item `revision` (the entry changed since the recall) fails that item with an `error`
+  naming the expected and current revisions and saying the feedback was not applied; the entry is
+  unchanged
 
-Returns: `results`, with `entry_id` and `success` for each item; successful items also include `already_applied` and `recorded_bucket`, while failures include `error`.
+Returns: `results`, with `entry_id` and `success` for each item; successful items also include `already_applied` and `recorded_bucket`, while failures include `error`. A successful item whose entry has been challenged also includes its `state` and `challenges` (as in `read_memory`), so a second `factually_wrong` shows both reports.
 
 ## curate_memory
 
@@ -379,7 +384,7 @@ Curator update tool for content edits and lifecycle transitions.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
-| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
+| `revision` | str | (required) | The `revision` of the entry as last read with `read_memory` or `list_memories` |
 | `title` | str \| null | `null` | Replace title |
 | `content` | str \| null | `null` | Replace markdown body |
 | `categories` | list[str] \| null | `null` | Replace categories |
@@ -394,6 +399,10 @@ Auto-state behavior:
 - any mutation from `approved` downgrades to `curated`
 - mutations from `contested`, `disputed`, or `stale` are rejected until the Memory page resolves the entry
 - other invalid transitions are rejected
+- a stale `revision` is refused with a `ToolError` (`Entry changed since it was read: ... expected
+  revision '...', current revision '...'. Re-read before retrying.`) and the entry is unchanged
+- the returned entry carries its current `revision`, new after an edit of any revision field; pass
+  that one to a following `approve_memory`
 
 Response hint values clarify what happened, for example:
 
@@ -429,10 +438,12 @@ Curator-only lifecycle mutation.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
-| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
+| `revision` | str | (required) | The `revision` of the entry as last read with `read_memory` or `list_memories` |
 
 Behavior:
 
+- a stale `revision` is refused with the same re-read `ToolError` as `curate_memory`; nothing is
+  deleted
 - pending entries are hard-deleted from disk
 - curated/approved/contested/disputed/stale entries are soft-deleted (`state=deleted`)
 - returns a hint describing hard vs soft delete path
@@ -446,10 +457,12 @@ Approves a curated entry.
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
-| `revision` | str | (required) | Current revision from `read_memory` or `list_memories` |
+| `revision` | str | (required) | The `revision` of the entry as last read with `read_memory` or `list_memories` |
 
 Behavior:
 
+- a stale `revision` is refused with the same re-read `ToolError` as `curate_memory`; the entry
+  stays `curated`
 - only valid transition is `curated -> approved`
 - raises `ToolError` for any other current state
 - sets `approved_at` timestamp
@@ -500,8 +513,8 @@ recall_memory(agent="builder", categories=["pitfall"], limit=10)
 assess_memories(
  task_id="1846",
  assessments=[
-  {"entry_id": "...", "bucket": "outstanding"},
-  {"entry_id": "...", "bucket": "didnt_use"}
+  {"entry_id": "...", "revision": "...", "bucket": "outstanding"},
+  {"entry_id": "...", "revision": "...", "bucket": "didnt_use"}
  ]
 )
 ```

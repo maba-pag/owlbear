@@ -464,6 +464,63 @@ def test_mutation_advances_equal_clock_token_and_rejects_previous_token(tmp_path
     assert _directory_snapshot(tmp_path) == before_stale_write
 
 
+@pytest.mark.parametrize("check", ["expected_revision", "expected_updated_at"])
+def test_same_microsecond_writes_refuse_the_one_based_on_the_pre_image(tmp_path: Path, check: str) -> None:
+    """Two engines write in one frozen clock microsecond; the second, read before the first wrote, is refused."""
+    first, second = MemoryEngine(tmp_path), MemoryEngine(tmp_path)
+    entry = first.save(
+        title="Shared entry",
+        content="Original content",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="test-agent",
+        scope_agents=[],
+    )
+    pre_image = second.get_entry(entry.id)
+    stale = {check: pre_image.revision if check == "expected_revision" else pre_image.updated_at}
+    with patch("owlbear_memory.engine.datetime") as clock:
+        clock.now.return_value = datetime.fromisoformat(entry.updated_at)
+        clock.fromisoformat.side_effect = datetime.fromisoformat
+        won = first.edit(entry.id, {"content": "First writer wins."}, **stale)
+        before_stale_write = _directory_snapshot(tmp_path)
+        with pytest.raises(ConcurrencyError):
+            second.edit(entry.id, {"content": "Second writer, from the pre-image."}, **stale)
+
+    assert _directory_snapshot(tmp_path) == before_stale_write
+    assert MemoryEngine(tmp_path).get_entry(entry.id) == won
+
+
+def test_revision_refuses_a_stale_write_even_when_every_stamp_is_identical(tmp_path: Path) -> None:
+    """The revision is the content's identity: identical ``updated_at`` stamps cannot hide a change."""
+    stamp = "2026-10-21T00:00:00.000001+00:00"
+    with patch.object(MemoryEngine, "_now_iso", return_value=stamp):
+        first, second = MemoryEngine(tmp_path), MemoryEngine(tmp_path)
+        entry = first.save(
+            title="Shared entry",
+            content="Original content",
+            categories=["domain-knowledge"],
+            confidence=0.9,
+            source_agent="test-agent",
+            scope_agents=[],
+        )
+        entry = first.edit(entry.id, {"scope_agents": ["test-agent"]}, expected_revision=entry.revision)
+        pre_image = second.get_entry(entry.id)
+        won = first.edit(entry.id, {"content": "First writer wins."}, expected_revision=pre_image.revision)
+        assert won.updated_at == pre_image.updated_at == stamp
+        before_stale_writes = _directory_snapshot(tmp_path)
+        stale_writes = (
+            lambda: second.edit(entry.id, {"content": "Stale edit."}, expected_revision=pre_image.revision),
+            lambda: second.approve(entry.id, expected_revision=pre_image.revision),
+            lambda: second.delete(entry.id, expected_revision=pre_image.revision),
+        )
+        for stale_write in stale_writes:
+            with pytest.raises(ConcurrencyError):
+                stale_write()
+
+    assert _directory_snapshot(tmp_path) == before_stale_writes
+    assert MemoryEngine(tmp_path).get_entry(entry.id) == won
+
+
 def test_delete_agent_rollback_holds_lock_until_restored_entries_are_reloaded(tmp_path: Path) -> None:
     """A blocked writer observes restored entries after a failed lifecycle rollback."""
     context = multiprocessing.get_context("spawn")
