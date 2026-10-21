@@ -23,7 +23,7 @@ from pydantic import Field
 from owlbear_delivery_next.local_system import leases, local_home
 from owlbear_delivery_next.machine_host import control, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
-from owlbear_delivery_next.project_host import api, pages
+from owlbear_delivery_next.project_host import api, decision_routes, pages
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -161,6 +161,17 @@ def _routes(machine: Machine) -> APIRouter:
     @routes.post("/projects/{pid}/adopt")
     def adopt(pid: str) -> dict[str, Any]:
         return answer(lambda: machine.adopt(pid).info())
+
+    @routes.get("/decisions/{decision_id}/changes")
+    def pinned(decision_id: str) -> dict[str, Any]:
+        """The Changes of every loaded project whose decision baseline pins the decision (TD-419 slice 5a)."""
+        listed = [
+            c | {"project": p.name, "pid": p.entry.id}
+            for p in list(machine.projects.values())
+            if p.store is not None and p.state == "loaded"
+            for c in decision_routes.pinning(p.store, decision_id)
+        ]
+        return {"changes": listed}
 
     _machine_routes(routes, machine)
     _update_routes(routes, machine)

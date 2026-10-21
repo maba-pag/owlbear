@@ -13,6 +13,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import codebase
@@ -403,3 +404,18 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
         "minor", chosen, "major"
     )  # fmt: skip
     assert (stale.status_code, "changed since" in stale.json()["detail"], wrong.status_code) == (409, True, 422)
+
+
+def test_a_decision_lists_the_changes_of_every_loaded_project_whose_baseline_pins_it(tmp_path, http, machine):
+    """TD-419 slice 5a: the Decisions page's affected Changes come from every project the host serves."""
+    a, b = add(http, clone(tmp_path / "a")), add(http, clone(tmp_path / "b"))
+    decision, now = "D-01JQZ8V6M3K5T1W9X2Y4Z7A8B0", datetime.now(UTC)
+    for p, pins in ((a, {decision: "r" * 64}), (b, {})):
+        store = machine.projects[p["id"]].store
+        with store.lock("c1") as lock:
+            pin = DecisionBaseline(commit="c", at=now, revisions=pins)
+            store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD), decisions_baseline=pin))
+    got = http.get(f"/api/next/decisions/{decision}/changes").json()["changes"]
+    assert [(c["project"], c["pid"], c["slug"], c["applies"]) for c in got] == [("a", a["id"], "c1", False)]
+    anonymous = TestClient(http.app, base_url="http://127.0.0.1")
+    assert anonymous.get(f"/api/next/decisions/{decision}/changes").status_code == 401

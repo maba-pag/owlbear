@@ -127,6 +127,21 @@ def _same_or_narrower(source: Decision, target: Decision) -> bool:
     return source.scope is Scope.PROJECT or target.change == source.change
 
 
+def _wider(source: Decision, target: Decision) -> bool:
+    """A promotion widens: Global from a project or Change decision, a project from one of its own Changes'."""
+    if source.scope is Scope.GLOBAL:
+        return target.scope is not Scope.GLOBAL
+    return source.scope is Scope.PROJECT and target.scope is Scope.CHANGE and target.project == source.project
+
+
+def _succeeds(entry: Entry, target: str, link: LinkType, by_id: dict[str, Entry]) -> bool:
+    """A `replaces` link, or a `promoted_from` link that widens: both make *entry* a successor of *target*."""
+    if link is LinkType.REPLACES:
+        return True
+    found = by_id.get(target)
+    return link is LinkType.PROMOTED_FROM and found is not None and _wider(entry.decision, found.decision)
+
+
 def _links(entry: Entry, by_id: dict[str, Entry]) -> list[Finding]:
     path, source = str(entry.path), entry.decision.id
     found: list[Finding] = []
@@ -146,20 +161,27 @@ def _links(entry: Entry, by_id: dict[str, Entry]) -> list[Finding]:
                 "widen by promoted_from, depart from Global by exception_to"
             )
             found.append(Finding(path, "replace-scope", message, (source, link.target)))
+        elif link.type is LinkType.PROMOTED_FROM and not _wider(entry.decision, target.decision):
+            message = (
+                f"promoted_from {link.target}, a {target.decision.scope} decision of a layer not narrower; a "
+                "promotion widens: Global from a project or Change, a project from its own Change"
+            )
+            found.append(Finding(path, "promote-scope", message, (source, link.target)))
     return found
 
 
-def _successors(entries: list[Entry]) -> list[Finding]:
+def _successors(entries: list[Entry], by_id: dict[str, Entry]) -> list[Finding]:
+    """Two in-force successors of one decision, and a replaced one without any; a widening promotion counts (TD-426)."""
     successors: dict[str, dict[str, Entry]] = defaultdict(dict)
     for entry in entries:
         for link in entry.decision.links:
-            if link.type is LinkType.REPLACES:
+            if _succeeds(entry, link.target, link.type, by_id):
                 successors[link.target][entry.decision.id] = entry  # a repeated link is still one successor
     findings = []
     for target, by_source in successors.items():
         active = sorted((str(e.path), e.decision.id) for e in by_source.values() if e.decision.state is State.IN_FORCE)
         if len(active) > 1:
-            message = f"{len(active)} in-force decisions replace {target}"
+            message = f"{len(active)} in-force decisions replace or promote {target}"
             findings.extend(Finding(p, "two-successors", message, (i, target)) for p, i in active)
     for entry in entries:
         named = [e for e in successors.get(entry.decision.id, {}).values() if e.decision.state is not State.DRAFT]
@@ -187,7 +209,7 @@ def check(entries: list[Entry]) -> list[Finding]:
     by_id = {e.decision.id: e for e in entries}
     findings = [Finding(str(e.path), rule, m, (e.decision.id,)) for e in entries for rule, m in _single(e)]
     findings += [f for e in entries for f in _links(e, by_id)]
-    return sorted([*findings, *_duplicates(entries), *_successors(entries)])
+    return sorted([*findings, *_duplicates(entries), *_successors(entries, by_id)])
 
 
 def read_layers(found: Iterable[Layer]) -> tuple[list[Entry], list[tuple[Layer, Finding]]]:

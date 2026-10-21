@@ -35,6 +35,7 @@ SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research 
 }
 MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
 CHAT_TOOLS = {"save_brief", "save_visual_check", "challenge_brief", "show_status", "answer_question"}  # owner chat
+CHAT_TOOLS |= {"find_decisions", "record_decision", "read_back_decision"}  # TD-419 slice 5a, not granted to the shaper
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
 VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN}
