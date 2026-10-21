@@ -1,6 +1,6 @@
 # Decisions as Confirmed Intent: Build Design
 
-> **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-448..TD-455 (2026-10-21)
+> **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-448..TD-459 (2026-10-21)
 > **Date:** 2026-10-21
 > **Question:** How should OwlBear record, share and apply decisions so each one is the owner's confirmed intent?
 > **Status:** answered by the owner; slice 1 built, slices 2 to 6 not. It revises [the decision system](decision-system-build.md), whose
@@ -62,14 +62,27 @@ follows the owner's path.
 | Applies | From brief approval or confirmation | To its work at once; lasting ones only after the owner |
 | Changed by | Only the owner | An agent with a reason; a second reversal goes to the owner |
 
-## 4. Who sees what (TD-452)
+## 4. Who sees what (TD-452, TD-456 to TD-459)
 
-- **Workers** get the Global decisions that apply, the project decisions the brief assigned, and the Change's own,
-  pinned in the Change's baseline at approval; a lookup tool searches more in Global and their project.
-- **Challengers** (brief, plan, review) get the complete list of active Global and project decisions and the Change's
-  own, searchable, and
-  check the assignment before brief approval and whenever the scope changes; doubtful matches are included.
-- Binding text is never cut to fit; other projects' decisions are never visible.
+- **Picking:** a separate picker on Sol at medium effort reads the complete list of active Global and project
+  decisions once at shaping and picks the rules the Change must follow, doubtful ones included; approval pins them in
+  the Change's baseline (TD-459). Measured on 13 past pull requests against a reference list: 94% of the task's own
+  rules and 97% of the general ones, 4 consequential misses, about 6 credits and a minute per pick. Sol high found
+  96% and 98% at 15.6 credits and about 5 minutes; Haiku, Luna and Opus found less.
+- **Later decisions:** the Change's own decisions attach automatically; a rule replaced or withdrawn elsewhere, or a
+  widened scope, is reassessed at the next step boundary; an answer that changes the brief still stops the work
+  (TD-456).
+- **Workers** get the whole picked set, untrimmed and the same for every role: no tags, no role views (TD-457,
+  TD-458). Measured: Opus trimming halved the set but lost 2 to 3 rules that mattered, and as its own call cost about
+  what it saved.
+- **Lookup:** workers and lead chats ask the same picker, which reads the complete list; a failed lookup shows as
+  failed, never as "no rules apply" (TD-456, TD-459).
+- **Challengers** (brief, plan, review) check the complete list (TD-452).
+- **Correction log:** wrong picks and misses, each with the condition that made it wrong, correct the picker's
+  guidance; no statistics, no automatic filters (TD-456).
+- No fixed size limit; binding text is never cut; other projects' decisions are never visible.
+- Statements that only make sense next to their neighbours ("on those pages") were missed by every model, so the
+  migration makes each one readable on its own (slice 6).
 
 ## 5. Saving and syncing
 
@@ -105,7 +118,8 @@ read-back queue, the impact report, the Decisions tab, the generated view and th
 
 Changed: `owner_words` removed everywhere; a confirmed decision is active at once instead of a draft the owner
 activates (TD-450); project decisions of a brief published at approval instead of Change end (TD-453); a worker's
-context is its assignment plus lookup, a challenger's the complete list (TD-452); decision tools in every workspace
+context is the whole picked set plus lookup through the picker, a challenger's the complete list (TD-452, TD-457,
+TD-459); decision tools in every workspace
 by repository identity and wired into SDK steps; the closing check in the asking rules and the shaping skill (TD-448);
 the agents' boundary in their agent files (TD-451); the page in plain words without ids.
 
@@ -116,9 +130,10 @@ the agents' boundary in their agent files (TD-451); the page in plain words with
 | 1 | Model: `owner_words` removed, `inherited` added, `read_back` set by confirmation; page without ids | Old files load; no new write or migrated decision carries words (Git history keeps what it has) |
 | 2 | Decision tools in every workspace by repository identity, OwlBear's included: find, record confirmed, change, retire; active at once; the closing check in the asking rules and both asking skills | A decision confirmed in an unregistered workspace is found after a restart from another workspace |
 | 3 | Shaping assigns existing decisions in the brief; a brief's project decisions published at approval; abandonment revokes nothing | A project decision approved in one Change reaches a parallel Change at its next step |
-| 4 | Worker assignment plus lookup; challengers' complete list; the agents' boundary in their files | A rule left out of the assignment is caught by the challenger in a fixture |
+| 4 | The picker on Sol medium at shaping and for every lookup; the whole picked set to every worker; challengers' complete list; the correction log; the agents' boundary in their files | A rule the picker left out is caught by the challenger in a fixture; a failed lookup is reported as failed |
 | 5 | Requests classified as event, clarification or amendment | A clarification becomes a Change decision; a brief-changing answer stops the work |
 | 6 | Migration as inherited, the past-work test, the switch | The test finds every governing decision; the record becomes a generated view |
 
-**Riskiest assumption:** assignment plus the challenger finds every decision that governs the work. Slice 6's test
-runs early on three past Changes and ten lead-chat tasks, by hand if need be, before slice 4 is built.
+**Riskiest assumption:** the picker plus the challenger finds every decision that governs the work. A first test on
+13 past pull requests (2026-10-21) chose the picker's model; slice 6's test on past Changes and lead-chat tasks checks
+it again on the migrated statements before the switch.

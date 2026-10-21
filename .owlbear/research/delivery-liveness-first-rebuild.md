@@ -1234,7 +1234,7 @@ their own decisions).
 
 **Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419, TD-424, TD-425, TD-427,
   TD-428, TD-429, TD-430, TD-435, TD-436, TD-437, TD-439, TD-440, TD-441, TD-442, TD-446, TD-449, TD-450, TD-451,
-  TD-452, TD-453, TD-454, TD-455; autonomous TD-389, TD-426.
+  TD-452, TD-453, TD-454, TD-455, TD-456, TD-457, TD-458, TD-459; autonomous TD-389, TD-426.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1284,6 +1284,14 @@ their own decisions).
   check the complete list [TD-452].
 - Shaping decisions apply from brief approval, project-wide ones to the project's other Changes at once; chat and
   page decisions apply at confirmation [TD-453].
+- A Change's rules are picked once at shaping and pinned at approval; its own later decisions attach; a rule replaced
+  or withdrawn elsewhere, or a widened scope, is reassessed at the next step boundary [TD-456].
+- A failed lookup shows as failed, never as "no rules apply"; no fixed size limit; a short log of wrong picks and
+  misses, each with the condition that made it wrong, corrects the picker; no statistics or automatic filters [TD-456].
+- A separate picker on Sol at medium effort picks a Change's rules at shaping and answers every later lookup of
+  workers and lead chats, reading the complete list [TD-459].
+- Every worker of a Change gets the whole picked set; no agent trims it [TD-457].
+- Rules carry no role or kind tags and there are no per-role views [TD-458].
 
 **Owner's words:**
 
@@ -1311,7 +1319,8 @@ their own decisions).
 - TD-442, 2026-10-21: "The asking rules plus the four candidates"
 - TD-446, 2026-10-21: "Tag by topic: the migration proposes roles and steps per topic, I confirm one list"
 
-**Replaced:** TD-359 by TD-383 and TD-388; TD-388 by TD-449; TD-439 by TD-454; TD-446 by TD-455.
+**Replaced:** TD-359 by TD-383 and TD-388; TD-388 by TD-449; TD-439 by TD-454; TD-446 by TD-455; TD-456's brief
+challenger as picker by TD-459.
 
 **Spent:** TD-440 (four mixed lines split by origin, the doubtful ones kept decided) and TD-441 (seven rows without a
   line got one), both applied in their topics.
