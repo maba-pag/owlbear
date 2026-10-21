@@ -77,29 +77,36 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
 def _decisions(c: Change, d: brief_tools.BriefDraft) -> list[BriefDecision]:
     """The draft's decisions; one asking a question the previous version asked keeps its identity (TD-419).
 
-    Once an answer was approved it is never edited: a changed answer becomes a successor that replaces it.
+    Once an answer was approved it is never edited: a changed answer or scope becomes a successor that replaces it.
     """
     now, key = datetime.now(UTC), brief_tools.question_key
     previous = {key(x.question): x for x in c.brief.decisions}
     accepted = {x.id: x for b in c.brief.approved for x in b.decisions if x.id}
     found = []
     for x in d.decisions:
-        ident, replaces = _identity(previous.get(key(x.question)), x.answer, accepted, now)
+        ident, replaces = _identity(previous.get(key(x.question)), (x.answer, x.scope), accepted, now)
         found.append(BriefDecision(**x.model_dump(), id=ident, replaces=replaces))
     return found
 
 
 def _identity(
-    prev: BriefDecision | None, answer: str, accepted: dict[str, BriefDecision], now: datetime
+    prev: BriefDecision | None, said: tuple[str, str], accepted: dict[str, BriefDecision], now: datetime
 ) -> tuple[str, str]:
-    """(id, replaces) for a decision whose previous version is *prev*."""
+    """(id, replaces) for a decision whose previous version is *prev* and whose answer and scope are *said*.
+
+    A published project decision keeps its file's layer, so a changed scope is a successor too (TD-453).
+    """
     if prev is None or not prev.id:
         return new_id(now), ""
-    if prev.id in accepted:  # approved as it stands: kept while its answer is, else a successor
-        return (prev.id, prev.replaces) if accepted[prev.id].answer == answer else (new_id(now), prev.id)
-    if (back := accepted.get(prev.replaces)) and back.answer == answer:  # back to the approved answer
+    if prev.id in accepted:  # approved as it stands: kept while its answer and scope are, else a successor
+        return (prev.id, prev.replaces) if _said(accepted[prev.id]) == said else (new_id(now), prev.id)
+    if (back := accepted.get(prev.replaces)) and _said(back) == said:  # back to the approved answer
         return back.id, back.replaces
     return prev.id, prev.replaces
+
+
+def _said(d: BriefDecision) -> tuple[str, str]:
+    return d.answer, d.scope
 
 
 def new_slug(title: str, taken: list[str]) -> str:

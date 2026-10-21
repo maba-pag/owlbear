@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import stat
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionError, LinkType, Scope, check_write, decision_path, read, snapshot, write
@@ -74,6 +74,7 @@ class Receipt:
     revision: str = ""
     conflict: bool = False
     notice: str = ""
+    batch: bool = False  # the save's own commit holds what it wrote, whatever became of a later conflict flag
 
 
 def _checkout(shared: DataRepo | None) -> DataRepo:
@@ -203,15 +204,24 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     until = time.monotonic() + SAVE_SECONDS
     behind = decision_sync.catch_up(shared, until)
     behind = f"not checked against the remote: {behind}" if behind else ""
-    decisions = [d for d, _, _ in items]
+    decisions, paths = [d for d, _, _ in items], [decision_path(d, folder) for d, folder, _ in items]
+    before = {path: _content(path) for path in paths}
     if refused := _refusals(items) or write_batch(items):
         return _refused(shared, decisions, refused, behind)
-    sent = decision_sync.publish(shared, [decision_path(d, folder) for d, folder, _ in items], message, until)
+    sent = decision_sync.publish(shared, paths, message, until)
+    if sent.uncommitted:  # files no commit holds would be read as rules by every Change here: put back
+        _unstage(shared, before, until)
+        notice = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
+        return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
     if sent.stale:
         return [Receipt(d.id, saved=False, commit=_head(shared), notice=sent.notice[:300]) for d in decisions]
+    held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
     view = _reconcile(shared, decisions, said, until)
-    return [_receipt(shared, view, d, _join(*said, behind), until) for d in decisions]
+    return [
+        replace(_receipt(shared, view, d, _join(*said, behind), until), batch=revision == d.revision)
+        for d, revision in zip(decisions, held, strict=True)
+    ]
 
 
 def _refusals(items: list[Placed]) -> dict[str, str]:
@@ -255,6 +265,14 @@ def _put_back(path: Path, text: bytes | None) -> None:
         path.write_bytes(text)
 
 
+def _unstage(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> None:
+    """Put the batch's files back as they were and their index entries back to `HEAD`'s."""
+    for path, text in before.items():
+        _put_back(path, text)
+    rels = [p.relative_to(shared.root).as_posix() for p in before]
+    shared.git("reset", "-q", "--", *rels, until=until)
+
+
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
     others = f"not saved: {', '.join(sorted(refused))} was refused, and these saves go together or not at all"
     commit = _head(shared)
@@ -267,7 +285,8 @@ def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str
 def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView:
     """Flag competing successors and publish the flags, reloading until none is left unflagged (ROUNDS at most).
 
-    A flag publication the remote overtook is taken back, and the next round reloads and flags again.
+    A flag publication the remote overtook is taken back, and the next round reloads and flags again; a refused flag
+    commit puts the flags back, leaving the competitors unflagged and none of them active.
     """
     project = next((d.project for d in decisions if d.project), "")
     for _ in range(ROUNDS):
@@ -275,9 +294,14 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
         competing = {e.decision.id: e for d in decisions for e in _competitors(found, d)}
         if not competing:
             return _view(shared, project)
+        before = {e.path: _content(e.path) for e in competing.values()}
         if flagged := [path for _, entry in sorted(competing.items()) if (path := _flag(entry))]:
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until)
+            if sent.uncommitted:
+                _unstage(shared, {p: before[p] for p in flagged}, until)
+                said.append(f"the conflict flags on {ids} were not committed and are put back: {sent.notice}")
+                break
             said.append("" if sent.stale else sent.notice)
     return _view(shared, project)
 

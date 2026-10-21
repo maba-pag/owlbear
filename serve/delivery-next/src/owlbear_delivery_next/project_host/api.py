@@ -181,7 +181,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     tool = store.now(slug)
     s = status(c, act, now, tool)
     out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
-    out |= card(c, act, store.events(slug), now, tool)
+    out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
@@ -486,7 +486,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     router.include_router(config_routes.router(store, host))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
-    router.include_router(brief_routes.router(store, read, put, wake, ending))
+    router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
     router.include_router(decision_routes.project(store, lambda: host.repo))

@@ -4,7 +4,9 @@ Change-scope decisions go to `<project>/changes/<record stem>/decisions/`: spent
 unchanged, withdrawn when it was abandoned. Project-scope ones go to `<project>/decisions/`: in force once merged or
 unchanged (the owner's brief approval activated them), a draft the owner may still activate when abandoned. An
 approved project decision a later approved version narrowed to the Change is withdrawn, and its successor relates to
-it: a `replaces` link may not narrow a layer.
+it: a `replaces` link may not narrow a layer. A project decision replacing one of the Change's own carries no link:
+its approval publishes it (TD-453, `lasting`) while the one it replaces waits for the Change's end, which withdraws
+it. A project decision the approval published is left as it is: the Change's end never writes over or demotes it.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
 CHANGES = "changes"
 TITLE = 120
 WHOLE = "Whole wording: "  # a cut statement's whole text in the rationale
+APPROVED = "approved"  # the brief's approval publishes its project decisions (TD-453)
 _STATES = {  # (lasting, the Change's work stays) -> state
     (False, True): State.SPENT,
     (False, False): State.WITHDRAWN,
@@ -59,11 +62,31 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
     return [decision_path(decision, layer) for decision, layer, _ in planned], []
 
 
+def lasting(project: str, c: Change, stem: str) -> list[Decision]:
+    """The approved brief's project decisions as its approval puts them in force, retired ones by a later version.
+
+    Built from the approvals alone, so a retry or a restart builds the same files. One without an id (a Change older
+    than TD-419) or that is not a valid decision is left to the archive, which reports it.
+    """
+    ids = {d.id for d, _ in _approved(c) if d.id}
+    found = []
+    for fields in _brief(project, c, stem, APPROVED):
+        if fields["scope"] is Scope.PROJECT and fields["id"] in ids:
+            try:
+                found.append(Decision.model_validate(fields))
+            except ValidationError:
+                continue
+    return found
+
+
 def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tuple[list[Placed], list[str]]:
     """Each decision of *c* with its layer and its file's revision, and why any cannot be written over its file."""
     planned: list[Placed] = []
     problems: list[str] = []
+    published = {p.id for p in c.decisions_published if p.saved}
     for fields in [*_brief(project, c, stem, outcome), *_changed(project, c, stem, outcome)]:
+        if fields["scope"] is Scope.PROJECT and fields["id"] in published:
+            continue
         try:
             decision = Decision.model_validate(fields)
             layer = root / project / CHANGES / stem if decision.scope is Scope.CHANGE else root / project
@@ -117,12 +140,17 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
     final = {d.id for d in brief.decisions}
     approved = _approved(c)
     lasting = {d.id for d, _ in approved if d.id and d.scope == "project"}
+    own = {d.id for d, _ in approved if d.id and d.scope != "project"}
     narrowing = {d.replaces for d, _ in approved if d.replaces in lasting and d.scope != "project"}
-    successors = {d.replaces for d, _ in approved if d.replaces} - narrowing
+    unlinked = {d.replaces for d, _ in approved if d.replaces in own and d.scope == "project"}
+    successors = {d.replaces for d, _ in approved if d.replaces} - narrowing - unlinked
     kept = outcome != "abandoned"
     found = []
     for i, (d, confirmed) in enumerate(approved):
-        fields = _said(d.answer, d.origin, confirmed or at, f"From Change {c.slug} ({outcome}).")
+        widened = d.scope == "project" and d.replaces in unlinked
+        note = f"From Change {c.slug} ({outcome})."
+        note += f" It replaces {d.replaces}, a decision for this Change alone in an earlier version." if widened else ""
+        fields = _said(d.answer, d.origin, confirmed or at, note)
         fields |= _placed(project, stem, lasting=d.scope == "project", kept=kept)
         if d.id and d.id not in final:  # approved once, then replaced or dropped by a later approval
             fields["state"] = State.REPLACED if kept and d.id in successors else State.WITHDRAWN
@@ -134,7 +162,7 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
             "origin": d.origin,
             "actor": "owner" if d.origin == "decided" else "shaper",
             "source": source,
-            "links": [{"type": link, "target": d.replaces}] if d.replaces else [],
+            "links": [{"type": link, "target": d.replaces}] if d.replaces and not widened else [],
             "created_at": at,
         }
         found.append(fields)

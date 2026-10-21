@@ -45,6 +45,7 @@ function card([c, label, variant]) {
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
     ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
     ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}
+    ${(c.decisions || []).map((d) => html`<p class="meta">${d}</p>`)}
   </li>`;
 }
 

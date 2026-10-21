@@ -41,6 +41,7 @@ from owlbear_delivery_next.workflow_steps import (
     conversation,
     curation,
     curation_build,
+    decision_publication,
     decisions_gate,
     design,
     engine,
@@ -399,6 +400,9 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
             store.write(lock, loop.apply(change, stop, now))
             return
+        if (resumed := decision_publication.resume(store, lock, change, datetime.now(UTC))) is None:
+            return
+        change = resumed
     with decisions_gate.gated(store, lock, change, step) as passed:
         if passed is None:  # a gone check's end runs whatever the decisions say
             prepare.ran(store, lock, store.read(lock.slug), repo, runnable=False)

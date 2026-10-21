@@ -27,6 +27,7 @@ class Sent:
 
     stale: bool = False
     notice: str = ""
+    uncommitted: bool = False  # the commit failed and `HEAD` did not move: nothing of the batch is in Git
 
 
 def _decision_file(rel: str) -> bool:
@@ -86,7 +87,7 @@ def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> 
     """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here."""
     before = _rev(shared, "HEAD", until)
     if failed := shared.commit(paths, message, until):
-        return Sent(notice=failed)
+        return Sent(notice=failed, uncommitted=bool(before) and _rev(shared, "HEAD", until) == before)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     made = _ours(shared, before, rels, until)
     pushed = shared.git("push", "-q", until=until)

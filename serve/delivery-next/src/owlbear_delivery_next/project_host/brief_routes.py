@@ -18,15 +18,14 @@ from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.change_flow import brief_rounds, picks
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
-from owlbear_delivery_next.workflow_steps import decisions_gate, pick
+from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.decision_store import DataView
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.store import Lock, Store
 
 
 class ChallengeBody(BaseModel):
@@ -78,6 +77,18 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
     return ""
 
 
+def approved(store: Store, lock: Lock, body: ApproveBody) -> str:
+    """Check and record the owner's approval under *lock*, its project decisions published; or why it is refused."""
+    c = store.read(lock.slug)
+    view = decisions_gate.loaded(store)  # one read: the pick is checked against the list the baseline pins
+    if why := refused(store, c, body, view):
+        return why
+    now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)
+    baseline, owed = decisions_gate.pinned(store, c, now, view)
+    approval = BriefApproval(at=now, version=body.version, baseline=baseline, unpinned=owed, picked=c.brief.picked)
+    return decision_publication.approve(store, lock, c, approval)  # TD-453: in force at approval
+
+
 def asked(store: Store, c: Change, body: ChallengeBody) -> str:
     """Record the shaper's request on *c*: a challenge, whose first for a version owes its pick, or a pick retry.
 
@@ -98,26 +109,27 @@ def asked(store: Store, c: Change, body: ChallengeBody) -> str:
 def router(
     store: Store,
     read: Callable[[str], Change],
-    put: Callable[[str, InboxItem], dict[str, str]],
     wake: Callable[[], None],
     held: Callable[[], bool] = lambda: False,
 ) -> APIRouter:
     """POST /briefs/challenge records the shaper's request; POST /changes/{slug}/approve-brief the owner's approval.
 
-    The challenge runs at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until
-    Resume.
+    Both are checked and recorded under the Change's lock, so the brief cannot change in between. The challenge runs
+    at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until Resume.
     """
     routes = APIRouter()
 
     @routes.post("/changes/{slug}/approve-brief")
     def approve(slug: str, body: ApproveBody) -> dict[str, str]:
-        view = decisions_gate.loaded(store)  # one read: the pick is checked against the list the baseline pins
-        if why := refused(store, c := read(slug), body, view):
-            raise HTTPException(409, why)
-        now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)
-        baseline, owed = decisions_gate.pinned(store, c, now, view)
-        approval = BriefApproval(at=now, version=body.version, baseline=baseline, unpinned=owed, picked=c.brief.picked)
-        return put(slug, approval)
+        read(slug)
+        try:
+            with store.lock(slug) as lock:
+                if why := approved(store, lock, body):
+                    raise HTTPException(409, why)
+        except (LockHeldError, StoreError) as exc:
+            raise HTTPException(409, f"change: {exc}; try again") from exc
+        wake()
+        return {"accepted": "brief-approval"}
 
     @routes.post("/briefs/challenge")
     def challenge(body: ChallengeBody) -> dict[str, Any]:

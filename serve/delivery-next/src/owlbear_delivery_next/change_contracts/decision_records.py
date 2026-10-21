@@ -70,6 +70,20 @@ class Pick(_Strict):
     session: str = ""  # the picker's session, recorded before it starts: a killed runner's pick resumes it
 
 
+class Published(_Strict):
+    """A brief's project decision its approval published (TD-453), with that save's receipt."""
+
+    id: str
+    title: str
+    state: str  # in force, or retired by a later approved version
+    revision: str = ""  # the file's revision the save wrote
+    saved: bool = False
+    committed: bool = False
+    published: bool = False  # the remote held it after the save; else the data repository's next save pushes it
+    notice: str = ""
+    at: datetime
+
+
 class Said(BaseModel):
     """What a pinned decision said, kept for those that applied, so a later difference can show the old wording."""
 

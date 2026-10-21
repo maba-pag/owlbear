@@ -178,6 +178,7 @@ def test_card_shows_the_last_event_step_time_and_credits():
         "quiet": False,
         "credits": {"change": 3.0, "step": 0.75, "unknown": 0},
         "overlaps": [],
+        "decisions": [],
     }
 
 

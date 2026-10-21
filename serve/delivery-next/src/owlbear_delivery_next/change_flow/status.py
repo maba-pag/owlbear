@@ -131,10 +131,19 @@ def _episode(c: Change, now: datetime) -> tuple[str, bool]:
     return f"{kind} failing for {_age(now - b.since)}, attempt {b.attempts}", now - b.since >= EPISODE_QUIET
 
 
-def card(
-    c: Change, activity: Activity, events: list[dict[str, Any]], now: datetime, tool: dict[str, Any] | None = None
+def card(  # noqa: PLR0913 - the data repository's push state is observed apart from the Change
+    c: Change,
+    activity: Activity,
+    events: list[dict[str, Any]],
+    now: datetime,
+    tool: dict[str, Any] | None = None,
+    *,
+    pending: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
-    """The Change card: the step and its latest tool call or logged event, step time, quiet flag and credits."""
+    """The Change card: the step and its latest tool call or logged event, step time, quiet flag and credits.
+
+    *pending* says what the shared data repository has not pushed yet, if anything.
+    """
     line, since = stage(c), c.step.started_at
     last = next((e for e in reversed(events) if "at" in e and "event" in e), None)
     shown = _tool_at(c, tool)
@@ -158,7 +167,20 @@ def card(
         "quiet": quiet or silent(c, activity, now, tool) is not None,
         "credits": {"change": round(c.spend.credits, 2), "step": round(step, 2), "unknown": len(c.spend.unread)},
         "overlaps": [f"overlaps with {o.other}: {', '.join(o.paths[:5])}" for o in c.overlaps],
+        "decisions": unpublished(c, pending),
     }
+
+
+def unpublished(c: Change, pending: Callable[[], str] | None = None) -> list[str]:
+    """The brief's project decisions its approval committed but did not push, until a later save pushed (TD-453).
+
+    Shown after the Change finished too: its cleanup never pushes them.
+    """
+    left = [p for p in c.decisions_published if p.committed and not p.published]  # planned ones: resume's line
+    if not left or (pending is not None and not pending()):
+        return []
+    titles, why = ", ".join(p.title for p in left), left[-1].notice or "not pushed"
+    return [f"Project decisions not yet pushed: {titles}: {why}; the data repository's next save pushes them"]
 
 
 def _left(events: list[dict[str, Any]], since: datetime | None) -> str:
