@@ -41,7 +41,9 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
   its project decisions in force (the brief approval activated them); abandoned, the Change decisions are withdrawn
   and the project decisions drafts the owner may still activate. A decision keeps its identity across brief versions
   by its question; once approved, a changed answer is a successor that replaces it. One decision that cannot be
-  written keeps all of the Change's out (the record still publishes) and is reported.
+  written keeps all of the Change's out (the record still publishes) and is reported; so does one the validator would
+  find at fault together with the decisions already in the repository (two in-force successors, say), and a write
+  that fails midway puts every file of the set back as it was.
 - **OwlBear's repository** keeps a generated, read-only full view (OwlBear's and the applicable Global decisions, with
   provenance, mandatory rules apart from history) so Copilot's cloud agent, Copilot code review and CodeRabbit read
   it (TD-425). It pins the data commit it came from; the lead chat regenerates it by pull request; CI checks equality
@@ -63,13 +65,17 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
   A snapshot validates every project's folder and keeps Global's and its own project's decisions and every finding
   involving one of them, so a `promoted_from` link to another project's decision is not a finding but another
   project's decision replacing a Global one (`replace-scope`) keeps that Global decision out of force everywhere. A
-  project folder that is missing, a folder that cannot be read, or a file in the project's view that is not a usable
-  decision stops loading. The index rebuilds a project's rows when the data commit or the digest of its decision
+  project folder that is missing, a folder of the root, Global or the project itself that cannot be read, or a file
+  in the project's view that is not a usable decision stops loading. Another project's folder that cannot be read
+  stops no one: it is an `unreadable` finding of that project's layer, outside the view, which stays complete. The
+  residual risk: a conflict over a Global rule that only that unreadable folder holds (its decision replacing or
+  competing with the Global one) stays unseen, and the Global rule counts as active, until the folder can be read.
+  The index rebuilds a project's rows when the data commit or the digest of its decision
   files' revisions changes, so uncommitted files count; creating or replacing its file is serialized by a lock file.
 - **Built in slice 6** (choices made while building): the view is `.owlbear/decisions.md`, written by
   `uv run decisions-view <owlbear-data> --project owlbear`. Its header says the record stays authoritative until the
   owner has reviewed the migration (TD-437); rules in force come Global first, then OwlBear's (its Changes' included),
-  grouped by topic; drafts are counted, not listed; replaced, withdrawn and spent ones are one line each in History,
+  grouped by topic, each with its rationale and consequences on one line apiece, so `--check` compares them too; drafts are counted, not listed; replaced, withdrawn and spent ones are one line each in History,
   and the validator's findings are listed. Its last line is the sha256 of everything above it. Freshness means the
   rendered decisions differ: `--check` compares the view without its data commit line and hash, so new owlbear-data
   commits that leave the decisions alone never fail it, and the pinned commit names the data the view was last
@@ -95,7 +101,9 @@ resolves, because two active rules that contradict each other give agents no ans
 ## 6. Lifecycle and deletion (TD-430)
 
 Draft, in force, then replaced, withdrawn (no longer relevant, no successor) or spent (a one-off that is done).
-Accepted wording is never edited: a change of intent is a successor. Nothing is deleted; replaced, withdrawn and spent
+Accepted wording is never edited: a change of intent is a successor. A `replaces` link never narrows a layer: an
+approved project decision that a later approved brief version narrows to its Change is archived withdrawn, and its
+Change successor relates to it (`related_to`). Nothing is deleted; replaced, withdrawn and spent
 decisions are hidden by default from agents and on the page. The only exception: a decision that leaked a secret or
 personal data is purged, with the owner's consent.
 
@@ -117,7 +125,11 @@ personal data is purged, with the owner's consent.
   the first readable gated step asks the owner to pin the set in force then (never a silent pin), while a Change
   approved before this gate is pinned on its first gated step. The gate runs once per step in the runner before
   any step but shaping (it waits for chat) and cleanup (an ending Change always cleans up), before a due test-copy
-  preparation and before the host launches a check environment: an unreadable store stops with its `state` stop; an
+  preparation and before the host launches a check environment. It first catches the checkout up with its remote
+  (`decision_store.refresh`: under the data repository's lock, rebasing only a clean checkout), so another
+  checkout's replacement or conflict reaches an idle one; when it cannot (offline, uncommitted files, a refused
+  rebase), steps go on with the local decisions, but publication and merge, which cannot be undone, stop with the
+  reason. Then: an unreadable store stops with its `state` stop; an
   applying decision
   flagged `conflict` or in any finding stops naming it; a new, changed or no-longer-in-force decision that applies
   now or applied at the pin asks "Continue with the current decisions" (re-pins the set the question showed) or
@@ -125,7 +137,8 @@ personal data is purged, with the owner's consent.
   starts applying because the scope grew is listed without a question. A project without a data repository runs as
   before until a Change holds a baseline, which then stops: Changes from before the gate had no rules to compare
   with. The section is held for the step's whole run, so the worker's, a challenger's and a judge's inputs carry the
-  same text; above 12,000 characters of decision entries the step stops and asks for a split, never a cut.
+  same text; above 12,000 characters of decision entries the step stops and asks for a split, never a cut. A
+  statement the archive cut keeps its whole wording in the rationale, and the entry carries it whole.
 
 ## 8. Read-backs (TD-427)
 

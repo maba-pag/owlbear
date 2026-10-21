@@ -157,7 +157,7 @@ def refresh(shared: DataRepo | None) -> str:
             if changed := status.stdout.splitlines():
                 return f"not refreshed: {len(changed)} uncommitted file(s) in {shared.root}; the next save publishes"
             failed = decision_sync.catch_up(shared, time.monotonic() + SAVE_SECONDS)
-    except DataRepoError as exc:
+    except (DataRepoError, OSError) as exc:  # a lock or attributes file that cannot be opened too
         raise DecisionsUnavailable(str(exc)) from exc
     return f"not refreshed from the remote: {failed}" if failed else ""
 
@@ -204,7 +204,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     behind = decision_sync.catch_up(shared, until)
     behind = f"not checked against the remote: {behind}" if behind else ""
     decisions = [d for d, _, _ in items]
-    if refused := _refusals(items) or _write(items):
+    if refused := _refusals(items) or write_batch(items):
         return _refused(shared, decisions, refused, behind)
     sent = decision_sync.publish(shared, [decision_path(d, folder) for d, folder, _ in items], message, until)
     if sent.stale:
@@ -226,7 +226,7 @@ def _refusals(items: list[Placed]) -> dict[str, str]:
     return found
 
 
-def _write(items: list[Placed]) -> dict[str, str]:
+def write_batch(items: Sequence[Placed]) -> dict[str, str]:
     """Write the batch; a refused or failed file puts back every file of the batch as it was and says why."""
     before = {decision_path(d, folder): _content(decision_path(d, folder)) for d, folder, _ in items}
     for decision, folder, expected in items:

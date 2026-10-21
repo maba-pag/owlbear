@@ -115,3 +115,39 @@ def test_a_folder_that_cannot_be_looked_into_raises_instead_of_loading_as_empty(
             load_folder(tmp_path / layer)
     finally:
         (tmp_path / locked).chmod(0o755)
+
+
+@pytest.mark.parametrize("locked", ["shop", "shop/changes", "shop/decisions"])
+def test_another_projects_unreadable_folder_is_a_finding_outside_the_view_not_a_stop(tmp_path, make, locked):
+    rule = put(tmp_path, make, Scope.GLOBAL)
+    own = put(tmp_path, make)
+    put(tmp_path, make, project="shop")
+    put(tmp_path, make, Scope.CHANGE, project="shop", change="20261020-090000-notes")
+    (tmp_path / locked).chmod(0)
+    try:
+        seen = snapshot(tmp_path, "owlbear")
+        with pytest.raises(PermissionError):
+            snapshot(tmp_path, "shop")  # its own project's folder still stops it
+    finally:
+        (tmp_path / locked).chmod(0o755)
+
+    assert {e.decision.id for e in seen.entries} == {rule.id, own.id}
+    assert (seen.complete, seen.findings) == (True, ())
+    [(layer, finding)] = seen.outside
+    where = tmp_path / ("shop/changes" if locked == "shop/changes" else "shop")  # each layer is read on its own
+    assert (layer.project, layer.scope, finding.rule, finding.path) == ("shop", Scope.PROJECT, "unreadable", str(where))
+    assert seen.active(rule.id)
+
+
+def test_a_readable_layer_beside_an_unreadable_one_still_counts(tmp_path, make):
+    rule = put(tmp_path, make, Scope.GLOBAL)
+    put(tmp_path, make, project="shop", links=(Link(type=LinkType.REPLACES, target=rule.id),))
+    put(tmp_path, make, Scope.CHANGE, project="shop", change="20261020-090000-notes")
+    (tmp_path / "shop" / "changes").chmod(0)
+    try:
+        seen = snapshot(tmp_path, "owlbear")
+    finally:
+        (tmp_path / "shop" / "changes").chmod(0o755)
+
+    assert not seen.active(rule.id)  # shop's readable replacement of a Global rule is still a finding here
+    assert "replace-scope" in {f.rule for f in seen.findings}

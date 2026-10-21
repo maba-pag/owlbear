@@ -484,3 +484,12 @@ def test_a_data_repository_path_with_spaces_loads_and_saves(tmp_path) -> None:
     said = save(local, make(), expected_revision=None, message="decisions: notes")
     assert (said.saved, said.committed) == (True, True)
     assert len(load(local, PROJECT).snapshot.entries) == 1
+
+
+def test_a_lock_that_cannot_be_opened_makes_refresh_unavailable_not_a_crash(shared, monkeypatch) -> None:
+    def broken(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(DataRepo, "locked", broken)
+    with pytest.raises(DecisionsUnavailable, match="Permission denied"):
+        refresh(set_up(shared))

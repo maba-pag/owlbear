@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import shutil
+import subprocess
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Applicability, Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions import Applicability, Decision, Link, LinkType, Origin, Scope, State, new_id, read, write
 from owlbear_delivery_next.change_contracts.curation_records import Share, TestReview
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.change_contracts.models import (
@@ -317,6 +318,60 @@ def test_a_change_pinned_with_whole_revisions_does_not_ask_while_they_hold(tmp_p
     assert ran == [K.BUILD]
     replace(shared, rule, "The pages are plain HTML and CSS with no build step.")
     assert step(store, tmp_path).outcome.exit == Exit.ASK  # an old pin still sees a real change
+
+
+def git(cwd: Path, *args: str) -> str:
+    who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+
+
+def pushed(root: Path, message: str) -> None:
+    for args in (("add", "-A"), ("commit", "-qm", message), ("push", "-q")):
+        git(root, *args)
+
+
+def test_another_checkouts_replacement_reaches_an_idle_checkouts_next_gated_step(tmp_path, shared, shared_repo, ran):
+    rule = put(shared, make())
+    store = stored(tmp_path, shared, change())
+    pushed(shared.root, "a rule")
+    peer = tmp_path / "peer"
+    git(tmp_path, "clone", "-q", str(shared_repo[1]), str(peer))
+    new = replace(DataRepo(peer), rule, "The pages are plain HTML and CSS with no build step.")
+    pushed(peer, "replaced in another checkout")
+
+    c = step(store, tmp_path)
+
+    assert ran == []
+    assert f"new: {new.id}" in loop.open_question(c).text
+
+
+@pytest.mark.parametrize("kind", [K.PUBLISH, K.MERGE])
+def test_a_failed_refresh_stops_before_publish_and_merge_but_not_before_build(tmp_path, shared, ran, kind):
+    put(shared, make())
+    git(shared.root, "remote", "set-url", "origin", str(tmp_path / "offline.git"))
+
+    assert step(stored(tmp_path / "build", shared, change()), tmp_path).outcome is None
+    c = step(stored(tmp_path / "last", shared, change(kind)), tmp_path)
+
+    assert ran == [K.BUILD]
+    assert (c.outcome.exit, c.stop.kind, c.stop.action) == (Exit.STOP, ErrorKind.STATE, decisions_gate.STALE)
+    assert f"not refreshed before {kind}, which cannot be undone: not refreshed from the remote" in c.stop.reason
+
+
+def test_a_long_answer_reaches_the_step_whole_within_the_budget(shared):
+    words = "Notes live in one SQLite table " + "and stay in it, " * 20 + "until the owner moves them."
+    earlier = Change(slug="notes", brief=Brief(version=1, approved_version=1, approved_at=AT, title="Notes", decisions=[
+        BriefDecision(id=new_id(), question="Where?", answer=words, origin="decided", scope="project")]))  # fmt: skip
+    [path], _ = decision_archive.archive(shared.root, PROJECT, earlier, "20261021-090000-notes", "merged")
+    cut = read(path)
+
+    line = step_decisions.entry(cut, resolved=True)
+
+    assert cut.statement.endswith("\u2026")
+    assert line.endswith(f"{cut.statement} (Whole wording: {' '.join(words.split())})")
+    assert step_decisions.size([step_decisions.HEAD, line]) == len(line) + 1
+    assert step_decisions.entry(make(statement="Wait\u2026", rationale="Whole wording: other"), resolved=True).endswith(
+        ": Wait\u2026")  # fmt: skip
 
 
 def checking(**fields) -> Change:

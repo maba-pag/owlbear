@@ -65,6 +65,8 @@ def _rule(entry: Entry, seen: Snapshot, names: dict[str, str]) -> list[str]:
         f"  - Statement: {_line(d.statement)}",
         f"  - Origin: {d.origin} by {_line(d.actor)}{source}, {d.created_at.date()}; scope: {_scope(d)}",
     ]
+    said = (("Rationale", d.rationale), ("Consequences", d.consequences))  # in the view, so `--check` compares them
+    lines += [f"  - {name}: {_line(text)}" for name, text in said if text.strip()]
     a = d.applies_to
     selectors = [
         f"{kind} {', '.join(f'`{v}`' for v in values)}"
