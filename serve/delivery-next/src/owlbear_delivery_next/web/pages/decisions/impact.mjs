@@ -110,8 +110,8 @@ function report(e, r) {
     <ul class="impacts">${r.projects.map((p) => place(p, e, r))}</ul>
     ${r.fixes ? html`<div class="row">${button("Schedule fixes", () => schedule(e, r), { aria: DIALOG,
       busy: state.pending === "schedule" })}</div>` : nothing}
-    ${made ? listed("Backlog entries", made,
-      (x) => `#${x.id} ${untagged(x.title)} · ${x.project}${x.new ? "" : ` · updated, ${x.added} new item(s)`}`) : nothing}`;
+    ${made ? listed("Backlog entries", made, (x) =>
+      `#${x.id} ${untagged(x.title)} · ${x.project}${x.new ? "" : ` · updated, ${x.added} new item(s)`}`) : nothing}`;
 }
 
 export function impact(e) {
