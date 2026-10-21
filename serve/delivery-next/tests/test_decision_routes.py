@@ -35,6 +35,7 @@ CHAT = AUTH | {"x-owlbear-use": "chat"}
 class Host:
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
+    repo = None  # the impact report says it does not know the clone
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -280,7 +281,6 @@ def test_a_second_reversal_is_the_owners_re_decision_only(owner, store, shared):
 
     again = {"title": "Notes", "statement": "A file.", "replaces": second.id, "reason": "r"}
     refused = chat.post("/api/next/decisions/propose", json=again)
-    worded = chat.post("/api/next/decisions/propose", json=again | {"confirmed": True}).json()
     unworded = after(second, state=State.DRAFT, statement="A JSON file.")
     seed(shared, unworded)
     unconfirmed = act(owner, unworded, "activate", reason="r")
@@ -288,7 +288,6 @@ def test_a_second_reversal_is_the_owners_re_decision_only(owner, store, shared):
 
     assert refused.status_code == 409
     assert "second reversal" in refused.json()["detail"]
-    assert now(shared, worded["receipts"][0]["id"]).state is State.DRAFT  # confirmed in the chat, still his to activate
     assert unconfirmed.status_code == 409
     assert confirmed["saved"] is True
     assert now(shared, unworded.id).origin is Origin.DECIDED
@@ -309,7 +308,7 @@ def test_a_chat_tool_never_takes_the_owners_actions(store, shared, action):
     assert now(shared, rule.id) == rule
 
 
-def test_a_chat_proposal_is_always_a_draft_and_never_replaces_a_decided_or_global_one(store, shared):
+def test_a_chat_proposal_is_a_draft_unless_confirmed_and_never_replaces_a_decided_or_global_one(store, shared):
     chat, rule, wide = client(store, CHAT), decided(), worldwide()
     seed(shared, rule, wide)
 
@@ -323,8 +322,9 @@ def test_a_chat_proposal_is_always_a_draft_and_never_replaces_a_decided_or_globa
 
     one, two = now(shared, plain["receipts"][0]["id"]), now(shared, worded["receipts"][0]["id"])
     assert (one.state, one.origin, one.read_back) == (State.DRAFT, Origin.AUTONOMOUS, "none")
-    assert (two.state, two.origin, two.read_back) == (State.DRAFT, Origin.DECIDED, today())
-    assert plain["receipts"][0]["active"] is False
+    assert (two.state, two.origin, two.read_back) == (State.IN_FORCE, Origin.DECIDED, today())  # TD-450
+    assert (plain["receipts"][0]["active"], worded["receipts"][0]["active"]) == (False, True)
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: record {two.id}"
     assert (on_decided.status_code, on_global.status_code, with_words.status_code) == (409, 422, 422)
     assert "secret wording" not in with_words.text  # a refused value is never echoed (TD-449)
     assert with_words.json()["detail"] == [
@@ -470,14 +470,14 @@ def test_find_decisions_counts_what_it_leaves_out(shared, monkeypatch):
 
 
 @pytest.mark.usefixtures("chat")
-def test_record_decision_is_always_a_draft_decided_only_when_the_owner_confirmed_it(shared):
+def test_record_decision_is_a_draft_unless_the_owner_confirmed_it_then_in_force_at_once(shared):
     plain = tool("record_decision", title="Tags", statement="Tags are free text.")
     confirmed = tool("record_decision", title="Tags", statement="Tags are free text.", confirmed=True)
 
     one, two = now(shared, plain["receipts"][0]["id"]), now(shared, confirmed["receipts"][0]["id"])
     assert plain["saved"] is True
     assert (one.state, one.origin, one.actor, one.read_back) == (State.DRAFT, Origin.AUTONOMOUS, "chat", "none")
-    assert (two.state, two.origin, two.read_back) == (State.DRAFT, Origin.DECIDED, today())
+    assert (two.state, two.origin, two.read_back) == (State.IN_FORCE, Origin.DECIDED, today())
     assert "decisions_page" in plain
     found = tool("find_decisions", text="tags")
     assert "owner_words" not in str([plain, confirmed, found])
@@ -487,23 +487,89 @@ def test_record_decision_is_always_a_draft_decided_only_when_the_owner_confirmed
 
 
 @pytest.mark.usefixtures("chat")
-def test_record_decision_never_replaces_a_decided_decision(shared):
+def test_record_decision_replaces_a_decided_decision_only_when_the_owner_re_decided_it(shared):
     rule = decided()
     seed(shared, rule)
-    got = tool("record_decision", title="Notes", statement="Postgres.", replaces=rule.id, confirmed=True)
-    assert got["saved"] is False
-    assert "re-decides it on the Decisions page" in got["error"]
+    shown = {"decision": rule.id, "revision": rule.revision}
+    draft = tool("record_decision", title="Notes", statement="Postgres.", replaces=shown, rationale="It grew.")
+    unsaid = tool("record_decision", title="Notes", statement="Postgres.", replaces=shown, rationale="It grew.",
+                  confirmed=True)  # fmt: skip
+    assert (draft["saved"], unsaid["saved"]) == (False, False)
+    assert "re-decides it on the Decisions page" in draft["error"]
+    assert "confirm that you re-decide it" in unsaid["error"]
     assert now(shared, rule.id) == rule
+
+    got = tool("record_decision", title="Notes", statement="Postgres.", replaces=shown | {"redecide": True},
+               rationale="It grew.", confirmed=True)  # fmt: skip
+
+    new = now(shared, got["receipts"][0]["id"])
+    assert (new.state, new.origin, new.actor, new.source) == (State.IN_FORCE, Origin.DECIDED, "chat", "chat")
+    assert now(shared, rule.id).state is State.REPLACED
 
 
 @pytest.mark.usefixtures("chat")
 def test_record_decision_says_why_a_draft_replaces_one(shared):
     rule = make()
     seed(shared, rule)
-    bare = tool("record_decision", title="Notes", statement="Postgres.", replaces=rule.id)
-    got = tool("record_decision", title="Notes", statement="Postgres.", replaces=rule.id, rationale="It grew.")
+    shown = {"decision": rule.id, "revision": rule.revision}
+    bare = tool("record_decision", title="Notes", statement="Postgres.", replaces=shown)
+    got = tool("record_decision", title="Notes", statement="Postgres.", replaces=shown, rationale="It grew.")
     assert (bare["saved"], "say why" in bare["error"]) == (False, True)
     assert now(shared, got["receipts"][0]["id"]).rationale == "Why it changed: It grew."
+
+
+@pytest.mark.usefixtures("chat")
+def test_a_confirmed_replacement_retires_its_predecessor_in_one_commit_and_shows_its_impact(shared):
+    first = make(state=State.REPLACED)
+    rule = after(first, title="Notes", statement="Postgres.")  # replacing it again is a second reversal
+    seed(shared, first, rule)
+    head = git(shared.root, "rev-parse", "HEAD")
+    stale = tool("record_decision", title="Notes", statement="A file.", rationale="Smaller.", confirmed=True,
+                 replaces={"decision": rule.id, "revision": "0" * 64})  # fmt: skip
+    assert (stale["saved"], git(shared.root, "rev-parse", "HEAD")) == (False, head)
+
+    got = tool("record_decision", title="Notes", statement="A file.", rationale="Smaller.", confirmed=True,
+               replaces={"decision": rule.id, "revision": rule.revision, "effect": "forbids"})  # fmt: skip
+
+    new = now(shared, got["receipts"][0]["id"])
+    assert (new.state, new.origin, new.read_back, now(shared, rule.id).state) == (
+        State.IN_FORCE, Origin.DECIDED, today(), State.REPLACED)  # fmt: skip
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: replace {rule.id} with {new.id}"
+    assert len(git(shared.root, "show", "--name-only", "--format=", "HEAD").splitlines()) == 2  # both or neither
+    assert (got["impact"]["old"]["id"], got["impact"]["effect"]) == (rule.id, "forbids")
+
+
+@pytest.mark.usefixtures("chat")
+def test_a_chat_replaces_a_global_decision_only_with_a_global_one(shared):
+    wide, local = worldwide(), make()
+    seed(shared, wide, local)
+
+    def replacing(old: Decision, scope: str) -> dict[str, Any]:
+        return tool("record_decision", title="x", statement="Other.", rationale="r", confirmed=True, scope=scope,
+                    replaces={"decision": old.id, "revision": old.revision})  # fmt: skip
+
+    departing, widening = replacing(wide, "here"), replacing(local, "global")
+    assert "only by an exception" in departing["error"]
+    assert "promoting it" in widening["error"]
+    got = replacing(wide, "global")
+    assert (now(shared, got["receipts"][0]["id"]).scope, now(shared, wide.id).state) == (Scope.GLOBAL, State.REPLACED)
+
+
+@pytest.mark.usefixtures("chat")
+def test_retire_decision_needs_the_owners_confirmation_and_a_decided_one_his_re_decision(shared):
+    rule, held = make(), decided(title="Exports are CSV")
+    seed(shared, rule, held)
+    head = git(shared.root, "rev-parse", "HEAD")
+
+    def retire(d: Decision, **more: object) -> dict[str, Any]:
+        return tool("retire_decision", decision=d.id, revision=d.revision, reason="No notes any more.", **more)
+
+    unconfirmed, unsaid = retire(rule), retire(held, confirmed=True)
+    assert (unconfirmed["saved"], unsaid["saved"], git(shared.root, "rev-parse", "HEAD")) == (False, False, head)
+    assert "confirmed=true" in unconfirmed["error"]
+    assert retire(rule, confirmed=True)["saved"] is True
+    assert retire(held, confirmed=True, redecide=True)["saved"] is True
+    assert (now(shared, rule.id).state, now(shared, held.id).state) == (State.WITHDRAWN, State.WITHDRAWN)
 
 
 @pytest.mark.usefixtures("chat")
@@ -513,7 +579,7 @@ def test_read_back_decision_records_only_a_confirmation_and_a_stale_revision_is_
 
     stale = tool("read_back_decision", decision=rule.id, revision="0" * 64, confirmed=True)
     unconfirmed = tool("read_back_decision", decision=rule.id, revision=rule.revision)
-    assert (unconfirmed["saved"], "replacement draft" in unconfirmed["error"]) == (False, True)
+    assert (unconfirmed["saved"], "replacement he confirms" in unconfirmed["error"]) == (False, True)
     assert now(shared, rule.id) == rule
     got = tool("read_back_decision", decision=rule.id, revision=rule.revision, confirmed=True)
 

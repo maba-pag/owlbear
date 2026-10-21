@@ -1,4 +1,9 @@
-"""Chat tools: a client of the running host, with a read-only status fallback when it is down (D4 §3.1, §3.3)."""
+"""Chat tools: a client of the running host, with a read-only status fallback when it is down (D4 §3.1, §3.3).
+
+The workspace is told before any state is made: a registered project's clone gets every tool; OwlBear's own
+repository, by its identity, gets OwlBear's decisions through the machine host (TD-435, TD-450); any other folder
+is no OwlBear project, and every tool says so.
+"""
 
 from __future__ import annotations
 
@@ -10,24 +15,30 @@ import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - tool annotations resolve at runtime
+from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop
-from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system import codebase, data_repo
+from owlbear_delivery_next.machine_host import registry, serve, versions
 from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.state_store.store import Store, StoreError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 NOT_RUNNING = (
     "Delivery is not running for {repo} - run `owlbear start`, then add this project on its page if it is not "
     "listed. Nothing advances until it runs."
 )
+NOT_OWLBEAR = "{repo} is not an OwlBear project: add its clone on the Changes page, then reload this window"
+NO_CHANGES = "OwlBear's own workspace has no Changes: only the decision tools work here"
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
-_STATE: dict[str, Chat] = {}
+_STATE: dict[str, Chat | Closed] = {}
 OK = 200
 UPDATED = "OwlBear updated: reload this VS Code window"  # a chat server older than the host (self-update §5.6)
 STALE = 409
@@ -49,12 +60,18 @@ SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "re
 class Chat:
     """The chat tools of one clone; every write goes through the running host."""
 
+    prefix = ""  # where its decisions are, under the host's API
+
     def __init__(self, repo: Path) -> None:
         self.repo, self.store = repo, Store.open(repo)
 
+    def record(self) -> host.HostRecord | None:
+        """The running host this workspace's tools call."""
+        return host.running(self.store)
+
     def call(self, method: str, path: str, body: object = None) -> tuple[int, Any]:
         """One request to the host with its token; 503 when it is not running."""
-        rec = host.running(self.store)
+        rec = self.record()
         down = NOT_RUNNING.format(repo=self.repo)
         if updated(rec):  # it reads no state either: a newer version may have written it
             return STALE, {"error": UPDATED}
@@ -62,7 +79,7 @@ class Chat:
             return 503, {"error": down}
         headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "chat"}
         data = None if body is None else json.dumps(body).encode()
-        url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{path}"  # the machine host's (TD-242)
+        url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{self.prefix}{path}"  # TD-242
         request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
         try:
             with _LOCAL.open(request, timeout=15) as response:
@@ -167,8 +184,8 @@ class Chat:
         return {"answered": code == OK, **out}
 
     def page(self) -> str | None:
-        """The Decisions page with its token, where the owner activates, replaces and withdraws."""
-        rec = host.running(self.store)
+        """The Decisions page with its token, where the owner looks decisions up and changes them."""
+        rec = self.record()
         full = api.link(rec)
         return full and rec and full.replace(rec.url, f"{rec.url}decisions", 1)
 
@@ -189,15 +206,72 @@ class Chat:
         return out | {"decisions_page": self.page()}
 
 
+class OwlBear(Chat):
+    """OwlBear's own workspace, never registered (TD-435): its decisions on the machine host, and no Changes."""
+
+    prefix = "/owlbear"
+
+    def __init__(self, repo: Path) -> None:  # no store: opening one makes Delivery state for this clone
+        self.repo = repo
+
+    def record(self) -> host.HostRecord | None:
+        """The machine host's record."""
+        return serve.running()
+
+    def save_brief(self, *_args: object, **_kwargs: object) -> dict[str, Any]:  # type: ignore[override]
+        """No Change tool works here."""
+        return {"error": NO_CHANGES}
+
+    challenge_brief = show_status = answer_question = save_brief
+
+
+class Closed:
+    """A folder that is no OwlBear project: every tool says so and nothing is written."""
+
+    def __init__(self, repo: Path) -> None:
+        self.why = NOT_OWLBEAR.format(repo=repo)
+
+    def __getattr__(self, _name: str) -> Callable[..., dict[str, Any]]:
+        return lambda *_args, **_kwargs: {"error": self.why}
+
+
+def workspace(repo: Path) -> Chat | Closed:
+    """The tools for the folder at *repo*, told before any state is made (``Store.open`` makes it)."""
+    try:
+        pid = registry.clone_id(registry.store_of(repo))
+        known = pid is not None and any(p.id == pid for p in registry.load().projects)
+    except registry.RegistryError:
+        known = False
+    if known:
+        return Chat(repo)
+    if data_repo.identity(repo) == data_repo.remote_identity(versions.URL):
+        return OwlBear(repo)
+    return Closed(repo)
+
+
 def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
     field = model.model_fields[name]
     return Field(description=field.description, examples=field.examples)
 
 
+class Replacement(tools.Args):
+    """The decision a new one replaces, as find_decisions showed it."""
+
+    decision: str = Field(description="Its id from find_decisions")
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$", description="Its revision from find_decisions")
+    redecide: bool = Field(default=False, description="True only when it is decided and the owner re-decided it here")
+    effect: Literal["", "forbids", "wording"] = Field(
+        default="",
+        description="As the owner said: the new rule forbids existing behaviour, or changes wording only; empty "
+        "when he did not say (treated as forbidding)",
+    )
+
+
 mcp = MCPServer(
     "owlbear-delivery",
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
-    "worker's question, find decisions, propose one, queue a read-back and record one.",
+    "worker's question, find decisions, record one the owner confirmed or propose one, retire one, queue a "
+    "read-back and record one.",
 )
 
 
@@ -273,7 +347,11 @@ def find_decisions(
     *,
     text: Annotated[str, Field(description="Words the title or statement holds; empty for all", max_length=200)] = "",
     where: Annotated[
-        Literal["project", "global", "all"], Field(description="This project's decisions, Global ones, or both")
+        Literal["project", "global", "all", "owlbear"],
+        Field(
+            description="This workspace's own decisions (OwlBear's in OwlBear's workspace), Global ones, both, or "
+            "OwlBear's own with Global"
+        ),
     ] = "all",
     include_retired: Annotated[bool, Field(description="Also replaced, withdrawn and spent decisions")] = False,
 ) -> dict[str, Any]:
@@ -282,7 +360,7 @@ def find_decisions(
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-def record_decision(  # noqa: PLR0913 - the proposal's fields
+def record_decision(  # noqa: PLR0913 - the decision's fields
     *,
     title: Annotated[str, Field(description="Short name of the decision", max_length=200)],
     statement: Annotated[str, Field(description="The rule in force, at most two lines", max_length=240)],
@@ -294,19 +372,48 @@ def record_decision(  # noqa: PLR0913 - the proposal's fields
         ),
     ] = "",
     topic: Annotated[str, Field(description="Topic it belongs to, if any", max_length=80)] = "",
+    scope: Annotated[
+        Literal["here", "global"],
+        Field(description="here: this project (OwlBear's own in OwlBear's workspace); global: every project"),
+    ] = "here",
     confirmed: Annotated[
         bool,
         Field(
-            description="True only when the owner confirmed this exact statement in this chat after it was read back "
-            "to him; then it is his decision. Never pass his words."
+            description="True only when the owner confirmed this statement in this chat after you read it back to "
+            "him; it is then his decision, in force at once. False: your own choice, a draft he activates. Never "
+            "pass his words."
         ),
     ] = False,
-    replaces: Annotated[str, Field(description="Id of the decision it would replace, if any")] = "",
+    replaces: Annotated[Replacement | None, Field(description="The decision it replaces, if any")] = None,
 ) -> dict[str, Any]:
-    """Propose a decision for this project: always a draft the owner activates on the Decisions page."""
+    """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
+
+    Read back free text and unclear answers at once; before the chat ends, run one closing check of everything you
+    record. A replacement retires what it replaces; the reply shows its impact on existing work.
+    """
     why = {"rationale": "", "reason": rationale} if replaces else {"rationale": rationale}  # a successor says why
-    body = {"title": title, "topic": topic, "statement": statement} | why
-    return _STATE["chat"].write("/decisions/propose", body | {"confirmed": confirmed, "replaces": replaces})
+    body = {"title": title, "topic": topic, "statement": statement, "scope": scope, "confirmed": confirmed} | why
+    if replaces:
+        body |= {"replaces": replaces.decision, "revision": replaces.revision, "redecide": replaces.redecide}
+        body |= {"effect": replaces.effect}
+    return _STATE["chat"].write("/decisions/propose", body)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
+def retire_decision(
+    *,
+    decision: Annotated[str, Field(description="Decision id from find_decisions")],
+    revision: Annotated[str, Field(description="Its revision from find_decisions", pattern=r"^[0-9a-f]{64}$")],
+    reason: Annotated[str, Field(description="Why it no longer applies", min_length=1, max_length=4000)],
+    redecide: Annotated[bool, Field(description="True only when it is decided and the owner re-decided it")] = False,
+    confirmed: Annotated[
+        bool, Field(description="True only when the owner confirmed retiring it in this chat after you read it back")
+    ] = False,
+) -> dict[str, Any]:
+    """Withdraw a decision or draft the owner confirmed retiring; it stays in history, hidden by default."""
+    path = f"/decisions/{urllib.parse.quote(decision, safe='')}/retire"
+    body = {"revision": revision, "reason": reason, "redecide": redecide, "confirmed": confirmed}
+    return _STATE["chat"].write(path, body)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
@@ -318,7 +425,7 @@ def read_back_decision(
         bool,
         Field(
             description="True only when the owner confirmed the statement as it stands after you read it back to "
-            "him. A different intent is no read-back: record it as a replacement draft with record_decision. Never "
+            "him. A different intent is no read-back: record it as a replacement with record_decision. Never "
             "pass his words."
         ),
     ] = False,
@@ -358,8 +465,8 @@ def queue_read_back(
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Serve the chat tools over stdio for the clone at ``--repo`` (default: the working directory)."""
+    """Serve the chat tools over stdio for the folder at ``--repo`` (default: the working directory)."""
     parser = argparse.ArgumentParser(prog="python -m owlbear_delivery_next mcp")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
-    _STATE["chat"] = Chat(parser.parse_args(argv).repo.resolve())
+    _STATE["chat"] = workspace(parser.parse_args(argv).repo.resolve())
     mcp.run()

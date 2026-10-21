@@ -310,12 +310,16 @@ def point(root: Path) -> DataRepo:
     return DataRepo(root)
 
 
+def remote_identity(url: str) -> str:
+    """A remote's URL without scheme, user and ``.git``: ``github.com/owner/name``."""
+    bare = re.sub(r"^[^/@]*@", "", re.sub(r"^[a-z+]+://", "", url)).replace(":", "/", 1)  # user-info only
+    return bare.removesuffix("/").removesuffix(".git")
+
+
 def identity(repo: Path) -> str:
     """Who a project is: its origin remote without scheme, user and ``.git``, else its main checkout's path."""
-    url = _git(repo, "config", "--get", "remote.origin.url").stdout.strip()
-    if url:
-        bare = re.sub(r"^[^/@]*@", "", re.sub(r"^[a-z+]+://", "", url)).replace(":", "/", 1)  # user-info only
-        return bare.removesuffix("/").removesuffix(".git")
+    if url := _git(repo, "config", "--get", "remote.origin.url").stdout.strip():
+        return remote_identity(url)
     top = _git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
     return str(Path(top).parent) if top else str(repo.resolve())
 

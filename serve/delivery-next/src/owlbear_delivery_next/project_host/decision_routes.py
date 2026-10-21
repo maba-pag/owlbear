@@ -2,10 +2,12 @@
 
 Reads come from the data repository's files (`decision_store.load`), text through the index. Every action is a
 `decision_store.save` and answers with its receipts; the owner's actions refuse a chat's call (its ``X-OwlBear-Use``
-header): a chat proposes, queues and records read-backs, only the page activates, replaces, withdraws, promotes,
-records an exception, resolves a conflict or ignores a read-back for now. ``where=owlbear`` reads and acts on
-OwlBear's own decisions (owlbear-data's ``owlbear/`` folder) and Global, though OwlBear's repository is not a
-registered project (TD-435); the list leads with the read-back queue of its scope (TD-427).
+header): a chat records what the owner confirmed (in force at once, TD-450) or proposes a draft, retires what he
+confirmed retiring, queues and records read-backs; only the page activates, promotes, records an exception, resolves
+a conflict or ignores a read-back for now. ``where=owlbear`` reads and acts on OwlBear's own decisions
+(owlbear-data's ``owlbear/`` folder) and Global, though OwlBear's repository is not a registered project (TD-435);
+the machine host mounts the same routes for them, the folder fixed, for chats in OwlBear's workspace. The list
+leads with the read-back queue of its scope (TD-427).
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from owlbear_decisions import ReadBackKind, State
+from owlbear_decisions import ReadBackKind, Scope, State
 from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.project_host import impact_routes
 from owlbear_delivery_next.state_store import (
@@ -30,16 +32,18 @@ from owlbear_delivery_next.state_store.decision_actions import Effect
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from owlbear_decisions import Entry
+    from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.state_store.decision_actions import Receipt
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Store
 
 NO_SHARED = "No shared repository is set up, so there are no decisions; set one with `owlbear-next data PATH`"
 OWNER_ONLY = "Only the owner does this, on the Decisions page; a chat proposes with record_decision"
+UNCONFIRMED = "only the owner retires a decision: read the retirement back to him, then pass confirmed=true"
 Revision = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, max_length=4000)]
 Statement = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=240)]
@@ -48,7 +52,7 @@ type ReadBack = Literal["", "none", "pending", "done"]
 OWLBEAR = "owlbear"  # OwlBear's own folder in owlbear-data, shown beside Global without registering it (TD-435)
 ACTIONS = {  # a commit subject's first word after "decisions: " -> the action shown; older subjects' words included
     **{a: a for a in ("replace", "withdraw", "activate", "promote", "exception", "keep", "read-back",
-                      "queue-read-back", "propose", "accept-existing", "conflict")},
+                      "queue-read-back", "propose", "record", "accept-existing", "conflict")},
     "proposed": "propose", "queue": "queue-read-back",
 }  # fmt: skip
 
@@ -70,6 +74,12 @@ class Redecide(Shown):
 
 class WithdrawBody(Redecide):
     """Why it no longer applies (``reason``, required); said in the commit and its rationale."""
+
+
+class RetireBody(WithdrawBody):
+    """A chat's withdrawal: ``confirmed`` says the owner confirmed retiring it there."""
+
+    confirmed: bool = False
 
 
 class Promotion(Shown):
@@ -128,9 +138,10 @@ class QueueBody(BaseModel):
 
 
 class ProposalBody(BaseModel):
-    """A chat's proposed decision: always a draft the owner activates.
+    """A chat's decision: in force at once when the owner confirmed it (``confirmed``), else a draft he activates.
 
-    ``confirmed``: the owner confirmed this exact statement in the chat, so it is his (`decided`).
+    ``scope``: the view's own folder or Global. A replacement names the ``revision`` of what it replaces as read,
+    whether the owner re-decided a `decided` one (``redecide``) and his ``effect`` mark (TD-428).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -140,8 +151,12 @@ class ProposalBody(BaseModel):
     statement: Statement
     rationale: Text = ""
     confirmed: bool = False
+    scope: Literal["here", "global"] = "here"
     replaces: Annotated[str, StringConstraints(pattern=f"{ID_PATTERN}|^$")] = ""
+    revision: Annotated[str, StringConstraints(pattern=r"^([0-9a-f]{64})?$")] = ""
     reason: Text = ""
+    redecide: bool = False
+    effect: Effect = ""
 
 
 def owner(request: Request) -> None:
@@ -178,9 +193,8 @@ def _linked(view: DataView, entry: Entry) -> tuple[list[dict[str, str]], list[di
     return out, into
 
 
-def _history(store: Store, entry: Entry) -> list[dict[str, str]]:
+def _history(shared: DataRepo | None, entry: Entry) -> list[dict[str, str]]:
     """The data repository's commits of the decision's file, newest first, each by its action word only."""
-    shared = store.shared
     if shared is None:
         return []
     rel = entry.path.relative_to(shared.root).as_posix()
@@ -223,14 +237,14 @@ def _receipts(work: Callable[[], list[Receipt]]) -> dict[str, Any]:
     return {"receipts": [asdict(r) for r in done], "saved": bool(done) and all(r.saved for r in done)}
 
 
-def _view(store: Store, project: str) -> DataView:
+def _view(shared: DataRepo | None, project: str) -> DataView:
     try:
-        return decision_store.load(store.shared, project)
+        return decision_store.load(shared, project)
     except decision_store.DecisionsUnavailable as exc:
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
 
 
-def _queue(store: Store, view: DataView, where: Where) -> list[dict[str, Any]]:
+def _queue(store: Store | None, view: DataView, where: Where) -> list[dict[str, Any]]:
     """The read-backs waiting in the scope filter, in queue order."""
     ignored = read_backs.marks(store)["ignored"]
     items = [read_backs.item(q, ignored) for q in read_backs.waiting(store, view)]
@@ -245,20 +259,34 @@ def scoped(where: Where = "all") -> str:
 In = Annotated[str, Depends(scoped)]  # the project folder a call reads and acts in
 
 
-def _at(store: Store, project: str) -> str:
-    return project or store.name
+type Shared = Callable[[], DataRepo | None]
+type Places = Callable[[], Sequence[decision_impact.Place]]  # the projects a change of mind's impact report covers
+type At = Callable[[str], str]  # the folder a call acts in: OwlBear's for ``where=owlbear``, else the router's own
 
 
-def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
-    """The decision routes; the caller adds the token check. *repo* is the project's clone, for the impact report."""
-    routes = APIRouter(route_class=impact_routes.Quiet)
-    mine: list[Any] = [Depends(owner)]
+def project(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
+    """A project host's routes over its store's folder; *repo* is the project's clone, for the impact report."""
 
     def here() -> list[decision_impact.Place]:
         known = repo() if repo else None
         return [decision_impact.Place(store.name, known, store, "" if known else "this host does not know its clone")]
 
-    routes.include_router(impact_routes.router(lambda: store.shared, here, mine))
+    return router(lambda: store.shared, store.name, here, store)
+
+
+def router(shared: Shared, folder: str, places: Places, store: Store | None = None) -> APIRouter:
+    """The decision routes over *folder*'s view; the caller adds the token check.
+
+    Without a project *store* (OwlBear's own decisions on the machine host) ignored read-backs and the Changes
+    pinning a decision are left out.
+    """
+    routes = APIRouter(route_class=impact_routes.Quiet)
+    mine: list[Any] = [Depends(owner)]
+
+    def at(scope: str) -> str:
+        return scope or folder
+
+    routes.include_router(impact_routes.router(shared, places, mine))
 
     @routes.get("/decisions")
     def listed(  # noqa: PLR0913 - the page's filters
@@ -271,11 +299,11 @@ def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
         read_back: ReadBack = "",
         retired: bool = False,
     ) -> dict[str, Any]:
-        if store.shared is None:
+        if (data := shared()) is None:
             return {"available": False, "reason": NO_SHARED, "decisions": []}
-        project = _at(store, scoped(where))
+        project = at(scoped(where))
         try:
-            view = decision_store.load(store.shared, project)
+            view = decision_store.load(data, project)
             ids = None
             if text.strip():
                 hits = decision_index.search(text, project, include_retired=True, limit=1000, view=view)
@@ -298,7 +326,8 @@ def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
 
     @routes.get("/decisions/{decision_id}")
     def one(decision_id: str, project: In) -> dict[str, Any]:
-        view = _view(store, _at(store, project))
+        data = shared()
+        view = _view(data, at(project))
         entry = view.snapshot.get(decision_id)
         if entry is None:
             raise HTTPException(404, "no such decision in this project's view")
@@ -306,19 +335,21 @@ def router(store: Store, repo: Callable[[], Path] | None = None) -> APIRouter:
         more = d.model_dump(mode="json", include={"rationale", "consequences", "applies_to", "actor", "source"})
         problems = [{"rule": f.rule, "message": f.message} for f in view.snapshot.findings_for(d.id)]
         rivals = [r.model_dump(mode="json", include={"id", "title"}) | {"revision": r.revision}
-                  for r in decision_actions.rivals(view, d, store.shared)]  # fmt: skip
+                  for r in decision_actions.rivals(view, d, data)]  # fmt: skip
         try:
-            redecide = d.state is State.DRAFT and decision_actions.redecision(store.shared, view, d)
+            redecide = d.state is State.DRAFT and decision_actions.redecision(data, view, d)
         except decision_store.DecisionsUnavailable as exc:
             raise HTTPException(409, f"{exc} ({exc.action})") from exc
         return _row(view, entry) | more | {
             "links": links,
-            "linked_from": linked_from, "problems": problems, "history": _history(store, entry),
-            "changes": decision_impact.pinning(store, d.id), "rivals": rivals, "redecide": redecide,
+            "linked_from": linked_from, "problems": problems, "history": _history(data, entry),
+            "changes": decision_impact.pinning(store, d.id) if store else [], "rivals": rivals, "redecide": redecide,
         }  # fmt: skip
 
-    _owner_routes(routes, store, mine)
-    _shared_routes(routes, store)
+    _owner_routes(routes, shared, at, mine)
+    if store is not None:
+        _ignore_route(routes, store, at, mine)
+    _shared_routes(routes, shared, at, places)
     return routes
 
 
@@ -328,15 +359,15 @@ def _confirmed(body: SuccessorBody) -> None:
         raise HTTPException(422, decision_actions.NOT_CONFIRMED)
 
 
-def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
+def _owner_routes(routes: APIRouter, shared: Shared, at: At, mine: list[Any]) -> None:
     """The owner's actions; a chat's call is refused."""
-    shared, act = store.shared, decision_actions
+    act = decision_actions
 
     @routes.post("/decisions/{decision_id}/replace", dependencies=mine)
     def replace(decision_id: str, body: ReplaceBody, project: In) -> dict[str, Any]:
         _confirmed(body)
         return _receipts(lambda: act.replace(
-            shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
+            shared(), at(project), decision_id, body.revision, title=body.title, statement=body.statement,
             rationale=body.rationale, reason=body.reason, redecided=body.redecide,
             effect=body.effect,
         ))  # fmt: skip
@@ -344,60 +375,85 @@ def _owner_routes(routes: APIRouter, store: Store, mine: list[Any]) -> None:
     @routes.post("/decisions/{decision_id}/withdraw", dependencies=mine)
     def withdraw(decision_id: str, body: WithdrawBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.withdraw(
-            shared, _at(store, project), decision_id, body.revision, reason=body.reason,
+            shared(), at(project), decision_id, body.revision, reason=body.reason,
             redecided=body.redecide))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/activate", dependencies=mine)
     def activate(decision_id: str, body: ActivateBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.activate(
-            shared, _at(store, project), decision_id, body.revision, reason=body.reason,
+            shared(), at(project), decision_id, body.revision, reason=body.reason,
             redecided=body.redecide, effect=body.effect))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/promote", dependencies=mine)
     def promote(decision_id: str, body: Promotion, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.promote(
-            shared, _at(store, project), decision_id, body.revision, reason=body.reason))  # fmt: skip
+            shared(), at(project), decision_id, body.revision, reason=body.reason))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/exception", dependencies=mine)
     def exception(decision_id: str, body: SuccessorBody, project: In) -> dict[str, Any]:
         _confirmed(body)
         return _receipts(lambda: act.exception(
-            shared, _at(store, project), decision_id, body.revision, title=body.title, statement=body.statement,
+            shared(), at(project), decision_id, body.revision, title=body.title, statement=body.statement,
             rationale=body.rationale,
         ))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/keep", dependencies=mine)
     def keep(decision_id: str, body: KeepBody, project: In) -> dict[str, Any]:
         return _receipts(lambda: act.keep(
-            shared, _at(store, project), decision_id, body.revisions, reason=body.reason))  # fmt: skip
+            shared(), at(project), decision_id, body.revisions, reason=body.reason))  # fmt: skip
+
+
+def _ignore_route(routes: APIRouter, store: Store, at: At, mine: list[Any]) -> None:
+    """The owner's "ignore for now", marked in the project's store (TD-427)."""
 
     @routes.post("/decisions/{decision_id}/ignore-read-back", dependencies=mine)
     def ignore(decision_id: str, body: Shown, project: In) -> dict[str, Any]:
         try:
-            return read_backs.ignore(store, _at(store, project), decision_id, body.revision)
+            return read_backs.ignore(store, at(project), decision_id, body.revision)
         except decision_actions.Refused as exc:
             raise HTTPException(exc.status, str(exc)) from exc
         except decision_store.DecisionsUnavailable as exc:
             raise HTTPException(409, f"{exc} ({exc.action})") from exc
 
 
-def _shared_routes(routes: APIRouter, store: Store) -> None:
-    """What a chat may do as well as the page: propose a draft, queue a read-back and record one."""
+def _impact(shared: DataRepo | None, folder: str, decision_id: str, places: Places) -> dict[str, Any]:
+    """A replacement's impact report as the page shows it (TD-428), or why it cannot be made."""
+    try:
+        return decision_impact.shown(decision_impact.report(shared, folder, decision_id, places()))
+    except (decision_actions.Refused, decision_store.DecisionsUnavailable) as exc:
+        return {"error": str(exc)}
+
+
+def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) -> None:
+    """What a chat may do as well as the page: record or propose, retire, queue a read-back and record one."""
 
     @routes.post("/decisions/propose")
-    def propose(body: ProposalBody) -> dict[str, Any]:
-        return _receipts(lambda: decision_actions.propose(
-            store.shared, store.name, title=body.title, topic=body.topic, statement=body.statement,
+    def propose(body: ProposalBody, project: In) -> dict[str, Any]:
+        scope = Scope.GLOBAL if body.scope == "global" else Scope.PROJECT
+        out = _receipts(lambda: decision_actions.propose(
+            shared(), at(project), title=body.title, topic=body.topic, statement=body.statement,
             rationale=body.rationale, confirmed=body.confirmed, replaces=body.replaces, reason=body.reason,
+            scope=scope, revision=body.revision, redecided=body.redecide, effect=body.effect,
+        ))  # fmt: skip
+        if body.confirmed and body.replaces and out["saved"] and body.effect != "wording":
+            out["impact"] = _impact(shared(), at(project), out["receipts"][0]["id"], places)
+        return out
+
+    @routes.post("/decisions/{decision_id}/retire")
+    def retire(decision_id: str, body: RetireBody, project: In) -> dict[str, Any]:
+        if not body.confirmed:
+            raise HTTPException(422, UNCONFIRMED)
+        return _receipts(lambda: decision_actions.withdraw(
+            shared(), at(project), decision_id, body.revision, reason=body.reason, redecided=body.redecide,
         ))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/queue-read-back")
     def queue_read_back(decision_id: str, body: QueueBody, project: In) -> dict[str, Any]:
-        return _receipts(lambda: read_backs.ask(
-            store, _at(store, project), decision_id, why=body.why, kind=body.kind, revision=body.revision))  # fmt: skip
+        return _receipts(lambda: decision_actions.queue_read_back(
+            shared(), at(project), decision_id, why=body.why, kind=body.kind, revision=body.revision))  # fmt: skip
 
     @routes.post("/decisions/{decision_id}/read-back")
     def read_back(decision_id: str, body: ReadBackBody, request: Request, project: In) -> dict[str, Any]:
         by = "chat" if request.headers.get("x-owlbear-use", "").lower() == "chat" else "owner"
-        return _receipts(lambda: read_backs.answer(
-            store, _at(store, project), decision_id, body.revision, confirmed=body.confirmed, by=by))  # fmt: skip
+        return _receipts(lambda: decision_actions.read_back(
+            shared(), at(project), decision_id, body.revision, confirmed=body.confirmed, by=by))  # fmt: skip

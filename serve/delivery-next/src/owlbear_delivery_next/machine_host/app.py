@@ -1,8 +1,8 @@
 """The machine host's HTTP surface (TD-242): pages, machine routes and each project's API by its id.
 
-Pages are at ``/``, machine routes under ``/api/next/`` and each project's own API, unchanged, under
-``/p/{id}/api/next/``, chosen by a small ASGI dispatcher. One token and the Host-header check guard everything;
-the token is no project boundary (one owner, loopback).
+Pages are at ``/``, machine routes under ``/api/next/`` (OwlBear's own decisions under ``/api/next/owlbear/``, TD-435)
+and each project's own API, unchanged, under ``/p/{id}/api/next/``, chosen by a small ASGI dispatcher. One token and
+the Host-header check guard everything; the token is no project boundary (one owner, loopback).
 """
 
 from __future__ import annotations
@@ -175,6 +175,14 @@ def _routes(machine: Machine) -> APIRouter:
         return {"changes": listed}
 
     routes.include_router(impact_routes.router(_shared, lambda: _places(machine), [Depends(decision_routes.owner)]))
+
+    def fenced(request: Request) -> None:
+        """Fenced as a project's API is: nothing while stopping, reads only while an update runs (§5.3)."""
+        if machine.stopping.is_set() or (machine.updating and request.method != "GET"):
+            raise HTTPException(503, "OwlBear is stopping" if machine.stopping.is_set() else machine.updating)
+
+    owlbear = decision_routes.router(_shared, decision_routes.OWLBEAR, lambda: _places(machine))
+    routes.include_router(owlbear, prefix="/owlbear", dependencies=[Depends(fenced)])  # chats in OwlBear's workspace
     _machine_routes(routes, machine)
     _update_routes(routes, machine)
     return routes

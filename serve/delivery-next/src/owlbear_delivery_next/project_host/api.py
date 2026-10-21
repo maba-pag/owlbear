@@ -488,7 +488,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(brief_routes.router(store, read, put, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
-    router.include_router(decision_routes.router(store, lambda: host.repo))
+    router.include_router(decision_routes.project(store, lambda: host.repo))
     job = session_slots.packed(host, pack or pack_job.Job(store))  # its sessions count as the project's (TD-336)
     router.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
     app.include_router(router)
