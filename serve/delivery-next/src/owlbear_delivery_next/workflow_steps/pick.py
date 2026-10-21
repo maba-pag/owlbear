@@ -46,10 +46,18 @@ FINISH = "Call `submit_result` once with the id of every decision you pick. If i
 CHANGED = f"the decisions in force changed since they were picked; {picks.RETRY}"
 
 
-def listed(seen: Snapshot) -> list[Decision]:
-    """The active Global and project decisions, by id; other Changes' own are never on the list."""
+def listed(seen: Snapshot, c: Change) -> list[Decision]:
+    """The active Global and project decisions, by id; other Changes' own and *c*'s brief decisions are not on it.
+
+    *c*'s project decisions are in force once its approval published them (TD-453): leaving them out keeps the list
+    a pick was made from the one a retried approval checks.
+    """
+    own = {d.id for b in [*c.brief.approved, c.brief] for d in b.decisions if d.id}
     found = (e.decision for e in seen.entries)
-    return sorted((d for d in found if d.state is State.IN_FORCE and d.scope is not Scope.CHANGE), key=lambda d: d.id)
+    return sorted(
+        (d for d in found if d.state is State.IN_FORCE and d.scope is not Scope.CHANGE and d.id not in own),
+        key=lambda d: d.id,
+    )
 
 
 def digest(found: list[Decision]) -> str:
@@ -101,7 +109,7 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
         c.brief.picked = base.model_copy(update={"status": "failed", "reason": _one(str(exc))[:300]})
         store.write(lock, c)
         return c
-    found = listed(view.snapshot)
+    found = listed(view.snapshot, c)
     base = base.model_copy(update={"commit": view.commit, "listed": digest(found)})
     if not found:  # nothing in force: nothing to pick, and no session
         c.brief.picked = base.model_copy(update={"status": "ok"})
@@ -179,4 +187,4 @@ def unapproved(store: Store, c: Change, view: DataView | None) -> str:
         return f"the decisions brief v{c.brief.version} must follow were not picked; {picks.RETRY}"
     if why := picks.unready(c):
         return why
-    return CHANGED if view is not None and digest(listed(view.snapshot)) != p.listed else ""
+    return CHANGED if view is not None and digest(listed(view.snapshot, c)) != p.listed else ""

@@ -71,23 +71,17 @@ class Pick(_Strict):
 
 
 class Published(_Strict):
-    """A brief's project decision Delivery publishes from its approval (TD-453), with its last save's receipt."""
+    """A brief's project decision its approval published (TD-453), with that save's receipt."""
 
     id: str
     title: str
     state: str  # in force, or retired by a later approved version
-    revision: str = ""  # the file's revision this Change wrote, once saved
+    revision: str = ""  # the file's revision the save wrote
     saved: bool = False
     committed: bool = False
-    published: bool = False  # the remote holds it
-    moved: bool = False  # its file changed without this Change since: that change stands, nothing is written over it
+    published: bool = False  # the remote held it after the save; else the data repository's next save pushes it
     notice: str = ""
     at: datetime
-
-    @property
-    def settled(self) -> bool:
-        """Nothing is left to publish: the remote holds it, or a later change does."""
-        return self.published or self.moved
 
 
 class Said(BaseModel):

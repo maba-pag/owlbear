@@ -1,39 +1,21 @@
 """The decision pick at shaping (TD-459): picked once per brief version before its challenge, pinned at approval."""
 
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
-from owlbear_delivery_next.change_contracts.models import Change, Exit, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
-from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
-from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_store
-from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import pick
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 PROJECT = "shop-site"
-DRAFT = {
-    "title": "Add farewell",
-    "outcome": "farewell(name) says goodbye in the app package.",
-    "criteria": ["farewell('Ada') returns 'Bye, Ada!'"],
-    "scope": ["packages/app"],
-}
-USAGE = {"credits": 6.0, "models": {"gpt-6.1-sol": {"credits": 6.0, "tokens": 900}}}
 
 
 def make(**changes) -> Decision:
@@ -43,83 +25,6 @@ def make(**changes) -> Decision:
         "state": State.IN_FORCE, "created_at": AT, "topic": "pages",
     }  # fmt: skip
     return Decision(**{**fields, **changes})
-
-
-class Host:
-    wake = SimpleNamespace(set=lambda: None)
-    paused = staticmethod(lambda: False)
-    draining = staticmethod(lambda: False)
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=AT, code=CURRENT)  # noqa: S106
-
-    def activity(self, _slug):
-        return Activity(host_up=True)
-
-
-class Picking:
-    """The chat's host API on a project with decisions; the picker's and the challenger's answers, in turn."""
-
-    def __init__(self, tmp_path: Path, repo: Path, shared: DataRepo, monkeypatch) -> None:
-        self.shared, self.repo = shared, repo
-        self.store = Store(tmp_path / "store", shared, PROJECT)
-        self.http = TestClient(api.create_app(self.store, "t", Host()), base_url="http://127.0.0.1",
-                               headers={"authorization": "Bearer t"})  # fmt: skip
-        self.picks: list[pick_tools.PickResult | str] = []  # a str is the ending of a failed session
-        self.verdicts: list[tools.ReviewResult] = []
-        self.told: list[sdk_adapter.Session] = []
-        monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
-        monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
-
-    async def run(self, cfg):
-        self.told.append(cfg)
-        done = Termination(confirmed=True)
-        if cfg.role != tools.PICKER:
-            return Run(cfg.session_id, "result", self.verdicts.pop(0), termination=done)
-        said = self.picks.pop(0)
-        if isinstance(said, str):
-            return Run(cfg.session_id, said, None, detail="the runtime did not start", termination=done)
-        return Run(cfg.session_id, "result", said, usage=USAGE, termination=done)
-
-    def pickers(self) -> list[sdk_adapter.Session]:
-        return [cfg for cfg in self.told if cfg.role == tools.PICKER]
-
-    @property
-    def slug(self) -> str:
-        return self.store.slugs()[0]
-
-    def change(self) -> Change:
-        return self.store.read(self.slug)
-
-    def put(self, decision: Decision) -> Decision:
-        write(decision, self.shared.root if decision.scope is Scope.GLOBAL else self.shared.root / PROJECT)
-        return decision
-
-    def save(self, **fields) -> dict:
-        body = DRAFT | {"change": "c1"} | fields if self.store.slugs() else DRAFT | fields
-        return self.http.post("/api/next/briefs", json=body).json()
-
-    def ask(self, version: int, rejected: dict[str, str] | None = None, *, retry: bool = False):
-        said = [{"finding": k, "reason": r} for k, r in (rejected or {}).items()]
-        body = {"change": "c1", "version": version, "rejected": said, "retry_pick": retry}
-        return self.http.post("/api/next/briefs/challenge", json=body)
-
-    def step(self) -> Change:
-        c = self.change()
-        runner._step(self.store, Lock(self.slug), c, c.step, self.repo)  # noqa: SLF001
-        return self.change()
-
-    def approve(self, version: int, *, unreviewed: bool = False):
-        body = {"version": version, "unreviewed": unreviewed}
-        return self.http.post(f"/api/next/changes/{self.slug}/approve-brief", json=body)
-
-    def approved(self) -> Change:
-        return self.store.fold(Lock(self.slug), self.slug, datetime.now(UTC))[0]
-
-
-@pytest.fixture
-def picking(tmp_path, change_repo, shared_repo, monkeypatch) -> Picking:
-    shared = DataRepo(shared_repo[0])
-    shared.claim(PROJECT, "github.com/acme/shop-site")
-    return Picking(tmp_path, change_repo, shared, monkeypatch)
 
 
 def picked(*ids: str) -> pick_tools.PickResult:
