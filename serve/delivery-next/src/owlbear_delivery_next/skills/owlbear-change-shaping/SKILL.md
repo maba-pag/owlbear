@@ -38,7 +38,7 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    test copy the project's declared preparation options prepare. If the project has no preview to render, offer three choices: add
    one in this Change, declare a person-only visual check, or change the scope.
 5. Propose a split when the idea is more than one reviewable pull request.
-6. Read back before saving for approval (see Read-Back below).
+6. Run the closing check before saving for approval (see Read-Back below).
 7. Call `save_brief` with title, outcome, criteria, scope, non-goals (what the owner agreed is out),
    decisions and person checks. `decisions` holds every choice the owner made and each consequential
    choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
@@ -68,10 +68,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 
 ## Read-Back
 
-Before saving for approval, play back every choice the owner made and your own consequential ones
-(those that change what the owner sees or does, cost, safety or reversibility; list yours with a
-one-line consequence). Ask one decision per question, paraphrased at the level of the owner's
-intent, never quoting the record, with the structured question tool when there is one:
+Read back a free-text or unclear answer at once, before building on it; a chosen option counts as
+confirmed and is not asked again. Ask one decision per question, paraphrased at the level of the
+owner's intent, never quoting the record, with the structured question tool when there is one:
 
 - three close variants of the recorded choice (fewer only when fewer really differ in consequence,
   never padded), the matching one at a varying position and never verbatim; a one-line consequence where
@@ -88,6 +87,11 @@ recommendation marked. "Explain first": explain each option's consequences neutr
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
 plus "your words as written", "show me more readings" and "explain first". When the direction itself
 is in doubt, ask the direction first, then its variants.
+
+Before saving for approval, end with one closing check of everything the brief records: every choice
+the owner made and your own consequential ones (those that change what the owner sees or does, cost,
+safety or reversibility, each with a one-line consequence), listed together and asked once. Read back
+an item he corrects as above, then save.
 
 ## Status and questions
 

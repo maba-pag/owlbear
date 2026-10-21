@@ -39,6 +39,8 @@ _MCP_SERVER_MODULES: dict[str, tuple[str, str]] = {
     "owlbear-memory": ("owlbear_memory_mcp.server", "mcp"),
 }
 _EXTERNAL_MCP_SERVERS = frozenset({"markitdown"})
+# OwlBear's own workspace only: projects get Delivery's chat server from `owlbear setup` (TD-435, TD-450)
+_WORKSPACE_MCP_SERVERS = frozenset({"owlbear-delivery"})
 _DEFAULT_MCP_SERVERS: frozenset[str] = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
 
 # Canonical VS Code built-in toolset prefixes.
@@ -138,7 +140,9 @@ def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]:
     if active_path.is_file():
         active, active_errors = _read_mcp_config(active_path)
         errors.extend(active_errors)
-        if not active_errors and (active - canonical or canonical - active - _EXTERNAL_MCP_SERVERS):
+        if not active_errors and (
+            active - canonical - _WORKSPACE_MCP_SERVERS or canonical - active - _EXTERNAL_MCP_SERVERS
+        ):
             errors.append(
                 f"{active_path}: MCP server names differ from {_CANONICAL_MCP_CONFIG} beyond external servers: "
                 f"expected={sorted(canonical)}, actual={sorted(active)}"

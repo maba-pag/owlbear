@@ -19,6 +19,7 @@ VENDORED = (WEB / "vendor", WEB / "pds")  # third-party releases, not the packag
 LIMIT = 500
 FIELDS = 6  # T5: about six fields per object
 WIDER = {"save_brief": 9}  # decisions and non_goals (reuse study v2, Sol finding 6); specified (TD-179 rule 1)
+WIDER |= {"record_decision": 7}  # scope and the replacement it makes, in a lead chat (TD-450)
 OWNED = [  # C-28: pages, scripts and styles count like modules
     p
     for p in WEB.rglob("*")

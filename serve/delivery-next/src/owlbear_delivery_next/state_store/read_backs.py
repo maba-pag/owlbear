@@ -33,8 +33,10 @@ def _parsed(row: tuple[str] | None) -> dict[str, dict[str, str]]:
     return {k: dict(v) if isinstance(v := found.get(k), dict) else {} for k in MARKS}
 
 
-def marks(store: Store) -> dict[str, dict[str, str]]:
-    """This host's ignored revisions by decision id."""
+def marks(store: Store | None) -> dict[str, dict[str, str]]:
+    """This host's ignored revisions by decision id; none without a project store (OwlBear's own decisions)."""
+    if store is None:
+        return _parsed(None)
     with store.db.read() as db:
         return _parsed(db.execute("SELECT value FROM meta WHERE key = ?", (KEY,)).fetchone())
 
@@ -46,7 +48,7 @@ def _mark(store: Store, mark: str, decision_id: str, value: str) -> None:
         db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (KEY, json.dumps(found)))
 
 
-def waiting(store: Store, view: DataView) -> list[Queued]:
+def waiting(store: Store | None, view: DataView) -> list[Queued]:
     """The view's read-backs in queue order, the ones ignored at their current revision last."""
     decisions = [e.decision for e in view.snapshot.entries]
     ignored = marks(store)["ignored"]

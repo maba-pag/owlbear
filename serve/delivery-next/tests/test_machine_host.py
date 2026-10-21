@@ -1,9 +1,13 @@
+import asyncio
+import io
 import json
 import os
 import signal
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.parse
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,10 +21,12 @@ from owlbear_delivery_next.change_contracts.decision_records import DecisionBase
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
+from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -89,6 +95,78 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
     monkeypatch.setattr(mcp_server, "_LOCAL", Opener())
     mcp_server.Chat(Path(p["path"])).call("GET", "/changes")
     assert sent == [f"http://127.0.0.1:9/p/{p['id']}/api/next/changes"]
+
+
+class Answer(io.BytesIO):
+    def __init__(self, data: bytes, status: int) -> None:
+        super().__init__(data)
+        self.status = status
+
+
+class Loopback:
+    """The chat server's opener, answered in-process by the machine host."""
+
+    def __init__(self, http: TestClient) -> None:
+        self.http = http
+
+    def open(self, request, **_kw):
+        url = urllib.parse.urlsplit(request.full_url)
+        r = self.http.request(request.get_method(), f"{url.path}?{url.query}", content=request.data,
+                              headers=dict(request.header_items()))  # fmt: skip
+        if r.status_code >= 400:
+            raise urllib.error.HTTPError(request.full_url, r.status_code, "", r.headers, io.BytesIO(r.content))
+        return Answer(r.content, r.status_code)
+
+
+def chat_tool(name: str, **args: object) -> dict:
+    return asyncio.run(mcp_server.mcp.call_tool(name, args)).structured_content
+
+
+def origin(path: Path, url: str) -> Path:
+    subprocess.run(["git", "-C", str(path), "remote", "add", "origin", url], check=True)  # noqa: S603, S607
+    return path
+
+
+def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and_found_from_a_project(
+    tmp_path, http, machine, shared_repo, monkeypatch
+):
+    """TD-435, TD-450: a chat server on OwlBear's own clone writes OwlBear's folder through the machine host."""
+    (shared_repo[0] / "owlbear").mkdir()
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    monkeypatch.setattr(mcp_server.OwlBear, "record", lambda _self: machine.record)
+    monkeypatch.setattr(mcp_server, "_LOCAL", Loopback(http))
+    p = add(http, clone(tmp_path / "shop"))
+    own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
+    monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.workspace(own))  # noqa: SLF001 - the server's chat
+
+    got = chat_tool("record_decision", title="Pages", statement="Pages are plain HTML.", confirmed=True)
+
+    saved = decision_store.load(DataRepo(shared_repo[0]), "owlbear").snapshot.get(got["receipts"][0]["id"]).decision
+    assert (saved.project, str(saved.state), str(saved.origin)) == ("owlbear", "in_force", "decided")
+    assert chat_tool("show_status") == {"error": mcp_server.NO_CHANGES}
+    assert not (own / ".git" / "owlbear-delivery").exists()  # OwlBear's repository stays unregistered
+    monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.workspace(Path(p["path"])))  # noqa: SLF001
+    assert [d["title"] for d in chat_tool("find_decisions", where="owlbear")["decisions"]] == ["Pages"]
+    machine.updating = "an update runs"  # fenced as a project's API is
+    refused = http.post("/api/next/owlbear/decisions/propose", json={"title": "x", "statement": "x"})
+    assert refused.status_code == 503
+
+
+def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
+    tmp_path, shared_repo, monkeypatch
+):
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    other = origin(clone(tmp_path / "other"), "https://github.com/acme/other.git")
+    head = DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout
+    monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.workspace(other))  # noqa: SLF001 - the server's chat
+
+    said = [chat_tool("record_decision", title="x", statement="x", confirmed=True), chat_tool("find_decisions"),
+            chat_tool("retire_decision", decision="x", revision="0" * 64, reason="r", confirmed=True),
+            chat_tool("show_status")]  # fmt: skip
+
+    assert said == [{"error": mcp_server.NOT_OWLBEAR.format(repo=other)}] * 4
+    assert DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout == head
+    assert not (other / ".git" / "owlbear-delivery").exists()
 
 
 def test_a_project_that_fails_to_load_is_listed_with_its_reason_beside_a_working_one(tmp_path, http, machine):

@@ -400,6 +400,25 @@ def test_renaming_moves_the_whole_folder_commits_pushes_and_is_used_from_then_on
     assert (reopened.name, reopened.settings().widths) == ("acme-shop", [1440])
 
 
+def test_after_a_rename_decisions_are_recorded_and_found_in_the_new_folder(shared, repo) -> None:
+    root, _ = shared
+    store = Store.open(repo)
+    app = api.create_app(store, "t", host_module.Host(store, repo))  # its routes made before the rename
+    renamed = TestClient(app, base_url="http://127.0.0.1", headers=AUTH).put(
+        "/api/next/config/folder", json={"name": "acme-shop"}
+    )
+    assert renamed.status_code == 200
+    chat = TestClient(app, base_url="http://127.0.0.1", headers=AUTH | {"x-owlbear-use": "chat"})
+
+    got = chat.post("/api/next/decisions/propose", json={"title": "Tags", "statement": "Tags are free text."}).json()
+
+    made = got["receipts"][0]["id"]
+    assert got["saved"] is True
+    assert (root / "acme-shop" / "decisions" / f"{made}.md").is_file()
+    assert not (root / "shop-site").exists()
+    assert chat.get(f"/api/next/decisions/{made}").json()["project"] == "acme-shop"
+
+
 def test_a_rename_to_a_taken_or_unsafe_name_is_refused(shared, repo) -> None:
     root, _ = shared
     store = Store.open(repo)

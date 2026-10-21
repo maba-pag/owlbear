@@ -1,7 +1,8 @@
 """The owner's actions on decisions and a chat's proposals (TD-419 slice 5a); every write is a `decision_store.save`.
 
 Authority ("Prior decisions by origin"; decision system §2, §4): anyone proposes a draft, only the owner activates,
-replaces, withdraws, promotes, records an exception or resolves a conflict. A `decided` decision changes only when
+replaces, withdraws, promotes, records an exception or resolves a conflict; what he confirmed in a chat is in force
+at once (TD-450). A `decided` decision changes only when
 the owner re-decides it. A reversal is a `replaces` link; the reversals of a lineage are counted back through
 `replaces` and `promoted_from` to its first decision, so a promotion never resets them, and a second reversal is the
 owner's. Each action names the revision the owner (or chat) read: a stale one is refused before anything is written.
@@ -40,7 +41,7 @@ EFFECTS = {"forbids": "it forbids existing behaviour", "wording": "wording only"
 type Effect = Literal["", "forbids", "wording"]  # empty: not said, treated as possibly forbidding
 NOT_CONFIRMED = (
     "a read-back records only the owner's confirmation of the statement as it stands; a different intent is a "
-    f"replacement on {PAGE}, or a replacement draft the chat records with record_decision"
+    f"replacement he confirms, on {PAGE} or in a chat with record_decision"
 )
 
 
@@ -154,6 +155,20 @@ def _in_force(decision: Decision, action: str) -> None:
         raise Refused(msg)
 
 
+def _scoped(old: Decision, scope: Scope | None) -> None:
+    """Refuse a successor in another layer than *old*: a Global rule is departed from by an exception, a wider one made.
+
+    None: the page's replacement, which keeps *old*'s scope.
+    """
+    if scope is None or (old.scope is Scope.GLOBAL) == (scope is Scope.GLOBAL):
+        return
+    if old.scope is Scope.GLOBAL:
+        msg = f"{old.id} is Global: a project departs from it only by an exception the owner records"
+    else:
+        msg = f"{old.id} is not Global: the owner widens it by promoting it on {PAGE}"
+    raise Refused(msg, 422)
+
+
 def _retire(shared: DataRepo | None, new: Decision, old: Decision, message: str) -> list[Receipt]:
     """Save *new* and mark *old* replaced in one commit: both or neither, never two rules in force."""
     retired = old.model_copy(update={"state": State.REPLACED})
@@ -170,21 +185,27 @@ def _new(old: Decision | None, **fields: object) -> Decision:
 def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *,
     title: str, statement: str, rationale: str, reason: str, redecided: bool, effect: Effect = "",
+    scope: Scope | None = None, by: str = OWNER, topic: str = "",
 ) -> list[Receipt]:  # fmt: skip
-    """The owner's successor, in force and `decided`, confirmed today, keeping the old one's other links."""
+    """The owner's successor, in force and `decided`, confirmed today, keeping the old one's other links.
+
+    *by*: where he confirmed it, on the page or in a chat (TD-450); *scope*: the layer a chat named for it; *topic*:
+    the successor's, else the old one's.
+    """
     why = _reason(reason, "replacing a decision")
     view = decision_store.load(shared, project)
     old = _entry(view, decision_id).decision
     if stale := _stale(view, old, revision):
         return stale
     _in_force(old, "replaced")
+    _scoped(old, scope)
     authorise(old, owner=True, redecided=redecided)  # his successor is decided: no second() needed
     kept = tuple(link for link in old.links if link.type not in LINEAGE)  # exception_to, refines, depends on, related
     new = _new(
-        old, title=title.strip() or old.title, statement=statement,
+        old, title=title.strip() or old.title, topic=topic.strip() or old.topic, statement=statement,
         rationale=_marked(_because(rationale or old.rationale, CHANGED, why), effect), scope=old.scope,
         project=old.project,
-        change=old.change, origin=Origin.DECIDED, actor=OWNER, source=PAGE, read_back=_today(),
+        change=old.change, origin=Origin.DECIDED, actor=by, source=PAGE if by == OWNER else by, read_back=_today(),
         state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
     return _retire(shared, new, old, f"decisions: replace {old.id} with {new.id}")
@@ -382,30 +403,42 @@ def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the ca
 
 def propose(  # noqa: PLR0913 - the proposal's fields
     shared: DataRepo | None, project: str, *, title: str, topic: str, statement: str, rationale: str,
-    confirmed: bool, replaces: str, reason: str = "",
+    confirmed: bool, replaces: str, reason: str = "", scope: Scope = Scope.PROJECT, revision: str = "",
+    redecided: bool = False, effect: Effect = "",
 ) -> list[Receipt]:  # fmt: skip
-    """A chat's draft for this project, never in force.
+    """A chat's decision for *project* (or Global): in force at once when the owner confirmed it, else a draft.
 
-    `decided` and confirmed today when the owner confirmed this exact statement in the chat, else `autonomous`.
+    Confirmed, it is his: `decided`, read back today, and a replacement retires what it replaces with it, as
+    `replace` does on the page (TD-450). An agent's own choice stays an `autonomous` draft he activates (TD-451).
     """
     if not project:
         msg = "decisions are proposed for a project; this host serves none"
         raise Refused(msg, 422)
+    if confirmed and replaces:
+        return replace(
+            shared, project, replaces, revision, title=title, statement=statement, rationale=rationale,
+            reason=reason, redecided=redecided, effect=effect, scope=scope, by=CHAT, topic=topic,
+        )  # fmt: skip
     links: tuple[Link, ...] = ()
+    layer = {"scope": scope, "project": "" if scope is Scope.GLOBAL else project}
     if replaces:
-        old = _entry(decision_store.load(shared, project), replaces).decision
+        why = _reason(reason, "a draft that replaces a decision")
+        view = decision_store.load(shared, project)
+        old = _entry(view, replaces).decision
+        if stale := _stale(view, old, revision):
+            return stale
         _in_force(old, "replaced")
-        if old.scope is Scope.GLOBAL:
-            msg = f"{old.id} is Global: a project departs from it only by an exception the owner records"
-            raise Refused(msg, 422)
+        _scoped(old, scope)
         authorise(old, owner=False)
-        second(every(shared), old, decided=confirmed, owner=False)
-        rationale = _because(rationale, CHANGED, _reason(reason, "a draft that replaces a decision"))
+        second(every(shared), old, decided=False, owner=False)
+        rationale = _because(rationale, CHANGED, why)
         links = (Link(type=LinkType.REPLACES, target=old.id),)
-    draft = _new(
-        None, title=title, topic=topic, statement=statement, rationale=rationale, scope=Scope.PROJECT,
-        project=project, origin=Origin.DECIDED if confirmed else Origin.AUTONOMOUS, actor=CHAT, source=CHAT,
-        read_back=_today() if confirmed else "none", state=State.DRAFT, links=links,
+        layer = {"scope": old.scope, "project": old.project, "change": old.change}  # as a confirmed one keeps it
+    made = _new(
+        None, title=title, topic=topic, statement=statement, rationale=rationale, **layer,
+        origin=Origin.DECIDED if confirmed else Origin.AUTONOMOUS,
+        actor=CHAT, source=CHAT, read_back=_today() if confirmed else "none",
+        state=State.IN_FORCE if confirmed else State.DRAFT, links=links,
     )  # fmt: skip
-    said = f"decisions: propose {draft.id}"
-    return [decision_store.save(shared, draft, expected_revision=None, message=said)]
+    said = f"decisions: {'record' if confirmed else 'propose'} {made.id}"
+    return [decision_store.save(shared, made, expected_revision=None, message=said)]
