@@ -83,6 +83,12 @@ def memory(store: Store) -> Path | None:
     return folder
 
 
+def previous(store: Store, slug: str, session: str | None) -> dict[int, float | None]:
+    """PIDs earlier runners persisted for *session*; they remain in the activity log when a runner is killed."""
+    pids = [e.get("pids", {}) for e in store.events(slug) if e.get("event") == "pids" and e.get("session") == session]
+    return {int(p): c for found in pids for p, c in found.items()}
+
+
 def run(store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run:
     """Run one agent session where the profile's runtime says (TD-35), screenshots included (C7).
 

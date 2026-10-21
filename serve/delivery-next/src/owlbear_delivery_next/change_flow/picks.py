@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick
-from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.models import StepKind
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
@@ -32,11 +32,14 @@ def owed(c: Change) -> bool:
 def owe(c: Change) -> None:
     """A challenge request owes the current version's pick, once: a version picked or picking keeps its pick."""
     if current(c) is None:
-        _owed(c)
+        c.brief.picked = Pick(version=c.brief.version)
 
 
 def retry(c: Change, version: int) -> str:
-    """Pick *version* again after a failed pick or a changed list, without a challenge round; why not, or ""."""
+    """Pick *version* again after a failed pick or a changed list, without a challenge round; why not, or "".
+
+    The runner picks during the chat's wait, which stays (`loop.next_step`).
+    """
     b = c.brief
     if c.step.kind != StepKind.SHAPE or c.finished_at or c.intent.abandoned_at:
         return "the Change is not being shaped"
@@ -48,16 +51,8 @@ def retry(c: Change, version: int) -> str:
         return f"ask for brief v{version}'s challenge first; its decisions are picked then"
     if owed(c):
         return f"the decisions of brief v{version} are being picked; ask again after it"
-    _owed(c)
+    c.brief.picked = Pick(version=version)
     return ""
-
-
-def _owed(c: Change) -> None:
-    c.brief.picked = Pick(version=c.brief.version)
-    o = c.outcome
-    waits = o is not None and o.exit == Exit.PENDING and o.waiting == Waiting.CHAT
-    if waits and c.step.mode is None and c.brief.challenged == c.brief.version:
-        c.outcome = None  # runnable: the runner picks, then waits for the approval again
 
 
 def unready(c: Change) -> str:

@@ -93,7 +93,8 @@ def change(kind: StepKind = K.BUILD, scope: tuple[str, ...] = ("web",), **fields
 def stored(tmp_path: Path, shared: DataRepo | None, c: Change, *, pin: bool = True) -> Store:
     store = Store(tmp_path / "store", shared, PROJECT if shared else "")
     if pin:
-        c = c.model_copy(update={"decisions_baseline": decisions_gate.pinned(store, c, AT)[0]})
+        view = decisions_gate.loaded(store)
+        c = c.model_copy(update={"decisions_baseline": decisions_gate.pinned(store, c, AT, view)[0]})
     store.write(Lock("c1"), c)
     return store
 
@@ -220,7 +221,7 @@ def test_an_unreadable_data_repository_stops_the_step(tmp_path, shared, ran):
 
 def test_without_a_data_repository_only_a_change_with_a_baseline_stops(tmp_path, shared, ran):
     old = stored(tmp_path / "old", None, change(), pin=False)
-    assert decisions_gate.pinned(old, change(), AT) == (None, False)  # no baseline is owed
+    assert decisions_gate.pinned(old, change(), AT, decisions_gate.loaded(old)) == (None, False)  # none is owed
     assert step(old, tmp_path).outcome is None  # a project without one never recorded rules to compare with
     pinned = stored(tmp_path / "pinned", shared, change())
     moved = Store(pinned.root, None, "")
@@ -261,14 +262,14 @@ def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_th
     c = change().model_copy(update={"brief": Brief(version=1, challenged=1, scope=["web"])})
     store = Store(tmp_path / "store", shared, PROJECT)
 
-    baseline, owed = decisions_gate.pinned(store, c, AT)
+    baseline, owed = decisions_gate.pinned(store, c, AT, decisions_gate.loaded(store))
     folded = loop.fold(c, [BriefApproval(at=AT, version=1, baseline=baseline, unpinned=owed)], AT)
     assert (folded.decisions_baseline.revisions, folded.decisions_unpinned_at) == ({rule.id: rule.rule_revision}, None)
     assert set(folded.decisions_baseline.said) == {rule.id}
 
     away = tmp_path / "away"
     (shared.root / PROJECT).rename(away)
-    baseline, owed = decisions_gate.pinned(store, c, AT)
+    baseline, owed = decisions_gate.pinned(store, c, AT, decisions_gate.loaded(store))
     folded = loop.fold(c, [BriefApproval(at=AT, version=1, baseline=baseline, unpinned=owed)], AT)
     assert (folded.decisions_baseline, folded.decisions_unpinned_at) == (None, AT)
     store.write(Lock("c1"), folded.model_copy(update={"step": Step(kind=K.BUILD, task="t1")}))
@@ -312,7 +313,7 @@ def test_a_change_pinned_with_whole_revisions_does_not_ask_while_they_hold(tmp_p
     rule = put(shared, make())
     c = change()
     store = stored(tmp_path, shared, c, pin=False)
-    baseline = decisions_gate.pinned(store, c, AT)[0]
+    baseline = decisions_gate.pinned(store, c, AT, decisions_gate.loaded(store))[0]
     store.write(Lock("c1"), c.model_copy(update={
         "decisions_baseline": baseline.model_copy(update={"revisions": {rule.id: rule.revision}})}))  # fmt: skip
 

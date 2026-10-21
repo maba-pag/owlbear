@@ -113,14 +113,24 @@ def baseline(view: DataView, c: Change, now: datetime, found: list[Applied] | No
     return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said)
 
 
-def pinned(store: Store, c: Change, now: datetime) -> tuple[DecisionBaseline | None, bool]:
-    """The baseline a brief approval pins, and whether one is owed: none without a data repository, owed unread."""
+def loaded(store: Store) -> DataView | None:
+    """The project's decisions as they load now; None without a data repository or when they do not load."""
     if store.shared is None:
-        return None, False
+        return None
     try:
-        return baseline(decision_store.load(store.shared, store.name), c, now), False
+        return decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable:
-        return None, True
+        return None
+
+
+def pinned(store: Store, c: Change, now: datetime, view: DataView | None) -> tuple[DecisionBaseline | None, bool]:
+    """The baseline a brief approval pins from *view* (`loaded`), and whether one is owed.
+
+    None is owed without a data repository; one is owed when the decisions did not load.
+    """
+    if view is None:
+        return None, store.shared is not None
+    return baseline(view, c, now), False
 
 
 def _quoted(text: str) -> str:

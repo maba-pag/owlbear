@@ -21,6 +21,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import pick
 
@@ -233,3 +234,90 @@ def test_an_unreviewed_last_revision_is_picked_and_pinned_without_a_challenger(p
     assert (c.brief.picked.version, c.outcome.reason, len(picking.told)) == (2, "approve brief v2", 3)
     assert picking.approve(2, unreviewed=True).status_code == 200
     assert picking.approved().brief.approved[-1].picked.version == 2
+
+
+def test_approval_checks_the_pick_and_pins_the_baseline_from_one_read(picking, monkeypatch):
+    rule = picking.put(make())
+    picking.save()
+    picking.ask(1)
+    picking.picks.append(picked(rule.id))
+    picking.verdicts.append(verdict())
+    picking.step()
+    real, reads = decision_store.load, []
+
+    def load(shared, project):
+        reads.append(project)
+        view = real(shared, project)
+        if len(reads) == 1:  # the rule changes right after the approval read the list
+            changed = rule.model_copy(update={"title": "Pages are plain HTML and CSS"})
+            write(changed, picking.shared.root / PROJECT, rule.revision)
+        return view
+
+    monkeypatch.setattr(decision_store, "load", load)
+    assert picking.approve(1).status_code == 200
+    assert picking.approved().decisions_baseline.revisions[rule.id] == rule.rule_revision  # the gate sees the change
+    assert len(reads) == 1
+
+
+def test_a_pick_retried_while_the_shaper_revises_runs_and_leaves_that_wait(picking):
+    rule = picking.put(make())
+    picking.save()
+    picking.ask(1)
+    picking.picks.append("error")
+    picking.verdicts.append(verdict("AC-1"))
+    c = picking.step()
+    waited = c.outcome
+    assert (c.brief.picked.status, waited.waiting) == ("failed", Waiting.CHAT)
+    assert waited.reason == "the shaper revises brief v1 for F1"
+    assert picking.ask(1, retry=True).status_code == 200
+    c = picking.change()
+    assert (c.outcome, loop.next_step(c, AT).kind) == (waited, StepKind.SHAPE)  # the runner picks during the wait
+    paused = c.model_copy(deep=True)
+    paused.intent.paused_at = AT
+    asked = c.model_copy(update={"outcome": waited.model_copy(update={"exit": Exit.ASK})})
+    assert (loop.next_step(paused, AT), loop.next_step(asked, AT)) == (None, None)
+    picking.picks.append(picked(rule.id))
+    c = picking.step()
+    assert (c.brief.picked.status, len(picking.told), c.outcome) == ("ok", 3, waited)  # no challenger; the same wait
+    assert loop.next_step(c, AT) is None
+
+
+class Killed(BaseException):
+    """The runner is killed in the middle of a session: nothing after it runs."""
+
+
+def test_an_interrupted_pick_resumes_its_recorded_session_so_its_spend_counts(picking, monkeypatch):
+    rule = picking.put(make())
+    picking.save()
+    picking.ask(1)
+    started = []
+
+    async def killed(cfg):
+        started.append(cfg)
+        raise Killed
+
+    monkeypatch.setattr(sdk_adapter, "run", killed)
+    with pytest.raises(Killed):
+        picking.step()
+    first = started[0]
+    assert (first.resume, picking.change().brief.picked.status) == (False, "owed")
+    assert picking.change().brief.picked.session == first.session_id  # recorded before the runtime started
+    monkeypatch.setattr(sdk_adapter, "run", picking.run)
+    picking.picks.append(picked(rule.id))  # its runtime reports the session's whole usage, before the kill too
+    picking.verdicts.append(verdict())
+    c = picking.step()
+    again = picking.pickers()[0]
+    assert (again.session_id, again.resume, again.fresh) == (first.session_id, True, first.message)
+    assert (c.brief.picked.status, c.spend.last[first.session_id].credits) == ("ok", 6.0)
+
+
+def test_a_correction_log_that_is_not_utf8_fails_the_pick_with_its_reason(picking):
+    picking.put(make())
+    (picking.shared.root / pick.LOG).write_bytes(b"- Missed \xff\xfe rules\n")
+    picking.save()
+    picking.ask(1)
+    picking.verdicts.append(verdict())
+    c = picking.step()
+    assert (c.brief.picked.status, picking.pickers()) == ("failed", [])
+    assert "utf-8" in c.brief.picked.reason
+    assert "the picker failed" in picking.approve(1).json()["detail"]

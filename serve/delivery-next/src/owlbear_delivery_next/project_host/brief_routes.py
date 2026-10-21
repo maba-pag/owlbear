@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Store
 
 
@@ -57,8 +58,8 @@ def slug_of(store: Store, handle: str) -> str | None:
     return None
 
 
-def refused(store: Store, c: Change, body: ApproveBody) -> str:
-    """Why the owner's approval of this brief version is refused, or ""."""
+def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -> str:
+    """Why the owner's approval of this brief version is refused, or ""; *view* is the decisions read it pins."""
     brief = c.brief
     if body.version != brief.version:
         return f"brief version {body.version} is not the current draft"
@@ -66,7 +67,7 @@ def refused(store: Store, c: Change, body: ApproveBody) -> str:
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
         return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"
-    if why := pick.unapproved(store, c):  # TD-459: approval pins the pick, never picks
+    if why := pick.unapproved(store, c, view):  # TD-459: approval pins the pick, never picks
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
         return (
@@ -110,10 +111,11 @@ def router(
 
     @routes.post("/changes/{slug}/approve-brief")
     def approve(slug: str, body: ApproveBody) -> dict[str, str]:
-        if why := refused(store, c := read(slug), body):
+        view = decisions_gate.loaded(store)  # one read: the pick is checked against the list the baseline pins
+        if why := refused(store, c := read(slug), body, view):
             raise HTTPException(409, why)
         now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)
-        baseline, owed = decisions_gate.pinned(store, c, now)
+        baseline, owed = decisions_gate.pinned(store, c, now, view)
         approval = BriefApproval(at=now, version=body.version, baseline=baseline, unpinned=owed, picked=c.brief.picked)
         return put(slug, approval)
 

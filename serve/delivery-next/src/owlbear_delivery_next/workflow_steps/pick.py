@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from owlbear_decisions import Decision, Snapshot
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.runtimes.session_result import Run
+    from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = "decision-pick"
@@ -61,6 +62,7 @@ def corrections(root: Path, project: str) -> str:
 
     Raises:
         OSError: A log exists but cannot be read.
+        ValueError: A log is not UTF-8.
     """
     texts = []
     for path in (root / LOG, root / project / LOG):
@@ -95,7 +97,7 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
     try:
         view = decision_store.load(store.shared, store.name)
         log = corrections(view.snapshot.root, store.name)
-    except (decision_store.DecisionsUnavailable, OSError) as exc:
+    except (decision_store.DecisionsUnavailable, OSError, ValueError) as exc:
         c.brief.picked = base.model_copy(update={"status": "failed", "reason": _one(str(exc))[:300]})
         store.write(lock, c)
         return c
@@ -112,20 +114,37 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
 
 
 def _session(store: Store, lock: Lock, c: Change, said: str) -> Run:
-    """One SDK session in an empty folder: its only tool is its result, whatever the profile's runtime."""
+    """One SDK session in an empty folder: its only tool is its result, whatever the profile's runtime.
+
+    Its id is recorded before it starts, so a pick a killed runner left resumes that session and its spend counts.
+    """
     settings = store.settings()
     role = roles.chosen(settings, LABEL)
     sessions.granted(LABEL)
+    p = c.brief.picked
+    resume, p.session = bool(p.session), p.session or _new_id(c)
+    store.write(lock, c)
+
+    def replaced() -> str:
+        p.session = _new_id(c)
+        store.write(lock, c)
+        return p.session
+
     with tempfile.TemporaryDirectory(prefix="owlbear-pick-") as folder:
         at = Path(folder)
         cfg = sdk_adapter.Session(
-            kind=StepKind.REVIEW, worktree=at, session_id=f"{c.slug}-{LABEL}-{uuid.uuid4().hex[:8]}", message=said,
-            resume=False, policy=Policy(at, write=False), observe=lambda: tools.Worktree("", ""), checks=(),
+            kind=StepKind.REVIEW, worktree=at, session_id=p.session, message=said, fresh=said, resume=resume,
+            previous=sessions.previous(store, c.slug, p.session) if resume else {},
+            policy=Policy(at, write=False), observe=lambda: tools.Worktree("", ""), checks=(),
             submit=pick_tools.SUBMIT, model=role.model, effort=role.effort, context=role.context,
             limit=roles.limit(settings, LABEL), role=tools.PICKER, job=LABEL,
-            journal=sdk_adapter.Journal(lambda e: store.log(lock, c.slug, e)),
+            journal=sdk_adapter.Journal(lambda e: store.log(lock, c.slug, e), replaced=replaced),
         )  # fmt: skip
         return asyncio.run(sdk_adapter.run(cfg))
+
+
+def _new_id(c: Change) -> str:
+    return f"{c.slug}-{LABEL}-{uuid.uuid4().hex[:8]}"
 
 
 def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
@@ -147,11 +166,12 @@ def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
     return base.model_copy(update={"status": "ok", "decisions": chosen, "dropped": dropped, "reason": reason})
 
 
-def unapproved(store: Store, c: Change) -> str:
-    """Why an approval may not pin the current version's pick, or "": present, picked, on the list as it is now.
+def unapproved(store: Store, c: Change, view: DataView | None) -> str:
+    """Why an approval may not pin the current version's pick, or "": present, picked, on *view*'s list.
 
-    Without a data repository there is nothing to pick. Decisions that do not load leave the pick as it is: the
-    approval is then pinned unread and the gate asks the owner, as before.
+    *view* is the read the approval pins (`decisions_gate.loaded`). Without a data repository there is nothing to
+    pick. Decisions that do not load leave the pick as it is: the approval is then pinned unread and the gate asks
+    the owner, as before.
     """
     if store.shared is None:
         return ""
@@ -159,8 +179,4 @@ def unapproved(store: Store, c: Change) -> str:
         return f"the decisions brief v{c.brief.version} must follow were not picked; {picks.RETRY}"
     if why := picks.unready(c):
         return why
-    try:
-        view = decision_store.load(store.shared, store.name)
-    except decision_store.DecisionsUnavailable:
-        return ""
-    return CHANGED if digest(listed(view.snapshot)) != p.listed else ""
+    return CHANGED if view is not None and digest(listed(view.snapshot)) != p.listed else ""

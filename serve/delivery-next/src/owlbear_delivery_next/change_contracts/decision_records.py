@@ -67,6 +67,7 @@ class Pick(_Strict):
     at: datetime | None = None
     decisions: list[PickedDecision] = Field(default_factory=list)
     dropped: list[str] = Field(default_factory=list)
+    session: str = ""  # the picker's session, recorded before it starts: a killed runner's pick resumes it
 
 
 class Said(BaseModel):
