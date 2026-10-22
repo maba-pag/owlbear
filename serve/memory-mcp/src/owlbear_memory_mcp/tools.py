@@ -19,6 +19,7 @@ from owlbear_memory import (
     MemoryState,
     NotFoundError,
     TransitionError,
+    Where,
     validate_scope_agents,
 )
 from owlbear_memory import (
@@ -225,6 +226,7 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "score": entry.score,
         "scope_agents": entry.scope_agents,
         "source_agent": entry.source_agent,
+        "recommended": entry.recommended,
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
@@ -289,8 +291,9 @@ async def save_memory(  # noqa: PLR0913
     categories: list[MemoryCategory | str],
     confidence: float,
     source_agent: str,
+    where: Where,
 ) -> dict[str, Any]:
-    """Create a pending memory entry with explicit source_agent."""
+    """Create a pending memory entry with explicit source_agent and the saver's recommended scope."""
     engine = _engine_from_ctx(ctx)
     coerced_categories = _coerce_categories(categories)
     try:
@@ -301,12 +304,16 @@ async def save_memory(  # noqa: PLR0913
             confidence=confidence,
             scope_agents=[],
             source_agent=source_agent,
+            recommended=where,
         )
     except (DuplicateEntryError, ConcurrencyError) as exc:
         raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    hint = "Saved as pending and unscoped. The memory curator assigns relevance scope before promotion."
+    hint = (
+        f"Saved as pending and unscoped in this project, recommended {where}. "
+        "The memory curator decides its scope and assigns relevance before promotion."
+    )
     return _with_hint(_entry_to_dict(entry), hint)
 
 

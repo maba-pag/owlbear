@@ -32,6 +32,7 @@ from owlbear_memory.models import (
     MemoryState,
     PurgePreview,
     PurgeResult,
+    Where,
 )
 from owlbear_memory.writer_lock import writer_lock
 
@@ -106,6 +107,7 @@ def _matches_repair_copy(candidate: MemoryEntry, source: MemoryEntry, marked_tit
         and candidate.categories == source.categories
         and candidate.confidence == source.confidence
         and candidate.source_agent == source.source_agent
+        and candidate.recommended == source.recommended
         and candidate.scope_agents == source.scope_agents
         and candidate.created_at == source.created_at
     )
@@ -891,6 +893,7 @@ class MemoryEngine:
         confidence: float,
         source_agent: str,
         scope_agents: list[str],
+        recommended: Where | None = None,
     ) -> MemoryEntry:
         """Create, persist, and return a new pending memory entry."""
         with self._writer():
@@ -908,6 +911,7 @@ class MemoryEngine:
                 score=confidence,
                 scope_agents=scope_agents,
                 source_agent=source_agent,
+                recommended=recommended,
                 created_at=now,
                 updated_at=now,
                 approved_at=None,

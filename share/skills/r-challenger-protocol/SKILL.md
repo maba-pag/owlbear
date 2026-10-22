@@ -139,10 +139,11 @@ memory_candidate:
   content: <single actionable lesson with exact evidence locator>
   categories: [<memory categories>]
   confidence: <0.7-0.9>
+  where: <project or global: the recommended scope>
 ```
 
 Use `memory_candidate: null` when no lesson qualifies. Never include `scope_agents`; the memory
 curator owns relevance scope. The task-owning caller validates the candidate against
 `h-memory-structure` and, when it qualifies, calls `save_memory` with the reviewer-provided
-`source_agent`. The caller must not rewrite provenance, invent a candidate, or let memory handling
+`source_agent` and `where`. The caller must not rewrite provenance, invent a candidate, or let memory handling
 change the primary advisory or lifecycle disposition.

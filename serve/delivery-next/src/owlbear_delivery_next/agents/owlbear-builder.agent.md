@@ -19,7 +19,7 @@ that can falsify each). Apply them to the code and tests you write.
 Before you start, call `recall_memory` with agent `builder` and apply what it returns. After the task,
 before your last call, mark each memory you recalled with `assess_memories`, and if you learned a
 specific, non-obvious fact that would have helped from the start, save it with `save_memory` (source
-agent `builder`); never save task notes or code. Without the memory tools, go on without them.
+agent `builder`, `where` `project` or `global` as you recommend its scope); never save task notes or code. Without the memory tools, go on without them.
 </required_reading>
 
 <critical_rules>

@@ -113,7 +113,7 @@ See the [memory package README](../../../serve/memory/README.md) and
 
 | Tool | Description | Key parameters |
 | --- | --- | --- |
-| `save_memory` | Create a new `pending` memory entry; scope is assigned later by curation | `title`, `content`, `categories`, `confidence`, `source_agent` |
+| `save_memory` | Create a new `pending` memory entry in this project; scope is assigned later by curation | `title`, `content`, `categories`, `confidence`, `source_agent`, `where` |
 | `list_memories` | List metadata filtered by state/category/scope; each entry includes its revision | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID, including its revision | `entry_id` |
@@ -272,13 +272,14 @@ Creates a new `pending` entry in the memory store (see Configuration).
 | `categories` | list[str] | (required) | One or more category values |
 | `confidence` | float | (required) | Must be within `[0.7, 1.0]` |
 | `source_agent` | str | (required) | Non-blank immutable provenance label |
+| `where` | `project` or `global` | (required) | Your recommended scope (TD-293): `project` for a lesson specific to this project, `global` for one that holds in any project. Stored as `recommended`; the entry stays pending in this project until the curator or the owner decides |
 
 Named provenance is accepted at intake without active-agent runtime validation. A readable local
 `.agent.md` is corroboration the curator may use later; it is not an authorization boundary.
 
 Scope members are validated at the shared memory-model boundary and must be nonblank strings. An
 empty list is valid for a pending entry; `*` is valid universal scope and is not authorization.
-`save_memory` always creates an unscoped pending entry; curation assigns scope.
+`save_memory` always creates an unscoped pending entry in the bound project, whatever `where` recommends; curation assigns scope and decides Global.
 
 Returns: the unscoped pending entry and a guidance hint indicating next-step curation.
 
@@ -493,7 +494,8 @@ save_memory(
  content="Tool prefix truncation broke matching in task #1307...",
  categories=["tool-usage", "pitfall"],
  confidence=0.8,
- source_agent="builder"
+ source_agent="builder",
+ where="global"
 )
 ```
 

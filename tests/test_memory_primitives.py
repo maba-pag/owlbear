@@ -82,6 +82,20 @@ def _write_valid_file(path: Path, body: str = "Some content") -> None:
     path.write_text(_VALID_FRONTMATTER + body + "\n", encoding="utf-8")
 
 
+def test_a_recommended_scope_round_trips_and_an_entry_without_one_keeps_its_bytes(tmp_path: Path) -> None:
+    """TD-293: the saver's recommendation is written only when set, so files saved before it stay unchanged."""
+    plain, recommended = tmp_path / "plain.md", tmp_path / "recommended.md"
+    storage.write_entry(plain, _make_valid_entry(), memory_dir=tmp_path)
+    storage.write_entry(
+        recommended, _make_valid_entry().model_copy(update={"recommended": "global"}), memory_dir=tmp_path
+    )
+
+    assert "recommended" not in plain.read_text(encoding="utf-8")
+    assert (storage.read_entry(plain).recommended, storage.read_entry(recommended).recommended) == (None, "global")
+    with pytest.raises(PydanticValidationError):
+        MemoryEntry(**_valid_entry_data(), recommended="team")
+
+
 def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
     """Threads sharing the storage module never corrupt each other's YAML parsing."""
     previous_interval = sys.getswitchinterval()

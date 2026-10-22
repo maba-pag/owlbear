@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates tool annotations at registration.
 from mcp.types import ToolAnnotations
-from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
+from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState, Where
 from pydantic import Field, StrictStr
 
 from owlbear_memory_mcp.store import shared_stores
@@ -87,6 +87,13 @@ _RecallAgent = Annotated[StrictStr | Literal[0] | None, Field(default=None)]
 _Limit = Annotated[int, Field(ge=0)]
 _Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
 _BatchSession = Literal["curation", "review"]
+_Where = Annotated[
+    Where,
+    Field(
+        description="Your recommended scope (TD-293): project for a lesson specific to this project, global for "
+        "one that holds in any project. It only recommends: the entry stays pending in this project until curated."
+    ),
+]
 
 
 @dataclass
@@ -144,8 +151,9 @@ async def save_memory(  # noqa: PLR0913
     categories: _Categories,
     confidence: _Confidence,
     source_agent: _Agent,
+    where: _Where,
 ) -> dict[str, Any]:  # pragma: no cover
-    """Create a new pending memory entry with explicit source agent."""
+    """Create a new pending memory entry with explicit source agent and its recommended scope."""
     return await save_memory_impl(
         ctx,
         title=title,
@@ -153,6 +161,7 @@ async def save_memory(  # noqa: PLR0913
         categories=categories,
         confidence=confidence,
         source_agent=source_agent,
+        where=where,
     )
 
 

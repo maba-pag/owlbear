@@ -147,6 +147,7 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
                 categories=["domain-knowledge"],
                 confidence=0.9,
                 source_agent="test-agent",
+                where="project",
             ),
             lambda: tools.curate_memory(
                 ctx, entry_id=curate_entry.id, revision=curate_entry.revision, scope_agents=["test-agent"]
