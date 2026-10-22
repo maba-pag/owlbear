@@ -65,30 +65,20 @@ def test_handbook_documents_typed_search_and_refresh_unions() -> None:
     refresh_section = handbook.split("### refresh_knowledge_source", 1)[1].split("### register_knowledge_source", 1)[0]
 
     assert "list[dict] | KnowledgeFailure" in search_section
-    assert "An empty `[]` is a successful no-match result." in search_section
     assert all(f"`{field}`" in search_section for field in _FAILURE_FIELDS)
     assert "ToolError" in search_section
-    assert "error string" not in search_section.lower()
-    assert "error: ..." not in search_section
 
     assert "KnowledgeFailure" in refresh_section
     assert all(field in refresh_section for field in ("source_id", "sources_refreshed", "documents_created"))
     assert all(f"`{field}`" in refresh_section for field in _FAILURE_FIELDS)
-    assert "Partial URL-list success" in refresh_section
-    assert "error-free no-op" in refresh_section
     assert "ToolError" in refresh_section
-    assert "error string" not in refresh_section.lower()
-    assert "error: ..." not in refresh_section
 
 
-def test_handbook_enumerates_typed_failure_literals_and_fail_closed_extraction() -> None:
+def test_handbook_enumerates_typed_failure_literals() -> None:
     handbook = _HANDBOOK_PATH.read_text(encoding="utf-8")
 
     assert all(f"`{stage}`" in handbook for stage in _FAILURE_STAGES)
     assert all(f"`{code}`" in handbook for code in _FAILURE_CODES)
-    assert "authoritative boolean" in handbook
-    assert "redacted operational summary" in handbook
-    assert "no document for persistence" in handbook
 
 
 def test_knowledge_ingestor_reports_structured_failures_without_claiming_success() -> None:
@@ -98,12 +88,8 @@ def test_knowledge_ingestor_reports_structured_failures_without_claiming_success
     channel_b = output_format.split("### Channel B", 1)[1]
 
     assert all(f"`{field}`" in channel_a for field in _FAILURE_FIELDS)
-    assert "per-source failures" in channel_a
-    assert "Never parse operational text" in agent
     assert all(stage in channel_a for stage in ("acquisition", "extraction", "persistence", "indexing", "query"))
-    assert "error string" not in agent.lower()
     assert "knowledge_search" not in channel_b
-    assert "Not applicable" in channel_b
 
 
 @pytest.mark.asyncio

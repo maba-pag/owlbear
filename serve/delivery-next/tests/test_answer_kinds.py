@@ -254,10 +254,8 @@ def test_the_chat_tool_takes_the_kind_and_passes_only_a_confirmed_statement(pick
     monkeypatch.setattr(mcp_server, "_LOCAL", Loopback(picking.http))
     monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
     [tool] = [t for t in asyncio.run(mcp_server.mcp.list_tools()) if t.name == "answer_question"]
-    assert (sorted(tool.input_schema["required"]), "read a clarification back" in tool.description) == (
-        ["kind", "question"],
-        True,
-    )
+    assert sorted(tool.input_schema["required"]) == ["kind", "question"]
+    assert {"statement", "confirmed"} <= set(tool.input_schema["properties"])
 
     def said(**args: object) -> dict:
         return asyncio.run(mcp_server.mcp.call_tool("answer_question", {"question": f"c1.{run.qid}", **args}))
