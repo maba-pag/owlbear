@@ -272,6 +272,25 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
     assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
 
 
+def test_agent_validator_reads_active_mcp_servers_from_both_workspace_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed, vscode, root = tmp_path / "seed.json", tmp_path / "vscode.json", tmp_path / "root.json"
+    seed.write_text('{"servers": {"owlbear-browser": {}, "owlbear-memory": {}}}', encoding="utf-8")
+    vscode.write_text('{"servers": {"owlbear-delivery": {}, "owlbear-browser": {}}}', encoding="utf-8")
+    root.write_text('{"mcpServers": {"owlbear-memory": {}}}', encoding="utf-8")
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", seed)
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG_PATHS", (seed, vscode))
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_ROOT_MCP_CONFIG", root)
+    errors = lambda: _AGENT_VALIDATOR._configured_mcp_servers()[1]  # noqa: E731, SLF001
+
+    assert errors() == []
+    root.write_text('{"mcpServers": {}}', encoding="utf-8")
+    assert any("MCP server names differ" in error for error in errors())
+    root.write_text('{"servers": {"owlbear-memory": {}}}', encoding="utf-8")
+    assert errors() == [f"{root}: MCP configuration needs a mcpServers object"]
+
+
 def test_agent_validator_rejects_multi_name_tool_search_queries(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
