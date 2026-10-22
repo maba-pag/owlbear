@@ -3,7 +3,7 @@ import { state, show, several, formsOf, send } from "./state.mjs";
 import { toggle, button, hd, text, row, info, notice, refusal } from "./widgets.mjs";
 import { questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote } from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection } from "./visual.mjs";
-import { spendLines, activityLog, planList, roundsInfo, stepper } from "./progress.mjs";
+import { spendLines, toolLines, activityLog, planList, roundsInfo, stepper } from "./progress.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { choose } from "./list.mjs";
 
@@ -74,5 +74,6 @@ export function detailView(d) {
     ${!approvingNow && (d.brief.outcome || d.criteria.length) ? briefInfo(d) : nothing}
     ${d.pullback && !behind ? pullbackNote(d.pullback, d) : nothing}
     ${info("Recent activity", activityLog(d.activity))}
-    ${spendLines(d.spend)}`;
+    ${spendLines(d.spend)}
+    ${toolLines(d.tool_use)}`;
 }

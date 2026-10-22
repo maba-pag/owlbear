@@ -20,6 +20,19 @@ export function spendLines(spend) {
   return toggle("spend", `Spent ${spentText(spend.credits, (spend.unread || []).length)}`, lines);
 }
 
+// C-28 T8: a line per Delivery tool, most called first; the share refused leaves out lint-only refusals.
+export function toolLines(use) {
+  const used = Object.entries(use?.tools ?? {}).filter(([, t]) => t.calls).sort(([, a], [, b]) => b.calls - a.calls);
+  if (!used.length) return nothing;
+  const lines = used.map(([tool, t]) => {
+    const also = [t.lint && `${t.lint} lint`, t.late && `${t.late} late`].filter(Boolean).map((s) => `, ${s}`);
+    const said = `${tool}: ${t.calls} call${t.calls === 1 ? "" : "s"}, ${Math.round((100 * t.rejected) / t.calls)}% `
+      + `refused${also.join("")}, ${t.retries} ${t.retries === 1 ? "retry" : "retries"}`;
+    return text(said, { size: "xs", color: "contrast-medium" });
+  });
+  return toggle("tool-use", `Tool calls (${used.reduce((n, [, t]) => n + t.calls, 0)})`, lines);
+}
+
 // Credits a session did not report make the total a lower bound, never a false zero (TD-94).
 export function spentText(credits, unknown) {
   if (!unknown) return `${credits.toFixed(2)} credits`;

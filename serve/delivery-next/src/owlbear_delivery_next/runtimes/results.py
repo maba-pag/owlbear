@@ -34,6 +34,7 @@ class Gate:
         self.cfg, self.run, self.log, self.ended = cfg, run, log, ended
         self.done = False
         self.lint = lint.Lint(log)
+        self._refused: set[str] = set()  # the tools whose last call was refused, so their next call is a retry
         self._lock = threading.Lock()
         self._linting = threading.Lock()
 
@@ -90,9 +91,13 @@ class Gate:
     ) -> tuple[str, bool]:
         """A helper answers and the step goes on; its rejected calls never count toward ending the step."""
         if self.done:
+            with self._lock:
+                self._tally(spec.name, "late")
             return ENDED, False
         args, errors = tool_schema.parse(spec.model, arguments)
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors)
+        with self._lock:
+            self._tally(spec.name, "rejected" if errors else "")
         if args is None:
             return "Rejected. Fix each field, then call again:\n" + "\n".join(f"- {e}" for e in errors), False
         return helper(args), True
@@ -122,7 +127,21 @@ class Gate:
 
     def _late(self, spec: tools.Spec) -> tuple[str, bool]:
         self.log(event="tool", tool=spec.name, accepted=False, errors=["the step has already ended"])
+        self._tally(spec.name, "late")
         return ENDED, False
+
+    def _tally(self, name: str, outcome: str) -> None:
+        """Count one call of *name* in the run: its outcome field, if any, and whether it retries a refusal."""
+        n = self.run.tool_calls.setdefault(name, {})
+        n["calls"] = n.get("calls", 0) + 1
+        if name in self._refused:
+            n["retries"] = n.get("retries", 0) + 1
+        if outcome:
+            n[outcome] = n.get(outcome, 0) + 1
+        if outcome in {"rejected", "lint"}:
+            self._refused.add(name)
+        else:
+            self._refused.discard(name)
 
     def _settle(
         self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None
@@ -131,8 +150,10 @@ class Gate:
             self.run.head = None if errors else tree.head
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
+        linted = bool(errors) and all(e.startswith("lint: ") for e in errors)
+        self._tally(spec.name, "lint" if linted else "rejected" if errors else "")
         if errors:
-            self.run.invalid += not all(e.startswith("lint: ") for e in errors)  # lint has its own limit (TD-87)
+            self.run.invalid += not linted  # lint has its own limit (TD-87)
             if self.run.invalid >= tools.INVALID_LIMIT:
                 self._finish("invalid", None, "; ".join(errors)[:300])
             lines = "\n".join(f"- {e}" for e in errors)

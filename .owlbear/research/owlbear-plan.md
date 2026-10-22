@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-22, status at `main` after #565 and this pull request, decisions to TD-462
+> **Date:** 2026-10-22, status at `main` after #566 and this pull request, decisions to TD-463
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -226,7 +226,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-25 | Curator modes and the Global threshold, 95% at first (TD-292, TD-400) | Missing | build | 5 |
 | C-25, C-27 | The watcher saves lessons and infers stages | Not built | build | 9 |
 | C-26 | Tests do not assert prose wording | Two memory-governance tests still assert curation wording (identity deferral, corroborated scope): kept until a behavioural test covers the rule | align | — |
-| C-28 | Tool use is measured, success rates included (T8) | Success rates are not counted | align | — |
+| C-28 | Tool use is measured, success rates included (T8) | Counted per Change and shown on its page (TD-463); no view across Changes, and wrong-tool selection shows only as missing-tool reports | align | — |
 | C-28 | Default rules guide, never gate | Ruff's complexity rule fails CI; `noqa` is the escape | keep | — |
 | C-30 | Every role may use built-in subagents | Not in window steps | keep | 8 |
 | S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |

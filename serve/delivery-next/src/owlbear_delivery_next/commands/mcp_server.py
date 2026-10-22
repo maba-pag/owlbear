@@ -50,7 +50,7 @@ def updated(rec: host.HostRecord | None) -> bool:
 
 
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
-PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every Change: 16 rows were 77 KB with them
+PAGE_ONLY = ("progress", "spend", "tool_use", "pullback")  # off the list of all Changes: 16 rows were 77 KB with them
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 _pause = time.sleep  # the poll's own pause
 FOUND = 20  # decisions a find returns; the rest are counted

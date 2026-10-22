@@ -164,6 +164,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
+    out["tool_use"] = c.tool_use.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]

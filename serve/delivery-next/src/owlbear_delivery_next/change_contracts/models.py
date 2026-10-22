@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
+from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
 
 FORMAT = 7
@@ -477,6 +478,7 @@ class Change(Record):
     loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
+    tool_use: ToolUse = Field(default_factory=ToolUse)  # C-28 T8: how agents' Delivery tool calls went
     finished_at: datetime | None = None
     pullback: Pullback | None = None
     pull_requested: datetime | None = None  # the owner asked to pull the target again

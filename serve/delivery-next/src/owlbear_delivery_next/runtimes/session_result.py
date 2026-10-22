@@ -77,6 +77,7 @@ class Run:
     usage_unread: str = ""  # why the usage does not prove the model; such a run is never processed (TD-54, TD-94)
     subagents: list[dict[str, Any]] = field(default_factory=list)  # each subagent's record, a breakdown (TD-129)
     model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns once after a wait
+    tool_calls: dict[str, dict[str, int]] = field(default_factory=dict)  # each tool's tally fields (C-28 T8)
 
 
 def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult:
