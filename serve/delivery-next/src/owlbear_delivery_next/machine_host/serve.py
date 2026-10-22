@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -46,6 +47,7 @@ class Server(uvicorn.Server):
 
     def handle_exit(self, sig: int, frame: FrameType | None) -> None:
         """A signal: close the gates, then let Uvicorn shut down (it replays the signal once it has)."""
+        self.machine.say(f"stopping: {signal.Signals(sig).name} received")
         self.machine.closing()
         super().handle_exit(sig, frame)
 
@@ -144,6 +146,8 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
             server.run(sockets=[sock])
         clean = True
     finally:
+        if not clean:
+            machine.say("stopping: the server failed (its error follows)")
         machine.stop_all()
         if clean:  # an exception leaves the record behind: the next start is after a crash
             ended()
