@@ -23,7 +23,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import step_decisions, step_input
+from owlbear_delivery_next.runtimes import step_answers, step_decisions, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_archive
 from owlbear_delivery_next.state_store.store import Lock
@@ -207,6 +207,7 @@ def test_a_brief_change_stops_the_work_and_answering_within_the_brief_reopens_th
 
     reopened = loop.open_question(c)
     assert (reopened.id, reopened.answer, loop.ordinary(reopened)) == (run.qid, None, True)
+    assert not any("not built yet" in line for line in step_answers.answered(c))  # the owner's question stays his
     assert run.answer(kind="event", text="English").status_code == 200
     run.step()
     [(_, delivered)] = run.held

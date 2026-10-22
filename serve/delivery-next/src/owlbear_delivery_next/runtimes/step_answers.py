@@ -34,6 +34,7 @@ def answered(change: Change, *, challenged: bool = False, own: str = "") -> list
     kept = [
         q for q in change.questions
         if q.answer and not disputes.hidden(q, challenged=challenged, own=own) and not answer_kinds.unchecked(change, q)
+        and not answer_kinds.owned(q)  # its text says why the rejected clarification changed the brief
     ]  # fmt: skip
     return ["", "The owner's answers so far:", *(f"- {_one(q.text)}: {answer_text(q)}" for q in kept)] if kept else []
 
