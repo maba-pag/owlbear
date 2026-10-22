@@ -1,13 +1,11 @@
 {
-  "source": "the decision record, reworded by Sol for TD-462 and scoped by TD-442 on 2026-10-22; every entry is for the owner's review in the preview",
+  "source": "the decision record, reworded by Sol for TD-462 and scoped by TD-442 on 2026-10-22; the owner checked the four Sol left uncertain (TD-464)",
   "notes": [
-    "The nine ECC adoptions are numbered 1-9 in the archived record at commit 04b1d8ec4, section 3.8.1, TD-115; the current record retains their summary under Standalone decisions.",
-    "The nine cover test weakening, defect proof, caller/fallback review, test curation, watcher lessons, shaping, UI accessibility, consumer-aware planning and ordered state changes.",
-    "B259 matches ECC adoption 4; B294 matches adoption 5. This does not make all test or memory decisions Global.",
-    "B289 mixes Global config-approval rules with quality-service implementation; TD-442 provides no clause-level scope split, so the matching B id is included.",
-    "B009's page-comment policy is excluded. B328 records the scope mapping itself and remains OwlBear-scoped under “all else”.",
-    "A second Sol check (2026-10-22) corrected 8 drifting and 2 still-dependent rewordings, flagged 4 that may need splitting, and kept 29 originals that already stood alone.",
-    "The quality-service entry stays Global for its config-approval rule (TD-442) but also describes OwlBear's linter service; split it on review."
+    "The nine ECC adoptions (TD-115) stand in the record as their own lines: 1-3 and 6-9 under Standalone (TD-468), 4 in C-26's test curation line, 5 in Standalone's watcher lessons line; all nine are Global (TD-442).",
+    "TD-442 does not make every test or memory decision Global, only the ECC ones.",
+    "The quality service is split in the record: its config-approval line is Global (TD-442), the line that runs linters is OwlBear's.",
+    "Page-comment policy (C-01's exception) and the scope mapping itself stay OwlBear's under “all else”.",
+    "A second Sol check (2026-10-22) corrected 8 drifting and 2 still-dependent rewordings and kept 29 originals that already stood alone; the 4 it left uncertain were split or retired with the owner (TD-467 to TD-469)."
   ],
   "global": [
     {
@@ -64,15 +62,39 @@
     },
     {
       "topic": "Standalone",
-      "original": "A quality service separate from Delivery runs linters; agents request changes to lint/format configs, CI workflows and Git hooks, the owner approves, refused from the start; no suppression grandfathered."
-    },
-    {
-      "topic": "Standalone",
-      "original": "The nine ECC adoptions stay agent rules, among them: never weaken tests or checks to get green; failing-before proof where feasible; shapers never infer business constraints from code."
-    },
-    {
-      "topic": "Standalone",
       "original": "Watcher lessons need evidence that agent behaviour caused the signal; merging lessons belongs to the curator."
+    },
+    {
+      "topic": "Standalone",
+      "original": "Agents request changes to lint and format configs, CI workflows and Git hooks and the owner approves; direct agent edits are refused from the start; no existing suppression is grandfathered."
+    },
+    {
+      "topic": "Standalone",
+      "original": "The builder never deletes, skips or weakens a test or check to get green; the reviewer reports any that does."
+    },
+    {
+      "topic": "Standalone",
+      "original": "A defect fix prefers existing tests that tell the bug apart and shows failing-before evidence where feasible; otherwise it states its reproduction basis and gap."
+    },
+    {
+      "topic": "Standalone",
+      "original": "The reviewer checks whether a caller already handles a problem and reports fallbacks that hide failures."
+    },
+    {
+      "topic": "Standalone",
+      "original": "The shaper never infers business constraints from code; criteria may say what must not happen; it asks for the observable pain, the current workaround and evidence against its assumptions."
+    },
+    {
+      "topic": "Standalone",
+      "original": "UI work covers a partial state, pointer target size per WCAG 2.5.8 with its exceptions, and modal focus containment and return, proven in a browser."
+    },
+    {
+      "topic": "Standalone",
+      "original": "The planner finds a change's consumers from real imports and puts their tests in the task's checks."
+    },
+    {
+      "topic": "Standalone",
+      "original": "Builder and reviewer trace state changes in the order they happen."
     }
   ],
   "reworded": [
@@ -690,12 +712,6 @@
     },
     {
       "topic": "C-28 Code and tool rules",
-      "original": "Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63.",
-      "statement": "Agent-facing tools follow T1-T8 of the Delivery Tool Surface Audit, with T7 changed to no tool-count limits, one process action per tool, tests of field descriptions and small flat schemas, and measured tool success.",
-      "note": "uncertain: a second check found it still depends on other decisions (T1–T8 remain opaque identifiers; expanding TD-63 does not state the rest of the contract.); it may need splitting into several decisions"
-    },
-    {
-      "topic": "C-28 Code and tool rules",
       "original": "Step kinds are a guide, not a gate: a new kind is allowed when no existing step can run its work, recorded with its reason; above eleven (the design's ten and the test review's) the count is reported, not failed.",
       "statement": "Delivery step kinds are a guide, not a gate: a new kind is allowed when no existing step can do its work; record why. Above eleven (the design's ten plus test review), report the count, never fail it.",
       "note": "corrected by a second check: Adds “only”: permission when existing kinds cannot do the work becomes an exclusive prohibition in other circumstances."
@@ -738,39 +754,9 @@
     },
     {
       "topic": "Standalone",
-      "original": "A quality service separate from Delivery runs linters; agents request changes to lint/format configs, CI workflows and Git hooks, the owner approves, refused from the start; no suppression grandfathered.",
-      "statement": "A quality service outside Delivery runs linters; agents request lint/format config, CI-workflow and Git-hook changes, the owner approves. Refuse direct agent edits from the start; no existing suppression is grandfathered.",
-      "note": "ok"
-    },
-    {
-      "topic": "Standalone",
       "original": "Fixing memory publication and curation (F17) follows the plan's order; M4 and M5 no longer exist.",
       "statement": "Fixing memory publication and curation follows the OwlBear plan's work order; the old build and first-real-project milestones, M4 and M5, no longer exist.",
       "note": "ok"
-    },
-    {
-      "topic": "Standalone",
-      "original": "The nine ECC adoptions stay agent rules, among them: never weaken tests or checks to get green; failing-before proof where feasible; shapers never infer business constraints from code.",
-      "statement": "The nine ECC adoptions in OwlBear's archived decision record at 04b1d8ec4 stay agent rules; examples: never weaken tests/checks for green; failing-before proof where feasible; shapers never infer business constraints from code.",
-      "note": "uncertain: a second check found it still depends on other decisions (An archive pointer and three examples still do not state the nine adopted rules.); it may need splitting into several decisions"
-    },
-    {
-      "topic": "Standalone",
-      "original": "Order of the remaining work: TD-358's build work, the research move (TD-227), self-update steps 3c to 5, the old engine's removal, v1.0, TD-318's memory work, the window-step gate, the watcher.",
-      "statement": "Order: decision-review fixes (TD-358); research to owlbear-data; pack PRs, runtime handover and idle updates; old-engine removal; v1.0; memory curation and scope work (TD-318); safe window-step gate; watcher.",
-      "note": "uncertain: a second check found it still depends on other decisions (“Decision-review fixes” and “memory curation and scope work” still require external decision groups to identify their complete scope.); it may need splitting into several decisions"
-    },
-    {
-      "topic": "Standalone",
-      "original": "Of TD-392..TD-402, the small items come with TD-358's work; the PDS fallback's removal, then the page split, before v1.0; the threshold with TD-318's work; the GitHub account before the first real project.",
-      "statement": "Dual major tags, all-layer Save dialogs, paused test-review notices and memory-role fixes join decision-review work; remove PDS fallback then split pages pre-v1.0; 95% threshold joins memory work; GitHub-account settings precede real use.",
-      "note": "corrected by a second check: Removes the bounded decision range and generalises the particular threshold setting to “memory confidence” work."
-    },
-    {
-      "topic": "Standalone",
-      "original": "The build work of TD-319..TD-357 comes before self-update step 3b; TD-274's gap stays until after self-update step 5.",
-      "statement": "The TD-319..TD-357 decision-review fixes precede the self-update release-tag workflow (step 3b); disabling project agents and skills in SDK steps stays after idle automatic self-updates (step 5).",
-      "note": "uncertain: a second check found it still depends on other decisions (The unresolved TD range still carries the substantive work scope; “decision-review fixes” does not replace that definition.); it may need splitting into several decisions"
     },
     {
       "topic": "C-31 The decision record",
@@ -890,12 +876,6 @@
       "topic": "C-31 The decision record",
       "original": "An answer during the work is classified by its relayer as event, clarification or brief change; clarifications are read back and become Change decisions; a Sol check stops the work when one changes the brief.",
       "statement": "An answer during a Change is classified by its relayer as event, clarification or brief change; clarifications are read back and become Change decisions; a Sol check stops work when a clarification changes the brief.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
-      "original": "The migration rewords statements that only make sense beside their neighbours so each stands alone, the original beside it, every reworded one marked for the owner's review in the preview.",
-      "statement": "The decision-record migration rewords context-dependent statements to stand alone, keeps each original beside its rewrite, and marks every rewrite for the owner's review in the preview.",
       "note": "ok"
     }
   ]

@@ -101,11 +101,11 @@ def _global(result: Preview, project: str) -> list[str]:
 
 def _reworded(result: Preview) -> list[str]:
     lines = [
-        "## Reworded for your review (TD-462)",
+        "## Reworded (TD-462)",
         "",
         (
             "Lines that only made sense beside their neighbours, reworded to stand alone; the entry holds the "
-            "rewording only. Accept or correct each in the last column; `uncertain` ones come first."
+            "rewording only. Sol checked each twice; the owner checks only those left `uncertain` (TD-464)."
         ),
         "",
     ]
@@ -115,12 +115,12 @@ def _reworded(result: Preview) -> list[str]:
     lines += [
         f"Overlay: {result.overlay.source}.",
         "",
-        "| Topic | Entry | Original | Reworded | Note | Your mark |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Topic | Entry | Original | Reworded | Note |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for c, r in found:
         cells = (c.topic.heading, f"`{c.decision.id}`", r.original, c.decision.statement, r.note)
-        lines.append("| " + " | ".join(_cell(cell) for cell in cells) + " | |")
+        lines.append("| " + " | ".join(_cell(cell) for cell in cells) + " |")
     return [*lines, ""]
 
 

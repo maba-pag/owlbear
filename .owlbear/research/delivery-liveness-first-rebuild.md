@@ -176,6 +176,9 @@ TD-342, TD-365, TD-366, TD-367; autonomous TD-48, TD-67, TD-267, TD-316.
 
 **Replaced:** TD-34 by TD-343; TD-50 by TD-320; TD-145 by TD-223; TD-55 by TD-365; TD-36 by TD-367.
 
+**Spent:** TD-267 (the owner moved it into the window-step gate's design as its starting point,
+2026-10-22).
+
 ## C-05 Roles, agents and skills
 
 **Rows:** decided TD-58, TD-69, TD-99, TD-106, TD-108, TD-109, TD-110, TD-134, TD-135, TD-136, TD-139, TD-157,
@@ -228,6 +231,8 @@ TD-159, TD-166, TD-167, TD-169, TD-170, TD-329, TD-343; autonomous TD-274, TD-31
 **Replaced:** TD-136 by TD-170; TD-166 by TD-170 and TD-169; TD-135 by TD-159; TD-139 by TD-157, C-08 and TD-329;
 TD-167 by TD-329.
 
+**Spent:** TD-109 and TD-110 (built: how it works lives in the code, TD-385).
+
 ## C-06 The shaper
 
 **Rows:** decided TD-13, TD-83, TD-93, TD-138, TD-160, TD-163, TD-164, TD-165, TD-244, TD-328, TD-348;
@@ -259,6 +264,8 @@ autonomous TD-275, TD-276, TD-277.
 **Replaced:** TD-93 by TD-165 and TD-244; TD-106 by TD-165 and TD-244; TD-160 by TD-165 and TD-244; TD-163 by
 TD-165; TD-138 by TD-165; TD-164 by TD-244; TD-244 by TD-242, TD-281 and TD-321.
 
+**Spent:** TD-275 and TD-276 (built: how it works lives in the code, TD-385).
+
 ## C-07 Local installs
 
 **Rows:** decided TD-5, TD-131, TD-140, TD-162, TD-346.
@@ -276,6 +283,8 @@ TD-165; TD-138 by TD-165; TD-164 by TD-244; TD-244 by TD-242, TD-281 and TD-321.
 - TD-346, 2026-10-18: "TD-162 replaces TD-5's 'wherever convenient'"
 
 **Replaced:** TD-5 by TD-162; TD-131 by C-06.
+
+**Spent:** TD-140 (the install approval round, done under TD-244).
 
 ## C-08 Local home and paths
 
@@ -316,7 +325,7 @@ autonomous TD-295, TD-395.
 - Preferences resolve built-in → global → machine → project, the project winning; global and built-in defaults stay
   separate; capabilities are checked afterwards and a value is never silently replaced [TD-336].
 - Machine-only: update channel and registered projects. Project-only: test preparations, data permissions and the
-  PR marker [TD-336, TD-243].
+  PR marker [TD-336, TD-243, TD-130].
 - Session limits count agent sessions, never per model: machine-only (default 4) and per project, layered (default
   2). Free slots go round-robin across projects, first-ready within one; waiting spends no budget [TD-336, TD-105].
 - Running sessions are never stopped to meet a session limit [TD-336, TD-105].
@@ -341,6 +350,8 @@ autonomous TD-295, TD-395.
 
 **Replaced:** TD-7 by TD-227; TD-59 by TD-95 and TD-128; TD-64 by TD-98; TD-52 by TD-243 and TD-336; TD-243 by
 TD-336; TD-105 by TD-336.
+
+**Spent:** TD-128 (built: how it works lives in the code, TD-385) and TD-227 (the research moved on 2026-10-20).
 
 ## C-10 Test preparation
 
@@ -381,6 +392,8 @@ TD-65.
 
 **Replaced:** TD-60 by TD-96; TD-65 by TD-96; TD-92 by TD-120 and TD-82.
 
+**Spent:** TD-349 (TD-92's overnight instructions, retired).
+
 ## C-11 Visual checks
 
 **Rows:** decided TD-14, TD-24, TD-38, TD-40, TD-49, TD-51, TD-77, TD-78, TD-79, TD-91.
@@ -403,6 +416,7 @@ TD-65.
   means unsure. Shaping writes visible expectations [TD-91].
 - The owner passes or fails on one page with the comparison, both verdicts and findings. Fail needs a finding or
   comment, which becomes a next-review criterion, a Pass comment a note; brief contradictions are held [TD-79, TD-340].
+- Every preview run gets a free port Delivery chooses; preview recipes take the port as a placeholder [TD-40].
 
 **Owner's words:**
 
@@ -480,6 +494,9 @@ TD-65.
   TD-380; TD-207 by TD-208, TD-219; TD-212 by TD-219, TD-220, TD-236, TD-330; TD-218 by TD-330; TD-233 by TD-323;
   TD-237 by TD-245.
 
+**Spent:** TD-253 (built: how it works lives in the code, TD-385) and TD-380 (the repeat fields, dropped by a settings
+migration).
+
 ## C-13 Retry and Accept as done
 
 **Rows:** decided TD-210, TD-214, TD-216, TD-217, TD-341; autonomous TD-245, TD-246, TD-252, TD-324.
@@ -509,13 +526,15 @@ TD-65.
 
 **Replaced:** TD-217 by TD-246.
 
+**Spent:** TD-245 (built: how it works lives in the code, TD-385).
+
 ## C-14 Brief, approval and amendments
 
 **Rows:** decided TD-73, TD-122, TD-179, TD-181, TD-185, TD-221, TD-236, TD-249, TD-255, TD-422; autonomous TD-254.
 
 - The brief review is a challenge, not a review, named "brief challenge" [TD-73].
 - Challenge the brief before approval; the shaper may revise or reject with reasons. Apply the shaper's round
-  settings and show standing rejections at approval; no post-approval challenge [TD-208, TD-221].
+  settings and show standing rejections at approval; no post-approval challenge [TD-208, TD-221, TD-236].
 - The shaper requests a challenge when the saved draft is ready [TD-249, TD-254].
 - Approval requires the current brief to be challenged, except an unreviewed last-round revision the owner
   explicitly accepts in the approval dialog [TD-249, TD-255].
@@ -604,6 +623,8 @@ TD-65.
 **Replaced:** TD-76 by TD-101; TD-101 by TD-302, TD-357; TD-125 by TD-302, TD-357; TD-177 by TD-194; TD-194 by
   TD-357; TD-273 by TD-357; TD-302 by TD-307.
 
+**Spent:** TD-270 (built: how it works lives in the code, TD-385).
+
 ## C-16 Versions, labels and release
 
 **Rows:** decided TD-298, TD-302, TD-306, TD-307, TD-308, TD-310, TD-354, TD-355, TD-356, TD-392, TD-393, TD-404;
@@ -646,6 +667,8 @@ TD-65.
 - TD-404, 2026-10-19: "A fine-grained token you create, secret RELEASE_TOKEN, used only to create tags"
 
 **Replaced:** TD-240 by TD-298, TD-302; TD-298 by TD-302; TD-302 by TD-306, TD-307, TD-355.
+
+**Spent:** TD-315 (release tagging on since 2026-10-19).
 
 ## C-17 Runtime and self-update
 
@@ -726,6 +749,8 @@ TD-65.
 **Replaced:** TD-259 by TD-350; TD-282 by TD-350, TD-351; TD-283 by TD-350, TD-351; TD-288 by TD-352; TD-304 by
   TD-352; TD-313 by TD-350.
 
+**Spent:** TD-284 (built: how it works lives in the code, TD-385).
+
 ## C-19 Machine host and UI
 
 **Rows:** decided TD-11, TD-85, TD-104, TD-113, TD-241, TD-242, TD-262, TD-265, TD-281, TD-321, TD-416, TD-420,
@@ -781,6 +806,8 @@ TD-65.
 - TD-443, 2026-10-21: "Tabs done; the UX review and the visual overhaul become one backlog entry"
 
 **Replaced:** TD-11 by TD-281; TD-242 by TD-281; TD-85 by TD-416 and TD-443.
+
+**Spent:** TD-294 (built: how it works lives in the code, TD-385).
 
 ## C-20 Repository policy
 
@@ -871,6 +898,8 @@ TD-65.
 - TD-231: the Snyk Code "1 new Code Analysis issue" is for the owner to read in Snyk later; TD-362 ignores one
   Code finding (the screenshot route's Path Traversal), but no row says whether that was TD-231's issue.
 
+**Spent:** TD-226 (merge-queue support built).
+
 ## C-21 Old engine retirement
 
 **Rows:** decided TD-2, TD-183, TD-199, TD-200, TD-201, TD-202, TD-337.
@@ -895,6 +924,8 @@ TD-65.
 
 **Replaced:** TD-2 by TD-337; TD-183 by TD-199, TD-200, TD-201, TD-202 and TD-203; TD-199 by TD-203; TD-202 by TD-337.
 
+**Spent:** TD-337 (the old Changes finished).
+
 ## C-22 Package structure
 
 **Rows:** decided TD-133, TD-168, TD-171, TD-172, TD-173, TD-174, TD-186, TD-191; autonomous TD-158, TD-196,
@@ -916,6 +947,8 @@ TD-197.
 - TD-191, 2026-10-16: "Same rule as TD-186: one path, spend.py only"
 
 **Replaced:** TD-133 by TD-168; TD-158 by TD-168; TD-196 by TD-274.
+
+**Spent:** TD-172, TD-174, TD-186, TD-191 and TD-197 (built: how it works lives in the code, TD-385).
 
 ## C-23 The owlbear command
 
@@ -1033,6 +1066,8 @@ TD-197.
 
 **Replaced:** TD-112 by TD-339 and TD-372; TD-311 by TD-339, TD-371 and TD-373.
 
+**Spent:** TD-312 (the test curation merged in #477).
+
 ## C-27 Status and progress
 
 **Rows:** decided TD-61, TD-66, TD-97; also Q5 (recommendation, no origin).
@@ -1057,9 +1092,14 @@ TD-197.
 
 ## C-28 Code and tool rules
 
-**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63, TD-401, TD-417; autonomous TD-184, TD-391, TD-463.
+**Rows:** decided TD-1, TD-19, TD-31, TD-33, TD-63, TD-401, TD-417; autonomous TD-184, TD-391, TD-463, TD-467.
 
-- Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63 [TD-1, TD-63].
+- Agents author content, not identity: the server binds the Change, claim, attempt, heads and fences from the session
+  or one short handle it issued; agents never echo hex identities or fence values (T2) [TD-1, TD-467].
+- The agent that authors a payload calls the tool that validates it while it can still correct it; payload limits
+  come back to it as errors naming what to fix (T3) [TD-1, TD-467].
+- Recovery belongs to the engine and the owner, not agents: the engine recovers by itself, owner decisions run as page
+  actions, and at most one agent tool requests recovery (T6) [TD-1, TD-467].
 - No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
 - A test checks that every agent-facing tool describes each field and stays small and flat (about six fields, one
   nesting level); whether the surface works is measured, not counted [TD-63].
@@ -1083,7 +1123,9 @@ TD-197.
 - TD-401, 2026-10-19: "Pages, scripts and styles count like Python; tests don't"
 - TD-417, 2026-10-20: "A guide, not a gate: a new kind is allowed when no existing step can run its work"
 
-**Replaced:** TD-1 by TD-63; TD-19 by TD-33; TD-391's cap by TD-417.
+**Replaced:** TD-1's T7 by TD-63; TD-19 by TD-33; TD-391's cap by TD-417.
+
+**Spent:** TD-184 (built: how it works lives in the code, TD-385).
 
 ## C-29 Confirmations and input
 
@@ -1159,14 +1201,26 @@ TD-344; TD-344 by TD-374.
 - The builder's code is linted once, at submission, on the changed files with the project's linters; no per-edit
   lint, broad-edit warning or session-start context hook [TD-87, decided].
 - Lint may refuse 5 builder submits per session; later submits pass marked `lint-unresolved` [TD-88, decided].
-- A quality service separate from Delivery runs linters; agents request changes to lint/format configs, CI workflows
-  and Git hooks, the owner approves, refused from the start; no suppression grandfathered [TD-89, decided].
+- A quality service separate from Delivery runs the linters [TD-89, decided].
+- Agents request changes to lint and format configs, CI workflows and Git hooks and the owner approves; direct agent
+  edits are refused from the start; no existing suppression is grandfathered [TD-89, decided].
 - The memory MCP server stays [TD-90, decided].
 - Fixing memory publication and curation (F17) follows the plan's order; M4 and M5 no longer exist
   [TD-444, autonomous].
 - The old Knowledge agents are not Delivery roles [TD-114, decided].
-- The nine ECC adoptions stay agent rules, among them: never weaken tests or checks to get green; failing-before
-  proof where feasible; shapers never infer business constraints from code [TD-115, decided; TD-112].
+- The builder never deletes, skips or weakens a test or check to get green; the reviewer reports any that does
+  [TD-115, decided] [TD-468, autonomous].
+- A defect fix prefers existing tests that tell the bug apart and shows failing-before evidence where feasible;
+  otherwise it states its reproduction basis and gap [TD-115, decided] [TD-468, autonomous].
+- The reviewer checks whether a caller already handles a problem and reports fallbacks that hide failures
+  [TD-115, decided] [TD-468, autonomous].
+- The shaper never infers business constraints from code; criteria may say what must not happen; it asks for the
+  observable pain, the current workaround and evidence against its assumptions [TD-115, decided] [TD-468, autonomous].
+- UI work covers a partial state, pointer target size per WCAG 2.5.8 with its exceptions, and modal focus containment
+  and return, proven in a browser [TD-115, decided] [TD-468, autonomous].
+- The planner finds a change's consumers from real imports and puts their tests in the task's checks
+  [TD-115, decided] [TD-468, autonomous].
+- Builder and reviewer trace state changes in the order they happen [TD-115, decided] [TD-468, autonomous].
 - Watcher lessons need evidence that agent behaviour caused the signal; merging lessons belongs to the curator
   [TD-115, decided].
 - delivery-next's browser tests run in CI [TD-127, decided; TD-280].
@@ -1186,12 +1240,10 @@ TD-344; TD-344 by TD-374.
   [TD-285, decided].
 - Agent sessions keep a total running-time limit, by default planner 30, test preparer 30, builder 40 and reviewer
   20 minutes, each a setting (global and per project) [TD-286, decided].
-- Order of the remaining work: TD-358's build work, the research move (TD-227), self-update steps 3c to 5, the old
-  engine's removal, v1.0, TD-318's memory work, the window-step gate, the watcher [TD-394, decided; TD-250, TD-228].
-- Of TD-392..TD-402, the small items come with TD-358's work; the PDS fallback's removal, then the page split,
-  before v1.0; the threshold with TD-318's work; the GitHub account before the first real project [TD-403, decided].
-- The build work of TD-319..TD-357 comes before self-update step 3b; TD-274's gap stays until after self-update
-  step 5 [TD-358, decided; TD-329].
+- After the decision system: TD-318's memory work, then the window-step gate, then the watcher
+  [TD-394, decided] [TD-469, autonomous].
+- The curator's Global threshold comes with TD-318's memory work; the per-project GitHub account comes before the
+  first real project [TD-403, decided] [TD-469, autonomous].
 - After the first real project (item 10), the browser and knowledge packages are rebuilt from scratch, starting from
   the ideas of the issues closed on 2026-10-20; until then they stay untouched, no fixes [TD-434, decided].
 - While the owner is away, each reviewed pull request with green CI merges; the runtime updates itself as usual
@@ -1226,18 +1278,19 @@ TD-344; TD-344 by TD-374.
 - TD-434, 2026-10-20: "once delivery is stable we will work on browser and knowledge packages … saving the ideas"
 - TD-438, 2026-10-20: "Merge each reviewed, green pull request overnight; the runtime updates itself as usual"
 
-**Replaced:** TD-17 by TD-402; TD-250 by TD-394; TD-90's timing by TD-444.
+**Replaced:** TD-17 by TD-402; TD-228 and TD-250 by TD-394; TD-90's timing by TD-444.
 
 **Spent:** TD-6, TD-8, TD-18, TD-28, TD-37, TD-62, TD-68, TD-141, TD-180, TD-188, TD-206, TD-232, TD-234, TD-248,
 TD-261, TD-264, TD-268, TD-269, TD-271, TD-279; TD-132 and TD-445 (autonomous, 2026-10-21: TD-132's choices live in
-their own decisions).
+their own decisions); TD-358 and the done parts of TD-394 and TD-403 (TD-469: built through v1.0; TD-274's gap is
+C-05's).
 
 ## C-31 The decision record
 
 **Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419, TD-424, TD-425, TD-427,
   TD-428, TD-429, TD-430, TD-435, TD-436, TD-437, TD-439, TD-440, TD-441, TD-442, TD-446, TD-449, TD-450, TD-451,
-  TD-452, TD-453, TD-454, TD-455, TD-456, TD-457, TD-458, TD-459, TD-460, TD-462; autonomous TD-389, TD-426,
-  TD-461.
+  TD-452, TD-453, TD-454, TD-455, TD-456, TD-457, TD-458, TD-459, TD-460, TD-462, TD-464, TD-465, TD-466; autonomous
+  TD-389, TD-426, TD-461.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1273,6 +1326,9 @@ their own decisions).
   checks the generated view's own hash [TD-436].
 - The record's first migration stops at a preview listing its unclear clauses; the record stays authoritative until
   the owner has reviewed it [TD-437].
+- After the owner's review, a final preview with its fixes reruns the past-work test; the record switches to the new
+  store if the test misses nothing new [TD-466].
+- A migrated line citing both decided and autonomous rows carries decided; only the owner changes it [TD-465].
 - Today's rules come over as inherited: their recorded authority, marked never read back, without quotes; one is
   read back only when work relies on it and its meaning is unclear [TD-454].
 - Global: C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research out of
@@ -1299,7 +1355,7 @@ their own decisions).
 - An answer during the work is classified by its relayer as event, clarification or brief change; clarifications
   are read back and become Change decisions; a Sol check stops the work when one changes the brief [TD-461].
 - The migration rewords statements that only make sense beside their neighbours so each stands alone, the original
-  beside it, every reworded one marked for the owner's review in the preview [TD-462].
+  kept beside it; the owner checks only those Sol's two checks leave uncertain [TD-462, TD-464].
 
 **Owner's words:**
 
@@ -1328,7 +1384,7 @@ their own decisions).
 - TD-446, 2026-10-21: "Tag by topic: the migration proposes roles and steps per topic, I confirm one list"
 
 **Replaced:** TD-359 by TD-383 and TD-388; TD-388 by TD-449; TD-439 by TD-454; TD-446 by TD-455; TD-456 in part by
-TD-459.
+TD-459; TD-462's review of every rewording by TD-464.
 
 **Spent:** TD-440 (four mixed lines split by origin, the doubtful ones kept decided) and TD-441 (seven rows without a
   line got one), both applied in their topics.
