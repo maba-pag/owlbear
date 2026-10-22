@@ -249,14 +249,16 @@ class Closed:
 def workspace(repo: Path) -> Chat | Closed:
     """The tools for the folder at *repo*, told before any state is made (``Store.open`` makes it).
 
-    A registered clone has its id and its project folder in ``~/.owlbear``.
+    A clone is a project when the machine's registry lists its id; an id or a project folder left behind is not.
     """
     try:
         pid = project_home.clone_id(project_home.clone_dir(repo))
     except StoreError, OSError:
         pid = None
-    if pid is not None and project_home.home(pid).is_dir():
-        return Chat(repo)
+    if pid is not None:
+        listed = project_home.registered(pid)
+        if listed or (listed is None and project_home.home(pid).is_dir()):  # an unreadable registry: its folder tells
+            return Chat(repo)
     if data_repo.identity(repo) == data_repo.remote_identity(codebase.URL):
         return OwlBear(repo)
     return Closed(repo)
