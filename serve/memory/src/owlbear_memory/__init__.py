@@ -20,6 +20,7 @@ from owlbear_memory.models import (
     MemoryEntry,
     MemoryHealth,
     MemoryState,
+    Where,
     validate_scope_agents,
 )
 from owlbear_memory.writer_lock import writer_lock
@@ -40,6 +41,7 @@ __all__ = [
     "NotFoundError",
     "TransitionError",
     "ValidationError",
+    "Where",
     "check_slot_efficiency",
     "compute_score",
     "repair_duplicate_ids",

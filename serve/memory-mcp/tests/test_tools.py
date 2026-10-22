@@ -139,10 +139,11 @@ async def test_agents_read_global_memory_beside_their_projects_and_write_only_th
     )  # fmt: skip
     before = sorted(p.name for p in (tmp_path / "memory").iterdir())
     saved = await tools.save_memory(
-        context, title="New", content="new", categories=["process"], confidence=0.8, source_agent="*"
+        context, title="New", content="new", categories=["process"], confidence=0.8, source_agent="*", where="global"
     )
-    assert sorted(p.name for p in (tmp_path / "memory").iterdir()) == before
+    assert sorted(p.name for p in (tmp_path / "memory").iterdir()) == before  # global only recommends (TD-293)
     assert (tmp_path / "shop" / "memory" / f"{saved['id']}.md").is_file()
+    assert (saved["recommended"], saved["state"]) == ("global", "pending")
 
 
 @pytest.mark.asyncio

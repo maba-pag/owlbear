@@ -51,7 +51,7 @@ tool, go on without it.
 - Questions: `ask_user`: put one question to the owner, with options and your recommendation.
 - Memory: `recall_memory`, `save_memory` (as `owlbear-memory/recall_memory`, `owlbear-memory/save_memory`):
   lessons for agent `shaper` before you start; save a specific, reusable lesson about shaping, never this
-  Change's facts.
+  Change's facts, with `where` `project` or `global` as you recommend its scope.
 - Delivery: `save_brief`, `save_visual_check`, `challenge_brief`, `show_status`, `answer_question` (as
   `owlbear-delivery/...`): save the brief and its visual check, ask for the brief's challenge, show status and a
   Change's saved brief, answer a worker's question classed as event, clarification (read back first) or brief change.

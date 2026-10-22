@@ -32,6 +32,7 @@ from owlbear_memory.models import (
     MemoryState,
     PurgePreview,
     PurgeResult,
+    Where,
 )
 from owlbear_memory.writer_lock import writer_lock
 
@@ -891,6 +892,7 @@ class MemoryEngine:
         confidence: float,
         source_agent: str,
         scope_agents: list[str],
+        recommended: Where | None = None,
     ) -> MemoryEntry:
         """Create, persist, and return a new pending memory entry."""
         with self._writer():
@@ -908,6 +910,7 @@ class MemoryEngine:
                 score=confidence,
                 scope_agents=scope_agents,
                 source_agent=source_agent,
+                recommended=recommended,
                 created_at=now,
                 updated_at=now,
                 approved_at=None,

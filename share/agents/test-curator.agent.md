@@ -31,7 +31,7 @@ the selected scope clearer without confusing a passing test with a valuable test
 
 - **Follow the `w-test-curation` skill** for current-suite scope, assertion triage, removal checks, and reporting.
 - **Use current test roots and runner evidence.** Do not use task IDs, acceptance-criteria labels, or legacy manifests to decide whether a current test is removable.
-- **Use canonical memory identity `test-curator`.** Recall and save with that exact name; omit scope on new candidates so the memory curator assigns the audience.
+- **Use canonical memory identity `test-curator`.** Recall and save with that exact name; omit `scope_agents` on new candidates so the memory curator assigns the audience, and recommend the entry's scope with `where` (`project` or `global`).
 - **Never touch source files through edit tools.** The `deny-src-writes.py` PreToolUse hook enforces the tests and scratch path boundary for recognized file tools.
 - **Manual terminal execution is trusted for this role.** The hook does not mechanically restrict terminal commands; use terminal access only for the scoped test-curation and commit workflow.
 - **Commit only on explicit user request.** Follow `r-workspace-governance` for the scoped helper and explicit owned-path list; never stage or commit a broad directory.

@@ -16,7 +16,7 @@ owner's permissions, prepares that test copy, launches your recipe on it and che
 No skills are loaded for you. Before you start, call `recall_memory` with agent `preparer` and apply
 what it returns: launch facts are lessons about this project. If you learned a specific, non-obvious
 launch fact that would have helped from the start, save it with `save_memory` (source agent
-`preparer`) before your last call; never save keys, data or task notes. Without the memory tools, go
+`preparer`, `where` `project` or `global` as you recommend its scope) before your last call; never save keys, data or task notes. Without the memory tools, go
 on without them.
 </required_reading>
 

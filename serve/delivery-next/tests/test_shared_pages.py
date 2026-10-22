@@ -219,6 +219,13 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
             fresh.get_by_role("button", name="Approve").click()  # and the action goes through the twin
             expect(page.locator("#status")).to_contain_text('Approved "Read the twin"')
             expect(fresh.get_by_role("button", name="Make global")).to_be_visible()
+            MemoryEngine(root / "shop-site" / "memory").save(
+                title="Prefer uv", content="Prefer uv: run tools with uv", categories=[MemoryCategory.PROCESS],
+                confidence=0.8, source_agent="builder", scope_agents=[], recommended="global",
+            )  # fmt: skip
+            page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+            expect(entries.filter(has_text="Prefer uv")).to_contain_text("recommended for Global")  # TD-293
+            expect(fresh).not_to_contain_text("recommended")  # shown on pending entries only
             browser.close()
     finally:
         server.should_exit = True

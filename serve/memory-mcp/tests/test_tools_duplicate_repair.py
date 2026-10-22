@@ -161,6 +161,7 @@ async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
             categories=["domain-knowledge"],
             confidence=0.9,
             source_agent="test-agent",
+            where="project",
         ),
         "curate_memory": lambda: tools.curate_memory(
             ctx,
