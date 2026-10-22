@@ -111,6 +111,9 @@ personal data is purged, with the owner's consent.
 
 ## 7. Applying decisions
 
+> Superseded in part: selectors and "every applicable decision" gave way to the picker and the whole picked
+> set ([decisions as confirmed intent §4](decision-intent-build.md), TD-457, TD-459, TD-460).
+
 - **Applicability** is typed: repository-relative globs, roles, step kinds; empty means the whole scope. It is
   recomputed when a Change's scope grows; unresolved applicability is shown, never silently excluded.
 - **Step context:** each step gets every applicable decision in full, the ones its brief references, and a paged
