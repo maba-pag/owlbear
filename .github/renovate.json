@@ -52,7 +52,8 @@
       "matchDatasources": ["node-version"],
       "matchPackageNames": ["node"],
       "versioning": "node",
-      "groupName": "Node.js runtime"
+      "groupName": "Node.js runtime",
+      "rangeStrategy": "bump"
     },
     {
       "description": "Group routine version updates by ecosystem on Friday",
