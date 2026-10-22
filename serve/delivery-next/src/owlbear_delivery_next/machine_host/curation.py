@@ -2,8 +2,10 @@
 
 A run binds the memory server to one project folder of the shared repository, OwlBear's own included (TD-435), with
 Global memory beside it, and gives the curator role its automatic workflow. The job keeps each folder's last run, its
-report and what it judged in ``~/.owlbear/curation.json``, one run at a time, each holding one of the machine's
-session slots (TD-336). The Maintenance page's button starts it now; merges and idle time start it later.
+report and what it saw in ``~/.owlbear/curation.json``, one run at a time, each holding one of the machine's
+session slots (TD-336). The Maintenance page's button starts it now. A merge starts its project's folder, and idle time
+every folder, when the folder holds a pending entry no run has seen; while paused only with "Curate memory while
+paused" on (the owner, 2026-10-22). An entry a run left pending starts no other run until it changes.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import lookup
@@ -53,6 +56,7 @@ class FolderRun(Record):
     reason: str = ""
     entries: list[Judged] = Field(default_factory=list)
     skipped: dict[str, str] = Field(default_factory=dict)  # entry id: its revision when the curator skipped it
+    seen: dict[str, str] = Field(default_factory=dict)  # every entry still pending after the run: id to revision
 
 
 class Runs(Record):
@@ -125,6 +129,32 @@ class Curation:
         """What runs or waits, for an update or a stop when idle to wait for."""
         with self.lock:
             return [f"memory curation: {', '.join(self.queue)}"] if self.queue else []
+
+    def due(self, folder: str) -> bool:
+        """Whether *folder* holds a pending entry, or a changed one, that no finished run saw."""
+        shared = self.shared()
+        if shared is None:
+            return False
+        seen = self.load().folders.get(folder, FolderRun()).seen
+        return any(seen.get(e.id) != e.revision for e in _pending(shared.root / folder / "memory"))
+
+    def allowed(self, *, paused: bool) -> bool:
+        """Whether a merge or idle time may start a run now: while paused only with the machine's switch on."""
+        if not paused:
+            return True
+        try:
+            return registry.load().settings.curate_while_paused
+        except registry.RegistryError:
+            return False
+
+    def nudge(self, wanted: list[str] | None, *, paused: bool) -> list[str]:
+        """Start each of *wanted* (every folder for None) that is due, when a trigger may start runs now."""
+        shared = self.shared()
+        if shared is None or not self.allowed(paused=paused):
+            return []
+        known = folders(shared.root)
+        due = [f for f in (known if wanted is None else wanted) if f in known and f not in self.queue and self.due(f)]
+        return [f for one in due for f in self.start(one)]
 
     def start(self, folder: str) -> list[str]:
         """Queue *folder*, or every folder for ``all``; a folder already waiting keeps its place."""
@@ -205,18 +235,16 @@ class Curation:
             return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}")
         with shared.locked():
             notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed
+        left = {e.id: e.revision for e in _pending(store)}
+        skipped = {j.entry_id: left[j.entry_id] for j in report.entries if j.action == "skipped" and j.entry_id in left}
         return FolderRun(
-            state="done",
-            started_at=started,
-            ended_at=ended,
-            summary=report.summary,
-            reason=notice,
-            entries=report.entries,
-            skipped=_skipped(store, report.entries),
-        )
+            state="done", started_at=started, ended_at=ended, summary=report.summary, reason=notice,
+            entries=report.entries, skipped=skipped, seen=left,
+        )  # fmt: skip
 
 
-def _skipped(store: Path, judged: list[Judged]) -> dict[str, str]:
-    """The revision of each entry the curator skipped and that is still pending: unchanged, it is not judged again."""
-    pending = {e.id: e.revision for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING}
-    return {j.entry_id: pending[j.entry_id] for j in judged if j.action == "skipped" and j.entry_id in pending}
+def _pending(store: Path) -> list[Any]:
+    """The folder's pending entries; none when it has no memory yet."""
+    if not store.is_dir():
+        return []
+    return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]

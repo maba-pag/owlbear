@@ -99,7 +99,10 @@ independent.
 - A run counts against the machine's sessions (TD-336). Its state and last report show on the Maintenance page.
 - Built so far: Delivery's own `owlbear-curator` role (SDK only, its memory tools and a structured report as
   its result, no subagents), the machine host's job (`machine_host/curation.py`, state in `~/.owlbear/curation.json`)
-  and the Maintenance page's Curate now per folder. The merge and idle triggers come next.
+  and the Maintenance page's Curate now per folder; the merge trigger (a Change's pull request merged) and the
+  idle trigger (the idle updater's 15 minutes without use, checked every minute), both only for a folder with a
+  pending entry no run has seen. Delivery keeps no record of which Change saved memory, so a merge checks the
+  folder instead.
 
 ### 3.5 Slice 5: the one-off sort
 

@@ -96,3 +96,37 @@ def test_without_a_shared_repository_nothing_is_curated() -> None:
     assert job.read() == {"available": False, "reason": curation.NO_SHARED, "folders": []}
     with pytest.raises(ValueError, match="no shared repository"):
         job.start("all")
+
+
+def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_while_paused_only_when_allowed(root) -> None:
+    """The merge and idle triggers: a skipped entry starts no run until it changes; Pause holds them unless the
+    machine's "Curate memory while paused" is on (the owner, 2026-10-22)."""
+    from owlbear_delivery_next.machine_host import registry  # noqa: PLC0415
+
+    left = pending(root / "shop" / "memory", "Unsure lesson")
+    report = MemoryCurationResult(
+        summary="1 skipped", entries=[Judged(entry_id=left.id, action="skipped", confidence=50)]
+    )
+    runs = []
+
+    def run(cfg) -> Run:
+        runs.append(cfg.memory.parent.name)
+        return Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True))
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    assert (job.due("shop"), job.due("owlbear")) == (True, False)
+    assert job.nudge(None, paused=True) == []  # paused, the switch off by default
+    assert job.nudge(None, paused=False) == ["shop"]
+    finished(job)
+    assert (job.due("shop"), job.nudge(["shop"], paused=False)) == (False, [])  # unchanged: no other run
+
+    MemoryEngine(root / "shop" / "memory").edit(
+        left.id, {"content": "Unsure lesson: now with evidence"}, left.updated_at
+    )
+    saved = registry.load()
+    registry.configure(
+        saved.settings.model_copy(update={"curate_while_paused": True}), registry.revision(saved.settings)
+    )
+    assert job.nudge(["shop"], paused=True) == ["shop"]  # changed, and allowed while paused
+    finished(job)
+    assert runs == ["shop", "shop"]

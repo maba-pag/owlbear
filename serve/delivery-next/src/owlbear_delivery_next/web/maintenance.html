@@ -187,7 +187,9 @@ function curationSection() {
   return html`<section aria-labelledby="curation-title">
     <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
     <p-text size="sm">The memory curator judges each folder's pending entries: alone at or above your threshold
-      (Settings, Memory curation), and leaves the rest for you on the Memory page. Each run is one agent session.</p-text>
+      (Settings, Memory curation), and leaves the rest for you on the Memory page. It runs after a merge and when
+      OwlBear is idle, for folders with entries no run has seen; while paused only with "Curate memory while paused"
+      on. Each run is one agent session.</p-text>
     ${c.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>`
       : html`<p-text id="curation-none" size="sm">${c.reason.charAt(0).toUpperCase() + c.reason.slice(1)}.</p-text>`}
   </section>`;

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
+CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
 
 
 class MachineError(Exception):
@@ -107,6 +108,7 @@ class Machine:
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
             h.updating = lambda: self.updating
             h.slots = self.slots
+            h.merged = lambda: self.curation.nudge([h.store.name], paused=self.paused)
 
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
@@ -273,6 +275,18 @@ class Machine:
             self.say("stopping: nothing runs")
             self.on_stop()
             return True
+
+    def curation_loop(self) -> None:
+        """Thread: once OwlBear is idle, curate each memory folder holding pending entries no run has seen."""
+        from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR  # noqa: PLC0415 - it names this class
+
+        while not self.stopping.wait(CURATE_EVERY):
+            try:
+                idle = self.auto.mono() - self.auto.last_use >= IDLE_FOR
+                if idle and not (self.updating or self.ending or self.busy()):
+                    self.curation.nudge(None, paused=self.paused)
+            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
+                self.say(f"looking whether to curate memory failed: {type(exc).__name__}: {exc}")
 
     def idle_loop(self) -> None:
         """Thread: look every ``IDLE`` seconds whether a stop when idle may stop OwlBear."""

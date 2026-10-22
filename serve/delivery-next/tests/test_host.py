@@ -723,7 +723,11 @@ def test_a_pr_merged_while_paused_starts_its_cleanup(store, tmp_path):
     paused(fake, [True])
     save(store, asking(fake))
     fake.host.observe_pr = lambda _slug: ("merged", False)
+    merges = []
+    fake.host.merged = lambda: merges.append(True)  # the machine may curate the project's memory (item 5 slice 4)
     assert (fake.host.tick(NOW), store.read("c1").step.kind) == (["c1"], StepKind.CLEANUP)
+    fake.host.tick(NOW)  # its cleanup's passes are no second merge
+    assert merges == [True]
 
 
 def test_a_permission_to_pass_the_pause_holds_only_for_its_own_pass(store, tmp_path):

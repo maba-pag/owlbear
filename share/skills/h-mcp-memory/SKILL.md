@@ -208,7 +208,8 @@ persist across those edits.
 ### Curation trigger, visibility, and failure handling
 
 - `memory-curator` is the owner in chats; Delivery's own `owlbear-curator` role runs automatic curation
-  from the Maintenance page's Curate now, one memory folder per session, and reports each entry there. Otherwise:
+  from the Maintenance page's Curate now, after a merge and when OwlBear is idle, one memory folder per
+  session, and reports each entry there. Otherwise:
   the user runs `memory-curator` with `Curate: automatic` or curates with it
   interactively, or reviews pending entries on the Delivery engine's Memory page.
   At or above `curation_threshold()` the curator acts alone, Make global
