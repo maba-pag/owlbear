@@ -208,9 +208,10 @@ persist across those edits.
 ### Curation trigger, visibility, and failure handling
 
 - `memory-curator` is the owner. No Delivery or continuation step triggers it:
-  the user runs `memory-curator` with `Curate: Periodic curation` or reviews
-  pending entries on the Delivery engine's Memory page. Manual curation is available at any
-  time.
+  the user runs `memory-curator` with `Curate: automatic` or curates with it
+  interactively, or reviews pending entries on the Delivery engine's Memory page.
+  At or above `curation_threshold()` the curator acts alone, Make global
+  included; below it, it asks in interactive mode and skips in automatic mode.
 - Curation is opportunistic, not an eventual-processing SLA. No durable due
   state or age scheduler is implied.
 - The pending backlog is visible through
@@ -233,8 +234,8 @@ fixture or lightweight event record must capture:
    with a complete batch over eligible attempts; keep `didnt_use` separate from
    tool failure and `factually_wrong`.
 2. **Pending age and curation latency:** pending `created_at`, curation
-   trigger (`periodic` or `manual`), curation start/end,
-   entry action (`promoted`, `pruned`, or `deferred`), and failure/re-entry
+   trigger (`automatic` or `interactive`), curation start/end,
+   entry action (`promoted`, `pruned`, `made global`, `deferred` or `skipped`), and failure/re-entry
    reason. Report oldest, median, and high-percentile pending age and the
    created-to-curated latency.
 3. **Review cost:** curator and human-review elapsed time, entries examined,

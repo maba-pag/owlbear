@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Curation
 
-> **Audience:** The `memory-curator` agent (periodic or manual mode). **When:** The user requests a periodic curation pass (`Curate: Periodic curation`) or invokes the curator for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
+> **Audience:** The `memory-curator` agent (automatic or interactive mode). **When:** An automatic run (`Curate: automatic`, from Delivery or a chat) or the owner curating with the agent in a chat. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
 
 Maintain institutional memory by turning raw agent learnings into scoped MCP memory entries. MCP memory is the canonical reviewed store; the retired VS Code `/memories/` store is not an inbox or fallback.
 
@@ -16,6 +16,7 @@ The canonical path is:
 
 ```text
 save_memory -> list_memories/read_memory -> curate_memory(entry_id=..., revision=..., scope_agents=[...]) -> recall_memory
+                                          \-> make_global(entry_id=..., revision=...) for a lesson that holds in any project
 ```
 
 Curated and approved MCP entries are what future agents recall. Pending entries are unreviewed and invisible to recall. Memory curation operates on MCP entries only.
@@ -50,27 +51,51 @@ The curator also does not resolve exceptional states. `curate_memory` is blocked
 
 Before curation, invoke directly callable Memory operations as granted; a deferred inventory listing
 does not override those bindings. For each required Memory operation without a direct callable
-binding (`list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `delete_agent_memories`,
-`rename_agent_memories`, `commit_memory_batch`), run one `tool_search` whose query is exactly that
-operation name.
+binding (`list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `make_global`,
+`curation_threshold`, `delete_agent_memories`, `rename_agent_memories`, `commit_memory_batch`), run one
+`tool_search` whose query is exactly that operation name.
 
-Require callable bindings for `list_memories` and `commit_memory_batch` before any candidate read or
-mutation. If either required binding is unavailable or its search returns a tool error,
+Require callable bindings for `list_memories`, `curation_threshold` and `commit_memory_batch` before any
+candidate read or mutation. If either required binding is unavailable or its search returns a tool error,
 report the exact missing operation and return without changing MCP memory or the workspace. The
 remaining bindings are required before using their corresponding operations; do not substitute a
 different memory store or direct Git command.
 
 **Mode detection:**
 
-- **Periodic mode** — the request is `Curate: Periodic curation`. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
-- **Manual mode** — any other direct user request. Resolve conflicts and uncertain scope through `askQuestions`.
+- **Automatic mode** — the request is `Curate: automatic`. Nobody answers: never call `askQuestions`.
+- **Interactive mode** — any other request; the owner is in the chat and answers through `askQuestions`.
+
+**Threshold:** call `curation_threshold()` once; its `threshold` (95 unless the owner changed it on the Settings
+page) is the confidence at or above which you act alone (TD-400).
+
+**Folders:** without a `folder`, the tools work on this server's own project folder. When the request names other
+project folders of the shared repository (or `all`), pass `folder=<name>` to `list_memories`, `read_memory`,
+`curate_memory`, `delete_memory`, `make_global` and `commit_memory_batch`, one folder at a time. Global memory is
+never a `folder`; it changes only by `make_global`.
 
 Classify content before provenance or scope. Delete low-value content regardless of identity. For
 keep-worthy unfamiliar named provenance, require another reviewed non-pending entry or a readable
 local definition; candidate text cannot self-prove identity. `*` is anonymous provenance and needs
 no source corroboration, but it does not waive separate target-scope evidence. Identity-only
-uncertainty remains pending and is omitted from periodic defer and conflict summaries. Conflicts and
+uncertainty remains pending and is omitted from automatic skip and conflict summaries. Conflicts and
 ordinary content or scope uncertainty remain reportable.
+
+## Confidence and the threshold
+
+For each entry, decide everything you would do to it (keep, edit, scope, merge, delete, make global) and state one
+confidence, 0 to 100, that this whole set is right. Then:
+
+| Confidence | Automatic mode | Interactive mode |
+| --- | --- | --- |
+| At or above the threshold | Act alone, `make_global` included | Act alone, `make_global` included |
+| Below the threshold | Leave the entry as it is; report it as skipped with the reason | Ask the owner, one entry per question, your proposed set as the recommendation |
+
+- A conflict with curated or approved memory or with project rules is never resolved alone: count its confidence as
+  below the threshold.
+- `make_global` is for a lesson that holds in any project; the saver's `recommended` scope is evidence, not a
+  decision. In interactive mode, propose Make global for such a lesson whenever you do not make it global alone.
+- An automatic run never changes an entry it skips; the next run judges it again only once it changed.
 
 ## Step 1 — Gather Candidates
 
@@ -87,10 +112,11 @@ For each MCP pending entry, classify by meaning:
 | Rating | Meaning | Default action |
 | --- | --- | --- |
 | PROMOTE | Specific, actionable, non-obvious, and not already covered | Curate into MCP with explicit scope |
+| GLOBAL | PROMOTE-worthy and holds in any project, not only this one | Curate, then `make_global` |
 | DEFER | Plausible but lacks enough evidence, scope clarity, or wording quality | Leave pending and report the entry ID |
 | DELETE | Generic, empty, obvious, stale, or wrong | Delete/prune |
 | DUPLICATE | Existing curated/approved MCP entry already covers it | Delete pending/file note |
-| CONFLICT | Contradicts existing curated/approved memory or project rules | Leave pending or resolve manually |
+| CONFLICT | Contradicts existing curated/approved memory or project rules | Skip it (automatic) or ask the owner (interactive) |
 
 Deduplicate by meaning, not wording. Before deleting as duplicate, read the likely existing MCP entry unless metadata alone is conclusive.
 
@@ -115,9 +141,12 @@ in relevance scope. A deleted agent may remain in immutable historical provenanc
 | Rating | MCP action |
 | --- | --- |
 | PROMOTE | Call `curate_memory(entry_id=..., revision=entry["revision"], scope_agents=[...])`; optionally improve title/content/categories/confidence in the same call |
-| DEFER | Leave pending and, in periodic mode, include ordinary content/scope uncertainty or conflict in the return report; do not report identity-only uncertainty |
+| GLOBAL | Curate it first if pending, then call `make_global(entry_id=..., revision=...)` with the revision after curation |
+| DEFER | Leave pending; in automatic mode report ordinary content/scope uncertainty or a conflict as skipped; do not report identity-only uncertainty |
 | DELETE / DUPLICATE | Call `delete_memory(entry_id=..., revision=entry["revision"])` |
-| CONFLICT | Periodic: leave pending and report the conflict. Manual: ask the user, then curate/delete according to the decision |
+| CONFLICT | Automatic: leave pending and report it as skipped. Interactive: ask the owner, then curate/delete according to the answer |
+
+Any action below the threshold follows the table in "Confidence and the threshold" first.
 
 When editing an approved entry, remember `curate_memory` downgrades it to curated. That is intentional; the user must re-approve later.
 
@@ -130,17 +159,22 @@ Do not inspect, create, migrate, or defer notes in `/memories/` paths. If old fi
 Before returning, commit reviewed MCP memory mutations with the dedicated MCP operation:
 
 ```text
-owlbear-memory/commit_memory_batch(session_type="curation")
+owlbear-memory/commit_memory_batch(session_type="curation")            # this server's own folder
+owlbear-memory/commit_memory_batch(session_type="curation", folder=...) # each other folder you changed
 ```
 
-The MCP operation stages only non-pending entries of the memory store and returns the commit SHA or a no-op result. Do not use a terminal or broad-add the memory folder.
+The MCP operation stages only non-pending entries of the memory store and returns the commit SHA or a no-op result. `make_global` commits its own move. Do not use a terminal or broad-add the memory folder.
 
 ## Step 7 — Return Channel A Signal
 
 Return the verdict:
 
-- Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} pending conflicts/uncertain ({entry IDs})` for reportable ordinary uncertainty or conflicts only; exclude identity-only pending entries)
-- Manual mode: concise summary of promoted, pruned, deferred, and resolved entries
+- Automatic mode: `DONE | {P} promoted, {D} pruned, {G} made global` (add `— {K} skipped ({entry IDs})` for
+  reportable ordinary uncertainty or conflicts only; exclude identity-only pending entries), then the report as one
+  fenced `json` block: `{"threshold": T, "entries": [{"folder": "...", "entry_id": "...", "action": "...",
+  "confidence": N, "reason": "..."}]}`, one item per entry you judged, `reason` set for a skip.
+- Interactive mode: concise summary of promoted, pruned, made global, asked, and skipped entries, each with its
+  confidence
 
 ## Verification Checklist
 
@@ -148,7 +182,8 @@ Return the verdict:
 - [ ] Every named scope has independent corroboration or explicit manual user confirmation
 - [ ] Duplicate checks compared against existing curated/approved MCP entries
 - [ ] Noise removals are truly low-signal, not merely unfamiliar
-- [ ] Conflicts were deferred in periodic mode or resolved with user input in manual mode
+- [ ] Each judged entry has one stated confidence; below the threshold nothing changed alone
+- [ ] Conflicts were skipped in automatic mode or resolved with the owner in interactive mode
 - [ ] No `/memories/` file store was used for curation
 - [ ] No broad `git add` of the memory folder was used
 - [ ] Did not call `approve_memory`
@@ -157,8 +192,9 @@ Return the verdict:
 
 - **Using retired file memory:** `/memories/` paths are no longer an agent memory store. Promotion means MCP curation.
 - **Global scope by habit:** `['*']` floods all agents. Prefer named role scopes unless the learning is truly universal.
-- **Auto-resolving conflicts:** conflicting lessons must be deferred in periodic mode or resolved with the user in manual mode.
-- **Reporting identity-only uncertainty:** keep it pending silently in periodic mode; do not add its count or ID to defer/conflict summaries.
+- **Auto-resolving conflicts:** conflicting lessons must be skipped in automatic mode or resolved with the owner in interactive mode.
+- **Reporting identity-only uncertainty:** keep it pending silently in automatic mode; do not add its count or ID to skip/conflict summaries.
+- **Global by habit:** `make_global` only for a lesson that holds in any project, never because the saver recommended it.
 - **Broad memory commits:** use `commit_memory_batch` so pending entries stay uncommitted.
 - **Manual lifecycle rewrites:** use the agent lifecycle tools when definitions are renamed or
  deleted so provenance and relevance cannot drift.

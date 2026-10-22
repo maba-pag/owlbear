@@ -74,7 +74,7 @@ content before identity and scope; `*` provenance is anonymous. Named provenance
 independent corroboration from another reviewed non-pending memory or a readable local `.agent.md`;
 manual review may instead obtain explicit user confirmation. Candidate text cannot corroborate its
 own named identity or scope, and that evidence never raises stored entry confidence or review
-confidence. Periodic curation silently retains identity-only uncertainty as pending while reporting
+confidence. Automatic curation silently retains identity-only uncertainty as pending while reporting
 conflicts and ordinary content or scope uncertainty.
 
 ## 4. Operational Fundamentals
