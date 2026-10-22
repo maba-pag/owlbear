@@ -26,6 +26,7 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `content` | str | Markdown body |
 | `scope_agents` | list[str] | Scope list (empty list allowed); supplied members must be nonblank strings; `*` means all agents |
 | `source_agent` | str | Required; immutable historical provenance marker |
+| `recommended` | `project` or `global` | Optional: the saver's recommended scope (TD-293); omitted when unset |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Approval timestamp (set on approve, cleared on downgrade/delete) |
