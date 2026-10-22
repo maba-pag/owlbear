@@ -272,12 +272,14 @@ function card(m) {
   const scope = m.scope_agents.length ? m.scope_agents.map((a) => (a === "*" ? "all agents" : a)).join(", ")
     : "no agent yet";
   const meta = `From ${m.source_agent} · for ${scope} · confidence ${m.confidence} · updated ${age(m.updated_at)}`;
+  const advice = m.state === "pending" && m.recommended  // the saver's recommendation; the curator decides (TD-293)
+    ? ` · recommended for ${m.recommended === "global" ? "Global" : "this project"}` : "";
   return html`<li class="entry">
     <div class="title"><p-text weight="semibold">${m.title}</p-text>
       <p-tag variant=${TAGS[m.state]} compact="true">${m.state}</p-tag>
       <p-tag class="place" compact="true">${m.place.label}</p-tag>
       ${m.categories.map((c) => html`<p-tag compact="true">${c}</p-tag>`)}</div>
-    <p-text size="xs" color="contrast-medium">${meta}</p-text>
+    <p-text size="xs" color="contrast-medium">${meta}${advice}</p-text>
     ${state.editing?.id === m.key ? editor(m) : html`<p-text class="said" size="sm">${m.content}</p-text>${actions(m)}`}
   </li>`;
 }

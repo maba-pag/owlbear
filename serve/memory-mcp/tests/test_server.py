@@ -710,13 +710,19 @@ async def test_live_server_accepts_optional_recall_and_open_provenance(
                 "categories": ["process"],
                 "confidence": 0.8,
                 "source_agent": "*",
+                "where": "global",
             },
+        )
+        unrecommended = await client.call_tool(
+            "save_memory",
+            {"title": "No scope", "content": "x", "categories": ["process"], "confidence": 0.8, "source_agent": "*"},
         )
         invalid = await client.call_tool("recall_memory", {"agent": 1})
 
     assert not recall.is_error
     assert "Known agents: none discovered." in _text(recall)
     assert not saved.is_error
+    assert unrecommended.is_error  # the saver always recommends a scope (TD-293)
     assert invalid.is_error
 
 
@@ -860,6 +866,7 @@ async def test_live_server_uses_an_explicit_store_outside_any_workspace(
         "categories": ["process"],
         "confidence": 0.8,
         "source_agent": "builder",
+        "where": "project",
     }
 
     async with mcp.Client(memory_mcp) as client:
@@ -916,6 +923,7 @@ async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
         "categories": ["process"],
         "confidence": 0.8,
         "source_agent": "builder",
+        "where": "project",
     }
 
     async with mcp.Client(memory_mcp) as client:

@@ -14,7 +14,7 @@ challenger's findings: claims to check, not orders. Delivery runs the checks and
 <required_reading>
 Before you start, call `recall_memory` with agent `updater` and apply what it returns. Before your last call,
 mark each memory you recalled with `assess_memories`, and if you learned a specific, non-obvious fact that would
-have helped from the start, save it with `save_memory` (source agent `updater`); never save task notes or skill
+have helped from the start, save it with `save_memory` (source agent `updater`, `where` `project` or `global` as you recommend its scope); never save task notes or skill
 text. Without the memory tools, go on without them.
 </required_reading>
 

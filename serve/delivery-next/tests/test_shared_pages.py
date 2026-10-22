@@ -177,6 +177,23 @@ def curated(folder: Path, title: str) -> None:
     engine.edit(entry.id, {"scope_agents": ["builder"]}, expected_revision=entry.revision)
 
 
+def recommendation_shows_while_pending(page, entries, folder: Path) -> None:
+    """TD-293: the saver's recommended scope shows on a pending entry, and no longer once it is curated."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    engine = MemoryEngine(folder)
+    prefer = engine.save(
+        title="Prefer uv", content="Prefer uv: run tools with uv", categories=[MemoryCategory.PROCESS],
+        confidence=0.8, source_agent="builder", scope_agents=[], recommended="global",
+    )  # fmt: skip
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(entries.filter(has_text="Prefer uv")).to_contain_text("recommended for Global")
+    engine.edit(prefer.id, {"scope_agents": ["builder"]}, expected_revision=prefer.revision)  # curated
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(entries.filter(has_text="Prefer uv")).to_contain_text("curated")
+    expect(entries.filter(has_text="Prefer uv")).not_to_contain_text("recommended")
+
+
 @pytest.mark.browser
 def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
     tmp_path: Path, shared_repo, pds
@@ -219,6 +236,7 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
             fresh.get_by_role("button", name="Approve").click()  # and the action goes through the twin
             expect(page.locator("#status")).to_contain_text('Approved "Read the twin"')
             expect(fresh.get_by_role("button", name="Make global")).to_be_visible()
+            recommendation_shows_while_pending(page, entries, root / "shop-site" / "memory")
             browser.close()
     finally:
         server.should_exit = True

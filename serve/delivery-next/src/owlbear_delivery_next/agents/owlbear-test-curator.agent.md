@@ -17,7 +17,7 @@ Delivery loads `owlbear-review-judgment` (evidence and operating context) into y
 
 Before you start, call `recall_memory` with agent `test-curator` and apply what it returns. Before your last call,
 mark each memory you recalled with `assess_memories`, and if you learned a specific, non-obvious fact that would
-have helped from the start, save it with `save_memory` (source agent `test-curator`). Without the memory tools, go
+have helped from the start, save it with `save_memory` (source agent `test-curator`, `where` `project` or `global` as you recommend its scope). Without the memory tools, go
 on without them.
 </required_reading>
 

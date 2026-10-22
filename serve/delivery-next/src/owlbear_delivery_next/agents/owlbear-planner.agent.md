@@ -55,7 +55,7 @@ on without them.
 - `web_fetch`: read documentation when the plan depends on outside behaviour, such as a library's or a
   service's API; the repository and its installed versions come first.
 - Memory (each also as `owlbear-memory/<name>`): `recall_memory` before you start; `save_memory` for a
-  non-obvious lesson.
+  non-obvious lesson, with `where` `project` or `global` as you recommend its scope.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
 - `lookup_decisions`: when you are unsure which decision governs a choice, ask it in a sentence; the picker
