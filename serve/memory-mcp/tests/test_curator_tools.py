@@ -104,3 +104,38 @@ async def test_the_threshold_is_the_global_settings_value_else_95(root: Path) ->
     (root / "config.json").write_text(json.dumps({"format": 2, "curator_threshold": 30}))
     assert await tools.curation_threshold(ctx) == {"threshold": 95, "source": "default"}
     assert await tools.curation_threshold(bound(root, shared=False)) == {"threshold": 95, "source": "default"}
+
+
+@pytest.mark.asyncio
+async def test_a_folder_that_links_to_global_or_outside_the_repository_is_refused(root: Path, tmp_path: Path) -> None:
+    (root / "memory").mkdir()
+    (root / "alias").mkdir()
+    (root / "alias" / "memory").symlink_to(root / "memory")
+    (tmp_path / "elsewhere" / "memory").mkdir(parents=True)
+    (root / "outside").symlink_to(tmp_path / "elsewhere")
+    ctx = bound(root)
+
+    for folder in ("alias", "outside"):
+        with pytest.raises(ToolError, match="no memory folder"):
+            await tools.list_memories(ctx, folder=folder)
+
+
+@pytest.mark.asyncio
+async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_and_can_be_tried_again(
+    root: Path,
+) -> None:
+    folder = root / "docs" / "memory"
+    entry = saved(folder, "Pin the runtime", curated=True)
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "seed")
+    ctx = bound(root)
+    (root / ".git" / "hooks" / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
+    (root / ".git" / "hooks" / "pre-commit").chmod(0o755)
+
+    with pytest.raises(ToolError, match="stays in docs"):
+        await tools.make_global(ctx, entry_id=entry.id, revision=entry.revision, folder="docs")
+    assert (git(root, "status", "--porcelain"), MemoryEngine(folder).get_entry(entry.id).origin) == ("", None)
+
+    (root / ".git" / "hooks" / "pre-commit").unlink()
+    moved = await tools.make_global(ctx, entry_id=entry.id, revision=entry.revision, folder="docs")
+    assert (moved["origin"], git(root, "status", "--porcelain")) == ("docs", "")

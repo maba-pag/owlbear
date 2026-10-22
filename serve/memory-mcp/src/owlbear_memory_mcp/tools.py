@@ -32,7 +32,7 @@ from owlbear_memory import (
 )
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
-from owlbear_memory_mcp.git import commit_batch, commit_move, format_git_failure
+from owlbear_memory_mcp.git import commit_batch, commit_move, format_git_failure, repo_locked
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
@@ -137,8 +137,9 @@ def _in_folder(ctx: Context, folder: str | None) -> Context:
         msg = f"{folder!r} is no project folder of the shared repository; Global memory changes only by make_global"
         raise ToolError(msg)
     path = root / folder / "memory"
-    if not path.is_dir():
-        msg = f"the shared repository has no memory folder for {folder}"
+    real = path.resolve() if path.is_dir() and not (path.is_symlink() or path.parent.is_symlink()) else None
+    if real is None or real.parent.parent != root.resolve() or real == (root / GLOBAL).resolve():
+        msg = f"the shared repository has no memory folder for {folder}"  # links never lead to Global or elsewhere
         raise ToolError(msg)
     base = ctx.request_context.lifespan_context
     swapped = SimpleNamespace(
@@ -797,7 +798,7 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
     project = source.parent.name
     target.mkdir(exist_ok=True)
     try:
-        with writer_lock(source), writer_lock(target):
+        with repo_locked(root), writer_lock(source), writer_lock(target):  # the repository lock first, as the page
             found = [(p, e) for p in sorted(source.glob("*.md")) if (e := storage.read_entry(p)) and e.id == entry_id]
             if len(found) != 1:
                 msg = f"entry not found: {entry_id}"
@@ -821,12 +822,15 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
                 storage.write_entry(path, entry, memory_dir=source)  # as it was, so it can be tried again
                 msg = f"{entry.title} could not move: {exc.strerror or exc}; try again"
                 raise ToolError(msg) from exc
-            sha = commit_move([path, moved], f"memory {project}: make global {entry.title}")
-    except MemoryBusyError as exc:
+            try:
+                sha = commit_move([path, moved], f"memory {project}: make global {entry.title}")
+            except subprocess.CalledProcessError as exc:
+                moved.replace(path)
+                storage.write_entry(path, entry, memory_dir=source)  # back where it was, so it can be tried again
+                msg = f"{entry.title} stays in {project}: the commit failed: {format_git_failure(exc)}"
+                raise ToolError(msg) from exc
+    except (MemoryBusyError, TimeoutError) as exc:
         raise ToolError(str(exc)) from exc
-    except subprocess.CalledProcessError as exc:
-        msg = f"moved into Global memory, but not committed: {format_git_failure(exc)}"
-        raise ToolError(msg) from exc
     hint = f"Moved into Global memory and committed; the owner can move it back to {project} on the Memory page."
     return _with_hint(_entry_to_dict(moving) | {"commit_sha": sha}, hint)
 

@@ -91,8 +91,8 @@ confidence, 0 to 100, that this whole set is right. Then:
 | At or above the threshold | Act alone, `make_global` included | Act alone, `make_global` included |
 | Below the threshold | Leave the entry as it is; report it as skipped with the reason | Ask the owner, one entry per question, your proposed set as the recommendation |
 
-- A conflict with curated or approved memory or with project rules is never resolved alone: count its confidence as
-  below the threshold.
+- A conflict with curated or approved memory or with project rules lowers your confidence; resolve it alone only
+  when your confidence in the whole set is still at or above the threshold, and report which side stands and why.
 - `make_global` is for a lesson that holds in any project; the saver's `recommended` scope is evidence, not a
   decision. In interactive mode, propose Make global for such a lesson whenever you do not make it global alone.
 - An automatic run never changes an entry it skips; the next run judges it again only once it changed.
@@ -116,7 +116,7 @@ For each MCP pending entry, classify by meaning:
 | DEFER | Plausible but lacks enough evidence, scope clarity, or wording quality | Leave pending and report the entry ID |
 | DELETE | Generic, empty, obvious, stale, or wrong | Delete/prune |
 | DUPLICATE | Existing curated/approved MCP entry already covers it | Delete pending/file note |
-| CONFLICT | Contradicts existing curated/approved memory or project rules | Skip it (automatic) or ask the owner (interactive) |
+| CONFLICT | Contradicts existing curated/approved memory or project rules | Resolve it at or above the threshold; below it, skip (automatic) or ask the owner (interactive) |
 
 Deduplicate by meaning, not wording. Before deleting as duplicate, read the likely existing MCP entry unless metadata alone is conclusive.
 
@@ -144,7 +144,7 @@ in relevance scope. A deleted agent may remain in immutable historical provenanc
 | GLOBAL | Curate it first if pending, then call `make_global(entry_id=..., revision=...)` with the revision after curation |
 | DEFER | Leave pending; in automatic mode report ordinary content/scope uncertainty or a conflict as skipped; do not report identity-only uncertainty |
 | DELETE / DUPLICATE | Call `delete_memory(entry_id=..., revision=entry["revision"])` |
-| CONFLICT | Automatic: leave pending and report it as skipped. Interactive: ask the owner, then curate/delete according to the answer |
+| CONFLICT | At or above the threshold: curate/delete and report the resolution. Below it, automatic: leave pending and report it as skipped; interactive: ask the owner, then act on the answer |
 
 Any action below the threshold follows the table in "Confidence and the threshold" first.
 
@@ -183,7 +183,7 @@ Return the verdict:
 - [ ] Duplicate checks compared against existing curated/approved MCP entries
 - [ ] Noise removals are truly low-signal, not merely unfamiliar
 - [ ] Each judged entry has one stated confidence; below the threshold nothing changed alone
-- [ ] Conflicts were skipped in automatic mode or resolved with the owner in interactive mode
+- [ ] Conflicts below the threshold were skipped (automatic) or asked (interactive); each resolved alone says why
 - [ ] No `/memories/` file store was used for curation
 - [ ] No broad `git add` of the memory folder was used
 - [ ] Did not call `approve_memory`
@@ -192,7 +192,7 @@ Return the verdict:
 
 - **Using retired file memory:** `/memories/` paths are no longer an agent memory store. Promotion means MCP curation.
 - **Global scope by habit:** `['*']` floods all agents. Prefer named role scopes unless the learning is truly universal.
-- **Auto-resolving conflicts:** conflicting lessons must be skipped in automatic mode or resolved with the owner in interactive mode.
+- **Resolving conflicts on a guess:** below the threshold a conflict is skipped (automatic) or asked (interactive); none is resolved silently.
 - **Reporting identity-only uncertainty:** keep it pending silently in automatic mode; do not add its count or ID to skip/conflict summaries.
 - **Global by habit:** `make_global` only for a lesson that holds in any project, never because the saver recommended it.
 - **Broad memory commits:** use `commit_memory_batch` so pending entries stay uncommitted.
