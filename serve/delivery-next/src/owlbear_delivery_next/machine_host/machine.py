@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.project_host.host import RunnerRecord
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
+CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
 
 
 class MachineError(Exception):
@@ -79,6 +81,9 @@ class Machine:
 
         self.updater = Updater(self)
         self.auto = Auto(self)
+        self.curation = Curation(
+            self.slots, fenced=lambda: self.updating or ("stopping" if self.stopping.is_set() else "")
+        )
 
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
@@ -103,6 +108,7 @@ class Machine:
             h.closed = lambda: self.stopping.is_set() or not p.gate.open
             h.updating = lambda: self.updating
             h.slots = self.slots
+            h.merged = lambda: self.curation.nudge([h.store.name], paused=self.paused)
 
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
@@ -226,7 +232,9 @@ class Machine:
 
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
-        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
+        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)] + (
+            self.curation.working()
+        )
 
     def fence(self, text: str) -> list[str]:
         """An update's fence (self-update §5.3): nothing starts from now on; what still runs, which lifts it."""
@@ -241,7 +249,9 @@ class Machine:
     def busy(self) -> list[str]:
         """What an update waits for: each project's running steps, environments and admitted work."""
         projects = list(self.projects.values())
-        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
+        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)] + (
+            self.curation.working()
+        )
 
     def fenced(self) -> None:
         """Refuse a project change while an update's fence holds.
@@ -265,6 +275,18 @@ class Machine:
             self.say("stopping: nothing runs")
             self.on_stop()
             return True
+
+    def curation_loop(self) -> None:
+        """Thread: once OwlBear is idle, curate each memory folder holding pending entries no run has seen."""
+        from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR  # noqa: PLC0415 - it names this class
+
+        while not self.stopping.wait(CURATE_EVERY):
+            try:
+                idle = self.auto.mono() - self.auto.last_use >= IDLE_FOR
+                if idle and not (self.updating or self.ending or self.busy()):
+                    self.curation.nudge(None, paused=self.paused)
+            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
+                self.say(f"looking whether to curate memory failed: {type(exc).__name__}: {exc}")
 
     def idle_loop(self) -> None:
         """Thread: look every ``IDLE`` seconds whether a stop when idle may stop OwlBear."""

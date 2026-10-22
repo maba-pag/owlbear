@@ -20,7 +20,7 @@ import psutil
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import failures
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Record, Waiting
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Record, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
@@ -154,6 +154,7 @@ class Host:
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
         self.closed: Callable[[], bool] = lambda: False  # the machine or this project stops: nothing starts at all
         self.updating: Callable[[], str] = lambda: ""  # the machine's update fence: why nothing starts now
+        self.merged: Callable[[], None] = lambda: None  # a Change's pull request merged: the machine may curate memory
         self.passing: set[str] = set()  # Changes whose next step runs while paused (TD-287, TD-303)
         self.slots, self.wants, self.grants = Slots(lambda: session_slots.ALL), dict[str, int](), dict[str, int]()
         self.waiting, self.asked = set[str](), set[str]()  # Changes waiting for a session slot (TD-336)
@@ -312,6 +313,8 @@ class Host:
         if paused:
             state, moved = (state if state in {"merged", "closed"} else None), False
         c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
+        if state == "merged" and prior.step.kind != StepKind.CLEANUP and c.step.kind == StepKind.CLEANUP:
+            self.merged()  # its project's memory may hold what the Change's agents saved (item 5 slice 4)
         if moved:
             self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
         c = self._woken(self._pull(lock, c, now) if not paused or self.owner_runs() else c, now)

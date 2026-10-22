@@ -17,11 +17,15 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
+from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import curation, registry
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Agent
 from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
@@ -92,8 +96,20 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
             return JSONResponse({"detail": str(exc)}, status_code=409)
         return values(request)
 
+    report = MemoryCurationResult(summary="1 promoted, nothing left for you", entries=[])
+    job = curation.Curation(
+        Slots(lambda: 1), shared=lambda: DataRepo(shared),
+        run=lambda cfg: Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True)),
+    )  # fmt: skip
+
+    async def curating(request):
+        if request.method == "POST":
+            job.start((await request.json())["folder"])
+        return JSONResponse(job.read())
+
     routes = [Route("/api/next/projects", projects), Route("/api/next/machine", values)]
     routes += [Route("/api/next/machine/settings", configure, methods=["PUT"])]
+    routes += [Route("/api/next/curation", curating, methods=["GET", "POST"])]
     routes += [Mount(f"/p/{pid}", app) for pid, app in apps.items()]
     return Starlette(routes=[*routes, Mount("/", apps[SHOP])]), launches
 
@@ -434,6 +450,35 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             page.goto(f"{base}/config?project={DOCS}")
             pds.pick(page, "Layer", f"go:{SHOP}")
             expect(page).to_have_url(f"{base}/config?project={SHOP}")
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(tmp_path: Path, shared_repo, pds) -> None:
+    """Item 5 slice 4: each folder of the shared repository with its last run; Curate now runs one at once."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    root = shared_repo[0]
+    curated(root / "shop-site" / "memory", "Run ruff first")
+    server, base = serving(machine(tmp_path, root)[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/maintenance?project={SHOP}#token=t")
+            folders = page.locator("#curation li")
+            expect(folders).to_have_count(1)
+            expect(folders.first).to_contain_text("Never curated.")
+            folders.first.get_by_role("button", name="Curate shop-site now").click()
+            pds.modal(page).get_by_role("button", name="Curate now").click()
+            expect(page.locator("#status")).to_contain_text("Curating shop-site")
+            expect(folders.first).to_contain_text("1 promoted, nothing left for you")
             browser.close()
     finally:
         server.should_exit = True

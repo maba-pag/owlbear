@@ -329,8 +329,9 @@ FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the d
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 LOOKUP = "lookup_decisions"  # which decisions govern a question, answered by the picker (TD-456, TD-459)
 LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator"})  # a Change step's own worker
-JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker"})  # a verdict or pick, never a question
+JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker", "curator"})  # never a question
 PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
+CURATOR = "curator"  # automatic memory curation: its memory tools, then its report as its result (item 5 slice 4)
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
 VERDICTS = frozenset(
     {"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider"}
@@ -347,7 +348,7 @@ def asks(role: str, *, judging: bool = False) -> bool:
 
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the first look, the UI scan, the lookup."""
-    if role == PICKER:
+    if role in {PICKER, CURATOR}:
         return [SUBMIT.name]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
