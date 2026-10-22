@@ -10,11 +10,11 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine
+from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storage
 
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, memory_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Store
 
@@ -268,6 +268,57 @@ def test_make_global_moves_the_entry_and_publishes_both_folders(shared):
     assert [e.id for e in MemoryEngine(root / "memory").get_entries()] == [entry.id]
 
 
+def test_a_global_entry_moves_back_only_to_the_project_it_came_from(shared):
+    """TD-292: Make global records the project; only it takes the entry back, and one without a record stays."""
+    root, remote, repo = shared
+    store = Store.open(repo)
+    folder, common = root / store.name / "memory", root / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    c = client(store)
+    globalized = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()
+    theirs, unknown = seed(common, "Their habit", curated=True), seed(common, "An older global", curated=True)
+    theirs = theirs.model_copy(update={"origin": "docs-site"})
+    storage.write_entry(common / f"{theirs.id}.md", theirs, memory_dir=common)
+
+    refused = [
+        c.post(f"/api/next/memory/{e.id}/move-back", json={"updated_at": e.updated_at}) for e in (theirs, unknown)
+    ]
+    back = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": globalized["entry"]["updated_at"]})
+
+    assert globalized["entry"]["origin"] == store.name
+    said = [(r.status_code, w in r.json()["detail"]) for r, w in zip(refused, ("docs-site", "recorded"), strict=True)]
+    assert said == [(409, True), (409, True)]
+    assert (back.status_code, back.json()["entry"]["origin"]) == (200, None)
+    assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
+    assert "origin" not in (folder / f"{entry.id}.md").read_text()
+    assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: move back Pin the runtime"
+
+
+def test_a_move_that_fails_keeps_the_entry_where_it_was_with_its_origin_and_can_be_tried_again(shared, monkeypatch):
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder, common = root / store.name / "memory", root / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    c = client(store)
+    shown = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+    real = Path.replace
+
+    def refuse(self, target):  # only the move into the project's folder fails; atomic writes still work
+        if Path(target).parent == folder and Path(target).suffix == ".md":
+            raise PermissionError(13, "Permission denied")
+        return real(self, target)
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    failed = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": shown["updated_at"]})
+    monkeypatch.setattr(Path, "replace", real)
+    again = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": shown["updated_at"]})
+
+    assert (failed.status_code, "try again" in failed.json()["detail"]) == (409, True)
+    assert again.status_code == 200
+    assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
+    assert MemoryEngine(common).get_entries() == []
+
+
 def test_make_global_refuses_an_entry_global_memory_holds_or_the_curator_has_not_scoped(shared):
     root, _, repo = shared
     store = Store.open(repo)
@@ -425,3 +476,47 @@ def test_a_filter_whose_choice_vanished_shows_everything_again(shared, pds):
         expect(pds.select(page, "Agent")).to_have_js_property("value", "any")
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
         expect(page.locator(".entry")).to_have_count(2)
+
+
+def test_a_moved_entry_refuses_the_page_that_showed_it_before_and_one_too_large_with_its_origin(shared, monkeypatch):
+    """Copilot on #585: each move is a change, so replaying an older request is stale; an oversized entry is a 422."""
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    entry, big = seed(folder, "Pin the runtime", curated=True), seed(folder, "Too large", curated=True)
+    c = client(store)
+    made = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+    c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": made["updated_at"]})
+    replayed = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+
+    def too_large(*_a, **_k):
+        too = "serialized entry exceeds 8192 bytes"
+        raise ValueError(too)
+
+    monkeypatch.setattr(memory_routes.storage, "write_entry", too_large)
+    refused = c.post(f"/api/next/memory/{big.id}/make-global", json={"updated_at": big.updated_at})
+
+    assert (replayed.status_code, refused.status_code, "8192" in refused.json()["detail"]) == (409, 422, True)
+    assert sorted(e.id for e in MemoryEngine(folder).get_entries()) == sorted([entry.id, big.id])
+
+
+def test_a_move_back_whose_write_at_home_fails_stays_global_with_its_origin(shared, monkeypatch):
+    """CodeRabbit on #585: the origin is cleared only at home, so Global never keeps an entry without it."""
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder, common = root / store.name / "memory", root / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    c = client(store)
+    made = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+    real = memory_routes.storage.write_entry
+
+    def failing(path, written, *, memory_dir):
+        if memory_dir == folder:
+            raise OSError(28, "No space left on device")
+        return real(path, written, memory_dir=memory_dir)
+
+    monkeypatch.setattr(memory_routes.storage, "write_entry", failing)
+    failed = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": made["updated_at"]})
+
+    assert (failed.status_code, MemoryEngine(common).get_entry(entry.id).origin) == (409, store.name)
+    assert MemoryEngine(folder).get_entries() == []

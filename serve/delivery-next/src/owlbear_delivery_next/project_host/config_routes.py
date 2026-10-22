@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.design_packs import calibration, pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
+from owlbear_delivery_next.project_host import memory_routes
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.catalogue import CATALOGUE
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
@@ -267,9 +268,11 @@ def _rename(store: Store, host: Host, name: str) -> str:
             raise HTTPException(409, f"steps of {', '.join(busy)} are running; rename once they have finished")
         until = time.monotonic() + data_repo.SAVE_SECONDS
         with store.shared.locked():
-            notice = store.shared.rename(store.name, name, until)
+            old = store.name
+            notice = store.shared.rename(old, name, until)
             for h in held:
                 h.store.name = name
+            notice = notice or memory_routes.reorigin(store.shared, old, name, until)  # Global keeps its way home
     except DataRepoError as exc:
         raise HTTPException(409, str(exc)) from exc
     except OSError as exc:

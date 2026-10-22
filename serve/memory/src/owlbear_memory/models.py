@@ -139,6 +139,7 @@ class MemoryEntry(BaseModel):
     scope_agents: list[str] = Field(default_factory=list)
     source_agent: str = Field(frozen=True)
     recommended: Where | None = None
+    origin: str | None = Field(default=None, min_length=1)  # the project a Global entry came from (TD-292)
     created_at: str
     updated_at: str
     approved_at: str | None = None

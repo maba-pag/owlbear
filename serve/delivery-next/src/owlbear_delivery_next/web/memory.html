@@ -114,14 +114,15 @@ function busy(m, action) {
   return state.pending === `${m.key}:${action}`;
 }
 
-// One owner action, through the project that read the entry; Global memory is named with ?where=global.
-async function act(m, action, body = {}) {
+// One owner action, through the project that read the entry, or the one named; Global is named with ?where=global.
+async function act(m, action, body = {}, of = m.place.of) {
   state.pending = `${m.key}:${action}`;
   show();
   try {
-    const where = m.place.where === "global" && action !== "make-global" ? "?where=global" : "";
+    const moves = ["make-global", "move-back"].includes(action);
+    const where = m.place.where === "global" && !moves ? "?where=global" : "";
     const r = await call(`/memory/${encodeURIComponent(m.id)}/${action}${where}`,
-      { body: { updated_at: m.updated_at, ...body }, timeout: 60000, of: m.place.of });  // a push can take a while
+      { body: { updated_at: m.updated_at, ...body }, timeout: 60000, of });  // a push can take a while
     state.error = "";
     state.editing = null;
     const title = `"${r.entry.title}"`, again = action === "edit" && m.state === "approved";
@@ -131,6 +132,7 @@ async function act(m, action, body = {}) {
       edit: again ? `Saved ${title}; it needs your approval again.` : `Saved ${title}.`,
       delete: `Deleted ${title}.`,
       "make-global": `Made ${title} global: the agents of every project read it.`,
+      "move-back": `Moved ${title} back to ${m.origin}: only its agents read it now.`,
     }[action];
     state.status = `${done}${r.notice ? ` ${r.notice}` : ""}`;
     state.pending = null;
@@ -168,10 +170,28 @@ async function globalize(m) {
     title: `Make “${m.title}” global?`, yes: "Make global", no: `Keep it in ${m.place.label}`,
     now: `It moves from the memory of ${m.place.label} to Global memory, as it reads now.`,
     then: "The agents of every project in this shared repository read it beside their own memory.",
-    after: "Edit or delete it in Global memory; it does not move back.",
+    after: `Edit or delete it in Global memory, or move it back to ${m.place.label}.`,
     instead: `It stays in the memory of ${m.place.label}.`,
   });
   if (sure) act(m, "make-global");
+}
+
+// The project a Global entry came from, when its folder is shown: only that project takes it back (TD-292).
+function home(m) {
+  if (m.place.where !== "global" || !m.origin) return null;
+  return state.loaded.places.find((p) => p.where === "project" && p.repository === m.place.repository
+    && p.name === m.origin) ?? null;
+}
+
+async function moveBack(m, to) {
+  const sure = await ask({
+    title: `Move “${m.title}” back to ${to.label}?`, yes: "Move back", no: "Keep it global",
+    now: `It moves from Global memory back to the memory of ${to.label}, the project it came from, as it reads now.`,
+    then: `Only the agents of ${to.label} read it; other projects no longer do.`,
+    after: "Make it global again at any time.",
+    instead: "It stays in Global memory.",
+  });
+  if (sure) act(m, "move-back", {}, to.of);
 }
 
 const PURGE_DAYS = 30;  // an entry deleted this long ago is removed
@@ -264,6 +284,11 @@ function actions(m) {
   if (m.place.where === "project" && !["pending", "deleted"].includes(m.state)) {  // Global has no curator
     parts.push(button("Make global", () => globalize(m), { variant: "secondary", icon: "globe", aria: DIALOG,
       busy: busy(m, "make-global") }));
+  }
+  const back = m.state !== "deleted" && home(m);
+  if (back) {
+    parts.push(button(`Move back to ${back.label}`, () => moveBack(m, back), { variant: "secondary",
+      icon: "arrow-left", aria: DIALOG, busy: busy(m, "move-back") }));
   }
   return parts.length ? html`<div class="row">${parts}</div>` : nothing;
 }

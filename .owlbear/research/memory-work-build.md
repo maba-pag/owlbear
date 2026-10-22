@@ -57,11 +57,11 @@ independent.
   only where the move is allowed.
 - Entries made Global before this slice have no `origin` and cannot move back (`D-01M5J1DACNN11K5CYPDD6D4QPR`);
   Global is empty today, so none exist yet.
-- The curator gets the same Make global as an MCP tool, so it can act alone (§3.3); it records `origin` the same
-  way.
 
 ### 3.3 Slice 3: curator modes and the threshold
 
+- The curator gets Make global as a memory MCP tool, so it can act alone; it records `origin` as the page
+  does (§3.2). Built here, where it is first used.
 - The modes are renamed to what the decisions say: **automatic** (was periodic) and **interactive** (was manual).
 - For each entry the curator judges everything it would do to it (keep, edit, scope, merge, delete, Make global)
   and states one confidence for that whole set. At 95% or more it acts in both modes. Below 95%, automatic mode

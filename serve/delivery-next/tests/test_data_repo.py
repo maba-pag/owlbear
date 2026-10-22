@@ -421,6 +421,29 @@ def test_after_a_rename_decisions_are_recorded_and_found_in_the_new_folder(share
     assert chat.get(f"/api/next/decisions/{made}").json()["project"] == "acme-shop"
 
 
+def test_after_a_rename_a_global_entry_still_moves_back_to_its_project(shared, repo) -> None:
+    """TD-292, Copilot on #585: Global entries made global from the folder name its new name."""
+    from owlbear_memory import MemoryCategory, MemoryEngine  # noqa: PLC0415
+
+    root, remote = shared
+    store = Store.open(repo)
+    engine = MemoryEngine(sessions.memory(store))
+    entry = engine.save(
+        title="Pin the runtime", content="Pin it", categories=[MemoryCategory.PROCESS], confidence=0.8,
+        source_agent="builder", scope_agents=[],
+    )  # fmt: skip
+    entry = engine.edit(entry.id, {"scope_agents": ["builder"]}, expected_revision=entry.revision)
+    c = renamer(store, repo)
+    made = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+
+    renamed = c.put("/api/next/config/folder", json={"name": "acme-shop"})
+    back = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": made["updated_at"]})
+
+    assert (renamed.status_code, renamed.json()["notice"], back.status_code) == (200, "", 200)
+    assert (root / "acme-shop" / "memory" / f"{entry.id}.md").is_file()
+    assert "memory global: shop-site is now acme-shop" in git(remote, "log", "--format=%s", "main")
+
+
 def test_a_rename_to_a_taken_or_unsafe_name_is_refused(shared, repo) -> None:
     root, _ = shared
     store = Store.open(repo)
