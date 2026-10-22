@@ -1,10 +1,10 @@
 """A project host's share of the machine's session slots (TD-336, TD-105).
 
 A step's agent sessions are reserved before its runner launches and given back once its processes are confirmed
-gone. A step reserves none when it never starts an agent session (publish, follow, merge, cleanup), up to the
-project's limit for a visual check that captures and judges (its judges run in waves of the grant), else one. The
-grant is written with the runner's record, so a restarted machine host counts it again before granting anything. A
-design pack update takes one slot for each of its sessions while it runs.
+gone. A step reserves none when it never starts an agent session (publish, follow, merge, cleanup) and one once its
+decision pick waits for a session; up to the project's limit for a visual check that captures and judges (its judges
+run in waves of the grant), else one. The grant is written with the runner's record, so a restarted machine host
+counts it again before granting anything. A design pack update takes one slot for each of its sessions while it runs.
 """
 
 from __future__ import annotations
@@ -15,11 +15,12 @@ import threading
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system.slots import PACK
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check
+from owlbear_delivery_next.workflow_steps import check, pick
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -34,9 +35,15 @@ WAIT = 2.0  # seconds between a pack session's checks for a stop while it waits
 
 
 def wanted(c: Change, step: Step | None) -> int:
-    """The sessions a runner for *step* may run at once: 0 without an agent, all its judges may use, else 1."""
-    if step is None or step.kind in NO_AGENT:
+    """The sessions a runner for *step* may run at once: 0 without an agent, all its judges may use, else 1.
+
+    A step without an agent whose decision pick waits for a session (`decisions_gate`) gets one for it.
+    """
+    if step is None:
         return 0
+    if step.kind in NO_AGENT:
+        o = c.outcome
+        return int(o is not None and o.cause == cause_key(ErrorKind.NETWORK, step.kind, pick.LABEL))
     return ALL if check.capturing(c) or step.kind == StepKind.TESTS else 1
 
 

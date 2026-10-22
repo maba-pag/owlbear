@@ -107,11 +107,11 @@ def test_a_merged_change_archives_its_decisions_with_the_record_in_one_commit(st
     assert (where.actor, where.read_back, where.created_at) == ("shaper", "none", AT)
     assert where.source == "Change notes, brief v2 approved 2026-10-15T09:00:00+00:00"
     ui = read(root / change / "decisions" / f"{c.decisions[0].id}.md")
-    assert (ui.applies_to.paths, ui.read_back, ui.rationale) == (
-        ("web/app.css",),
+    assert (ui.read_back, ui.rationale) == (
         (AT + timedelta(hours=1)).date().isoformat(),
         "From Change notes (merged).",
     )
+    assert "applies_to" not in ui.content()  # no selectors (TD-460)
     files = "".join(p.read_text(encoding="utf-8") for p in (root / "shop-site").rglob("decisions/*.md"))
     assert "owner_words" not in files
     assert "skip the UI review" not in files  # the owner's answer is never stored (TD-449)
@@ -285,7 +285,7 @@ def test_one_decision_that_cannot_be_written_keeps_all_out_and_the_record_still_
 def test_an_invalid_decision_is_a_notice_and_nothing_is_archived(store, shared_repo) -> None:
     root, _ = shared_repo
     c = finished()
-    c.decisions.append(Decision(id=new_id(AT), text="Paths outside", origin="decided", at=AT, paths=["../x"]))
+    c.decisions.append(Decision(id="D-NOTANID", text="A malformed id", origin="decided", at=AT))
     notice = change_record.save(store, c, MERGED, AT)
     assert c.decisions[1].id in notice
     assert list(root.rglob("decisions/*.md")) == []

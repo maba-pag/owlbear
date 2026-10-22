@@ -332,7 +332,7 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
         if entry is None:
             raise HTTPException(404, "no such decision in this project's view")
         d, (links, linked_from) = entry.decision, _linked(view, entry)
-        more = d.model_dump(mode="json", include={"rationale", "consequences", "applies_to", "actor", "source"})
+        more = d.model_dump(mode="json", include={"rationale", "consequences", "actor", "source"})
         problems = [{"rule": f.rule, "message": f.message} for f in view.snapshot.findings_for(d.id)]
         rivals = [r.model_dump(mode="json", include={"id", "title"}) | {"revision": r.revision}
                   for r in decision_actions.rivals(view, d, data)]  # fmt: skip

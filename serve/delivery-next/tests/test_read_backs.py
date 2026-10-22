@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_decisions import Applicability, Decision, Origin, Scope, State, new_id, write
+from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import mcp_server
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -240,8 +240,10 @@ def awaiting(scope: tuple[str, ...] = ("web",)) -> Change:
 def test_the_approval_view_shows_at_most_three_applying_read_backs_and_counts_the_rest(owner, shared, store):
     applying = [waiting(k, created_at=AT + timedelta(minutes=i)) for i, k in
                 enumerate(("improvement", "safety", "uncertain", "blocked"))]  # fmt: skip
-    elsewhere = waiting("safety", applies_to=Applicability(paths=("api/**",)))
-    put(shared, *applying, elsewhere)
+    other = "20261021-090000-other"  # another Change's own decision is not in force for this one
+    elsewhere = waiting("safety", scope=Scope.CHANGE, change=other)
+    put(shared, *applying)
+    write(elsewhere, shared.root / PROJECT / "changes" / other)
     store.write(Lock("notes"), awaiting())
 
     got = owner.get("/api/next/changes/notes").json()["brief"]["read_backs"]

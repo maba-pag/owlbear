@@ -6,7 +6,8 @@ top-level folder when its matching files are many and spread (at most five group
 its identity (decision, project, area); a checklist longer than one entry's text takes several entries, `(part k of
 n)`, so every item stays listed, up to PARTS. Each names the old and new decisions' exact revisions as evidence and
 lists its Changes and files as a checklist, so partial coverage is ticked off; a Change ticks only what it verified:
-its cleanup ticks the file items its merged pull request changed (`verified`). Scheduling again reconciles the same
+its cleanup ticks the file items its merged pull request changed, or completes an entry that names no paths, which
+no file can cover (`verified`). Scheduling again reconciles the same
 entries: ticked items stay ticked, items no longer found stay listed, new ones are added unticked, and a project's
 grouping stays as first scheduled (see `_route`). A wording-only change schedules
 nothing. Keeping a project's existing code is the owner's `decided` project decision that refines the new rule (an
@@ -46,6 +47,8 @@ PRS = 10  # pull requests kept as evidence
 OTHER = "other folders"
 CHECK = re.compile(r"^- \[([ xX])\] (.+)$")
 FIX = re.compile(r"^Apply decision \S+ in ")
+WHOLE = "Check {} against the new rule"  # a project's item when the report names no paths
+PATHLESS = re.compile(r"^(Change \S+|Check .+ against the new rule)")
 LONGEST = 4000  # an entry's text
 type Line = tuple[str, str, bool]  # an item's key, its text, and whether it is ticked
 
@@ -170,7 +173,7 @@ def _route(impact: Impact, have: Sequence[str]) -> list[tuple[str, list[str]]]:
         found = list(by.items())
     (first, paths), changes = found[0], [_item(c) for c in impact.changes]
     if not changes and not paths and len(found) == 1:
-        paths = [f"Check {impact.project} against the new rule"]
+        paths = [WHOLE.format(impact.project)]
     return [(first, [*changes, *paths]), *found[1:]]
 
 
@@ -261,35 +264,40 @@ def schedule(
 
 def _covered(item: str, files: frozenset[str]) -> bool:
     """Whether a merged file is the item's path or lies under the folder it names; a Change item never is."""
-    if item.startswith("Change "):
+    if PATHLESS.match(item):
         return False
     path = item.rstrip("/")
     return path in files or any(f.startswith(f"{path}/") for f in files)
 
 
 def _verify(
-    files: frozenset[str], changes: set[str], project: str, said: tuple[str, str]
+    files: frozenset[str] | None, changes: set[str], project: str, said: tuple[str, str]
 ) -> Callable[[Entry, str], dict[str, Any]]:
     """Tick the items *files* cover over the entry as it is now, ticks made meanwhile kept; done when none is left.
 
-    The entry is checked again under the lock: one reassigned to another Change meanwhile is left as it is.
+    An entry that names no paths has nothing a merge's files can cover: the merged Change launched from it (*files*
+    not None) completes it, said so without claiming any file. The entry is checked again under the lock: one
+    reassigned to another Change meanwhile is left as it is.
     """
     change, pr = said
 
     def fields(entry: Entry, body: str) -> dict[str, Any]:
         if entry.status in {"done", "dropped"} or not _mine(entry, changes, project):
             return {}
+        items = checklist(entry.text)
+        whole = bool(files) and bool(items) and all(PATHLESS.match(i) for _, i, _ in items)
         owner = {k for k, _, t in checklist(body) if t}  # ticked on GitHub
         lines, covered = [], 0
         for line in entry.text.splitlines():
             m = CHECK.match(line)
-            hit = bool(m) and _covered(m[2], files)
+            hit = bool(m) and (whole or _covered(m[2], files or frozenset()))
             if m and (hit or (m[1] == " " and _key(m[2]) in owner)):
                 covered += hit
                 line = f"- [x] {m[2]}"  # noqa: PLW2901 - the ticked line replaces it
             lines.append(line)
         text = "\n".join(lines)
-        said = f"Verified by Change {change}{f' ({pr})' if pr else ''}: {covered} item(s) ticked."
+        by = f"Verified by Change {change}{f' ({pr})' if pr else ''}"
+        said = f"{by}, merged: its checklist names no files." if whole else f"{by}: {covered} item(s) ticked."
         if covered and said not in text and len(text) + len(said) + 2 <= LONGEST:
             text += f"\n\n{said}"
         left = any(not t for _, _, t in checklist(text))
@@ -303,13 +311,14 @@ def verified(backlog: Backlog, slug: str, clone: str | None, files: frozenset[st
     """Settle the project's fix entries that went into the finished Change *slug* of the clone *clone*.
 
     A merged Change ticks the items its merged *files* cover, never a Change item, and names itself and *pr* in the
-    text; None (abandoned or unchanged) ticks nothing. Each entry is then done when nothing is left, else open again.
+    text, or completes an entry that names no paths; None (abandoned or unchanged) ticks nothing. Each entry is then
+    done when nothing is left, else open again.
     """
     changes = {slug, f"{clone}/{slug}"} if clone else {slug}  # as `backlog_routes.named` stores it
     found, _ = backlog.read(fresh=True)
     mine = sorted((e.id for e in found.values() if _mine(e, changes, backlog.project)
                    and e.status not in {"done", "dropped"}), key=int)  # fmt: skip
-    settle = _verify(files or frozenset(), changes, backlog.project, (slug, pr))
+    settle = _verify(files, changes, backlog.project, (slug, pr))
     return [backlog.revise(i, settle) for i in mine]
 
 
@@ -337,7 +346,7 @@ def accept(shared: DataRepo, report: Report, project: str, revision: str, reason
         id=new_id(), title=_short(f"{project} keeps existing code under: {new.title}", TITLE), topic=new.topic,
         statement=_short(f"Code in {project} built before \u201c{new.title}\u201d stays as it is; new work follows it.",
                          STATEMENT_LIMIT),
-        rationale=f"Why: {why}\n\nImpact when kept: {impact.status}: {impact.why}", applies_to=new.applies_to,
+        rationale=f"Why: {why}\n\nImpact when kept: {impact.status}: {impact.why}",
         scope=Scope.PROJECT, project=project, origin=Origin.DECIDED, actor="owner", source=ACCEPTED,
         read_back=now.date().isoformat(), state=State.IN_FORCE, created_at=now,
         links=(Link(type=LinkType.EXCEPTION_TO if new.scope is Scope.GLOBAL else LinkType.REFINES, target=new.id),),

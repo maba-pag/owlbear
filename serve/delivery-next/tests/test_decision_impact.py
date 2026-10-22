@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_decisions import Applicability, Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.local_system import local_home
@@ -24,7 +24,7 @@ from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import decision_fixes, decision_impact, decision_store, decision_sync
 from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.decision_actions import Refused
-from owlbear_delivery_next.state_store.decision_impact import ACCEPTED, REMOTE, Impact, Place, Report
+from owlbear_delivery_next.state_store.decision_impact import ACCEPTED, Impact, Place, Report
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -50,11 +50,11 @@ def make(**changes) -> Decision:
     return Decision(**{**fields, **changes})
 
 
-def pair(paths: tuple[str, ...] = (), rationale: str = "", **scope) -> tuple[Decision, Decision]:
+def pair(rationale: str = "", **scope) -> tuple[Decision, Decision]:
     """An old rule, replaced, and its successor in force."""
-    old = make(state=State.REPLACED, applies_to=Applicability(paths=paths), **scope)
+    old = make(state=State.REPLACED, **scope)
     new = make(title="Notes live in Postgres", statement="Notes live in Postgres.", rationale=rationale,
-               links=(Link(type=LinkType.REPLACES, target=old.id),), applies_to=old.applies_to, **scope)  # fmt: skip
+               links=(Link(type=LinkType.REPLACES, target=old.id),), **scope)  # fmt: skip
     return old, new
 
 
@@ -110,7 +110,7 @@ def verdicts(report) -> dict[str, tuple[str, str]]:
 
 
 def test_merge_history_confirms_built_effect_from_a_merged_record_and_from_a_baseline(tmp_path, shared, store):
-    old, new = pair(paths=("notes/**",))
+    old, new = pair()
     publish(shared, old, new, records={"20261020-090000-c1": merged(old.id),
                                        "20261020-100000-c2": merged(old.id) | {"outcome": "abandoned"}})  # fmt: skip
     repo = clone(tmp_path, "shop", ["notes/db.py", "tests/test_notes.py"])
@@ -118,9 +118,9 @@ def test_merge_history_confirms_built_effect_from_a_merged_record_and_from_a_bas
     [only] = by_record.projects
     assert (only.status, only.changes) == ("confirmed", (
         {"slug": "c1", "title": "Notes", "pr": "https://github.com/acme/shop/pull/7", "from": "merged"},))  # fmt: skip
-    assert only.paths == ("notes/db.py",)  # its matching files stay evidence
+    assert only.paths == ()  # no selectors: no file is matched (TD-460)
 
-    other = make(title="Tags", statement="Tags.", applies_to=Applicability(paths=("tags/**",)), state=State.REPLACED)
+    other = make(title="Tags", statement="Tags.", state=State.REPLACED)
     later = make(title="Tags 2", statement="Tags two.", links=(Link(type=LinkType.REPLACES, target=other.id),))
     publish(shared, other, later)
     with store.lock("c3") as lock:
@@ -132,38 +132,33 @@ def test_merge_history_confirms_built_effect_from_a_merged_record_and_from_a_bas
     assert [c["slug"] for c in by_pin.projects[0].changes] == ["c3"]
 
 
-def test_path_selectors_without_matching_files_are_unaffected_and_whole_project_rules_unknown(tmp_path, shared, store):
-    scoped, scoped_new = pair(paths=("web/**",))
+def test_a_rule_no_change_built_under_is_unknown_and_a_withdrawn_one_reports_itself(tmp_path, shared, store):
     whole, whole_new = pair()
-    publish(shared, scoped, scoped_new, whole, whole_new)
-    repo = clone(tmp_path, "shop", ["src/app.py", "README.md"])
-    here = [Place(PROJECT, repo, store)]
+    publish(shared, whole, whole_new)
+    here = [Place(PROJECT, clone(tmp_path, "shop", ["src/app.py", "README.md"]), store)]
 
-    assert verdicts(decision_impact.report(shared, PROJECT, scoped_new.id, here))[PROJECT] == (
-        "unaffected", "no file matches its paths here, at HEAD or on the remote, and no Change applied it")  # fmt: skip
     assert verdicts(decision_impact.report(shared, PROJECT, whole_new.id, here))[PROJECT] == (
         "unknown", decision_impact.WHOLE)  # fmt: skip
-    gone = make(state=State.WITHDRAWN, applies_to=Applicability(paths=("src/**",)))
+    gone = make(state=State.WITHDRAWN)
     publish(shared, gone)
     withdrawn = decision_impact.report(shared, PROJECT, gone.id, here)
     assert (withdrawn.new, withdrawn.effect, verdicts(withdrawn)[PROJECT][0]) == (None, "withdrawn", "unknown")
     with pytest.raises(Refused, match="replaced no decision"):
-        decision_impact.report(shared, PROJECT, scoped.id, here)
+        decision_impact.report(shared, PROJECT, whole.id, here)
 
 
 def test_an_unavailable_project_stays_unknown_and_says_why(tmp_path, shared, store):
-    old, new = pair(paths=("src/**",))
+    old, new = pair()
     publish(shared, old, new, records={"20261020-090000-c1": merged(old.id)})
     unserved = decision_impact.report(shared, PROJECT, new.id, [])
-    broken = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, tmp_path / "gone", store)])
+    elsewhere = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, tmp_path / "gone", store)])
     assert verdicts(unserved)[PROJECT] == ("unknown", "shop-site's repository is not a project this host serves")
     assert unserved.projects[0].changes[0]["slug"] == "c1"  # the merged record is still evidence
-    assert verdicts(broken)[PROJECT][0] == "unknown"
-    assert "cannot" in verdicts(broken)[PROJECT][1]
+    assert verdicts(elsewhere)[PROJECT][0] == "confirmed"  # its files are never read
 
 
 def test_a_global_change_covers_every_known_project_and_owlbears_folder(tmp_path, shared):
-    old, new = pair(paths=("web/**",), scope=Scope.GLOBAL, project="")
+    old, new = pair(scope=Scope.GLOBAL, project="")
     (shared.root / "owlbear").mkdir()
     write(make(project="owlbear", title="Lint once", statement="Linted once."), shared.root / "owlbear")
     publish(shared, old, new)
@@ -172,18 +167,17 @@ def test_a_global_change_covers_every_known_project_and_owlbears_folder(tmp_path
     report = decision_impact.report(shared, PROJECT, new.id, places)
 
     assert {k: v[0] for k, v in verdicts(report).items()} == {
-        PROJECT: "unknown", OTHER: "unaffected", "owlbear": "unknown"}  # fmt: skip
+        PROJECT: "unknown", OTHER: "unknown", "owlbear": "unknown"}  # fmt: skip
     assert verdicts(report)["owlbear"][1] == "OwlBear's repository is not a project this host serves"
 
 
-def test_evidence_is_capped_and_test_files_are_named(tmp_path, shared, store):
-    old, new = pair(paths=("src/**", "tests/**"))
+def test_the_shown_report_names_both_rules_and_what_the_change_means(tmp_path, shared, store):
+    old, new = pair()
     publish(shared, old, new)
-    files = [f"src/m{n:02}.py" for n in range(55)] + ["tests/test_a.py", "src/test_b.py"]
     shown = decision_impact.shown(decision_impact.report(shared, PROJECT, new.id, [
-        Place(PROJECT, clone(tmp_path, "shop", files), store)]))  # fmt: skip
+        Place(PROJECT, clone(tmp_path, "shop", ["src/m.py"]), store)]))  # fmt: skip
     [p] = shown["projects"]
-    assert (len(p["paths"]), p["more"], p["tests"], p["more_tests"]) == (50, 7, ["src/test_b.py", "tests/test_a.py"], 0)
+    assert (p["paths"], p["tests"], "paths" in shown["old"]) == ([], [], False)
     assert (shown["old"]["id"], shown["new"]["id"], shown["effect"], shown["fixes"]) == (
         old.id, new.id, "unknown", True)  # fmt: skip
     assert "treated as forbidding" in shown["divergence"]
@@ -221,30 +215,26 @@ def test_the_owner_marks_a_replacement_and_its_successor_records_it(tmp_path, sh
 
 
 def test_scheduling_makes_one_grouped_entry_per_project_with_revisions_and_a_checklist(tmp_path, shared, github):
-    old, new = pair(paths=("web/**", "api/**"), scope=Scope.GLOBAL, project="")
+    old, new = pair(scope=Scope.GLOBAL, project="")
     publish(shared, old, new)
-    spread = [f"web/p{n}.js" for n in range(15)] + [f"api/r{n}.py" for n in range(10)]
-    places = [Place(PROJECT, clone(tmp_path, "shop", ["web/a.js"])), Place(OTHER, clone(tmp_path, "blog", spread)),
-              Place("tools", clone(tmp_path, "tools", ["x.md"]))]  # fmt: skip
+    places = [Place(PROJECT, clone(tmp_path, "shop", ["web/a.js"])), Place(OTHER, clone(tmp_path, "blog", ["a.md"]))]
     report = decision_impact.report(shared, PROJECT, new.id, places)
 
     made = decision_fixes.schedule(shared, report, new.revision)
 
     assert [(m["project"], m["title"]) for m in made] == [
         (PROJECT, f"Apply decision {new.id} in {PROJECT}: Notes live in Postgres"),
-        (OTHER, f"Apply decision {new.id} in {OTHER} (web/): Notes live in Postgres"),
-        (OTHER, f"Apply decision {new.id} in {OTHER} (api/): Notes live in Postgres"),
-    ]  # the unaffected project gets none
+        (OTHER, f"Apply decision {new.id} in {OTHER}: Notes live in Postgres"),
+    ]
     first = github.issues[1]
     assert f"Old rule \u201c{old.title}\u201d: {old.statement}" in first["body"]
     assert f"New rule \u201c{new.title}\u201d: {new.statement}" in first["body"]
     assert f"({old.id}" not in first["body"].split("Tick each item")[0]  # its readable head names titles
-    assert "- [ ] web/a.js" in first["body"]
+    assert f"- [ ] Check {PROJECT} against the new rule" in first["body"]
     assert f"decision {new.id} revision {new.revision}" in first["body"]  # the evidence list
     assert "**Projects:** shop-site" in first["body"]
-    assert github.issues[2]["body"].split("<!--")[0].count("- [ ] web/") == 15  # its readable part
     again = decision_fixes.schedule(shared, report, new.revision)
-    assert (len(github.issues), [m["new"] for m in again]) == (3, [False, False, False])  # reconciled, not repeated
+    assert (len(github.issues), [m["new"] for m in again]) == (2, [False, False])  # reconciled, not repeated
     with pytest.raises(Refused, match="changed since"):
         decision_fixes.schedule(shared, report, old.revision)
 
@@ -289,7 +279,7 @@ def test_the_machine_host_reports_on_every_project_it_serves(tmp_path, shared, m
     (local_home.root() / "data.json").write_text(json.dumps({"repository": str(shared.root)}))
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo: [])
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts here ({slug})"))
-    old, new = pair(paths=("web/**",), scope=Scope.GLOBAL, project="")
+    old, new = pair(scope=Scope.GLOBAL, project="")
     publish(shared, old, new)
     record = HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     machine = Machine(record)
@@ -306,60 +296,24 @@ def test_the_machine_host_reports_on_every_project_it_serves(tmp_path, shared, m
                          headers={"x-owlbear-use": "chat"})  # fmt: skip
     finally:
         machine.stop_all()
-    assert {p["project"]: p["status"] for p in got["projects"]} == {PROJECT: "unknown", OTHER: "unaffected"}
+    assert {p["project"]: p["status"] for p in got["projects"]} == {PROJECT: "unknown", OTHER: "unknown"}
     assert chat.status_code == 403
 
 
-def test_untracked_unpushed_and_remote_files_count_and_an_unconfirmed_remote_is_never_unaffected(
-    tmp_path, shared, store
-):
-    old, new = pair(paths=("web/**",))
-    publish(shared, old, new)
-
-    def seen(repo: Path) -> tuple[str, str, tuple[str, ...]]:
-        [only] = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, repo, store)]).projects
-        return only.status, only.why, only.paths
-
-    repo = clone(tmp_path, "shop", ["src/app.py"])
-    assert seen(repo)[0] == "unaffected"
-    (repo / "web").mkdir()
-    (repo / "web" / "new.js").write_text("x\n")
-    assert seen(repo)[::2] == ("unknown", ("web/new.js",))  # untracked
-    git(repo, "add", "-A")
-    git(repo, "commit", "-qm", "local")
-    git(repo, "rm", "-q", "web/new.js")  # gone from the working tree, still in the unpushed commit at HEAD
-    assert seen(repo)[::2] == ("unknown", ("web/new.js",))
-
-    fresh, peer = clone(tmp_path, "blog", ["src/app.py"]), tmp_path / "peer"
-    git(tmp_path, "clone", "-q", str(tmp_path / "blog.git"), str(peer))
-    (peer / "web").mkdir()
-    (peer / "web" / "pushed.js").write_text("x\n")
-    git(peer, "add", "-A")
-    git(peer, "commit", "-qm", "elsewhere")
-    git(peer, "push", "-q")
-    assert seen(fresh)[::2] == ("unknown", ("web/pushed.js",))  # only on the remote: fetched first
-
-    cut = clone(tmp_path, "cut", ["src/app.py"])
-    git(cut, "remote", "set-url", "origin", str(tmp_path / "missing.git"))  # the fetch fails
-    for unconfirmed in (cut, clone(tmp_path, "solo", ["src/app.py"], origin=False)):  # the second has no remote
-        status, why, _ = seen(unconfirmed)
-        assert (status, why.startswith(REMOTE)) == ("unknown", True)
-
-
-def test_older_or_unreadable_change_records_cannot_prove_a_project_unaffected(tmp_path, shared, store):
-    old, new = pair(paths=("web/**",))
+def test_older_or_unreadable_change_records_are_listed_as_incomplete(tmp_path, shared, store):
+    old, new = pair()
     publish(shared, old, new, records={"20261019-090000-c0": merged("D-ELSE") | {"slug": "c0"}})
     here = [Place(PROJECT, clone(tmp_path, "shop", ["src/app.py"]), store)]
     changes = shared.root / PROJECT / "changes"
-    assert verdicts(decision_impact.report(shared, PROJECT, new.id, here))[PROJECT][0] == "unaffected"
+    found = verdicts(decision_impact.report(shared, PROJECT, new.id, here))
+    assert found[PROJECT] == ("unknown", decision_impact.WHOLE)
 
     older = merged("D-ELSE") | {"slug": "c1"}
     del older["decisions_applied"]
     (changes / "20261020-090000-c1.json").write_text(json.dumps(older))
     [impact] = decision_impact.report(shared, PROJECT, new.id, here).projects
-    assert (impact.status, impact.why, impact.incomplete) == (
-        "unknown", "1 finished-Change record(s) cannot rule out that it was applied",
-        ("20261020-090000-c1.json: merged, but records no decisions it applied",))  # fmt: skip
+    assert (impact.status, impact.incomplete) == (
+        "unknown", ("20261020-090000-c1.json: merged, but records no decisions it applied",))  # fmt: skip
 
     (changes / "20261020-100000-c2.json").write_text("{not json")
     shown = decision_impact.shown(decision_impact.report(shared, PROJECT, new.id, here))
@@ -419,42 +373,37 @@ def test_keeping_existing_code_is_taken_back_when_the_rule_changed_between_catch
     assert git(shared.root, "status", "--porcelain") == ""
 
 
-def test_scheduling_again_reconciles_the_same_entry_keeping_ticks_and_its_grouping(tmp_path, shared, store, github):
-    old, new = pair(paths=("notes/**", "web/**"))
+def test_scheduling_again_reconciles_the_same_entry_keeping_ticks_and_its_grouping(shared, github):
+    old, new = pair()
     publish(shared, old, new)
-    repo = clone(tmp_path, "shop", ["notes/a.py", "notes/b.py"])
 
-    def schedule() -> list[dict]:
-        report = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, repo, store)])
-        return decision_fixes.schedule(shared, report, new.revision)
+    def schedule(*paths: str) -> list[dict]:
+        impact = Impact(PROJECT, "unknown", "files to look at", (), paths)
+        return decision_fixes.schedule(shared, Report(old, new, "forbids", (impact,)), new.revision)
 
     def checks(number: int) -> list[str]:
         return [line for line in github.issues[number]["body"].split("<!--")[0].splitlines() if line.startswith("- [")]
 
-    [first] = schedule()
+    [first] = schedule("notes/a.py", "notes/b.py")
     number = int(first["id"])
     issue = github.issues[number]
     issue["body"] = issue["body"].replace("- [ ] notes/a.py", "- [x] notes/a.py", 1)  # ticked on GitHub
-    (repo / "notes" / "c.py").write_text("x\n")
-    [second] = schedule()
+    [second] = schedule("notes/a.py", "notes/b.py", "notes/c.py")
     assert (second["id"], second["new"], second["added"], len(github.issues)) == (first["id"], False, 1, 1)
     assert checks(number) == ["- [x] notes/a.py", "- [ ] notes/b.py", "- [ ] notes/c.py"]
     body = github.issues[number]["body"]
     assert f"Old rule \u201c{old.title}\u201d: {old.statement}" in body
     assert f"New rule \u201c{new.title}\u201d: {new.statement}" in body
 
-    (repo / "web").mkdir()
-    for n in range(30):  # past the split threshold, spread over two folders: the project's entry keeps them all
-        (repo / "web" / f"p{n:02}.js").write_text("x\n")
-    (repo / "notes" / "c.py").unlink()  # no longer found: stays listed
-    third = schedule()
+    web = [f"web/p{n:02}.js" for n in range(30)]  # past the split threshold over two folders: one entry keeps all
+    third = schedule("notes/a.py", "notes/b.py", *web)  # notes/c.py no longer found: stays listed
     assert ([m["id"] for m in third], len(github.issues)) == ([first["id"]], 1)
     assert checks(number)[:3] == ["- [x] notes/a.py", "- [ ] notes/b.py", "- [ ] notes/c.py"]
-    assert checks(number)[3:] == [f"- [ ] web/p{n:02}.js" for n in range(30)]
+    assert checks(number)[3:] == [f"- [ ] {p}" for p in web]
 
 
 def test_a_long_checklist_takes_numbered_entries_listing_every_item_up_to_a_cap(shared, github, monkeypatch):
-    old, new = pair(paths=("src/**",))
+    old, new = pair()
     publish(shared, old, new)
     paths = tuple(f"src/{'m' * 60}{n:04}.py" for n in range(400))  # one folder: no split by area
     impact = Impact(PROJECT, "unknown", "400 files match", (), paths)
@@ -470,7 +419,7 @@ def test_a_long_checklist_takes_numbered_entries_listing_every_item_up_to_a_cap(
     assert [k for t in texts for k, _, _ in decision_fixes.checklist(t)] == list(paths)  # each once, in order
 
     monkeypatch.setattr(decision_fixes, "PARTS", 2)
-    other, later = pair(paths=("src/**",))
+    other, later = pair()
     publish(shared, other, later)
     wide = Impact(PROJECT, "unknown", "400 files match", (), paths)
     with pytest.raises(Refused, match=r"needs .* backlog entries, more than 2"):

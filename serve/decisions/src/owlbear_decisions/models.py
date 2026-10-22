@@ -7,7 +7,6 @@ import hashlib
 import json
 import secrets
 from datetime import UTC, date, datetime
-from pathlib import PurePosixPath
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field, field_validator, model_validator
@@ -71,8 +70,8 @@ class ReadBackKind(enum.StrEnum):
 
 READ_BACK_EXTRAS = ("read_back_why", "read_back_kind")  # left out of a decision's content while empty
 OMITTED_WHEN_EMPTY = (*READ_BACK_EXTRAS, "inherited")
-# files hashed an empty `owner_words` before TD-449 removed it; hashing it again keeps their revisions
-_LEGACY_HASHED = {"owner_words": []}
+# files hashed empty `owner_words` and selectors before TD-449 and TD-460 removed them; hashing them keeps revisions
+_LEGACY_HASHED = {"owner_words": [], "applies_to": {"paths": [], "roles": [], "steps": []}}
 
 
 class _Frozen(BaseModel):
@@ -86,31 +85,14 @@ class Link(_Frozen):
     target: Annotated[str, StringConstraints(pattern=ID_PATTERN)]
 
 
-class Applicability(_Frozen):
-    """Typed selectors; all empty means the whole scope."""
-
-    paths: tuple[NonBlank, ...] = ()
-    roles: tuple[NonBlank, ...] = ()
-    steps: tuple[NonBlank, ...] = ()
-
-    @field_validator("paths")
-    @classmethod
-    def _relative(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        for glob in value:
-            parts = PurePosixPath(glob).parts
-            if glob.startswith("/") or "\\" in glob or ".." in parts:
-                msg = f"{glob!r} is not a repository-relative glob"
-                raise ValueError(msg)
-        return value
-
-
 class Decision(_Frozen):
     """One decision; `revision` is the sha256 of its canonical content.
 
     Statement length is a validator finding, not a construction error, so a faulty file still loads and is
-    reported (see `validate`). The owner's words are never stored (TD-449); an older file's are dropped on reading.
-    `read_back` is the date the owner last confirmed the statement; `inherited` marks a decision brought over from
-    the old record and never read back (TD-454).
+    reported (see `validate`). The owner's words are never stored (TD-449) and decisions carry no paths, roles or
+    steps selectors (TD-460); an older file's are dropped on reading. `read_back` is the date the owner last
+    confirmed the statement; `inherited` marks a decision brought over from the old record and never read back
+    (TD-454).
     """
 
     id: Annotated[str, StringConstraints(pattern=ID_PATTERN)]
@@ -120,7 +102,6 @@ class Decision(_Frozen):
     statement: NonBlank
     rationale: str = ""
     consequences: str = ""
-    applies_to: Applicability = Applicability()
     scope: Scope
     project: Annotated[str, StringConstraints(pattern=f"{FOLDER_PATTERN}|^$")] = ""
     change: Annotated[str, StringConstraints(pattern=f"{CHANGE_PATTERN}|^$")] = ""
@@ -138,9 +119,9 @@ class Decision(_Frozen):
 
     @model_validator(mode="before")
     @classmethod
-    def _drop_owner_words(cls, data: object) -> object:
-        if isinstance(data, dict) and "owner_words" in data:
-            return {k: v for k, v in data.items() if k != "owner_words"}
+    def _drop_retired(cls, data: object) -> object:
+        if isinstance(data, dict) and _LEGACY_HASHED.keys() & data.keys():
+            return {k: v for k, v in data.items() if k not in _LEGACY_HASHED}
         return data
 
     @field_validator("rationale", "read_back_why")
