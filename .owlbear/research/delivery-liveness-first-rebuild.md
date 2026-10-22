@@ -1063,9 +1063,8 @@ TD-197.
 - No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
 - A test checks that every agent-facing tool describes each field and stays small and flat (about six fields, one
   nesting level); whether the surface works is measured, not counted [TD-63].
-- T8 is measured per Change: each Delivery tool's calls, refusals, lint-only refusals, calls after the step ended
-  and retries after a refusal, kept on the Change because the activity log drops old events, and shown on its page
-  under the spend; wrong-tool selection shows only as missing-tool reports [TD-463].
+- T8 is measured per Change: each Delivery tool's calls, refusals, lint refusals, late calls and retries, kept on
+  the Change and shown under its spend; wrong tools show only as missing-tool reports [TD-463].
 - No ceilings on agent instructions; use specialist terms without fillers or explanations, but not "caveman" style
   [TD-19].
 - Split oversized code without cutting logic: aim for at most 400 lines per module; a test fails at 500 raw lines,
