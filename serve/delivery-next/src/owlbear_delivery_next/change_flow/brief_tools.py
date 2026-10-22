@@ -59,6 +59,12 @@ class DecisionDraft(Args):
         "being asked; autonomous: the shaping agent chose it",
         examples=["decided"],
     )
+    reason: str = Field(
+        default="",
+        max_length=500,
+        description="Why you chose it, in your words, never the owner's; required when origin is autonomous",
+        examples=["One table keeps the notes' backup with the rest of the data"],
+    )
     scope: Literal["change", "project"] = Field(
         default="change",
         description="project: a lasting rule for later Changes in this project; change: only this Change",
@@ -188,6 +194,11 @@ def check_brief(brief: BriefDraft) -> list[str]:
         errors.append("person_checks: names repeat - give each check its own name")
     if len({question_key(d.question) for d in brief.decisions}) < len(brief.decisions):
         errors.append("decisions: a question repeats - ask each once; its question is a decision's identity")
+    errors += [
+        f"decisions[{i}].reason: empty for an autonomous choice - say why you chose it"
+        for i, d in enumerate(brief.decisions)
+        if d.origin == "autonomous" and not d.reason.strip()
+    ]
     errors += [
         f'person_checks[{i}].name: "{VISUAL}" is reserved for the visual check - choose another name'
         for i, p in enumerate(brief.person_checks)
