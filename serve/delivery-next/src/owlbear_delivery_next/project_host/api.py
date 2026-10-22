@@ -10,7 +10,7 @@ import shutil
 import time
 from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -18,7 +18,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.inbox import (
-    AnswerItem,
     CheckResult,
     ConsentItem,
     IntentItem,
@@ -69,7 +68,6 @@ if TYPE_CHECKING:
 
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
-T6 = "This is a recovery decision; make it in the Changes page"
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
 PICKER_NOTE = (  # the owner's typed messages run on the picker, not on the role's model (TD-277)
     '\n\nBegin your first message or question to the owner with this line: "Messages you type here run on this '
@@ -83,24 +81,6 @@ class Body(BaseModel):
     """Strict request body."""
 
     model_config = ConfigDict(extra="forbid")
-
-
-class AnswerBody(Body):
-    """Answer one open question; a visual decision names the round, capture and pack the page showed (TD-79).
-
-    A final retry names the plan tasks to rebuild and the loop attempt and head the page showed (TD-217).
-    """
-
-    question: str = Field(max_length=16)
-    option: str | None = Field(default=None, max_length=64)
-    text: str = Field(default="", max_length=2000)
-    channel: Literal["status-view", "chat"] = "status-view"
-    round: int | None = Field(default=None, ge=1)
-    head: str = Field(default="", max_length=40)
-    pack: str = Field(default="", max_length=200)
-    findings: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=60)
-    tasks: list[Annotated[str, Field(max_length=16)]] = Field(default_factory=list, max_length=200)
-    attempt: int | None = Field(default=None, ge=1)
 
 
 class CheckBody(Body):
@@ -335,6 +315,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         merge = offer(c, events)
         q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
+        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | {"ordinary": loop.ordinary(q)}
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
             waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
@@ -364,7 +345,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
                     for h in c.handled
                 ],
-                "question": q.model_dump(mode="json", include={"id", "text", "options"}) if q else None,
+                "question": shown,
                 "retry": rebuilds.shown(c, q),  # TD-217: the plan tasks beside the final review's retry question
                 "rounds": round_marks.shown(c),  # TD-217: each loop's round markers, details and what is left
                 "checks": checks,
@@ -409,34 +390,6 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     @router.get("/changes/{slug}/before/{name}")
     def before_screenshot(slug: str, name: str) -> FileResponse:
         return png(read(slug).before, lambda base: store.before_dir(slug, base), name)
-
-    @router.post("/changes/{slug}/answers")
-    def answer(slug: str, body: AnswerBody) -> dict[str, str]:
-        c = read(slug)
-        q = next((q for q in c.questions if q.id == body.question and q.answer is None), None)
-        if q is None:
-            raise HTTPException(409, f"question {body.question} is not open")
-        if q.cause == loop.CONSENT:
-            raise HTTPException(409, "consent to merge goes through merge-consent with the exact head")
-        if body.channel == "chat" and not loop.ordinary(q):
-            raise HTTPException(403, T6)
-        if body.option is not None and body.option not in {o.id for o in held.offered(store, c, q)}:
-            if body.option in {o.id for o in q.options}:  # an accept its hold no longer supports
-                raise HTTPException(409, "the held result no longer matches its step, brief or commit; run it again")
-            raise HTTPException(422, f"option {body.option} is not one of {[o.id for o in q.options]}")
-        if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
-            raise HTTPException(409, "the Change moved on since this round gate asked; reload")
-        if body.option is None and ({o.next for o in q.options} & loop.DECISIONS - {"retry"} or q.repair):
-            raise HTTPException(422, f"choose one of {[o.label for o in q.options]}")
-        if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():
-            raise HTTPException(422, "a reconsideration needs your note: what the reviewer should weigh")
-        if why := answers.refused(c, q, body):
-            raise HTTPException(*why)
-        item = AnswerItem(
-            at=datetime.now(UTC), channel=body.channel, question=q.id, option=body.option, text=body.text,
-            round=body.round, findings=body.findings, tasks=body.tasks, attempt=body.attempt, head=body.head,
-        )  # fmt: skip
-        return put(slug, item)
 
     @router.post("/changes/{slug}/criteria/{criterion}/withdraw")
     def withdraw(slug: str, criterion: str) -> dict[str, str]:
@@ -485,6 +438,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return put(slug, RestartItem(at=datetime.now(UTC)))
 
     router.include_router(config_routes.router(store, host))
+    router.include_router(answers.router(store, read, put))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))

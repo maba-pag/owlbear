@@ -34,6 +34,7 @@ type Role = Literal[
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
 type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild"]
+type AnswerKind = Literal["event", "clarification", "brief_change"]  # its relayer's class of a worker's answer
 
 
 class StepKind(StrEnum):
@@ -203,6 +204,8 @@ class Answer(Record):
     passed: bool | None = None
     inputs: Inputs | None = None
     tasks: list[str] = Field(default_factory=list)  # the plan tasks a final retry rebuilds (TD-217)
+    kind: AnswerKind | None = None  # TD-461: set on a worker question's answer only
+    statement: str = ""  # a clarification's confirmed intent: a Change decision once checked within the brief
 
 
 class Question(Record):

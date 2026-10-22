@@ -3,18 +3,46 @@ import { DIALOG, REVERT, show, draft, notify, send } from "./state.mjs";
 import { button, external, field, choice, tick, hd, text, list, row, panel, info } from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
+// A worker's question (TD-461): the owner says how his answer bears on the approved brief; a clarification is his
+// intent in at most two lines, confirmed by him, which becomes a decision of this Change.
+const CLASSES = [
+  { id: "event", label: "It only settles how the work goes on" },
+  { id: "clarification", label: "It clarifies what the brief means: it becomes a decision of this Change" },
+  { id: "brief_change", label: "It changes the approved brief: the work stops and asks you" },
+];
+
+function classed(q, mine) {
+  if (!q.ordinary) return {};
+  if (!mine.kind) return notify("Choose how your answer bears on the brief.");
+  if (mine.kind !== "clarification") return { kind: mine.kind };
+  const statement = (mine.statement ?? "").trim();
+  if (!statement || statement.split("\n").length > 2 || mine.confirmed !== true) {
+    return notify("Write your intent in at most two lines and confirm it.");
+  }
+  return { kind: mine.kind, statement, confirmed: true };
+}
+
 export function questionForm(q, d) {
   const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
   const answer = async () => {
     const picked = q.options.some((o) => o.id === mine.option) ? mine.option : null, words = mine.text ?? "";
+    const said = classed(q, mine);
+    if (!said) return;
     const chosen = q.options.find((o) => o.id === picked), told = chosen && consequence(chosen, d);
     if (told && !(await ask(told))) return;
-    send("/answers", { question: q.id, option: picked, text: words }, d, key);
+    send("/answers", { question: q.id, option: picked, text: words, ...said }, d, key);
   };
+  const clarifying = q.ordinary && mine.kind === "clarification";
+  const confirm = (on) => { mine.confirmed = on; show(); };
   return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
-    field(key, "text", "Your answer in words"), button("Answer", answer));
+    field(key, "text", "Your answer in words"),
+    q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
+    clarifying ? field(key, "statement", "Your intent, as this Change's decision records it (at most two lines)")
+      : nothing,
+    clarifying ? tick("This statement is my intent", mine.confirmed === true, confirm) : nothing,
+    button("Answer", answer));
 }
 
 // The owner's choice after the final review's last round (TD-217): the plan tasks to rebuild, those with an open

@@ -59,6 +59,7 @@ SESSIONS: dict[str, Role] = {
     "test-review": "test-reviewer",  # one share of a test review (TD-373)
     "test-curation": "test-curator",  # a test review's build (TD-339)
     "decision-pick": "picker",  # a brief version's decisions, before its challenge (TD-459)
+    "clarification-check": "picker",  # an owner's clarification against the approved brief (TD-461)
 }
 
 

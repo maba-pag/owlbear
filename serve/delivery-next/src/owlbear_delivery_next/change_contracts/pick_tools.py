@@ -6,7 +6,7 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import tools
 
-REMINDER = "Your turn ended without a result. Call submit_result once with the ids you pick."
+REMINDER = "Your turn ended without a result. Call submit_result once, as the Finish section of your message says."
 
 
 class PickedId(tools.Args):
@@ -26,6 +26,23 @@ class PickResult(tools.Args):
 
 
 SUBMIT = tools.Spec("submit_result", "Submit the decisions you pick once, by id.", PickResult, "result")
+
+
+class ClarificationResult(tools.Args):
+    """``submit_result`` for the check of an owner's clarification against the approved brief (TD-461)."""
+
+    changes_brief: bool = Field(
+        description="True when following the clarification changes the approved brief: its outcome, scope, "
+        "criteria or non-goals",
+        examples=[False],
+    )
+    why: str = Field(
+        min_length=1, max_length=600, description="One or two sentences: the part of the brief it keeps or changes",
+        examples=["It only names the wording criterion AC-1 already asks for."],
+    )  # fmt: skip
+
+
+CLARIFY = tools.Spec("submit_result", "Submit your verdict on the clarification once.", ClarificationResult, "result")
 LIMIT = 600.0  # seconds a lookup's picker session may run: a pick takes about a minute
 WAIT = 900.0  # seconds a caller waits for a lookup's answer: its session's limit, its start and its end
 

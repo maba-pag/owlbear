@@ -41,6 +41,7 @@ _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "pids": lambda _e: "started a process",
     "force-stop": lambda _e: "stopped the session",
     "wave": lambda _e: "started judges",
+    "answer": lambda e: f"answered {e.get('question')}: {str(e.get('class')).replace('_', ' ')}",  # TD-461
 }
 _WHO = {
     Waiting.CI: "CI",
