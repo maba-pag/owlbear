@@ -148,10 +148,11 @@ def test_write_preview_files_and_report(tmp_path):
     files = [p.read_text(encoding="utf-8") for p in (out / "owlbear" / "decisions").iterdir()]
     assert not [f for f in files if "owner_words" in f or "bound to copilot" in f]
     report = (out / "REPORT.md").read_text(encoding="utf-8")
-    for heading in ("Counts", "Unclear clauses", "Orphan rows", "Proposed scope", "Validator findings", "Concordance"):
+    headings = ("Counts", "Unclear clauses", "Orphan rows", "Global by TD-442", "Reworded for your review (TD-462)")
+    for heading in (*headings, "Overlay entries that match no line", "Validator findings", "Concordance"):
         assert f"## {heading}" in report
     assert "- TD-4 (decided, C-01 Asking)" in report
-    assert "| C-01 Asking | 5 | owlbear | |" in report
+    assert "No overlay applied: every entry is proposed for `owlbear`." in report
     assert {f.rule for f in result.findings} == {"statement-length"}
     with pytest.raises(FileExistsError):
         write_preview(record, out)
