@@ -27,7 +27,7 @@ from owlbear_delivery_next.machine_host import app, project, registry, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
-from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store import decision_store, project_home
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -151,6 +151,17 @@ def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and
     machine.updating = "an update runs"  # fenced as a project's API is
     refused = http.post("/api/next/owlbear/decisions/propose", json={"title": "x", "statement": "x"})
     assert refused.status_code == 503
+
+
+def test_only_the_registry_makes_a_clone_a_project_never_an_id_and_folder_left_behind(tmp_path, http):
+    """TD-435: OwlBear's clone with a leftover clone id and project folder still gets OwlBear's own tools."""
+    own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
+    pid = project_home.ensure_id(project_home.clone_dir(own))
+    project_home.home(pid).mkdir(parents=True)
+    p = add(http, clone(tmp_path / "shop"))
+
+    assert type(mcp_server.workspace(own)) is mcp_server.OwlBear
+    assert type(mcp_server.workspace(Path(p["path"]))) is mcp_server.Chat
 
 
 def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
