@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-21, status at `main` after #554 (v1.11), decisions to TD-455
+> **Date:** 2026-10-22, status at `main` after #565, decisions to TD-455
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -204,15 +204,10 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |
-| C-01 | Read-backs offer close variants and other directions, the opposite among them, then "take your recommendation (…)" | `w-idea-refinement` offers no opposite and no named recommendation | align | — |
-| C-01 | A question shows the decision's record (statement and origin) and what changed | The shaping skill and `w-idea-refinement` say never to quote the record | align | — |
-| C-01 | In doubt, ask about the direction first and say why | The shaper does not say why | align | — |
-| C-01 | "Take your recommendation" is recorded `autonomous` with its reason | Brief decisions have no reason field | align | — |
 | C-03 | TD-27's benchmark, then the watcher's model | Not run | build | 9 |
 | C-04 | The watcher reads, judges and stops every runtime; it is on the real-use list | Not built | build | 9 |
 | C-04 | Window steps reopen only after the gate | Gate not built, no design | build | 8 |
 | C-04 | A missing tool reruns once in a runtime that has it | No other runtime while window steps are paused | keep | 8 |
-| C-05 | The repository's instructions apply, Delivery's format wins, a clash asks | Agents are not told which wins | align | — |
 | C-05 | Project agents and skills off in steps after self-update step 5 | Discoverable, allowed until then (TD-329) | build | 5 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
 | C-11 | A target whose UI changed since shaping gets a retake | Partly | build | visual baseline |

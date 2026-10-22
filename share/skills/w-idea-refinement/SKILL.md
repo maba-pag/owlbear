@@ -148,18 +148,19 @@ not asked again. End the session with one closing check of everything you record
 your own consequential choices (those that change what the user sees or does, cost, safety or reversibility, each
 with a one-line consequence), listed together and asked once; the user may correct, add or remove items. Read back
 a corrected item in the format below. The Read-Back never replaces asking an important decision when it arises. It
-is an exception to Core Method rules 2 and 3: it batches up to eight questions per `askQuestions` round and gives no
-recommendation.
+is an exception to Core Method rules 2 and 3: it batches up to eight questions per `askQuestions` round and names
+its recommendation only in the "take your recommendation (…)" option.
 
-One decision per question, paraphrased at the level of the user's intent, never quoting the record:
+One decision per question, paraphrased at the level of the user's intent, never quoting the user's words; the
+question shows the decision's record (its statement and origin) and what changed since:
 
 - three close variants of the recorded choice (fewer only when fewer really differ in consequence,
   never padded), the matching one at a varying position and never verbatim; put a one-line consequence in the
   option's secondary text where it distinguishes the variants;
-- one or two other directions where real ones exist;
-- then, always in this order: "take your recommendation", "none of these: show me more options",
-  "explain first";
-- no recommendation mark; free text stays open.
+- one or two other directions where real ones exist, the opposite among them;
+- then, always in this order: "take your recommendation (…)" with your recommendation named in the brackets,
+  "none of these: show me more options", "explain first";
+- no other recommendation mark; free text stays open.
 
 When the direction itself is in doubt (the user signals doubt, new evidence challenges it, or no
 meaningful variants exist), ask the direction first with balanced alternatives, then the variants of

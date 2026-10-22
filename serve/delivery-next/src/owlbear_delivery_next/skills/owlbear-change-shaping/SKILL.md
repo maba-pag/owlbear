@@ -42,7 +42,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 7. Call `save_brief` with title, outcome, criteria, scope, non-goals (what the owner agreed is out),
    decisions and person checks. `decisions` holds every choice the owner made and each consequential
    choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
-   came with something the owner approved without being asked) or `autonomous` (you chose it). Send
+   came with something the owner approved without being asked) or `autonomous` (you chose it, with your
+   `reason`, never the owner's words). Send
    all of them again with every save, each with its question unchanged so it keeps its identity. Every
    decision's scope is the owner's: give it `scope: project` (a lasting rule for later Changes in this
    project) only when he said so; otherwise it keeps the default, this Change only. Never change a
@@ -73,7 +74,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 
 Read back a free-text or unclear answer at once, before building on it; a chosen option counts as
 confirmed and is not asked again. Ask one decision per question, paraphrased at the level of the
-owner's intent, never quoting the record, with the structured question tool when there is one:
+owner's intent, never quoting his words, with the structured question tool when there is one; the
+question shows the decision's record (its statement and origin) and what changed since:
 
 - three close variants of the recorded choice (fewer only when fewer really differ in consequence,
   never padded), the matching one at a varying position and never verbatim; a one-line consequence where
@@ -84,12 +86,12 @@ owner's intent, never quoting the record, with the structured question tool when
   free text stays open.
 
 A chosen variant or direction is `decided`. "Take your recommendation": state your choice and why,
-record it `autonomous`. "Show me more options": ask again with options across directions, each with
+record it `autonomous` with that `reason`. "Show me more options": ask again with options across directions, each with
 benefits, costs, risks and its own percentage that it is a good choice (they need not add up), your
 recommendation marked. "Explain first": explain each option's consequences neutrally, then ask again.
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
 plus "your words as written", "show me more readings" and "explain first". When the direction itself
-is in doubt, ask the direction first, then its variants.
+is in doubt, ask the direction first, then its variants, and tell the owner why.
 
 Before saving for approval, end with one closing check of everything the brief records: every choice
 the owner made and your own consequential ones (those that change what the owner sees or does, cost,

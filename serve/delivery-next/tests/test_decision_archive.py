@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import briefs, change_record
+from owlbear_delivery_next.state_store import briefs, change_record, decision_archive
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.state_store.store import Store as LocalStore
 
@@ -264,6 +264,19 @@ def test_a_repeated_question_is_refused() -> None:
     fields = {"title": "Notes", "outcome": "Owners keep notes on a page.", "criteria": ["A note keeps 800 chars"]}
     errors = brief_tools.check_brief(brief_tools.BriefDraft(**fields, scope=["web"], decisions=made))
     assert any(e.startswith("decisions: a question repeats") for e in errors)
+
+
+def test_an_autonomous_choices_reason_is_its_rationale_when_published_and_archived(store, shared_repo) -> None:
+    root, _ = shared_repo
+    c, why = finished(), "One table keeps the notes in the backup with the rest"
+    approved = c.brief.approved[0]
+    shaped = [approved.decisions[0], approved.decisions[1].model_copy(update={"reason": why})]
+    c.brief.approved[0] = approved.model_copy(update={"decisions": shaped})
+
+    (published,) = decision_archive.lasting("shop-site", c, STEM)
+    assert why in published.rationale
+    assert change_record.save(store, c, MERGED, AT) == ""
+    assert why in read(root / "shop-site" / "decisions" / f"{shaped[1].id}.md").rationale
 
 
 def test_one_decision_that_cannot_be_written_keeps_all_out_and_the_record_still_publishes(store, shared_repo) -> None:

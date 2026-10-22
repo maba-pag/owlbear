@@ -85,6 +85,9 @@ Never end a turn without one of these calls.
   consequential choice in your result as yours (autonomous). Anything lasting (a project or Global rule), wider
   than this work, contrary to an owner decision, or committing outside (cost, accounts, publishing) asks the
   owner first with `ask_question`; in a screenshot judgement, answer `unsure` instead.
+- The repository's own instructions, conventions and required checks apply; where they differ from Delivery's
+  steps, tools or result format, Delivery's win, and a real clash between them goes to `ask_question` (outside
+  screenshot judgements).
 - When your message lists what earlier fix tasks answered, a finding that would undo that answer
   needs evidence that the answer was wrong. A finding settled not to fix comes back only with new
   evidence from the diff.

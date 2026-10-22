@@ -24,6 +24,7 @@ class BriefDecision(_Strict):
     question: str
     answer: str
     origin: Origin
+    reason: str = ""  # the shaper's reasons for an autonomous choice, never the owner's words (TD-41, TD-449)
     scope: Literal["change", "project"] = "change"  # project: a lasting rule for later Changes (TD-426)
     replaces: str = ""  # the approved decision this one changes: an approved answer is never edited (TD-430)
 
