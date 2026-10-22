@@ -231,7 +231,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-30 | Every role may use built-in subagents | Not in window steps | keep | 8 |
 | S | A project setting names the account for GitHub writes, by default the owner's when `gh` has it (TD-402) | `maba-pag` does everything; both sandboxes are `boecht`'s | build | 10 |
 | S | A quality service runs linters and judges exceptions (TD-89) | Not built | build | not placed |
-| C-31 | Today's rules come over as inherited (TD-454) | The converter keeps quotes and has no inherited mark | build | 14 |
+| C-31 | Today's rules come over as inherited (TD-454, TD-462) | The preview is built; the switch waits for the owner's review | build | 14 |
 
 Record repairs made with this document: the trim of 2026-10-19 had listed TD-228, TD-250 and TD-358 as spent,
 dropped C-21's lines for TD-199 and TD-201 and cut TD-318's schedule to one of its four parts; they are back in force.
