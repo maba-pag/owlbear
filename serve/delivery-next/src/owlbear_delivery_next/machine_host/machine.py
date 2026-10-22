@@ -88,7 +88,7 @@ class Machine:
 
     def say(self, text: str) -> None:
         """Write one line to the machine host's log."""
-        sys.stdout.write(f"{datetime.now(UTC):%H:%M:%S} {text}\n")
+        sys.stdout.write(f"{datetime.now(UTC):%H:%M:%SZ} {text}\n")
         sys.stdout.flush()
 
     def _load(self, entry: registry.Project) -> Project:

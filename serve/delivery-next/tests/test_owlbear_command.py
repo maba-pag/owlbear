@@ -216,13 +216,16 @@ def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps
     assert control.projects()["paused"] is True
     assert "(the last run crashed)" in (local_home.root() / control.LOG).read_text()
     assert control.stop(said.append) == 0
+    assert "Z stopping: SIGTERM received\n" in (local_home.root() / control.LOG).read_text()  # `owlbear stop`'s signal
     assert (control.start(said.append), control.projects()["paused"]) == (0, False)
     assert (command.restart(), control.projects()["paused"]) == (0, False)
     assert (command.restart(paused=True), control.projects()["paused"]) == (0, True)
     assert control.stop(said.append) == 0
 
 
-def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering_one_is_paused(monkeypatch) -> None:
+def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering_one_is_paused(
+    monkeypatch, capsys
+) -> None:
     def fail(_self, **_kw):
         raise RuntimeError
 
@@ -235,6 +238,7 @@ def test_a_host_that_fails_leaves_its_crash_mark_and_a_restart_of_an_unanswering
         with pytest.raises(RuntimeError):
             control.serve.serve(run=True)
     assert (seen, (local_home.root() / "host.json").exists()) == ([False, True], True)
+    assert capsys.readouterr().out.count("stopping: the server failed (its error follows)\n") == 2
 
     started, at = [], "2026-10-10T12:00:00Z"
     up = control.serve.HostRecord(url="http://127.0.0.1:9/", token="t", pid=9, started_at=at, code="")  # noqa: S106

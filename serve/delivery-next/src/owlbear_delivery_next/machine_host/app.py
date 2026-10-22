@@ -237,6 +237,7 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
 
     @routes.post("/stop")
     def stop() -> dict[str, bool]:
+        machine.say("stopping: asked through the stop route")
         machine.on_stop()
         return {"stopping": True}
 
