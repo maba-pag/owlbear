@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-21, status at `main` after #554 (v1.11), decisions to TD-455
+> **Date:** 2026-10-22, status at `main` after #565 and this pull request, decisions to TD-462
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -181,8 +181,9 @@ script became ES modules under `web/pages/<page>/`, served from a list fixed at 
 has more than 259.
 v1.0 is the first merge labelled `release:major`, after items 1, 6, 2, 3, 4, 7, 11 and 13; it is tagged `v1.0` and `v1`.
 Item 14, the decision system (TD-419), is built (#538 to #547); the owner reviewed the migration preview (TD-439 to
-TD-446), then had decision management rethought and decided it (TD-448 to TD-455, [design](decision-intent-build.md));
-its six slices come before anything migrates. Item 5's three
+TD-446), then had decision management rethought and decided it (TD-448 to TD-462, [design](decision-intent-build.md)).
+Its slices 1 to 5 are built (#556 to #565); of slice 6 the preview with the reworded overlay and the past-work test
+are built, and the switch waits for the owner's review of the preview (TD-437). Item 5's three
 residuals from closed issues are built (#548); the rest of item 5 needs a design.
 
 ### 3.5 Items 8 and 9: gate, then watcher
