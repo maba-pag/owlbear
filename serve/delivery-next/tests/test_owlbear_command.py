@@ -1,3 +1,4 @@
+import io
 import os
 import plistlib
 import signal
@@ -83,6 +84,24 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     agent.unlink()
     agent.symlink_to(Path.home() / "my-checkout" / agent.name)  # the owner's own link, even a dangling one
     assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
+
+
+def test_install_without_a_terminal_says_each_choice_was_not_done(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
+    monkeypatch.setattr(control, "autostart", lambda *_a, **_k: pytest.fail("the login item was touched"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO())  # no terminal: an agent's shell
+    assert install.install(command.say, command.ask_tty, command.app) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line for line in lines if line.startswith("not done, no terminal to answer: ")] == [
+        f"not done, no terminal to answer: {q} Run `owlbear install` in a terminal to answer it."
+        for q in (
+            f"Link {install.link_path()} to {Path(sys.executable).parent / 'owlbear'}, so `owlbear` runs in any shell?",
+            f"Link the shaper and its skill into {Path.home() / '.copilot'}, so New Change finds them anywhere?",
+            "Start OwlBear at login, paused until you press Resume?",
+        )
+    ]
+    assert not install.link_path().is_symlink()
+    assert not (Path.home() / ".copilot" / "agents" / "owlbear-shaper.agent.md").is_symlink()
 
 
 def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_said(monkeypatch, tmp_path) -> None:
