@@ -224,7 +224,7 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-25 | A Global entry can move back to a project (TD-292) | The page says it does not move back | align | 5 |
 | C-25 | Curator modes and the Global threshold, 95% at first (TD-292, TD-400) | Missing | build | 5 |
 | C-25, C-27 | The watcher saves lessons and infers stages | Not built | build | 9 |
-| C-26 | Tests do not assert prose wording | Workspace tests assert skill prose (`tests/test_agent_ecosystem_validation.py`) | align | — |
+| C-26 | Tests do not assert prose wording | Two memory-governance tests still assert curation wording (identity deferral, corroborated scope): kept until a behavioural test covers the rule | align | — |
 | C-28 | Tool use is measured, success rates included (T8) | Success rates are not counted | align | — |
 | C-28 | Default rules guide, never gate | Ruff's complexity rule fails CI; `noqa` is the escape | keep | — |
 | C-30 | Every role may use built-in subagents | Not in window steps | keep | 8 |
