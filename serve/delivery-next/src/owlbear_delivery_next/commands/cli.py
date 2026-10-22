@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from subprocess import CalledProcessError
 
+from pydantic import ValidationError
+
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -36,7 +38,7 @@ from owlbear_delivery_next.design_packs import design_pack, pack_update
 from owlbear_delivery_next.design_packs.detector import DetectorError
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.pack_runs import pack_replay
-from owlbear_delivery_next.project_host import host
+from owlbear_delivery_next.project_host import answers, host
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import backlog_migrate
@@ -154,6 +156,27 @@ def seed(store: Store, a: argparse.Namespace) -> None:
     store.write_profile(Profile(version=old.version + 1, confirmed_at=now, entries=entries, runtime=old.runtime))
     with store.lock(a.change) as lock:
         store.write(lock, change)
+
+
+def answer(store: Store, a: argparse.Namespace) -> int:
+    """Queue the owner's answer, classed and checked as the Changes page's is (TD-461); a refused one writes nothing."""
+    q = next((q for q in store.read(a.change).questions if q.id == a.question and q.answer is None), None)
+    kind = a.kind.replace("-", "_") if a.kind else None
+    try:
+        body = answers.AnswerBody(
+            question=a.question, option=a.option, text=a.text, kind=kind, statement=a.statement, confirmed=a.confirmed
+        )
+    except ValidationError as exc:
+        why = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+    else:
+        why = f"question {a.question} is not open" if q is None else answers.classed(q, body)
+        if not why:
+            said = {"classed": body.kind, "statement": body.statement.strip()}
+            item = AnswerItem(at=datetime.now(UTC), question=a.question, option=a.option, text=a.text, **said)
+            store.put_inbox(a.change, item)
+            return 0
+    sys.stderr.write(f"not answered: {why}\n")
+    return 1
 
 
 def show_status(store: Store, now: datetime) -> str:
@@ -280,6 +303,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
     ans.add_argument("--question", required=True)
     ans.add_argument("--option")
     ans.add_argument("--text", default="")
+    ans.add_argument("--kind", choices=("event", "clarification", "brief-change"), help="a worker's question's class")
+    ans.add_argument("--statement", default="", help="a clarification's intent the owner confirmed when read back")
+    ans.add_argument("--confirmed", action="store_true", help="the owner confirmed the statement as read back")
     show = sub.add_parser("show", help="print the Change's step, exit and open question")
     show.add_argument("change")
     shared = sub.add_parser("data", help="show or set the shared settings repository (TD-57)")
@@ -320,8 +346,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0915 - one parser an
         return report(store, a)
     if a.command == "seed":
         seed(store, a)
-    elif a.command == "answer":
-        item = AnswerItem(at=datetime.now(UTC), question=a.question, option=a.option, text=a.text)
-        store.put_inbox(a.change, item)
+    elif a.command == "answer" and (code := answer(store, a)):
+        return code
     sys.stdout.write(describe(store.read(a.change)) + "\n")
     return 0

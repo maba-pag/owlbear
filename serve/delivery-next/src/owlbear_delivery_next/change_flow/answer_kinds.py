@@ -8,15 +8,16 @@ again within the brief, or to stop the Change.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_decisions import new_id
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Outcome, Question
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Change
@@ -45,14 +46,30 @@ def logged(c: Change, items: Iterable[InboxItem], now: datetime) -> list[dict[st
 def delivered_next(c: Change) -> Question | None:
     """The answered question of the current step whose answer the step's session receives next, if any.
 
-    An answer that changes the brief is never delivered.
+    An answer that changes the brief, or a clarification not yet checked within it, is never delivered.
     """
     s = c.step
     return next(
         (q for q in reversed(c.questions) if q.step == s.kind and q.answer and not q.effect_observed_at
-         and q.answer.kind != "brief_change"),
+         and q.answer.kind != "brief_change" and not unchecked(c, q)),
         None,
     )  # fmt: skip
+
+
+def decision_id(c: Change, q: Question) -> str:
+    """The id of the decision *q*'s clarification becomes: the same on every check of the same answer."""
+    at = q.answer.at if q.answer else datetime.now(UTC)
+    return new_id(at, seed=f"{c.slug}\n{q.id}\n{at.isoformat()}\nclarification")
+
+
+def unchecked(c: Change, q: Question) -> bool:
+    """Whether *q*'s answer is a clarification its check has not yet found within the brief: no role reads it."""
+    return bool(q.answer and q.answer.kind == "clarification") and all(d.id != decision_id(c, q) for d in c.decisions)
+
+
+def first_unchecked(c: Change) -> Question | None:
+    """The oldest clarification not yet checked, at whatever step it was asked or the Change now is."""
+    return next((q for q in c.questions if unchecked(c, q)), None)
 
 
 def question(c: Change, q: Question, why: str = "") -> Question:

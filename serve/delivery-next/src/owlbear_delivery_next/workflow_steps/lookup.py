@@ -74,18 +74,36 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
 
 
 def _own(c: Change, project: str, found: list[Decision]) -> list[Decision]:
-    """*c*'s approved brief decisions not on *found*, each whole: its Change ones stay in it until archival."""
+    """*c*'s approved brief decisions and those recorded during its work, each whole, once, when not on *found*.
+
+    Its Change ones stay in it until archival; a clarification confirmed during the work is one of them (TD-461).
+    """
     brief = c.brief.approved[-1] if c.brief.approved else c.brief
-    at, held, stem = c.brief.approved_at or datetime.now(UTC), {d.id for d in found}, decisions_gate.stem(c)
-    return [
+    at, stem = c.brief.approved_at or datetime.now(UTC), decisions_gate.stem(c) or c.slug
+    fields = {"scope": Scope.CHANGE, "project": project, "change": stem, "state": State.IN_FORCE}
+    shaped = [
         Decision(
             id=d.id or new_id(at, seed=f"{c.slug}\n{i}\n{d.question}"), title=_one(d.question), topic=brief.title,
-            statement=d.answer, scope=Scope.CHANGE, project=project, change=stem or c.slug, origin=d.origin,
-            actor="owner" if d.origin == "decided" else "shaper", state=State.IN_FORCE, created_at=at,
+            statement=d.answer, origin=d.origin, actor="owner" if d.origin == "decided" else "shaper", created_at=at,
+            **fields,
         )
         for i, d in enumerate(brief.decisions)
-        if d.id not in held
     ]  # fmt: skip
+    later = [
+        Decision(
+            id=d.id or new_id(d.at, seed=f"{c.slug}\n{d.text}"), title=_one(d.title or d.text), topic=brief.title,
+            statement=d.text, origin=d.origin, actor="owner" if d.origin == "decided" else "delivery",
+            created_at=d.at, **fields,
+        )
+        for d in c.decisions
+        if d.text.strip()
+    ]  # fmt: skip
+    held, kept = {d.id for d in found}, []
+    for d in [*shaped, *later]:
+        if d.id not in held:
+            held.add(d.id)
+            kept.append(d)
+    return kept
 
 
 def chat(

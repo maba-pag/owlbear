@@ -26,6 +26,7 @@ from owlbear_delivery_next.runtimes import (
     readiness,
     sdk_adapter,
     session_result,
+    step_answers,
     step_decisions,
     step_input,
 )
@@ -128,7 +129,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             kind=s.kind,
             worktree=at,
             session_id=s.session or "",
-            message=step_decisions.resumed(step_input.answer(answer))
+            message=step_decisions.resumed(step_answers.answer(answer))
             if resume and answer
             else (parts.message if resume else told),
             resume=resume,
