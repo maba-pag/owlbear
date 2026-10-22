@@ -7,10 +7,10 @@ import shutil
 from pathlib import Path
 
 FIX = (
-    "Install the Copilot CLI with `brew install --cask copilot-cli` or set COPILOT_CLI_PATH; "
+    "Install the Copilot CLI with `brew install --cask copilot-cli` or set COPILOT_CLI_PATH to its absolute path; "
     "a Node version switch hides an `npm install -g` copy"
 )
-SHIM = "copilot-shim"  # VS Code's stand-in on PATH; it only reports that the real CLI is missing
+SHIM = "copilot-shim"  # VS Code's launcher; without a real CLI it asks on stdin whether to install one
 
 
 def cli_path() -> str:

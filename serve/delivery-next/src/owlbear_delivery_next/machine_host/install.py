@@ -128,13 +128,15 @@ def _tools(say: Say) -> int:
 
 
 def _login_item(say: Say) -> int:
-    """How many tools the login item's saved PATH cannot find; the host it starts sees only that PATH."""
-    if (saved := control.saved_path()) is None:
+    """How many tools the login item cannot find; the host it starts sees only its saved environment."""
+    if (env := control.saved_env()) is None:
         return 0
+    saved, cli = env.get("PATH", ""), env.get("COPILOT_CLI_PATH")
     missing = [tool for tool in TOOLS if shutil.which(tool, path=saved) is None]
-    missing += ["copilot"] * (copilot_cli.find(saved) is None)
+    if (shutil.which(cli, path=saved) if cli else copilot_cli.find(saved)) is None:
+        missing.append(f"copilot at its COPILOT_CLI_PATH {cli}" if cli else "copilot")
     for tool in missing:
-        say(f"login item: {tool} not on its PATH · fix: run `owlbear autostart on` from a shell where {tool} runs")
+        say(f"login item: {tool} not found · fix: run `owlbear autostart on` from a shell where it runs")
     return len(missing)
 
 

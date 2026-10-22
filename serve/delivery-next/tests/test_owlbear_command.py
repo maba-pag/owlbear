@@ -94,13 +94,17 @@ def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_sa
         return subprocess.CompletedProcess(args, refuse[0] if args[1] == "bootstrap" else 0, b"", b"denied")
 
     monkeypatch.setattr(control.subprocess, "run", launchctl)
-    shim, node = tmp_path / "copilot-shim", tmp_path / "state" / "fnm_multishells" / "1_2" / "bin"
-    monkeypatch.setenv("PATH", os.pathsep.join(["/opt/homebrew/bin", str(shim), str(node), "/usr/bin"]))
-    assert (control.saved_path(), control.autostart(said.append, on=True)) == (None, 0)
+    path = os.pathsep.join(["/opt/homebrew/bin", str(tmp_path / "fnm_multishells" / "1_2" / "bin"), "/usr/bin"])
+    monkeypatch.setenv("PATH", path)
+    monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
+    assert (control.saved_env(), control.autostart(said.append, on=True)) == (None, 0)
     item = plistlib.loads(control.plist_path().read_bytes())
-    assert (item["ProgramArguments"], control.saved_path()) == (control.argv(), "/opt/homebrew/bin:/usr/bin")
+    assert (item["ProgramArguments"], control.saved_env()) == (control.argv(), {"PATH": path})
     assert item["ProgramArguments"][-1] == "machine"  # a login start is paused (TD-350)
     assert (item["RunAtLoad"], calls) == (True, ["bootout", "bootstrap"])
+    monkeypatch.setenv("COPILOT_CLI_PATH", "/opt/copilot/copilot")
+    assert control.autostart(said.append, on=True) == 0
+    assert control.saved_env() == {"PATH": path, "COPILOT_CLI_PATH": "/opt/copilot/copilot"}
     refuse[0] = 1
     assert control.autostart(said.append, on=True) == 1
     assert "macOS refused to load it (denied)" in said[-1]
@@ -136,8 +140,22 @@ def test_doctor_runs_each_tool_and_checks_the_login_items_path(monkeypatch, tmp_
         + install.copilot_cli.FIX,
     ]
     assert [line.split(" · ")[0] for line in said[2:]] == [
-        f"login item: {name} not on its PATH" for name in ("gh", "copilot")
+        f"login item: {name} not found" for name in ("gh", "copilot")
     ] + ["4 problems found"]
+    real = tmp_path / "real"
+    tool(real, "copilot")
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(tmp_path / "elsewhere"))  # this shell's override is not the login item's
+    item = {"PATH": f"{shim}:{bin_}:{tmp_path}", "COPILOT_CLI_PATH": str(real / "copilot")}
+    control.plist_path().write_bytes(plistlib.dumps({"EnvironmentVariables": item}))
+
+    def login_item() -> list[str]:
+        said.clear()
+        install.doctor(said.append, [])
+        return [line.split(" · ")[0] for line in said if line.startswith("login item:")]
+
+    assert login_item() == []
+    (real / "copilot").unlink()
+    assert login_item() == [f"login item: copilot at its COPILOT_CLI_PATH {real / 'copilot'} not found"]
 
 
 def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
