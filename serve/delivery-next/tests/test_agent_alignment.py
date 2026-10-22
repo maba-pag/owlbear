@@ -38,9 +38,10 @@ CHAT_TOOLS = {"save_brief", "save_visual_check", "challenge_brief", "show_status
 CHAT_TOOLS |= {"find_decisions", "record_decision", "read_back_decision"}  # TD-419 slice 5a, not granted to the shaper
 CHAT_TOOLS |= {"queue_read_back"}  # TD-427: the read-back queue, not granted to the shaper
 CHAT_TOOLS |= {"retire_decision"}  # TD-450: decisions changed in a lead chat, not granted to the shaper
+CHAT_TOOLS |= {"lookup_decisions"}  # TD-456, TD-459: the picker's answer, not granted to the shaper
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
-VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN}
+VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP}
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
     *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
@@ -136,6 +137,25 @@ def test_conditional_tools_say_their_condition_and_the_window_offers_the_same_to
 
 def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> None:
     assert {r for r in AGENTS if set(preload.tools(r)) & {"task", "read_agent", "list_agents", "write_agent"}} == set()
+
+
+WITHIN = ("builder", "planner", "reviewer", "preparer", "test-curator", "updater")  # roles inside approved work
+
+
+def test_roles_within_approved_work_carry_the_boundary_and_change_workers_the_lookup() -> None:
+    """TD-451: reversible details are the agent's and recorded as its own; anything lasting asks the owner first."""
+    for role in (*WITHIN, CHAT):
+        _, body = preload.agent_file(role) if role != CHAT else ({}, shaper_file()[2])
+        said = " ".join(body.split("<boundaries>", 1)[1].split("</boundaries>", 1)[0].split())
+        assert "autonomous" in said, role
+        assert "lasting (a project or Global rule)" in said, role
+        assert "contrary to an owner decision" in said, role
+        assert "committing outside (cost, accounts, publishing)" in said, role
+    for role in WITHIN:
+        _, body = preload.agent_file(role)
+        if tools.LOOKUP in tools.results(role):  # a Change step's own worker (TD-456)
+            assert "never take it for no decision applying" in entry(body, tools.LOOKUP), role
+    assert {r for r in AGENTS if tools.LOOKUP in tools.results(r)} == set(WITHIN) - {"updater"}  # no Change
 
 
 def test_judges_are_never_offered_or_told_of_a_question() -> None:

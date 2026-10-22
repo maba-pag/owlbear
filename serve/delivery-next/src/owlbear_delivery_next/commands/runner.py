@@ -48,6 +48,7 @@ from owlbear_delivery_next.workflow_steps import (
     follow,
     held,
     judges,
+    lookup,
     merge,
     overlap,
     plan_round,
@@ -117,6 +118,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
     role = roles.chosen(store.settings(), s.kind)
     ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
+    asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
 
     def config(at: Path) -> sdk_adapter.Session:
         parts = step_input.session(change, profile, at, others, ctx)
@@ -153,15 +155,13 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             subagents=roles.subagents(store.settings(), s.kind),  # TD-374, TD-376: the role's setting
             memory=sessions.memory(store),
             ui=change.brief.ui,
-            helpers=((design_tools.SCAN, partial(design.builder_scan, at)),)
-            if s.kind == StepKind.BUILD and change.brief.ui  # the builder's design detector (slice 7)
-            else (),
+            helpers=_helpers(change, at, asked),
             preparing=ctx,
         )
 
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
-    run = accepted or _kept(store, lock, change, path, made)
+    run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
@@ -187,6 +187,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
     store.write(lock, loop.apply(change, result, end))
+
+
+def _helpers(
+    change: Change, at: Path, asked: lookup.Asked
+) -> tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...]:
+    """The tools that answer within the turn: the builder's design detector on a UI Change (slice 7), the lookup."""
+    ui = change.step.kind == StepKind.BUILD and change.brief.ui
+    return (*(((design_tools.SCAN, partial(design.builder_scan, at)),) if ui else ()), asked.helper())
 
 
 def _kept(
