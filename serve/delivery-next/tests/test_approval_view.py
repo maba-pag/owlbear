@@ -15,6 +15,7 @@ import uvicorn
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -160,6 +161,23 @@ def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_
         expect(page.get_by_role("dialog")).to_be_hidden()
         page.wait_for_timeout(500)
     assert store.fold(Lock("tail"), "tail", NOW)[0].brief.approved_version == 2
+
+
+@pytest.mark.browser
+def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url, pds) -> None:  # C-28 T8
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    used = change().model_copy(update={"slug": "used"})
+    used.tool_use = ToolUse().plus(
+        {"ask_question": {"calls": 1}, "submit_result": {"calls": 3, "rejected": 1, "retries": 1}}
+    )
+    store.write(Lock("used"), used)
+    with opened(base, "used", pds) as page:
+        expect(page.get_by_text("Tool calls (4)")).to_be_visible()
+        page.get_by_text("Tool calls (4)").click()
+        expect(page.get_by_text("submit_result: 3 calls, 33% refused, 1 retry")).to_be_visible()
+        expect(page.get_by_text("ask_question: 1 call, 0% refused, 0 retries")).to_be_visible()
 
 
 def sent(store: Store, slug: str) -> str:

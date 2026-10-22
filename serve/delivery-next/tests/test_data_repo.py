@@ -239,6 +239,7 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=at, approved=[approved]))
     c.decisions.append(Decision(text="keep 800 characters", origin="decided", at=at))
     c.spend = c.spend.plus({"credits": 3.5}, "s1")
+    c.tool_use = c.tool_use.plus({"submit_result": {"calls": 2, "rejected": 1}})
     pr = PullRequest(
         repository="acme/shop-site", number=7, node_id="n", url="https://x/pull/7", head_branch="owlbear/notes",
         head_sha="a" * 40, base_branch="main", draft=False, state="closed", merged=True, merge_commit_sha="b" * 40,
@@ -251,6 +252,7 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     assert (record["outcome"], record["pr"]["number"], record["brief"]["title"]) == ("merged", 7, "Notes")
     assert (record["brief"]["decisions"][0]["answer"], record["decisions"][0]["text"]) == ("yes", "keep 800 characters")
     assert (record["brief"]["visual"][0]["expect"], record["spend"]["credits"]) == ("a counter shows 800", 3.5)
+    assert record["tool_use"] == c.tool_use.model_dump(mode="json")
     assert pushed(remote, "shop-site/changes/20261015-090000-notes.json").splitlines()[-1] == (
         "changes: shop-site: notes merged"
     )

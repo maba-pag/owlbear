@@ -9,6 +9,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKind, Exit, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.tool_use import ToolTally
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, sdk_usage, session_result, subagents
@@ -199,7 +200,11 @@ def test_the_breakdown_rides_on_the_step_event_and_never_adds_to_the_spend(tmp_p
     }
     run = Run("s1", "result", usage=usage_, termination=Termination(confirmed=True))
     run = dataclasses.replace(run, subagents=[{"call": "c1", "agent": "explore", "credits": 3.0}])
+    run.tool_calls = {"submit_plan": {"calls": 2, "rejected": 1, "retries": 1}}
     sessions.logged(store, Lock("c1"), change, run, {"kind": StepKind.PLAN, "exit": "done"})
     (logged,) = [e for e in store.events("c1") if e.get("event") == "step"]
     assert logged["subagents"] == [{"call": "c1", "agent": "explore", "credits": 3.0}]
     assert store.read("c1").spend.credits == 4.0  # the session's own total, its subagent's share inside it
+    held = dataclasses.replace(run, usage={"error": "held"})  # an accepted held run was counted when it was held
+    sessions.logged(store, Lock("c1"), store.read("c1"), held, {"kind": StepKind.PLAN, "exit": "done"})
+    assert store.read("c1").tool_use.tools["submit_plan"] == ToolTally(calls=2, rejected=1, retries=1)

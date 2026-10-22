@@ -44,6 +44,7 @@ def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
         "decisions_applied": sorted(c.decisions_baseline.said) if c.decisions_baseline else [],  # its impact (TD-428)
         "decisions_picked": {d.id: d.revision for d in brief.picked.decisions} if brief.picked else {},  # TD-459
         "spend": c.spend.model_dump(mode="json", exclude={"last"}),
+        "tool_use": c.tool_use.model_dump(mode="json"),
     }
     stem = f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}"
     path = store.shared.root / store.name / decision_archive.CHANGES / f"{stem}.json"
