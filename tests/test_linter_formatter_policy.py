@@ -98,12 +98,10 @@ _M09_RESEARCH_MARKDOWN_PATHS = (
 _M09_SOURCES_MARKDOWN_PATH = ".owlbear/sources/overview.md"
 _X04_FORMATTERS = {
     "[json]": "biomejs.biome",
-    "[jsonc]": "biomejs.biome",
-    "[javascript][javascriptreact][typescript][typescriptreact][css]": "biomejs.biome",
+    "[javascript][javascriptreact][jsonc][typescript][typescriptreact][css]": "biomejs.biome",
     "[markdown]": "DavidAnson.vscode-markdownlint",
     "[python]": "charliermarsh.ruff",
     "[toml]": "tamasfe.even-better-toml",
-    "[xml]": "redhat.vscode-xml",
 }
 
 
