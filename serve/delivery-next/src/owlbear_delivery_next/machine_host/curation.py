@@ -44,6 +44,8 @@ SLOT = "memory"  # curation's own share of the machine's slots
 ALL = "all"
 NO_SHARED = "no shared repository is set up, so there is no memory to curate"
 LEFT = "the last curation's processes may still run; stop them before curating again"
+LINGERING = "memory curation: its last session's processes may still run"
+INTERRUPTED = "interrupted: OwlBear stopped while it ran or waited"
 
 
 class FolderRun(Record):
@@ -63,6 +65,7 @@ class Runs(Record):
     """Every folder's last run, kept in ``~/.owlbear`` because it is this machine's work."""
 
     folders: dict[str, FolderRun] = Field(default_factory=dict)
+    left: dict[int, float | None] = Field(default_factory=dict)  # a run's processes not yet confirmed gone
 
 
 def message(folder: str) -> str:
@@ -93,10 +96,17 @@ class Curation:
         run: Callable[[sdk_adapter.Session], Run] = _run,
         fenced: Callable[[], str] = str,
     ) -> None:
-        """No run yet; *run* runs one session, replaced in tests; *fenced* says why nothing may start now."""
+        """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone."""
         self.slots, self.shared, self.run, self.fenced = slots, shared, run, fenced
-        self.lock, self.queue, self.worker = threading.Lock(), list[str](), None
-        self.left: dict[int, float | None] = {}  # an unconfirmed run's processes, until they are seen gone
+        self.lock = threading.RLock()
+        self.queue, self.again, self.worker = list[str](), set[str](), None
+        self.held = ""  # the slot a run whose processes may still run keeps
+        runs = self.load()
+        for name, r in runs.folders.items():
+            if r.state in {"waiting", "running"}:
+                runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
+        self.left = dict(runs.left)
+        self._write(runs)
 
     def path(self) -> Path:
         """Where the runs are kept."""
@@ -109,12 +119,16 @@ class Curation:
         except OSError, ValueError:
             return Runs()
 
+    def _write(self, runs: Runs) -> None:
+        self.path().parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(self.path(), runs.model_dump_json(indent=2) + "\n")
+
     def _save(self, folder: str, run: FolderRun) -> None:
         with self.lock:
             runs = self.load()
             runs.folders[folder] = run
-            self.path().parent.mkdir(parents=True, exist_ok=True)
-            atomic_write(self.path(), runs.model_dump_json(indent=2) + "\n")
+            runs.left = dict(self.left)
+            self._write(runs)
 
     def read(self) -> dict[str, Any]:
         """Each folder of the shared repository with its last run, and what waits."""
@@ -125,10 +139,27 @@ class Curation:
         listed = [{"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")} for f in folders(shared.root)]
         return {"available": True, "folders": listed, "queue": list(self.queue)}
 
-    def working(self) -> list[str]:
-        """What runs or waits, for an update or a stop when idle to wait for."""
+    def lingering(self) -> bool:
+        """Whether a run's processes may still run; once they are seen gone, their slot is given back."""
         with self.lock:
-            return [f"memory curation: {', '.join(self.queue)}"] if self.queue else []
+            if not self.left:
+                return False
+            if not processes.verdict(self.left, processes.alive).confirmed:
+                return True
+            self.left = {}
+            if self.held:
+                self.slots.give(SLOT, self.held)
+                self.held = ""
+            runs = self.load()
+            runs.left = {}
+            self._write(runs)
+            return False
+
+    def working(self) -> list[str]:
+        """What runs, waits or may still run, for an update or a stop when idle to wait for."""
+        with self.lock:
+            busy = [f"memory curation: {', '.join(self.queue)}"] if self.queue else []
+        return busy + ([LINGERING] if self.lingering() else [])
 
     def due(self, folder: str) -> bool:
         """Whether *folder* holds a pending entry, or a changed one, that no finished run saw."""
@@ -148,13 +179,19 @@ class Curation:
             return False
 
     def nudge(self, wanted: list[str] | None, *, paused: bool) -> list[str]:
-        """Start each of *wanted* (every folder for None) that is due, when a trigger may start runs now."""
+        """Start each of *wanted* (every folder for None) that is due, when a trigger may start runs now.
+
+        A folder already running gets one more run after it, if it is still due then.
+        """
         shared = self.shared()
         if shared is None or not self.allowed(paused=paused):
             return []
         known = folders(shared.root)
-        due = [f for f in (known if wanted is None else wanted) if f in known and f not in self.queue and self.due(f)]
-        return [f for one in due for f in self.start(one)]
+        candidates = [f for f in (known if wanted is None else wanted) if f in known]
+        with self.lock:
+            self.again |= {f for f in candidates if self.queue[:1] == [f]}
+            free = [f for f in candidates if f not in self.queue]
+        return [f for one in free if self.due(one) for f in self.start(one)]
 
     def start(self, folder: str) -> list[str]:
         """Queue *folder*, or every folder for ``all``; a folder already waiting keeps its place."""
@@ -168,11 +205,10 @@ class Curation:
             raise ValueError(msg)
         with self.lock:
             added = [f for f in wanted if f not in self.queue]
-        for f in added:  # shown waiting before the worker can end its run
-            self._save(f, self.load().folders.get(f, FolderRun()).model_copy(update={"state": "waiting"}))
-        with self.lock:
-            self.queue.extend(f for f in added if f not in self.queue)
-            if self.worker is None or not self.worker.is_alive():
+            for f in added:  # shown waiting before the worker can end its run
+                self._save(f, self.load().folders.get(f, FolderRun()).model_copy(update={"state": "waiting"}))
+            self.queue.extend(added)
+            if self.worker is None:  # a worker clears this under the lock as it ends, so none is ever missed
                 self.worker = threading.Thread(target=self._work, name="memory-curation", daemon=True)
                 self.worker.start()
         return added
@@ -181,24 +217,28 @@ class Curation:
         while True:
             with self.lock:
                 if not self.queue:
+                    self.worker = None
                     return
                 folder = self.queue[0]
+            started = datetime.now(UTC)
             try:
-                self._one(folder)
-            finally:
-                with self.lock:
-                    self.queue.remove(folder)
+                self._one(folder, started)
+            except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
+                why = f"{type(exc).__name__}: {exc}"[:300]
+                self._save(
+                    folder, FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
+                )
+            with self.lock:
+                self.queue.remove(folder)
+                again = folder in self.again
+                self.again.discard(folder)
+            if again and self.due(folder):
+                self.start(folder)
 
-    def _one(self, folder: str) -> None:
-        started = datetime.now(UTC)
+    def _one(self, folder: str, started: datetime) -> None:
         shared = self.shared()
-        if shared is None:
-            self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=NO_SHARED))
-            return
-        if self.left and not processes.verdict(self.left, processes.alive).confirmed:
-            self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=LEFT))
-            return
-        if why := self.fenced():
+        why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
+        if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return
         turn, key = threading.Event(), f"curate:{folder}"
@@ -207,14 +247,16 @@ class Curation:
             turn.clear()
         try:
             self._save(folder, FolderRun(state="running", started_at=started))
-            self._save(folder, self._session(shared, folder, started))
+            self._save(folder, self._session(shared, folder, started, key))
         finally:
-            self.slots.give(SLOT, key)
+            if self.held != key:
+                self.slots.give(SLOT, key)
 
-    def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime) -> FolderRun:
+    def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
         role = roles.chosen(settings, LABEL)
         store = shared.root / folder / "memory"
+        before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
         with tempfile.TemporaryDirectory(prefix="owlbear-curation-") as empty:
             at = Path(empty)
             said = message(folder)
@@ -227,7 +269,9 @@ class Curation:
             )  # fmt: skip
             done = self.run(cfg)
         t = done.termination
-        self.left = {} if t is None or t.confirmed else dict.fromkeys((*t.survivors, *t.unknown)) | done.pids
+        if t is not None and not t.confirmed:  # its slot stays taken and it counts as busy until they are gone
+            with self.lock:
+                self.left, self.held = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids, key
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
         if done.ending != "result" or report is None:
@@ -235,11 +279,14 @@ class Curation:
             return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}")
         with shared.locked():
             notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed
-        left = {e.id: e.revision for e in _pending(store)}
-        skipped = {j.entry_id: left[j.entry_id] for j in report.entries if j.action == "skipped" and j.entry_id in left}
+        after = {e.id: e.revision for e in _pending(store)}
+        seen = {i: r for i, r in after.items() if before.get(i) == r}  # one saved or changed meanwhile stays due
+        skipped = {
+            j.entry_id: after[j.entry_id] for j in report.entries if j.action == "skipped" and j.entry_id in after
+        }
         return FolderRun(
             state="done", started_at=started, ended_at=ended, summary=report.summary, reason=notice,
-            entries=report.entries, skipped=skipped, seen=left,
+            entries=report.entries, skipped=skipped, seen=seen,
         )  # fmt: skip
 
 

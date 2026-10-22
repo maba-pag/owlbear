@@ -130,3 +130,64 @@ def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_while
     assert job.nudge(["shop"], paused=True) == ["shop"]  # changed, and allowed while paused
     finished(job)
     assert runs == ["shop", "shop"]
+
+
+def test_an_entry_saved_during_a_run_stays_due_and_a_trigger_meanwhile_runs_the_folder_once_more(root) -> None:
+    """Sol: only what the curator could see is marked seen; a merge during its run is not lost."""
+    pending(root / "shop" / "memory", "First lesson")
+    runs = []
+
+    def run(cfg) -> Run:
+        runs.append(cfg.session_id)
+        if len(runs) == 1:  # an agent saves while the curator runs, and its Change merges
+            pending(root / "shop" / "memory", "Saved meanwhile")
+            assert job.nudge(["shop"], paused=False) == []
+        report = MemoryCurationResult(summary="judged", entries=[])
+        return Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True))
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    finished(job)
+    assert (len(runs), job.due("shop")) == (2, False)  # the follow-up saw it
+
+
+def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interrupted_runs(root) -> None:
+    def run(cfg) -> Run:
+        if "owlbear" in cfg.session_id:
+            broke = "the runtime broke"
+            raise RuntimeError(broke)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("all")
+    finished(job)
+    states = {f["folder"]: (f["state"], f["reason"]) for f in job.read()["folders"]}
+    assert states == {"owlbear": ("failed", "RuntimeError: the runtime broke"), "shop": ("done", "")}
+
+    job._save("shop", curation.FolderRun(state="running"))  # noqa: SLF001 - OwlBear stops while it runs
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert {f["folder"]: f["state"] for f in again.read()["folders"]}["shop"] == "failed"
+
+
+def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until_they_are_gone(
+    root, monkeypatch
+) -> None:
+    alive = [True]
+    monkeypatch.setattr(curation.processes, "alive", lambda _pid, _created: alive[0])
+    slots = Slots(lambda: 2)
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=False, survivors=(4242,)))  # fmt: skip
+
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    for _ in range(200):
+        if job.queue == []:
+            break
+        time.sleep(0.02)
+    assert (job.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
+    assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: None}  # kept on file
+    alive[0] = False
+    assert (job.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
