@@ -12,7 +12,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (  # noqa: T
     Pick,
     Published,
 )
-from owlbear_delivery_next.change_contracts.models import Channel, Inputs, Record
+from owlbear_delivery_next.change_contracts.models import AnswerKind, Channel, Inputs, Record
 
 
 class _Item(Record):
@@ -43,6 +43,8 @@ class AnswerItem(_Item):
     tasks: list[str] = Field(default_factory=list)  # the plan tasks a final retry rebuilds (TD-217)
     attempt: int | None = None  # with the head, the final loop the owner's task list was shown for
     head: str = ""
+    classed: AnswerKind | None = None  # how its relayer classed a worker question's answer (TD-461)
+    statement: str = ""  # a clarification's intent as the owner confirmed it when read back
 
 
 class WithdrawItem(_Item):

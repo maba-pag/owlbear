@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.profile_record import in_window
-from owlbear_delivery_next.change_flow import budgets, repairs
+from owlbear_delivery_next.change_flow import answer_kinds, budgets, repairs
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.workflow_steps import held
 
@@ -31,9 +31,7 @@ def opening(
     window cannot resume a chat, so there a repair chance falls back to a fresh session at once (TD-175).
     """
     s = change.step
-    answer = next(
-        (q for q in reversed(change.questions) if q.step == s.kind and q.answer and not q.effect_observed_at), None
-    )
+    answer = answer_kinds.delivered_next(change)
     accepted = held.take(store, lock, change)
     repair = "" if accepted else repairs.session(change, task)
     if answer and s.session and s.session != repair:

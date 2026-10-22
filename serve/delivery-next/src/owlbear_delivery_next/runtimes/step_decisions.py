@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from owlbear_decisions import Decision
     from owlbear_delivery_next.change_contracts.decision_records import BriefDecision
+    from owlbear_delivery_next.change_contracts.decision_records import Decision as ChangeDecision
 
 SHAPED = 30  # the brief's own decisions listed; brief_tools.DecisionDraft bounds each question and answer
 HEAD = "## Decisions in force (the lasting rules this Change follows: follow them; a conflict goes to the owner)"
@@ -52,6 +53,22 @@ def entry(decision: Decision, *, replaced: bool = False) -> str:
 def section(pinned: Sequence[Decision], replaced: Collection[str] = ()) -> list[str]:
     """The section every role of a step reads: each pinned decision whole."""
     return [HEAD, *(entry(d, replaced=d.id in replaced) for d in pinned)] if pinned else [HEAD, "- none in force"]
+
+
+def own(lines: list[str] | None, recorded: Sequence[ChangeDecision]) -> list[str] | None:
+    """*lines* with the decisions recorded on the Change during its work, such as a confirmed clarification (TD-461).
+
+    They hold for this Change alone, in force from when they were recorded, whole like every other.
+    """
+    if lines is None or not recorded:
+        return lines
+    mine = [f"- {d.id or 'this Change'} (change, {d.origin}): {_titled(d)}" for d in recorded]
+    return [lines[0], *mine, *(x for x in lines[1:] if x != "- none in force")]
+
+
+def _titled(d: ChangeDecision) -> str:
+    text = " ".join(d.text.split())
+    return f"{' '.join(d.title.split())}: {text}" if d.title else text
 
 
 def complete(others: Sequence[Decision]) -> list[str]:

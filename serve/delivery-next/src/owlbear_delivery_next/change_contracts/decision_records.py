@@ -32,6 +32,7 @@ class Decision(_Strict):
     """One recorded decision with its provenance."""
 
     id: str = ""  # owlbear_decisions.new_id() at creation; empty in Changes older than TD-419
+    title: str = ""  # a clarification's: from the question it answers (TD-461); else its text is its title
     text: str
     origin: Origin
     at: datetime

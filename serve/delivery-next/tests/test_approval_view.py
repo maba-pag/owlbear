@@ -200,11 +200,41 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
         expect(words).to_have_value("the site is read in Canada")
         expect(form.get_by_label("English")).to_be_checked()
         expect(page.locator("#changes .card.current")).to_contain_text("greet")
+        form.get_by_label("It only settles how the work goes on").check()
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     item = sent(store, "greet")
     assert '"option":"en"' in item.replace(" ", "")
+    assert '"classed":"event"' in item.replace(" ", "")
     assert "the site is read in Canada" in item
+
+
+@pytest.mark.browser
+def test_a_clarification_is_sent_only_with_the_owners_confirmed_statement(page_url, pds) -> None:
+    """TD-461: the owner classes his answer; a clarification carries his intent in two lines, which he confirms."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())
+    with opened(base, "greet", pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        form.get_by_label("English").check()
+        form.get_by_label("Your answer in words").fill("english, the readers are in Canada mostly")
+        expect(form.get_by_label("This statement is my intent")).to_have_count(0)
+        form.get_by_label("It clarifies what the brief means", exact=False).check()
+        form.get_by_label("Your intent, as this Change's decision records it", exact=False).fill(
+            "The greeting is in English."
+        )
+        form.get_by_role("button", name="Answer").click()
+        expect(page.locator("#error")).to_contain_text("Write your intent in at most two lines and confirm it.")
+        with store.db.read() as db:
+            assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)  # nothing unconfirmed is sent
+        form.get_by_label("This statement is my intent").check()
+        form.get_by_role("button", name="Answer").click()
+        expect(page.locator("#detail")).not_to_contain_text("Not done")
+    item = sent(store, "greet").replace(" ", "")
+    assert '"classed":"clarification"' in item
+    assert '"statement":"ThegreetingisinEnglish."' in item
 
 
 @pytest.mark.browser
@@ -241,8 +271,10 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
         labels = {"de": "German", "fr": "French"}
         changed.questions[0].options = [m.Option(id=o, label=labels[o]) for o in left]
         store.write(Lock("greet"), changed)
-        expect(form.get_by_role("radio")).to_have_count(len(left), timeout=10_000)
-        expect(form.get_by_role("radio", checked=True)).to_have_count(0)
+        offered = form.locator('p-radio-group[label="Choose an option"]').get_by_role("radio")
+        expect(offered).to_have_count(len(left), timeout=10_000)
+        expect(offered.and_(form.get_by_role("radio", checked=True))).to_have_count(0)
+        form.get_by_label("It only settles how the work goes on").check()
         form.get_by_role("button", name="Answer").click()
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     assert '"option":null' in sent(store, "greet").replace(" ", "")

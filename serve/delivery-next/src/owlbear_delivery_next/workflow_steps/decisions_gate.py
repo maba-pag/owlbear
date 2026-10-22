@@ -388,5 +388,5 @@ def gated(store: Store, lock: Lock, c: Change, step: Step | None) -> Iterator[Ch
         return
     if gate.pinned:
         store.write(lock, gate.change)
-    with step_decisions.using(gate.lines, gate.others):
+    with step_decisions.using(step_decisions.own(gate.lines, gate.change.decisions), gate.others):
         yield gate.change

@@ -129,8 +129,11 @@ def hidden(q: Question, *, challenged: bool, own: str = "") -> bool:
     """Whether a challenged review leaves out this answer: the owner's decision about review findings.
 
     A plan or brief challenge leaves out the owner's decisions about its own loop's findings (*own*, TD-190, TD-221).
+    No role reads an answer that changes the approved brief: it was never passed on (TD-461).
     """
     cause = q.cause or ""
+    if q.answer and q.answer.kind == "brief_change":
+        return True
     return (challenged and cause.startswith(FOUND)) or (bool(own) and cause.startswith(own))
 
 

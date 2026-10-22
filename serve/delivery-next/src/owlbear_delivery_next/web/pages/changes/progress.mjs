@@ -36,6 +36,7 @@ function ago(iso) {
 }
 
 const BOOKKEEPING = new Set(["pids", "inventory", "skill", "tasks", "preserved"]);
+const CLASSES = { event: "an event", clarification: "a clarification", brief_change: "a brief change" };  // TD-461
 const SAID = {
   step: (e) => `${e.kind} step ${e.exit}${e.reason ? `: ${e.reason}` : ""}`,
   tool: (e) => e.summary || `Called ${e.tool}${e.accepted === false ? " (rejected)" : ""}`,
@@ -53,6 +54,7 @@ const SAID = {
   "ro-install": (e) => `${e.command} in ${e.package}${e.ok ? "" : " failed"}`,
   "fix-drafted": (e) => `Drafted fix Change ${e.fix}`,
   brief: (e) => `Brief v${e.version} saved`,
+  answer: (e) => `Answered ${e.question} as ${CLASSES[e.class] ?? e.class}`,
 };
 
 // Newest first, in words; process and inventory bookkeeping stays in the activity file.

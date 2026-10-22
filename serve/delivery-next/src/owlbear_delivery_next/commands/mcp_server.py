@@ -24,7 +24,7 @@ from pydantic import Field
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, picks
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
-from owlbear_delivery_next.project_host import api, brief_routes, host
+from owlbear_delivery_next.project_host import answers, api, brief_routes, host
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -164,8 +164,8 @@ class Chat:
             "next": "the challenge still runs; call show_status with the handle",
         }
 
-    def answer_question(self, question: str, option: str, text: str) -> dict[str, Any]:
-        """Answer one worker question; recovery decisions are refused with the Changes page (T6)."""
+    def answer_question(self, question: str, option: str, text: str, said: dict[str, Any]) -> dict[str, Any]:
+        """Answer one worker question with its class (*said*); recovery decisions are refused with the page (T6)."""
         if updated(host.running(self.store)):
             return {"answered": False, "error": UPDATED}
         handle, _, qid = question.partition(".")
@@ -182,8 +182,8 @@ class Chat:
         if q is None:
             return {"answered": False, "error": f"question: {question} is not open"}
         if not loop.ordinary(q):
-            return {"answered": False, "error": api.T6, "changes_page": api.link(host.running(self.store))}
-        body = {"question": qid, "option": option or None, "text": text, "channel": "chat"}
+            return {"answered": False, "error": answers.T6, "changes_page": api.link(host.running(self.store))}
+        body = {"question": qid, "option": option or None, "text": text, "channel": "chat"} | said
         code, out = self.call("POST", f"/changes/{slug}/answers", body)
         return {"answered": code == OK, **out}
 
@@ -341,13 +341,21 @@ def show_status(
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-def answer_question(
+def answer_question(  # noqa: PLR0913 - the answer, its class and a clarification's confirmed intent
     question: Annotated[str, Field(description="Question id from show_status", examples=["c1.q2"])],
+    kind: Annotated[Literal["event", "clarification", "brief_change"], Field(description=answers.KIND)],
     option: Annotated[str, Field(description="Chosen option id, if any", examples=["o1"])] = "",
     text: Annotated[str, Field(description="The owner's answer in words", max_length=2000)] = "",
+    statement: Annotated[str, Field(description=answers.STATEMENT, max_length=240)] = "",
+    *,
+    confirmed: Annotated[bool, Field(description=answers.CONFIRMED)] = False,
 ) -> dict[str, Any]:
-    """Answer one worker question for the owner; recovery decisions are made in the Changes page."""
-    return _STATE["chat"].answer_question(question, option, text)
+    """Answer one worker question for the owner, classed; read a clarification back to him before you pass it.
+
+    Recovery decisions are made in the Changes page.
+    """
+    said = {"kind": kind, "statement": statement, "confirmed": confirmed}
+    return _STATE["chat"].answer_question(question, option, text, said)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

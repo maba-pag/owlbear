@@ -37,7 +37,7 @@ from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import environment
-from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions, step_input
+from owlbear_delivery_next.runtimes import sdk_adapter, step_answers, step_decisions, step_input
 from owlbear_delivery_next.state_store import decision_archive, read_backs
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, curation, decisions_gate, prepare
@@ -453,7 +453,7 @@ def test_a_resumed_worker_receives_the_decisions_with_its_answer_and_its_continu
         step(store, change_repo)
 
     resumed, continued = sent
-    assert resumed.startswith(step_input.answer(asked))
+    assert resumed.startswith(step_answers.answer(asked))
     assert continued.startswith(step_input.CONTINUE)  # the answer reached it before an interruption
     for message in sent:
         assert step_decisions.HEAD in message
