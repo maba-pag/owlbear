@@ -24,6 +24,7 @@ DEFAULTS: dict[Role, RoleModel] = {
     "test-reviewer": RoleModel(model="gpt-6.1-sol", effort="medium"),  # one share of a test review (TD-339)
     "test-curator": RoleModel(model="claude-opus-5.5", effort="high", context="long"),  # applies what holds
     "picker": RoleModel(model="gpt-6.1-sol", effort="medium"),  # picks a brief's decisions from the list (TD-459)
+    "curator": RoleModel(model="gpt-6.1-sol", effort="high"),  # automatic memory curation (TD-292, TD-400)
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
 MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the shaper's chat has none (TD-285)
@@ -38,6 +39,7 @@ MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the s
     "test-reviewer": 20,  # the reviewer's
     "test-curator": 40,  # the builder's
     "picker": 10,  # a pick takes about a minute
+    "curator": 20,  # one memory folder's pending entries
 }
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",
@@ -58,6 +60,7 @@ SESSIONS: dict[str, Role] = {
     "pack-update": "updater",  # the design pack update's writing session (TD-125)
     "test-review": "test-reviewer",  # one share of a test review (TD-373)
     "test-curation": "test-curator",  # a test review's build (TD-339)
+    "memory-curation": "curator",  # one memory folder's automatic curation (item 5 slice 4)
     "decision-pick": "picker",  # a brief version's decisions, before its challenge (TD-459)
     "clarification-check": "picker",  # an owner's clarification against the approved brief (TD-461)
 }

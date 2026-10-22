@@ -48,6 +48,12 @@ class SettingsBody(api.Body):
     settings: registry.Settings
 
 
+class CurateBody(api.Body):
+    """Which memory folder of the shared repository to curate now, or ``all``."""
+
+    folder: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
 def _local(host: str) -> bool:
     return host.rsplit(":", 1)[0] in api.LOCAL_HOSTS
 
@@ -184,6 +190,7 @@ def _routes(machine: Machine) -> APIRouter:
     owlbear = decision_routes.router(_shared, lambda: decision_routes.OWLBEAR, lambda: _places(machine))
     routes.include_router(owlbear, prefix="/owlbear", dependencies=[Depends(fenced)])  # chats in OwlBear's workspace
     _machine_routes(routes, machine)
+    _curation_routes(routes, machine)
     _update_routes(routes, machine)
     return routes
 
@@ -240,6 +247,26 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
         machine.say("stopping: asked through the stop route")
         machine.on_stop()
         return {"stopping": True}
+
+
+def _curation_routes(routes: APIRouter, machine: Machine) -> None:
+    """Automatic memory curation: each folder's last run, and the Maintenance page's button."""
+
+    @routes.get("/curation")
+    def curation() -> dict[str, Any]:
+        """Each memory folder's last automatic curation, and what waits (item 5 slice 4)."""
+        return machine.curation.read()
+
+    @routes.post("/curation")
+    def curate(body: CurateBody) -> dict[str, Any]:
+        """The Maintenance page's button: curate one folder, or all, now; also while paused (the owner, 2026-10-22)."""
+        if why := machine.updating or ("OwlBear is stopping" if machine.stopping.is_set() else ""):
+            raise HTTPException(503, why)
+        try:
+            started = machine.curation.start(body.folder)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return machine.curation.read() | {"started": started}
 
 
 def machine_values(machine: Machine) -> dict[str, Any]:

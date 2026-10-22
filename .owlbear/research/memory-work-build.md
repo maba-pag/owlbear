@@ -97,6 +97,9 @@ independent.
   beside "Update itself while paused", off by default; the button always runs at once (the owner, 2026-10-22).
   Update behaviour is unchanged.
 - A run counts against the machine's sessions (TD-336). Its state and last report show on the Maintenance page.
+- Built so far: Delivery's own `owlbear-curator` role (SDK only, its memory tools and a structured report as
+  its result, no subagents), the machine host's job (`machine_host/curation.py`, state in `~/.owlbear/curation.json`)
+  and the Maintenance page's Curate now per folder. The merge and idle triggers come next.
 
 ### 3.5 Slice 5: the one-off sort
 

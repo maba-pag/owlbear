@@ -25,7 +25,7 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
-    "test-curator", "picker",
+    "test-curator", "picker", "curator",
 )  # fmt: skip
 PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
@@ -34,13 +34,17 @@ SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research 
     *("task", "read_agent", "list_agents", "write_agent"),
 }
 MEMORY_TOOLS = {"recall_memory", "save_memory", "assess_memories"}
+CURATOR_TOOLS = {  # the memory curator's (item 5 slice 3)
+    "curation_threshold", "list_memories", "read_memory", "curate_memory", "delete_memory", "make_global",
+    "commit_memory_batch",
+}  # fmt: skip
 CHAT_TOOLS = {"save_brief", "save_visual_check", "challenge_brief", "show_status", "answer_question"}  # owner chat
 CHAT_TOOLS |= {"find_decisions", "record_decision", "read_back_decision"}  # TD-419 slice 5a, not granted to the shaper
 CHAT_TOOLS |= {"queue_read_back"}  # TD-427: the read-back queue, not granted to the shaper
 CHAT_TOOLS |= {"retire_decision"}  # TD-450: decisions changed in a lead chat, not granted to the shaper
 CHAT_TOOLS |= {"lookup_decisions"}  # TD-456, TD-459: the picker's answer, not granted to the shaper
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
-VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
+VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CURATOR_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
 VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP}
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
@@ -94,7 +98,8 @@ def audit(granted: Sequence[str], body: str) -> list[str]:
 
 
 def granted(role: str) -> list[str]:
-    launcher = [] if role == tools.PICKER else [subagents.LAUNCHER]  # offered while the role's setting is on (TD-376)
+    one_shot = role in {tools.PICKER, tools.CURATOR}  # SDK-only sessions without subagents
+    launcher = [] if one_shot else [subagents.LAUNCHER]  # offered while the role's setting is on (TD-376)
     return [*preload.tools(role), *tools.results(role, ui=True), *tools.results(role, ui=False), *launcher]
 
 
@@ -142,7 +147,7 @@ def test_roles_within_approved_work_carry_the_boundary_and_change_workers_the_lo
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer", "picker"}), (
+        assert asks == (role not in {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator"}), (
             role
         )  # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
         assert (tools.ASK.name in wf.tools_note(role)) == asks

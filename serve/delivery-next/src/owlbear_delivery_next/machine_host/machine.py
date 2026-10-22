@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.project_host.host import RunnerRecord
@@ -79,6 +80,9 @@ class Machine:
 
         self.updater = Updater(self)
         self.auto = Auto(self)
+        self.curation = Curation(
+            self.slots, fenced=lambda: self.updating or ("stopping" if self.stopping.is_set() else "")
+        )
 
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
@@ -226,7 +230,9 @@ class Machine:
 
     def left(self) -> list[str]:
         """What a stop when idle still waits for: each project's running steps, environments and admitted work."""
-        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)]
+        return [f"{p.name}: {w}" for p in list(self.projects.values()) for w in p.working(stopping=True)] + (
+            self.curation.working()
+        )
 
     def fence(self, text: str) -> list[str]:
         """An update's fence (self-update §5.3): nothing starts from now on; what still runs, which lifts it."""
@@ -241,7 +247,9 @@ class Machine:
     def busy(self) -> list[str]:
         """What an update waits for: each project's running steps, environments and admitted work."""
         projects = list(self.projects.values())
-        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)]
+        return [f"{p.name}: {w}" for p in projects for w in p.working(stopping=True, requests=False)] + (
+            self.curation.working()
+        )
 
     def fenced(self) -> None:
         """Refuse a project change while an update's fence holds.

@@ -38,7 +38,8 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here } from "/assets/ui.mjs";
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
-const state = { actions: [], use: [], error: "", tests: null, skipped: new Set(), starting: false };
+const state = { actions: [], use: [], error: "", tests: null, skipped: new Set(), starting: false, curation: null,
+  curating: "" };
 
 // The last run in words, so its state never rests on the tag's colour alone.
 function lastRun(a) {
@@ -162,6 +163,60 @@ function useSection() {
   </section>`;
 }
 
+// Item 5 slice 4: each memory folder's last automatic curation; the button runs one now, also while paused.
+function folderRun(f) {
+  const at = f.ended_at || f.started_at, when = at ? `, ${new Date(at).toLocaleString()}` : "";
+  const said = f.state === "never" ? "Never curated." : `Last run: ${f.state}${when}`;
+  const skipped = f.entries.filter((e) => e.action === "skipped");
+  return html`<li class="action">
+    <div class="title"><p-heading size="md"><h3>${f.folder}</h3></p-heading>
+      <p-button type="button" compact="true" variant="secondary" .loading=${state.curating === f.folder}
+        ?disabled=${["waiting", "running"].includes(f.state)} @click=${() => curate(f.folder)}
+        aria=${`{"aria-label": "Curate ${f.folder} now"}`}>Curate now</p-button></div>
+    <p-text size="sm">${said}</p-text>
+    ${f.summary ? html`<p-text size="sm">${f.summary}</p-text>` : nothing}
+    ${f.reason ? html`<p-text size="xs" color="contrast-medium">${f.reason}</p-text>` : nothing}
+    ${skipped.length ? html`<p-text size="xs">Left for you: ${skipped.map((e) => `${e.entry_id.slice(0, 8)} (${
+      e.confidence}%${e.reason ? `: ${e.reason}` : ""})`).join("; ")}</p-text>` : nothing}
+  </li>`;
+}
+
+function curationSection() {
+  const c = state.curation;
+  if (!c) return nothing;  // a host serving one clone has no machine to curate with
+  return html`<section aria-labelledby="curation-title">
+    <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
+    <p-text size="sm">The memory curator judges each folder's pending entries: alone at or above your threshold
+      (Settings, Memory curation), and leaves the rest for you on the Memory page. Each run is one agent session.</p-text>
+    ${c.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>`
+      : html`<p-text id="curation-none" size="sm">${c.reason.charAt(0).toUpperCase() + c.reason.slice(1)}.</p-text>`}
+  </section>`;
+}
+
+async function curate(folder) {
+  const sure = await ask({
+    title: `Curate ${folder} now?`, yes: "Curate now", no: "Cancel",
+    now: `The memory curator judges the pending entries of ${folder}, with Global memory beside them.`,
+    then: "At or above your threshold it promotes, prunes or makes global alone; it leaves the rest as they are and "
+      + "reports them here. It runs now, also while Delivery is paused, and uses AI credits.",
+    after: "Approve, edit or move its results on the Memory page.",
+    instead: "Nothing starts.",
+  });
+  if (!sure) return;
+  state.curating = folder;
+  show();
+  try {
+    await call("/curation", { machine: true, body: { folder }, timeout: 30000 });
+    document.getElementById("status").textContent = `Curating ${folder}; this page shows its report when it ends.`;
+    state.error = "";
+  } catch (e) {
+    state.error = e.message;
+  } finally {
+    state.curating = "";
+    await refresh();
+  }
+}
+
 function view() {
   const error = state.error ? state.error.charAt(0).toUpperCase() + state.error.slice(1) : "";
   return html`
@@ -172,6 +227,7 @@ function view() {
       <p-heading size="lg"><h2 id="actions-title">Maintenance actions</h2></p-heading>
       <ul id="actions" class="actions">${state.actions.map(action)}</ul>
     </section>
+    ${curationSection()}
     ${useSection()}`;
 }
 
@@ -191,7 +247,11 @@ async function refresh() {
   // The test review's offer reads the project's tests from Git: its failure never hides the rest of the page.
   state.tests = await call("/maintenance/test-review", { timeout: 30000 })
     .catch((e) => ({ problem: `Could not read the project's tests: ${e.message}` }));
+  state.curation = await call("/curation", { machine: true, timeout: 15000 }).catch(() => null);
   show();
+  clearTimeout(state.again);  // a run in progress: look again until its report is in
+  const busy = (state.curation?.folders ?? []).some((f) => ["waiting", "running"].includes(f.state));
+  if (busy) state.again = setTimeout(refresh, 5000);
 }
 
 show();

@@ -519,3 +519,33 @@ def test_a_decision_lists_the_changes_of_every_loaded_project_whose_baseline_pin
     assert [(c["project"], c["pid"], c["slug"], c["applies"]) for c in got] == [("a", a["id"], "c1", False)]
     anonymous = TestClient(http.app, base_url="http://127.0.0.1")
     assert anonymous.get(f"/api/next/decisions/{decision}/changes").status_code == 401
+
+
+def test_the_maintenance_button_curates_a_memory_folder_now_also_while_paused(http, machine, shared_repo, monkeypatch):
+    """Item 5 slice 4: the machine's curation lists the shared repository's memory folders and runs one at once."""
+    from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult  # noqa: PLC0415
+    from owlbear_delivery_next.local_system.processes import Termination  # noqa: PLC0415
+    from owlbear_delivery_next.runtimes.session_result import Run  # noqa: PLC0415
+
+    (shared_repo[0] / "shop" / "memory").mkdir(parents=True)
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    machine.slots.open()
+    report = MemoryCurationResult(summary="nothing pending", entries=[])
+    machine.curation.run = lambda cfg: Run(cfg.session_id, ending="result", payload=report,
+                                           termination=Termination(confirmed=True))  # fmt: skip
+    assert machine.paused  # the button runs also while paused (the owner, 2026-10-22)
+
+    listed = http.get("/api/next/curation").json()
+    unknown = http.post("/api/next/curation", json={"folder": "nowhere"})
+    machine.updating = "an update runs"
+    fenced = http.post("/api/next/curation", json={"folder": "shop"})
+    machine.updating = ""
+    started = http.post("/api/next/curation", json={"folder": "shop"})
+    for _ in range(200):
+        if not machine.curation.working():
+            break
+        time.sleep(0.02)
+
+    assert [f["folder"] for f in listed["folders"]] == ["shop"]
+    assert (unknown.status_code, fenced.status_code, started.json()["started"]) == (409, 503, ["shop"])
+    assert http.get("/api/next/curation").json()["folders"][0]["summary"] == "nothing pending"
