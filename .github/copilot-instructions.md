@@ -25,19 +25,19 @@ generated consumer branch and no sync workflow (TD-203).
 ### Plan and Status
 
 [The plan](../.owlbear/research/owlbear-plan.md) holds where OwlBear stands, the order of the remaining work and
-where the code differs from [the decisions](../.owlbear/research/delivery-liveness-first-rebuild.md). Read it when
+where the code differs from [the decisions](../.owlbear/decisions.md). Read it when
 you start or resume work and after a context compaction; a pull request that changes what it says updates it. The
 old Delivery redesign programme and
 [its execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md) are superseded history (TD-202).
-[.owlbear/decisions.md](../.owlbear/decisions.md) is the generated, read-only view of the decisions in owlbear-data;
-until the owner has reviewed their migration, the decision record stays authoritative (TD-437).
+The decisions live in owlbear-data (TD-424); [.owlbear/decisions.md](../.owlbear/decisions.md) is their generated,
+read-only view, and the old decision record is Git history (TD-466). Look decisions up with `find_decisions` or
+`lookup_decisions` and change them only with the decision tools or the Decisions page.
 
 ### Asking the Owner
 
 When the owner decides or re-decides anything consequential, including a read-back or a recorded
 decision under review, ask one decision per question with the structured question tool, as his
-decisions TD-41..43, TD-150 and TD-156 in
-[the decision record](../.owlbear/research/delivery-liveness-first-rebuild.md) define:
+decisions TD-41..43, TD-150 and TD-156 in [the decisions](../.owlbear/decisions.md) define:
 
 - The message shows the decision's record (its statement and origin) and what changed since.
 - Options: three close variants of the decision (fewer only when fewer really differ, never padded),
@@ -55,9 +55,8 @@ decisions TD-41..43, TD-150 and TD-156 in
   everything you record (TD-448).
 - Before asking, challenge the proposal against his intent: what it lacks and what it overdoes,
   not only what is wrong (TD-150).
-- Record each answer as C-31 of the decision record says: his confirmed intent, never his words
-  (TD-449); edit its topic in the same change, never append history rows; number it after the highest
-  TD number in the record on a freshly fetched `main`.
+- Record each answer with `record_decision`: his confirmed intent, never his words (TD-449); a changed
+  decision names the one it replaces.
 
 ## Directory Structure
 

@@ -78,7 +78,6 @@ def test_the_view_lists_global_then_the_projects_rules_by_topic_and_retired_ones
     assert "Shop only" not in text
     assert found["other"].id not in text
     assert f"Data commit: `{COMMIT}`" in text
-    assert "`.owlbear/research/delivery-liveness-first-rebuild.md` stays authoritative" in text
 
 
 def test_an_inherited_decision_shows_it_was_never_read_back(tmp_path, make):
@@ -133,18 +132,6 @@ def test_an_empty_data_repository_is_an_empty_view_and_none_needs_one(tmp_path, 
         render(snapshot(tmp_path, "owlbear"), "none")
     with pytest.raises(ValueError, match="not a commit hash"):
         render(snapshot(tmp_path, "owlbear"), "main")
-
-
-def test_the_committed_view_is_the_view_of_a_data_repository_without_decisions(tmp_path, capsys):
-    """The scheduled check passes today: owlbear-data has no decisions until the owner reviews the migration."""
-    git(tmp_path, "init", "-q")
-    (tmp_path / "owlbear").mkdir()
-    (tmp_path / "owlbear" / "notes.md").write_text("x\n", encoding="utf-8")
-    git(tmp_path, "add", ".")
-    git(tmp_path, "commit", "-q", "-m", "data")
-
-    assert main([str(tmp_path), "--out", str(ROOT / ".owlbear/decisions.md"), "--check"]) == 0
-    assert "matches owlbear-data" in capsys.readouterr().out
 
 
 def test_check_passes_on_equal_fails_on_a_changed_decision_and_ignores_unrelated_data_commits(tmp_path, make, capsys):

@@ -15,7 +15,7 @@
 ## 1. Context, decisions and gaps
 
 Decisions, all `decided` by the owner on 2026-10-11; they are added as TD-38 to TD-40 to the
-[rebuild research §3.8](delivery-liveness-first-rebuild.md) table with this plan:
+[rebuild research §3.8](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#38-decisions-in-force-by-topic-td-359) table with this plan:
 
 - **TD-38.** "Before" screenshots are part of shaping. Once it is clear that a Change alters what a
   page shows, shaping establishes the render recipe, captures the current pages from the target and
@@ -256,7 +256,7 @@ not ready until the capture lifecycle and D-A's framing were complete. Dispositi
 ## 7. Corrections from the retrospective review of 2026-10-11
 
 A Sol review of the whole delivery-next history (record in
-[the rebuild research](delivery-liveness-first-rebuild.md), "Retrospective review") found three
+[the rebuild research](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#311-retrospective-review-2026-10-11), "Retrospective review") found three
 errors in this plan:
 
 - **Retake.** The plan had dropped the retake, saying "as the owner asked". The owner had agreed to

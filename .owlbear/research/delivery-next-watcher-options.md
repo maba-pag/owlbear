@@ -1,6 +1,6 @@
 # Watcher Agent: Design Options and Reusable Implementations
 
-> **Owning task:** Delivery rebuild, phase 3 "N1 design" ([rebuild §3.12](delivery-liveness-first-rebuild.md))
+> **Owning task:** Delivery rebuild, phase 3 "N1 design" ([rebuild §3.12](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#312-repair-plan-2026-10-11))
 > **Date:** 2026-10-12
 > **Question:** Which designs can satisfy the decided watcher requirements, what can be reused from
 > Delivery's own code and from claude-mem, and what must be decided with the owner? Nothing here is

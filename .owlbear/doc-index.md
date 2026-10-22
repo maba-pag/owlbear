@@ -128,9 +128,10 @@
 
 ### Outbound links
 - [The plan](research/owlbear-plan.md)
-- [the decisions](research/delivery-liveness-first-rebuild.md)
+- [the decisions](decisions.md)
 - [its execution plan](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-redesign-execution-plan.md)
-- [the decision record](research/delivery-liveness-first-rebuild.md)
+- [.owlbear/decisions.md](decisions.md)
+- [the decisions](decisions.md)
 - [cloud-agent](../.github/instructions/cloud-agent.instructions.md)
 - [code-review](../.github/instructions/code-review.instructions.md)
 
@@ -198,6 +199,50 @@
 - [`serve/`](../serve/README.md)
 - [`.github/`](../.github/README-automation.md)
 - [`tests/`](../tests/README.md)
+
+## .owlbear/decisions.md
+- # `Decisions: Global and `owlbear``
+- ## `Rules in force`
+- ### `Global`
+- #### `C-01 Asking the owner`
+- #### `C-02 Permissions and agent writes`
+- #### `C-09 Data repository and settings`
+- #### `C-26 Tests`
+- #### `Standalone`
+- ### ``owlbear``
+- #### `C-01 Asking the owner`
+- #### `C-02 Permissions and agent writes`
+- #### `C-03 Models and credits`
+- #### `C-04 Window steps and the watcher`
+- #### `C-05 Roles, agents and skills`
+- #### `C-06 The shaper`
+- #### `C-07 Local installs`
+- #### `C-08 Local home and paths`
+- #### `C-09 Data repository and settings`
+- #### `C-10 Test preparation`
+- #### `C-11 Visual checks`
+- #### `C-12 Review loops and rounds`
+- #### `C-13 Retry and Accept as done`
+- #### `C-14 Brief, approval and amendments`
+- #### `C-15 Design pack update`
+- #### `C-16 Versions, labels and release`
+- #### `C-17 Runtime and self-update`
+- #### `C-18 Pause, stop and resume`
+- #### `C-19 Machine host and UI`
+- #### `C-20 Repository policy`
+- #### `C-21 Old engine retirement`
+- #### `C-22 Package structure`
+- #### `C-23 The owlbear command`
+- #### `C-24 Backlog`
+- #### `C-25 Memory`
+- #### `C-26 Tests`
+- #### `C-27 Status and progress`
+- #### `C-28 Code and tool rules`
+- #### `C-29 Confirmations and input`
+- #### `C-30 Subagents`
+- #### `C-31 The decision record`
+- #### `Standalone`
+- ## `History`
 
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
@@ -286,6 +331,7 @@
 - [Operating OwlBear](../setup/operating-owlbear.md#running-owlbear)
 - [Memory MCP](../serve/memory-mcp/README.md)
 - [Memory core](../serve/memory/README.md)
+- [Decisions core](../serve/decisions/README.md)
 - [Knowledge MCP](../serve/knowledge-mcp/README.md)
 - [Knowledge core](../serve/knowledge/README.md)
 - [Browser MCP](../serve/browser-mcp/README.md)
@@ -332,6 +378,19 @@
 - [acquisition tests](../serve/browser-mcp/tests/test_acquire.py)
 - [SSRF policy tests](../serve/browser-mcp/tests/test_ssrf_preflight.py)
 
+## serve/decisions/README.md
+- # `owlbear-decisions — Decision Files`
+- ## `Launch / Usage`
+- ### `File contract`
+- ### `Validator rules`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [decision system design](research/decision-system-build.md)
+- [serve/README.md](../serve/README.md)
+- [README.md](../README.md)
+
 ## serve/delivery-next/DEMO-slice1.md
 - # `Delivery-next slice 1, phase B: live demonstration`
 - ## `Results`
@@ -374,6 +433,8 @@
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-challenger.agent.md
 
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-design-judge.agent.md
+
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-picker.agent.md
 
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-planner.agent.md
 
@@ -581,6 +642,7 @@
 - ## `Dependencies`
 
 ### Outbound links
+- [Configuration](../serve/memory-mcp/README.md#configuration)
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 
@@ -647,6 +709,7 @@
 - [`share/`](../share/README.md)
 - [`serve/`](../serve/README.md)
 - [Upgrading OwlBear](../setup/operating-owlbear.md#upgrading-owlbear)
+- [memory server configuration](../serve/memory-mcp/README.md#configuration)
 - [Troubleshooting](../setup/setup-guide.md#troubleshooting)
 
 ## setup/setup-guide.md
@@ -1191,6 +1254,9 @@
 - # `Store`
 - ## `What lives here`
 - ## `What belongs elsewhere`
+
+### Outbound links
+- [memory server](../serve/memory-mcp/README.md#configuration)
 
 ## tests/README.md
 - # `Tests`
