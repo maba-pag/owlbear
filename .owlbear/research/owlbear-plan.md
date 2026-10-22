@@ -220,9 +220,6 @@ as is for the reason given. Item: the plan item of §2 that picks it up.
 | C-16 | OwlBear's own project sets `release:minor` | OwlBear is not a registered project | keep | 10 |
 | C-19 | Add project can create a new project from zero (TD-421) | Only an existing clone can be added | build | 15 |
 | C-20 | OwlBear builds itself through its own Delivery (TD-319) | Developed in chat only | keep | 10 |
-| C-25 | The saver recommends a scope (TD-293) | Missing | align | 5 |
-| C-25 | A Global entry can move back to a project (TD-292) | The page says it does not move back | align | 5 |
-| C-25 | Curator modes and the Global threshold, 95% at first (TD-292, TD-400) | Missing | build | 5 |
 | C-25, C-27 | The watcher saves lessons and infers stages | Not built | build | 9 |
 | C-26 | Tests do not assert prose wording | Two memory-governance tests still assert curation wording (identity deferral, corroborated scope): kept until a behavioural test covers the rule | align | — |
 | C-28 | Tool use is measured, success rates included (T8) | Counted per Change and shown on its page (TD-463); no view across Changes, and wrong-tool selection shows only as missing-tool reports | align | — |
