@@ -15,6 +15,7 @@ _REPO_ROOT = Path(__file__).parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "share/agents"
 _PROMPTS_ROOT = _REPO_ROOT / "share/prompts"
 _SKILLS_ROOT = _REPO_ROOT / "share/skills"
+_INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
@@ -554,6 +555,24 @@ def test_project_doc_instruction_declares_local_standard_route() -> None:
     assert (_SKILLS_ROOT / "r-doc-standards/SKILL.md").is_file()
 
 
+def test_memory_curator_identity_deferral_reporting_split() -> None:
+    """Periodic curation keeps identity-only uncertainty pending without reporting it."""
+    workflow = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
+    curator = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
+    structure = (_SKILLS_ROOT / "h-memory-structure/SKILL.md").read_text(encoding="utf-8")
+
+    content = " ".join(f"{workflow}\n{curator}\n{structure}".split())
+
+    assert "Classify content before provenance or scope." in content
+    assert "`*` is anonymous provenance" in content
+    assert (
+        "Identity-only uncertainty remains pending and is omitted from periodic defer and conflict summaries."
+        in content
+    )
+    assert "Conflicts and ordinary content or scope uncertainty remain reportable." in content
+    assert "another reviewed non-pending entry or a readable local definition" in content
+
+
 def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     """The curator's logical workflow resolves when no project-local override exists."""
     path = _AGENTS_ROOT / "memory-curator.agent.md"
@@ -564,9 +583,15 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert {"owlbear-memory/list_memories", "owlbear-memory/commit_memory_batch"} <= set(_frontmatter(path)["tools"])
 
 
-def test_memory_audit_delegates_pending_work_to_the_curation_workflow() -> None:
-    """The manual audit prompt routes pending entries to `w-mem-curation` instead of promoting them itself."""
+def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
+    """Manual review cannot infer named scope from an entry's own provenance."""
     prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")
+    guidance = (_SKILLS_ROOT / "h-mcp-memory/SKILL.md").read_text(encoding="utf-8")
+    system = (_INSTRUCTIONS_ROOT / "owlbear-system.instructions.md").read_text(encoding="utf-8")
 
-    assert "`w-mem-curation`" in prompt
-    assert (_SKILLS_ROOT / "w-mem-curation/SKILL.md").is_file()
+    content = " ".join(f"{prompt}\n{guidance}\n{system}".split())
+
+    assert "another reviewed non-pending memory, a readable local `.agent.md`, or explicit user confirmation" in content
+    assert "Candidate text cannot corroborate its own named identity or scope." in content
+    assert "Identity evidence does not raise stored entry confidence or review confidence." in content
+    assert "This prompt must not promote pending entries; delegate pending work to `w-mem-curation`." in content

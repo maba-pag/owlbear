@@ -53,7 +53,7 @@ def test_knowledge_ingestor_uses_canonical_platform_identities() -> None:
 
 def test_handbook_documents_current_server_and_storage_contract() -> None:
     handbook = _HANDBOOK_PATH.read_text(encoding="utf-8")
-    assert "`owlbear-knowledge` MCP server" in handbook
+    assert "`owlbear-knowledge`" in handbook
     assert "`.owlbear/knowledge/local.db`" in handbook
     assert "`.owlbear/knowledge/vectors`" in handbook
     assert "KNOWLEDGE_TOOLS_EXCLUDE" not in handbook

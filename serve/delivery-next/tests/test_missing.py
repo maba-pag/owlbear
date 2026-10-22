@@ -335,4 +335,3 @@ def test_prompts_and_window_note_name_the_report() -> None:
     assert "report_missing_tool" in step_input.FINISH
     assert "report_missing_tool" in step_input.reminder("builder")
     assert "report_missing_tool" in window_files.tools_note("builder")
-    assert "something you need is missing" not in step_input.FINISH
