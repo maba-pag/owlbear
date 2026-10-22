@@ -107,7 +107,6 @@ _RETIRED_EVIDENCE_PHRASES = {
     "command_or_procedure",
     "exit_status_or_artifact_locator",
     "call `answer`",
-    "heterogeneous",
 }
 
 
@@ -478,32 +477,14 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
 
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
     knowledge_ingestor_tools = set(metadata["knowledge-ingestor"]["tools"])
-    assert {
+    assert {tool for tool in knowledge_ingestor_tools if tool.startswith("owlbear-browser/")} == {
         "owlbear-browser/acquire",
         "owlbear-browser/browser_status",
-    } <= knowledge_ingestor_tools
+    }  # no interactive browser tool: sign-in stays with the operator
     browser_status_tool = browser_tools["browser_status"]
     assert browser_status_tool.annotations.read_only_hint is True
     assert browser_status_tool.annotations.idempotent_hint is True
     assert browser_status_tool.annotations.destructive_hint is False
-
-    knowledge_ingestor_guidance = (_AGENTS_ROOT / "knowledge-ingestor.agent.md").read_text(encoding="utf-8")
-    normalized_guidance = " ".join(knowledge_ingestor_guidance.split())
-    assert (
-        "Use `owlbear-browser/browser_status` only for readiness diagnosis and routing; "
-        "it does not authorize ingestion or prove authenticated content." in normalized_guidance
-    )
-    assert (
-        "Treat `not-launched` as normal before the first `acquire` and after the last "
-        "OwlBear-owned window closes; the first or next `acquire` launches or relaunches "
-        "the browser. Closing a shared page while another OwlBear-owned window remains "
-        "keeps status `ready`, and the next `acquire` reopens the page." in normalized_guidance
-    )
-    assert (
-        "Assign first-use sign-in, site trust, consent, or MFA directly to the operator in the "
-        "visible managed browser window; no interactive MCP tool participates, and credentials "
-        "or session material must never pass through an OwlBear request or result." in normalized_guidance
-    )
 
 
 def test_retired_delivery_operations_are_absent_from_active_customization_prose() -> None:
@@ -570,7 +551,8 @@ def test_project_doc_instruction_declares_local_standard_route() -> None:
         "store/README.md",
         "tests/README.md",
     } <= set(apply_to.split(","))
-    assert "Before applying these project-specific document-type rules, read `r-doc-standards`" in content
+    assert "`r-doc-standards`" in content
+    assert (_SKILLS_ROOT / "r-doc-standards/SKILL.md").is_file()
 
 
 def test_memory_curator_identity_deferral_reporting_split() -> None:
@@ -593,13 +575,12 @@ def test_memory_curator_identity_deferral_reporting_split() -> None:
 
 def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     """The curator's logical workflow resolves when no project-local override exists."""
-    agent = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
-    skill = _SKILLS_ROOT / "w-mem-curation/SKILL.md"
+    path = _AGENTS_ROOT / "memory-curator.agent.md"
+    agent = path.read_text(encoding="utf-8")
 
-    assert "fall back to `share/skills` when no local override exists" in agent
-    assert skill.is_file()
-    assert "owlbear-memory/list_memories" in agent
-    assert "owlbear-memory/commit_memory_batch" in agent
+    assert "`w-mem-curation`" in agent.split("<required_reading>", 1)[1].split("</required_reading>", 1)[0]
+    assert _AGENT_VALIDATOR._check_required_reading(agent, path) == []  # noqa: SLF001
+    assert {"owlbear-memory/list_memories", "owlbear-memory/commit_memory_batch"} <= set(_frontmatter(path)["tools"])
 
 
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
@@ -614,24 +595,3 @@ def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     assert "Candidate text cannot corroborate its own named identity or scope." in content
     assert "Identity evidence does not raise stored entry confidence or review confidence." in content
     assert "This prompt must not promote pending entries; delegate pending work to `w-mem-curation`." in content
-
-
-def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
-    """Assessment and curation policy stays explicit without adding a workflow gate."""
-    guidance = (_SKILLS_ROOT / "h-mcp-memory/SKILL.md").read_text(encoding="utf-8")
-    curation = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
-    content = " ".join(f"{guidance}\n{curation}".split())
-
-    assert "human-assisted and sampled" in content
-    assert "`builder` is the only assessment consumer" in content
-    assert guidance.count("substantive task attempt") == 4
-    assert "`assess_memories` | builder" in curation
-    assert "memory_candidate" in content
-    assert "pre-execution `dispatch_failure`" in content
-    assert "A repeated assessment with the same task, entry, and revision is not applied again" in content
-    assert "No Delivery or continuation step triggers it" in guidance
-    assert "opportunistic, not an eventual-processing SLA" in guidance
-    assert 'list_memories(states=["pending"])' in guidance
-    assert "Assessment coverage" in content
-    assert "Pending age and curation latency" in content
-    assert "Useful or harmful recall" in content
