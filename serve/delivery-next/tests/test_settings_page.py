@@ -145,6 +145,12 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         pds.pick(page, "Layer", "global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
         expect(page.locator("#pr")).to_contain_text("Set in each project")  # TD-308: the marker is per project
+        threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")  # TD-400
+        expect(threshold).to_have_attribute("placeholder", "inherit (95)")
+        threshold.fill("90")
+        expect(page.locator("#pending")).to_contain_text("curator threshold: inherited → 90")
+        pds.pick(page, "Layer", "project")
+        expect(page.locator("#curation")).to_contain_text("Set for all projects")  # one value everywhere
     project = store.read_config()
     assert (project.agents["builder"].max_rounds, project.design_failures, project.agents["builder"].minutes) == (
         4, "back", None

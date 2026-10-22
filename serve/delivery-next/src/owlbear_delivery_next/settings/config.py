@@ -140,9 +140,10 @@ class WideLayer(Layer):
 
 
 class GlobalLayer(WideLayer):
-    """The global settings; the visibility switch is global only (TD-35), test preparation per project (TD-96)."""
+    """The global settings; the visibility switch and the curator's threshold are global only (TD-35, TD-400)."""
 
     visible: bool | None = None
+    curator_threshold: int | None = Field(default=None, ge=50, le=100)  # percent: the curator decides alone at or above
 
 
 class MachineLayer(WideLayer):
@@ -185,6 +186,7 @@ class Settings(Record):
     pr_labels: list[str] = Field(default_factory=list)
     pr_marker: bool = True
     sessions: int = 2
+    curator_threshold: int = 95
     sources: dict[str, Source]
 
 
@@ -204,7 +206,13 @@ def _defaults() -> GlobalLayer:
         )
         for role, rm in DEFAULTS.items()
     }
-    return GlobalLayer(visible=False, agents=agents, runtimes={"sdk": True, "window": True}, widths=DEFAULT_WIDTHS)
+    return GlobalLayer(
+        visible=False,
+        agents=agents,
+        runtimes={"sdk": True, "window": True},
+        widths=DEFAULT_WIDTHS,
+        curator_threshold=95,
+    )
 
 
 def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) -> object:
@@ -260,6 +268,9 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     labels = _pick("pr_labels", sources, *((s, layer.pr_labels) for s, layer in layers), ("default", []))
     marker = _pick("pr_marker", sources, ("project", project.pr_marker), ("default", True))
     at_once = _pick("sessions", sources, *((s, layer.sessions) for s, layer in layers), ("default", 2))  # TD-336
+    threshold = _pick(  # TD-400: global only, 95% at first
+        "curator_threshold", sources, ("global", glob.curator_threshold), ("default", base.curator_threshold)
+    )
     return Settings(
         visible=visible,
         agents=agents,
@@ -272,5 +283,6 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         pr_labels=labels,
         pr_marker=bool(marker),
         sessions=int(at_once),
+        curator_threshold=int(threshold),
         sources=sources,
     )
