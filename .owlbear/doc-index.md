@@ -387,7 +387,7 @@
 - ## `Dependencies`
 
 ### Outbound links
-- [decision system design](research/decision-system-build.md)
+- [decision system design](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md)
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 

@@ -2,7 +2,7 @@
 
 The file contract for OwlBear's decisions and every project's: one Markdown file per lasting decision, a
 validator for a data repository's decision folders, a project's snapshot of them, and OwlBear's generated view. It
-is slice 1 of the [decision system design](../../.owlbear/research/decision-system-build.md); Delivery stores the
+is slice 1 of the [decision system design](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md); Delivery stores the
 files in `owlbear-data` and indexes them. OwlBear's hand-edited decision record was migrated into `owlbear-data` and
 retired (TD-466); it and its converter remain in Git history.
 
