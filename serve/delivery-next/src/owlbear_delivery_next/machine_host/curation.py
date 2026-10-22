@@ -228,12 +228,15 @@ class Curation:
                 self._save(
                     folder, FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
                 )
-            with self.lock:
-                self.queue.remove(folder)
-                again = folder in self.again
+            with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
+                again = folder in self.again and self.due(folder)
                 self.again.discard(folder)
-            if again and self.due(folder):
-                self.start(folder)
+                self.queue.remove(folder)
+                if again:
+                    self._save(
+                        folder, self.load().folders.get(folder, FolderRun()).model_copy(update={"state": "waiting"})
+                    )
+                    self.queue.append(folder)
 
     def _one(self, folder: str, started: datetime) -> None:
         shared = self.shared()
