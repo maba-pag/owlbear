@@ -177,7 +177,7 @@ def _retire(shared: DataRepo | None, new: Decision, old: Decision, message: str)
 
 def _new(old: Decision | None, **fields: object) -> Decision:
     base = old.content() if old else {}
-    keep = {k: base[k] for k in ("aliases", "topic", "rationale", "consequences", "applies_to") if k in base}
+    keep = {k: base[k] for k in ("aliases", "topic", "rationale", "consequences") if k in base}
     taken = {"id": new_id(), "created_at": _now(), "conflict": False, "read_back": "none"}
     return Decision.model_validate({**keep, **taken, **{k: v for k, v in fields.items() if v is not None}})
 

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from owlbear_decisions.models import Scope, new_id
 from owlbear_decisions.storage import parse, read, serialize, write
+from owlbear_decisions.validate import validate
 
 AT = datetime(2026, 10, 20, tzinfo=UTC)
 
@@ -52,8 +53,6 @@ def test_new_id_format_and_seed():
         {"aliases": ("td 1",)},
         {"read_back": "soon"},
         {"read_back": "2026-13-40"},
-        {"applies_to": {"paths": ["../outside"]}},
-        {"applies_to": {"paths": ["/abs/*.py"]}},
         {"created_at": datetime(2026, 10, 20)},  # noqa: DTZ001 - naive on purpose
         {"links": ({"type": "contradicts", "target": new_id()},)},
     ],
@@ -68,10 +67,27 @@ def test_long_statement_still_loads(make):
     assert parse(serialize(decision)) == decision
 
 
-def test_revision_of_a_file_without_owner_words_is_unchanged(make):
-    # computed by the model before TD-449 removed `owner_words`: pinned Changes and read revisions stay valid
-    assert make().revision == "4d7cce702b8ca504ca7ed249a9236d5b34ca29adf317077d84602ac884c6a451"
-    assert make().rule_revision == "3e369545593ece1036a7e81af34dd98d01bf10107974ca6069f6258ae7eb2c60"
+def test_revision_of_a_file_without_owner_words_or_selectors_is_unchanged(make):
+    # computed by the model before TD-449 and TD-460 removed them: pinned Changes and read revisions stay valid
+    assert make().revision == "1fa20ebda080643d149934ca8d9e8718e8841deca1204b7e3fb68175b08aff21"
+    assert make().rule_revision == "5b698142e3773945405c3829a75622618a2b41e012170b41b98157026f9f4b39"
+
+
+def test_an_old_file_with_selectors_loads_validates_and_is_written_back_without_them(make, tmp_path):
+    old = serialize(make()).replace("state: in_force\n", "applies_to:\n  paths:\n  - web/**\n  roles:\n  - builder\n"
+                                    "state: in_force\n")  # fmt: skip
+    assert "applies_to" in old
+    loaded = parse(old)
+    assert loaded == make()
+    assert "applies_to" not in loaded.content()
+    assert not hasattr(loaded, "applies_to")
+    path = tmp_path / "owlbear" / "decisions" / f"{loaded.id}.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(old, encoding="utf-8")
+    assert read(path).revision == make().revision
+    assert validate(tmp_path, [tmp_path / "owlbear"]) == []
+    write(loaded.model_copy(update={"read_back": "2026-10-21"}), path.parent.parent, loaded.revision)
+    assert "applies_to" not in path.read_text(encoding="utf-8")
 
 
 def test_an_old_file_with_owner_words_loads_and_is_written_back_without_them(make, tmp_path):

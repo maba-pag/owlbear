@@ -1,28 +1,21 @@
 """The impact of a change of mind with built effect (TD-428; decision system §9, slice 5b part 2).
 
 For a decision that replaced another, or was withdrawn, each project the old rule reached is `confirmed` (merge
-history shows work built under it: a merged finished-Change record whose brief made it or whose baseline applied it,
-or a Change in the project's store whose baseline applied it), `unaffected` (its path selectors match no file in the
-working tree, at `HEAD` or at the freshly fetched remote default branch, and every merged record rules it out) or
-`unknown`, with why. Records alone miss chat-built code, so a rule without path selectors stays unknown, and so does a
-project whose remote cannot be confirmed or whose history holds records that cannot rule it out (older ones without
-`decisions_applied`, or unreadable ones). A Global rule reaches every project the host knows and OwlBear's own folder;
-a project whose repository the host cannot read stays unknown. Nothing here writes, apart from the bounded fetch
-updating the project checkout's remote-tracking branches.
+history shows work built under it: a merged finished-Change record whose brief made it or whose baseline pinned it,
+or a Change in the project's store whose baseline pinned it) or `unknown`, with why: decisions carry no path
+selectors (TD-460), so code and tests alone cannot rule a project out, and records miss chat-built code. A Global rule
+reaches every project the host knows and OwlBear's own folder; a project whose repository the host cannot read stays
+unknown. Nothing here writes.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_decisions import LinkType, Scope, State
-from owlbear_decisions.applies import overlap
-from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.state_store import decision_actions, decision_store
 from owlbear_delivery_next.state_store.decision_actions import EFFECT, EFFECTS, Refused
 from owlbear_delivery_next.state_store.decision_archive import CHANGES
@@ -39,10 +32,7 @@ if TYPE_CHECKING:
 type Status = Literal["confirmed", "unaffected", "unknown"]
 OWLBEAR = "owlbear"  # OwlBear's own folder in owlbear-data (TD-435)
 SHOWN = 50  # evidence paths listed per project; the rest are counted
-GIT_SECONDS = 20
-FETCH_SECONDS = 10
-REMOTE = "could not confirm against the remote"
-WHOLE = "a whole-project rule: code and tests cannot tell"
+WHOLE = "no Change recorded work under it, and code and tests cannot tell"
 ACCEPTED = "the Decisions page: existing code accepted"  # the source of the owner's grandfathering decision
 DIVERGENCE = {
     "forbids": "The new rule forbids existing behaviour: affected work, publication and merge pause until compliance "
@@ -53,10 +43,6 @@ DIVERGENCE = {
     "wording": "Wording only: existing behaviour stays compliant, so no fixes are scheduled.",
     "withdrawn": "Withdrawn without a successor: no rule replaces it, so existing code needs no fix for it.",
 }
-
-
-class Unreadable(Exception):  # noqa: N818 - says what happened
-    """The project's repository cannot be listed."""
 
 
 @dataclass(frozen=True)
@@ -151,94 +137,21 @@ def applied(store: Store | None, decision_id: str) -> list[dict[str, str]]:
     ]
 
 
-def _git(git: str, repo: Path, *args: str, seconds: float = GIT_SECONDS) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-        [git, "-C", str(repo), *args], capture_output=True, text=True, timeout=seconds, check=False,
-        stdin=subprocess.DEVNULL, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-    )  # fmt: skip
-
-
-def _names(listed: subprocess.CompletedProcess[str], repo: Path) -> list[str]:
-    if listed.returncode:
-        msg = f"git cannot list the files of {repo}: {' '.join(listed.stderr.split())[:200]}"
-        raise Unreadable(msg)
-    return [p for p in listed.stdout.split("\0") if p]
-
-
-def _remote_head(git: str, repo: Path) -> str:
-    """The remote default branch's commit after a bounded fetch; nothing when it cannot be resolved."""
-    quiet = ("-c", "gc.auto=0", "-c", "maintenance.auto=false")
-    fetched = _git(git, repo, *quiet, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules",
-                   "origin", seconds=FETCH_SECONDS)  # fmt: skip
-    if fetched.returncode:
-        return ""
-    branch = "HEAD"
-    if _git(git, repo, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/HEAD").returncode:
-        said = _git(git, repo, "ls-remote", "--symref", "origin", "HEAD", seconds=FETCH_SECONDS).stdout.split()
-        if len(said) < 2 or said[0] != "ref:" or not said[1].startswith("refs/heads/"):  # noqa: PLR2004 - ref: NAME
-            return ""
-        branch = said[1].removeprefix("refs/heads/")
-    head = _git(git, repo, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}^{{commit}}")
-    return "" if head.returncode else head.stdout.strip()
-
-
-def tracked(repo: Path) -> tuple[list[str], str]:
-    """The files of the working tree (untracked ones too), `HEAD` and the remote default branch, and a doubt.
-
-    The remote is fetched first, bounded; the doubt says why it could not be confirmed, else it is empty.
-    """
-    try:
-        git = resolve_git_executable()
-        files = _names(_git(git, repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard"), repo)
-        files += _names(_git(git, repo, "ls-tree", "-r", "-z", "--name-only", "HEAD"), repo)
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-        msg = f"its repository {repo} cannot be read: {exc}"
-        raise Unreadable(msg) from exc
-    try:
-        remote = _remote_head(git, repo)
-        files += _names(_git(git, repo, "ls-tree", "-r", "-z", "--name-only", remote), repo) if remote else []
-    except OSError, subprocess.TimeoutExpired, Unreadable:
-        remote = ""
-    doubt = "" if remote else f"{REMOTE}: its default branch could not be fetched and resolved"
-    return sorted(set(files)), doubt
-
-
-def classify(
-    old: Decision, changes: Sequence[dict[str, str]], files: Iterable[str], unreadable: str = "", doubt: str = ""
-) -> tuple[Status, str, tuple[str, ...]]:
-    """One project's verdict on *old*, why, and the files its path selectors match.
-
-    A *doubt* (an unconfirmed remote, records that cannot rule it out) keeps it from `unaffected`.
-    """
-    globs = old.applies_to.paths
-    paths = tuple(f for f in files if any(overlap(g, f) for g in globs)) if globs else ()
+def classify(changes: Sequence[dict[str, str]], unreadable: str = "") -> tuple[Status, str]:
+    """One project's verdict on the old rule and why: confirmed by the Changes that built under it, else unknown."""
     if unreadable:
-        return "unknown", unreadable, paths
+        return "unknown", unreadable
     if changes:
-        return "confirmed", f"{len(changes)} Change(s) built or are building work under the old rule", paths
-    if not globs:
-        return "unknown", WHOLE, paths
-    if paths:
-        return "unknown", f"{len(paths)} files match its paths: whether they follow it needs a look", paths
-    if doubt:
-        return "unknown", doubt, paths
-    return "unaffected", "no file matches its paths here, at HEAD or on the remote, and no Change applied it", paths
+        return "confirmed", f"{len(changes)} Change(s) built or are building work under the old rule"
+    return "unknown", WHOLE
 
 
 def _impact(root: Path, place: Place, old: Decision, accepted: dict[str, str]) -> Impact:
     merged, incomplete = built(root, place.name, old)
     changes = [*merged, *applied(place.store, old.id)]
-    files: list[str] = []
     unreadable = place.why or ("" if place.repo else f"{place.name}'s repository is not served by this host")
-    doubt = f"{len(incomplete)} finished-Change record(s) cannot rule out that it was applied" if incomplete else ""
-    if not unreadable and place.repo and old.applies_to.paths:
-        try:
-            files, remote = tracked(place.repo)
-            doubt = "; ".join(filter(None, (doubt, remote)))
-        except Unreadable as exc:
-            unreadable = str(exc)
-    status, why, paths = classify(old, changes, files, unreadable, doubt)
-    return Impact(place.name, status, why, tuple(changes), paths, accepted.get(place.name, ""), tuple(incomplete))
+    status, why = classify(changes, unreadable)
+    return Impact(place.name, status, why, tuple(changes), (), accepted.get(place.name, ""), tuple(incomplete))
 
 
 def _reached(root: Path, old: Decision, places: Sequence[Place]) -> list[Place]:
@@ -310,7 +223,7 @@ def is_test(path: str) -> bool:
 
 def _rule(d: Decision) -> dict[str, Any]:
     out = d.model_dump(mode="json", include={"id", "title", "statement", "scope", "project", "state", "origin"})
-    return out | {"revision": d.revision, "paths": list(d.applies_to.paths)}
+    return out | {"revision": d.revision}
 
 
 def _project(i: Impact) -> dict[str, Any]:

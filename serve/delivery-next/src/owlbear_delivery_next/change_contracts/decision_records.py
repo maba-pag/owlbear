@@ -85,7 +85,7 @@ class Published(_Strict):
 
 
 class Said(BaseModel):
-    """What a pinned decision said, kept for those that applied, so a later difference can show the old wording."""
+    """What a pinned decision said, so a later difference can show the old wording."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -94,11 +94,18 @@ class Said(BaseModel):
 
 
 class DecisionBaseline(BaseModel):
-    """Every decision in force in the project's view at a data commit, by id and revision."""
+    """Every decision in force the Change considered, by id and rule revision, and the wording of those pinned.
+
+    Pinned from a pick (*picked*), they are the picked decisions and the Change's own; a decision in force at a rule
+    revision the map does not hold goes to the picker at the next step boundary (TD-456). Without a pick every
+    decision in force is pinned.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     commit: str
     at: datetime
     revisions: dict[str, str] = Field(default_factory=dict)
-    said: dict[str, Said] = Field(default_factory=dict)  # the ones that applied to the Change
+    said: dict[str, Said] = Field(default_factory=dict)  # the pinned ones: what every step's input lists
+    picked: bool = False
+    session: str = ""  # a reassessing pick's session, recorded before it starts: a killed runner's pick resumes it

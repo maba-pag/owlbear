@@ -68,7 +68,6 @@ rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename
 | `id` | `D-` plus a 26-character ULID (Crockford base32: 48-bit milliseconds, 80 random bits), sortable by creation |
 | `aliases` | Display names such as `TD-417`; one record row split into clauses names each of them |
 | `title`, `topic`, `statement` | The statement is the in-force line, at most 240 characters |
-| `applies_to` | `paths` (repository-relative globs), `roles`, `steps`; all empty means the whole scope |
 | `scope`, `project`, `change` | `global` (no project), `project` (its folder name), `change` (project and the Change's folder, up to 96 characters: Delivery's record stem) |
 | `origin`, `actor`, `source` | `decided`, `approved` or `autonomous`; who made it; where (chat, Change, PR, question) |
 | `inherited` | Brought over from the old decision record and never read back (TD-454); written only when true |
@@ -79,9 +78,10 @@ rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename
 | `created_at` | Time-zone-aware timestamp |
 
 `revision` is not stored: it is the sha256 of the canonical JSON of every other field, so any content change
-gives a new one. The owner's words are never stored (TD-449): an older file's `owner_words` is dropped when it is
-read and never written back. `write` refuses a stale `expected_revision` and never edits the statement of an in-force
-decision. A malformed file is reported by `load_folder`, never skipped.
+gives a new one. The owner's words are never stored (TD-449) and decisions carry no paths, roles or steps selectors
+(TD-460): an older file's `owner_words` and `applies_to` are dropped when it is read and never written back, its
+revision computed as before while they were empty. `write` refuses a stale `expected_revision` and never edits the
+statement of an in-force decision. A malformed file is reported by `load_folder`, never skipped.
 
 ### Validator rules
 

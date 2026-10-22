@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from owlbear_decisions import DecisionError, State, applies, decision_path, read
+from owlbear_decisions import DecisionError, State, decision_path, read
 from owlbear_delivery_next.change_contracts.decision_records import Published, Said
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit
@@ -107,7 +107,7 @@ def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str]
             return c, "; ".join(_failed(r) for r in failed)
         at = c.brief.approved_at or datetime.now(UTC)
         saved = {d.id: _record(d, r, at) for (d, _), r in zip(items, receipts, strict=True)}
-        done.decisions_baseline = _pinned(c.decisions_baseline, c, [d for d, _ in items])
+        done.decisions_baseline = _pinned(c.decisions_baseline, [d for d, _ in items])
     kept = [p for p in c.decisions_published if p.committed and p.id not in saved]  # planned ones not saved go
     done.decisions_published = [*kept, *saved.values()]
     return done, ""
@@ -150,18 +150,16 @@ def _record(d: Decision, r: Receipt | None, at: datetime) -> Published:
     return Published(id=d.id, title=d.title, state=d.state.value, notice=r.notice, at=at, **fields)
 
 
-def _pinned(baseline: DecisionBaseline | None, c: Change, saved: list[Decision]) -> DecisionBaseline | None:
-    """The approval's pin with *c*'s own saves taken in: its gate asks only about others' changes."""
+def _pinned(baseline: DecisionBaseline | None, saved: list[Decision]) -> DecisionBaseline | None:
+    """The approval's pin with the Change's own saves taken in, pinned: its gate asks only about others' changes."""
     if baseline is None:
         return None
     pin = baseline.model_copy(deep=True)
-    paths, own = decisions_gate.scope(c), decisions_gate.stem(c)
     for d in saved:
         if d.state is not State.IN_FORCE:
             pin.revisions.pop(d.id, None)
             pin.said.pop(d.id, None)
             continue
         pin.revisions[d.id] = d.rule_revision
-        if applies(d, paths=paths, role=None, step=None, change=own) is not False:
-            pin.said[d.id] = Said(title=d.title, statement=d.statement)
+        pin.said[d.id] = Said(title=d.title, statement=d.statement)
     return pin

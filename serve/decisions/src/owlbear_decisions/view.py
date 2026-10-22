@@ -67,14 +67,6 @@ def _rule(entry: Entry, seen: Snapshot, names: dict[str, str]) -> list[str]:
     ]
     said = (("Rationale", d.rationale), ("Consequences", d.consequences))  # in the view, so `--check` compares them
     lines += [f"  - {name}: {_line(text)}" for name, text in said if text.strip()]
-    a = d.applies_to
-    selectors = [
-        f"{kind} {', '.join(f'`{v}`' for v in values)}"
-        for kind, values in (("paths", a.paths), ("roles", a.roles), ("steps", a.steps))
-        if values
-    ]
-    if selectors:
-        lines.append(f"  - Applies to: {'; '.join(selectors)}")
     if d.read_back not in {"none", "pending"}:
         lines.append(f"  - Read back: confirmed {d.read_back}")
     elif d.inherited:

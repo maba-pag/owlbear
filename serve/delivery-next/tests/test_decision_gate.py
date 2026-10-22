@@ -1,4 +1,4 @@
-"""The runner's decision gate and step context (TD-419 slice 4): baselines, differences, faults and the budget."""
+"""The runner's decision gate and step context (TD-419 slice 4): baselines, differences, faults, whole text."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Applicability, Decision, Link, LinkType, Origin, Scope, State, new_id, read, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, write
 from owlbear_delivery_next.change_contracts.curation_records import Share, TestReview
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval
 from owlbear_delivery_next.change_contracts.models import (
@@ -77,8 +77,7 @@ def put(shared: DataRepo, decision: Decision) -> Decision:
 
 def replace(shared: DataRepo, old: Decision, statement: str) -> Decision:
     """A successor in force, and *old* replaced: an accepted wording is never edited (TD-430)."""
-    new = put(shared, make(title=old.title, statement=statement, applies_to=old.applies_to,
-                           links=(Link(type=LinkType.REPLACES, target=old.id),)))  # fmt: skip
+    new = put(shared, make(title=old.title, statement=statement, links=(Link(type=LinkType.REPLACES, target=old.id),)))
     write(old.model_copy(update={"state": State.REPLACED}), shared.root / PROJECT, old.revision)
     return new
 
@@ -122,7 +121,7 @@ def answer(store: Store, option: str) -> Change:
     return c
 
 
-def test_a_decision_an_earlier_change_recorded_reaches_a_later_changes_builder(
+def test_a_change_approved_without_a_pick_gives_every_role_every_decision_in_force(
     tmp_path, shared, change_repo, monkeypatch
 ):
     earlier = Change(slug="notes", brief=Brief(version=1, approved_version=1, approved_at=AT, title="Notes", decisions=[
@@ -132,8 +131,9 @@ def test_a_decision_an_earlier_change_recorded_reaches_a_later_changes_builder(
     files, left = decision_archive.archive(shared.root, PROJECT, earlier, "20261021-090000-notes", "merged")
     assert files
     assert not left
-    unresolved = put(shared, make(applies_to=Applicability(paths=("api/**",)), title="API is versioned"))
-    other = put(shared, make(applies_to=Applicability(steps=("review",)), title="Reviews read the diff"))
+    api = put(shared, make(title="API is versioned"))
+    other = put(shared, make(title="Reviews read the diff"))
+    gone = put(shared, make(title="Old rule", state=State.WITHDRAWN))
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: change_repo)
     seen: list[str] = []
 
@@ -143,6 +143,7 @@ def test_a_decision_an_earlier_change_recorded_reaches_a_later_changes_builder(
 
     monkeypatch.setattr(runner, "_kept", kept)
     store = stored(tmp_path, shared, change(scope=()))
+    assert store.read("c1").decisions_baseline.picked is False  # Brief.picked is None: approved before picking
 
     with pytest.raises(Started):
         step(store, change_repo)
@@ -150,15 +151,15 @@ def test_a_decision_an_earlier_change_recorded_reaches_a_later_changes_builder(
     message = seen[0]
     assert "## Decisions in force" in message
     assert "Notes live in one SQLite table." in message  # the earlier Change's project decision
-    assert f"{unresolved.id} (project, approved): API is versioned" in message
-    assert message.count(step_decisions.UNRESOLVED) == 1  # no scope yet: shown, never dropped
-    assert other.id not in message  # a review rule: counted, not listed, in a build
-    assert "1 other decision(s) in force do not apply to this step" in message
+    assert f"{api.id} (project, approved): API is versioned" in message
+    assert f"{other.id} (project, approved): Reviews read the diff" in message  # no role or step selectors
+    assert gone.id not in message
+    assert "do not apply" not in message
 
 
 @pytest.mark.parametrize("kind", [K.BUILD, K.PUBLISH, K.MERGE])
 def test_an_applicable_change_after_approval_asks_before_the_next_step_and_continue_repins(tmp_path, shared, ran, kind):
-    rule = put(shared, make(applies_to=Applicability(paths=("web/**",))))
+    rule = put(shared, make())
     store = stored(tmp_path, shared, change(kind))
     new = replace(shared, rule, "The pages are plain HTML and CSS with no build step.")
 
@@ -198,15 +199,6 @@ def test_pause_keeps_the_baseline_and_asks_again_after_resume(tmp_path, shared, 
     assert ran == []
 
 
-def test_a_change_to_a_decision_that_does_not_apply_does_not_stop_the_change(tmp_path, shared, ran):
-    elsewhere = put(shared, make(applies_to=Applicability(paths=("api/**",))))
-    store = stored(tmp_path, shared, change())
-    replace(shared, elsewhere, "The API is versioned by path.")
-
-    assert step(store, tmp_path).outcome is None
-    assert ran == [K.BUILD]
-
-
 def test_an_unreadable_data_repository_stops_the_step(tmp_path, shared, ran):
     store = stored(tmp_path, shared, change())
     shutil.rmtree(shared.root / PROJECT)
@@ -236,7 +228,7 @@ def test_without_a_data_repository_only_a_change_with_a_baseline_stops(tmp_path,
 def test_a_conflicted_applicable_decision_stops_naming_it(tmp_path, shared, ran):
     store = stored(tmp_path, shared, change())
     flagged = put(shared, make(conflict=True))
-    put(shared, make(conflict=True, applies_to=Applicability(paths=("api/**",))))  # does not apply
+    put(shared, make(conflict=True, state=State.WITHDRAWN))  # not in force
 
     c = step(store, tmp_path)
 
@@ -246,15 +238,17 @@ def test_a_conflicted_applicable_decision_stops_naming_it(tmp_path, shared, ran)
     assert flagged.id in c.stop.reason
 
 
-def test_decisions_that_do_not_fit_stop_instead_of_being_cut(tmp_path, shared, ran):
-    for n in range(40):
-        put(shared, make(title=f"Rule {n} " + "t" * 100, statement="s" * 239))
+def test_decisions_longer_than_twelve_thousand_characters_reach_the_step_whole(tmp_path, shared, monkeypatch):
+    rules = [put(shared, make(title=f"Rule {n} " + "t" * 100, statement=f"{n:02} " + "s" * 236)) for n in range(40)]
     store = stored(tmp_path, shared, change())
+    held: list[list[str]] = []
+    monkeypatch.setattr(runner, "_agent", lambda *_a: held.append(step_decisions.held()))
 
-    c = step(store, tmp_path)
+    assert step(store, tmp_path).outcome is None
 
-    assert ran == []
-    assert (c.stop.reason, c.stop.action) == (decisions_gate.SPLIT, "Split the Change")
+    [lines] = held
+    assert sum(len(line) + 1 for line in lines if line.startswith("- D-")) > 12_000
+    assert all(f"- {r.id} (project, approved): {r.title}: {r.statement}" in lines for r in rules)  # none cut
 
 
 def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_the_set_in_force(tmp_path, shared, ran):
@@ -361,20 +355,18 @@ def test_a_failed_refresh_stops_before_publish_and_merge_but_not_before_build(tm
     assert f"not refreshed before {kind}, which cannot be undone: not refreshed from the remote" in c.stop.reason
 
 
-def test_a_long_answer_reaches_the_step_whole_within_the_budget(shared):
+def test_a_long_answer_reaches_the_step_whole(shared):
     words = "Notes live in one SQLite table " + "and stay in it, " * 20 + "until the owner moves them."
     earlier = Change(slug="notes", brief=Brief(version=1, approved_version=1, approved_at=AT, title="Notes", decisions=[
         BriefDecision(id=new_id(), question="Where?", answer=words, origin="decided", scope="project")]))  # fmt: skip
     [path], _ = decision_archive.archive(shared.root, PROJECT, earlier, "20261021-090000-notes", "merged")
     cut = read(path)
 
-    line = step_decisions.entry(cut, resolved=True)
+    line = step_decisions.entry(cut)
 
     assert cut.statement.endswith("\u2026")
     assert line.endswith(f"{cut.statement} (Whole wording: {' '.join(words.split())})")
-    assert step_decisions.size([step_decisions.HEAD, line]) == len(line) + 1
-    assert step_decisions.entry(make(statement="Wait\u2026", rationale="Whole wording: other"), resolved=True).endswith(
-        ": Wait\u2026")  # fmt: skip
+    assert step_decisions.entry(make(statement="Wait\u2026", rationale="Whole wording: other")).endswith(": Wait\u2026")
 
 
 def checking(**fields) -> Change:

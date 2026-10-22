@@ -26,7 +26,7 @@ def put(root, make, seed, scope=Scope.PROJECT, **changes):
 
 def data(root, make):
     """Global and owlbear decisions in force and retired, a draft, a conflict, a finding and another project's."""
-    autonomous = {"origin": Origin.AUTONOMOUS, "applies_to": {}}
+    autonomous = {"origin": Origin.AUTONOMOUS}
     found = {
         "rule": put(root, make, "rule", Scope.GLOBAL, aliases=("TD-1",), topic="Global rules", **autonomous),
         "old": put(root, make, "old", aliases=("TD-2",), title="Old lint", state=State.REPLACED),
@@ -63,11 +63,10 @@ def test_the_view_lists_global_then_the_projects_rules_by_topic_and_retired_ones
     assert f"- **`{found['new'].id}` (TD-3)** Lint once" in rules
     assert "  - Statement: The builder's code is linted once, at submission." in rules
     assert "  - Origin: decided by owner, chat 2026-10-20, 2026-10-20; scope: project `owlbear`" in rules
-    assert "  - Applies to: paths `serve/**/*.py`; roles `builder`" in rules
+    assert "Applies to" not in text  # no selectors (TD-460)
     assert "  - Read back: confirmed 2026-10-20" in rules
     assert "words" not in rules
     assert f"  - Links: replaces `{found['old'].id}` (TD-2)" in rules
-    assert "Applies to" not in rules[rules.index(found["rule"].id) : rules.index("### `owlbear`")]
     assert "Drafts (proposed, not in force) are not listed: 1." in rules
     for name in ("old", "gone", "spent", "draft", "other"):
         assert f"- **`{found[name].id}`" not in rules, name

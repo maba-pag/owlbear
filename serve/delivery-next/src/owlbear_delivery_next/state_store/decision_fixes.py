@@ -337,7 +337,7 @@ def accept(shared: DataRepo, report: Report, project: str, revision: str, reason
         id=new_id(), title=_short(f"{project} keeps existing code under: {new.title}", TITLE), topic=new.topic,
         statement=_short(f"Code in {project} built before \u201c{new.title}\u201d stays as it is; new work follows it.",
                          STATEMENT_LIMIT),
-        rationale=f"Why: {why}\n\nImpact when kept: {impact.status}: {impact.why}", applies_to=new.applies_to,
+        rationale=f"Why: {why}\n\nImpact when kept: {impact.status}: {impact.why}",
         scope=Scope.PROJECT, project=project, origin=Origin.DECIDED, actor="owner", source=ACCEPTED,
         read_back=now.date().isoformat(), state=State.IN_FORCE, created_at=now,
         links=(Link(type=LinkType.EXCEPTION_TO if new.scope is Scope.GLOBAL else LinkType.REFINES, target=new.id),),

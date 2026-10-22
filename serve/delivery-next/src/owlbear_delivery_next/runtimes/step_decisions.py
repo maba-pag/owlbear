@@ -1,7 +1,10 @@
-"""The "Decisions in force" section of a step's input (TD-419 slice 4, §7): every applicable decision, whole.
+"""The "Decisions in force" section of a step's input (TD-452, TD-456, TD-457): the Change's pinned set, whole.
 
 The runner's gate loads the decisions once per step and holds the section while the step runs, so every input built
-for that step (the worker's, a challenger's, a judge's) carries the same text. One runner process runs one step.
+for that step (the worker's, a judge's, any role's) carries the same pinned set: the decisions picked for the Change
+and its own, or every one in force when it was approved without a pick. A challenger's input (`held(complete=True)`)
+adds the complete list of the others in force to check the pinned set against. Binding text is never cut and has no
+size limit. One runner process runs one step.
 """
 
 from __future__ import annotations
@@ -17,12 +20,14 @@ if TYPE_CHECKING:
     from owlbear_decisions import Decision
     from owlbear_delivery_next.change_contracts.decision_records import BriefDecision
 
-BUDGET = 12_000  # characters of mandatory decision text, apart from every other limit; never cut
 SHAPED = 30  # the brief's own decisions listed; brief_tools.DecisionDraft bounds each question and answer
-UNRESOLVED = " [unresolved applicability]"
-HEAD = "## Decisions in force (the project's and Global lasting rules: follow them; a conflict goes to the owner)"
+HEAD = "## Decisions in force (the lasting rules this Change follows: follow them; a conflict goes to the owner)"
 NONE = "- none recorded: this project has no shared data repository"
-_HELD: list[list[str]] = []
+COMPLETE = (
+    "## The complete list: every other decision in force (check the decisions above against it: one here that "
+    "governs this work but is missing above is a finding)"
+)
+_HELD: list[tuple[list[str], list[str]]] = []
 
 
 def shaped(decisions: Sequence[BriefDecision]) -> list[str]:
@@ -33,10 +38,10 @@ def shaped(decisions: Sequence[BriefDecision]) -> list[str]:
     return ["", head, *(f"- {' '.join(d.question.split())} -> {' '.join(d.answer.split())} ({d.origin})" for d in kept)]
 
 
-def entry(decision: Decision, *, resolved: bool, replaced: bool = False) -> str:
+def entry(decision: Decision, *, replaced: bool = False) -> str:
     """One decision in full: id and aliases, scope, origin, title and statement, a cut one's whole wording too."""
     names = ", ".join([decision.id, *decision.aliases])
-    note = (UNRESOLVED if not resolved else "") + (" [this Change's brief replaces it]" if replaced else "")
+    note = " [this Change's brief replaces it]" if replaced else ""
     statement = " ".join(decision.statement.split())
     whole = " ".join(decision.rationale.partition(WHOLE)[2].split())
     if statement.endswith("\u2026") and whole.startswith(statement[:-1].rstrip()):
@@ -44,34 +49,32 @@ def entry(decision: Decision, *, resolved: bool, replaced: bool = False) -> str:
     return f"- {names} ({decision.scope}, {decision.origin}): {' '.join(decision.title.split())}: {statement}{note}"
 
 
-def section(applying: Sequence[tuple[Decision, bool]], others: int, replaced: Collection[str] = ()) -> list[str]:
-    """The section: each applying decision with whether its applicability resolved, then the count of the rest."""
-    lines = [HEAD, *(entry(d, resolved=r, replaced=d.id in replaced) for d, r in applying)]
-    if not applying:
-        lines.append("- none applies to this step")
-    if others:
-        lines.append(f"{others} other decision(s) in force do not apply to this step and are not listed.")
-    return lines
+def section(pinned: Sequence[Decision], replaced: Collection[str] = ()) -> list[str]:
+    """The section every role of a step reads: each pinned decision whole."""
+    return [HEAD, *(entry(d, replaced=d.id in replaced) for d in pinned)] if pinned else [HEAD, "- none in force"]
 
 
-def size(lines: Sequence[str]) -> int:
-    """The characters of the section's decision entries, measured against `BUDGET`."""
-    return sum(len(line) + 1 for line in lines if line.startswith("- D-"))
+def complete(others: Sequence[Decision]) -> list[str]:
+    """What a challenger reads besides the section: every other decision in force, whole."""
+    return ["", COMPLETE, *(entry(d) for d in others)] if others else ["", COMPLETE, "- none: the list above is all"]
 
 
 @contextmanager
-def using(lines: list[str] | None) -> Iterator[None]:
-    """Hold *lines* as the section of every input built until the block ends; None holds none."""
-    _HELD.append(lines or [])
+def using(lines: list[str] | None, others: list[str] | None = None) -> Iterator[None]:
+    """Hold *lines* as the section of every input built until the block ends, *others* for challengers too."""
+    _HELD.append((lines or [], others or []))
     try:
         yield
     finally:
         _HELD.pop()
 
 
-def held() -> list[str]:
-    """The section held for the running step, with a blank line before it; nothing outside a gated step."""
-    return ["", *_HELD[-1]] if _HELD and _HELD[-1] else []
+def held(*, complete: bool = False) -> list[str]:
+    """The section held for the running step after a blank line, a challenger's (*complete*) with the complete list."""
+    if not (_HELD and _HELD[-1][0]):
+        return []
+    lines, others = _HELD[-1]
+    return ["", *lines, *(others if complete else [])]
 
 
 def resumed(message: str) -> str:
