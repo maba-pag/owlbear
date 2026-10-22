@@ -190,15 +190,18 @@ function curationSection() {
       (Settings, Memory curation), and leaves the rest for you on the Memory page. It runs after a merge and when
       OwlBear is idle, for folders with entries no run has seen; while paused only with "Curate memory while paused"
       on. Each run is one agent session.</p-text>
-    ${c.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>`
+    ${c.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
+      <div><p-button id="curate-all" type="button" compact="true" .loading=${state.curating === "all"}
+        @click=${() => curate("all")}>Curate all now</p-button></div>`
       : html`<p-text id="curation-none" size="sm">${c.reason.charAt(0).toUpperCase() + c.reason.slice(1)}.</p-text>`}
   </section>`;
 }
 
 async function curate(folder) {
+  const which = folder === "all" ? "every memory folder, one after the other" : folder;
   const sure = await ask({
-    title: `Curate ${folder} now?`, yes: "Curate now", no: "Cancel",
-    now: `The memory curator judges the pending entries of ${folder}, with Global memory beside them.`,
+    title: `Curate ${folder === "all" ? "all memory" : folder} now?`, yes: "Curate now", no: "Cancel",
+    now: `The memory curator judges the pending entries of ${which}, with Global memory beside them.`,
     then: "At or above your threshold it promotes, prunes or makes global alone; it leaves the rest as they are and "
       + "reports them here. It runs now, also while Delivery is paused, and uses AI credits.",
     after: "Approve, edit or move its results on the Memory page.",
@@ -209,7 +212,8 @@ async function curate(folder) {
   show();
   try {
     await call("/curation", { machine: true, body: { folder }, timeout: 30000 });
-    document.getElementById("status").textContent = `Curating ${folder}; this page shows its report when it ends.`;
+    document.getElementById("status").textContent = `Curating ${folder === "all" ? "every memory folder" : folder}; `
+      + "this page shows each report when it ends.";
     state.error = "";
   } catch (e) {
     state.error = e.message;
