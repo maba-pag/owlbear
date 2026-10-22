@@ -161,7 +161,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
-    run = accepted or asked.settled(_kept(store, lock, change, path, made))
+    run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None

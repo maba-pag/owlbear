@@ -5,8 +5,11 @@ complete list. A failed lookup says failed, never "none apply"; a lookup attache
 import asyncio
 import io
 import json
+import threading
+import time
 import urllib.error
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -55,9 +58,9 @@ def picked(*ids: str) -> pick_tools.PickResult:
     return pick_tools.PickResult(picked=[{"id": i, "note": "it governs the work"} for i in ids])
 
 
-def building(picking, *chosen: Decision) -> None:
+def building(picking, *chosen: Decision, **draft) -> None:
     """A Change approved on a pick of *chosen*, then at its build step."""
-    picking.save()
+    picking.save(**draft)
     assert picking.ask(1).status_code == 200
     picking.picks.append(picked(*(d.id for d in chosen)))
     picking.verdicts.append(tools.ReviewResult(verdict="pass"))
@@ -152,6 +155,162 @@ def test_a_workers_lookup_in_a_window_step_goes_through_the_relay_with_a_picks_t
     assert waited == [step_mcp.TIMEOUT, pick_tools.WAIT]  # a pick's time, not a result check's
     assert c.spend.credits == 12.0
     assert set(c.decisions_baseline.said) == {rule.id}
+
+
+def test_a_window_lookup_still_running_when_the_window_delivers_keeps_its_spend(picking, monkeypatch):
+    rule, other = picking.put(make()), picking.put(fonts())
+    building(picking, rule)
+    picking.picks.append(picked(other.id))
+    started, release, said, asking = threading.Event(), threading.Event(), [], []
+
+    async def blocked(cfg):
+        started.set()
+        await asyncio.to_thread(release.wait, 10)
+        return await picking.run(cfg)
+
+    def window(cfg, inbox):
+        gate = Gate(cfg, Run(cfg.session_id, runtime="window"), lambda **_e: None, lambda: None)
+        with Inbox(gate, inbox):
+            asking.append(threading.Thread(target=lambda: said.append(relayed(inbox, asked()))))
+            asking[0].start()
+            assert started.wait(10)
+            gate.finish("error", None, "stopped while its lookup runs")
+        cfg.journal.delivered()  # the runner's Change is replaced by a copy while the lookup runs
+        release.set()
+        return Run(cfg.session_id, "error", detail="stopped", termination=DONE, runtime="window")
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", blocked)
+    monkeypatch.setattr(sessions, "in_window", lambda _profile: True)
+    monkeypatch.setattr(sessions.vscode_adapter, "run", window)
+
+    c = build(picking)
+    asking[0].join(10)
+
+    assert [d["id"] for d in json.loads(said[0].content[0].text)["decisions"]] == [other.id]
+    assert c.spend.credits == 12.0  # the shaping pick and the lookup that ended after the delivery
+
+
+def test_a_workers_lookup_lists_the_changes_own_decisions_whole(picking, monkeypatch):
+    answer = " ".join(["Farewells use the first name only and never the family name,"] * 6)
+    drafted = {"question": "Which name does a farewell use?", "answer": answer, "origin": "decided"}
+    building(picking, decisions=[drafted])
+    picking.picks.clear()  # nothing was in force to pick from
+    own = picking.change().brief.decisions[0]
+    picking.picks.append(picked(own.id))
+    said = []
+
+    async def run(cfg):
+        if cfg.role == tools.PICKER:
+            return await picking.run(cfg)
+        step = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
+        (tool,) = [t for t in step.tools() if t.name == tools.LOOKUP]
+        reply = await tool.handler(SimpleNamespace(arguments={"question": QUESTION}))
+        said.append(json.loads(reply.text_result_for_llm))
+        return Run(cfg.session_id, "error", detail="stopped after its lookup", termination=DONE)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", run)
+
+    build(picking)
+
+    whole = {"id": own.id, "title": own.question, "statement": answer, "scope": "change", "origin": "decided"}
+    assert said == [{"decisions": [whole | {"note": "it governs the work"}]}]
+    assert all(x in picking.pickers()[0].message for x in (own.id, answer))
+
+
+class Blocked:
+    """A lookup's work that waits until released, counting how many run at once."""
+
+    def __init__(self, done: Run) -> None:
+        self.done, self.release, self.entered, self.running, self.most = done, threading.Event(), [], 0, 0
+
+    def __call__(self, *_args):
+        self.running += 1
+        self.most = max(self.most, self.running)
+        self.entered.append(1)
+        self.release.wait(10)
+        self.running -= 1
+        return {"decisions": []}, self.done
+
+
+def until(ready) -> None:
+    end = time.monotonic() + 10
+    while not ready():
+        assert time.monotonic() < end
+        time.sleep(0.01)
+
+
+def test_a_steps_lookups_run_one_at_a_time(monkeypatch):
+    work, logged = Blocked(Run("look", "result")), []
+    monkeypatch.setattr(lookup, "worker", work)
+    monkeypatch.setattr(lookup.sessions, "logged", lambda *a: logged.append(a))
+    asked_ = lookup.Asked(None, None, lambda: "change")
+    question = pick_tools.Question(question=QUESTION)
+    with ThreadPoolExecutor(2) as pool:
+        calls = [pool.submit(asked_, question) for _ in range(2)]
+        until(lambda: asked_.admitted == 2 and work.entered)
+        assert len(work.entered) == 1  # the second waits its turn: one picker beside the step's session
+        work.release.set()
+        assert [json.loads(f.result(10)) for f in calls] == [{"decisions": []}] * 2
+    assert (work.most, logged) == (1, [])  # spend counts when the step settles
+
+
+def test_a_steps_settlement_rejects_lookups_not_started_waits_for_the_running_one_and_counts_its_spend(monkeypatch):
+    work, logged, change = Blocked(Run("look", "result")), [], ["taken at the start"]
+    monkeypatch.setattr(lookup, "worker", work)
+    monkeypatch.setattr(lookup.sessions, "logged", lambda _s, _l, c, done, fields: logged.append((c, done, fields)))
+    asked_ = lookup.Asked(None, None, lambda: change[0])
+    question = pick_tools.Question(question=QUESTION)
+    with ThreadPoolExecutor(3) as pool:
+        running, waiting = pool.submit(asked_, question), pool.submit(asked_, question)
+        until(lambda: asked_.admitted == 2 and work.entered)
+        change[0] = "the runner's now"  # a window's delivery replaced it
+        settling = pool.submit(asked_.settled, lambda: "the step's run")
+        until(lambda: not asked_.open)
+        assert json.loads(asked_(question)) == {"failed": lookup.ENDED}
+        assert not settling.done()  # the running lookup is waited for
+        work.release.set()
+        assert settling.result(10) == "the step's run"
+        assert json.loads(running.result(10)) == {"decisions": []}  # admitted before settlement: answered
+        assert json.loads(waiting.result(10)) == {"failed": lookup.ENDED}
+    assert (len(work.entered), logged) == (1, [("the runner's now", work.done, {"kind": lookup.LABEL, "exit": "ok"})])
+
+
+def host_lookup(picking) -> dict:
+    return picking.http.post("/api/next/decisions/lookup", json={"question": QUESTION}).json()
+
+
+def test_a_hosts_lead_chat_lookups_run_one_at_a_time_and_a_waiting_one_gives_up(picking, monkeypatch):
+    work = Blocked(Run("look", "result", termination=DONE))
+    monkeypatch.setattr(lookup, "chat", work)
+    monkeypatch.setattr(lookup, "SLOT_WAIT", 0.05)
+    with ThreadPoolExecutor(1) as pool:
+        first = pool.submit(host_lookup, picking)
+        until(lambda: work.entered)
+        assert host_lookup(picking) == {"failed": lookup.BUSY}
+        work.release.set()
+        assert first.result(10) == {"decisions": []}
+    assert (host_lookup(picking), work.most) == ({"decisions": []}, 1)
+
+
+def test_a_lead_chats_lookup_whose_processes_are_not_confirmed_gone_holds_the_next_until_a_rescan(picking, monkeypatch):
+    picking.put(make())
+    left, alive = Termination(confirmed=False, survivors=(4242,)), [True]
+
+    async def run(cfg):
+        picking.told.append(cfg)
+        return Run(cfg.session_id, "result", picked(), termination=left, pids={4242: 1.0})
+
+    monkeypatch.setattr(sdk_adapter, "run", run)
+    monkeypatch.setattr(lookup.processes, "alive", lambda pid, _created: alive[0] if pid == 4242 else False)
+
+    first, held = host_lookup(picking), host_lookup(picking)
+    alive[0] = False
+    rescanned = host_lookup(picking)
+
+    assert first["failed"].startswith("its pick cannot be trusted")
+    assert held == {"failed": lookup.LEFT}
+    assert rescanned["failed"].startswith("its pick cannot be trusted")  # it ran: the processes were seen gone
+    assert len(picking.pickers()) == 2
 
 
 def test_a_lookup_the_relay_gets_no_answer_for_is_failed_not_a_stopped_step(tmp_path):

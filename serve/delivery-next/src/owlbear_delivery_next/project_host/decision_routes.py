@@ -365,10 +365,11 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
 
 def _lookup_route(routes: APIRouter, shared: Shared, folder: Callable[[], str], store: Store | None) -> None:
     """A lead chat's lookup: the picker over the folder's and Global decisions in force (TD-456, TD-459)."""
+    chats = lookup.Chats()  # this host's: one lookup at a time (TD-336)
 
     @routes.post("/decisions/lookup")
     def look_up(body: LookupBody) -> dict[str, Any]:
-        return lookup.chat(shared(), folder(), body.question, store.settings if store else None)
+        return chats(shared(), folder(), body.question, store.settings if store else None)
 
 
 def _confirmed(body: SuccessorBody) -> None:
