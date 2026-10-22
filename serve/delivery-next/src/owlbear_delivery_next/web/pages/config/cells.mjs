@@ -96,6 +96,17 @@ export function sessionsAtOnce() {
   source(key, state.loaded.settings[key]));
 }
 
+// TD-400: the curator decides alone at or above this confidence; one value for every machine and project.
+export function curatorThreshold() {
+  const key = "curator_threshold";
+  if (state.layer !== "global") {
+    return cell(html`<p-text>Set for all projects</p-text>`, source(key, state.loaded.settings[key]));
+  }
+  return cell(typed("Curator's confidence threshold in percent (50 to 100)", own(key), (v) => edit(key, v),
+    { key, placeholder: `inherit (${inherited()[key]})`, inputmode: "numeric", disabled: state.saving }),
+  source(key, state.loaded.settings[key]));
+}
+
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
 export function prLabels() {
   const key = "pr_labels", below = inherited()[key].join(", ") || "none";

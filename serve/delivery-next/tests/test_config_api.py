@@ -153,7 +153,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     assert (got["global"], got["global_location"]) == ({"format": F, "agents": {}, "runtimes": {}, "widths": None,
                                                          "preparations": None, "data": None, "design_failures": None,
                                                          "final_review": None, "pr_labels": None,
-                                                         "pr_marker": None, "sessions": None, "visible": None},
+                                                         "pr_marker": None, "sessions": None, "visible": None,
+                                                         "curator_threshold": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})
     assert data.status_code == 422  # test preparation is a project setting (TD-96)
@@ -370,7 +371,13 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
 
 @pytest.mark.parametrize(
     "layer",
-    [{"pr_marker": False}, {"data": {}}, {"visible": True}, {"agents": {"builder": {"last_round_at": 8}}}],
+    [
+        {"pr_marker": False},
+        {"data": {}},
+        {"visible": True},
+        {"curator_threshold": 90},
+        {"agents": {"builder": {"last_round_at": 8}}},
+    ],
 )
 def test_this_machine_s_layer_refuses_project_and_global_settings_and_combinations_that_do_not_fit(store, layer):
     c = client(store, headers=AUTH)

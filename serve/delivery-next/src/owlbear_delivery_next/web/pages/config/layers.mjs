@@ -7,7 +7,7 @@ import { named } from "./sections.mjs";
 function saved(layer, key) {
   const loaded = state.loaded;
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (key === "design_failures" || key === "sessions") return String(loaded[layer]?.[key] ?? "");
+  if (["design_failures", "sessions", "curator_threshold"].includes(key)) return String(loaded[layer]?.[key] ?? "");
   if (key === "pr_labels" || key === "pr_marker") {
     const v = loaded[layer]?.[key];
     if (v === null || v === undefined) return "";
@@ -68,7 +68,7 @@ function edited(layer) {
       next[key] = value || null;
       continue;
     }
-    if (key === "sessions") {
+    if (key === "sessions" || key === "curator_threshold") {
       next[key] = value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
       continue;
     }
