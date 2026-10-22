@@ -4,6 +4,7 @@ import { here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./state.mjs";
 import {
   cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
+  curatorThreshold,
   contextCell, ratesCell, editable, inactive,
 } from "./cells.mjs";
 import { pendingLine, save, rename } from "./layers.mjs";
@@ -156,6 +157,15 @@ function settingsSections() {
       ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
         [row(text("Agent sessions at once in one project"), sessionsAtOnce())])}
       <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="curation-title">
+      <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
+      <p-text>The memory curator states its confidence in everything it would do to an entry. At or above this
+        threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
+        entry as it is in an automatic run.</p-text>
+      ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
+        [row(text("Curator's confidence threshold (%)"), curatorThreshold())])}
+      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
     </section>
     <section class="panel" aria-labelledby="subagents-title">
       <p-heading size="lg"><h2 id="subagents-title">Subagents</h2></p-heading>

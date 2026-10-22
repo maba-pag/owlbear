@@ -8,7 +8,7 @@ export const SOURCES = { default: "built-in default", global: "global", machine:
 export const LAYERS = { project: "This project", machine: "This machine", global: "All projects" };
 export const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
-export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions"];  // whole numbers (TD-286: minutes; TD-336)
+export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold"];  // whole numbers
 export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Design pack updates (updater)"]];
