@@ -35,12 +35,18 @@ NOT_RUNNING = (
     "Delivery is not running for {repo} - run `owlbear start`, then add this project on its page if it is not "
     "listed. Nothing advances until it runs."
 )
-NOT_OWLBEAR = "{repo} is not an OwlBear project: add its clone on the Changes page, then reload this window"
+NOT_SERVED = (
+    "OwlBear is running but does not serve {repo}: its state and reason are on the Changes page, and "
+    "`owlbear doctor` names the fix. Nothing advances until it is served."
+)
+OWLBEAR_DOWN = "Delivery is not running - run `owlbear start`; OwlBear's own clone is never added as a project (TD-435)"
+RESTART = "reload the VS Code window; in the Copilot runtime, run Restart Local Agent Host instead"
+NOT_OWLBEAR = "{repo} is not an OwlBear project: add its clone on the Changes page, then " + RESTART
 NO_CHANGES = "OwlBear's own workspace has no Changes: only the decision tools work here"
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 _STATE: dict[str, Chat | Closed] = {}
 OK = 200
-UPDATED = "OwlBear updated: reload this VS Code window"  # a chat server older than the host (self-update §5.6)
+UPDATED = "OwlBear updated: " + RESTART  # a chat server older than the host (self-update §5.6)
 STALE = 409
 
 
@@ -62,6 +68,7 @@ class Chat:
     """The chat tools of one clone; every write goes through the running host."""
 
     prefix = ""  # where its decisions are, under the host's API
+    not_running = NOT_RUNNING
 
     def __init__(self, repo: Path) -> None:
         self.repo, self.store = repo, Store.open(repo)
@@ -70,14 +77,18 @@ class Chat:
         """The running host this workspace's tools call."""
         return host.running(self.store)
 
+    def down(self) -> str:
+        """Why the tools reach no host: Delivery is not running, or it runs without this project."""
+        machine = host.running_at(local_home.root())
+        return (NOT_SERVED if machine and machine.token else self.not_running).format(repo=self.repo)
+
     def call(self, method: str, path: str, body: object = None, timeout: float = 15.0) -> tuple[int, Any]:
         """One request to the host with its token; 503 when it is not running."""
         rec = self.record()
-        down = NOT_RUNNING.format(repo=self.repo)
         if updated(rec):  # it reads no state either: a newer version may have written it
             return STALE, {"error": UPDATED}
         if rec is None or not rec.token:
-            return 503, {"error": down}
+            return 503, {"error": self.down()}
         headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "chat"}
         data = None if body is None else json.dumps(body).encode()
         url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{self.prefix}{path}"  # TD-242
@@ -91,7 +102,7 @@ class Chat:
             except ValueError:
                 return exc.code, {"error": str(exc.reason)}
         except (urllib.error.URLError, OSError) as exc:
-            return 503, {"error": f"{down} ({exc})"}
+            return 503, {"error": f"{self.not_running.format(repo=self.repo)} ({exc})"}
 
     def save_brief(self, fields: dict[str, Any], path: str = "/briefs") -> dict[str, Any]:
         """Create or revise a brief draft; the host returns the handle or one error per field."""
@@ -110,7 +121,7 @@ class Chat:
         if code != OK:
             now = datetime.now(UTC)
             rows = [api.summary(self.store, s, host.activity(self.store, s, None), now) for s in self.store.slugs()]
-            out["message"] = NOT_RUNNING.format(repo=self.repo)
+            out["message"] = self.down()
         out["changes"] = [r for r in rows if not change or r.get("handle") == change]
         if not change:
             out["changes"] = [{k: v for k, v in r.items() if k not in PAGE_ONLY} for r in out["changes"]]
@@ -221,6 +232,7 @@ class OwlBear(Chat):
     """OwlBear's own workspace, never registered (TD-435): its decisions on the machine host, and no Changes."""
 
     prefix = "/owlbear"
+    not_running = OWLBEAR_DOWN
 
     def __init__(self, repo: Path) -> None:  # no store: opening one makes Delivery state for this clone
         self.repo = repo
