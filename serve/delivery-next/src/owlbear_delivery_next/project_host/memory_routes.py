@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException
@@ -153,19 +154,67 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
             if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
                 where = store.name if back else "Global memory"
                 raise HTTPException(409, f"{where} holds {entry.title} already")
-            moving = entry.model_copy(update={"origin": None if back else store.name})
-            storage.write_entry(path, moving, memory_dir=source)  # rewritten in place, then moved whole
-            try:
-                path.replace(moved)
-            except OSError as exc:
-                storage.write_entry(path, entry, memory_dir=source)  # as it was, so the move can be tried again
-                raise HTTPException(409, f"{entry.title} could not move: {exc.strerror or exc}; try again") from exc
+            moving = entry.model_copy(update={"origin": None if back else store.name, "updated_at": _later(entry)})
+            _relocate(path, moved, (source, target), (entry, moving), back=back)
             entry = moving
             what = "move back" if back else "make global"
             notice = shared.publish([path, moved], f"memory {store.name}: {what} {entry.title}", until)
     except tuple(e for e, _, _ in REFUSED) as exc:
         raise _refused(exc) from exc
     return {"entry": _shown(entry), "notice": notice}
+
+
+def _later(entry: MemoryEntry) -> str:
+    """A change time after the entry's own, so a page that showed it before the move is refused (stale)."""
+    now, before = datetime.now(UTC), datetime.fromisoformat(entry.updated_at)
+    return (now if now > before else before + timedelta(microseconds=1)).isoformat()
+
+
+def _relocate(
+    path: Path, moved: Path, folders: tuple[Path, Path], entries: tuple[MemoryEntry, MemoryEntry], *, back: bool
+) -> None:
+    """Move the entry's file and write its new origin, so a failure at any point leaves it whole where it was.
+
+    Make global writes the origin before it moves; Move back moves first and clears the origin only at home, so
+    an entry in Global never loses the project it came from.
+    """
+    (source, target), (entry, moving) = folders, entries
+    try:
+        if back:
+            path.replace(moved)
+            try:
+                storage.write_entry(moved, moving, memory_dir=target)
+            except OSError, ValueError:
+                moved.replace(path)
+                raise
+        else:
+            storage.write_entry(path, moving, memory_dir=source)  # rewritten in place, then moved whole
+            try:
+                path.replace(moved)
+            except OSError:
+                storage.write_entry(path, entry, memory_dir=source)
+                raise
+    except ValueError as exc:  # the origin made it too large to store
+        raise HTTPException(422, f"{entry.title} cannot move: {exc}") from exc
+    except OSError as exc:
+        raise HTTPException(409, f"{entry.title} could not move: {exc.strerror or exc}; try again") from exc
+
+
+def reorigin(shared: data_repo.DataRepo, old: str, new: str, until: float) -> str:
+    """After a project folder's rename, Global entries made global from it name its new name (TD-292).
+
+    The caller holds the shared repository's lock. What the owner should know about the publication, else nothing.
+    """
+    common = shared.root / "memory"
+    if not common.is_dir():
+        return ""
+    changed = []
+    with writer_lock(common):
+        for path in sorted(common.glob("*.md")):
+            if (entry := storage.read_entry(path)) is not None and entry.origin == old:
+                storage.write_entry(path, entry.model_copy(update={"origin": new}), memory_dir=common)
+                changed.append(path)
+    return shared.publish(changed, f"memory global: {old} is now {new}", until) if changed else ""
 
 
 def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
