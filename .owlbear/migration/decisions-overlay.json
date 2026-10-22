@@ -5,7 +5,9 @@
   "The nine cover test weakening, defect proof, caller/fallback review, test curation, watcher lessons, shaping, UI accessibility, consumer-aware planning and ordered state changes.",
   "B259 matches ECC adoption 4; B294 matches adoption 5. This does not make all test or memory decisions Global.",
   "B289 mixes Global config-approval rules with quality-service implementation; TD-442 provides no clause-level scope split, so the matching B id is included.",
-  "B009's page-comment policy is excluded. B328 records the scope mapping itself and remains OwlBear-scoped under “all else”."
+  "B009's page-comment policy is excluded. B328 records the scope mapping itself and remains OwlBear-scoped under “all else”.",
+  "A second Sol check (2026-10-22) corrected 8 drifting and 2 still-dependent rewordings, flagged 4 that may need splitting, and kept 29 originals that already stood alone.",
+  "The quality-service entry stays Global for its config-approval rule (TD-442) but also describes OwlBear's linter service; split it on review."
  ],
  "global": [
   {
@@ -88,27 +90,15 @@
   },
   {
    "topic": "C-01 Asking the owner",
-   "original": "When the direction itself is in doubt, ask the direction first, then the nuances, stating the reason.",
-   "statement": "When a decision's direction is in doubt, ask the owner about the direction first, then the nuances, stating the reason.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-01 Asking the owner",
    "original": "Used at the end of ideation, before design approval and for the assistant's consequential choices.",
    "statement": "Use the decision read-back format at the end of ideation, before design approval and for the assistant's consequential choices.",
    "note": "ok"
   },
   {
-   "topic": "C-01 Asking the owner",
-   "original": "\"Show me more options\" gives a bounded set across directions, each with pros, cons, risks and its own percentage that it is a good choice, not adding up.",
-   "statement": "In a decision read-back, \"Show me more options\" gives a bounded set across directions, each with pros, cons, risks and its own percentage of being a good choice, not shares of a total.",
-   "note": "ok"
-  },
-  {
    "topic": "C-03 Models and credits",
    "original": "The watcher's model and effort are chosen with the owner after TD-27's benchmark has run.",
-   "statement": "Choose the watcher's model and effort with the owner after OwlBear's cheap-model quality-and-cost benchmark comparing Luna, Haiku and Sol has run.",
-   "note": "ok"
+   "statement": "Choose the watcher's model and effort with the owner after benchmarking OwlBear work: gpt-6-luna max vs claude-haiku-5.5 high, and claude-haiku-5.5 xhigh vs gpt-6.1-sol low, for quality and cost.",
+   "note": "corrected by a second check: Replaces TD-27's two specified model/effort comparisons with an unspecified three-model benchmark."
   },
   {
    "topic": "C-03 Models and credits",
@@ -161,8 +151,8 @@
   {
    "topic": "C-04 Window steps and the watcher",
    "original": "Suspended visibility: agent need, the Change's always-visible or the global switch makes a step a window chat with the same tools as unwatched; changes apply from the next session.",
-   "statement": "While window steps are paused, visibility routing is suspended: agent visibility need, Change always-visible or global visibility makes a step a window chat with unwatched tools; changes apply from the next session.",
-   "note": "ok"
+   "statement": "While window steps are paused, visibility routing is suspended: agent need, Change always-visible or the global visibility switch makes a step a window chat with the same tools as unwatched; changes apply next session.",
+   "note": "corrected by a second check: “Unwatched tools” is undefined and no longer clearly states equality with an unwatched step's tool list."
   },
   {
    "topic": "C-05 Roles, agents and skills",
@@ -207,21 +197,9 @@
    "note": "ok"
   },
   {
-   "topic": "C-06 The shaper",
-   "original": "Delivery-sent shaping turns use the role's model and effort; owner-typed turns use the chat's picker, unpinned, with one reminder from the shaper to match the role.",
-   "statement": "Delivery-sent shaping turns use the shaper role's model and effort; owner-typed turns use the chat's picker, unpinned, with one reminder from the shaper to match its role's model and effort.",
-   "note": "ok"
-  },
-  {
    "topic": "C-07 Local installs",
    "original": "Approval is one list giving location, purpose, alternative and what declining means, approved per location and artifact kind; a new location or capability asks again.",
    "statement": "Approval of OwlBear installs outside repositories uses one list of location, purpose, alternative and consequences of declining, approved per location and artifact kind; a new location or capability asks again.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-08 Local home and paths",
-   "original": "The confirmed project profile lives in the project's data-repository folder and is re-checked on a new clone, so a fresh clone needs no new setup.",
-   "statement": "The confirmed project profile lives in the project's folder in owlbear-data and is rechecked on a new clone, so a fresh clone needs no new setup.",
    "note": "ok"
   },
   {
@@ -244,12 +222,6 @@
   },
   {
    "topic": "C-09 Data repository and settings",
-   "original": "A save on the settings page commits and pushes.",
-   "statement": "Saving on Delivery's settings page commits and pushes the saved settings.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-09 Data repository and settings",
    "original": "Machine-only: update channel and registered projects. Project-only: test preparations, data permissions and the PR marker.",
    "statement": "Delivery settings restricted to the machine are update channel and registered projects; settings restricted to a project are test preparations, data permissions and the PR attribution marker.",
    "note": "ok"
@@ -258,12 +230,6 @@
    "topic": "C-09 Data repository and settings",
    "original": "Session limits count agent sessions, never per model: machine-only (default 4) and per project, layered (default 2). Free slots go round-robin across projects, first-ready within one; waiting spends no budget.",
    "statement": "Agent-session limits, never per model: machine-only default 4; per-project default 2, layered built-in, global, machine, project. Free slots go round-robin by project, first-ready within each; waiting spends no budget.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-09 Data repository and settings",
-   "original": "Running sessions are never stopped to meet a session limit.",
-   "statement": "Running agent sessions are never stopped to meet a session limit.",
    "note": "ok"
   },
   {
@@ -280,12 +246,6 @@
   },
   {
    "topic": "C-10 Test preparation",
-   "original": "Projects declare preparation options: live copy, live copy plus test data, or test data only, each with export and restore, masking, isolation and cleanup; the preparer picks one, Delivery validates and runs it.",
-   "statement": "For Delivery checks, projects declare live-copy, live-copy-plus-test-data or test-data-only preparations, each with export, restore, masking, isolation and cleanup; the preparer picks one, Delivery validates and runs it.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-10 Test preparation",
    "original": "The owner's standing per-project permissions cover data classes, keys, isolation and retention; with no safe option Delivery asks or blocks.",
    "statement": "The owner's standing per-project test-preparation permissions cover data classes, keys, isolation and retention; with no safe preparation option, Delivery asks or blocks.",
    "note": "ok"
@@ -294,24 +254,6 @@
    "topic": "C-10 Test preparation",
    "original": "Restore, seed, cleanup and checks get only declared variables; export and masking run only declared, committed scripts.",
    "statement": "For Delivery's test environments, restore, seed, cleanup and checks get only declared variables; export and masking run only declared, committed scripts.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-10 Test preparation",
-   "original": "Agents keep allow-all and may write the project settings that hold preparation permissions.",
-   "statement": "Delivery agents keep allow-all permissions and may write the project settings holding test-preparation permissions.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-10 Test preparation",
-   "original": "The preparer has its own agent file and edits only test-system setup files; its edits are discarded after the check and never become Change code.",
-   "statement": "The test preparer has its own agent file and edits only test-system setup files; discard its edits after the check, never making them Change code.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-11 Visual checks",
-   "original": "UI changes always get design and layout testing. The agent's check suffices to merge unless it is unsure or the brief sets a person-only check: then the merge waits for the owner. He may view any screenshot freely.",
-   "statement": "UI changes always get design and layout testing. The agent's visual check suffices to merge unless unsure or the brief requires a person-only check; then merge waits for the owner. The owner may view any screenshot freely.",
    "note": "ok"
   },
   {
@@ -335,8 +277,8 @@
   {
    "topic": "C-11 Visual checks",
    "original": "The owner passes or fails on one page with the comparison, both verdicts and findings. Fail needs a finding or comment, which becomes a next-review criterion, a Pass comment a note; brief contradictions are held.",
-   "statement": "On one visual-check page, the owner passes or fails with screenshot comparison, both judges' verdicts and findings. Fail needs a finding or comment as a next-review criterion; Pass comments are notes; brief conflicts are held.",
-   "note": "ok"
+   "statement": "The owner decides on one visual-check page with screenshot comparison, both verdicts and findings. Fail needs a finding or comment; its comment becomes a next-review criterion. Pass comments stay notes; brief conflicts are held.",
+   "note": "corrected by a second check: Makes selected findings, not only Fail comments, next-review criteria; TD-79 specifies the comment."
   },
   {
    "topic": "C-12 Review loops and rounds",
@@ -372,12 +314,6 @@
    "topic": "C-12 Review loops and rounds",
    "original": "Repairs after the last round stay unreviewed and are shown with standing rejections. Only at max rounds with the owner threshold of new findings does he choose another round or reject and retry.",
    "statement": "After a review loop's last round, repairs stay unreviewed and are shown with standing rejections. Only at maximum rounds with the owner threshold of new findings does the owner choose another round or reject and retry.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-12 Review loops and rounds",
-   "original": "The producing session gets one repair chance (final review: a fresh one, reused once), then a fresh session; an unresumable one is replaced, recorded, budgets unchanged.",
-   "statement": "The session producing reviewed work gets one repair chance, then a fresh session; final-review repairs start fresh and reuse that session once. An unresumable session is replaced and recorded; budgets stay unchanged.",
    "note": "ok"
   },
   {
@@ -420,12 +356,6 @@
    "topic": "C-13 Retry and Accept as done",
    "original": "The owner selects tasks to rebuild; selecting none accepts the remaining findings as the owner's decision and continues to publishing.",
    "statement": "In a final-review retry, the owner selects tasks to rebuild; selecting none accepts the remaining findings as the owner's decision and continues to publishing.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-13 Retry and Accept as done",
-   "original": "\"Accept as done\" names in its confirmation the criteria the remaining findings report unmet; confirming accepts them as the owner's decision.",
-   "statement": "The \"Accept as done\" confirmation names criteria that remaining findings report unmet; confirming records acceptance of those unmet criteria as the owner's decision.",
    "note": "ok"
   },
   {
@@ -508,12 +438,6 @@
   },
   {
    "topic": "C-15 Design pack update",
-   "original": "The pack updater writes its candidate and implements accepted findings, using its own configurable role.",
-   "statement": "The design-pack updater writes the candidate design pack and implements accepted findings, using its own configurable role.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-15 Design pack update",
    "original": "The updater may change its whole candidate, but only in its own folder and without shell access; read upstream skills at the pinned revision.",
    "statement": "The design-pack updater may change its whole candidate, but only in its own folder and without shell access; read upstream skills at the pinned revision.",
    "note": "ok"
@@ -561,24 +485,6 @@
    "note": "ok"
   },
   {
-   "topic": "C-15 Design pack update",
-   "original": "Owner-started pack updates run at once and end to end, paused or not: commit, PR, CI, merge on green; failure asks the owner. Started paused, the machine takes the version at once.",
-   "statement": "Owner-started design-pack updates run immediately and end to end, paused or not: commit, PR, CI, merge on green; failure asks the owner. If started paused, the machine takes the version immediately.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-15 Design pack update",
-   "original": "A pack update whose package skill changed since it started stops, so its PR holds only what was challenged.",
-   "statement": "A design-pack update stops if the package's skill changed since the update started, so the PR holds only what was challenged.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-16 Versions, labels and release",
-   "original": "Tags are versions; \"stable\" means major versions only, the channel for those afraid of a broken build.",
-   "statement": "OwlBear tags are versions; \"stable\" means major versions only, the update channel for those afraid of a broken build.",
-   "note": "ok"
-  },
-  {
    "topic": "C-16 Versions, labels and release",
    "original": "A workflow makes the tag once that merge commit's own CI passes.",
    "statement": "OwlBear's release workflow creates a version tag after a labelled PR merges to main and that merge commit's own CI passes.",
@@ -616,38 +522,14 @@
   },
   {
    "topic": "C-17 Runtime and self-update",
-   "original": "A machine set to major versions only starts at the newest major; until `v1.0` exists that is `v0.1`.",
-   "statement": "An OwlBear machine set to major versions only starts at the newest major; until v1.0 exists, that is v0.1.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-17 Runtime and self-update",
    "original": "Update when idle and Update while paused start on; automatic updates obey both; Run updates now still works, as does an owner's pack update started while paused.",
    "statement": "OwlBear's Update when idle and Update while paused settings start on; automatic updates obey both. Run updates now and an owner's design-pack update started while paused still work.",
    "note": "ok"
   },
   {
    "topic": "C-17 Runtime and self-update",
-   "original": "Run updates now skips the 15 minutes without use and the announcement, and waits for running steps, check environments and pack updates to end.",
-   "statement": "Run updates now starts an OwlBear self-update without the 15-minute inactivity wait or advance announcement, but waits for running steps, check environments and design-pack updates to end.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-17 Runtime and self-update",
    "original": "After each merge, Run updates now (`owlbear update`) takes the tagged version; a failed update is repaired forward by hand (recommendation taken once step 4 was built and rehearsed).",
    "statement": "After each merge, Run updates now (owlbear update) takes the tagged version; repair failed updates forward by hand, as adopted after version installation and handover were built and rehearsed.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-17 Runtime and self-update",
-   "original": "Deploying sessions need not re-review merges from the owner's other sessions; report which such merges are included.",
-   "statement": "Sessions deploying OwlBear need not re-review merges from the owner's other sessions; report which such merges the deployment includes.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-17 Runtime and self-update",
-   "original": "A self-update switches only after the new version answered in a standby; a later failure restarts it once and tells the owner.",
-   "statement": "An OwlBear self-update switches only after the new version answers in standby; a later failure restarts that new version once and tells the owner.",
    "note": "ok"
   },
   {
@@ -660,12 +542,6 @@
    "topic": "C-18 Pause, stop and resume",
    "original": "The pause holds Delivery's automatic work on Changes; the owner's own actions and the listed maintenance run.",
    "statement": "Delivery's pause holds automatic work on Changes; the owner's own actions and maintenance, including design-pack updates, self-updates and cleanup, run.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-18 Pause, stop and resume",
-   "original": "Cleanup runs fully while paused, including branch deletion, PR closure and pull-back; automatic Change publishing and merging wait for Resume.",
-   "statement": "A Change's cleanup runs fully while Delivery is paused, including branch deletion, PR closure and pull-back; automatic Change publishing and merging wait for Resume.",
    "note": "ok"
   },
   {
@@ -688,27 +564,15 @@
   },
   {
    "topic": "C-19 Machine host and UI",
-   "original": "A new project gets folder, name, Git identity, an optional GitHub repository, Delivery's chat tools (with consent), the agent workspace, the first commit and push; designed before built.",
-   "statement": "Delivery's new-project flow gives a project its folder, name, Git identity, optional GitHub repository, consented chat tools, agent workspace, first commit and push; design the flow before building it.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-19 Machine host and UI",
    "original": "A project created this way is a real project: Delivery's work on it waits for the watcher.",
    "statement": "A project created through Delivery's new-project flow is a real project: Delivery's work on it waits for the watcher.",
    "note": "ok"
   },
   {
    "topic": "C-19 Machine host and UI",
-   "original": "Keep maintenance next to its data, with an overview linking actions and runs: memory in Memory, pack and engine updates in Settings, test review per project.",
-   "statement": "Keep maintenance next to its data, with an overview linking actions and runs: memory in Memory, design-pack and engine updates in Settings, test review per project.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-19 Machine host and UI",
    "original": "The machine host's web UI is the one UI (TD-85's \"cockpit\" meant it); the old Cockpit was audited, its memory purge ported and Cockpit deleted before v1.0.",
-   "statement": "Delivery's machine-host web UI is its only UI; earlier requests for a \"cockpit\" mean this UI. The old Cockpit was audited, its memory purge ported, and Cockpit deleted before v1.0.",
-   "note": "ok"
+   "statement": "Delivery's machine-host web UI is its only UI; TD-85's \"cockpit\" meant that UI. The old Cockpit was audited, its memory purge ported, and Cockpit deleted before v1.0.",
+   "note": "corrected by a second check: Generalises the clarification of TD-85's “cockpit” to every earlier cockpit request."
   },
   {
    "topic": "C-19 Machine host and UI",
@@ -790,12 +654,6 @@
   },
   {
    "topic": "C-25 Memory",
-   "original": "Project memory lives in the project's folder of the shared data repository, never in the working repository.",
-   "statement": "Project memory lives in the project's folder in owlbear-data, never in the working repository.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-25 Memory",
    "original": "Project-specific lessons stay in the project; general ones go to Global. The saving agent recommends the scope; the entry waits unused in its project until curated.",
    "statement": "Project-specific memory lessons stay in the project; general lessons go to Global. The saving agent recommends the scope; the memory entry waits unused in its project until curated.",
    "note": "ok"
@@ -804,12 +662,6 @@
    "topic": "C-25 Memory",
    "original": "Above one Global confidence threshold (95% at first) the curator decides alone, Make global included; below it, it asks (interactive mode) or skips (automatic mode); interactive sessions propose Make global.",
    "statement": "Above one Global confidence threshold, initially 95%, the memory curator decides alone, including Make global; below it, ask in interactive mode or skip in automatic mode. Interactive sessions propose Make global.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-26 Tests",
-   "original": "Reviewers split the test files and only report; the curator checks their retire and merge verdicts against the code, applies what holds in a reviewed Change the owner can still stop, then measures again.",
-   "statement": "Test reviewers divide the test files and only report; the test curator checks their retire and merge verdicts against code, applies what holds in a reviewed Change the owner can still stop, then measures again.",
    "note": "ok"
   },
   {
@@ -840,13 +692,13 @@
    "topic": "C-28 Code and tool rules",
    "original": "Agent-facing tools follow rules T1–T8 of the tool-surface audit, with T7 as re-decided by TD-63.",
    "statement": "Agent-facing tools follow T1-T8 of the Delivery Tool Surface Audit, with T7 changed to no tool-count limits, one process action per tool, tests of field descriptions and small flat schemas, and measured tool success.",
-   "note": "ok"
+   "note": "uncertain: a second check found it still depends on other decisions (T1–T8 remain opaque identifiers; expanding TD-63 does not state the rest of the contract.); it may need splitting into several decisions"
   },
   {
    "topic": "C-28 Code and tool rules",
    "original": "Step kinds are a guide, not a gate: a new kind is allowed when no existing step can run its work, recorded with its reason; above eleven (the design's ten and the test review's) the count is reported, not failed.",
-   "statement": "Delivery step kinds are a guide, not a gate: add a kind only when none can run its work, recording why; report, never fail, a count above eleven, the engine design's ten plus test review.",
-   "note": "ok"
+   "statement": "Delivery step kinds are a guide, not a gate: a new kind is allowed when no existing step can do its work; record why. Above eleven (the design's ten plus test review), report the count, never fail it.",
+   "note": "corrected by a second check: Adds “only”: permission when existing kinds cannot do the work becomes an exclusive prohibition in other circumstances."
   },
   {
    "topic": "C-29 Confirmations and input",
@@ -892,12 +744,6 @@
   },
   {
    "topic": "Standalone",
-   "original": "The memory MCP server stays.",
-   "statement": "The owlbear-memory MCP server stays.",
-   "note": "ok"
-  },
-  {
-   "topic": "Standalone",
    "original": "Fixing memory publication and curation (F17) follows the plan's order; M4 and M5 no longer exist.",
    "statement": "Fixing memory publication and curation follows the OwlBear plan's work order; the old build and first-real-project milestones, M4 and M5, no longer exist.",
    "note": "ok"
@@ -906,31 +752,25 @@
    "topic": "Standalone",
    "original": "The nine ECC adoptions stay agent rules, among them: never weaken tests or checks to get green; failing-before proof where feasible; shapers never infer business constraints from code.",
    "statement": "The nine ECC adoptions in OwlBear's archived decision record at 04b1d8ec4 stay agent rules; examples: never weaken tests/checks for green; failing-before proof where feasible; shapers never infer business constraints from code.",
-   "note": "uncertain: the full nine-rule bundle cannot fit within 240 characters; its exact source remains necessary"
-  },
-  {
-   "topic": "Standalone",
-   "original": "Watcher lessons need evidence that agent behaviour caused the signal; merging lessons belongs to the curator.",
-   "statement": "Watcher memory lessons need evidence that agent behaviour caused the signal; merging those lessons belongs to the memory curator.",
-   "note": "ok"
+   "note": "uncertain: a second check found it still depends on other decisions (An archive pointer and three examples still do not state the nine adopted rules.); it may need splitting into several decisions"
   },
   {
    "topic": "Standalone",
    "original": "Order of the remaining work: TD-358's build work, the research move (TD-227), self-update steps 3c to 5, the old engine's removal, v1.0, TD-318's memory work, the window-step gate, the watcher.",
    "statement": "Order: decision-review fixes (TD-358); research to owlbear-data; pack PRs, runtime handover and idle updates; old-engine removal; v1.0; memory curation and scope work (TD-318); safe window-step gate; watcher.",
-   "note": "uncertain: the named decision-review and memory work groups span multiple rules; exhaustive scope needs their source records"
+   "note": "uncertain: a second check found it still depends on other decisions (“Decision-review fixes” and “memory curation and scope work” still require external decision groups to identify their complete scope.); it may need splitting into several decisions"
   },
   {
    "topic": "Standalone",
    "original": "Of TD-392..TD-402, the small items come with TD-358's work; the PDS fallback's removal, then the page split, before v1.0; the threshold with TD-318's work; the GitHub account before the first real project.",
-   "statement": "Small version-tag, settings, test-review and memory-save fixes join decision-review work; remove PDS fallback then split pages before v1.0; memory confidence joins curation work; per-project GitHub writers precede real use.",
-   "note": "uncertain: TD-403 does not enumerate its small items; this grouping follows the plan"
+   "statement": "Dual major tags, all-layer Save dialogs, paused test-review notices and memory-role fixes join decision-review work; remove PDS fallback then split pages pre-v1.0; 95% threshold joins memory work; GitHub-account settings precede real use.",
+   "note": "corrected by a second check: Removes the bounded decision range and generalises the particular threshold setting to “memory confidence” work."
   },
   {
    "topic": "Standalone",
    "original": "The build work of TD-319..TD-357 comes before self-update step 3b; TD-274's gap stays until after self-update step 5.",
    "statement": "The TD-319..TD-357 decision-review fixes precede the self-update release-tag workflow (step 3b); disabling project agents and skills in SDK steps stays after idle automatic self-updates (step 5).",
-   "note": "uncertain: the decision range is not a named work package; replacing it with an exhaustive scope would exceed 240 characters"
+   "note": "uncertain: a second check found it still depends on other decisions (The unresolved TD range still carries the substantive work scope; “decision-review fixes” does not replace that definition.); it may need splitting into several decisions"
   },
   {
    "topic": "C-31 The decision record",
@@ -941,8 +781,8 @@
   {
    "topic": "C-31 The decision record",
    "original": "The full rows TD-1..TD-382 and the old research report stay at commit `04b1d8ec4`; requirement R4 moved into C-03.",
-   "statement": "The full TD-1..TD-382 rows and old rebuild research stay at commit 04b1d8ec4; the requirement to compare a role's behaviour and quality before changing runtimes moved to the Models and credits topic.",
-   "note": "ok"
+   "statement": "The full TD-1..TD-382 rows and old research stay at 04b1d8ec4; C-03 holds the rule to compare a role's behaviour and quality in both runtimes with the same model, effort, context and effective tools before moving it.",
+   "note": "corrected by a second check: Resolves R4 without its controlled-comparison requirement: same model, effort, context and effective tools."
   },
   {
    "topic": "C-31 The decision record",
@@ -982,18 +822,6 @@
   },
   {
    "topic": "C-31 The decision record",
-   "original": "A change of mind with built effect shows an impact report; activating, stopping affected work and scheduling fixes are separate steps; fixes are backlog entries grouped by what one Change can do.",
-   "statement": "A changed decision affecting built behaviour requires an impact report. Activation, stopping affected work and scheduling fixes are separate steps; fixes are backlog entries grouped by what one Change can do.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-31 The decision record",
-   "original": "OwlBear's own decisions show as a fixed OwlBear scope beside Global on the Decisions page, read from owlbear-data's `owlbear/` folder; the repository stays unregistered.",
-   "statement": "OwlBear's own decisions appear as a fixed OwlBear scope beside Global on Decisions, read from owlbear-data's owlbear/ folder; OwlBear's repository remains unregistered.",
-   "note": "ok"
-  },
-  {
-   "topic": "C-31 The decision record",
    "original": "A read-only owlbear-data token serves only a workflow on pushes to main and a daily schedule; pull-request CI checks the generated view's own hash.",
    "statement": "A read-only owlbear-data token serves only OwlBear's decision-view generation workflow on pushes to main and a daily schedule; PR CI checks the generated decision view's own hash.",
    "note": "ok"
@@ -1013,14 +841,14 @@
   {
    "topic": "C-31 The decision record",
    "original": "Global: C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research out of its project, config changes the owner approves, the nine ECC adoptions; all else is OwlBear's.",
-   "statement": "Global: owner-question rules, not page comments; owner review of security changes; research outside consumer projects; owner-approved lint/CI/hook config changes; the nine ECC agent rules. All other rules belong to OwlBear's project.",
-   "note": "uncertain: the nine ECC rules still require their full source list"
+   "statement": "Global: C-01's asking rules except page comments; owner review of security changes; consumer research kept out of its project; owner-approved lint/format configs, CI workflows and Git hooks; nine ECC adoptions. All else is OwlBear's.",
+   "note": "corrected by a second check: Broadens consumer-project research exclusion to research generally; drops formatter configurations from the approval list."
   },
   {
    "topic": "C-31 The decision record",
    "original": "Within approved work or a delegation agents decide reversible details and record consequential ones as theirs; anything lasting, wider, contrary to an owner decision or committing outside asks first.",
-   "statement": "Within approved work or a delegation, agents choose reversible details and record consequential ones as theirs; anything lasting, wider, contrary to an owner decision or committing outside asks the owner first.",
-   "note": "ok"
+   "statement": "Within approved or delegated work, agents choose reversible details and record consequential ones as theirs; anything lasting, wider, contrary to an owner decision or externally committing (cost, accounts, publishing) asks the owner first.",
+   "note": "corrected by a second check: “Committing outside” remains ambiguous: outside a worktree, outside the delegation, or an external commitment. The build document identifies cost, accounts and publishing."
   },
   {
    "topic": "C-31 The decision record",
@@ -1031,8 +859,8 @@
   {
    "topic": "C-31 The decision record",
    "original": "Shaping decisions apply from brief approval, project-wide ones to the project's other Changes at once; chat and page decisions apply at confirmation.",
-   "statement": "Decisions made in shaping apply at brief approval; project-wide ones then apply to the project's other Changes immediately. Decisions made in chat or on the Decisions page apply at confirmation.",
-   "note": "ok"
+   "statement": "Decisions made in shaping apply at brief approval; project-wide ones then apply to the project's other Changes immediately. Decisions made in chat or on a page apply at confirmation.",
+   "note": "corrected by a second check: Narrows “page decisions” to the Decisions page, excluding decisions confirmed through other pages, including Change clarifications."
   },
   {
    "topic": "C-31 The decision record",

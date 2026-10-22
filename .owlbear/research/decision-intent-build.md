@@ -6,7 +6,7 @@
 > **Status:** answered by the owner; slices 1 to 4 built (slice 4: the picker, the picked set to every worker, the
 > complete list to challengers, later decisions picked at step boundaries, selectors removed, the lookup through the
 > picker for workers and lead chats, and the agents' boundary in their files); of slice 6 the preview is built (the
-> converter applies `.owlbear/migration/decisions-overlay.json`: 166 lines reworded to stand alone, 16 Global by
+> converter applies `.owlbear/migration/decisions-overlay.json`: 137 lines reworded to stand alone, 16 Global by
 > TD-442) and awaits the owner's review, then the past-work test and the switch (TD-437); slice 5 remains. It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
