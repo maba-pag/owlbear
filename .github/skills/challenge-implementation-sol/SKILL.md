@@ -1,10 +1,9 @@
 ---
-name: "challenge-implementation_sol"
+name: challenge-implementation-sol
 description: "Use GPT-6.1 Sol to review an implementation against its plan, intent, and material behavioral risks"
+disable-model-invocation: true
 argument-hint: "Describe the implementation or provide its plan, commit, diff, or review scope"
-agent: "agent"
 ---
-
 Challenge an existing implementation with a fresh GPT-6.1 Sol subagent. Determine whether the
 reviewed implementation fulfills the accepted plan and user intent, and whether it introduces other
 concrete material defects in the implemented workflow or its directly connected boundaries. Treat
@@ -147,6 +146,8 @@ Use `runSubagent` for a new review on every invocation, with these exact choices
   prepared role. The fresh, un-specialized subagent still inherits active workspace instructions;
   never describe it as context-free.
 - Set `model` to exactly `GPT-6.1 Sol (copilot)`.
+- In VS Code's Copilot runtime, use its subagent tool with model `gpt-6.1-sol` and no named agent type; it is the
+  same fresh, unnamed GPT-6.1 Sol subagent, not a substitute.
 - Set `description` to a short phrase such as `Challenge implementation`.
 - Require read-only work: no edits, branches, commits, destructive commands, external mutations,
   publication, finalization, or lifecycle transitions. Apply the same constraints to the caller.

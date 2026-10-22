@@ -98,6 +98,9 @@ names, not positions: the table lists the items in their order.
   they are not detected (§3.7 there).
 - An organisation with the merge queue for OwlBear's `main`, once someone else contributes or Delivery builds
   OwlBear (TD-326).
+- Delivery's chat server in `.mcp.json`: the Copilot runtime's format allows no `${userHome}` or `${workspaceFolder}`,
+  so it stays in `.vscode/mcp.json` until an `owlbear mcp` command (repository = working folder) ships in a release;
+  then its entry becomes `owlbear mcp` with no paths.
 - The "align" fixes of §4 that belong to no item above: small, each its own pull request.
 
 **What depends on what** (open work only; solid: needed first, dashed: decided order without a technical need):

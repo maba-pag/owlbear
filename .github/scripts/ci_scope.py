@@ -73,6 +73,7 @@ SUITES: dict[str, tuple[str, ...]] = {
         ".owlbear/skills/**",
         ".github/scripts/check_uv_version.py",
         ".pre-commit-config.yaml",
+        ".mcp.json",
         ".vscode/mcp.json",
         "seed/.vscode/mcp.json",
         "serve/*-mcp/**",

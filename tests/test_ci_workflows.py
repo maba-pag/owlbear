@@ -98,6 +98,7 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
         ([".github/workflows/ci.yml"], list(ci_scope.SUITES)),
         ([".github/scripts/ci_scope.py"], list(ci_scope.SUITES)),
         (["share/skills/x/SKILL.md"], ["static", "agent-ecosystem"]),
+        ([".mcp.json"], ["static", "agent-ecosystem"]),
         (["serve/a/b/src/x.txt"], ["static"]),
     ],
 )

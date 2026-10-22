@@ -1,10 +1,9 @@
 ---
-name: "challenge-plan_sol"
+name: challenge-plan-sol
 description: "Use GPT-6.1 Sol to challenge a technical plan and reconcile material risks with user intent"
+disable-model-invocation: true
 argument-hint: "Describe or paste the plan, decision, or compatibility proposal to challenge"
-agent: "agent"
 ---
-
 Challenge the plan or proposal with a fresh GPT-6.1 Sol subagent before recommending
 implementation. Treat the subagent as an independent evidence source, not a replacement planner:
 the calling model owns the contextual judgment and final plan.
@@ -119,6 +118,8 @@ Use `runSubagent` for a new challenge on every invocation, with these exact choi
  workspace instructions; do not describe it as context-free or assume it has the caller's full
  context.
 - Set `model` to exactly `GPT-6.1 Sol (copilot)`.
+- In VS Code's Copilot runtime, use its subagent tool with model `gpt-6.1-sol` and no named agent type; it is the
+ same fresh, unnamed GPT-6.1 Sol subagent, not a substitute.
 - Set `description` to a short phrase such as `Challenge technical plan`.
 - Tell the subagent to be read-only: no file edits, branches, commits, destructive commands,
  external mutations, publication, finalization, or lifecycle transitions. Apply the same constraint
