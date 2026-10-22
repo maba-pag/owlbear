@@ -1295,7 +1295,7 @@ their own decisions).
 - Rules carry no role or kind tags and there are no per-role views [TD-458].
 - Decisions carry no paths, roles or steps selectors; the picker alone decides what applies to a Change [TD-460].
 - An answer during the work is classified by its relayer as event, clarification or brief change; clarifications
-  are read back and become Change decisions; a Sol check stops one that changes the brief [TD-461].
+  are read back and become Change decisions; a Sol check stops the work when one changes the brief [TD-461].
 - The migration rewords statements that only make sense beside their neighbours so each stands alone, the original
   beside it, every reworded one marked for the owner's review in the preview [TD-462].
 
