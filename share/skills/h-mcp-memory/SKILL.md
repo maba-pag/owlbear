@@ -19,7 +19,7 @@ For curation workflow, see `w-mem-curation`.
 | Outcome owners | the new Delivery engine's builder, planner, preparer, updater, shaper | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | the new Delivery engine's reviewer, challenger, design-judge, test-reviewer | `recall_memory`; return candidates to their parent |
-| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch`, agent lifecycle tools |
+| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch` (each with an optional `folder`), `make_global`, `curation_threshold`, agent lifecycle tools |
 
 These profiles are intentionally asymmetric. Producers save unscoped pending candidates with any
 non-blank provenance label; the curator
@@ -119,11 +119,20 @@ See the [memory package README](../../../serve/memory/README.md) and
 | `read_memory` | Read one full memory entry by ID, including its revision | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a substantive task attempt | `task_id`, `assessments` |
 | `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
-| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, required `revision`, optional mutable fields, `scope_agents` |
+| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, required `revision`, optional mutable fields, `scope_agents`, `folder` |
+| `make_global` | Curator: move a curated or approved entry into Global memory, recording its project as `origin` (TD-292), and commit both paths | `entry_id`, required `revision`, `folder` |
+| `curation_threshold` | Curator: the confidence threshold in percent at or above which it acts alone (TD-400); the global settings' value, else 95 | — |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id`, required `revision` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
 | `delete_agent_memories` | Remove retired scope references, hard-delete pending orphans, and tombstone reviewed orphans | `agent` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id`, required `revision` |
+
+### Curator folders
+
+The curator's `list_memories`, `read_memory`, `curate_memory`, `delete_memory` and `commit_memory_batch` take an
+optional `folder`: another project folder of the shared repository, by name, so one session can curate every
+project's memory. Omitted, they work on the server's own folder. Global memory is never named as a folder; it
+changes only by `make_global`, and the owner moves an entry back on the Memory page.
 
 ## Assessment and curation policy
 
@@ -199,9 +208,10 @@ persist across those edits.
 ### Curation trigger, visibility, and failure handling
 
 - `memory-curator` is the owner. No Delivery or continuation step triggers it:
-  the user runs `memory-curator` with `Curate: Periodic curation` or reviews
-  pending entries on the Delivery engine's Memory page. Manual curation is available at any
-  time.
+  the user runs `memory-curator` with `Curate: automatic` or curates with it
+  interactively, or reviews pending entries on the Delivery engine's Memory page.
+  At or above `curation_threshold()` the curator acts alone, Make global
+  included; below it, it asks in interactive mode and skips in automatic mode.
 - Curation is opportunistic, not an eventual-processing SLA. No durable due
   state or age scheduler is implied.
 - The pending backlog is visible through
@@ -224,8 +234,8 @@ fixture or lightweight event record must capture:
    with a complete batch over eligible attempts; keep `didnt_use` separate from
    tool failure and `factually_wrong`.
 2. **Pending age and curation latency:** pending `created_at`, curation
-   trigger (`periodic` or `manual`), curation start/end,
-   entry action (`promoted`, `pruned`, or `deferred`), and failure/re-entry
+   trigger (`automatic` or `interactive`), curation start/end,
+   entry action (`promoted`, `pruned`, `made global`, `deferred` or `skipped`), and failure/re-entry
    reason. Report oldest, median, and high-percentile pending age and the
    created-to-curated latency.
 3. **Review cost:** curator and human-review elapsed time, entries examined,

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import os
 import shlex
 import stat
 import subprocess
 import sys
+import time
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +19,7 @@ from owlbear_memory import MemoryEntry, MemoryState, repair_duplicate_ids, stora
 from owlbear_memory.errors import DuplicateEntryError, MemoryBusyError
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
 _CURATION = "curation"
 _REVIEW = "review"
@@ -451,6 +454,50 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
             return _commit_batch_locked(memory_dir, repo_dir, session_type=session_type)
     except (DuplicateEntryError, MemoryBusyError) as exc:
         raise ValueError(str(exc)) from exc
+
+
+@contextlib.contextmanager
+def repo_locked(root: Path, wait: float = 30.0) -> Iterator[None]:
+    """Hold the shared repository's lock, the file Delivery's ``data_repo.locked`` serializes every write with."""
+    admin = Path(_git(root, "rev-parse", "--absolute-git-dir"))
+    fd = os.open(admin / "owlbear-delivery.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        end = time.monotonic() + wait
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > end:
+                    msg = "the shared repository is busy; try again"
+                    raise TimeoutError(msg) from None
+                time.sleep(0.1)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _known(repo_dir: Path, rel: str) -> bool:
+    """Whether *rel* is on disk, in the index or in HEAD: a path a move commit names."""
+    checks = (("ls-files", "--error-unmatch", rel), ("cat-file", "-e", f"HEAD:{rel}"))
+    return (repo_dir / rel).exists() or any(_git_bytes(repo_dir, *args)[0] == 0 for args in checks)
+
+
+def commit_move(paths: Sequence[Path], message: str) -> str:
+    """Commit exactly *paths*, one entry moved between two memory folders of one repository; return the commit.
+
+    On failure the paths are unstaged again, so the caller can put the files back as they were.
+    """
+    repo_dir = Path(_git(paths[0].parent, "rev-parse", "--show-toplevel")).resolve()
+    rels = [p.parent.resolve().joinpath(p.name).relative_to(repo_dir).as_posix() for p in paths]
+    tracked = [r for r in rels if _known(repo_dir, r)]
+    try:
+        _git(repo_dir, "add", "-A", "--", *tracked)
+        _git(repo_dir, "commit", "-q", "-m", message, "--", *tracked)
+    except subprocess.CalledProcessError:
+        _git_bytes(repo_dir, "reset", "-q", "--", *tracked)
+        raise
+    return _git(repo_dir, "rev-parse", "HEAD")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
@@ -20,14 +23,16 @@ from owlbear_memory import (
     NotFoundError,
     TransitionError,
     Where,
+    storage,
     validate_scope_agents,
+    writer_lock,
 )
 from owlbear_memory import (
     ValidationError as MemoryValidationError,
 )
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
-from owlbear_memory_mcp.git import commit_batch, format_git_failure
+from owlbear_memory_mcp.git import commit_batch, commit_move, format_git_failure, repo_locked
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
@@ -39,9 +44,11 @@ __all__ = [
     "assess_memories",
     "commit_memory_batch",
     "curate_memory",
+    "curation_threshold",
     "delete_agent_memories",
     "delete_memory",
     "list_memories",
+    "make_global",
     "read_memory",
     "recall_memory",
     "rename_agent_memories",
@@ -50,6 +57,9 @@ __all__ = [
 
 SLOT_EXPLORE = 2
 SLOT_CHALLENGE = 2
+GLOBAL = "memory"  # Global memory: the shared repository's own memory folder (TD-241)
+FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")  # a project folder's name in the shared repository
+CONFIG, THRESHOLD = "config.json", 95  # the global settings; the curator's threshold without one (TD-400)
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
 
 
@@ -106,6 +116,37 @@ def _readable(ctx: Context) -> list[MemoryEntry]:
         return entries
     mine = {entry.id for entry in entries}
     return entries + [entry for entry in shared.get_entries() if entry.id not in mine]
+
+
+def _shared_root(ctx: Context) -> Path | None:
+    """The shared repository whose project folder this server is bound to, beside its Global memory (TD-72, TD-241)."""
+    common = getattr(ctx.request_context.lifespan_context, "global_dir", None)
+    root = _memory_dir_from_ctx(ctx).parent.parent
+    return root if common is not None and Path(common) == root / GLOBAL else None
+
+
+def _in_folder(ctx: Context, folder: str | None) -> Context:
+    """The context of another project folder of the shared repository, for the curator; the bound one for None."""
+    if folder is None:
+        return ctx
+    root = _shared_root(ctx)
+    if root is None:
+        msg = "this memory server is bound to no shared repository: it works on its own folder only"
+        raise ToolError(msg)
+    if not FOLDER.fullmatch(folder) or folder == GLOBAL:
+        msg = f"{folder!r} is no project folder of the shared repository; Global memory changes only by make_global"
+        raise ToolError(msg)
+    path = root / folder / "memory"
+    real = path.resolve() if path.is_dir() and not (path.is_symlink() or path.parent.is_symlink()) else None
+    if real is None or real.parent.parent != root.resolve() or real == (root / GLOBAL).resolve():
+        msg = f"the shared repository has no memory folder for {folder}"  # links never lead to Global or elsewhere
+        raise ToolError(msg)
+    base = ctx.request_context.lifespan_context
+    swapped = SimpleNamespace(
+        engine=MemoryEngine(path), memory_dir=path, global_dir=base.global_dir,
+        global_engine=getattr(base, "global_engine", None),
+    )  # fmt: skip
+    return cast("Context", SimpleNamespace(request_context=SimpleNamespace(lifespan_context=swapped)))
 
 
 def _memory_dir_from_ctx(ctx: Context) -> Path:
@@ -227,6 +268,7 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "scope_agents": entry.scope_agents,
         "source_agent": entry.source_agent,
         "recommended": entry.recommended,
+        "origin": entry.origin,
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
         "approved_at": entry.approved_at,
@@ -317,9 +359,9 @@ async def save_memory(  # noqa: PLR0913
     return _with_hint(_entry_to_dict(entry), hint)
 
 
-async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, Any]:
+async def commit_memory_batch(ctx: Context, *, session_type: str, folder: str | None = None) -> dict[str, Any]:
     """Commit non-pending memory entries through the state-aware Git helper."""
-    memory_dir = _memory_dir_from_ctx(ctx)
+    memory_dir = _memory_dir_from_ctx(_in_folder(ctx, folder))
     try:
         result = commit_batch(memory_dir, session_type=session_type)
     except ValueError as exc:
@@ -358,8 +400,10 @@ async def list_memories(
     states: list[MemoryState | str] | None = None,
     categories: list[MemoryCategory | str] | None = None,
     scope_agents: list[str] | None = None,
+    folder: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return metadata-only entries with pending-first ordering."""
+    ctx = _in_folder(ctx, folder)
     coerced_states = _coerce_states(states)
     coerced_categories = _coerce_categories(categories)
     allowed_states = (
@@ -399,8 +443,9 @@ async def list_memories(
     return [_metadata_dict(entry) for entry in entries]
 
 
-async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None) -> dict[str, Any]:
     """Return a full entry by ID, excluding deleted state."""
+    ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
     shared = _global_engine(ctx)
     try:
@@ -589,8 +634,10 @@ async def curate_memory(  # noqa: PLR0913
     categories: list[MemoryCategory | str] | None = None,
     confidence: float | None = None,
     scope_agents: list[str] | None = None,
+    folder: str | None = None,
 ) -> dict[str, Any]:
     """Curate entries using code-managed lifecycle transitions."""
+    ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
     updated = await _update_entry(
@@ -612,8 +659,9 @@ async def curate_memory(  # noqa: PLR0913
     return _with_hint(updated, hint)
 
 
-async def delete_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
+async def delete_memory(ctx: Context, *, entry_id: str, revision: str, folder: str | None = None) -> dict[str, Any]:
     """Compatibility alias for delete semantics."""
+    ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
     deleted = await _delete_entry(ctx, entry_id=entry_id, revision=revision)
@@ -737,3 +785,66 @@ async def assess_memories(
             results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
 
     return {"results": results}
+
+
+async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str | None = None) -> dict[str, Any]:
+    """Move one entry of a project's memory into Global, recording the project (TD-292), and commit both paths."""
+    ctx = _in_folder(ctx, folder)
+    root = _shared_root(ctx)
+    if root is None:
+        msg = "this memory server is bound to no shared repository, so it has no Global memory"
+        raise ToolError(msg)
+    source, target = _memory_dir_from_ctx(ctx), root / GLOBAL
+    project = source.parent.name
+    if target.is_symlink() or (target.exists() and target.resolve().parent != root.resolve()):
+        msg = "Global memory is a link out of the shared repository: nothing moves"
+        raise ToolError(msg)
+    target.mkdir(exist_ok=True)
+    try:
+        with repo_locked(root), writer_lock(source), writer_lock(target):  # the repository lock first, as the page
+            found = [(p, e) for p in sorted(source.glob("*.md")) if (e := storage.read_entry(p)) and e.id == entry_id]
+            if len(found) != 1:
+                msg = f"entry not found: {entry_id}"
+                raise ToolError(msg)
+            path, entry = found[0]
+            if entry.revision != revision:
+                msg = f"Entry changed since it was read: {entry_id}. Re-read before retrying."
+                raise ToolError(msg)
+            if entry.state not in {MemoryState.CURATED, MemoryState.APPROVED}:  # the owner resolves the others first
+                msg = f"{entry.title} is {entry.state}: only a curated or approved entry goes global"
+                raise ToolError(msg)
+            moved = target / path.name
+            if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
+                msg = f"Global memory holds {entry.title} already"
+                raise ToolError(msg)
+            moving = entry.model_copy(update={"origin": project})
+            storage.write_entry(path, moving, memory_dir=source)  # rewritten in place, then moved whole
+            try:
+                path.replace(moved)
+            except OSError as exc:
+                storage.write_entry(path, entry, memory_dir=source)  # as it was, so it can be tried again
+                msg = f"{entry.title} could not move: {exc.strerror or exc}; try again"
+                raise ToolError(msg) from exc
+            try:
+                sha = commit_move([path, moved], f"memory {project}: make global {entry.title}")
+            except subprocess.CalledProcessError as exc:
+                moved.replace(path)
+                storage.write_entry(path, entry, memory_dir=source)  # back where it was, so it can be tried again
+                msg = f"{entry.title} stays in {project}: the commit failed: {format_git_failure(exc)}"
+                raise ToolError(msg) from exc
+    except (MemoryBusyError, TimeoutError) as exc:
+        raise ToolError(str(exc)) from exc
+    hint = f"Moved into Global memory and committed; the owner can move it back to {project} on the Memory page."
+    return _with_hint(_entry_to_dict(moving) | {"commit_sha": sha}, hint)
+
+
+async def curation_threshold(ctx: Context) -> dict[str, Any]:
+    """The curator's confidence threshold in percent: the global settings' value, else 95 (TD-400)."""
+    root = _shared_root(ctx)
+    try:
+        value = json.loads((root / CONFIG).read_text(encoding="utf-8")).get("curator_threshold") if root else None
+    except OSError, ValueError, AttributeError:
+        value = None
+    if isinstance(value, int) and not isinstance(value, bool) and 50 <= value <= 100:  # noqa: PLR2004
+        return {"threshold": value, "source": "global"}
+    return {"threshold": THRESHOLD, "source": "default"}

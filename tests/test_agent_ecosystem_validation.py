@@ -575,7 +575,7 @@ def test_project_doc_instruction_declares_local_standard_route() -> None:
 
 
 def test_memory_curator_identity_deferral_reporting_split() -> None:
-    """Periodic curation keeps identity-only uncertainty pending without reporting it."""
+    """Automatic curation keeps identity-only uncertainty pending without reporting it."""
     workflow = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
     curator = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
     structure = (_SKILLS_ROOT / "h-memory-structure/SKILL.md").read_text(encoding="utf-8")
@@ -585,7 +585,7 @@ def test_memory_curator_identity_deferral_reporting_split() -> None:
     assert "Classify content before provenance or scope." in content
     assert "`*` is anonymous provenance" in content
     assert (
-        "Identity-only uncertainty remains pending and is omitted from periodic defer and conflict summaries."
+        "Identity-only uncertainty remains pending and is omitted from automatic skip and conflict summaries."
         in content
     )
     assert "Conflicts and ordinary content or scope uncertainty remain reportable." in content
