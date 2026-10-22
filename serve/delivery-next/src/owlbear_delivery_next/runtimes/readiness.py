@@ -15,7 +15,7 @@ import truststore
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.design_packs import pack_update
 from owlbear_delivery_next.local_system.git_files import probe_in
-from owlbear_delivery_next.runtimes.copilot_cli import cli_path
+from owlbear_delivery_next.runtimes import copilot_cli
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import profile_share
 
@@ -150,9 +150,10 @@ def publishing(host: str, probe: Probe, network: str | None) -> list[Check]:
 def readiness(host: str, probe: Probe, network: str | None, copilot: str | None) -> list[Check]:
     """Every readiness fact, in the order a fix should be applied."""
     out = publishing(host, probe, network)
-    code, text = probe([copilot, "--version"]) if copilot else (127, "not found")
-    fix = "Install the Copilot CLI (`npm install -g @github/copilot`) or set COPILOT_CLI_PATH"
-    out.append(Check("copilot cli", ok=code == 0, detail=f"{copilot}: {text.splitlines()[0] if text else ''}", fix=fix))
+    code, text = probe([copilot, "--version"]) if copilot else (127, copilot_cli.missing())
+    line = text.splitlines()[0] if text else ""
+    detail = f"{copilot}: {line}" if copilot else line
+    out.append(Check("copilot cli", ok=code == 0, detail=detail, fix=copilot_cli.FIX))
     name, email = probe(["git", "config", "user.name"]), probe(["git", "config", "user.email"])
     ok = name[0] == email[0] == 0 and bool(name[1] and email[1])
     fix = 'Run `git config --global user.name "Your Name"` and `git config --global user.email you@example.com`'
@@ -169,7 +170,7 @@ def check(repo: Path, prof: Profile | None) -> list[Check]:
     """The readiness check of this clone (DR2), run by setup and at every host start."""
     host = profile.value(prof or Profile(), profile.HOST, "github.com")
     try:
-        copilot: str | None = cli_path()
+        copilot: str | None = copilot_cli.cli_path()
     except FileNotFoundError:
         copilot = None
     updates = Check("design pack updates", ok=True, detail=pack_update.said(pack_update.notice(refresh=True)))

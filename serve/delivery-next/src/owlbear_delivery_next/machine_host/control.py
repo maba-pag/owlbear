@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import serve
 from owlbear_delivery_next.project_host.api import link
+from owlbear_delivery_next.runtimes.copilot_cli import SHIM
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,6 +38,19 @@ type Say = Callable[[str], None]
 def plist_path() -> Path:
     """Where the login item lives."""
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+
+
+def login_path(path: str) -> str:
+    """*path* without VS Code's Copilot shim and fnm's per-shell Node folders, which vanish or mislead at login."""
+    dirs = path.split(os.pathsep)
+    return os.pathsep.join(d for d in dirs if Path(d).name != SHIM and "fnm_multishells" not in Path(d).parts)
+
+
+def saved_path() -> str | None:
+    """The PATH the login item starts the host with, or None without a login item."""
+    if not plist_path().exists():
+        return None
+    return plistlib.loads(plist_path().read_bytes()).get("EnvironmentVariables", {}).get("PATH", "")
 
 
 def argv(*, run: bool = False) -> list[str]:
@@ -197,8 +211,8 @@ def autostart(say: Say, *, on: bool) -> int:
         "RunAtLoad": True,
         "WorkingDirectory": str(local_home.root()),
         "EnvironmentVariables": {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin")
-        },  # git and gh as this shell finds them
+            "PATH": login_path(os.environ.get("PATH", "/usr/bin:/bin"))
+        },  # git, gh, uv and copilot as this shell finds them
         "StandardOutPath": log,
         "StandardErrorPath": log,
     }

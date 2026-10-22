@@ -85,7 +85,7 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
 
 
-def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_said(monkeypatch) -> None:
+def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_said(monkeypatch, tmp_path) -> None:
     calls, said = [], []
     refuse = [0]
 
@@ -94,9 +94,11 @@ def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_sa
         return subprocess.CompletedProcess(args, refuse[0] if args[1] == "bootstrap" else 0, b"", b"denied")
 
     monkeypatch.setattr(control.subprocess, "run", launchctl)
-    assert control.autostart(said.append, on=True) == 0
+    shim, node = tmp_path / "copilot-shim", tmp_path / "state" / "fnm_multishells" / "1_2" / "bin"
+    monkeypatch.setenv("PATH", os.pathsep.join(["/opt/homebrew/bin", str(shim), str(node), "/usr/bin"]))
+    assert (control.saved_path(), control.autostart(said.append, on=True)) == (None, 0)
     item = plistlib.loads(control.plist_path().read_bytes())
-    assert (item["ProgramArguments"], item["EnvironmentVariables"]["PATH"]) == (control.argv(), os.environ["PATH"])
+    assert (item["ProgramArguments"], control.saved_path()) == (control.argv(), "/opt/homebrew/bin:/usr/bin")
     assert item["ProgramArguments"][-1] == "machine"  # a login start is paused (TD-350)
     assert (item["RunAtLoad"], calls) == (True, ["bootout", "bootstrap"])
     refuse[0] = 1
@@ -104,6 +106,38 @@ def test_the_login_item_runs_the_machine_host_with_this_path_and_a_refusal_is_sa
     assert "macOS refused to load it (denied)" in said[-1]
     assert control.autostart(said.append, on=False) == 0
     assert not control.plist_path().exists()
+
+
+def test_doctor_runs_each_tool_and_checks_the_login_items_path(monkeypatch, tmp_path) -> None:
+    def tool(folder: Path, name: str, code: int = 0) -> None:
+        folder.mkdir(exist_ok=True)
+        (folder / name).write_text(f"#!/bin/sh\necho {name} says {code}\nexit {code}\n")
+        (folder / name).chmod(0o755)
+
+    bin_, shim = tmp_path / "bin", tmp_path / "copilot-shim"
+    for name in ("git", "gh", "uv", "copilot"):
+        tool(bin_, name)
+    tool(shim, "copilot", 1)
+    monkeypatch.setenv("PATH", f"{shim}:{bin_}")
+    monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
+    said = []
+    assert (install.doctor(said.append, []), said) == (0, ["all checks passed"])
+    control.plist_path().parent.mkdir(parents=True)
+    control.plist_path().write_bytes(plistlib.dumps({"EnvironmentVariables": {"PATH": f"{shim}:{bin_}"}}))
+    tool(bin_, "uv", 2)
+    (bin_ / "copilot").unlink()
+    (bin_ / "gh").rename(tmp_path / "gh")  # only this shell's PATH has it
+    monkeypatch.setenv("PATH", f"{shim}:{bin_}:{tmp_path}")
+    said.clear()
+    assert install.doctor(said.append, []) == 1
+    assert said[:2] == [
+        f"uv: {bin_ / 'uv'} does not run: uv says 2 · fix: reinstall it",
+        f"copilot: Copilot CLI not found: only VS Code's shim {shim / 'copilot'}, which is not the CLI. "
+        + install.copilot_cli.FIX,
+    ]
+    assert [line.split(" · ")[0] for line in said[2:]] == [
+        f"login item: {name} not on its PATH" for name in ("gh", "copilot")
+    ] + ["4 problems found"]
 
 
 def test_start_runs_one_detached_host_and_stop_ends_it() -> None:

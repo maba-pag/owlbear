@@ -19,9 +19,13 @@ Before running setup, ensure the following are installed on your Mac:
 | [uv](https://docs.astral.sh/uv/) | Installs OwlBear's dependencies and launches its tool servers | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | Git, with `user.name` and `user.email` set | Clone, and the commits of each Change | [git-scm.com](https://git-scm.com/) |
 | [GitHub CLI](https://cli.github.com/), signed in (`gh auth login`) | Pull requests; needs push access to your project | [Installation guide](https://cli.github.com/manual/installation) |
-| GitHub Copilot CLI | Runs OwlBear's agent sessions | `npm install -g @github/copilot`, or set `COPILOT_CLI_PATH` to it |
+| GitHub Copilot CLI | Runs OwlBear's agent sessions | `brew install --cask copilot-cli`, or set `COPILOT_CLI_PATH` to it |
 | VS Code | New Change's shaping chat opens there | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
+
+Install the Copilot CLI with Homebrew, not `npm install -g`: a Node version manager such as fnm or
+nvm keeps global npm packages per Node version, so switching Node hides that copy. VS Code's own
+`copilot` stand-in then answers on `PATH`; OwlBear skips it and reports the CLI as missing.
 
 If your Git configuration signs commits, OwlBear checks that the signing key is usable before it
 works on a project.
