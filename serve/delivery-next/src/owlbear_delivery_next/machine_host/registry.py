@@ -50,6 +50,7 @@ class Settings(Record):
     channel: Literal["minor", "major"] = "minor"  # every minor version, or major versions only (TD-300)
     update_when_idle: bool = True  # TD-288
     update_while_paused: bool = True
+    curate_while_paused: bool = False  # automatic memory curation after merges and when idle, also while paused
     sessions: int = Field(default=4, ge=1)  # TD-336: agent sessions at once on this machine, all projects together
 
 

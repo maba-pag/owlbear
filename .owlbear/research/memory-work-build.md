@@ -93,8 +93,9 @@ independent.
      An entry a run skipped does not start another run until it changes, so unchanged skips never cost a session
      again; the button and the merge trigger still judge them.
   3. **Button:** the Maintenance page's "Curate memory now" starts it at once for the chosen folder, or for all.
-- Pause holds the merge and idle triggers, as it holds steps; the button runs at once also while paused, because
-  pressing it is the owner's own act. Draft decision `D-01M5J22EPYPVJ99SFAP4TN8NQE` for the owner (TD-418). Update behaviour is unchanged.
+- While paused, the merge and idle triggers run only when "Curate memory while paused" is on, a machine setting
+  beside "Update itself while paused", off by default; the button always runs at once (the owner, 2026-10-22).
+  Update behaviour is unchanged.
 - A run counts against the machine's sessions (TD-336). Its state and last report show on the Maintenance page.
 
 ### 3.5 Slice 5: the one-off sort
