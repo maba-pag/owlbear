@@ -147,7 +147,7 @@
 ## .github/instructions/code-review.instructions.md
 - # `GitHub Copilot Code Review`
 
-## .github/prompts/challenge-implementation_sol.prompt.md
+## .github/skills/challenge-implementation-sol/SKILL.md
 - ## `Implementation Frame`
 - ## `Review Contract`
 - ### `Conformance And Implementation Soundness`
@@ -157,7 +157,7 @@
 - ## `Required Challenger Memo`
 - ## `Caller Reconciliation`
 
-## .github/prompts/challenge-plan_sol.prompt.md
+## .github/skills/challenge-plan-sol/SKILL.md
 - ## `Decision Frame And Necessity Gate`
 - ## `Evidence Sufficiency Gate`
 - ## `Dispatch Requirements`

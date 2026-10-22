@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "owlbear-browser": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_browser_mcp"],
+      "tools": ["*"]
+    },
+    "owlbear-knowledge": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_knowledge_mcp"],
+      "tools": ["*"]
+    },
+    "owlbear-memory": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_memory_mcp"],
+      "tools": ["*"]
+    }
+  }
+}

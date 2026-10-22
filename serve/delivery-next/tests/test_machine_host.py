@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import os
+import re
 import signal
 import subprocess
 import threading
@@ -394,7 +395,7 @@ def test_a_project_whose_lock_cannot_be_taken_fails_alone(tmp_path, http, machin
     assert shown["good"]["state"] == "loaded"
 
 
-def test_a_stop_waits_for_work_started_in_the_background_and_closing_closes_every_gate(tmp_path, http, machine):
+def test_a_stop_waits_for_work_started_in_the_background_and_closing_closes_every_gate(tmp_path, http, machine, capsys):
     p = machine.projects[add(http, clone(tmp_path / "a"))["id"]]
     until = time.monotonic() + 0.5
     p.app.state.busy = lambda: ["a shaping chat opening"] if time.monotonic() < until else []
@@ -402,8 +403,15 @@ def test_a_stop_waits_for_work_started_in_the_background_and_closing_closes_ever
     assert (time.monotonic() >= until, p.state) == (True, "stopped")
     q = machine.projects[add(http, clone(tmp_path / "b"))["id"]]
     server = serve.Server(uvicorn.Config(app.create(machine)), machine)
+    capsys.readouterr()
     server.handle_exit(signal.SIGTERM, None)
     assert (q.gate.open, q.host.paused(), server.should_exit) == (False, True, True)
+    assert http.post("/api/next/stop").json() == {"stopping": True}
+    q.host.say("still here")
+    stamp = r"\d\d:\d\d:\d\dZ "  # UTC, and says so
+    lines = capsys.readouterr().out.splitlines()  # project threads may log between these
+    for said in ("stopping: SIGTERM received", "stopping: asked through the stop route", ".*still here"):
+        assert any(re.fullmatch(stamp + said, line) for line in lines), said
 
 
 def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http):
