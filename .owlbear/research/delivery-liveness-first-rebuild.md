@@ -1098,6 +1098,9 @@ TD-197.
   or one short handle it issued; agents never echo hex identities or fence values (T2) [TD-1, TD-467].
 - The agent that authors a payload calls the tool that validates it while it can still correct it; payload limits
   come back to it as errors naming what to fix (T3) [TD-1, TD-467].
+- Every agent-facing field states its limits and gives one example; an error names the one field to fix (T4)
+  [TD-1, TD-467].
+- Agents submit evidence as simple records the server canonicalizes (T5) [TD-1, TD-467].
 - Recovery belongs to the engine and the owner, not agents: the engine recovers by itself, owner decisions run as page
   actions, and at most one agent tool requests recovery (T6) [TD-1, TD-467].
 - No tool-count limits; every Delivery tool serves one named process action (T1) [TD-63].
