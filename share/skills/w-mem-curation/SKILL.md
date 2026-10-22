@@ -95,7 +95,8 @@ confidence, 0 to 100, that this whole set is right. Then:
   when your confidence in the whole set is still at or above the threshold, and report which side stands and why.
 - `make_global` is for a lesson that holds in any project; the saver's `recommended` scope is evidence, not a
   decision. In interactive mode, propose Make global for such a lesson whenever you do not make it global alone.
-- An automatic run never changes an entry it skips; the next run judges it again only once it changed.
+- An automatic run never changes an entry it skips. Which runs start is the scheduler's: idle time passes over an
+  unchanged skipped entry, while the button and a merge judge it again.
 
 ## Step 1 — Gather Candidates
 

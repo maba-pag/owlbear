@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import MemoryCategory, MemoryEngine
+from owlbear_memory import MemoryCategory, MemoryEngine, storage
 
 from owlbear_memory_mcp import tools
 
@@ -80,7 +80,7 @@ async def test_make_global_records_the_project_and_commits_both_paths(root: Path
 
     with pytest.raises(ToolError, match="changed since"):
         await tools.make_global(ctx, entry_id=entry.id, revision="0" * 16, folder="docs")
-    with pytest.raises(ToolError, match="curate it"):
+    with pytest.raises(ToolError, match="only a curated or approved entry"):
         await tools.make_global(ctx, entry_id=pending.id, revision=pending.revision, folder="docs")
     moved = await tools.make_global(ctx, entry_id=entry.id, revision=entry.revision, folder="docs")
 
@@ -139,3 +139,26 @@ async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_an
     (root / ".git" / "hooks" / "pre-commit").unlink()
     moved = await tools.make_global(ctx, entry_id=entry.id, revision=entry.revision, folder="docs")
     assert (moved["origin"], git(root, "status", "--porcelain")) == ("docs", "")
+
+
+@pytest.mark.asyncio
+async def test_make_global_refuses_a_contested_entry_and_a_global_folder_that_links_elsewhere(
+    root: Path, tmp_path: Path
+) -> None:
+    """Copilot on #586: unresolved entries stay with the owner; a linked Global never takes an entry out."""
+    folder = root / "docs" / "memory"
+    entry = saved(folder, "Pin the runtime", curated=True)
+    engine = MemoryEngine(folder)
+    contested = engine.get_entry(entry.id).model_copy(update={"state": "contested"})
+    storage.write_entry(folder / f"{entry.id}.md", contested, memory_dir=folder)
+    ctx = bound(root)
+
+    with pytest.raises(ToolError, match="contested"):
+        await tools.make_global(ctx, entry_id=entry.id, revision=contested.revision, folder="docs")
+    other = saved(folder, "Sign commits", curated=True)
+    (tmp_path / "elsewhere").mkdir()
+    (root / "memory").rmdir()  # the refused move made it, empty
+    (root / "memory").symlink_to(tmp_path / "elsewhere")
+    with pytest.raises(ToolError, match="link out"):
+        await tools.make_global(ctx, entry_id=other.id, revision=other.revision, folder="docs")
+    assert {e.id for e in MemoryEngine(folder).get_entries()} == {entry.id, other.id}
