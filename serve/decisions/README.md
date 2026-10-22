@@ -31,7 +31,8 @@ counts, unclear clauses, orphan rows, the Global entries, the reworded ones, the
 the validator's findings with their explanation and the row-to-entry concordance. It refuses a folder that already
 holds a preview and never changes the record (TD-437).
 
-`--overlay` (none by default) applies rewordings and Global lines keyed by a line's exact statement; pass
+`--overlay` (none by default) applies rewordings and Global lines keyed by a line's topic heading and exact
+statement; pass
 `.owlbear/migration/decisions-overlay.json` for OwlBear's record:
 
 ```bash
