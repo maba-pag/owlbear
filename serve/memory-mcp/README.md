@@ -62,7 +62,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 
 | Tool | Description |
 | --- | --- |
-| `save_memory` | Create an unscoped `pending` entry from self-reported provenance; recognition is not authorization |
+| `save_memory` | Create an unscoped `pending` entry from self-reported provenance and the saver's recommended scope (`where`: `project` or `global`); recognition is not authorization |
 | `list_memories` | List metadata sorted by curation priority, including each entry's `revision`; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`, including its `revision`; errors on deleted entries |
 | `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then optional contested state/challenge lines and body; contested entries add one `Challenge task:` line per record); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |

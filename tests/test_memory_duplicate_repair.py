@@ -575,3 +575,31 @@ def test_repair_does_not_reuse_pending_copy_with_different_scope(tmp_path: Path)
     remaining_copy = storage.read_entry(tmp_path / f"{new_copy.id}.md")
     assert remaining_copy is not None
     assert remaining_copy.scope_agents == ["source-agent"]
+
+
+def test_repair_does_not_reuse_pending_copy_with_a_different_recommendation(tmp_path: Path) -> None:
+    older = _entry(
+        title="Older entry", content="older content", updated_at="2026-01-01T00:00:00+00:00",
+        state=MemoryState.APPROVED, scope_agents=["source-agent"], recommended="project",
+    )  # fmt: skip
+    newest = _entry(title="Newest entry", content="newest content", updated_at="2026-01-02T00:00:00+00:00")
+    other = _entry(
+        title=f"[Recovered duplicate ID {_DUPLICATE_ID}] Older entry", content=older.content,
+        updated_at="2026-10-01T00:00:00+00:00", state=MemoryState.PENDING, id=_REUSE_ID, created_at=older.created_at,
+        source_agent=older.source_agent, scope_agents=["source-agent"], recommended="global",
+        outstanding_count=0, unremarkable_count=0, didnt_use_count=0, score=older.confidence,
+    )  # fmt: skip
+    storage.write_entry(tmp_path / f"{_DUPLICATE_ID}.md", newest, memory_dir=tmp_path)
+    storage.write_entry(tmp_path / "older-copy.md", older, memory_dir=tmp_path)
+    storage.write_entry(tmp_path / f"{_REUSE_ID}.md", other, memory_dir=tmp_path)
+
+    MemoryEngine(tmp_path).save(
+        title="Unrelated mutation", content="mutation content", categories=["domain-knowledge"], confidence=0.9,
+        source_agent="test-agent", scope_agents=[],
+    )  # fmt: skip
+
+    entries = [entry for path in tmp_path.glob("*.md") if (entry := storage.read_entry(path)) is not None]
+    repaired = {entry.id: entry.recommended for entry in entries if _DUPLICATE_ID in entry.title}
+    assert len(repaired) == 2
+    assert repaired.pop(_REUSE_ID) == "global"
+    assert list(repaired.values()) == ["project"]  # a fresh copy keeps the source's recommendation

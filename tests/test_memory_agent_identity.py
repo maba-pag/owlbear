@@ -60,6 +60,7 @@ async def test_save_accepts_nonblank_provenance_and_defaults_to_unscoped(tmp_pat
         categories=[MemoryCategory.PROCESS],
         confidence=0.8,
         source_agent="GitHub Copilot",
+        where="project",
     )
 
     assert result["scope_agents"] == []
@@ -74,6 +75,7 @@ async def test_save_accepts_nonblank_provenance_and_defaults_to_unscoped(tmp_pat
             categories=[MemoryCategory.PROCESS],
             confidence=0.8,
             source_agent="builder",
+            where="project",
             scope_agents=["builder"],  # type: ignore[call-arg]
         )
 

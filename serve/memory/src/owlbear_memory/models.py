@@ -74,6 +74,9 @@ class PurgeResult(BaseModel):
     failed: int
 
 
+Where = Literal["project", "global"]  # TD-293: the saver's recommended scope; the curator or the owner decides
+
+
 AssessmentBucket = Literal["outstanding", "unremarkable", "didnt_use", "factually_wrong"]
 
 
@@ -135,6 +138,7 @@ class MemoryEntry(BaseModel):
     score: float = 0.0
     scope_agents: list[str] = Field(default_factory=list)
     source_agent: str = Field(frozen=True)
+    recommended: Where | None = None
     created_at: str
     updated_at: str
     approved_at: str | None = None

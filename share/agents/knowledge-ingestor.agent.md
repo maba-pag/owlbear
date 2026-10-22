@@ -30,7 +30,8 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 - **Follow the `h-knowledge-ops` skill** for MCP tool behaviors, scope conventions, and the curation lifecycle.
 - Report Knowledge outcomes from their structured fields: inspect `stage` and `code`, preserve `retryable` and the redacted `message`, and retain successful refresh counts beside per-source failures. Never parse operational text or claim acquisition, extraction, persistence, indexing, or query work succeeded when a typed failure names that stage.
 - **Use canonical memory identity `knowledge-ingestor`.** Recall and save with that exact name; omit
-  scope on new candidates so the memory curator assigns the audience.
+  `scope_agents` on new candidates so the memory curator assigns the audience, and recommend the entry's
+  scope with `where` (`project` or `global`).
 - Use `read/readFile` for local text paths, `web` for known public pages, `owlbear-browser/acquire` for rendered pages, `markitdown/*` for supported document conversion, `vscode/askQuestions` for user validation, and `owlbear-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 validation: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Use `owlbear-browser/browser_status` only for readiness diagnosis and routing; it does not authorize ingestion or prove authenticated content.
