@@ -72,6 +72,7 @@ _BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_li
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MCP_CONFIG_PATHS = (_REPO_ROOT / "seed/.vscode/mcp.json", _REPO_ROOT / ".vscode/mcp.json")
+_ROOT_MCP_CONFIG = _REPO_ROOT / ".mcp.json"  # the Copilot runtime's format; VS Code reads it too
 _CANONICAL_MCP_CONFIG = _MCP_CONFIG_PATHS[0]
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlbear" / "instructions")
@@ -116,7 +117,7 @@ def _frontmatter_data(fm_lines: list[str]) -> dict[str, object]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _read_mcp_config(path: Path) -> tuple[frozenset[str], list[str]]:
+def _read_mcp_config(path: Path, key: str = "servers") -> tuple[frozenset[str], list[str]]:
     """Read configured MCP server names and report malformed configuration."""
     if not path.is_file():
         return frozenset(), [f"{path}: MCP configuration file does not exist"]
@@ -126,26 +127,28 @@ def _read_mcp_config(path: Path) -> tuple[frozenset[str], list[str]]:
         return frozenset(), [f"{path}: MCP configuration is not valid JSON: {exc}"]
     if not isinstance(parsed, dict):
         return frozenset(), [f"{path}: MCP configuration must be a JSON object"]
-    servers = parsed.get("servers")
+    servers = parsed.get(key)
     if not isinstance(servers, dict):
-        return frozenset(), [f"{path}: MCP configuration needs a servers object"]
+        return frozenset(), [f"{path}: MCP configuration needs a {key} object"]
     names = frozenset(name for name in servers if isinstance(name, str) and name)
     return names, []
 
 
 def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]:
-    """Read canonical and active MCP server names, checking their key sets."""
+    """Read canonical and active MCP server names, checking their key sets; the active ones span both files."""
     canonical, errors = _read_mcp_config(_CANONICAL_MCP_CONFIG)
-    active_path = _MCP_CONFIG_PATHS[1]
-    if active_path.is_file():
-        active, active_errors = _read_mcp_config(active_path)
+    files = [(p, k) for p, k in ((_MCP_CONFIG_PATHS[1], "servers"), (_ROOT_MCP_CONFIG, "mcpServers")) if p.is_file()]
+    if files:
+        read = [_read_mcp_config(path, key) for path, key in files]
+        active = frozenset().union(*(names for names, _ in read))
+        active_errors = [error for _, found in read for error in found]
         errors.extend(active_errors)
         if not active_errors and (
             active - canonical - _WORKSPACE_MCP_SERVERS or canonical - active - _EXTERNAL_MCP_SERVERS
         ):
             errors.append(
-                f"{active_path}: MCP server names differ from {_CANONICAL_MCP_CONFIG} beyond external servers: "
-                f"expected={sorted(canonical)}, actual={sorted(active)}"
+                f"{' and '.join(str(p) for p, _ in files)}: MCP server names differ from {_CANONICAL_MCP_CONFIG} "
+                f"beyond external servers: expected={sorted(canonical)}, actual={sorted(active)}"
             )
     return canonical, errors
 
