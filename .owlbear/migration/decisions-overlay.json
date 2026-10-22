@@ -760,18 +760,6 @@
     },
     {
       "topic": "C-31 The decision record",
-      "original": "One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers only) and what is open; no history rows.",
-      "statement": "OwlBear's decision record has one section per topic: rows by origin, rules in force, owner's words, replaced decision numbers only, and open matters; no history rows.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
-      "original": "The full rows TD-1..TD-382 and the old research report stay at commit `04b1d8ec4`; requirement R4 moved into C-03.",
-      "statement": "The full TD-1..TD-382 rows and old research stay at 04b1d8ec4; C-03 holds the rule to compare a role's behaviour and quality in both runtimes with the same model, effort, context and effective tools before moving it.",
-      "note": "corrected by a second check: Resolves R4 without its controlled-comparison requirement: same model, effort, context and effective tools."
-    },
-    {
-      "topic": "C-31 The decision record",
       "original": "In-force lines state intent in at most two lines each; how something is built lives in code, tests and pull request texts, not here.",
       "statement": "In-force statements in OwlBear's decision record state intent in at most two lines each; implementation belongs in code, tests and PR texts, not the decision record.",
       "note": "ok"
@@ -784,38 +772,8 @@
     },
     {
       "topic": "C-31 The decision record",
-      "original": "A new decision edits its topic in the same change: its number on the rows line under its origin and an in-force line; nothing is appended elsewhere.",
-      "statement": "Recording a new decision updates its topic in OwlBear's decision record in the same change: add its TD number under its origin and its in-force statement; append nothing elsewhere.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
-      "original": "Implementation choices go to the pull request text only; an autonomous choice that changes a rule is recorded in its topic. New numbers continue after the highest one in this file.",
-      "statement": "Implementation choices go only in PR text; an autonomous choice changing a rule is recorded in that rule's topic in OwlBear's decision record. New TD numbers follow that record's highest number.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
-      "original": "Until a decision system replaces this record, implementation choices the owner would notice on a page are recorded as autonomous rows too.",
-      "statement": "Until a decision system replaces OwlBear's decision record, record implementation choices the owner would notice on a page as autonomous rows in that record too.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
-      "original": "Decisions become a system of their own for OwlBear's work and every project, scoped like memory; it is the next item, before item 5 ([design](decision-system-build.md)).",
-      "statement": "Give OwlBear and every project a decision system scoped to Change, project and Global; prioritise it next, before the post-v1.0 project-agent isolation and memory-curation work.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
       "original": "A read-only owlbear-data token serves only a workflow on pushes to main and a daily schedule; pull-request CI checks the generated view's own hash.",
       "statement": "A read-only owlbear-data token serves only OwlBear's decision-view generation workflow on pushes to main and a daily schedule; PR CI checks the generated decision view's own hash.",
-      "note": "ok"
-    },
-    {
-      "topic": "C-31 The decision record",
-      "original": "The record's first migration stops at a preview listing its unclear clauses; the record stays authoritative until the owner has reviewed it.",
-      "statement": "The first migration of OwlBear's decision record stops at a preview listing unclear clauses; the decision record stays authoritative until the owner has reviewed the preview.",
       "note": "ok"
     },
     {

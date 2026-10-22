@@ -1295,22 +1295,12 @@ C-05's).
   TD-452, TD-453, TD-454, TD-455, TD-456, TD-457, TD-458, TD-459, TD-460, TD-462, TD-464, TD-465, TD-466; autonomous
   TD-389, TD-426, TD-461.
 
-- One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
-  only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
-- The full rows TD-1..TD-382 and the old research report stay at commit `04b1d8ec4`; requirement R4 moved
-  into C-03 [TD-383, TD-384].
 - In-force lines state intent in at most two lines each; how something is built lives in code, tests and
   pull request texts, not here [TD-385, TD-389].
 - A decision records only the owner's confirmed intent; his words are never stored, in decision files, this record
   or commit messages; the record's existing quotes stay as history until the migration [TD-449].
-- A new decision edits its topic in the same change: its number on the rows line under its origin and an in-force
-  line; nothing is appended elsewhere [TD-389, TD-449].
-- Implementation choices go to the pull request text only; an autonomous choice that changes a rule is
-  recorded in its topic. New numbers continue after the highest one in this file [TD-389].
-- Until a decision system replaces this record, implementation choices the owner would notice on a page are
-  recorded as autonomous rows too [TD-418].
-- Decisions become a system of their own for OwlBear's work and every project, scoped like memory; it is the next item,
-  before item 5 ([design](decision-system-build.md)) [TD-419].
+- Implementation choices go to the pull request text only; an autonomous choice that changes a rule is recorded as
+  a decision [TD-389].
 - All decisions, OwlBear's and every project's, live in `owlbear-data` [TD-424]; OwlBear's repository keeps a
   generated full view for GitHub's agents and reviewers, data credentials only in its generator [TD-425].
 - Global rules apply to every project at once; a project departs from one only by an exception (the owner took the
@@ -1327,11 +1317,6 @@ C-05's).
   owlbear-data's `owlbear/` folder; the repository stays unregistered [TD-435].
 - A read-only owlbear-data token serves only a workflow on pushes to main and a daily schedule; pull-request CI
   checks the generated view's own hash [TD-436].
-- The record's first migration stops at a preview listing its unclear clauses; the record stays authoritative until
-  the owner has reviewed it [TD-437].
-- After the owner's review, a final preview with its fixes reruns the past-work test; the record switches to the new
-  store if the test misses nothing new [TD-466].
-- A migrated line citing both decided and autonomous rows carries decided; only the owner changes it [TD-465].
 - Today's rules come over as inherited: their recorded authority, marked never read back, without quotes; one is
   read back only when work relies on it and its meaning is unclear [TD-454].
 - Global: C-01's asking rules (not page comments), security changes reviewed with the owner, consumer research out of
@@ -1357,8 +1342,6 @@ C-05's).
 - Decisions carry no paths, roles or steps selectors; the picker alone decides what applies to a Change [TD-460].
 - An answer during the work is classified by its relayer as event, clarification or brief change; clarifications
   are read back and become Change decisions; a Sol check stops the work when one changes the brief [TD-461].
-- The migration rewords statements that only make sense beside their neighbours so each stands alone, the original
-  kept beside it; the owner checks only those Sol's two checks leave uncertain [TD-462, TD-464].
 
 **Owner's words:**
 
@@ -1390,4 +1373,6 @@ C-05's).
 TD-459; TD-462's review of every rewording by TD-464.
 
 **Spent:** TD-440 (four mixed lines split by origin, the doubtful ones kept decided) and TD-441 (seven rows without a
-  line got one), both applied in their topics.
+  line got one), both applied in their topics. By the switch to the decision store (TD-466): the record's format and
+  editing rules (TD-383, TD-384, TD-386, TD-387, TD-389's numbering and TD-449's topic edits), TD-418 (until the
+  record was replaced), TD-419 (built), and the migration's TD-437, TD-462, TD-464, TD-465 and TD-466.
