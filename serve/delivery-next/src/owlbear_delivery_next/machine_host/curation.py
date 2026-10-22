@@ -46,6 +46,7 @@ NO_SHARED = "no shared repository is set up, so there is no memory to curate"
 LEFT = "the last curation's processes may still run; stop them before curating again"
 LINGERING = "memory curation: its last session's processes may still run"
 INTERRUPTED = "interrupted: OwlBear stopped while it ran or waited"
+UNKNOWN = "its processes could not be identified, so none could be confirmed gone; check for a stray copilot process"
 
 
 class FolderRun(Record):
@@ -79,7 +80,8 @@ def message(folder: str) -> str:
 def folders(root: Path) -> list[str]:
     """The project folders of the shared repository that keep memory, Global's own folder never among them."""
     found = (p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))
-    return sorted(p.name for p in found if p.name != "memory" and (p / "memory").is_dir())
+    own = (p for p in found if p.name != "memory" and (p / "memory").is_dir() and not (p / "memory").is_symlink())
+    return sorted(p.name for p in own)  # a link never leads a run to Global or out of the repository
 
 
 def _run(cfg: sdk_adapter.Session) -> Run:
@@ -106,6 +108,9 @@ class Curation:
             if r.state in {"waiting", "running"}:
                 runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
         self.left = dict(runs.left)
+        if self.left:  # processes a stopped host left: their slot stays taken until they are seen gone
+            self.held = "curate:restored"
+            self.slots.restore(SLOT, {self.held: 1})
         self._write(runs)
 
     def path(self) -> Path:
@@ -138,6 +143,16 @@ class Curation:
         runs = self.load().folders
         listed = [{"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")} for f in folders(shared.root)]
         return {"available": True, "folders": listed, "queue": list(self.queue)}
+
+    def _pids(self, event: dict[str, Any]) -> None:
+        """Keep the session's processes on file as it records them, so a host that stops meanwhile still knows them."""
+        if event.get("event") != "pids":
+            return
+        with self.lock:
+            self.left |= {int(p): c for p, c in event.get("pids", {}).items()}
+            runs = self.load()
+            runs.left = dict(self.left)
+            self._write(runs)
 
     def lingering(self) -> bool:
         """Whether a run's processes may still run; once they are seen gone, their slot is given back."""
@@ -246,8 +261,16 @@ class Curation:
             return
         turn, key = threading.Event(), f"curate:{folder}"
         while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
+            if why := self.fenced():  # an update or a stop came while it waited: it never starts
+                self.slots.cancel(SLOT, key)
+                self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
+                return
             turn.wait(5)
             turn.clear()
+        if why := self.fenced():
+            self.slots.give(SLOT, key)
+            self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
+            return
         try:
             self._save(folder, FolderRun(state="running", started_at=started))
             self._save(folder, self._session(shared, folder, started, key))
@@ -268,17 +291,22 @@ class Curation:
                 message=said, fresh=said, resume=False, policy=Policy(at, write=False),
                 observe=lambda: tools.Worktree("", ""), checks=(), submit=memory_curation_tools.SUBMIT,
                 model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
-                role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(), memory=store,
+                role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
             done = self.run(cfg)
         t = done.termination
-        if t is not None and not t.confirmed:  # its slot stays taken and it counts as busy until they are gone
-            with self.lock:
-                self.left, self.held = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids, key
+        with self.lock:
+            watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
+            self.left, self.held = watched, key if watched else ""  # kept until they are seen gone
+            runs = self.load()
+            runs.left = dict(self.left)
+            self._write(runs)
+        unknown = t is not None and not t.confirmed and not watched
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
-        if done.ending != "result" or report is None:
+        if done.ending != "result" or report is None or unknown:
             why = " ".join((done.detail or "no report was submitted").split())[:300]
+            why = f"{UNKNOWN}; {why}" if unknown else why
             return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}")
         with shared.locked():
             notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed

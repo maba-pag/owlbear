@@ -191,3 +191,67 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
     assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: None}  # kept on file
     alive[0] = False
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
+
+
+def test_a_linked_memory_folder_is_never_curated(root) -> None:
+    """Copilot on #587: a project folder whose memory links to Global or outside is not a folder to curate."""
+    (root / "alias").mkdir()
+    (root / "alias" / "memory").symlink_to(root / "memory")
+    listed = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root)).read()["folders"]
+    assert [f["folder"] for f in listed] == ["owlbear", "shop"]
+
+
+def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_their_slot(root, monkeypatch) -> None:
+    """Copilot on #587: a host that stops mid-run leaves the session's processes known, their slot taken."""
+    alive = [True]
+    monkeypatch.setattr(curation.processes, "alive", lambda _pid, _created: alive[0])
+    on_file = []
+
+    def run(cfg) -> Run:
+        cfg.journal.event({"event": "pids", "pids": {"4242": None}})
+        on_file.append(curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root)).load().left)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    finished(job)
+    assert (on_file, job.load().left) == ([{4242: None}], {})  # known while it ran, cleared once confirmed gone
+
+    job._save("shop", curation.FolderRun(state="running"))  # noqa: SLF001 - the host stops mid-run
+    runs = job.load()
+    runs.left = {4242: None}
+    job._write(runs)  # noqa: SLF001
+    slots = Slots(lambda: 1, closed=True)
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (slots.counts(curation.SLOT)[2], restarted.working()) == (1, [curation.LINGERING])
+    alive[0] = False
+    assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
+
+
+def test_a_run_unconfirmed_without_processes_to_watch_gives_its_slot_back_and_says_so(root) -> None:
+    slots = Slots(lambda: 1)
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
+                   termination=Termination(confirmed=False))  # fmt: skip
+
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    finished(job)
+    shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
+    assert (shop["state"], curation.UNKNOWN in shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", True, 0)
+
+
+def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_it(root) -> None:
+    slots, fence = Slots(lambda: 1), [""]
+    assert slots.take("0123456789abcdef", "a-change", 1, 1) == 1  # a project's step holds the only slot
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran"),
+                            fenced=lambda: fence[0])  # fmt: skip
+    job.start("shop")
+    time.sleep(0.2)
+    fence[0] = "an update runs"
+    slots.give("0123456789abcdef", "a-change")
+    finished(job)
+    shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
+    assert (shop["state"], shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", "an update runs", 0)
