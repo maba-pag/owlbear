@@ -70,8 +70,9 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 
 **Systemic process problems** (e.g., agent repeatedly writing the same complaint, finding contradicts a convention in `copilot-instructions.md` or `h-module-design`):
 
-- **Automatic:** leave affected entries pending and include the entry IDs plus conflict summary in the return report.
-- **Interactive:** present to the owner via `askQuestions` for resolution.
+- **At or above the threshold:** resolve them and report which side stands and why.
+- **Below it, automatic:** leave affected entries pending and include the entry IDs plus conflict summary in the return report.
+- **Below it, interactive:** present to the owner via `askQuestions` for resolution.
 
 | Rationalization | Response |
 | --- | --- |

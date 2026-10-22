@@ -796,6 +796,9 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
         raise ToolError(msg)
     source, target = _memory_dir_from_ctx(ctx), root / GLOBAL
     project = source.parent.name
+    if target.is_symlink() or (target.exists() and target.resolve().parent != root.resolve()):
+        msg = "Global memory is a link out of the shared repository: nothing moves"
+        raise ToolError(msg)
     target.mkdir(exist_ok=True)
     try:
         with repo_locked(root), writer_lock(source), writer_lock(target):  # the repository lock first, as the page
@@ -807,8 +810,8 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
             if entry.revision != revision:
                 msg = f"Entry changed since it was read: {entry_id}. Re-read before retrying."
                 raise ToolError(msg)
-            if entry.state in {MemoryState.PENDING, MemoryState.DELETED}:
-                msg = f"{entry.title} is {entry.state}: curate it before it goes global"
+            if entry.state not in {MemoryState.CURATED, MemoryState.APPROVED}:  # the owner resolves the others first
+                msg = f"{entry.title} is {entry.state}: only a curated or approved entry goes global"
                 raise ToolError(msg)
             moved = target / path.name
             if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
