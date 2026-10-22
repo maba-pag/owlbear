@@ -8,6 +8,7 @@ A store still in the clone moves to its folder once, on first open; a move cut s
 from __future__ import annotations
 
 import errno
+import json
 import os
 import secrets
 import shutil
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 
 STORE_DIR = "owlbear-delivery"
 PROJECTS = "projects"
+MACHINE = "machine.json"  # the registry (``machine_host.registry``); read here only to tell a project from leftovers
 CLONE_ID = "clone-id"
 MOVE_LOCK = "move.lock"
 KEPT = frozenset({CLONE_ID, MARKER, MOVE_LOCK})  # what stays in the clone
@@ -67,6 +69,20 @@ def ensure_id(folder: Path) -> str:
 def home(pid: str) -> Path:
     """The project's folder in ``~/.owlbear``."""
     return local_home.root() / PROJECTS / pid
+
+
+def registered(pid: str) -> bool | None:
+    """Whether the machine's registry lists project *pid*; None when it cannot be read. Creates nothing."""
+    try:
+        machine = json.loads((local_home.root() / MACHINE).read_text())
+    except FileNotFoundError:
+        return False
+    except OSError, ValueError:
+        return None
+    projects = machine.get("projects") if isinstance(machine, dict) else None
+    if not isinstance(projects, list):
+        return None
+    return any(isinstance(p, dict) and p.get("id") == pid for p in projects)
 
 
 def _left(folder: Path) -> list[Path]:

@@ -27,7 +27,7 @@ from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-MACHINE, LOCK = "machine.json", "machine.lock"
+MACHINE, LOCK = project_home.MACHINE, "machine.lock"
 MACHINE_FORMAT = 4  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`
 STALE = "the machine settings changed since this page loaded them"
 
