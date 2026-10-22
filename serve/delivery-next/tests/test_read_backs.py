@@ -13,7 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
-from owlbear_delivery_next.commands import mcp_server
+from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
@@ -87,9 +87,9 @@ def queue(c: TestClient, **query) -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def chat(store, monkeypatch) -> mcp_server.Chat:
+def chat(store, monkeypatch) -> chat_client.Chat:
     http = client(store, CHAT)
-    tools = mcp_server.Chat.__new__(mcp_server.Chat)
+    tools = chat_client.Chat.__new__(chat_client.Chat)
     tools.store = store
 
     def call(method: str, path: str, body: object = None) -> tuple[int, Any]:

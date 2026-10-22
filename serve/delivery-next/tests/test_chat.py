@@ -19,8 +19,8 @@ from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import mcp_server, setup
-from owlbear_delivery_next.commands.mcp_server import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
+from owlbear_delivery_next.commands import chat_client, setup
+from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import answers, api, pages
@@ -279,11 +279,11 @@ def test_chat_refuses_recovery_decisions(repo):
 
 def test_a_host_running_without_this_project_says_so_and_owlbears_clone_is_never_told_to_add_itself(repo, monkeypatch):
     machine = HostRecord(url="http://127.0.0.1:9/", token="t", pid=9, started_at=NOW, code=CURRENT)  # noqa: S106
-    monkeypatch.setattr(mcp_server.host, "running_at", lambda root: machine if root == local_home.root() else None)
+    monkeypatch.setattr(chat_client.host, "running_at", lambda root: machine if root == local_home.root() else None)
     chat, served = Chat(repo), NOT_SERVED.format(repo=repo)
     assert chat.find_decisions("x", "all", include_retired=False) == {"found": False, "error": served}
     assert chat.show_status()["message"] == served
-    monkeypatch.setattr(mcp_server.host, "running_at", lambda _root: None)
+    monkeypatch.setattr(chat_client.host, "running_at", lambda _root: None)
     assert chat.show_status()["message"] == NOT_RUNNING.format(repo=repo)
     own = OwlBear(repo).find_decisions("x", "all", include_retired=False)
     assert (own["error"], "add this project" in own["error"]) == (OWLBEAR_DOWN, False)

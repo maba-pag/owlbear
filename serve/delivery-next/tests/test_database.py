@@ -14,7 +14,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval, IntentItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change
-from owlbear_delivery_next.commands.mcp_server import Chat
+from owlbear_delivery_next.commands.chat_client import Chat
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.project import ImportWaitingError, Project
 from owlbear_delivery_next.project_host import config_routes
