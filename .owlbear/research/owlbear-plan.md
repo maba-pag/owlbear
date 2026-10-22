@@ -117,9 +117,9 @@ flowchart LR
   I9 -.-> VB["Visual baseline"]
 ```
 
-Independent of everything else: TD-402 (small, before item 15), the align fixes of §4, the quality service, and
-Renovate's #451 and #452, which fail the Tooling check (archify 3.2.0's manifest coverage; the `.nvmrc` pin no
-longer equals the lower bound of `package.json`'s Node range, which CI requires). Item 14's runner gate only stops and asks until item 16 designs amendments; its CI
+Independent of everything else: TD-402 (small, before item 15), the align fixes of §4 and the quality service.
+Renovate's #451 and #452 merged on 2026-10-22: the topology diagram re-rendered with Archify 3.2.0, and Renovate now
+raises `package.json`'s Node floor with `.nvmrc`. Item 14's runner gate only stops and asks until item 16 designs amendments; its CI
 freshness check (slice 6) runs with the owner's `OWLBEAR_DATA_TOKEN` secret (TD-436).
 
 **The old roadmap.** The roadmap M0–M7 and the repair plan of 2026-10-11 are history at `04b1d8ec4` (§3.7 and §3.12
