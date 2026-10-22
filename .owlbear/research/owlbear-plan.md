@@ -56,6 +56,7 @@ Renovate's pull requests come back now that the old engine is gone (owner, 2026-
 | Conflicts with read-back decisions: the agent workspace hidden from Git (TD-420), CI lint from the pre-commit config (TD-409), a repeated finding linked to every match (TD-405) | — | #535 to #537 |
 | The decision system (item 14) except the migration: files and validator, Change decisions archived, store with receipts, step context and runner gate, Decisions tab and chat tools, generated view, read-back queue, impact report, fix entries ticked by merged Changes | [decision system](decision-system-build.md) | #538 to #547, #550 |
 | Memory: the residuals of #238, #244 and #249; a chat's memory in its project's folder of `owlbear-data` (TD-72) | — | #548, #553 |
+| Decisions as confirmed intent (item 14): inherited decisions, saving at confirmation, the picker and lookups, answers classed by their relayer, the migration and the switch to `owlbear-data` (TD-466) | [decisions as confirmed intent](decision-intent-build.md) | #556 to #565, #570, #571 |
 
 ## 2. The Plan
 
@@ -105,8 +106,7 @@ names, not positions: the table lists the items in their order.
 flowchart LR
   A402["TD-402: GitHub account per project"] --> I15["15 New project from zero"]
   A402 --> I10["10 First real project"]
-  I14["14 Decisions as confirmed intent, then migration"] -.-> I5["5 Memory work"]
-  I5 -.-> I8["8 Window-step gate"]
+  I5["5 Memory work"] -.-> I8["8 Window-step gate"]
   I8 -.-> I9["9 Watcher"]
   B27["TD-27 benchmark"] --> I9
   I9 --> I16["16 Amendment design"]
