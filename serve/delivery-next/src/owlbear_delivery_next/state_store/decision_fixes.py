@@ -285,7 +285,7 @@ def _verify(
         if entry.status in {"done", "dropped"} or not _mine(entry, changes, project):
             return {}
         items = checklist(entry.text)
-        whole = files is not None and bool(items) and all(PATHLESS.match(i) for _, i, _ in items)
+        whole = bool(files) and bool(items) and all(PATHLESS.match(i) for _, i, _ in items)
         owner = {k for k, _, t in checklist(body) if t}  # ticked on GitHub
         lines, covered = [], 0
         for line in entry.text.splitlines():

@@ -213,6 +213,18 @@ def test_a_path_free_fix_is_completed_by_the_merged_change_launched_from_it_and_
 
 
 @pytest.mark.usefixtures("github")
+def test_a_merge_that_changed_no_files_does_not_complete_a_path_free_fix(shared):
+    impact = Impact(PROJECT, "unknown", "no record", (), ())
+    fix = now(shared, scheduled(shared, impact, "c1"))
+
+    fields = decision_fixes._verify(frozenset(), {"c1"}, PROJECT, ("c1", URL))(fix, "")  # noqa: SLF001
+
+    assert fields["status"] == "open"
+    assert not any(ticks(fields["text"]).values())
+    assert "Verified by" not in fields["text"]
+
+
+@pytest.mark.usefixtures("github")
 def test_an_entry_reassigned_meanwhile_is_left_as_it_is(tmp_path, shared, merged, monkeypatch):
     repo, sha = merged
     fix = entry(shared, FIX, ["a.py"])
