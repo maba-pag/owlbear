@@ -239,30 +239,30 @@ def until(ready) -> None:
         time.sleep(0.01)
 
 
-def test_a_steps_lookups_run_one_at_a_time(monkeypatch):
+def test_a_second_lookup_while_one_runs_is_refused_as_busy(monkeypatch):
     work, logged = Blocked(Run("look", "result")), []
     monkeypatch.setattr(lookup, "worker", work)
     monkeypatch.setattr(lookup.sessions, "logged", lambda *a: logged.append(a))
     asked_ = lookup.Asked(None, None, lambda: "change")
     question = pick_tools.Question(question=QUESTION)
     with ThreadPoolExecutor(2) as pool:
-        calls = [pool.submit(asked_, question) for _ in range(2)]
-        until(lambda: asked_.admitted == 2 and work.entered)
-        assert len(work.entered) == 1  # the second waits its turn: one picker beside the step's session
+        first = pool.submit(asked_, question)
+        until(lambda: asked_.admitted == 1 and work.entered)
+        assert json.loads(asked_(question)) == {"failed": lookup.BUSY}  # one picker beside the step's session
         work.release.set()
-        assert [json.loads(f.result(10)) for f in calls] == [{"decisions": []}] * 2
+        assert json.loads(first.result(10)) == {"decisions": []}
     assert (work.most, logged) == (1, [])  # spend counts when the step settles
 
 
-def test_a_steps_settlement_rejects_lookups_not_started_waits_for_the_running_one_and_counts_its_spend(monkeypatch):
+def test_a_steps_settlement_rejects_later_lookups_waits_for_the_running_one_and_counts_its_spend(monkeypatch):
     work, logged, change = Blocked(Run("look", "result")), [], ["taken at the start"]
     monkeypatch.setattr(lookup, "worker", work)
     monkeypatch.setattr(lookup.sessions, "logged", lambda _s, _l, c, done, fields: logged.append((c, done, fields)))
     asked_ = lookup.Asked(None, None, lambda: change[0])
     question = pick_tools.Question(question=QUESTION)
-    with ThreadPoolExecutor(3) as pool:
-        running, waiting = pool.submit(asked_, question), pool.submit(asked_, question)
-        until(lambda: asked_.admitted == 2 and work.entered)
+    with ThreadPoolExecutor(2) as pool:
+        running = pool.submit(asked_, question)
+        until(lambda: asked_.admitted == 1 and work.entered)
         change[0] = "the runner's now"  # a window's delivery replaced it
         settling = pool.submit(asked_.settled, lambda: "the step's run")
         until(lambda: not asked_.open)
@@ -271,7 +271,6 @@ def test_a_steps_settlement_rejects_lookups_not_started_waits_for_the_running_on
         work.release.set()
         assert settling.result(10) == "the step's run"
         assert json.loads(running.result(10)) == {"decisions": []}  # admitted before settlement: answered
-        assert json.loads(waiting.result(10)) == {"failed": lookup.ENDED}
     assert (len(work.entered), logged) == (1, [("the runner's now", work.done, {"kind": lookup.LABEL, "exit": "ok"})])
 
 

@@ -182,7 +182,7 @@ def _one(text: str) -> str:
 
 
 class Asked:
-    """A step's ``lookup_decisions``, one at a time within the worker's turn.
+    """A step's ``lookup_decisions``, one at a time within the worker's turn; a second at once is refused as busy.
 
     A lookup reads the Change the runner holds and never writes it: its run waits until `settled` closes admission,
     waits for every lookup admitted and counts their spend on the Change the runner holds then.
@@ -201,6 +201,8 @@ class Asked:
         with self.state:
             if not self.open:
                 return json.dumps({"failed": ENDED})
+            if self.admitted:  # a queued call could outwait the relay and report failed while its picker succeeds
+                return json.dumps({"failed": BUSY})
             self.admitted += 1
         try:
             with self.turn:

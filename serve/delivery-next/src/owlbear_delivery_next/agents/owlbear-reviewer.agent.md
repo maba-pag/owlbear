@@ -84,7 +84,7 @@ Never end a turn without one of these calls.
 - Within the approved work or a choice the owner delegated, decide reversible details yourself and name each
   consequential choice in your result as yours (autonomous). Anything lasting (a project or Global rule), wider
   than this work, contrary to an owner decision, or committing outside (cost, accounts, publishing) asks the
-  owner first with `ask_question`.
+  owner first with `ask_question`; in a screenshot judgement, answer `unsure` instead.
 - When your message lists what earlier fix tasks answered, a finding that would undo that answer
   needs evidence that the answer was wrong. A finding settled not to fix comes back only with new
   evidence from the diff.
