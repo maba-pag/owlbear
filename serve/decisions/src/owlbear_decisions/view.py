@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from owlbear_decisions.models import Decision
     from owlbear_decisions.validate import Entry
 
-RECORD = ".owlbear/research/delivery-liveness-first-rebuild.md"
 OUT = Path(".owlbear/decisions.md")
 COMMIT_PREFIX = "Data commit: "
 NO_COMMIT = "none"
@@ -153,9 +152,6 @@ def render(seen: Snapshot, commit: str) -> str:
         "last line; a workflow on pushes to main and a daily schedule fails when owlbear-data's decisions differ.",
         "",
         COMMIT_PREFIX + (f"`{commit}`" if commit != NO_COMMIT else "none (no decisions migrated yet)"),
-        "",
-        f"The decision record `{RECORD}` stays authoritative until the owner has reviewed the migration",
-        "(TD-437): where this view and the record differ, follow the record.",
         "",
         *([f"Drafts (proposed, not in force) are not listed: {drafts}.", ""] if drafts else []),
         *_rules(seen, names),

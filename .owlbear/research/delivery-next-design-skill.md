@@ -1,6 +1,6 @@
 # Design Skill and Screenshot Judgement for Delivery Next
 
-> **Owning task:** Delivery rebuild, owner questions of 2026-10-14 ([rebuild §3.8](delivery-liveness-first-rebuild.md))
+> **Owning task:** Delivery rebuild, owner questions of 2026-10-14 ([rebuild §3.8](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#38-decisions-in-force-by-topic-td-359))
 > **Date:** 2026-10-14
 > **Question:** Should Delivery adopt Impeccable for UI builds and for judging screenshots, by installing it
 > unmodified or by extracting its useful parts? And how should screenshots be judged when one model may miss
@@ -67,7 +67,7 @@ available there, and J6 records every decision, so the default models can change
 
 ### 3.4 The owner's decisions, 2026-10-14
 
-TD-74 amended, TD-76 to TD-79 in [the rebuild](delivery-liveness-first-rebuild.md):
+TD-74 amended, TD-76 to TD-79 in [the decisions](../decisions.md):
 - The screenshot judgement is a review. Delivery has three: after each task, at the end of a Change, and the
   visual review.
 - Impeccable is extracted, not installed. "The runner and the extracted design rules" are updated together and

@@ -89,7 +89,7 @@ customization; it starts after installation and does not repeat the install path
 | Setup guide | `setup/setup-guide.md`, `setup/operating-owlbear.md`, `setup/sharing-guide.md` |
 | Folder orientation guide | `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md` |
 
-`PLC-4` Docs that do not fit an existing doc type are research: they go to the project's research folder in the data repository (`w-research` Step 6); only OwlBear's decision record, plan and build designs of unbuilt work stay in `.owlbear/research/` (TD-395). Change-specific decisions belong in native Delivery authority rather than standalone documentation. They are not placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
+`PLC-4` Docs that do not fit an existing doc type are research: they go to the project's research folder in the data repository (`w-research` Step 6); only OwlBear's plan and build designs of unbuilt work stay in `.owlbear/research/` (TD-395). Change-specific decisions belong in native Delivery authority rather than standalone documentation. They are not placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
 
 ## 3. Audience Targets
 

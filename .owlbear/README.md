@@ -11,7 +11,7 @@ portable source tree copied into a consumer project.
 | `hooks/` | Project-local write hooks used by the development checkout |
 | `instructions/`, `prompts/`, and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem |
 | `scripts/` | Development validators and operational helper scripts |
-| `research/` | OwlBear's decision record, its plan and status, and build designs of work not yet built; other research lives in the project's folder of the data repository |
+| `research/` | OwlBear's plan and status, and build designs of work not yet built; other research lives in the project's folder of the data repository |
 | `sources/` | External-source attribution for research and implementation work |
 | `memory/` | Agent memory entries written by the `owlbear-memory` server; host-local memory databases are ignored |
 | `knowledge/` | Local Knowledge database and placeholders; databases and vectors are ignored |

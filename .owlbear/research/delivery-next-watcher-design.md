@@ -1,6 +1,6 @@
 # Watcher Agent: Design Draft
 
-> **Owning task:** Delivery rebuild, phase 3 "N1 design" ([rebuild §3.12](delivery-liveness-first-rebuild.md))
+> **Owning task:** Delivery rebuild, phase 3 "N1 design" ([rebuild §3.12](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#312-repair-plan-2026-10-11))
 > **Date:** 2026-10-14
 > **Question:** How should the watcher read, judge, stop and summarise running steps in both runtimes,
 > within the decided rules? This is a draft for the owner's design session. It builds on the

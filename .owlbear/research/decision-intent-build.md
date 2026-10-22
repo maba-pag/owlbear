@@ -7,10 +7,10 @@
 > complete list to challengers, later decisions picked at step boundaries, selectors removed, the lookup through the
 > picker for workers and lead chats, and the agents' boundary in their files; slice 5: answers during the work classed
 > by their relayer, clarifications read back and checked against the approved brief on the picker's role, then kept
-> as the Change's decisions, brief changes stopping the work); of slice 6 the preview is built (the
-> converter applies `.owlbear/migration/decisions-overlay.json`: 130 lines reworded to stand alone, 22 Global by
-> TD-442); the owner reviewed it on 2026-10-22 (TD-464 to TD-469), and the switch follows once the past-work test on
-> the final preview misses nothing new (TD-466). It revises [the decision system](decision-system-build.md), whose
+> as the Change's decisions, brief changes stopping the work); slice 6 is done: the preview (123 lines reworded to
+> stand alone, 22 Global by TD-442), reviewed by the owner on 2026-10-22 (TD-464 to TD-469); the past-work test on the
+> final preview missed nothing new, so the record switched to `owlbear-data` and is Git history, with its converter
+> (TD-466). It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
 

@@ -75,8 +75,7 @@ answer or approval is referenced verifiably. A read-back acknowledgement never c
   The index rebuilds a project's rows when the data commit or the digest of its decision
   files' revisions changes, so uncommitted files count; creating or replacing its file is serialized by a lock file.
 - **Built in slice 6** (choices made while building): the view is `.owlbear/decisions.md`, written by
-  `uv run decisions-view <owlbear-data> --project owlbear`. Its header says the record stays authoritative until the
-  owner has reviewed the migration (TD-437); rules in force come Global first, then OwlBear's (its Changes' included),
+  `uv run decisions-view <owlbear-data> --project owlbear`. Rules in force come Global first, then OwlBear's (its Changes' included),
   grouped by topic, each with its rationale and consequences on one line apiece, so `--check` compares them too; drafts are counted, not listed; replaced, withdrawn and spent ones are one line each in History,
   and the validator's findings are listed. Its last line is the sha256 of everything above it. Freshness means the
   rendered decisions differ: `--check` compares the view without its data commit line and hash, so new owlbear-data

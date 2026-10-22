@@ -1,13 +1,12 @@
 # owlbear-decisions — Decision Files
 
 The file contract for OwlBear's decisions and every project's: one Markdown file per lasting decision, a
-validator for a data repository's decision folders, a project's snapshot of them, and a preview of the first
-migration from the hand-edited
-[decision record](../../.owlbear/research/delivery-liveness-first-rebuild.md). It is slice 1 of the
-[decision system design](../../.owlbear/research/decision-system-build.md); Delivery stores the files in
-`owlbear-data` and indexes them (slice 3), and the Decisions page and step context come in later slices.
+validator for a data repository's decision folders, a project's snapshot of them, and OwlBear's generated view. It
+is slice 1 of the [decision system design](../../.owlbear/research/decision-system-build.md); Delivery stores the
+files in `owlbear-data` and indexes them. OwlBear's hand-edited decision record was migrated into `owlbear-data` and
+retired (TD-466); it and its converter remain in Git history.
 
-**Use this guide when:** you write or read decision files, change their rules, or run the migration preview.
+**Use this guide when:** you write or read decision files, change their rules, or regenerate the view.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
@@ -17,7 +16,6 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 
 ```bash
 uv run decisions-validate <data-repo-root>
-uv run decisions-migrate-preview <record.md> <out-dir> [--project owlbear] [--overlay PATH]
 uv run decisions-view <data-repo-root> [--project owlbear] [--out .owlbear/decisions.md] [--commit SHA] [--check]
 ```
 
@@ -25,28 +23,9 @@ uv run decisions-view <data-repo-root> [--project owlbear] [--out .owlbear/decis
 the repository root (`<root>/decisions/`), each project's layer its folder (`<root>/<project>/decisions/`) and a
 Change's layer `<root>/<project>/changes/<slug>/decisions/`, as in Delivery's data repository.
 
-`decisions-migrate-preview` writes one proposed, inherited decision per in-force bullet into
-`<out-dir>/<project>/decisions/` (Global ones into `<out-dir>/decisions/`, the Global layer) and a `REPORT.md` with
-counts, unclear clauses, orphan rows, the Global entries, the reworded ones, the overlay entries that match no line,
-the validator's findings with their explanation and the row-to-entry concordance. It refuses a folder that already
-holds a preview and never changes the record (TD-437).
-
-`--overlay` (none by default) applies rewordings and Global lines keyed by a line's topic heading and exact
-statement; pass
-`.owlbear/migration/decisions-overlay.json` for OwlBear's record:
-
-```bash
-uv run decisions-migrate-preview .owlbear/research/delivery-liveness-first-rebuild.md \
-  .owlbear/scratch/decisions-preview/<n> --overlay .owlbear/migration/decisions-overlay.json
-```
-
-A reworded line's entry holds only the rewording; `REPORT.md` shows the original beside it, `uncertain` ones first,
-for the owner to accept or correct (TD-462). A `global` line becomes a Global decision (TD-442), the rest the
-project's. An entry whose original is no in-force line is listed as stale: the record changed since the overlay.
-
 `decisions-view` writes OwlBear's generated, read-only view of the Global and the project's decisions (slice 6,
 TD-425): a header naming the data commit (`--commit`, default the root's `HEAD`; `none` only for a data repository
-without decisions) and that the record stays authoritative (TD-437), the rules in force by layer and topic, history,
+without decisions), the rules in force by layer and topic, history,
 the validator's findings, and a last line `<!-- decisions-view sha256:... -->` over everything above it. `--check`
 writes nothing and exits 1 when the view is missing, edited by hand, or shows other decisions than the data; a new
 data commit alone never makes it stale. Pull-request CI checks only the hash (`.github/scripts/decisions_view_hash.py`,
