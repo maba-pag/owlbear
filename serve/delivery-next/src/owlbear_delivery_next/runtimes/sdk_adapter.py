@@ -336,6 +336,8 @@ class _Step:
             ),
             "mcp_servers": _memory(self.cfg.memory),
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
+            "enable_config_discovery": False,  # nor its or the user's agents and skills (TD-167, TD-274)
+            "included_builtin_skills": [],  # nor the runtime's bundled skills: only the role's own (TD-134)
             "working_directory": str(self.cfg.worktree),
             "model": self.cfg.model,
             "reasoning_effort": self.cfg.effort,

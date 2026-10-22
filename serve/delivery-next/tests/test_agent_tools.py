@@ -86,6 +86,14 @@ def test_without_a_memory_folder_or_the_memory_server_the_agents_go_on_without_m
     assert list(json.loads(wf.mcp(INBOX, tmp_path)(None))["mcpServers"]) == [wf.names(INBOX)[0]]
 
 
+def test_a_step_loads_only_its_role_and_delivery_skills_never_discovered_or_bundled_ones() -> None:
+    """TD-167, TD-274, TD-134: discovery stays off explicitly, so an SDK default can never turn project agents on."""
+    got = options()
+    assert (got["enable_config_discovery"], got["included_builtin_skills"]) == (False, [])
+    assert [a["name"] for a in got["custom_agents"]] == ["owlbear-builder"]
+    assert all(Path(d).parent == preload.directory() for d in got["skill_directories"])
+
+
 def test_the_sdk_approves_only_the_mcp_tools_the_role_is_offered(tmp_path) -> None:
     def asked(kind: StepKind, server: str, tool: str) -> str:
         cfg = sdk_adapter.Session(**(FIELDS | {"kind": kind, "memory": tmp_path}))
