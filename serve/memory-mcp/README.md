@@ -68,6 +68,8 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then optional contested state/challenge lines and body; contested entries add one `Challenge task:` line per record); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
 | `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale |
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
+| `make_global` | Curator: moves a curated or approved entry into Global memory, records its project as `origin`, and commits both paths |
+| `curation_threshold` | Curator: the confidence threshold in percent from the shared repository's global settings, else 95 |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
 | `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |

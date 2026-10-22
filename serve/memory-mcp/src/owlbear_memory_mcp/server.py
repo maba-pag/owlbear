@@ -32,6 +32,9 @@ from owlbear_memory_mcp.tools import (
     curate_memory as curate_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
+    curation_threshold as curation_threshold_impl,
+)
+from owlbear_memory_mcp.tools import (
     delete_agent_memories as delete_agent_memories_impl,
 )
 from owlbear_memory_mcp.tools import (
@@ -39,6 +42,9 @@ from owlbear_memory_mcp.tools import (
 )
 from owlbear_memory_mcp.tools import (
     list_memories as list_memories_impl,
+)
+from owlbear_memory_mcp.tools import (
+    make_global as make_global_impl,
 )
 from owlbear_memory_mcp.tools import (
     read_memory as read_memory_impl,
@@ -63,9 +69,11 @@ __all__ = [
     "assess_memories",
     "commit_memory_batch",
     "curate_memory",
+    "curation_threshold",
     "delete_agent_memories",
     "delete_memory",
     "list_memories",
+    "make_global",
     "mcp",
     "memory_dir",
     "read_memory",
@@ -87,6 +95,13 @@ _RecallAgent = Annotated[StrictStr | Literal[0] | None, Field(default=None)]
 _Limit = Annotated[int, Field(ge=0)]
 _Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
 _BatchSession = Literal["curation", "review"]
+_Folder = Annotated[
+    str | None,
+    Field(
+        description="For the memory curator: another project folder of the shared repository to work on, by its "
+        "name; omit for this server's own folder. Global memory is never named here: it changes only by make_global."
+    ),
+]
 _Where = Annotated[
     Where,
     Field(
@@ -172,6 +187,7 @@ async def list_memories(
     states: list[MemoryState] | None = None,
     categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None,
     scope_agents: list[str] | None = None,
+    folder: _Folder = None,
 ) -> list[dict[str, Any]]:  # pragma: no cover
     """List memory metadata sorted by curation priority."""
     return await list_memories_impl(
@@ -179,6 +195,7 @@ async def list_memories(
         states=states,
         categories=categories,
         scope_agents=scope_agents,
+        folder=folder,
     )
 
 
@@ -204,9 +221,10 @@ async def read_memory(
     ctx: Context,
     *,
     entry_id: str,
+    folder: _Folder = None,
 ) -> dict[str, Any]:  # pragma: no cover
     """Read a full memory entry by ID."""
-    return await read_memory_impl(ctx, entry_id=entry_id)
+    return await read_memory_impl(ctx, entry_id=entry_id, folder=folder)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
@@ -220,6 +238,7 @@ async def curate_memory(  # noqa: PLR0913
     categories: list[MemoryCategory] | None = None,
     confidence: _Confidence | None = None,
     scope_agents: list[str] | None = None,
+    folder: _Folder = None,
 ) -> dict[str, Any]:  # pragma: no cover
     """Curate and mutate a memory entry."""
     return await curate_memory_impl(
@@ -231,19 +250,38 @@ async def curate_memory(  # noqa: PLR0913
         categories=categories,
         confidence=confidence,
         scope_agents=scope_agents,
+        folder=folder,
     )
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession) -> dict[str, Any]:  # pragma: no cover
+async def commit_memory_batch(
+    ctx: Context, *, session_type: _BatchSession, folder: _Folder = None
+) -> dict[str, Any]:  # pragma: no cover
     """Commit reviewed non-pending memory entries for one curation or review session."""
-    return await commit_memory_batch_impl(ctx, session_type=session_type)
+    return await commit_memory_batch_impl(ctx, session_type=session_type, folder=folder)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
-async def delete_memory(ctx: Context, *, entry_id: str, revision: _Revision) -> dict[str, Any]:  # pragma: no cover
+async def delete_memory(
+    ctx: Context, *, entry_id: str, revision: _Revision, folder: _Folder = None
+) -> dict[str, Any]:  # pragma: no cover
     """Delete a memory entry with lifecycle-aware semantics."""
-    return await delete_memory_impl(ctx, entry_id=entry_id, revision=revision)
+    return await delete_memory_impl(ctx, entry_id=entry_id, revision=revision, folder=folder)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+async def make_global(
+    ctx: Context, *, entry_id: str, revision: _Revision, folder: _Folder = None
+) -> dict[str, Any]:  # pragma: no cover
+    """Move a curated or approved entry into Global memory, recording its project, and commit (TD-292)."""
+    return await make_global_impl(ctx, entry_id=entry_id, revision=revision, folder=folder)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+async def curation_threshold(ctx: Context) -> dict[str, Any]:  # pragma: no cover
+    """The curator's confidence threshold in percent: at or above it the curator acts alone (TD-400)."""
+    return await curation_threshold_impl(ctx)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))

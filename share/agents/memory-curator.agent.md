@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-6 Luna (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/problems, read/readFile, search, owlbear-memory/commit_memory_batch, owlbear-memory/curate_memory, owlbear-memory/delete_agent_memories, owlbear-memory/delete_memory, owlbear-memory/list_memories, owlbear-memory/read_memory, owlbear-memory/rename_agent_memories]
+  [vscode/toolSearch, vscode/askQuestions, read/problems, read/readFile, search, owlbear-memory/commit_memory_batch, owlbear-memory/curate_memory, owlbear-memory/curation_threshold, owlbear-memory/make_global, owlbear-memory/delete_agent_memories, owlbear-memory/delete_memory, owlbear-memory/list_memories, owlbear-memory/read_memory, owlbear-memory/rename_agent_memories]
 agents: []
 ---
 

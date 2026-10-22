@@ -453,6 +453,18 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
         raise ValueError(str(exc)) from exc
 
 
+def commit_move(paths: Sequence[Path], message: str) -> str:
+    """Commit exactly *paths*, one entry moved between two memory folders of one repository; return the commit."""
+    repo_dir = Path(_git(paths[0].parent, "rev-parse", "--show-toplevel")).resolve()
+    rels = [p.parent.resolve().joinpath(p.name).relative_to(repo_dir).as_posix() for p in paths]
+    known = [
+        r for r in rels if (repo_dir / r).exists() or _git_bytes(repo_dir, "ls-files", "--error-unmatch", r)[0] == 0
+    ]
+    _git(repo_dir, "add", "-A", "--", *known)
+    _git(repo_dir, "commit", "-q", "-m", message, "--", *known)
+    return _git(repo_dir, "rev-parse", "HEAD")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run a state-aware memory batch commit from the command line."""
     parser = ArgumentParser(description="Commit reviewed OwlBear memory entries.")
