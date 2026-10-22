@@ -12,14 +12,16 @@ import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.runtimes import step_decisions, step_input
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import pick
+from owlbear_delivery_next.workflow_steps import pick, plan_round, reconsider, sessions
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 PROJECT = "shop-site"
@@ -197,3 +199,66 @@ def test_a_change_approved_without_a_pick_keeps_every_decision_in_force(picking,
         return
     worker, _ = run.held[-1]
     assert (line(rule) in worker, line(other) in worker, len(picking.pickers())) == (True, True, 1)
+
+
+@pytest.mark.parametrize("kind", [StepKind.PUBLISH, StepKind.MERGE])
+def test_a_decision_new_at_a_step_without_an_agent_waits_for_a_session_then_is_picked(picking, monkeypatch, kind):
+    rule = picking.put(make())
+    run = Running(picking, monkeypatch, rule)
+    c = run.p.change()
+    c.step = Step(kind=kind)
+    picking.store.write(Lock(picking.slug), c)
+    new = picking.put(make(title="Farewells are polite", statement="Farewells say thank you."))
+    monkeypatch.setattr(sessions, "GRANT", session_slots.wanted(c, c.step))  # what the host grants it: none
+
+    c = run.step()  # no SessionGrantError escapes: the host would record a runner gone, again and again
+
+    assert (sessions.GRANT, run.held, len(picking.pickers()), c.stop) == (0, [], 1, None)
+    assert (c.outcome.exit, c.outcome.cause) == (Exit.PENDING, f"{ErrorKind.NETWORK}:{kind}:{pick.LABEL}")
+    step = loop.next_step(c, c.outcome.wake_at)
+    assert (step.kind, session_slots.wanted(c, step)) == (kind, 1)  # the host grants its pick a session
+    monkeypatch.setattr(sessions, "GRANT", 1)
+    picking.picks.append(picked(new.id))
+
+    c = run.step(c.outcome.wake_at)
+
+    assert (len(run.held), len(picking.pickers()), new.id in c.decisions_baseline.said) == (1, 2, True)
+
+
+def verdict(*places: str, upheld: dict[str, bool] | None = None) -> tools.ReviewResult:
+    judged = [{"finding": k, "upheld": u, "reason": "see AC-1"} for k, u in (upheld or {}).items()]
+    found = [{"place": p, "problem": "untestable", "fix": "name the output"} for p in places]
+    return tools.ReviewResult(verdict="fix" if places else "pass", findings=found, rechecked=judged)
+
+
+def test_a_brief_reconsideration_reads_the_pick_beside_the_complete_list(picking):
+    rule = picking.put(make())
+    other = picking.put(make(title="Invoices are PDF", topic="billing", statement="Invoices are sent as PDF."))
+    picking.save()
+    picking.ask(1)
+    clarified = [{"finding": "F1", "verdict": "clarified", "text": "AC-1: name the exact text", "reason": "r"}]
+    picking.picks.append(picked(rule.id))
+    picking.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True}), ReconsiderResult(reconsidered=clarified)]
+    picking.step()
+    picking.ask(1, {"F1": "no"})
+    q = loop.open_question(picking.step())
+    picking.store.put_inbox(picking.slug, AnswerItem(at=AT, question=q.id, option="reconsider", text="narrow it"))
+    picking.approved()  # folds the answer
+
+    picking.step()
+
+    said = picking.told[-1].message
+    assert said.startswith("You reconsider brief challenge findings")
+    assert said.index(line(rule)) < said.index(step_decisions.COMPLETE) < said.index(line(other))
+
+
+@pytest.mark.parametrize("which", ["plan", "code"])
+def test_plan_and_code_reconsiderations_read_the_complete_list(which):
+    rule, other = make(), make(title="Invoices are PDF", topic="billing", statement="Invoices are sent as PDF.")
+    task = Task(id="t1", title="Add farewell")
+    c = Change(slug="c1", plan=Plan(tasks=[task]))
+
+    with step_decisions.using(step_decisions.section([rule]), step_decisions.complete([other])):  # the runner's gate
+        said = plan_round.prompt(c, Path()) if which == "plan" else reconsider.prompt(c, task, Path())
+
+    assert said.index(line(rule)) < said.index(step_decisions.COMPLETE) < said.index(line(other))

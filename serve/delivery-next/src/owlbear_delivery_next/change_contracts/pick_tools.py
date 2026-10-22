@@ -19,9 +19,10 @@ class PickedId(tools.Args):
 class PickResult(tools.Args):
     """``submit_result`` for the decision pick."""
 
-    picked: list[PickedId] = tools.bounded(
-        1000, "Every decision you pick; empty when none governs the work", [{"id": "D-01JC0000000000000000000000"}], 0
-    )
+    picked: list[PickedId] = Field(
+        description="Every decision you pick; empty when none governs the work",
+        examples=[[{"id": "D-01JC0000000000000000000000"}]],
+    )  # no size limit: the list it picks from has none (TD-456)
 
 
 SUBMIT = tools.Spec("submit_result", "Submit the decisions you pick once, by id.", PickResult, "result")

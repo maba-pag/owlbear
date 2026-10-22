@@ -226,3 +226,11 @@ def test_a_correction_log_that_is_not_utf8_fails_the_pick_with_its_reason(pickin
     assert (c.brief.picked.status, picking.pickers()) == ("failed", [])
     assert "utf-8" in c.brief.picked.reason
     assert "the picker failed" in picking.approve(1).json()["detail"]
+
+
+def test_a_pick_has_no_size_limit_but_each_id_is_still_checked():
+    many = [{"id": f"D-{n:026d}"} for n in range(1_500)]  # the list it picks from has no size limit (TD-456)
+    assert len(pick_tools.PickResult.model_validate({"picked": many}).picked) == 1_500
+    assert "maxItems" not in pick_tools.PickResult.model_json_schema()["properties"]["picked"]
+    with pytest.raises(ValueError, match="at most 40 characters"):
+        pick_tools.PickResult.model_validate({"picked": [{"id": "D-" + "0" * 40}]})

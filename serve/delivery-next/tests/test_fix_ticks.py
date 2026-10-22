@@ -8,12 +8,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.state_store import decision_fixes
 from owlbear_delivery_next.state_store.backlog import Backlog
+from owlbear_delivery_next.state_store.decision_impact import Impact, Report
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import cleanup, engine
 
@@ -176,6 +179,37 @@ def test_an_abandoning_change_whose_pr_merged_anyway_credits_nothing(tmp_path, s
     finish(tmp_path, shared, repo, Gh(pr(sha)), "abandon")
 
     assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.py": False})
+
+
+def scheduled(shared: DataRepo, impact: Impact, change: str) -> str:
+    """A path-free report's fix entry, scheduled and launched into *change* from the backlog."""
+    fields = {"scope": Scope.PROJECT, "project": PROJECT, "origin": Origin.DECIDED, "actor": "owner", "created_at": NOW}
+    old = Decision(id=new_id(), title="Notes live in SQLite", statement="SQLite.", state=State.REPLACED, **fields)
+    new = Decision(id=new_id(), title="Notes live in Postgres", statement="Postgres.", state=State.IN_FORCE,
+                   links=(Link(type=LinkType.REPLACES, target=old.id),), **fields)  # fmt: skip
+    [made] = decision_fixes.schedule(shared, Report(old, new, "forbids", (impact,)), new.revision)
+    return Backlog(shared, PROJECT).update(made["id"], {"change": change, "status": "in-change"}).id
+
+
+@pytest.mark.usefixtures("github")
+@pytest.mark.parametrize("launched", ["confirmed", "unknown"])
+def test_a_path_free_fix_is_completed_by_the_merged_change_launched_from_it_and_by_no_other(
+    tmp_path, shared, merged, launched
+):
+    repo, sha = merged
+    built = {"slug": "c0", "title": "Notes", "pr": f"{URL[:-1]}5", "from": "merged"}
+    impacts = {"confirmed": Impact(PROJECT, "confirmed", "built under it", (built,), ()),
+               "unknown": Impact(PROJECT, "unknown", "no record", (), ())}  # fmt: skip
+    fix = scheduled(shared, impacts.pop(launched), "c1")
+    unrelated = scheduled(shared, impacts.popitem()[1], "c9")
+
+    finish(tmp_path, shared, repo, Gh(pr(sha)))
+
+    done = now(shared, fix)
+    assert (done.status, all(ticks(done.text).values()), done.evidence[-1]) == ("done", True, URL)
+    assert f"Verified by Change c1 ({URL}), merged: its checklist names no files." in done.text
+    left = now(shared, unrelated)
+    assert (left.status, any(ticks(left.text).values()), "Verified by" in left.text) == ("in-change", False, False)
 
 
 @pytest.mark.usefixtures("github")

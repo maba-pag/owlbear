@@ -28,7 +28,7 @@ from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.runtimes import step_decisions
 from owlbear_delivery_next.state_store import decision_store, read_backs
-from owlbear_delivery_next.workflow_steps import before, check, engine, pick, prepare
+from owlbear_delivery_next.workflow_steps import before, check, engine, pick, prepare, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -344,12 +344,16 @@ def _reassessed(
     """
     c = c.model_copy(deep=True)
     others = [d for d in later if not _attached(d, c)]
-    chosen, why = pick.reassessed(store, lock, c, others, view.snapshot.root) if others else ([], "")
+    wait = timedelta(minutes=1)
+    try:
+        chosen, why = pick.reassessed(store, lock, c, others, view.snapshot.root) if others else ([], "")
+    except sessions.SessionGrantError as exc:  # a step granted no session: the host grants the retry one
+        chosen, why, wait = [], f"{exc}; it runs again with one", timedelta(0)
     now = datetime.now(UTC)
     if why:
         cause = cause_key(ErrorKind.NETWORK, c.step.kind, pick.LABEL)
         reason = f"{REPICK}: {why}"[:300]
-        return c, StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
+        return c, StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + wait)
     pin = c.decisions_baseline
     pin.revisions |= {d.id: d.rule_revision for d in later}
     pin.said |= {d.id: _said(d) for d in [*(d for d in later if _attached(d, c)), *chosen]}

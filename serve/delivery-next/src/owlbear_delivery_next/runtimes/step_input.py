@@ -103,12 +103,12 @@ def _brief(change: Change, *, challenged: bool = False, own: str = "", complete:
     return lines + step_decisions.held(complete=complete)  # a challenger checks the complete list (TD-452)
 
 
-def brief(change: Change) -> list[str]:
-    """The brief section, and the owner's criteria from earlier visual reviews that every review checks (TD-79)."""
+def brief(change: Change, *, complete: bool = False) -> list[str]:
+    """The brief section, the owner's visual-review criteria (TD-79), a challenger's (*complete*) full list too."""
     if not (kept := [k for k in change.owner_criteria if k.withdrawn_at is None]):
-        return _brief(change)
+        return _brief(change, complete=complete)
     owner = [f"- {k.id}: {' '.join(k.text.split())[:2000]}" for k in kept[:20]]  # whole: every review checks it
-    return [*_brief(change), "", "The owner's criteria from earlier visual reviews:", *owner]
+    return [*_brief(change, complete=complete), "", "The owner's criteria from earlier visual reviews:", *owner]
 
 
 def page_errors(errors: tuple[Sequence[PageError], Sequence[PageError]]) -> list[str]:
