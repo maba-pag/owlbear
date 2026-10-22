@@ -55,8 +55,8 @@ def test_rewording_replaces_the_statement_and_the_report_shows_both(tmp_path):
     reworded = by_original["The same applies here."].decision
     assert (reworded.statement, reworded.title) == (CLEAR, "A read-back offers three close variants of the …")
     row = next(line for line in report.splitlines() if CLEAR in line and "|" in line)
-    assert "| The same applies here. | " + CLEAR + " | ok | |" in row
-    section = report.split("## Reworded for your review (TD-462)")[1]
+    assert "| The same applies here. | " + CLEAR + " | ok |" in row
+    section = report.split("## Reworded (TD-462)")[1]
     assert section.index("uncertain: long") < section.index("| ok |")  # uncertain ones first
     assert not [f for f in files if "The same applies here" in f or "Long one" in f]
     assert any("over 240" in reason for reason in by_original["Long one."].unclear)

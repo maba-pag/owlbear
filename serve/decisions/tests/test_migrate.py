@@ -105,7 +105,7 @@ def test_one_entry_per_bullet_with_statement_and_aliases_inherited_without_words
 
 def test_unclear_clauses():
     clauses = preview(_synthetic()).clauses
-    assert any("mixed origins" in reason for reason in clauses[1].unclear)
+    assert clauses[1].unclear == []  # TD-465: mixed origins carry decided and are settled
     assert clauses[1].decision.origin is Origin.DECIDED
     assert clauses[2].unclear == []
     assert clauses[3].unclear == ["TD-9 is in no Rows line"]
@@ -148,7 +148,7 @@ def test_write_preview_files_and_report(tmp_path):
     files = [p.read_text(encoding="utf-8") for p in (out / "owlbear" / "decisions").iterdir()]
     assert not [f for f in files if "owner_words" in f or "bound to copilot" in f]
     report = (out / "REPORT.md").read_text(encoding="utf-8")
-    headings = ("Counts", "Unclear clauses", "Orphan rows", "Global by TD-442", "Reworded for your review (TD-462)")
+    headings = ("Counts", "Unclear clauses", "Orphan rows", "Global by TD-442", "Reworded (TD-462)")
     for heading in (*headings, "Overlay entries that match no line", "Validator findings", "Concordance"):
         assert f"## {heading}" in report
     assert "- TD-4 (decided, C-01 Asking)" in report
@@ -162,7 +162,7 @@ def test_cli(tmp_path, capsys):
     record = tmp_path / "record.md"
     record.write_text(_synthetic(), encoding="utf-8")
     assert main([str(record), str(tmp_path / "out")]) == 0
-    assert capsys.readouterr().out.startswith("7 entries, 4 unclear clauses, 1 orphan rows")
+    assert capsys.readouterr().out.startswith("7 entries, 3 unclear clauses, 1 orphan rows")
 
 
 def _in_force_bullets(text: str) -> int:

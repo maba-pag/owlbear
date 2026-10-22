@@ -8,10 +8,9 @@
 > picker for workers and lead chats, and the agents' boundary in their files; slice 5: answers during the work classed
 > by their relayer, clarifications read back and checked against the approved brief on the picker's role, then kept
 > as the Change's decisions, brief changes stopping the work); of slice 6 the preview is built (the
-> converter applies `.owlbear/migration/decisions-overlay.json`: 137 lines reworded to stand alone, 16 Global by
-> TD-442; the past-work test on 13 past pull requests found with the reworded statements what the original wording
-> found, 93% and 96% against 94% and 97%, so it has not yet shown that every governing decision is found) and awaits
-> the owner's review before the switch (TD-437). It revises [the decision system](decision-system-build.md), whose
+> converter applies `.owlbear/migration/decisions-overlay.json`: 130 lines reworded to stand alone, 22 Global by
+> TD-442); the owner reviewed it on 2026-10-22 (TD-464 to TD-469), and the switch follows once the past-work test on
+> the final preview misses nothing new (TD-466). It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
 

@@ -112,10 +112,8 @@ def _origin(bullet: Bullet, topic: Topic, rows: dict[str, tuple[str, Topic]]) ->
     found = set(origins.values())
     if not bullet.cited:
         unclear.append("cites no TD row; origin autonomous by the best-effort rule")
-    if len(found) > 1:
-        mix = "; ".join(f"{o} {', '.join(td for td, of in origins.items() if of == o)}" for o in sorted(found))
-        unclear.append(f"mixed origins ({mix}); the most protective one is proposed")
     unclear.extend(f"origin qualified as '{q}' in the record" for ref in bullet.references for q in ref.qualifiers)
+    # TD-465: a line with mixed origins carries the most protective one; that is settled, not unclear
     return (max(found, key=_RANK.__getitem__) if found else Origin.AUTONOMOUS), unclear
 
 
