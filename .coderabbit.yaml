@@ -24,7 +24,7 @@ reviews:
   path_instructions:
     - path: ".owlbear/research/**"
       instructions: >-
-        Decision record, plan and build designs. Flag only contradictions with other
+        Plan and build designs. Flag only contradictions with other
         documents or the code, broken links and stale references. No wording or style comments.
   pre_merge_checks:
     docstrings:
