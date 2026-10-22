@@ -108,6 +108,7 @@ def _matches_repair_copy(candidate: MemoryEntry, source: MemoryEntry, marked_tit
         and candidate.confidence == source.confidence
         and candidate.source_agent == source.source_agent
         and candidate.recommended == source.recommended
+        and candidate.origin == source.origin
         and candidate.scope_agents == source.scope_agents
         and candidate.created_at == source.created_at
     )
