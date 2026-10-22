@@ -294,6 +294,31 @@ def test_a_global_entry_moves_back_only_to_the_project_it_came_from(shared):
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: move back Pin the runtime"
 
 
+def test_a_move_that_fails_keeps_the_entry_where_it_was_with_its_origin_and_can_be_tried_again(shared, monkeypatch):
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder, common = root / store.name / "memory", root / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    c = client(store)
+    shown = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+    real = Path.replace
+
+    def refuse(self, target):  # only the move into the project's folder fails; atomic writes still work
+        if Path(target).parent == folder and Path(target).suffix == ".md":
+            raise PermissionError(13, "Permission denied")
+        return real(self, target)
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    failed = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": shown["updated_at"]})
+    monkeypatch.setattr(Path, "replace", real)
+    again = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": shown["updated_at"]})
+
+    assert (failed.status_code, "try again" in failed.json()["detail"]) == (409, True)
+    assert again.status_code == 200
+    assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
+    assert MemoryEngine(common).get_entries() == []
+
+
 def test_make_global_refuses_an_entry_global_memory_holds_or_the_curator_has_not_scoped(shared):
     root, _, repo = shared
     store = Store.open(repo)

@@ -153,9 +153,14 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
             if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
                 where = store.name if back else "Global memory"
                 raise HTTPException(409, f"{where} holds {entry.title} already")
-            entry = entry.model_copy(update={"origin": None if back else store.name})
-            storage.write_entry(path, entry, memory_dir=source)  # rewritten in place, then moved whole
-            path.replace(moved)
+            moving = entry.model_copy(update={"origin": None if back else store.name})
+            storage.write_entry(path, moving, memory_dir=source)  # rewritten in place, then moved whole
+            try:
+                path.replace(moved)
+            except OSError as exc:
+                storage.write_entry(path, entry, memory_dir=source)  # as it was, so the move can be tried again
+                raise HTTPException(409, f"{entry.title} could not move: {exc.strerror or exc}; try again") from exc
+            entry = moving
             what = "move back" if back else "make global"
             notice = shared.publish([path, moved], f"memory {store.name}: {what} {entry.title}", until)
     except tuple(e for e, _, _ in REFUSED) as exc:
