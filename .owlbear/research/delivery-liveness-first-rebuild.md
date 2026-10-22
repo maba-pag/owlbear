@@ -1234,7 +1234,8 @@ their own decisions).
 
 **Rows:** decided TD-359, TD-383, TD-384, TD-385, TD-386, TD-387, TD-388, TD-418, TD-419, TD-424, TD-425, TD-427,
   TD-428, TD-429, TD-430, TD-435, TD-436, TD-437, TD-439, TD-440, TD-441, TD-442, TD-446, TD-449, TD-450, TD-451,
-  TD-452, TD-453, TD-454, TD-455, TD-456, TD-457, TD-458, TD-459; autonomous TD-389, TD-426.
+  TD-452, TD-453, TD-454, TD-455, TD-456, TD-457, TD-458, TD-459, TD-460, TD-462; autonomous TD-389, TD-426,
+  TD-461.
 
 - One section per topic: its rows by origin, the rules in force, the owner's words, what was replaced (numbers
   only) and what is open; no history rows [TD-359, TD-383, TD-386, TD-387].
@@ -1292,6 +1293,11 @@ their own decisions).
   workers and lead chats, reading the complete list [TD-459].
 - Every worker of a Change gets the whole picked set; no agent trims it [TD-457].
 - Rules carry no role or kind tags and there are no per-role views [TD-458].
+- Decisions carry no paths, roles or steps selectors; the picker alone decides what applies to a Change [TD-460].
+- An answer during the work is classified by its relayer as event, clarification or brief change; clarifications
+  are read back and become Change decisions; a Sol check stops one that changes the brief [TD-461].
+- The migration rewords statements that only make sense beside their neighbours so each stands alone, the original
+  beside it, every reworded one marked for the owner's review in the preview [TD-462].
 
 **Owner's words:**
 
