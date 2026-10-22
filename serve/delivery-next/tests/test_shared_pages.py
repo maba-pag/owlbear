@@ -225,7 +225,16 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
             entries.filter(has_text="Pin the runtime").get_by_role("button", name="Make global").click()
             pds.modal(page).get_by_role("button", name="Make global").click()
             expect(page.locator("#status")).to_contain_text('Made "Pin the runtime" global')
-            expect(entries.filter(has_text="Pin the runtime").locator(".place")).to_have_text("Global")
+            pinned = entries.filter(has_text="Pin the runtime")
+            expect(pinned.locator(".place")).to_have_text("Global")
+            expect(common.get_by_role("button", name="Move back to docs-site")).to_have_count(0)  # no origin recorded
+            pinned.get_by_role("button", name="Move back to docs-site").click()  # TD-292: only to where it came from
+            pds.modal(page).get_by_role("button", name="Move back").click()
+            expect(page.locator("#status")).to_contain_text('Moved "Pin the runtime" back to docs-site')
+            expect(pinned.locator(".place")).to_have_text("docs-site")
+            pinned.get_by_role("button", name="Make global").click()
+            pds.modal(page).get_by_role("button", name="Make global").click()
+            expect(pinned.locator(".place")).to_have_text("Global")
             page.goto(f"{base}/memory")
             expect(entries).to_have_count(3)
             page.route(f"**/p/{SHOP}/api/next/memory**", lambda r: r.abort())  # the shop's first clone stops answering

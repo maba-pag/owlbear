@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine
+from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storage
 
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -266,6 +266,32 @@ def test_make_global_moves_the_entry_and_publishes_both_folders(shared):
     assert committed == sorted([f"{store.name}/memory/{entry.id}.md", f"memory/{entry.id}.md"])
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: make global Pin the runtime"
     assert [e.id for e in MemoryEngine(root / "memory").get_entries()] == [entry.id]
+
+
+def test_a_global_entry_moves_back_only_to_the_project_it_came_from(shared):
+    """TD-292: Make global records the project; only it takes the entry back, and one without a record stays."""
+    root, remote, repo = shared
+    store = Store.open(repo)
+    folder, common = root / store.name / "memory", root / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
+    c = client(store)
+    globalized = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()
+    theirs, unknown = seed(common, "Their habit", curated=True), seed(common, "An older global", curated=True)
+    theirs = theirs.model_copy(update={"origin": "docs-site"})
+    storage.write_entry(common / f"{theirs.id}.md", theirs, memory_dir=common)
+
+    refused = [
+        c.post(f"/api/next/memory/{e.id}/move-back", json={"updated_at": e.updated_at}) for e in (theirs, unknown)
+    ]
+    back = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": globalized["entry"]["updated_at"]})
+
+    assert globalized["entry"]["origin"] == store.name
+    said = [(r.status_code, w in r.json()["detail"]) for r, w in zip(refused, ("docs-site", "recorded"), strict=True)]
+    assert said == [(409, True), (409, True)]
+    assert (back.status_code, back.json()["entry"]["origin"]) == (200, None)
+    assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
+    assert "origin" not in (folder / f"{entry.id}.md").read_text()
+    assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: move back Pin the runtime"
 
 
 def test_make_global_refuses_an_entry_global_memory_holds_or_the_curator_has_not_scoped(shared):

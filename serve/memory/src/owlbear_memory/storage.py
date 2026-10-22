@@ -155,6 +155,8 @@ def _serialize_entry(entry: MemoryEntry) -> bytes:
     }
     if entry.recommended is not None:  # written only when set, so older entries keep their bytes
         frontmatter["recommended"] = entry.recommended
+    if entry.origin is not None:
+        frontmatter["origin"] = entry.origin
     if entry.assessment_receipts:
         frontmatter["assessment_receipts"] = [receipt.model_dump() for receipt in entry.assessment_receipts]
 
