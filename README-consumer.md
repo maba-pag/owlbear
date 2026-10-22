@@ -55,7 +55,7 @@ Probably not a fit when:
 | [uv](https://docs.astral.sh/uv/) | Installs OwlBear's dependencies |
 | Git, with `user.name` and `user.email` set | OwlBear commits each Change's work |
 | [GitHub CLI](https://cli.github.com/), signed in with push access to your project | Opens, updates and merges pull requests |
-| GitHub Copilot CLI (`npm install -g @github/copilot`) | Runs OwlBear's agent sessions |
+| GitHub Copilot CLI (`brew install --cask copilot-cli`) | Runs OwlBear's agent sessions |
 | VS Code + GitHub Copilot extension | New Change opens its shaping chat there |
 | A Git project with a GitHub `origin` | Each Change is published to that repository |
 

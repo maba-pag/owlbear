@@ -55,8 +55,10 @@ Pull requests reach `main` with the required `CI` check; versions are Git tags (
 that the release workflow sets on merges labelled `release:minor` or `release:major`.
 
 Requirements: macOS, Python 3.14.8 (3.14 series only), [uv](https://docs.astral.sh/uv/), VS Code with
-GitHub Copilot, [GitHub CLI](https://cli.github.com/), and Git. JSON linting and diagram rendering also
-need the Node version pinned in `.nvmrc`.
+GitHub Copilot, [GitHub CLI](https://cli.github.com/), the GitHub Copilot CLI (`brew install --cask copilot-cli`),
+and Git. JSON linting and diagram rendering also need the Node version pinned in `.nvmrc`. Install
+the Copilot CLI with Homebrew rather than `npm install -g`, whose copy is hidden when the Node version
+changes.
 
 The checked-in development runtime is pinned to Python 3.14.8; OwlBear supports the 3.14 series only.
 

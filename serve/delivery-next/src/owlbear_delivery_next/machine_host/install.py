@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.machine_host import control, registry
-from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.runtimes import copilot_cli, readiness
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.machine_host.control import Say
 
 COMPLETION = "completion.zsh"
+TOOLS = ("git", "gh", "uv")  # besides the Copilot CLI, which skips VS Code's shim
 
 
 def link_path() -> Path:
@@ -93,25 +94,66 @@ def uninstall(say: Say) -> int:
     return 0
 
 
+def _fails(command: list[str]) -> str | None:
+    """None when *command* exits 0, else its first output line or the error."""
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return str(exc)
+    lines = (done.stdout + done.stderr).strip().splitlines()
+    return None if done.returncode == 0 else (lines or [f"exit {done.returncode}"])[0]
+
+
+def _tools(say: Say) -> int:
+    """How many of git, gh, uv and the Copilot CLI this shell cannot find or run; uv updates OwlBear."""
+    failed = 0
+    for tool in TOOLS:
+        if (path := shutil.which(tool)) is None:
+            say(
+                f"{tool}: not found on PATH · fix: install it, then run `owlbear autostart on` again for the login item"
+            )
+            failed += 1
+        elif error := _fails([path, "--version"]):
+            say(f"{tool}: {path} does not run: {error} · fix: reinstall it")
+            failed += 1
+    try:
+        copilot = copilot_cli.cli_path()
+    except FileNotFoundError as exc:
+        say(f"copilot: {exc}")
+        return failed + 1
+    if error := _fails([copilot, "--version"]):
+        say(f"copilot: {copilot} does not run: {error} · fix: {copilot_cli.FIX}")
+        failed += 1
+    return failed
+
+
+def _login_item(say: Say) -> int:
+    """How many tools the login item cannot find; the host it starts sees only its saved environment."""
+    if (env := control.saved_env()) is None:
+        return 0
+    saved, cli = env.get("PATH", ""), env.get("COPILOT_CLI_PATH")
+    missing = [tool for tool in TOOLS if shutil.which(tool, path=saved) is None]
+    if (shutil.which(cli, path=saved) if cli else copilot_cli.find(saved)) is None:
+        missing.append(f"copilot at its COPILOT_CLI_PATH {cli}" if cli else "copilot")
+    for tool in missing:
+        say(f"login item: {tool} not found · fix: run `owlbear autostart on` from a shell where it runs")
+    return len(missing)
+
+
 def doctor(say: Say, dropped: list[str]) -> int:
-    """What the host's environment cannot do: git, gh and its login, and each project's readiness, with the fix."""
+    """What the host's environment cannot do: its tools, gh's login, the login item and each project's readiness."""
     from owlbear_delivery_next.runtimes import readiness  # noqa: PLC0415 - only doctor needs it
     from owlbear_delivery_next.state_store.store import Store, StoreError  # noqa: PLC0415
 
     for name in dropped:
         say(f"ignored from this shell: {name} (the host never sees it; a project's own Git settings decide)")
-    failed = 0
-    for tool in ("git", "gh"):
-        if shutil.which(tool) is None:
-            say(
-                f"{tool}: not found on PATH · fix: install it, then run `owlbear autostart on` again for the login item"
-            )
-            failed += 1
+    failed = _tools(say)
     if shutil.which("gh"):
         done = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, check=False)  # noqa: S607
         if done.returncode:
             say("gh: not signed in from this environment · fix: gh auth login")
             failed += 1
+    failed += _login_item(say)
     for p in registry.load().projects:
         try:
             checks = readiness.ready(Store.open(Path(p.path)), Path(p.path))

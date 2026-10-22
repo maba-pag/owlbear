@@ -39,6 +39,13 @@ def plist_path() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
 
+def saved_env() -> dict[str, str] | None:
+    """The environment the login item starts the host with, or None without a login item."""
+    if not plist_path().exists():
+        return None
+    return plistlib.loads(plist_path().read_bytes()).get("EnvironmentVariables", {})
+
+
 def argv(*, run: bool = False) -> list[str]:
     """The machine host's process: this interpreter and the one dispatcher; paused unless *run*."""
     return [str(local_home.stable(Path(sys.executable))), "-m", "owlbear_delivery_next", "machine"] + ["--run"] * run
@@ -191,14 +198,15 @@ def autostart(say: Say, *, on: bool) -> int:
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
     log = str(local_home.root() / LOG)
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}  # git, gh, uv, node and copilot as this shell finds them
+    if cli := os.environ.get("COPILOT_CLI_PATH"):
+        env["COPILOT_CLI_PATH"] = cli
     item = {
         "Label": LABEL,
         "ProgramArguments": argv(),
         "RunAtLoad": True,
         "WorkingDirectory": str(local_home.root()),
-        "EnvironmentVariables": {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin")
-        },  # git and gh as this shell finds them
+        "EnvironmentVariables": env,
         "StandardOutPath": log,
         "StandardErrorPath": log,
     }

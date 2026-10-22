@@ -68,10 +68,10 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear restart [--paused]` | Stops it, then starts it running or paused as it was |
 | `owlbear status` | Its address, pause, projects, and login item |
 | `owlbear logs [-n N]` | The end of its log |
-| `owlbear doctor` | Checks Git, the GitHub CLI and its sign-in, and each project's readiness, with the fix |
+| `owlbear doctor` | Checks Git, the GitHub CLI and its sign-in, uv, the Copilot CLI, whether the login item's saved PATH and `COPILOT_CLI_PATH` find them, and each project's readiness, with the fix |
 | `owlbear update` | Runs updates now |
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
-| `owlbear autostart on` or `off` | Starts OwlBear at login, or not |
+| `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
 | `owlbear data [PATH]` | Shows or sets the shared settings repository |
 | `owlbear home` | Shows OwlBear's folder on this Mac |

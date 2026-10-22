@@ -1,5 +1,6 @@
 import contextlib
 import json
+import os
 import shlex
 import subprocess
 import threading
@@ -23,7 +24,7 @@ from owlbear_delivery_next.commands.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import answers, api, pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import readiness, step_input
+from owlbear_delivery_next.runtimes import copilot_cli, readiness, step_input
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings.config import Agent, Layer, resolve
 from owlbear_delivery_next.state_store import briefs
@@ -306,6 +307,24 @@ def test_readiness_gives_one_concrete_fix_per_failure():
     locked = {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (0, "ABC"), GPG: (2, "")}
     assert [n for n, _ in failed(READY | locked)] == ["commit signing"]
     assert failed(READY | locked | {GPG: (0, "")}) == []
+
+
+def test_copilot_cli_skips_vscode_shim_and_names_it_when_alone(tmp_path, monkeypatch):
+    shim, real = tmp_path / copilot_cli.SHIM, tmp_path / "bin"
+    for folder in (shim, real):
+        folder.mkdir()
+        (folder / "copilot").write_text("#!/bin/sh\n", encoding="utf-8")
+        (folder / "copilot").chmod(0o755)
+    monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
+    monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{real}")
+    assert copilot_cli.cli_path() == str(real / "copilot")
+    monkeypatch.setenv("PATH", str(shim))
+    with pytest.raises(FileNotFoundError, match=r"only VS Code's shim .*brew install --cask copilot-cli"):
+        copilot_cli.cli_path()
+    checks = readiness.readiness("github.com", lambda argv: READY.get(" ".join(argv), (0, "")), None, None)
+    [check] = [c for c in checks if c.name == "copilot cli"]
+    assert not check.ok
+    assert check.detail == f"not found: only VS Code's shim {shim / 'copilot'}, which is not the CLI"
 
 
 def test_a_failed_sign_in_names_the_failed_account_not_the_last_one_listed():
