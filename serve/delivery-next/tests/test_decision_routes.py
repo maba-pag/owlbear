@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_decisions.validate import validate_repo
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
-from owlbear_delivery_next.commands import mcp_server
+from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
@@ -431,10 +431,10 @@ def test_withdrawing_a_draft_or_a_decision_in_force_keeps_it_in_history(owner, s
 
 
 @pytest.fixture
-def chat(store, monkeypatch) -> mcp_server.Chat:
+def chat(store, monkeypatch) -> chat_client.Chat:
     """The chat tools of a clone whose host answers in-process, every call marked as the chat's."""
     http = client(store, CHAT)
-    tools = mcp_server.Chat.__new__(mcp_server.Chat)
+    tools = chat_client.Chat.__new__(chat_client.Chat)
     tools.store = store
 
     def call(method: str, path: str, body: object = None) -> tuple[int, Any]:
@@ -462,7 +462,7 @@ def test_find_decisions_matches_text_scope_and_retired_ones_with_the_revision_a_
 
     assert found["found"] is True
     assert [(d["id"], d["revision"]) for d in found["decisions"]] == [(rule.id, rule.revision)]
-    assert set(found["decisions"][0]) == set(mcp_server.SHORT)
+    assert set(found["decisions"][0]) == set(chat_client.SHORT)
     assert [d["title"] for d in tool("find_decisions", where="global")["decisions"]] == [wide.title]
     assert {d["id"] for d in everything["decisions"]} == {rule.id, gone.id}
     assert everything["more"] == 0
@@ -471,7 +471,7 @@ def test_find_decisions_matches_text_scope_and_retired_ones_with_the_revision_a_
 @pytest.mark.usefixtures("chat")
 def test_find_decisions_counts_what_it_leaves_out(shared, monkeypatch):
     seed(shared, make(), make(title="Tags", statement="Free."), make(title="Exports", statement="CSV."))
-    monkeypatch.setattr(mcp_server, "FOUND", 2)
+    monkeypatch.setattr(chat_client, "FOUND", 2)
     got = tool("find_decisions")
     assert (len(got["decisions"]), got["more"]) == (2, 1)
 

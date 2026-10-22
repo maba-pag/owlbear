@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import mcp_server, runner
+from owlbear_delivery_next.commands import chat_client, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
@@ -199,7 +199,7 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
     shaping.save()
     shaping.host.paused = lambda: True  # TD-287: the challenge the owner's chat asks for runs while paused
     shaping.verdicts += [verdict("AC-1")]
-    chat = mcp_server.Chat.__new__(mcp_server.Chat)
+    chat = chat_client.Chat.__new__(chat_client.Chat)
     chat.store = shaping.store
 
     def call(method, path, body=None):
@@ -207,8 +207,8 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
         return r.status_code, r.json()
 
     chat.call = call
-    monkeypatch.setattr(mcp_server, "POLL", 0)
-    monkeypatch.setattr(mcp_server, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
+    monkeypatch.setattr(chat_client, "POLL", 0)
+    monkeypatch.setattr(chat_client, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
     out = chat.challenge_brief("c1", 1, [])
     assert (out["requested"], [f["id"] for f in out["findings"]], out["approvable"]) == (True, ["F1"], False)
     assert chat.challenge_brief("c1", 2, [])["requested"] is False  # no such version
@@ -217,14 +217,14 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
 def test_a_challenge_asked_before_a_stop_when_idle_is_recorded_and_the_chat_returns_at_once(shaping, monkeypatch):
     shaping.save()
     shaping.host.draining = lambda: True
-    chat = mcp_server.Chat.__new__(mcp_server.Chat)
+    chat = chat_client.Chat.__new__(chat_client.Chat)
     chat.store = shaping.store
     chat.call = lambda method, path, body=None: (
         200,
         shaping.http.request(method, f"/api/next{path}", json=body).json(),
     )
-    monkeypatch.setattr(mcp_server, "_pause", lambda _s: pytest.fail("a paused challenge is not waited for"))
-    assert chat.challenge_brief("c1", 1, []) == {"requested": True, "running": False, "next": mcp_server.PAUSED}
+    monkeypatch.setattr(chat_client, "_pause", lambda _s: pytest.fail("a paused challenge is not waited for"))
+    assert chat.challenge_brief("c1", 1, []) == {"requested": True, "running": False, "next": chat_client.PAUSED}
     assert shaping.change().step.mode == "challenge"  # TD-283: the request is in; the challenger starts after Resume
 
 

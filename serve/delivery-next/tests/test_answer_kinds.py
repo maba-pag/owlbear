@@ -18,7 +18,7 @@ from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Plan, Question, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import answer_kinds, loop
-from owlbear_delivery_next.commands import cli, mcp_server, runner
+from owlbear_delivery_next.commands import chat_client, cli, mcp_server, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import answers
@@ -248,10 +248,10 @@ class Loopback:
 
 def test_the_chat_tool_takes_the_kind_and_passes_only_a_confirmed_statement(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
-    chat = mcp_server.Chat.__new__(mcp_server.Chat)
+    chat = chat_client.Chat.__new__(chat_client.Chat)
     chat.repo, chat.store = picking.repo, picking.store
-    monkeypatch.setattr(mcp_server.Chat, "record", lambda _self: RECORD)
-    monkeypatch.setattr(mcp_server, "_LOCAL", Loopback(picking.http))
+    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
     monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
     [tool] = [t for t in asyncio.run(mcp_server.mcp.list_tools()) if t.name == "answer_question"]
     assert sorted(tool.input_schema["required"]) == ["kind", "question"]

@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
-from owlbear_delivery_next.commands import mcp_server, setup
+from owlbear_delivery_next.commands import chat_client, mcp_server, setup
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, registry, serve
@@ -93,8 +93,8 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
             sent.append(request.full_url)
             raise OSError
 
-    monkeypatch.setattr(mcp_server, "_LOCAL", Opener())
-    mcp_server.Chat(Path(p["path"])).call("GET", "/changes")
+    monkeypatch.setattr(chat_client, "_LOCAL", Opener())
+    chat_client.Chat(Path(p["path"])).call("GET", "/changes")
     assert sent == [f"http://127.0.0.1:9/p/{p['id']}/api/next/changes"]
 
 
@@ -134,19 +134,19 @@ def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and
     """TD-435, TD-450: a chat server on OwlBear's own clone writes OwlBear's folder through the machine host."""
     (shared_repo[0] / "owlbear").mkdir()
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
-    monkeypatch.setattr(mcp_server.OwlBear, "record", lambda _self: machine.record)
-    monkeypatch.setattr(mcp_server, "_LOCAL", Loopback(http))
+    monkeypatch.setattr(chat_client.OwlBear, "record", lambda _self: machine.record)
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(http))
     p = add(http, clone(tmp_path / "shop"))
     own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
-    monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.workspace(own))  # noqa: SLF001 - the server's chat
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(own))  # noqa: SLF001 - the server's chat
 
     got = chat_tool("record_decision", title="Pages", statement="Pages are plain HTML.", confirmed=True)
 
     saved = decision_store.load(DataRepo(shared_repo[0]), "owlbear").snapshot.get(got["receipts"][0]["id"]).decision
     assert (saved.project, str(saved.state), str(saved.origin)) == ("owlbear", "in_force", "decided")
-    assert chat_tool("show_status") == {"error": mcp_server.NO_CHANGES}
+    assert chat_tool("show_status") == {"error": chat_client.NO_CHANGES}
     assert not (own / ".git" / "owlbear-delivery").exists()  # OwlBear's repository stays unregistered
-    monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.workspace(Path(p["path"])))  # noqa: SLF001
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(Path(p["path"])))  # noqa: SLF001
     assert [d["title"] for d in chat_tool("find_decisions", where="owlbear")["decisions"]] == ["Pages"]
     machine.updating = "an update runs"  # fenced as a project's API is
     refused = http.post("/api/next/owlbear/decisions/propose", json={"title": "x", "statement": "x"})
@@ -160,8 +160,8 @@ def test_only_the_registry_makes_a_clone_a_project_never_an_id_and_folder_left_b
     project_home.home(pid).mkdir(parents=True)
     p = add(http, clone(tmp_path / "shop"))
 
-    assert type(mcp_server.workspace(own)) is mcp_server.OwlBear
-    assert type(mcp_server.workspace(Path(p["path"]))) is mcp_server.Chat
+    assert type(chat_client.workspace(own)) is chat_client.OwlBear
+    assert type(chat_client.workspace(Path(p["path"]))) is chat_client.Chat
 
 
 def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
@@ -170,13 +170,13 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
     other = origin(clone(tmp_path / "other"), "https://github.com/acme/other.git")
     head = DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout
-    monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.workspace(other))  # noqa: SLF001 - the server's chat
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(other))  # noqa: SLF001 - the server's chat
 
     said = [chat_tool("record_decision", title="x", statement="x", confirmed=True), chat_tool("find_decisions"),
             chat_tool("retire_decision", decision="x", revision="0" * 64, reason="r", confirmed=True),
             chat_tool("show_status")]  # fmt: skip
 
-    assert said == [{"error": mcp_server.NOT_OWLBEAR.format(repo=other)}] * 4
+    assert said == [{"error": chat_client.NOT_OWLBEAR.format(repo=other)}] * 4
     assert DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout == head
     assert not (other / ".git" / "owlbear-delivery").exists()
 

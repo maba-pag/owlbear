@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.decision_records import Decision as ChangeDecision
 from owlbear_delivery_next.change_contracts.models import Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.commands import mcp_server, runner, step_mcp
+from owlbear_delivery_next.commands import chat_client, mcp_server, runner, step_mcp
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -384,11 +384,11 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
     picking, monkeypatch
 ):
     rule, general = picking.put(make()), picking.put(fonts(scope=Scope.GLOBAL, project=""))
-    chat = mcp_server.Chat.__new__(mcp_server.Chat)
+    chat = chat_client.Chat.__new__(chat_client.Chat)
     chat.repo, chat.store = picking.repo, picking.store
     opener = Loopback(picking.http)
-    monkeypatch.setattr(mcp_server.Chat, "record", lambda _self: RECORD)
-    monkeypatch.setattr(mcp_server, "_LOCAL", opener)
+    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
+    monkeypatch.setattr(chat_client, "_LOCAL", opener)
     monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
     picking.picks += [picked(general.id), "error"]
 
@@ -425,9 +425,9 @@ def test_a_lead_chats_lookup_in_owlbears_workspace_goes_through_the_machine_host
         opener = Loopback(
             TestClient(app.create(machine), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
         )
-        monkeypatch.setattr(mcp_server.OwlBear, "record", lambda _self: RECORD)
-        monkeypatch.setattr(mcp_server, "_LOCAL", opener)
-        monkeypatch.setitem(mcp_server._STATE, "chat", mcp_server.OwlBear(tmp_path))  # noqa: SLF001
+        monkeypatch.setattr(chat_client.OwlBear, "record", lambda _self: RECORD)
+        monkeypatch.setattr(chat_client, "_LOCAL", opener)
+        monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.OwlBear(tmp_path))  # noqa: SLF001
 
         found = chat_tool("lookup_decisions", question=QUESTION)
     finally:
