@@ -54,7 +54,7 @@ tool, go on without it.
   Change's facts.
 - Delivery: `save_brief`, `save_visual_check`, `challenge_brief`, `show_status`, `answer_question` (as
   `owlbear-delivery/...`): save the brief and its visual check, ask for the brief's challenge, show status and a
-  Change's saved brief, answer a worker's question.
+  Change's saved brief, answer a worker's question classed as event, clarification (read back first) or brief change.
 - Not granted: `bash`, `edit`, `create`. You change no file and run no command; building starts after approval.
 
 </tools>

@@ -41,6 +41,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
+    answer_kinds,
     brief_rounds,
     budgets,
     curation_flow,
@@ -295,13 +296,18 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
         return  # a round gate or plan question the Change has moved past records nothing, so no session receives it
     if rebuilds.refused(c, q, item.option, item.tasks, (item.attempt, item.head)):
         return  # a final retry's selection the page no longer showed, or tasks where none belong (TD-217)
-    q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks)
+    kind = item.classed if ordinary(q) else None  # TD-461: only a worker's question is classed
+    said = {"kind": kind, "statement": item.statement if kind == "clarification" else ""}
+    q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks, **said)
     target = _target(q, item.option)
     if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
     if gate:
         c.outcome = None
+    if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
+        ask(c, answer_kinds.question(c, q), now)
+        return
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
     if target in DECISIONS:
@@ -338,7 +344,7 @@ def _entered(c: Change, q: Question, target: str) -> None:
         enter(c, StepKind(target))
 
 
-def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: bool) -> None:
+def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: bool) -> None:  # noqa: C901 - per owner
     """An engine decision about the open step; its answer is never resumed into a worker session."""
     q.effect_observed_at = item.at
     if not gate:
@@ -353,6 +359,8 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
         brief_rounds.decided(c, q, target, item.text, item.at)
     elif decision_baseline.owned(q):  # TD-419: continue on the decisions now in force
         decision_baseline.decided(c, target)
+    elif answer_kinds.owned(q):  # TD-461: the worker's question opens again for an answer within the brief
+        answer_kinds.decided(c, q, target, item.at)
     elif (q.cause or "").endswith(f":{VISUAL_MODEL}"):  # TD-94: the step reruns and takes a waived round if it holds
         kept = c.visual_rounds[-1] if c.visual_rounds else None
         if kept and kept.outcome == "model":

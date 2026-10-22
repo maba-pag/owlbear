@@ -18,6 +18,7 @@ from mcp import types
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts.decision_records import Decision as ChangeDecision
 from owlbear_delivery_next.change_contracts.models import Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import mcp_server, runner, step_mcp
@@ -215,6 +216,37 @@ def test_a_workers_lookup_lists_the_changes_own_decisions_whole(picking, monkeyp
     whole = {"id": own.id, "title": own.question, "statement": answer, "scope": "change", "origin": "decided"}
     assert said == [{"decisions": [whole | {"note": "it governs the work"}]}]
     assert all(x in picking.pickers()[0].message for x in (own.id, answer))
+
+
+def test_a_workers_lookup_lists_a_clarification_confirmed_during_the_work_once(picking, monkeypatch):
+    building(picking, picking.put(make()))
+    c = picking.change()
+    clarified = ChangeDecision(
+        id=new_id(), title="Which language does the greeting use?", text="The greeting is in English.",
+        origin="decided", at=AT,
+    )  # fmt: skip
+    c.decisions += [clarified, clarified.model_copy()]  # the same id twice: listed once
+    picking.store.write(Lock(picking.slug), c)
+    picking.picks.append(picked(clarified.id))
+    said = []
+
+    async def run(cfg):
+        if cfg.role == tools.PICKER:
+            return await picking.run(cfg)
+        step = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
+        (tool,) = [t for t in step.tools() if t.name == tools.LOOKUP]
+        said.append(
+            json.loads((await tool.handler(SimpleNamespace(arguments={"question": QUESTION}))).text_result_for_llm)
+        )
+        return Run(cfg.session_id, "error", detail="stopped after its lookup", termination=DONE)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", run)
+
+    build(picking)
+
+    whole = {"id": clarified.id, "title": clarified.title, "statement": clarified.text, "scope": "change"}
+    assert said == [{"decisions": [whole | {"origin": "decided", "note": "it governs the work"}]}]
+    assert picking.pickers()[-1].message.count(f"{clarified.id} |") == 1
 
 
 class Blocked:

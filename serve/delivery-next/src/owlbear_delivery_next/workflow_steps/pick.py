@@ -201,15 +201,26 @@ def _session(store: Store, lock: Lock, c: Change, said: str, p: Pick | DecisionB
 
 
 def config(  # noqa: PLR0913, PLR0917 - one picker session's place, id, message, journal and time
-    settings: Settings, at: Path, session: str, said: str, journal: sdk_adapter.Journal, limit: float | None = None
+    settings: Settings,
+    at: Path,
+    session: str,
+    said: str,
+    journal: sdk_adapter.Journal,
+    limit: float | None = None,
+    *,
+    submit: tools.Spec = pick_tools.SUBMIT,
+    job: str = LABEL,
 ) -> sdk_adapter.Session:
-    """A picker session in the empty folder *at* on the picker's role: read-only, its only tool its result."""
-    role = roles.chosen(settings, LABEL)
+    """A picker session in the empty folder *at* on the picker's role: read-only, its only tool its result.
+
+    *submit* and *job* name another one-shot judgement on the picker's role, such as a clarification's check.
+    """
+    role = roles.chosen(settings, job)
     return sdk_adapter.Session(
         kind=StepKind.REVIEW, worktree=at, session_id=session, message=said, fresh=said, resume=False,
         policy=Policy(at, write=False), observe=lambda: tools.Worktree("", ""), checks=(),
-        submit=pick_tools.SUBMIT, model=role.model, effort=role.effort, context=role.context,
-        limit=limit or roles.limit(settings, LABEL), role=tools.PICKER, job=LABEL, journal=journal,
+        submit=submit, model=role.model, effort=role.effort, context=role.context,
+        limit=limit or roles.limit(settings, job), role=tools.PICKER, job=job, journal=journal,
     )  # fmt: skip
 
 

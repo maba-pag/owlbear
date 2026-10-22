@@ -170,7 +170,7 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
 
 
 def _changed(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, Any]]:
-    """The decisions Delivery recorded on the Change itself, such as "Not a UI change"; each holds for it alone."""
+    """The decisions recorded on the Change itself, such as "Not a UI change" or a clarification; each for it alone."""
     title = (c.brief.approved[-1] if c.brief.approved else c.brief).title
     found = []
     for i, d in enumerate(c.decisions):
@@ -178,7 +178,7 @@ def _changed(project: str, c: Change, stem: str, outcome: str) -> list[dict[str,
         fields |= _placed(project, stem, lasting=False, kept=outcome != "abandoned")
         fields |= {
             "id": d.id or new_id(d.at, seed=f"{project}\n{stem}\nchange\n{i}\n{d.text}"),
-            "title": _short(d.text),
+            "title": _short(d.title or d.text),
             "topic": title,
             "origin": d.origin,
             "actor": "owner" if d.origin == "decided" else "delivery",

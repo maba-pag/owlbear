@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.commands.mcp_server import NOT_RUNNING, Chat
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api, pages
+from owlbear_delivery_next.project_host import answers, api, pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness, step_input
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
@@ -255,9 +255,10 @@ def test_chat_refuses_recovery_decisions(repo):
     with store.lock("greet") as lock:
         store.write(lock, change)
     chat = Chat(repo)
-    refused = chat.answer_question("c1.q2", "abandon", "")
-    assert (refused["answered"], refused["error"].startswith(api.T6)) == (False, True)
-    assert chat.answer_question("c1.q1", "o1", "") == {"answered": False, "error": NOT_RUNNING.format(repo=repo)}
+    refused = chat.answer_question("c1.q2", "abandon", "", {"kind": "event"})
+    assert (refused["answered"], refused["error"].startswith(answers.T6)) == (False, True)
+    down = {"answered": False, "error": NOT_RUNNING.format(repo=repo)}
+    assert chat.answer_question("c1.q1", "o1", "", {"kind": "event"}) == down
     with store.db.read() as db:
         assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
     status = chat.show_status("c1")

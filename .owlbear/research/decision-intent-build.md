@@ -3,11 +3,13 @@
 > **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-448..TD-462 (2026-10-21)
 > **Date:** 2026-10-21
 > **Question:** How should OwlBear record, share and apply decisions so each one is the owner's confirmed intent?
-> **Status:** answered by the owner; slices 1 to 4 built (slice 4: the picker, the picked set to every worker, the
+> **Status:** answered by the owner; slices 1 to 5 built (slice 4: the picker, the picked set to every worker, the
 > complete list to challengers, later decisions picked at step boundaries, selectors removed, the lookup through the
-> picker for workers and lead chats, and the agents' boundary in their files); of slice 6 the preview is built (the
+> picker for workers and lead chats, and the agents' boundary in their files; slice 5: answers during the work classed
+> by their relayer, clarifications read back and checked against the approved brief on the picker's role, then kept
+> as the Change's decisions, brief changes stopping the work); of slice 6 the preview is built (the
 > converter applies `.owlbear/migration/decisions-overlay.json`: 137 lines reworded to stand alone, 16 Global by
-> TD-442) and awaits the owner's review, then the past-work test and the switch (TD-437); slice 5 remains. It revises [the decision system](decision-system-build.md), whose
+> TD-442; the past-work test passed) and awaits the owner's review before the switch (TD-437). It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
 

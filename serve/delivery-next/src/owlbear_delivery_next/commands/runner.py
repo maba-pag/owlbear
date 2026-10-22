@@ -26,6 +26,7 @@ from owlbear_delivery_next.runtimes import (
     readiness,
     sdk_adapter,
     session_result,
+    step_answers,
     step_decisions,
     step_input,
 )
@@ -37,6 +38,7 @@ from owlbear_delivery_next.workflow_steps import (
     before,
     brief_round,
     check,
+    clarification,
     cleanup,
     conversation,
     curation,
@@ -127,7 +129,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             kind=s.kind,
             worktree=at,
             session_id=s.session or "",
-            message=step_decisions.resumed(step_input.answer(answer))
+            message=step_decisions.resumed(step_answers.answer(answer))
             if resume and answer
             else (parts.message if resume else told),
             resume=resume,
@@ -410,6 +412,8 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             return
         if (resumed := decision_publication.resume(store, lock, change, datetime.now(UTC))) is None:
             return
+        if step.kind in AGENT and (resumed := clarification.checked(store, lock, resumed)) is None:
+            return  # TD-461: the clarification's check asked the owner, or waits to run again
         change = resumed
     with decisions_gate.gated(store, lock, change, step) as passed:
         if passed is None:  # a gone check's end runs whatever the decisions say

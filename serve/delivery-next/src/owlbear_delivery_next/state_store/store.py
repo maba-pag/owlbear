@@ -18,7 +18,7 @@ from pydantic import TypeAdapter, ValidationError
 from owlbear_delivery_next.change_contracts.inbox import InboxItem
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
@@ -458,6 +458,7 @@ class Store:
         change.inbox_acked = []
         if asked and any(q.id == asked.id and q.answer and q.answer.option == loop.OBSOLETE for q in change.questions):
             events.append({"event": "consent-obsolete", "at": now.isoformat(timespec="seconds"), "question": asked.id})
+        events += answer_kinds.logged(change, items, now)  # TD-461: each answer's class
         with self.db.write() as db:
             put_record(db, change.slug, change.model_dump_json(indent=1))
             db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])
