@@ -70,8 +70,8 @@ class Overlay(BaseModel):
     @model_validator(mode="after")
     def _unique(self) -> Overlay:
         for name, entries in (("global", self.global_), ("reworded", self.reworded)):
-            if twice := [o for o, n in Counter(e.original for e in entries).items() if n > 1]:
-                msg = f"the overlay's {name} lists one original twice: {twice[0]}"
+            if twice := [o for o, n in Counter((e.topic, e.original) for e in entries).items() if n > 1]:
+                msg = f"the overlay's {name} lists one original twice in {twice[0][0]}: {twice[0][1]}"
                 raise ValueError(msg)
         return self
 
@@ -129,8 +129,9 @@ def _clause(  # noqa: PLR0913 - the line, its rows and where its entry goes
     overlay: Overlay | None,
 ) -> Clause:
     origin, unclear = _origin(bullet, topic, rows)
-    rewording = next((e for e in overlay.reworded if e.original == bullet.statement), None) if overlay else None
-    is_global = bool(overlay) and any(e.original == bullet.statement for e in overlay.global_)
+    line = (topic.heading, bullet.statement)  # the same statement may stand in two topics
+    rewording = next((e for e in overlay.reworded if (e.topic, e.original) == line), None) if overlay else None
+    is_global = bool(overlay) and any((e.topic, e.original) == line for e in overlay.global_)
     statement = rewording.statement if rewording else bullet.statement
     if len(statement) > STATEMENT_LIMIT:
         unclear.append(f"statement has {len(statement)} characters, over {STATEMENT_LIMIT}")
@@ -173,9 +174,9 @@ def preview(
             seen[topic.heading, bullet.statement] += 1
             minted = (new_id(at, seed=f"{topic.heading}|{bullet.statement}|{occurrence}"), at)
             clauses.append(_clause(topic, bullet, rows, project=project, minted=minted, overlay=overlay))
-    statements = {clause.bullet.statement for clause in clauses}
+    lines = {(clause.topic.heading, clause.bullet.statement) for clause in clauses}
     entries = [("global", e) for e in overlay.global_] + [("reworded", e) for e in overlay.reworded] if overlay else []
-    stale = [(kind, entry) for kind, entry in entries if entry.original not in statements]
+    stale = [(kind, entry) for kind, entry in entries if (entry.topic, entry.original) not in lines]
     return Preview(topics, clauses, rows, overlay=overlay, stale=stale)
 
 

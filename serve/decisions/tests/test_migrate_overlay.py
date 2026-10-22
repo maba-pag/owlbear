@@ -89,6 +89,21 @@ def test_an_overlay_listing_one_original_twice_is_refused(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
+def test_an_entry_matches_its_topics_line_only_and_is_stale_where_that_line_is_gone(tmp_path):
+    record = tmp_path / "record.md"
+    record.write_text(TEXT + "\n## C-02 Pages\n\n**Rows:** decided TD-3.\n\n- The same applies here [TD-3].\n")
+    reworded = [{"topic": "C-02 Pages", "original": "The same applies here.", "statement": CLEAR, "note": "ok"},
+                {"topic": "C-02 Pages", "original": "Long one.", "statement": CLEAR, "note": "ok"}]  # fmt: skip
+    overlay = _overlay(tmp_path, reworded=reworded)
+
+    result = write_preview(record, tmp_path / "out", overlay=overlay)
+
+    said = {(c.topic.heading, c.bullet.statement): c.decision.statement for c in result.clauses}
+    assert said[("C-01 Asking", "The same applies here.")] == "The same applies here."
+    assert said[("C-02 Pages", "The same applies here.")] == CLEAR
+    assert [(kind, e.topic, e.original) for kind, e in result.stale] == [("reworded", "C-02 Pages", "Long one.")]
+
+
 def test_real_record_with_the_real_overlay_validates_clean(tmp_path):
     overlay = json.loads(OVERLAY.read_text(encoding="utf-8"))
     result = write_preview(RECORD, tmp_path, overlay=OVERLAY)
