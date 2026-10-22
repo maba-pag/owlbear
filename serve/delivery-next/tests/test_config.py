@@ -67,6 +67,7 @@ def test_an_empty_list_clears_false_disables_and_only_none_inherits():
         {"widths": [1000]},
         {"widths": [2401]},
         {"visible": True},
+        {"curator_threshold": 90},
         {"colour": "red"},
         {"agents": {"builder": {"context": True}}},
         {"runtimes": {"sdk": "false"}},
@@ -96,6 +97,18 @@ def test_pull_request_labels_replace_the_global_list_and_the_marker_is_a_project
     assert resolve(glob, Layer(pr_labels=[])).pr_labels == []
     with pytest.raises(ValidationError, match="project setting"):
         GlobalLayer(pr_marker=False)
+
+
+def test_the_curators_threshold_is_95_percent_at_first_and_set_only_globally():
+    """TD-400 and the owner's 2026-10-22 answer: one global value, on the Settings page."""
+    assert (resolve(None, Layer()).curator_threshold, resolve(None, Layer()).sources["curator_threshold"]) == (
+        95, "default"
+    )  # fmt: skip
+    eff = resolve(GlobalLayer(curator_threshold=90), Layer())
+    assert (eff.curator_threshold, eff.sources["curator_threshold"]) == (90, "global")
+    for wrong in (49, 101):
+        with pytest.raises(ValidationError):
+            GlobalLayer(curator_threshold=wrong)
 
 
 def test_session_time_limits_are_doubled_by_default_and_set_per_role_globally_or_per_project():

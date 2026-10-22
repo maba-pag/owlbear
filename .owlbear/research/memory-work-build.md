@@ -69,7 +69,7 @@ independent.
   question format. Interactive sessions propose Make global for general lessons (TD-292).
 - The threshold is one value, 95% at first (TD-400), read by the run, not written into the skill: a global-only
   field of the Global settings layer (`settings/config.py` `GlobalLayer`, like `visible`, TD-35), so every machine
-  and both modes use the same number and changing it needs no release. Draft decision `D-01M5J22EQ0AFXT3R0W81FQ9KWV` for the owner (TD-418).
+  and both modes use the same number and changing it needs no release. The owner confirmed it on 2026-10-22, with a field on the Settings page.
 - **Which memory a run curates.** One folder per run: a project's memory folder in `owlbear-data`, OwlBear's own
   (`owlbear/memory`, served through the machine host's OwlBear route, TD-435) included though OwlBear is never a
   registered project. Global is read for comparison; the curator writes to it only by Make global (§3.2). The
@@ -93,8 +93,9 @@ independent.
      An entry a run skipped does not start another run until it changes, so unchanged skips never cost a session
      again; the button and the merge trigger still judge them.
   3. **Button:** the Maintenance page's "Curate memory now" starts it at once for the chosen folder, or for all.
-- Pause holds the merge and idle triggers, as it holds steps; the button runs at once also while paused, because
-  pressing it is the owner's own act. Draft decision `D-01M5J22EPYPVJ99SFAP4TN8NQE` for the owner (TD-418). Update behaviour is unchanged.
+- While paused, the merge and idle triggers run only when "Curate memory while paused" is on, a machine setting
+  beside "Update itself while paused", off by default; the button always runs at once (the owner, 2026-10-22).
+  Update behaviour is unchanged.
 - A run counts against the machine's sessions (TD-336). Its state and last report show on the Maintenance page.
 
 ### 3.5 Slice 5: the one-off sort

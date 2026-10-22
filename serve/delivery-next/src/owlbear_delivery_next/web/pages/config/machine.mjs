@@ -8,7 +8,8 @@ import { button } from "./cells.mjs";
 const CHANNELS = [["minor", "Every minor version (v0.1, v0.2 …)"], ["major", "Major versions only (v1, v2 …)"]];
 const MACHINE_LABELS = {
   channel: "Versions this machine takes", update_when_idle: "Update itself when idle",
-  update_while_paused: "Update itself while paused", sessions: "Agent sessions at once on this machine",
+  update_while_paused: "Update itself while paused", curate_while_paused: "Curate memory while paused",
+  sessions: "Agent sessions at once on this machine",
 };
 
 // The machine's settings as shown: each edited one as edited, the others as saved (TD-288, TD-300); a save after
@@ -45,6 +46,7 @@ function machineControls() {
     @change=${count}></p-input-text>`;
   return html`${channel}${box("update_when_idle", "Update itself when idle")}
     ${box("update_while_paused", "Update itself while paused")}
+    ${box("curate_while_paused", "Curate memory while paused (after merges and when idle; the button always runs)")}
     ${sessions}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
       disabled: !state.machineDraft })}</div>`;

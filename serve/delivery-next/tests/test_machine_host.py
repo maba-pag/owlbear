@@ -493,7 +493,10 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
     """TD-288, TD-300, TD-336: channel, the two update switches and the sessions at once, refused when another page
     saved first."""
     read = http.get("/api/next/machine").json()
-    chosen = {"channel": "major", "update_when_idle": False, "update_while_paused": True, "sessions": 3}
+    chosen = {
+        "channel": "major", "update_when_idle": False, "update_while_paused": True, "curate_while_paused": False,
+        "sessions": 3,
+    }  # fmt: skip
     saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     wrong = http.put("/api/next/machine/settings", json={"rev": "x", "settings": {"channel": "nightly"}})
