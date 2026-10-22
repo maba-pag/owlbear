@@ -6,6 +6,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_decisions.models import Scope
+
 if TYPE_CHECKING:
     from owlbear_decisions.migrate import Clause, Preview
 
@@ -42,6 +44,9 @@ def _counts(result: Preview) -> list[str]:
         *(f"| Entries `{origin}` | {n} |" for origin, n in sorted(origins.items())),
         f"| Unclear clauses | {sum(1 for c in result.clauses if c.unclear)} |",
         f"| Orphan rows | {len(orphans(result))} |",
+        f"| Reworded (TD-462) | {sum(1 for c in result.clauses if c.rewording)} |",
+        f"| Global (TD-442) | {sum(1 for c in result.clauses if c.decision.scope is Scope.GLOBAL)} |",
+        f"| Overlay entries that match no line | {len(result.stale)} |",
         f"| Validator findings | {len(result.findings)} |",
         *(f"| Validator `{rule}` | {n} |" for rule, n in sorted(rules.items())),
     ]
@@ -74,21 +79,60 @@ def _orphans(result: Preview) -> list[str]:
     return [*lines, *([] if found else ["None."]), ""]
 
 
-def _scope(result: Preview, project: str) -> list[str]:
-    per_topic = Counter(c.topic.heading for c in result.clauses)
-    lines = [
-        "## Proposed scope",
-        "",
+def _global(result: Preview, project: str) -> list[str]:
+    lines = ["## Global by TD-442", ""]
+    if result.overlay is None:
+        return [*lines, f"No overlay applied: every entry is proposed for `{project}`.", ""]
+    lines += [
         (
-            f"Every entry is proposed for `{project}`. Mark a topic `global` to make it apply to every project; "
-            "the owner decides this in his review (TD-437)."
+            "These entries are in `decisions/`, the Global layer at the data repository's root; every other entry is "
+            f"`{project}`'s. The overlay's notes:"
         ),
         "",
-        "| Topic | Entries | Proposed | Owner's mark |",
-        "| --- | --- | --- | --- |",
+        *(f"- {note}" for note in result.overlay.notes),
+        "",
+        "| Topic | Entry | Statement |",
+        "| --- | --- | --- |",
     ]
-    lines.extend(f"| {_cell(topic)} | {n} | {project} | |" for topic, n in per_topic.items())
+    found = [c for c in result.clauses if c.decision.scope is Scope.GLOBAL]
+    lines.extend(f"| {_cell(c.topic.heading)} | `{c.decision.id}` | {_cell(c.decision.statement)} |" for c in found)
+    return [*lines, *([] if found else ["None."]), ""]
+
+
+def _reworded(result: Preview) -> list[str]:
+    lines = [
+        "## Reworded for your review (TD-462)",
+        "",
+        (
+            "Lines that only made sense beside their neighbours, reworded to stand alone; the entry holds the "
+            "rewording only. Accept or correct each in the last column; `uncertain` ones come first."
+        ),
+        "",
+    ]
+    found = sorted(((c, r) for c in result.clauses if (r := c.rewording)), key=lambda pair: not pair[1].uncertain)
+    if result.overlay is None or not found:
+        return [*lines, "None.", ""]
+    lines += [
+        f"Overlay: {result.overlay.source}.",
+        "",
+        "| Topic | Entry | Original | Reworded | Note | Your mark |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for c, r in found:
+        cells = (c.topic.heading, f"`{c.decision.id}`", r.original, c.decision.statement, r.note)
+        lines.append("| " + " | ".join(_cell(cell) for cell in cells) + " | |")
     return [*lines, ""]
+
+
+def _stale(result: Preview) -> list[str]:
+    lines = [
+        "## Overlay entries that match no line",
+        "",
+        "Overlay entries whose original is no in-force line of the record: the record changed since the overlay.",
+        "",
+    ]
+    lines.extend(f"- {kind}, {entry.topic}: {entry.original}" for kind, entry in result.stale)
+    return [*lines, *([] if result.stale else ["None."]), ""]
 
 
 def _findings(result: Preview, out: Path) -> list[str]:
@@ -134,7 +178,7 @@ def render(result: Preview, *, record: str, digest: str, out: Path, project: str
         (
             f"Source: `{record}` (sha256 `{digest[:16]}`). The record is unchanged and stays authoritative until "
             "the owner has reviewed this preview (TD-437). Entries are in "
-            f"`{project}/decisions/`, one per in-force bullet."
+            f"`{project}/decisions/` and Global ones in `decisions/`, one per in-force bullet."
         ),
         "",
     ]
@@ -142,7 +186,9 @@ def render(result: Preview, *, record: str, digest: str, out: Path, project: str
         _counts(result),
         _unclear(result),
         _orphans(result),
-        _scope(result, project),
+        _global(result, project),
+        _reworded(result),
+        _stale(result),
         _findings(result, out),
         _concordance(result),
     )
