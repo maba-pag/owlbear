@@ -398,10 +398,9 @@ def test_a_stop_waits_for_work_started_in_the_background_and_closing_closes_ever
     assert http.post("/api/next/stop").json() == {"stopping": True}
     q.host.say("still here")
     stamp = r"\d\d:\d\d:\d\dZ "  # UTC, and says so
-    lines = capsys.readouterr().out.splitlines()
-    assert re.fullmatch(stamp + "stopping: SIGTERM received", lines[0])
-    assert re.fullmatch(stamp + "stopping: asked through the stop route", lines[1])
-    assert re.fullmatch(stamp + ".*still here", lines[-1])
+    lines = capsys.readouterr().out.splitlines()  # project threads may log between these
+    for said in ("stopping: SIGTERM received", "stopping: asked through the stop route", ".*still here"):
+        assert any(re.fullmatch(stamp + said, line) for line in lines), said
 
 
 def test_a_clone_without_its_chat_server_shows_the_setup_it_needs(tmp_path, http):
