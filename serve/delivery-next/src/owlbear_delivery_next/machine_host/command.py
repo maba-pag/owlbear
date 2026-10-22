@@ -51,8 +51,9 @@ def forward(argv: list[str]) -> int:
 
 
 def ask_tty(question: str) -> bool:
-    """A yes or no from the owner in the terminal; no when nobody can answer."""
+    """A yes or no from the owner in the terminal; no when nobody can answer, and said so."""
     if not sys.stdin.isatty():
+        say(f"not done, no terminal to answer: {question} Run `owlbear install` in a terminal to answer it.")
         return False
     return input(f"{question} [y/N] ").strip().lower() in {"y", "yes"}
 

@@ -350,6 +350,8 @@ the repository or in a Change's brief, answers, or status.
 | Setup prints a `FIX` line | A readiness check failed | Apply the fix on its `Next:` line, then run `owlbear setup --repo PATH` again |
 | A project shows as failed on the page | Its folder or store could not be loaded | Read the reason shown beside it; `owlbear doctor` names each project's fix |
 | **New Change** opens no shaping chat | The shaping agent is not linked into `~/.copilot` | Run `owlbear install` again and answer yes to the shaping agent |
+| `owlbear install` says `not done, no terminal to answer` | It ran without a terminal, for example from an agent; nothing was linked or added | Run `owlbear install` yourself in a terminal |
+| The Copilot runtime in VS Code 1.143 offers only Auto (and HydraFusion) | More than one GitHub account is signed in to VS Code, and the runtime uses the first one, which has no Copilot | Sign the other GitHub accounts out of VS Code (Accounts menu), then run **Restart Local Agent Host**; `gh` keeps its accounts |
 | `not written: ... is tracked` from setup | The file is tracked in Git | Add the printed server entry with **MCP: Open User Configuration** |
 | Agents not appearing in picker (agent workspace) | Wrong path in `chat.agentFilesLocations` | Run **Chat: Open Customizations**; verify the path relative to project root matches owlbear location |
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
