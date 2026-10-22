@@ -21,7 +21,7 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, picks
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import api, brief_routes, host
@@ -54,6 +54,7 @@ PAGE_ONLY = ("progress", "spend", "pullback")  # left out of the list of every C
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 _pause = time.sleep  # the poll's own pause
 FOUND = 20  # decisions a find returns; the rest are counted
+ASKED = Field(min_length=1, max_length=1000, description="What you need to decide; a reply with failed is no answer")
 SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "read_back", "revision")
 
 
@@ -69,7 +70,7 @@ class Chat:
         """The running host this workspace's tools call."""
         return host.running(self.store)
 
-    def call(self, method: str, path: str, body: object = None) -> tuple[int, Any]:
+    def call(self, method: str, path: str, body: object = None, timeout: float = 15.0) -> tuple[int, Any]:
         """One request to the host with its token; 503 when it is not running."""
         rec = self.record()
         down = NOT_RUNNING.format(repo=self.repo)
@@ -82,7 +83,7 @@ class Chat:
         url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{self.prefix}{path}"  # TD-242
         request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
         try:
-            with _LOCAL.open(request, timeout=15) as response:
+            with _LOCAL.open(request, timeout=timeout) as response:
                 return response.status, json.load(response)
         except urllib.error.HTTPError as exc:
             try:
@@ -201,6 +202,13 @@ class Chat:
         rows = [{k: d[k] for k in SHORT} for d in out["decisions"]]
         return {"found": True, "decisions": rows[:FOUND], "more": len(rows[FOUND:]), "decisions_page": self.page()}
 
+    def lookup_decisions(self, question: str) -> dict[str, Any]:
+        """The picker's answer, waited for as long as a pick takes; any failure says failed, never none."""
+        code, out = self.call("POST", "/decisions/lookup", {"question": question}, timeout=pick_tools.WAIT)
+        if code != OK:
+            return {"failed": str(out.get("detail") or out.get("error") or f"the host answered {code}")}
+        return out
+
     def write(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         """One decision write through the host: its receipts, or why it was refused."""
         code, out = self.call("POST", path, body)
@@ -257,19 +265,6 @@ def workspace(repo: Path) -> Chat | Closed:
 def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
     field = model.model_fields[name]
     return Field(description=field.description, examples=field.examples)
-
-
-class Replacement(tools.Args):
-    """The decision a new one replaces, as find_decisions showed it."""
-
-    decision: str = Field(description="Its id from find_decisions")
-    revision: str = Field(pattern=r"^[0-9a-f]{64}$", description="Its revision from find_decisions")
-    redecide: bool = Field(default=False, description="True only when it is decided and the owner re-decided it here")
-    effect: Literal["", "forbids", "wording"] = Field(
-        default="",
-        description="As the owner said: the new rule forbids existing behaviour, or changes wording only; empty "
-        "when he did not say (treated as forbidding)",
-    )
 
 
 mcp = MCPServer(
@@ -372,6 +367,12 @@ def find_decisions(
     return _STATE["chat"].find_decisions(text, where, include_retired=include_retired)
 
 
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=False, destructive_hint=False))
+def lookup_decisions(question: Annotated[str, ASKED]) -> dict[str, Any]:
+    """Ask which decisions govern a question; the picker answers in about a minute, a failure says `failed`."""
+    return _STATE["chat"].lookup_decisions(question)
+
+
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
 def record_decision(  # noqa: PLR0913 - the decision's fields
     *,
@@ -397,7 +398,7 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
             "pass his words."
         ),
     ] = False,
-    replaces: Annotated[Replacement | None, Field(description="The decision it replaces, if any")] = None,
+    replaces: Annotated[brief_tools.Replacement | None, Field(description="The decision it replaces, if any")] = None,
 ) -> dict[str, Any]:
     """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
 

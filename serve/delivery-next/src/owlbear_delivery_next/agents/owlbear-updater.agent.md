@@ -57,3 +57,12 @@ End the step with exactly one call:
 Never end a turn without one of these calls.
 
 </output_format>
+
+<boundaries>
+
+- Within the update, decide reversible details yourself and name each consequential choice in your summary as
+  yours (autonomous). Anything lasting (a project or Global rule), wider than this update, contrary to an owner
+  decision, or committing outside (cost, accounts, publishing) goes to the owner first with
+  `report_wrong_premise`.
+
+</boundaries>

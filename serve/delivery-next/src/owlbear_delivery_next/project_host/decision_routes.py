@@ -30,6 +30,7 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.state_store.decision_actions import Effect
 from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -135,6 +136,14 @@ class QueueBody(BaseModel):
     why: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
     kind: ReadBackKind
     revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+
+
+class LookupBody(BaseModel):
+    """A lead chat's question: which decisions govern it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
 
 
 class ProposalBody(BaseModel):
@@ -350,7 +359,16 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
     if store is not None:
         _ignore_route(routes, store, at, mine)
     _shared_routes(routes, shared, at, places)
+    _lookup_route(routes, shared, folder, store)
     return routes
+
+
+def _lookup_route(routes: APIRouter, shared: Shared, folder: Callable[[], str], store: Store | None) -> None:
+    """A lead chat's lookup: the picker over the folder's and Global decisions in force (TD-456, TD-459)."""
+
+    @routes.post("/decisions/lookup")
+    def look_up(body: LookupBody) -> dict[str, Any]:
+        return lookup.chat(shared(), folder(), body.question, store.settings if store else None)
 
 
 def _confirmed(body: SuccessorBody) -> None:

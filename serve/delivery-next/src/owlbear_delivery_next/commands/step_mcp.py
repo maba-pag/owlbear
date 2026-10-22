@@ -18,13 +18,18 @@ from mcp import types
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
+from owlbear_delivery_next.change_contracts import pick_tools
+
 NOT_RUNNING = "No Delivery step is running in this folder any more. Stop now."
 TIMEOUT = 60.0  # a result check reads the worktree with git
+LOST = json.dumps({"failed": "Delivery gave no answer to the lookup"})
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 
 
-def forward(inbox: Path, method: str, path: str, body: object = None) -> dict[str, Any] | None:
-    """One request to the step's receiver; None when the inbox or the receiver is gone."""
+def forward(
+    inbox: Path, method: str, path: str, body: object = None, timeout: float = TIMEOUT
+) -> dict[str, Any] | None:
+    """One request to the step's receiver; None when the inbox or the receiver is gone, or it did not answer."""
     try:
         where = json.loads(inbox.read_text())
         url, token = f"{where['url']}{path}", where["token"]
@@ -34,7 +39,7 @@ def forward(inbox: Path, method: str, path: str, body: object = None) -> dict[st
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
     try:
-        with _LOCAL.open(request, timeout=TIMEOUT) as response:
+        with _LOCAL.open(request, timeout=timeout) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
         try:
@@ -59,8 +64,11 @@ def relay(inbox: Path) -> Server:
 
     async def call_tool(_ctx: object, params: types.CallToolRequestParams) -> types.CallToolResult:
         body = {"name": params.name, "arguments": params.arguments or {}}
-        found = await anyio.to_thread.run_sync(forward, inbox, "POST", "/call", body)
-        text, ok = (found["text"], bool(found.get("ok"))) if found and "text" in found else (NOT_RUNNING, False)
+        looks = params.name == pick_tools.LOOKUP.name  # a picker session answers it, in about a minute
+        wait = pick_tools.WAIT if looks else TIMEOUT
+        found = await anyio.to_thread.run_sync(forward, inbox, "POST", "/call", body, wait)
+        lost = LOST if looks else NOT_RUNNING
+        text, ok = (found["text"], bool(found.get("ok"))) if found and "text" in found else (lost, False)
         return types.CallToolResult(content=[types.TextContent(type="text", text=text)], is_error=not ok)
 
     return Server("owlbear-step", on_list_tools=list_tools, on_call_tool=call_tool)

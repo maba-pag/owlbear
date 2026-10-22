@@ -3,9 +3,9 @@
 > **Owning task:** item 14 of [the plan](owlbear-plan.md); owner decisions TD-448..TD-462 (2026-10-21)
 > **Date:** 2026-10-21
 > **Question:** How should OwlBear record, share and apply decisions so each one is the owner's confirmed intent?
-> **Status:** answered by the owner; slices 1, 2 and 3 built and of slice 4 the picker and the runtime switch (the picked set
-> to every worker, the complete list to challengers, later decisions picked at step boundaries, selectors removed); of
-> slice 4 the lookup tool and the agents' boundary in their files remain, then slices 5 and 6. It revises [the decision system](decision-system-build.md), whose
+> **Status:** answered by the owner; slices 1 to 4 built (slice 4: the picker, the picked set to every worker, the
+> complete list to challengers, later decisions picked at step boundaries, selectors removed, the lookup through the
+> picker for workers and lead chats, and the agents' boundary in their files); slices 5 and 6 remain. It revises [the decision system](decision-system-build.md), whose
 > built parts it reuses. Made from Sol's design and a second Sol's challenge, after the owner's correction that a
 > decision is his intent, not his words.
 

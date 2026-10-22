@@ -1,4 +1,7 @@
-"""The owner chat's brief tool: one fixed draft schema and the checks its schema cannot express (D4 §3.3, T3-T5)."""
+"""The owner chat's brief tool: one fixed draft schema and the checks its schema cannot express (D4 §3.3, T3-T5).
+
+It also holds the chat's replacement of a decision, the one other argument object a chat tool takes.
+"""
 
 from __future__ import annotations
 
@@ -60,6 +63,19 @@ class DecisionDraft(Args):
         default="change",
         description="project: a lasting rule for later Changes in this project; change: only this Change",
         examples=["project"],
+    )
+
+
+class Replacement(Args):
+    """The decision a lead chat's new one replaces, as find_decisions showed it."""
+
+    decision: str = Field(description="Its id from find_decisions")
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$", description="Its revision from find_decisions")
+    redecide: bool = Field(default=False, description="True only when it is decided and the owner re-decided it here")
+    effect: Literal["", "forbids", "wording"] = Field(
+        default="",
+        description="As the owner said: the new rule forbids existing behaviour, or changes wording only; empty "
+        "when he did not say (treated as forbidding)",
     )
 
 
