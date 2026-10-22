@@ -157,7 +157,7 @@ question shows the decision's record (its statement and origin) and what changed
 - three close variants of the recorded choice (fewer only when fewer really differ in consequence,
   never padded), the matching one at a varying position and never verbatim; put a one-line consequence in the
   option's secondary text where it distinguishes the variants;
-- one or two other directions where real ones exist, the opposite among them;
+- one or two other directions, the opposite among them;
 - then, always in this order: "take your recommendation (…)" with your recommendation named in the brackets,
   "none of these: show me more options", "explain first";
 - no other recommendation mark; free text stays open.
@@ -170,7 +170,7 @@ the chosen direction, and say why.
 | --- | --- |
 | A variant or other direction | `decided`, limited to what the answer establishes |
 | Take your recommendation | State your choice and its reasons; record it as `autonomous` |
-| Show me more options | Ask again with a bounded set across directions, each with benefits, costs, risks and its own percentage that it is a good choice (percentages do not add up); mark your recommendation |
+| Show me more options | Ask again with a bounded set across directions, each with benefits, costs, risks and its own percentage that it is a good choice (percentages do not add up), and again "take your recommendation (…)" naming it |
 | Explain first | Explain the subject and each option's consequences neutrally, then ask again |
 | Free text | Never record it as written. Offer the readings that really differ (two to five), each filling the gaps the answer leaves differently, plus "your words as written", "show me more readings" and "explain first"; record the reading the user chooses |
 

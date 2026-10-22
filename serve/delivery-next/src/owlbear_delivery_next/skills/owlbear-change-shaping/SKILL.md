@@ -80,15 +80,15 @@ question shows the decision's record (its statement and origin) and what changed
 - three close variants of the recorded choice (fewer only when fewer really differ in consequence,
   never padded), the matching one at a varying position and never verbatim; a one-line consequence where
   it helps;
-- one or two other directions where real ones exist, the opposite among them;
+- one or two other directions, the opposite among them;
 - then, always in this order: "take your recommendation (…)" with your recommendation named in the
   brackets, "none of these: show me more options", "explain first"; no other recommendation mark;
   free text stays open.
 
 A chosen variant or direction is `decided`. "Take your recommendation": state your choice and why,
 record it `autonomous` with that `reason`. "Show me more options": ask again with options across directions, each with
-benefits, costs, risks and its own percentage that it is a good choice (they need not add up), your
-recommendation marked. "Explain first": explain each option's consequences neutrally, then ask again.
+benefits, costs, risks and its own percentage that it is a good choice (they need not add up), and again
+"take your recommendation (…)" naming it. "Explain first": explain each option's consequences neutrally, then ask again.
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
 plus "your words as written", "show me more readings" and "explain first". When the direction itself
 is in doubt, ask the direction first, then its variants, and tell the owner why.
