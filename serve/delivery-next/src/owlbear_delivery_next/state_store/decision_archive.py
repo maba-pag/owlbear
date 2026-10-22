@@ -150,6 +150,7 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
         widened = d.scope == "project" and d.replaces in unlinked
         note = f"From Change {c.slug} ({outcome})."
         note += f" It replaces {d.replaces}, a decision for this Change alone in an earlier version." if widened else ""
+        note += f"\n\n{d.reason.strip()}" if d.reason.strip() else ""  # an autonomous choice's reasons (TD-41)
         fields = _said(d.answer, d.origin, confirmed or at, note)
         fields |= _placed(project, stem, lasting=d.scope == "project", kept=kept)
         if d.id and d.id not in final:  # approved once, then replaced or dropped by a later approval

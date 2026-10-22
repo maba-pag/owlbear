@@ -131,8 +131,8 @@ def test_a_saved_brief_waits_for_approval_of_its_exact_version(tmp_path):
 
 
 DECIDED = [
-    {"question": "Which wording?", "answer": "'Bye, Ada!'", "origin": "decided"},
-    {"question": "Where does it live?", "answer": "packages/app/farewell.ts", "origin": "autonomous"},
+    {"question": "Which wording?", "answer": "'Bye, Ada!'", "origin": "decided", "reason": ""},
+    {"question": "Where does it live?", "answer": "packages/app/farewell.ts", "origin": "autonomous", "reason": "Near"},
 ]
 
 
@@ -146,7 +146,7 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     change = store.read(store.slugs()[0])
     brief = change.brief
     assert (brief.version, brief.non_goals) == (2, ["No translations"])
-    assert [d.model_dump(include={"question", "answer", "origin"}) for d in brief.decisions] == DECIDED
+    assert [d.model_dump(include={"question", "answer", "origin", "reason"}) for d in brief.decisions] == DECIDED
     shown = [step_input.plan(change, Profile(), Path("/w"), {}), step_input.brief_challenge(change, Path("/w"))]
     for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
@@ -156,6 +156,9 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     assert (read_back["non_goals"], read_back["version"]) == (["No translations"], 2)
     bad = {**body, "decisions": [{"question": "Which?", "answer": "this", "origin": "guessed"}]}
     assert c.post("/api/next/briefs", json=bad).json()["errors"][0].startswith("decisions")
+    unreasoned = {**body, "decisions": [{**DECIDED[1], "reason": " "}]}
+    errors = c.post("/api/next/briefs", json=unreasoned).json()["errors"]
+    assert [e.split(":", 1)[0] for e in errors] == ["decisions[0].reason"]  # an autonomous choice says why
 
 
 def test_a_saved_decision_reaches_the_workers_whole(repo):
