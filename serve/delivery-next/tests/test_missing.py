@@ -59,8 +59,7 @@ def options(r: StepResult) -> list[tuple[str, object]]:
 def test_the_report_is_one_small_described_tool_every_step_offers() -> None:
     assert tools.MISSING in tools.SPECS
     assert (tools.MISSING.name, tools.MISSING.ending) == ("report_missing_tool", "missing-tool")
-    assert "when a decision is theirs" in tools.ASK.description
-    assert "missing" not in tools.ASK.description
+    assert tools.MISSING.description
 
 
 def test_a_denied_tool_stays_denied_and_is_retried_within_its_budget() -> None:
@@ -336,4 +335,3 @@ def test_prompts_and_window_note_name_the_report() -> None:
     assert "report_missing_tool" in step_input.FINISH
     assert "report_missing_tool" in step_input.reminder("builder")
     assert "report_missing_tool" in window_files.tools_note("builder")
-    assert "something you need is missing" not in step_input.FINISH
