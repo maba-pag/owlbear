@@ -432,6 +432,8 @@
 
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-challenger.agent.md
 
+## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-curator.agent.md
+
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-design-judge.agent.md
 
 ## serve/delivery-next/src/owlbear_delivery_next/agents/owlbear-picker.agent.md
@@ -1056,6 +1058,7 @@
 - ### `Exceptional-state resolution`
 - ### `Batch commits`
 - ## `Tool Summary`
+- ### `Curator folders`
 - ## `Assessment and curation policy`
 - ### `Decision: human-assisted and sampled`
 - ### `Assessment boundary`
@@ -1217,6 +1220,7 @@
 - ## `Revision-bound mutations`
 - ## `State Machine`
 - ## `Step 0 — Setup`
+- ## `Confidence and the threshold`
 - ## `Step 1 — Gather Candidates`
 - ## `Step 2 — Classify Signal`
 - ## `Step 3 — Assign Scope`

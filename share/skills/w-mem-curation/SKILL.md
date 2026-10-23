@@ -94,7 +94,8 @@ confidence, 0 to 100, that this whole set is right. Then:
 - A conflict with curated or approved memory or with project rules lowers your confidence; resolve it alone only
   when your confidence in the whole set is still at or above the threshold, and report which side stands and why.
 - `make_global` is for a lesson that holds in any project; the saver's `recommended` scope is evidence, not a
-  decision. In interactive mode, propose Make global for such a lesson whenever you do not make it global alone.
+  decision. `list_memories` and `read_memory` mark each entry's `where`: one in `global` is in Global memory
+  already, evidence beside the folder, never moved again. In interactive mode, propose Make global for such a lesson whenever you do not make it global alone.
 - An automatic run never changes an entry it skips. Which runs start is the scheduler's: idle time passes over an
   unchanged skipped entry, while the button and a merge judge it again.
 

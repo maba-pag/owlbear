@@ -440,7 +440,8 @@ async def list_memories(
             entry.id,
         )
     )
-    return [_metadata_dict(entry) for entry in entries]
+    own = {entry.id for entry in _engine_from_ctx(ctx).get_entries()}  # the rest is Global memory, read beside it
+    return [_metadata_dict(entry) | {"where": "project" if entry.id in own else "global"} for entry in entries]
 
 
 async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None) -> dict[str, Any]:
@@ -448,14 +449,15 @@ async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None)
     ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
     shared = _global_engine(ctx)
+    where = "project"
     try:
         entry = engine.get_entry(entry_id)
     except NotFoundError:
-        entry = _load_entry_or_raise(shared or engine, entry_id)  # Global memory, read only
+        entry, where = _load_entry_or_raise(shared or engine, entry_id), "global"  # Global memory, read only
     if entry.state == MemoryState.DELETED:
         msg = f"entry is deleted: {entry_id}"
         raise ToolError(msg)
-    return _entry_to_dict(entry)
+    return _entry_to_dict(entry) | {"where": where}
 
 
 async def recall_memory(
