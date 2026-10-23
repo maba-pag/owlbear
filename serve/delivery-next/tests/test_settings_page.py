@@ -136,6 +136,8 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(labels).to_have_value("inherit")
         labels.fill("release:minor, owlbear")
         pds.pick(page, "The line Opened by OwlBear Delivery", "off")
+        expect(page.locator("#watcher")).to_contain_text("inherit (on)")  # on in Global (owner, 2026-10-23)
+        pds.pick(page, "The watcher", "off")
         at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
@@ -156,6 +158,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         4, "back", None
     )  # fmt: skip
     assert (project.pr_labels, project.pr_marker, project.sessions) == (["release:minor", "owlbear"], False, 3)
+    assert project.watcher is False
     assert not store.global_path.exists()
 
 

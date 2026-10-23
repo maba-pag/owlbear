@@ -120,6 +120,11 @@ def test_roles_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def watcher_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 8 to 9: the watcher's role and its switch (2026-10-23); older runtimes refuse format 9."""
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -147,4 +152,5 @@ CONFIG: Migrations = {
     5: subagents_added,
     6: sessions_added,
     7: test_roles_added,
+    8: watcher_added,
 }

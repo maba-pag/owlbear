@@ -8,10 +8,10 @@ function saved(layer, key) {
   const loaded = state.loaded;
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
   if (["design_failures", "sessions", "curator_threshold"].includes(key)) return String(loaded[layer]?.[key] ?? "");
-  if (key === "pr_labels" || key === "pr_marker") {
+  if (key === "pr_labels" || key === "pr_marker" || key === "watcher") {
     const v = loaded[layer]?.[key];
     if (v === null || v === undefined) return "";
-    return key === "pr_marker" ? (v ? "on" : "off") : v.join(", ") || "none";
+    return key === "pr_labels" ? v.join(", ") || "none" : v ? "on" : "off";
   }
   const [role, field] = key.split(".");
   const value = role === "final_review" ? loaded[layer]?.final_review?.[field] : loaded[layer]?.agents?.[role]?.[field];
@@ -76,7 +76,7 @@ function edited(layer) {
       next[key] = !value ? null : value === "none" ? [] : value.split(",").map((l) => l.trim()).filter(Boolean);
       continue;
     }
-    if (key === "pr_marker") {
+    if (key === "pr_marker" || key === "watcher") {
       next[key] = value ? value === "on" : null;
       continue;
     }

@@ -293,7 +293,9 @@ the watcher.
 
 SDK first, since window steps stay paused; the window feed comes with their reopening.
 
-1. TD-27's benchmark on OwlBear work for the two decided pairs (D-…009AV); the owner chooses model and effort.
+1. Done 2026-10-23: the benchmark ([watcher model benchmark](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/watcher-model-benchmark.md));
+   the owner chose gpt-6-luna, medium effort, default context, as the `watcher` role's default, with a layered
+   on/off switch (D-01M5MWY8P1SXVJ7QVY7RA1PA8D). The settings exist; nothing reads them until the watcher does.
 2. SDK feed: the runner's event callback normalised into one event (kind, tool, arguments, agent, parent, time),
    subagents included by `agent_id`; attempt identity stored before work; one watcher per step.
 3. Watcher policy: write targets, the TD-46 never-judged classes, the clearly inappropriate classes with precedence
@@ -323,8 +325,8 @@ Revised 2026-10-23. Sol challenged the first draft; its 17 findings are folded i
 - Q1 Heads-ups (§3.4b, his input): answered 2026-10-23, a separate rethinker agent, not the watcher.
 - Q2 The second stop of a step: answered 2026-10-23, allow (a brief amendment his answer approves), run again, or
   replan the stopped task (§3.3).
-- Q3 TD-27's benchmark: run it now on OwlBear work (it spends credits on four model settings), then choose the
-  watcher's model and effort from the results (D-…009AV).
+- Q3 TD-27's benchmark: answered 2026-10-23, run on 40 labelled calls; the owner chose gpt-6-luna medium, as a
+  setting with an on/off switch.
 
 **Proposed, `autonomous`** (the agent's choices, recorded as drafts):
 
