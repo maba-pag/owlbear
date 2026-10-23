@@ -58,11 +58,12 @@ def move(shared: DataRepo, local: MachineValues) -> str:
     until = time.monotonic() + data_repo.SAVE_SECONDS
     with shared.locked():
         have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(exclude_none=True)
-        if not local.model_dump(exclude_none=True).keys() - have.keys():
-            return ""
-        values = MachineValues.model_validate(local.model_dump(exclude_none=True) | have)
-        update_layer(shared.global_path, GlobalLayer, lambda glob: glob.model_copy(update={"machine": values}))
-        return shared.publish(shared.global_path, MOVED, until)
+        if local.model_dump(exclude_none=True).keys() - have.keys():
+            values = MachineValues.model_validate(local.model_dump(exclude_none=True) | have)
+            update_layer(shared.global_path, GlobalLayer, lambda glob: glob.model_copy(update={"machine": values}))
+        return shared.publish(
+            shared.global_path, MOVED, until
+        )  # also what an earlier start left uncommitted or unpushed
 
 
 def _format(text: str) -> int | None:

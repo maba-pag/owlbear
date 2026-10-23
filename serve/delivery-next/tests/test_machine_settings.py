@@ -160,3 +160,22 @@ def test_a_global_deleted_after_the_first_carry_gets_only_the_machine_settings(s
 
     glob = read_layer(shared.global_path, GlobalLayer)
     assert (glob.machine.sessions, glob.pr_marker, glob.agents) == (2, None, {})  # nothing else comes back
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_move_whose_commit_failed_is_committed_before_this_machine_s_settings_are_cleared(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "publish", lambda *_a: "the commit failed")
+        said = _carry(monkeypatch, shared)
+    assert any("the commit failed" in line for line in said)
+    assert not registry.load().settings_moved  # Global holds them, uncommitted: kept here too
+
+    _carry(monkeypatch, shared)  # the next start: nothing left to copy, the commit made
+
+    assert _git(shared.root, "status", "--porcelain") == ""
+    assert json.loads(_git(shared.root, "show", "HEAD:config.json"))["machine"]["sessions"] == LEGACY.sessions
+    assert registry.load().settings_moved
