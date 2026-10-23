@@ -241,7 +241,8 @@ def correct_decision_origin(
 ) -> dict[str, Any]:
     """Lower a decision's origin the owner says he never decided; its statement and state stay, the reason is recorded.
 
-    Only downward: decided, approved, autonomous. Raising one is his read-back or replacement.
+    Only downward: decided, approved, autonomous. Making it his again is a replacement he confirms
+    (record_decision with confirmed=true); a read-back keeps the origin.
     """
     path = f"/decisions/{urllib.parse.quote(decision, safe='')}/correct-origin"
     body = {"revision": revision, "origin": origin, "reason": reason, "confirmed": confirmed}

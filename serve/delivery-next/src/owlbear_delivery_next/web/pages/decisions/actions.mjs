@@ -165,7 +165,8 @@ async function correct(e) {
   const to = LOWER[e.origin];
   const why = await ask({ title: `Mark “${e.title}” ${to}?`, yes: `Mark ${to}`,
     now: `It is recorded as ${WAS[to]}; it applies as it reads.`, items: [e.statement],
-    after: "Making it yours again is a read-back or a replacement.", instead: `It stays ${e.origin}.`,
+    after: "Making it your decision again is a replacement you confirm; a read-back keeps this origin.",
+    instead: `It stays ${e.origin}.`,
     reason: "Where it really came from (recorded with it)" });
   if (why) act(e, "correct-origin", { origin: to, reason: why, confirmed: true });
 }

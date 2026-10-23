@@ -385,7 +385,7 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
     Such as `decided` to `approved` for an agent's proposal he accepted without intent of his own. A draft is
     corrected in place; a decision in force, whose origin never changes once accepted (TD-430), by a successor with
     the same title, topic, statement, scope and read-back, marked wording only, which replaces it. Raising an origin
-    is his decision, a read-back or a replacement, never this.
+    takes a replacement he confirms as his own decision; a read-back only reconfirms and leaves the origin.
     """
     if not confirmed:
         raise Refused(UNSTATED, 422)
