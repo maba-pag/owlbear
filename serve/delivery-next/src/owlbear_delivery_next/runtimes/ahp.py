@@ -1,26 +1,35 @@
-"""Agent Host Protocol 0.10.0 client over the editor's local socket; stdlib only (TD-34, TD-36)."""
+"""Agent Host Protocol 0.10.0 client over the editor's local socket (TD-34, TD-36).
+
+The WebSocket layer is the ``websockets`` library's sync client over the Unix socket (TD-267), its limits chosen
+here rather than left to defaults: one message at most ``MAX_MESSAGE`` bytes, a ping every ``KEEPALIVE`` seconds that
+must be answered within as many, ``CLOSE_TIMEOUT`` seconds for the closing handshake and no compression.
+A refused or broken handshake is a ``HostError``; an opening that does not finish in ``IO_TIMEOUT`` is a
+``TimeoutError``. A write that does not finish in ``IO_TIMEOUT`` (a host that stopped reading) shuts the socket
+down, which fails it and ends the connection; reads wait without bound, as an idle host is normal.
+"""
 
 from __future__ import annotations
 
-import base64
 import contextlib
-import hashlib
 import itertools
 import json
-import os
 import queue
 import socket
-import struct
 import threading
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import quote
+
+from websockets.exceptions import ConnectionClosed, InvalidHandshake, WebSocketException
+from websockets.sync.client import unix_connect
 
 PROTOCOL = "0.10.0"
 ROOT = "ahp-root://"
 ENTRIES = Path.home() / "Library/Application Support/Code/agent-host/local-endpoint/entries"
-_TEXT, _CLOSE, _PING, _PONG = 1, 8, 9, 10
-_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"  # RFC 6455 handshake constant
-IO_TIMEOUT = 15.0
+IO_TIMEOUT = 15.0  # the opening handshake, and each write
+MAX_MESSAGE = 16 * 2**20  # a session's state with its turns; anything larger is a broken host, not a message
+KEEPALIVE = 20.0  # seconds between pings, and for each pong: a host that stops answering ends the connection
+CLOSE_TIMEOUT = 5.0
 
 type Json = dict[str, Any]
 
@@ -43,99 +52,51 @@ class HostError(RuntimeError):
     """The host refused a request or the connection ended."""
 
 
+def _ended(exc: BaseException) -> str:
+    """Why the connection ended, in a few words."""
+    if isinstance(exc, ConnectionClosed):
+        return "server closed" if exc.rcvd is not None else f"closed: {exc}"
+    return str(exc) or type(exc).__name__
+
+
 class Connection:
     """One WebSocket connection: numbered requests, notifications on a queue."""
 
     def __init__(self, path: str, token: str, client_id: str) -> None:
-        """Connect and upgrade; raises ``HostError`` when the host refuses."""
+        """Connect and upgrade; raises ``HostError`` when the host refuses, ``TimeoutError`` when it is silent."""
         self.client_id = client_id
         self._path, self._token = path, token
-        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._sock.settimeout(IO_TIMEOUT)  # bounds connect, upgrade and every send; an idle read just waits again
-        self._sock.connect(path)
-        key = base64.b64encode(os.urandom(16)).decode()
-        self._sock.sendall(
-            (
-                f"GET /?tkn={token} HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
-            ).encode()
-        )
-        head = b""
-        while b"\r\n\r\n" not in head:
-            chunk = self._sock.recv(1)
-            if not chunk:
-                raise HostError("closed during upgrade")  # noqa: EM101, TRY003
-            head += chunk
-        status, *headers = head.decode(errors="replace").split("\r\n")
-        if " 101 " not in status:
-            raise HostError(status)
-        accept = base64.b64encode(hashlib.sha1((key + _GUID).encode()).digest()).decode()  # noqa: S324 - RFC 6455
-        if not any(
-            h.lower().startswith("sec-websocket-accept:") and h.split(":", 1)[1].strip() == accept for h in headers
-        ):
-            raise HostError("upgrade without a valid Sec-WebSocket-Accept")  # noqa: EM101, TRY003
+        try:
+            self._ws = unix_connect(
+                path, f"ws://localhost/?tkn={quote(token, safe='')}", open_timeout=IO_TIMEOUT, ping_interval=KEEPALIVE,
+                ping_timeout=KEEPALIVE, close_timeout=CLOSE_TIMEOUT, max_size=MAX_MESSAGE, compression=None,
+                user_agent_header=None, legacy=True,
+            )  # fmt: skip
+        except InvalidHandshake as exc:
+            raise HostError(f"upgrade refused: {exc}") from exc  # noqa: EM102, TRY003
         self._ids, self._seq = itertools.count(1), itertools.count(1)
         self._pending: dict[int, queue.Queue[Json]] = {}
         self._events: queue.Queue[Json] = queue.Queue()
         self._lock = threading.Lock()
         self._closed: str | None = None
+        self._stalled: str | None = None
         threading.Thread(target=self._read, daemon=True).start()
 
     def close(self) -> None:
-        """Close the socket; the reader thread ends with a ``closed`` event.
-
-        Shut down first: on Linux a bare close leaves the reader's blocked recv holding the socket open, so the host
-        would not see the close until that read timed out.
-        """
-        with contextlib.suppress(OSError):
-            self._sock.shutdown(socket.SHUT_RDWR)
-        self._sock.close()
+        """Close the connection; the reader thread ends with a ``closed`` event."""
+        with contextlib.suppress(OSError, WebSocketException):
+            self._ws.close()
 
     def reopen(self, github_token: str) -> Connection:
         """A new, signed-in connection to this same host socket; no discovery, so it cannot reach another host."""
         entry = {"endpoint": {"path": self._path}, "connectionToken": self._token}
         return connect(entry, f"{self.client_id}-again", github_token)
 
-    def _exact(self, n: int) -> bytes:
-        buf = b""
-        while len(buf) < n:
-            try:
-                chunk = self._sock.recv(n - len(buf))
-            except TimeoutError:
-                continue
-            if not chunk:
-                raise HostError("closed")  # noqa: EM101
-            buf += chunk
-        return buf
-
-    def _frame(self) -> Json:
-        parts = b""
-        while True:
-            b0, b1 = self._exact(2)
-            op, n = b0 & 0x0F, b1 & 0x7F
-            if n == 126:  # noqa: PLR2004 - WebSocket 16-bit length marker
-                n = struct.unpack(">H", self._exact(2))[0]
-            elif n == 127:  # noqa: PLR2004 - WebSocket 64-bit length marker
-                n = struct.unpack(">Q", self._exact(8))[0]
-            payload = self._exact(n)
-            if b1 & 0x80:  # a server must not mask (RFC 6455 5.1)
-                raise HostError("masked server frame")  # noqa: EM101, TRY003
-            if op == _CLOSE:
-                self._frame_out(_CLOSE, payload[:2])
-                raise HostError("server closed")  # noqa: EM101, TRY003
-            if op == _PING:
-                self._frame_out(_PONG, payload)
-                continue
-            if op == _PONG:
-                continue
-            parts += payload
-            if b0 & 0x80:
-                return json.loads(parts)
-
     def _read(self) -> None:
         try:
             while True:
-                msg = self._frame()
+                raw = self._ws.recv()
+                msg = json.loads(raw)
                 if "id" in msg and ("result" in msg or "error" in msg):
                     with self._lock:
                         box = self._pending.pop(msg["id"], None)
@@ -145,27 +106,32 @@ class Connection:
                     self._send({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32601, "message": "unsupported"}})
                 else:
                     self._events.put(msg)
-        except (OSError, HostError, ValueError) as exc:
+        except (OSError, WebSocketException, HostError, ValueError) as exc:
+            why = self._stalled or _ended(exc)
             with self._lock:
-                self._closed = str(exc)
+                self._closed = why
                 waiting, self._pending = list(self._pending.values()), {}
-            self._events.put({"method": "closed", "params": {"error": str(exc)}})
+            self._events.put({"method": "closed", "params": {"error": why}})
             for box in waiting:
-                box.put({"error": {"message": f"connection closed: {exc}"}})
+                box.put({"error": {"message": f"connection closed: {why}"}})
 
     def _send(self, obj: Json) -> None:
-        self._frame_out(_TEXT, json.dumps(obj).encode())
+        # The library holds its connection lock while it writes, so neither keepalive nor a close can interrupt a
+        # write the host does not read; shutting the socket down from a timer can.
+        watchdog = threading.Timer(IO_TIMEOUT, self._stall)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            self._ws.send(json.dumps(obj))
+        except (OSError, WebSocketException) as exc:
+            raise HostError(f"connection closed: {self._stalled or _ended(exc)}") from exc  # noqa: EM102, TRY003
+        finally:
+            watchdog.cancel()
 
-    def _frame_out(self, op: int, data: bytes) -> None:
-        mask, n = os.urandom(4), len(data)
-        if n < 126:  # noqa: PLR2004 - WebSocket 7-bit length
-            head = bytes([0x80 | op, 0x80 | n])
-        elif n < 65536:  # noqa: PLR2004 - WebSocket 16-bit length
-            head = bytes([0x80 | op, 0x80 | 126]) + struct.pack(">H", n)
-        else:
-            head = bytes([0x80 | op, 0x80 | 127]) + struct.pack(">Q", n)
-        with self._lock:
-            self._sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+    def _stall(self) -> None:
+        self._stalled = f"the host read nothing for {IO_TIMEOUT:g} s"
+        with contextlib.suppress(OSError):
+            self._ws.socket.shutdown(socket.SHUT_RDWR)
 
     def request(self, method: str, params: Json, timeout: float = 60) -> Json:
         """Send one request and wait for its answer; raises ``HostError`` on error, timeout or a closed connection."""
@@ -177,7 +143,7 @@ class Connection:
         try:
             self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
             msg = box.get(timeout=timeout)
-        except OSError as exc:
+        except HostError as exc:
             raise HostError(f"{method}: {exc}") from exc  # noqa: EM102, TRY003
         except queue.Empty:
             raise HostError(f"{method}: no answer in {timeout}s") from None  # noqa: EM102, TRY003
