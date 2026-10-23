@@ -56,7 +56,8 @@ export function unsaved() {
 
 // A value in the overview: a list or a record in full, never "[object Object]".
 function plain(value) {
-  return value !== null && typeof value === "object" && !(Array.isArray(value) && value.every((v) => typeof v
+  if (value === null || value === undefined) return "unset";
+  return typeof value === "object" && !(Array.isArray(value) && value.every((v) => typeof v
     !== "object")) ? JSON.stringify(value) : shown(value);
 }
 
@@ -68,9 +69,10 @@ function at(value, key) {
 function acrossSection() {
   if (!clones()) return nothing;  // a clone's own host serves one project
   const loaded = state.loaded, all = [{ name: named(), config: loaded }, ...state.others];
-  const rows = Object.keys(loaded.settings.sources).map((key) => {
+  const keys = new Set([...Object.keys(loaded.settings.sources), ...(loaded.settings.missing ?? [])]);
+  const rows = [...keys].map((key) => {
     const below = loaded.inherited.project, wide = loaded.inherited.machine, source = wide.sources[key];
-    const global = at(wide, key), from = SOURCES[source] ?? source;  // global, built-in or the builder's
+    const global = at(wide, key), from = SOURCES[source] ?? source ?? "no layer";  // global or the builder's
     const here = at(below, key), apart = JSON.stringify(here) !== JSON.stringify(global);  // derived values too
     const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(here));
     return { key, global, from, machine: apart ? plain(here) : "same", differ, apart };

@@ -126,7 +126,7 @@ def watcher_added(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def defaults_removed(data: dict[str, Any]) -> dict[str, Any]:
-    """Settings format 9 to 10: code ships no defaults (2026-10-23); ``carried.carry`` fills Global once."""
+    """Settings format 9 to 10: code ships no defaults (2026-10-23); ``settings_carry.carry`` fills Global once."""
     return data
 
 

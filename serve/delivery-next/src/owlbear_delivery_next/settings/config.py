@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 
 CONFIG_FORMAT = 10  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults (2026-10-23)
-CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried into it (``carried.carry``)
+CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 RUNTIMES: tuple[str, ...] = ("sdk", "window")
 type RuntimeName = Literal["sdk", "window"]

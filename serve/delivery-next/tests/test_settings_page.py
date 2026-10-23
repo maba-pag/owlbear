@@ -297,8 +297,15 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_have_attribute("placeholder", "inherit (unset)")
         at_once.fill("3")
+        pds.pick(page, "Model for watcher", "tiny")  # one tier and no efforts: both still fillable
+        expect(page.locator("#agents")).to_contain_text("no layer sets a context tier")
+        page.locator("#agents").get_by_role("button", name="Use the default tier").click()
+        pds.pick(page, "Effort for watcher", "medium")
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(page.locator("#unset")).not_to_contain_text("sessions,")
+        expect(page.locator("#unset")).not_to_contain_text("agents.watcher.")
     assert store.read_config().sessions == 3
+    watcher = store.settings().agent("watcher")  # the watcher needs only its model, effort and context
+    assert (watcher.model, watcher.effort, watcher.context) == ("tiny", "medium", "default")

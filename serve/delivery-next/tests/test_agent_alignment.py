@@ -19,7 +19,7 @@ from owlbear_delivery_next.runtimes import readiness, sdk_adapter, step_input, s
 from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import carried, roles
+from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Layer, resolve
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -107,9 +107,9 @@ def granted(role: str) -> list[str]:
 
 def test_every_worker_role_has_its_own_agent_file_or_is_explicitly_pending() -> None:
     folder = files("owlbear_delivery_next").joinpath("agents")
-    for role in set(carried.MODELS) - {CHAT}:
+    for role in set(roles.ROLES) - {CHAT}:
         assert folder.joinpath(f"owlbear-{role}.agent.md").is_file() == (role not in PENDING), role
-    assert set(AGENTS) == set(carried.MODELS) - PENDING - {CHAT}
+    assert set(AGENTS) == set(roles.ROLES) - PENDING - {CHAT}
     assert {r for k, r in roles.SESSIONS.items() if "challenge" in k} == {"challenger"}
     files_ = {p.name for p in folder.iterdir()}
     assert files_ == {f"owlbear-{r}.agent.md" for r in (*AGENTS, "shaper")}  # no agent file without a check

@@ -133,7 +133,7 @@ def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> 
         raise Held(msg)
     settings = job.store.settings()
     try:
-        settings.need("pr_marker", "pr_labels")
+        settings.need("pr_labels", *(() if pr else ("pr_marker",)))  # the marker only for a new pull request
     except SettingsUnset as exc:
         raise Held(str(exc)) from exc
     if pr is None:

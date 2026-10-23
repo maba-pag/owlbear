@@ -104,9 +104,9 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
     """Find the open PR of the branch or create a draft; an unknown create is read back, never repeated blindly."""
     repo, branch, target = ctx.repository, c.names.branch, c.names.target
     settings = ctx.store.settings()
-    settings.need("pr_marker", "pr_labels")
     pr = ctx.gh.find_pull_request(repo, branch, target)
     if pr is None:
+        settings.need("pr_marker")  # each setting is needed only where it is used: a PR found again has its body
         title = c.brief.title or (c.plan.tasks[0].title if c.plan and c.plan.tasks else c.slug)
         try:
             pr = ctx.gh.create_pull_request(repo, branch, target, title[:200], _body(c, marker=settings.pr_marker))
@@ -114,7 +114,8 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
             if exc.retry_safe:
                 raise
             pr = ctx.gh.find_pull_request(repo, branch, target)
-    if pr:
+    if pr and c.names.labelled != pr.number:
+        settings.need("pr_labels")
         labelled(ctx, c, pr, settings.pr_labels)
     if pr and pr.draft and pr.head_sha == head:
         try:

@@ -205,10 +205,10 @@ export function contextCell(role) {
       ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
         aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`;
   } else if (model) {
-    const wrong = tierMismatch(role);
+    const wrong = tierMismatch(role) || (tierOf(role) ? "" : "no layer sets a context tier");
     control = html`<p-text size="sm">${tokens(model.context)} \u00b7 only tier</p-text>${wrong ? html`
       <p-text size="xs" color="error">${wrong}</p-text>${pure("Use the default tier", () => edit(key, "default"))}`
-      : nothing}`;  // the default tier overrides an inherited long one
+      : nothing}`;  // the default tier fills an unset one and overrides an inherited long one
   } else {
     const below = inherited().agents[role].context;
     control = choose(label, [[INHERIT, `inherit (${said(below)})`], ["default", "default"], ["long", "long"]],
@@ -239,7 +239,7 @@ export function editable(role, field) {
   const set = (v) => edit(key, v), common = { key, disabled: state.saving };
   let control, note = nothing;
   if (field === "effort") {
-    const efforts = model ? model.efforts : EFFORTS;
+    const efforts = model?.efforts.length ? model.efforts : EFFORTS;  // a model without efforts ignores the value
     const options = [[INHERIT, `inherit (${said(below)})`],
       ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
     if (value && !efforts.includes(value)) {
@@ -247,7 +247,8 @@ export function editable(role, field) {
     }
     control = choose(label, options, value || INHERIT, set, { ...common, wrong: mismatch(role) });
     if (model && !model.efforts.length) {
-      note = html`<p-text size="xs" color="contrast-medium">${model.id} takes no effort setting</p-text>`;
+      note = html`<p-text size="xs" color="contrast-medium">${model.id} takes no effort setting; it ignores
+        this one</p-text>`;
     }
   } else if (state.offered?.length) {
     const options = [[INHERIT, `inherit (${said(below)})`], ...state.offered.map((m) => {

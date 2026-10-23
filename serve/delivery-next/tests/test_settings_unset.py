@@ -2,11 +2,14 @@
 
 import json
 import subprocess
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import curation
@@ -54,14 +57,21 @@ def change(kind: StepKind) -> Change:
     )
 
 
-def test_a_step_that_needs_an_unset_setting_asks_the_owner_and_continues_once_filled():
+@pytest.mark.parametrize(("kind", "mode"), [(StepKind.REVIEW, None), (StepKind.SHAPE, "challenge")])
+def test_a_step_that_needs_an_unset_setting_asks_the_owner_then_runs_the_same_step_again(kind, mode):
+    asked = change(kind)
+    asked.step.mode = mode
     written: list[Change] = []
-    store = SimpleNamespace(read=lambda _slug: change(StepKind.BUILD), write=lambda _lock, c: written.append(c))
-    unset_settings.asked(store, SimpleNamespace(slug="c1"), SettingsUnset(["agents.builder.model"]))
-    (question,) = written[0].questions
-    assert question.cause == "state:build:settings-unset"
-    assert "agents.builder.model" in question.text
+    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c))
+    unset_settings.asked(store, SimpleNamespace(slug="c1"), SettingsUnset(["agents.reviewer.model"]))
+    (question,) = written[-1].questions
+    assert question.cause == f"state:{kind}:settings-unset"
+    assert "agents.reviewer.model" in question.text
     assert [o.id for o in question.options] == ["done", "pause"]
+
+    done, _ = loop.schedule(written[-1], [AnswerItem(at=datetime.now(UTC), question=question.id, option="done")],
+                            datetime.now(UTC))  # fmt: skip
+    assert (done.step.kind, done.step.task, done.step.mode) == (kind, asked.step.task, mode)
 
 
 def _git(root, *args: str) -> str:

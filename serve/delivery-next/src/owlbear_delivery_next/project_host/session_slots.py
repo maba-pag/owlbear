@@ -94,7 +94,12 @@ def waiting(host: Host, slug: str) -> str:
     if slug not in host.waiting:
         return ""
     used, total, mine = host.slots.counts(project(host))
-    return f"this machine {used} of {total}, this project {mine} of {limit(host)}"
+    try:
+        unset = host.store.settings().sessions is None
+    except StoreError:
+        unset = False
+    said = " (sessions at once is unset: set it on the Settings page)" if unset else ""
+    return f"this machine {used} of {total}, this project {mine} of {limit(host)}{said}"
 
 
 @contextlib.contextmanager
