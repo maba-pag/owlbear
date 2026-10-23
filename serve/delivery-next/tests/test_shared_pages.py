@@ -300,7 +300,8 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds) -> None:
     expect(save).to_be_disabled()
     pds.pick(page, "Versions this machine takes", "major")
     page.get_by_label("Update itself while paused").uncheck()
-    page.get_by_label("Curate memory while paused", exact=False).check()  # off by default (owner, 2026-10-22)
+    pds.pick(page, "Curate memory after a merge", "paused")  # on, not while paused, by default (owner, 2026-10-23)
+    pds.pick(page, "Curate memory when idle (the Maintenance button always runs)", "off")
     page.get_by_label("Agent sessions at once on this machine, across its projects").fill("3")  # TD-336
     other = registry.load().settings  # another page saves first
     registry.configure(other.model_copy(update={"update_when_idle": False}), registry.revision(other))
@@ -313,7 +314,12 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds) -> None:
     pds.modal(page).get_by_role("button", name="Save machine settings").click()
     expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
     expected = registry.Settings(
-        channel="major", update_when_idle=False, update_while_paused=False, curate_while_paused=True, sessions=3
+        channel="major",
+        update_when_idle=False,
+        update_while_paused=False,
+        curate_after_merge="paused",
+        curate_when_idle="off",
+        sessions=3,
     )
     assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
     a_read_begun_during_a_save_never_undoes_it(page, pds)

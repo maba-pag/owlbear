@@ -14,9 +14,9 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
@@ -28,7 +28,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
-MACHINE_FORMAT = 4  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`
+MACHINE_FORMAT = 5  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
+# 5: one curation setting per trigger (the owner, 2026-10-23)
 STALE = "the machine settings changed since this page loaded them"
 
 
@@ -44,13 +45,29 @@ class Project(Record):
     added_at: datetime
 
 
+type Curate = Literal["off", "on", "paused"]
+
+
 class Settings(Record):
     """The machine's own settings, changed only in Settings → This machine."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _one_switch(cls, data: Any) -> Any:  # noqa: ANN401 - the raw settings
+        """Format 4's one switch for both triggers becomes their two settings: on, or on even while paused."""
+        if isinstance(data, dict) and "curate_while_paused" in data:
+            data = dict(data)
+            both = "paused" if data.pop("curate_while_paused") else "on"
+            data.setdefault("curate_after_merge", both)
+            data.setdefault("curate_when_idle", both)
+        return data
 
     channel: Literal["minor", "major"] = "minor"  # every minor version, or major versions only (TD-300)
     update_when_idle: bool = True  # TD-288
     update_while_paused: bool = True
-    curate_while_paused: bool = False  # automatic memory curation after merges and when idle, also while paused
+    # automatic memory curation per trigger: off, on, or on even while paused (the owner, 2026-10-23)
+    curate_after_merge: Curate = "on"
+    curate_when_idle: Curate = "on"
     sessions: int = Field(default=4, ge=1)  # TD-336: agent sessions at once on this machine, all projects together
 
 

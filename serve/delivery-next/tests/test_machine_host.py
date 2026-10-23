@@ -494,8 +494,8 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
     saved first."""
     read = http.get("/api/next/machine").json()
     chosen = {
-        "channel": "major", "update_when_idle": False, "update_while_paused": True, "curate_while_paused": False,
-        "sessions": 3,
+        "channel": "major", "update_when_idle": False, "update_while_paused": True, "curate_after_merge": "paused",
+        "curate_when_idle": "off", "sessions": 3,
     }  # fmt: skip
     saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
@@ -549,3 +549,12 @@ def test_the_maintenance_button_curates_a_memory_folder_now_also_while_paused(ht
     assert [f["folder"] for f in listed["folders"]] == ["shop"]
     assert (unknown.status_code, fenced.status_code, started.json()["started"]) == (409, 503, ["shop"])
     assert http.get("/api/next/curation").json()["folders"][0]["summary"] == "nothing pending"
+
+
+@pytest.mark.parametrize(("old", "both"), [(False, "on"), (True, "paused")])
+def test_format_4s_one_curation_switch_becomes_a_setting_per_trigger(old, both) -> None:
+    raw = {"channel": "minor", "update_when_idle": True, "update_while_paused": True, "curate_while_paused": old,
+           "sessions": 4}  # fmt: skip
+    settings = registry.Settings.model_validate(raw)
+    assert (settings.curate_after_merge, settings.curate_when_idle) == (both, both)
+    assert "curate_while_paused" not in settings.model_dump()
