@@ -19,6 +19,8 @@ from owlbear_delivery_next.state_store.store import read_layer, update_layer
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
+MESSAGE = "settings: today's built-in values carried into Global"  # the carry's commit, found again in the history
+
 
 def due(shared: DataRepo) -> bool:
     """Whether the carry has work: values to fill in, or a filled Global layer whose carry was never committed."""
@@ -41,7 +43,7 @@ def carry(shared: DataRepo) -> str:
             update_layer(shared.global_path, GlobalLayer, filled)
         else:  # an invalid layer is never published: it stays uncommitted, and the host says why (StoreError)
             read_layer(shared.global_path, GlobalLayer)
-        return shared.publish(shared.global_path, "settings: today's built-in values carried into Global", until)
+        return shared.publish(shared.global_path, MESSAGE, until)
 
 
 def _format(text: str) -> int | None:
@@ -74,7 +76,13 @@ def _unpublished(shared: DataRepo) -> bool:
 
 
 def _committed(shared: DataRepo) -> int | None:
-    """The committed Global layer's format: 0 when none is committed, ``None`` when it is no layer."""
+    """The committed Global layer's format; ``None`` when it is no layer.
+
+    With none committed it is 0, unless the history holds the carry: a deletion committed after it is the owner's.
+    """
     rel = shared.global_path.relative_to(shared.root).as_posix()
     committed = shared.git("show", f"HEAD:{rel}")
-    return _format(committed.stdout) if committed.returncode == 0 else 0
+    if committed.returncode == 0:
+        return _format(committed.stdout)
+    carried = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", "--", rel)
+    return CARRIED_FORMAT if carried.returncode == 0 and carried.stdout.strip() else 0

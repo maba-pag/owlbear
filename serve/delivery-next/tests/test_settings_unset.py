@@ -185,6 +185,9 @@ def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled
     assert _git(shared.root, "rev-parse", "HEAD") == head
     shared.global_path.unlink()  # deleted after the carry committed: never carried again
     assert (settings_carry.due(shared), settings_carry.carry(shared), shared.global_path.exists()) == (False, "", False)
+    _git(shared.root, "add", "-A")
+    _git(shared.root, "commit", "-qm", "the owner deletes Global")  # a committed deletion too
+    assert (settings_carry.due(shared), settings_carry.carry(shared), shared.global_path.exists()) == (False, "", False)
 
 
 @pytest.mark.usefixtures("no_base")
