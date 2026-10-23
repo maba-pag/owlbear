@@ -18,13 +18,14 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from owlbear_decisions import ReadBackKind, Scope, State
+from owlbear_decisions import Origin, ReadBackKind, Scope, State
 from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.project_host import impact_routes
 from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_impact,
     decision_index,
+    decision_origin,
     decision_store,
     read_backs,
 )
@@ -53,7 +54,7 @@ type ReadBack = Literal["", "none", "pending", "done"]
 OWLBEAR = "owlbear"  # OwlBear's own folder in owlbear-data, shown beside Global without registering it (TD-435)
 ACTIONS = {  # a commit subject's first word after "decisions: " -> the action shown; older subjects' words included
     **{a: a for a in ("replace", "withdraw", "activate", "promote", "exception", "keep", "read-back",
-                      "queue-read-back", "propose", "record", "accept-existing", "conflict")},
+                      "queue-read-back", "propose", "record", "accept-existing", "conflict", "correct-origin")},
     "proposed": "propose", "queue": "queue-read-back",
 }  # fmt: skip
 
@@ -126,6 +127,13 @@ class ReadBackBody(Shown):
     """``confirmed``: the owner confirmed the statement as it stands, read back to him; no answer is sent."""
 
     confirmed: bool = False
+
+
+class CorrectBody(ReadBackBody):
+    """``origin``: the lower origin the owner stated; ``reason``: why, in the shaper's words, never his."""
+
+    origin: Literal["approved", "autonomous"]
+    reason: Text = ""
 
 
 class QueueBody(BaseModel):
@@ -479,3 +487,10 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
         by = "chat" if request.headers.get("x-owlbear-use", "").lower() == "chat" else "owner"
         return _receipts(lambda: decision_actions.read_back(
             shared(), at(project), decision_id, body.revision, confirmed=body.confirmed, by=by))  # fmt: skip
+
+    @routes.post("/decisions/{decision_id}/correct-origin")
+    def correct_origin(decision_id: str, body: CorrectBody, request: Request, project: In) -> dict[str, Any]:
+        by = "chat" if request.headers.get("x-owlbear-use", "").lower() == "chat" else "owner"
+        return _receipts(lambda: decision_origin.correct_origin(
+            shared(), at(project), decision_id, body.revision, origin=Origin(body.origin), reason=body.reason,
+            confirmed=body.confirmed, by=by))  # fmt: skip

@@ -219,6 +219,29 @@ def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions
 
 
 @pytest.mark.browser
+def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = make(title="Windows stay paused", statement="Paused.", origin=Origin.DECIDED, read_back="2026-10-21")
+    write(rule, store.shared.root / PROJECT)
+    with decisions_page(store, pds) as page:
+        card = page.locator(".entry", has_text="Windows stay paused")
+        card.get_by_role("button", name="Open").click()
+        card.get_by_role("button", name="Mark approved").click()
+        dialog = pds.modal(page)
+        expect(dialog).to_contain_text("an agent's proposal you accepted")
+        dialog.get_by_label("Where it really came from").fill("An agent proposed it; I accepted it.")
+        with page.expect_request(lambda r: r.url.endswith("/correct-origin")) as sent:
+            dialog.get_by_role("button", name="Mark approved").click()
+        expect(page.locator("#receipts")).to_contain_text("published")
+        body = sent.value.post_data_json
+    assert body == {"revision": rule.revision, "origin": "approved", "reason": "An agent proposed it; I accepted it.",
+                    "confirmed": True}  # fmt: skip
+    held = in_force(store)["Paused."]
+    assert (held.origin, held.read_back) == (Origin.APPROVED, "2026-10-21")
+
+
+@pytest.mark.browser
 def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_record_rows(store, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

@@ -43,6 +43,7 @@ CHAT_TOOLS |= {"find_decisions", "record_decision", "read_back_decision"}  # TD-
 CHAT_TOOLS |= {"queue_read_back"}  # TD-427: the read-back queue, not granted to the shaper
 CHAT_TOOLS |= {"retire_decision"}  # TD-450: decisions changed in a lead chat, not granted to the shaper
 CHAT_TOOLS |= {"lookup_decisions"}  # TD-456, TD-459: the picker's answer, not granted to the shaper
+CHAT_TOOLS |= {"correct_decision_origin"}  # the owner's provenance correction (2026-10-23), not the shaper's
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CURATOR_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
 VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP}

@@ -222,6 +222,34 @@ def read_back_decision(
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def correct_decision_origin(
+    *,
+    decision: Annotated[str, Field(description="Decision id from find_decisions")],
+    revision: Annotated[str, Field(description="Its revision from find_decisions", pattern=r"^[0-9a-f]{64}$")],
+    origin: Annotated[
+        Literal["approved", "autonomous"],
+        Field(description="approved: an agent's proposal he accepted; autonomous: an agent's own choice"),
+    ],
+    reason: Annotated[
+        str,
+        Field(description="Why, in your words, never his: what he stated about where it came from", max_length=4000),
+    ],
+    confirmed: Annotated[
+        bool,
+        Field(description="True only when the owner confirmed this correction in this chat after you read it back"),
+    ] = False,
+) -> dict[str, Any]:
+    """Lower a decision's origin the owner says he never decided; its statement and state stay, the reason is recorded.
+
+    Only downward: decided, approved, autonomous. Making it his again is a replacement he confirms
+    (record_decision with confirmed=true); a read-back keeps the origin.
+    """
+    path = f"/decisions/{urllib.parse.quote(decision, safe='')}/correct-origin"
+    body = {"revision": revision, "origin": origin, "reason": reason, "confirmed": confirmed}
+    return _STATE["chat"].write(path, body)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
 def queue_read_back(
     decision: Annotated[str, Field(description="Decision id from find_decisions")],
     revision: Annotated[str, Field(description="The revision find_decisions showed for it", pattern=r"^[0-9a-f]{64}$")],

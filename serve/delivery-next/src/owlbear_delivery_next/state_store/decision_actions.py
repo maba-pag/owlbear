@@ -10,7 +10,7 @@ A transition's files (a successor and what it retires, a kept decision and its w
 not at all. Every supersession says why: replace, withdraw, promote, keep and activating or proposing a draft that
 replaces one need a reason, recorded in the successor's (or withdrawn decision's) rationale. The owner's words are
 never stored (TD-449): what he confirmed is `decided` and its `read_back` is the day he confirmed it. A commit message
-names the action and the decisions' ids only, never text a person typed.
+names the action and the decisions' ids only, never text a person typed. An origin is corrected in `decision_origin`.
 """
 
 from __future__ import annotations
