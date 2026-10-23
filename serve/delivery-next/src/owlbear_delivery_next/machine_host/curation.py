@@ -30,7 +30,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.settings.config import Settings, SettingsUnset
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
@@ -257,7 +257,8 @@ class Curation:
 
     def _one(self, folder: str, started: datetime) -> None:
         shared = self.shared()
-        why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced() or _unset(shared)
+        why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
+        why = why or _unset(lookup.machine(shared))  # checked again on the snapshot it starts with
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return
@@ -282,6 +283,8 @@ class Curation:
 
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
+        if why := _unset(settings):  # cleared while it waited for its slot: the run never starts, its entries unseen
+            return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
         role = roles.chosen(settings, LABEL)
         store = shared.root / folder / "memory"
         before = {e.id: e.revision for e in _pending(store)}  # what the curator can see when it starts
@@ -330,10 +333,9 @@ def _pending(store: Path) -> list[Any]:
     return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]
 
 
-def _unset(shared: data_repo.DataRepo) -> str:
+def _unset(settings: Settings) -> str:
     """Why a run cannot start for unset settings: the curator's role or its threshold; empty when both are set."""
     try:
-        settings = lookup.machine(shared)
         settings.agent(roles.SESSIONS[LABEL])
         settings.need("curator_threshold")
     except SettingsUnset as exc:

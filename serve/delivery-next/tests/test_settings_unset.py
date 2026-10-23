@@ -15,12 +15,13 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.settings import carried, config, roles, rounds
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
 from owlbear_delivery_next.state_store import settings_carry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
-from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, review, unset_settings
+from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, lookup, review, unset_settings
 
 
 @pytest.fixture
@@ -150,13 +151,16 @@ def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatc
 def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)
-    assert curation._unset(shared) == ""  # noqa: SLF001
+    assert curation._unset(lookup.machine(shared)) == ""  # noqa: SLF001
     glob = read_layer(shared.global_path, GlobalLayer)
     shared.global_path.write_text(glob.model_copy(update={"curator_threshold": None}).model_dump_json())
-    assert "curator_threshold" in curation._unset(shared)  # noqa: SLF001
+    assert "curator_threshold" in curation._unset(lookup.machine(shared))  # noqa: SLF001
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=lambda _cfg: pytest.fail("never started"))
+    ran = job._session(shared, "shop", datetime.now(UTC), "curate:shop")  # noqa: SLF001 - cleared while it waited
+    assert (ran.state, "curator_threshold" in ran.reason, ran.seen) == ("failed", True, {})
     agents = {r: a for r, a in glob.agents.items() if r != "curator"}
     shared.global_path.write_text(glob.model_copy(update={"agents": agents}).model_dump_json())
-    assert "agents.curator.model" in curation._unset(shared)  # noqa: SLF001
+    assert "agents.curator.model" in curation._unset(lookup.machine(shared))  # noqa: SLF001
 
 
 def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled_again(shared_repo, monkeypatch):
@@ -227,3 +231,11 @@ def test_a_worker_that_may_propose_wording_needs_the_challenger_before_it_starts
     assert c.plan.tasks[0].spans == []  # raised before anything changed
     c.brief.specified = ["AC-1"]  # nothing left to propose
     review.started(c, None, Path(), no_challenger)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_the_page_shows_final_review_values_set_while_others_are_unset():
+    some = resolve(GlobalLayer(final_review=config.FinalReview(max_rounds=5)), Layer())
+    assert some.final_review is None  # a loop needs all four
+    assert some.page()["final_review"] == {"max_rounds": 5, "max_findings": None, "last_round_at": None,
+                                           "ask_owner_at": None}  # fmt: skip

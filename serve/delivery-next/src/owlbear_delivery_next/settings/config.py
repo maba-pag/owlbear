@@ -212,6 +212,7 @@ class Settings(Record):
     curator_threshold: int | None = None
     sources: dict[str, Source]
     missing: list[str] = Field(default_factory=list)
+    final_values: dict[str, int | None] = Field(default_factory=dict, exclude=True)  # the page's, set or not
 
     def need(self, *keys: str) -> None:
         """Raise ``SettingsUnset`` when any of *keys*, or a key under it (``agents.builder``), is unset."""
@@ -226,7 +227,10 @@ class Settings(Record):
 
     def page(self) -> dict[str, Any]:
         """The settings as the page reads them: every role, ``None`` where unset."""
-        return self.model_dump(mode="json", exclude={"roles"}) | {"agents": self.roles}
+        return self.model_dump(mode="json", exclude={"roles"}) | {
+            "agents": self.roles,
+            "final_review": self.final_values,
+        }
 
 
 BASE: GlobalLayer | None = None  # a layer under Global; empty in production (no code defaults), tests set one
@@ -292,6 +296,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         preparations=prep,
         data=data,
         final_review=RoundPolicy.model_validate(final) if None not in final.values() else None,
+        final_values=final,
         sources=sources,
         missing=missing,
     )
