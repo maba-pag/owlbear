@@ -25,6 +25,7 @@ from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_impact,
     decision_index,
+    decision_origin,
     decision_store,
     read_backs,
 )
@@ -490,6 +491,6 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
     @routes.post("/decisions/{decision_id}/correct-origin")
     def correct_origin(decision_id: str, body: CorrectBody, request: Request, project: In) -> dict[str, Any]:
         by = "chat" if request.headers.get("x-owlbear-use", "").lower() == "chat" else "owner"
-        return _receipts(lambda: decision_actions.correct_origin(
+        return _receipts(lambda: decision_origin.correct_origin(
             shared(), at(project), decision_id, body.revision, origin=Origin(body.origin), reason=body.reason,
             confirmed=body.confirmed, by=by))  # fmt: skip
