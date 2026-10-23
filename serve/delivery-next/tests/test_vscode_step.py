@@ -9,8 +9,9 @@ import subprocess
 import tempfile
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,7 +20,8 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.commands import step_mcp
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import ahp, readiness, sdk_adapter, session_result, vscode_adapter
+from owlbear_delivery_next.runtimes import ahp, host_record, readiness, sdk_adapter, session_result, vscode_adapter
+from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.ahp import HostError
 from owlbear_delivery_next.runtimes.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall
 from owlbear_delivery_next.runtimes.vscode_step import ACK, Step
@@ -303,6 +305,38 @@ def test_a_turn_billed_to_another_model_is_cancelled(tmp_path: Path) -> None:
     assert "mai-code-1.1-flash" in out.detail
     ((_, started),) = host.actions("chat/turnStarted")
     assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == started["turnId"]
+
+
+def _announced(call: str, name: str) -> list[dict]:
+    """A ``task`` call and the host's announcement of the subagent it started (P28, gate probes)."""
+    part = {"type": "subagent", "resource": f"ahp-chat:/{call}", "agentName": name}
+    return [
+        {"type": "chat/toolCallStart", "toolCallId": call, "toolName": "task"},
+        {"type": "chat/toolCallContentChanged", "toolCallId": call, "content": [part]},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("allowed", "name", "why"),
+    [(False, "explore", "no subagent may run"), (True, "my-helper", "only a built-in may run")],
+)
+def test_a_subagent_the_role_may_not_start_ends_the_step(tmp_path: Path, *, allowed: bool, name: str, why: str) -> None:
+    host = FakeHost(tmp_path, [{}], [[*_announced("t1", name), {"type": "chat/turnComplete"}]])
+    out = step(host, spec(tmp_path, subagents=allowed)).run(Control(), limit=60)
+
+    assert (out.end, out.subagents) == ("subagent", {"t1": name})
+    assert why in out.detail
+    ((_, started),) = host.actions("chat/turnStarted")
+    assert host.actions("chat/turnCancelled")[-1][1]["turnId"] == started["turnId"]
+
+
+def test_an_allowed_built_in_subagent_is_noted_once_and_the_turn_goes_on(tmp_path: Path) -> None:
+    script = [*_announced("t1", "explore"), _announced("t1", "explore")[1], USAGE, {"type": "chat/turnComplete"}]
+    host = FakeHost(tmp_path, [{}], [script])
+    out = step(host, spec(tmp_path, subagents=True)).run(Control(), limit=60)
+
+    assert (out.end, out.subagents) == ("complete", {"t1": "explore"})
+    assert not host.actions("chat/turnCancelled")
 
 
 def test_a_bootstrap_that_called_a_model_fails_closed(tmp_path: Path) -> None:
@@ -950,12 +984,14 @@ class Adapted:
         self.events: list[dict] = []
         self.delivered: list[int] = []
         self.files_during: list[bool] = []
+        self.placed_agent: str | None = None
         original = self.host.dispatch
 
         def dispatch(channel: str, action: dict) -> None:
             if action["type"] == "chat/turnStarted":
                 relay = str(inbox) in (folder / ".mcp.json").read_text()
                 self.files_during.append(relay and json.loads((folder / HOOKS).read_text()) == {NO_HOOKS: True})
+                self.placed_agent = (folder / AGENT).read_text()
                 if self.submit and (args := self.submit.pop(0)) is not None:
                     body = {"name": "submit_result", "arguments": args}
                     self.replies.append(step_mcp.forward(inbox, "POST", "/call", body))
@@ -976,6 +1012,7 @@ class Adapted:
             clock=self.host.clock,
             settle=lambda *_a: self.settled,
             reminder="Call submit_result.",
+            record=lambda *_a: host_record.Record(found=False, why="no host record"),
         )
 
     def run(self) -> session_result.Run:
@@ -1277,3 +1314,65 @@ def test_comments_and_slashes_inside_strings_still_get_the_pins(tmp_path: Path) 
 
     assert f'"{MCP_ACCESS}": "none",' in (tmp_path / ".vscode" / "settings.json").read_text()
     assert (tmp_path / ".vscode" / "settings.json").read_text().endswith(text.split("{", 1)[1])
+
+
+def _record(a: Adapted, tools: list[str] | None = None, subagents: list | None = None) -> host_record.Record:
+    allowed = wf.agent_tools("builder", a.inbox, subagents=a.cfg.subagents)
+    return host_record.Record(found=True, tools=allowed if tools is None else tools, subagents=subagents or [])
+
+
+def _subagent(**kw: object) -> SimpleNamespace:
+    return SimpleNamespace(**({"tool_call_id": "call_1", "agent_name": "explore", "model": "gpt-5.6-luna"} | kw))
+
+
+def test_a_window_subagent_is_counted_from_the_host_record(wt: Path, tmp_path: Path) -> None:
+    done = [*_announced("t1", "explore"), USAGE, {"type": "chat/turnComplete"}]
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
+    a.cfg = dataclasses.replace(a.cfg, subagents=True)
+    ended = _subagent(total_tokens=6958, total_tool_calls=1, duration=timedelta(milliseconds=2929))
+    record = _record(a, subagents=[("subagent.started", _subagent()), ("subagent.completed", ended)])
+    seen: list[tuple] = []
+    a.env = dataclasses.replace(a.env, record=lambda *args: seen.append(args) or record)
+    run = a.run()
+
+    assert run.ending == "result"
+    assert seen[0][0] == wt
+    assert seen[0][2] == "owlbear-builder"
+    ((sub,),) = [run.subagents]
+    assert (sub["agent"], sub["model"], sub["outcome"]) == ("explore", "gpt-5.6-luna", "completed")
+    assert (sub["tokens"], sub["tool_calls"], sub["seconds"], sub["allowed"]) == (6958, 1, 2.929, True)
+    assert "task" in (a.placed_agent or "")
+
+
+def test_tools_beyond_the_allowlist_in_the_host_record_void_the_result(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    record = _record(a, tools=[*wf.agent_tools("builder", a.inbox), "skill", "uv-init"])
+    a.env = dataclasses.replace(a.env, record=lambda *_a: record)
+    run = a.run()
+
+    assert (run.ending, run.payload) == ("error", None)
+    assert "outside its allowlist: uv-init" in run.detail
+
+
+def test_a_recorded_subagent_the_role_may_not_start_voids_the_result(wt: Path, tmp_path: Path) -> None:
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [[USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    record = _record(a, subagents=[("subagent.started", _subagent())])
+    a.env = dataclasses.replace(a.env, record=lambda *_a: record)
+    run = a.run()
+
+    assert (run.ending, run.payload) == ("error", None)
+    assert "no subagent may run" in run.detail
+
+
+def test_without_a_host_record_the_announced_subagents_stay_with_unknown_counts(wt: Path, tmp_path: Path) -> None:
+    done = [*_announced("t1", "explore"), USAGE, {"type": "chat/turnComplete"}]
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
+    a.cfg = dataclasses.replace(a.cfg, subagents=True)
+    a.env = dataclasses.replace(a.env, record=lambda *_a: host_record.Record(found=False, why="no host record"))
+    run = a.run()
+
+    assert run.ending == "result"
+    assert [(s["agent"], s["tokens"], s["outcome"]) for s in run.subagents] == [("explore", None, "unfinished")]
+    assert {"event": "host-record", "found": False, "why": "no host record"}.items() <= next(
+        e for e in a.events if e.get("event") == "host-record"
+    ).items()

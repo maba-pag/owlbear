@@ -2,7 +2,9 @@
 
 The window runs with the owner's session settings (D2, D4, D5): every tool call is approved by the harness, so
 Delivery's per-call policy does not apply; the agent's instructions carry the rules (D6). Results pass the same
-gate as SDK results. A turn billed to another model discards any result (TD-32).
+gate as SDK results. A turn billed to another model discards any result (TD-32), and so does a subagent the role may
+not start (TD-374). After the step, the host's own record of the session says what the window's connection does not:
+the tools the agent was given, which must be its allowlist, and what each subagent did (window-step gate, item 8).
 """
 
 from __future__ import annotations
@@ -16,10 +18,11 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import ahp, leftovers, readiness, step_input
+from owlbear_delivery_next.runtimes import ahp, host_record, leftovers, readiness, step_input, subagents
 from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.sdk_adapter import DEADLINES, role_of
@@ -96,6 +99,7 @@ class Env:
     settle: Callable[[Path, datetime], Termination] = leftovers.settle
     reminder: str | None = None  # None: the session role's own reminder
     shaper: Path | None = field(default_factory=lambda: readiness.shaper_path(Path.home()))  # the chat's agent (TD-93)
+    record: Callable[[Path, datetime, str], host_record.Record] = host_record.read
 
 
 def _grace(control: Control) -> Callable[[], None]:
@@ -153,6 +157,7 @@ class _Driver:
             context=cfg.context,
             reminder=step_input.reminder(self.role, judging=cfg.judging) if reminder is None else reminder,
             attachments=embedded(cfg.attachments),
+            subagents=cfg.subagents,
         )
         limit = cfg.limit or DEADLINES.get(cfg.kind, 2400.0)  # the role's time limit (TD-286)
         out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=limit)
@@ -167,7 +172,9 @@ class _Driver:
                 self.placed.append(wf.place(cfg.worktree, rel, render))
             self.placed.append(wf.place(cfg.worktree, wf.HOOKS, wf.hooks_off))
             self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox, cfg.memory)))
-            made = wf.agent(self.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, job=cfg.job)
+            made = wf.agent(
+                self.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, job=cfg.job, subagents=cfg.subagents
+            )
             self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), made))
             with Inbox(self.gate, inbox):
                 conn = self.env.connect(cfg.worktree)
@@ -190,12 +197,47 @@ def _ending(out: Outcome, gate: Gate) -> None:
     """Close the gate with the runtime's ending; a model mismatch voids any result, else an accepted call stands."""
     if out.end == "wrong-model":
         gate.wrong_model(out.detail)
+    elif out.end == "subagent":
+        gate.revoke(out.detail)
     elif out.end == "complete":
         gate.finish("no-result", None, "the turn ended without a result")
     elif out.end == "timeout":
         gate.finish("deadline", None, "step deadline")
     else:
         gate.finish("error", None, f"VS Code step {out.end}: {out.detail}"[:300])
+
+
+def _recorded(driver: _Driver, out: Outcome, inbox: Path, record: host_record.Record) -> None:
+    """What the host's record adds: the agent's tools must be its allowlist; each subagent is counted (item 8).
+
+    Without a single matching record, the subagents the window announced are kept with their counts unknown.
+    """
+    cfg, gate = driver.cfg, driver.gate
+    watch = subagents.Watch(allowed=cfg.subagents)
+    if not record.found:
+        driver.log(event="host-record", found=False, why=record.why)
+        for call, name in out.subagents.items():
+            watch.started(SimpleNamespace(tool_call_id=call, agent_name=name, model=None))
+        driver.run.subagents = watch.report()
+        return
+    allowed = wf.agent_tools(
+        driver.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, subagents=cfg.subagents
+    )  # fmt: skip
+    if extra := host_record.unexpected(record.tools or [], allowed):
+        gate.revoke(f"the host gave the agent tools outside its allowlist: {', '.join(extra[:5])}")
+    for kind, data in record.subagents:
+        if kind == "subagent.started":
+            why = watch.started(data)
+            if why == "auto":
+                gate.wrong_model("a subagent ran on auto")
+            elif why:
+                gate.revoke(why)
+        elif (ended := watch.ended(data, kind.removeprefix("subagent."))) is not None:
+            driver.log(event="subagent", **ended)
+    starts = sum(kind == "subagent.started" for kind, _ in record.subagents)
+    if starts != len(out.subagents):
+        driver.log(event="host-record", found=True, why=f"{starts} subagent starts recorded, {len(out.subagents)} seen")
+    driver.run.subagents = watch.report()
 
 
 def _usage(out: Outcome, model: str | None) -> dict[str, Any]:
@@ -232,6 +274,7 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     started = driver.control.started.is_set()
     if started:
         cfg.journal.delivered()
+        _recorded(driver, out, inbox, env.record(cfg.worktree, since, wf.agent_name(driver.role)))
     result.usage = _usage(out, cfg.model)
     _proven(result, out, cfg.model)
     result.termination = _termination(out, env.settle(cfg.worktree, since), started=started)

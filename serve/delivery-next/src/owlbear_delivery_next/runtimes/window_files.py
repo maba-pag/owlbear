@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import tools as tool_specs
 from owlbear_delivery_next.local_system import git_files, preload, text_files
+from owlbear_delivery_next.runtimes.subagents import LAUNCHER
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -228,17 +229,22 @@ def agent_path(role: str) -> str:
     return f".github/agents/{agent_name(role)}.agent.md"
 
 
-def agent(  # noqa: PLR0913 - the role, its inbox and memory, and what its job adds
-    role: str, inbox: Path, memory: Path | None = None, *, ui: bool = False, judging: bool = False, job: str = ""
-) -> Render:
-    """The role's agent from the package prose, renamed for the window, with its tools, skills and result note.
+def agent_tools(  # noqa: PLR0913 - the role, its inbox and memory, and what its step adds
+    role: str,
+    inbox: Path,
+    memory: Path | None = None,
+    *,
+    ui: bool = False,
+    judging: bool = False,
+    subagents: bool = False,
+) -> list[str]:
+    """The tools the role's window agent names: its allowlist, which the host also records it was given.
 
-    Its tools are the role's, under the same names as in the SDK runtime (the window runs the same harness), with
-    memory served by this step's memory server or left out, plus the result tools of this step's
-    relay; the window offers nothing else, neither its own question tool nor the owner's MCP tools (TD-69, runtime
-    research P19, P23).
+    They are the role's, under the same names as in the SDK runtime (the window runs the same harness), with
+    memory served by this step's memory server or left out, the subagent launcher when the role may start built-in
+    subagents (TD-374), plus the result tools of this step's relay; the window offers nothing else, neither its own
+    question tool nor the owner's MCP tools (TD-69, runtime research P19, P23).
     """
-    meta, body = preload.agent_file(role)
     relay, memory_name = names(inbox)
     served = preload.memory(memory) is not None
     own = [
@@ -246,7 +252,23 @@ def agent(  # noqa: PLR0913 - the role, its inbox and memory, and what its job a
         for name in preload.tools(role)
         if served or not name.startswith(f"{preload.MEMORY}/")
     ]
-    tools = ", ".join([*own, *(f"{relay}/{name}" for name in tool_specs.results(role, ui=ui, judging=judging))])
+    launcher = [LAUNCHER] if subagents and LAUNCHER not in own else []
+    return [*own, *launcher, *(f"{relay}/{name}" for name in tool_specs.results(role, ui=ui, judging=judging))]
+
+
+def agent(  # noqa: PLR0913 - the role, its inbox and memory, and what its job adds
+    role: str,
+    inbox: Path,
+    memory: Path | None = None,
+    *,
+    ui: bool = False,
+    judging: bool = False,
+    job: str = "",
+    subagents: bool = False,
+) -> Render:
+    """The role's agent from the package prose, renamed for the window, with its tools, skills and result note."""
+    meta, body = preload.agent_file(role)
+    tools = ", ".join(agent_tools(role, inbox, memory, ui=ui, judging=judging, subagents=subagents))
     skills = ", ".join(preload.required(role, ui=ui, job=job))
     head = f"---\nname: {agent_name(role)}\ndescription: {meta['description']}\ntools: [{tools}]\n"
     note = tools_note(role, ui=ui, judging=judging)

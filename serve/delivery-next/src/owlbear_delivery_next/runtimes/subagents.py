@@ -1,9 +1,10 @@
 """Built-in subagents (TD-129, TD-374): whether a session may start them, and what each did.
 
-Every SDK session is watched: agent, model, tokens, tool calls, credits and duration per subagent, unknown kept apart
-from zero. A session whose role's setting is on (the default) may start any built-in subagent the runtime offers, in
-read-only steps too, under the step's own permission check (TD-375, TD-376); any other start voids the step, and Auto
-stays a wrong model (TD-53).
+Every session is watched: agent, model, tokens, tool calls, credits and duration per subagent, unknown kept apart
+from zero. SDK sessions report them as events; a window step's come from the host's record of its session
+(``host_record``), the window announcing each start live. A session whose role's setting is on (the default) may
+start any built-in subagent the runtime offers, in read-only steps too, under the step's own permission check
+(TD-375, TD-376); any other start voids the step, and Auto stays a wrong model (TD-53).
 """
 
 from __future__ import annotations

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from owlbear_delivery_next.runtimes.ahp import ROOT, HostError
+from owlbear_delivery_next.runtimes.subagents import BUILTINS
 from owlbear_delivery_next.runtimes.vscode_contract import Control, End, Hooks, Outcome, StepSpec, ToolCall
 from owlbear_delivery_next.runtimes.window_files import SettingsError
 
@@ -391,7 +392,7 @@ class Step:
 
     def _halted(self, out: Outcome, control: Control, deadline: float, *, running: bool) -> bool:
         """On stop, timeout or a turn billed to another model, cancel the running turn and wait for the host."""
-        if out.end == "wrong-model":
+        if out.end in {"wrong-model", "subagent"}:
             self._cancel(out, out.turns[-1])
             return True
         if not control.stop.is_set() and self.clock() < deadline:
@@ -430,6 +431,10 @@ class Step:
         call_id = str(action.get("toolCallId"))
         if kind == "chat/toolCallStart":
             out.tools[call_id] = str(action.get("toolName"))
+        elif kind == "chat/toolCallContentChanged":
+            for part in action.get("content") or []:
+                if isinstance(part, dict) and part.get("type") == "subagent":
+                    self._subagent(out, call_id, str(part.get("agentName") or ""))
         elif kind == "chat/usage":
             out.usage = action.get("usage") or {}
             billed = out.usage.get("model")
@@ -448,6 +453,16 @@ class Step:
             if not allowed:
                 out.denied.append(call.name)
             self._confirm(chat, action, allowed=allowed)
+
+    def _subagent(self, out: Outcome, call_id: str, name: str) -> None:
+        """A subagent the host announced on its starting call; one the role may not start ends the step (TD-374)."""
+        if call_id in out.subagents:
+            return
+        out.subagents[call_id] = name
+        if not self.spec.subagents:
+            out.end, out.detail = "subagent", f"a subagent started: {name or 'unnamed'}; no subagent may run"
+        elif name not in BUILTINS:
+            out.end, out.detail = "subagent", f"a subagent started: {name or 'unnamed'}; only a built-in may run"
 
     def _confirm(self, chat: str, action: Json, *, allowed: bool) -> None:
         confirm: Json = {

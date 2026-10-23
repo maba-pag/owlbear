@@ -30,6 +30,7 @@ type End = Literal[
     "closed",
     "unbound",
     "wrong-model",
+    "subagent",
     "config-refused",
     "settings-refused",
     "cancel-unconfirmed",
@@ -62,6 +63,7 @@ class StepSpec:
     reminder: str = ""  # sent once as a new turn when the real turn completes before Delivery stops it
     picker: str = "agent"  # the mode ``code chat -m`` opens; the shaping chat keeps its agent for typed messages
     attachments: tuple[Json, ...] = ()  # sent with the prompt's turn only, e.g. screenshots (C7)
+    subagents: bool = False  # the role may start built-in subagents (TD-374); any other start ends the step
 
     @property
     def marker(self) -> str:
@@ -114,6 +116,7 @@ class Outcome:
     usage: Json | None = None
     tokens: dict[str, int] = field(default_factory=dict)  # billed model -> input plus output tokens of Delivery's turns
     cancel_confirmed: bool | None = None  # set when Delivery cancelled a turn: did the host confirm it?
+    subagents: dict[str, str] = field(default_factory=dict)  # the starting call id -> the subagent it announced
 
 
 def launch_code_chat(args: list[str], cwd: Path) -> None:
