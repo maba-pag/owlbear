@@ -4,7 +4,8 @@ The WebSocket layer is the ``websockets`` library's sync client over the Unix so
 here rather than left to defaults: one message at most ``MAX_MESSAGE`` bytes, a ping every ``KEEPALIVE`` seconds that
 must be answered within as many, ``CLOSE_TIMEOUT`` seconds for the closing handshake and no compression.
 A refused or broken handshake is a ``HostError``; an opening that does not finish in ``IO_TIMEOUT`` is a
-``TimeoutError``.
+``TimeoutError``. A write that does not finish in ``IO_TIMEOUT`` (a host that stopped reading) shuts the socket
+down, which fails it and ends the connection; reads wait without bound, as an idle host is normal.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import contextlib
 import itertools
 import json
 import queue
+import socket
 import threading
 from pathlib import Path
 from typing import Any, Protocol
@@ -24,7 +26,7 @@ from websockets.sync.client import unix_connect
 PROTOCOL = "0.10.0"
 ROOT = "ahp-root://"
 ENTRIES = Path.home() / "Library/Application Support/Code/agent-host/local-endpoint/entries"
-IO_TIMEOUT = 15.0  # the opening handshake
+IO_TIMEOUT = 15.0  # the opening handshake, and each write
 MAX_MESSAGE = 16 * 2**20  # a session's state with its turns; anything larger is a broken host, not a message
 KEEPALIVE = 20.0  # seconds between pings, and for each pong: a host that stops answering ends the connection
 CLOSE_TIMEOUT = 5.0
@@ -77,6 +79,7 @@ class Connection:
         self._events: queue.Queue[Json] = queue.Queue()
         self._lock = threading.Lock()
         self._closed: str | None = None
+        self._stalled: str | None = None
         threading.Thread(target=self._read, daemon=True).start()
 
     def close(self) -> None:
@@ -104,7 +107,7 @@ class Connection:
                 else:
                     self._events.put(msg)
         except (OSError, WebSocketException, HostError, ValueError) as exc:
-            why = _ended(exc)
+            why = self._stalled or _ended(exc)
             with self._lock:
                 self._closed = why
                 waiting, self._pending = list(self._pending.values()), {}
@@ -113,10 +116,22 @@ class Connection:
                 box.put({"error": {"message": f"connection closed: {why}"}})
 
     def _send(self, obj: Json) -> None:
+        # The library holds its connection lock while it writes, so neither keepalive nor a close can interrupt a
+        # write the host does not read; shutting the socket down from a timer can.
+        watchdog = threading.Timer(IO_TIMEOUT, self._stall)
+        watchdog.daemon = True
+        watchdog.start()
         try:
             self._ws.send(json.dumps(obj))
         except (OSError, WebSocketException) as exc:
-            raise HostError(f"connection closed: {_ended(exc)}") from exc  # noqa: EM102, TRY003
+            raise HostError(f"connection closed: {self._stalled or _ended(exc)}") from exc  # noqa: EM102, TRY003
+        finally:
+            watchdog.cancel()
+
+    def _stall(self) -> None:
+        self._stalled = f"the host read nothing for {IO_TIMEOUT:g} s"
+        with contextlib.suppress(OSError):
+            self._ws.socket.shutdown(socket.SHUT_RDWR)
 
     def request(self, method: str, params: Json, timeout: float = 60) -> Json:
         """Send one request and wait for its answer; raises ``HostError`` on error, timeout or a closed connection."""

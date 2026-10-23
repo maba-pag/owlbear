@@ -876,6 +876,22 @@ def test_a_host_that_stops_answering_pings_ends_the_connection(monkeypatch) -> N
         server.close()
 
 
+def test_a_write_the_host_never_reads_fails_within_the_io_bound(monkeypatch) -> None:
+    monkeypatch.setattr(ahp, "IO_TIMEOUT", 0.5)
+    release = threading.Event()
+    path, server = _host(lambda _conn: release.wait(10))  # upgraded, then reads nothing
+    conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
+    try:
+        with pytest.raises(ahp.HostError, match=r"read nothing for 0\.5 s"):
+            conn.request("send", {"text": "x" * 2**23}, timeout=30)
+        event = conn.next_event(5)
+        assert event == {"method": "closed", "params": {"error": "the host read nothing for 0.5 s"}}
+    finally:
+        release.set()
+        conn.close()
+        server.close()
+
+
 def test_endpoint_is_none_without_a_running_editor_host(tmp_path: Path) -> None:
     assert ahp.endpoint(tmp_path / "missing") is None
     (tmp_path / "a.json").write_text('{"endpoint": {"path": "/x"}}')
