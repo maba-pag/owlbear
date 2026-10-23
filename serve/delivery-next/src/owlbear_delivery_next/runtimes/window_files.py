@@ -1,4 +1,8 @@
-"""Files a C+ step needs in its worktree: the window's model pin, the step's MCP relay and its agent (TD-36).
+"""Files a C+ step needs in its worktree: the window's pins, the step's MCP relay, its agent and hooks off (TD-36).
+
+The window settings pin the harness and model and keep the owner's VS Code MCP servers from starting
+(``chat.mcp.access``); ``.github/copilot/settings.local.json`` turns every repository, user and plugin hook off
+(``disableAllHooks``), since VS Code's own hook setting does not reach the harness (window-step gate, item 8).
 
 None of them reaches the agent's commits: an untracked file is listed in the clone's ``info/exclude``, a tracked
 one is marked ``skip-worktree``; ``restore`` puts back what the step found. The owner's own folder gets only the
@@ -24,7 +28,9 @@ if TYPE_CHECKING:
 HARNESS, DEFAULT_MODEL = "chat.defaultToCopilotHarness", "chat.defaultModel"
 HARNESS_LINE = f'\n  "{HARNESS}": true'  # the one line Delivery adds to an owner's settings
 HARNESS_ADDED = re.compile(re.escape(HARNESS_LINE) + ",?")
+MCP_ACCESS = "chat.mcp.access"  # "none": the owner's VS Code MCP servers stay off; the step's .mcp.json still loads
 SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
+HOOKS, NO_HOOKS = ".github/copilot/settings.local.json", "disableAllHooks"
 SERVER = "owlbear-step"  # a step's relay is SERVER-<inbox>: the host disables a name another session holds (P21)
 
 type Render = Callable[[str | None], str]
@@ -49,6 +55,43 @@ def _opening(text: str) -> int | None:
     return sum(len(ln) for ln in lines[:first]) + lines[first].index("{") + 1
 
 
+def _strict(data: dict[str, Any], rel: str) -> str:
+    """``data`` as strict JSON; NaN or infinity, which Python reads but JSON readers refuse, refuse the step."""
+    try:
+        return json.dumps(data, indent=2, allow_nan=False) + "\n"
+    except ValueError as exc:
+        msg = f"{rel} holds a number JSON cannot carry; Delivery writes nothing"
+        raise SettingsError(msg) from exc
+
+
+def _plain_json(text: str) -> str:
+    """JSON with comments as plain JSON: comments and trailing commas outside strings go."""
+    out: list[str] = []
+    i, comma = 0, None  # comma: where in ``out`` the last comma outside a string went, until something follows it
+    while i < len(text):
+        c = text[i]
+        if c == '"':
+            end = i + 1
+            while end < len(text) and text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            out.append(text[i : end + 1])
+            i, comma = end + 1, None
+        elif text.startswith("//", i):
+            end = text.find("\n", i)
+            i = len(text) if end < 0 else end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end < 0 else end + 2
+        else:
+            if c in "}]" and comma is not None:
+                out[comma] = ""
+            if not c.isspace():
+                comma = len(out) if c == "," else None
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
 def _with_settings(old: str | None, model: str) -> str:
     """``old`` with the harness and model pinned; JSON with comments gets the keys after its opening brace."""
     try:
@@ -56,14 +99,21 @@ def _with_settings(old: str | None, model: str) -> str:
     except ValueError:
         current = None
     if isinstance(current, dict):
-        return json.dumps(current | {HARNESS: True, DEFAULT_MODEL: model}, indent=2) + "\n"
+        return _strict(current | {HARNESS: True, DEFAULT_MODEL: model, MCP_ACCESS: "none"}, SETTINGS)
     text = old or ""
     if current is not None or (at := _opening(text)) is None:
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
-    if f'"{HARNESS}"' in text or f'"{DEFAULT_MODEL}"' in text:
-        msg = f"{SETTINGS} pins the harness or model in a form Delivery can't edit"
+    try:
+        decoded = json.loads(_plain_json(text))
+    except ValueError:
+        decoded = None
+    if not isinstance(decoded, dict):
+        raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
+    _strict(decoded, SETTINGS)  # the owner's text stays, so it must already be strict JSON
+    if {HARNESS, DEFAULT_MODEL, MCP_ACCESS} & set(decoded):  # decoded, so an escaped spelling cannot hide one
+        msg = f"{SETTINGS} pins the harness, model or MCP access in a form Delivery can't edit"
         raise SettingsError(msg)
-    pins = f'\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": {json.dumps(model)},'
+    pins = f'\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": {json.dumps(model)},\n  "{MCP_ACCESS}": "none",'
     return text[:at] + pins + text[at:]
 
 
@@ -72,6 +122,18 @@ def settings(model: str) -> Render:
     if not model.strip() or model.strip().lower() == "auto":
         raise SettingsError("the step model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
     return lambda old: _with_settings(old, model)
+
+
+def hooks_off(old: str | None) -> str:
+    """The repository's local Copilot settings with every hook off; its other settings stay."""
+    try:
+        data = json.loads(old) if old and old.strip() else {}
+    except ValueError as exc:
+        msg = f"{HOOKS} is not plain JSON; Delivery cannot turn its hooks off"
+        raise SettingsError(msg) from exc
+    if not isinstance(data, dict):
+        raise SettingsError(f"{HOOKS} is not a JSON object; Delivery cannot turn its hooks off")  # noqa: EM102, TRY003
+    return _strict(data | {NO_HOOKS: True}, HOOKS)
 
 
 def write_window_settings(folder: Path, model: str) -> None:
@@ -151,7 +213,7 @@ def mcp(inbox: Path, memory: Path | None = None) -> Render:
         own = {relay: {"type": "stdio", "command": sys.executable, "args": args, "tools": ["*"]}}
         if (server := preload.memory(memory)) is not None:
             own[memory_name] = {"type": "stdio", **server}
-        return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), **own}}, indent=2) + "\n"
+        return _strict({**data, "mcpServers": {**data.get("mcpServers", {}), **own}}, MCP)
 
     return render
 

@@ -165,6 +165,7 @@ class _Driver:
         try:
             for rel, render in wf.skills(self.role, ui=cfg.ui, job=cfg.job):
                 self.placed.append(wf.place(cfg.worktree, rel, render))
+            self.placed.append(wf.place(cfg.worktree, wf.HOOKS, wf.hooks_off))
             self.placed.append(wf.place(cfg.worktree, wf.MCP, wf.mcp(inbox, cfg.memory)))
             made = wf.agent(self.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, job=cfg.job)
             self.placed.append(wf.place(cfg.worktree, wf.agent_path(self.role), made))
