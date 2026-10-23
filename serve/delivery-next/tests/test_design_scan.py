@@ -211,6 +211,7 @@ def test_a_real_capture_scans_each_state_in_its_page_and_falls_back_where_csp_re
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser starts and two pages hang; a loaded CI runner needs more than 30 s
 def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, monkeypatch):
     site = tmp_path / "site"
     site.mkdir()
@@ -236,7 +237,9 @@ def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, m
         pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
     finally:
         server.shutdown()
-    assert time.monotonic() - start < 30  # the deadline, not the 60 s in-page timer
+    # The deadline, not the 60 s in-page timer: one page on that timer alone passes 60 s. The headroom is the browser's
+    # start under a loaded CI runner, which took 35 s on 2026-10-22.
+    assert time.monotonic() - start < detector.PAGE_MS / 1000 - 5
     assert [(bool(s.file), s.design.scanned, s.errors) for s in shots] == [(True, False, ())] * 2  # the next page too
     assert all("refused" in s.design.reason for s in shots)
 
