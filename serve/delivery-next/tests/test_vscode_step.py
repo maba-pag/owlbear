@@ -668,16 +668,31 @@ def _host(
             while b"\r\n\r\n" not in head:
                 head += conn.recv(1)
             assert b"tkn=secret" in head
+            assert b"User-Agent" not in head
+            assert b"permessage-deflate" not in head
             key = next(
                 h.split(":", 1)[1].strip() for h in head.decode().split("\r\n") if h.startswith("Sec-WebSocket-Key")
             )
             digest = hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()  # noqa: S324
             accept_key = base64.b64encode(digest).decode() if valid_accept else "wrong"
-            conn.sendall(f"HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: {accept_key}\r\n\r\n".encode())
+            conn.sendall(
+                b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                + f"Sec-WebSocket-Accept: {accept_key}\r\n\r\n".encode()
+            )
             threading.Thread(target=serve, args=(conn,), daemon=True).start()
 
     threading.Thread(target=accept, daemon=True).start()
     return path, server
+
+
+def _answer_close(conn: socket.socket) -> bytes:
+    """Wait for the client's close frame, echo it and close the socket as the host does; return the payload."""
+    op, data = _ws_frame(conn)
+    while op != 8:
+        op, data = _ws_frame(conn)
+    _ws_send(conn, data, op=8)
+    conn.close()
+    return data
 
 
 def _sign_in(conn: socket.socket, *, refuse: bool = False, seen: list | None = None) -> list[tuple[str, str | None]]:
@@ -698,7 +713,7 @@ def test_a_reconnect_reaches_the_same_socket_and_signs_in_again() -> None:
     def serve(conn: socket.socket) -> None:
         seen.append([])
         _sign_in(conn, seen=seen[-1])  # noted before the reply, so the client cannot return first
-        conn.recv(1)
+        _answer_close(conn)
 
     path, server = _host(serve, accepts=2)
     first = ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh-1")
@@ -720,13 +735,13 @@ def test_a_failed_sign_in_closes_the_connection() -> None:
 
     def serve(conn: socket.socket) -> None:
         _sign_in(conn, refuse=True)
-        ended.put(conn.recv(1))
+        ended.put(_answer_close(conn))
 
     path, server = _host(serve)
     try:
         with pytest.raises(ahp.HostError, match="bad token"):
             ahp.connect({"endpoint": {"path": str(path)}, "connectionToken": "secret"}, "c1", "gh")
-        assert ended.get(timeout=5) == b""
+        assert ended.get(timeout=5) == b"\x03\xe8"  # a normal close
     finally:
         server.close()
 
@@ -742,7 +757,7 @@ def test_connection_speaks_websocket_json_rpc_over_the_local_socket() -> None:
         _ws_send(conn, {"jsonrpc": "2.0", "id": first["id"], "result": {"items": [first["method"]]}})
         second = _ws_recv(conn)
         _ws_send(conn, {"jsonrpc": "2.0", "id": second["id"], "error": {"message": "nope"}})
-        conn.recv(1)
+        _answer_close(conn)
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
@@ -802,13 +817,60 @@ def test_a_silent_upgrade_fails_within_the_io_bound_and_idle_reads_keep_waiting(
 
     def serve(conn: socket.socket) -> None:
         first = _ws_recv(conn)
-        threading.Event().wait(0.6)  # idle for three read timeouts, then answer
+        threading.Event().wait(0.6)  # idle for three opening timeouts, then answer
         _ws_send(conn, {"jsonrpc": "2.0", "id": first["id"], "result": {"ok": True}})
+        _answer_close(conn)
 
     path, server = _host(serve)
     conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
     try:
         assert conn.request("listSessions", {}, timeout=5) == {"ok": True}
+    finally:
+        conn.close()
+        server.close()
+
+
+def test_a_message_over_the_size_limit_ends_the_connection(monkeypatch) -> None:
+    monkeypatch.setattr(ahp, "MAX_MESSAGE", 64)
+    closes: queue.Queue[bytes] = queue.Queue()
+
+    def serve(conn: socket.socket) -> None:
+        _ws_send(conn, {"jsonrpc": "2.0", "method": "action", "params": {"text": "x" * 100}})
+        closes.put(_answer_close(conn))
+
+    path, server = _host(serve)
+    conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
+    try:
+        event = conn.next_event(5)
+        assert event is not None
+        assert event["method"] == "closed"
+        assert "message too big" in event["params"]["error"]
+        assert closes.get(timeout=5)[:2] == (1009).to_bytes(2, "big")
+    finally:
+        conn.close()
+        server.close()
+
+
+def test_a_host_that_stops_answering_pings_ends_the_connection(monkeypatch) -> None:
+    monkeypatch.setattr(ahp, "KEEPALIVE", 0.2)
+    monkeypatch.setattr(ahp, "CLOSE_TIMEOUT", 0.2)
+    pings: queue.Queue[int] = queue.Queue()
+
+    def serve(conn: socket.socket) -> None:
+        pings.put(_ws_frame(conn)[0])
+        while conn.recv(4096):  # never answers, reads until the client drops the socket
+            pass
+
+    path, server = _host(serve)
+    conn = ahp.Connection(str(path), "secret", "owlbear-delivery-test")
+    try:
+        assert pings.get(timeout=5) == 9
+        event = conn.next_event(10)
+        assert event is not None
+        assert event["method"] == "closed"
+        assert "keepalive ping timeout" in event["params"]["error"]
+        with pytest.raises(ahp.HostError, match="connection closed"):
+            conn.request("listSessions", {}, timeout=5)
     finally:
         conn.close()
         server.close()
