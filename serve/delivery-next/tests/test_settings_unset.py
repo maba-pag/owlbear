@@ -182,3 +182,5 @@ def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled
     head = _git(shared.root, "rev-parse", "HEAD")
     assert (settings_carry.due(shared), settings_carry.carry(shared)) == (False, "")  # a later edit: a save's to share
     assert _git(shared.root, "rev-parse", "HEAD") == head
+    shared.global_path.unlink()  # deleted after the carry committed: never carried again
+    assert (settings_carry.due(shared), settings_carry.carry(shared), shared.global_path.exists()) == (False, "", False)

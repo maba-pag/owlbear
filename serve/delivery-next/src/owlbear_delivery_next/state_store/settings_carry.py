@@ -57,8 +57,8 @@ def _unfilled(shared: DataRepo) -> bool:
     """Whether the Global layer has not had the built-in values carried into it yet."""
     try:
         found = _format(shared.global_path.read_text())
-    except FileNotFoundError:
-        return True
+    except FileNotFoundError:  # deleted after a committed carry: the owner's to restore, never carried again
+        found = _committed(shared)
     except OSError:
         return False  # an unreadable layer is reported where it is read, never overwritten here
     return found is not None and found < CARRIED_FORMAT
@@ -69,7 +69,12 @@ def _unpublished(shared: DataRepo) -> bool:
 
     Later edits to a carried layer are never published here; a Settings save publishes them.
     """
+    found = _committed(shared)
+    return found is not None and found < CARRIED_FORMAT
+
+
+def _committed(shared: DataRepo) -> int | None:
+    """The committed Global layer's format: 0 when none is committed, ``None`` when it is no layer."""
     rel = shared.global_path.relative_to(shared.root).as_posix()
     committed = shared.git("show", f"HEAD:{rel}")
-    found = _format(committed.stdout) if committed.returncode == 0 else 0
-    return found is not None and found < CARRIED_FORMAT
+    return _format(committed.stdout) if committed.returncode == 0 else 0
