@@ -249,9 +249,10 @@ surfaces: a note on the Change's row of the Changes page, and a read-back on the
 decision (TD-427 queues one only for ambiguity, new evidence, a conflict or changed consequences). The style rules
 match what the owner asks of reports: plain words, no hashes or line references, no context assumed.
 
-**For the session:** whether heads-ups belong to the watcher or are a separate observer; window and SDK steps only,
-or the owner's chats too (VS Code offers no surface above the chat input); cadence and backoff against credits; the
-model, after TD-27's benchmark.
+**Decided 2026-10-23** (D-01M5MFATRF5RFMJY9C8284FDV5): heads-ups are not the watcher's job. A separate "rethinker"
+agent on a stronger model runs about every 10th agent turn, slow but smart; the watcher stays cheap and fast. The
+rethinker may read the watcher's event feed. Its surface, backoff and model are decided when it is designed, after
+the watcher.
 
 ### 3.5 Placement, concurrency and lifecycle
 
@@ -293,7 +294,7 @@ SDK first, since window steps stay paused; the window feed comes with their reop
    harmless and reported; one steering message for a doubtful call.
 6. Stages (TD-61, TD-66) and the Changes page field; lessons saved as pending, role-scoped memories
    (D-…0088E), with evidence that the agent's behaviour caused the signal (D-…YS7YN).
-7. Context advice (§3.4a), and heads-ups (§3.4b) if the owner wants them.
+7. Context advice (§3.4a). Heads-ups are the separate rethinker's (§3.4b), not a watcher slice.
 8. Window feed when window steps reopen: every `chat/toolCallReady`, subscribed subagent chats, catch-up from
    the host record; then the suspended routing decisions are reviewed (D-…5KGRQ).
 
@@ -308,8 +309,7 @@ Revised 2026-10-23. Sol challenged the first draft; its 17 findings are folded i
 
 **Needs the owner** (his own decisions, asked one at a time):
 
-- Q1 Heads-ups (§3.4b, his input): part of the watcher or a separate observer, which steps or chats, where they
-  show, and cadence against credits.
+- Q1 Heads-ups (§3.4b, his input): answered 2026-10-23, a separate rethinker agent, not the watcher.
 - Q2 The second stop of a step: what the owner's question offers (§3.3): add the path to the brief's `outside`
   list as a new brief version, run again with the reason, or stop the Change.
 - Q3 TD-27's benchmark: run it now on OwlBear work (it spends credits on four model settings), then choose the

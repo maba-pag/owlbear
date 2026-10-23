@@ -198,7 +198,8 @@ that its criteria were agent proposals he accepted without intent of his own and
 are `autonomous`. The watcher's [draft](delivery-next-watcher-design.md) is revised to TD-55 and TD-365 (no guard blocks
 outside writes; the watcher judges each one afterwards, stops the dangerous or inappropriate and reports the harmless),
 to the gate as built, and to the window steps staying paused: it is built for SDK steps first. Its §4 asks the owner
-three questions (heads-ups, the second stop, running TD-27's benchmark) and proposes the rest as `autonomous` drafts.
+three questions and proposes the rest as `autonomous` drafts; heads-ups were answered on 2026-10-23: a separate
+"rethinker" agent on a stronger model, not the watcher.
 The owner's input of 2026-10-21, Claude Code's "You should know" observer, is its §3.4b.
 
 ## 4. Where the Code Differs From the Decisions
