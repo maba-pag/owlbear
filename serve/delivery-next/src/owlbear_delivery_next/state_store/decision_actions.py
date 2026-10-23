@@ -26,7 +26,7 @@ from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, Receipt
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     from owlbear_decisions import Entry
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -378,11 +378,11 @@ def read_back(  # noqa: PLR0913 - who confirmed and the revision read
 
 def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and the revision read
     shared: DataRepo | None, project: str, decision_id: str, revision: str, *, origin: Origin, reason: str,
-    confirmed: bool, by: str, owed: Callable[[], str] = lambda: "",
+    confirmed: bool, by: str,
 ) -> list[Receipt]:  # fmt: skip
     """Lower a decision's origin on the owner's confirmed statement; its rationale says why.
 
-    *owed*: why it must wait, such as fixes its own replacement still owes, or ''; asked after every other check.
+    One that changed the rule it replaced is refused: fixes for that change may depend on it staying in force.
 
     Such as `decided` to `approved` for an agent's proposal he accepted without intent of his own. A draft is
     corrected in place; a decision in force, whose origin never changes once accepted (TD-430), by a successor with
@@ -405,8 +405,10 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
     if old.state is State.IN_FORCE and (old.conflict or rivals(view, old, shared)):
         msg = f"{old.id} competes with another successor: the owner resolves the conflict first, then corrects it"
         raise Refused(msg)
-    if old.state is State.IN_FORCE and (waits := owed()):
-        raise Refused(waits)
+    if old.state is State.IN_FORCE and _changed_a_rule(old):
+        msg = (f"{old.id} changed the rule it replaced, and fixes may depend on it: its origin is not corrected; "
+               "the owner replaces it himself if he wants")  # fmt: skip
+        raise Refused(msg)
     rationale = _because(old.rationale, CORRECTED, f"{old.origin} to {origin}: {why}")
     if old.state is State.DRAFT:
         update = {"origin": origin, "rationale": rationale}
@@ -422,6 +424,14 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
         links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
     return _retire(shared, new, old, f"decisions: correct-origin {old.id} with {new.id} ({by})")
+
+
+def _changed_a_rule(decision: Decision) -> bool:
+    """It replaced a decision and is not marked wording only: its replacement may owe fixes (TD-428)."""
+    if not any(link.type is LinkType.REPLACES for link in decision.links):
+        return False
+    marks = [p for p in decision.rationale.split("\n\n") if p.startswith(EFFECT)]
+    return not marks or marks[-1] != EFFECT + EFFECTS["wording"]
 
 
 def _same(one: str, other: str) -> bool:

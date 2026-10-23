@@ -666,6 +666,27 @@ def test_a_correction_keeps_a_pending_read_back_and_waits_for_a_conflict_to_be_r
     )
 
 
+def test_a_replacement_that_changed_a_rule_keeps_its_origin_and_a_wording_one_is_corrected(store, shared):
+    old = make(state=State.REPLACED)
+    unmarked = after(old, origin=Origin.DECIDED)
+    forbids = after(make(state=State.REPLACED), origin=Origin.DECIDED, rationale="Effect on existing work: it forbids "
+                    "existing behaviour")  # fmt: skip
+    seed(shared, old, unmarked, forbids)
+    chat = client(store, CHAT)
+
+    for rule in (unmarked, forbids):
+        refused = act(chat, rule, "correct-origin", origin="approved", reason="r", confirmed=True)
+        assert (refused.status_code, "changed the rule it replaced" in refused.json()["detail"]) == (409, True)
+    first = decided()
+    seed(shared, first)
+    corrected = act(chat, first, "correct-origin", origin="approved", reason="r", confirmed=True).json()
+    successor = now(shared, corrected["receipts"][0]["id"])
+    again = act(chat, successor, "correct-origin", origin="autonomous", reason="r", confirmed=True).json()
+
+    assert again["saved"] is True
+    assert now(shared, again["receipts"][0]["id"]).origin is Origin.AUTONOMOUS
+
+
 def test_a_drafts_origin_is_corrected_in_place(store, shared):
     draft = make(origin=Origin.APPROVED, state=State.DRAFT)
     seed(shared, draft)

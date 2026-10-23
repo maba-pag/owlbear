@@ -450,21 +450,6 @@ def _impact(shared: DataRepo | None, folder: str, decision_id: str, places: Plac
         return {"error": str(exc)}
 
 
-def _still_due(shared: DataRepo | None, folder: str, decision_id: str, places: Places) -> str:
-    """Why an origin correction waits: fixes the decision's own replacement still owes, or ''.
-
-    The correction's successor replaces only it, so fixes owed for the rule it replaced would lose their way.
-    """
-    try:
-        pending = decision_impact.due(decision_impact.report(shared, folder, decision_id, places()))
-    except decision_actions.Refused, decision_store.DecisionsUnavailable:
-        return ""  # it replaced nothing, or the correction itself says what is wrong
-    if not pending:
-        return ""
-    where = ", ".join(i.project for i in pending)
-    return f"fixes for the rule it replaced are still due in {where}: schedule them or keep the existing code first"
-
-
 def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) -> None:
     """What a chat may do as well as the page: record or propose, retire, queue a read-back and record one."""
 
@@ -507,5 +492,4 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
         by = "chat" if request.headers.get("x-owlbear-use", "").lower() == "chat" else "owner"
         return _receipts(lambda: decision_actions.correct_origin(
             shared(), at(project), decision_id, body.revision, origin=Origin(body.origin), reason=body.reason,
-            confirmed=body.confirmed, by=by, owed=lambda: _still_due(shared(), at(project), decision_id, places),
-        ))  # fmt: skip
+            confirmed=body.confirmed, by=by))  # fmt: skip
