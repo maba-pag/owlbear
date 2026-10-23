@@ -102,9 +102,11 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
-    answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)
-    s.started_at = now
+    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
+    role = roles.chosen(store.settings(), session := curation_build.LABEL if curated else s.kind)  # its role's
     review.started(change, task, path, store.settings())  # a build's base; a plan task's loop (TD-208)
+    answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
+    s.started_at = now
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
@@ -120,8 +122,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         change, new = session_choice.replaced(store, lock, change, repair)
         return new
 
-    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
-    role = roles.chosen(store.settings(), session := curation_build.LABEL if curated else s.kind)  # its role's
     ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
     asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
 
