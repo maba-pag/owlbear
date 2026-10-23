@@ -1416,3 +1416,56 @@ def test_without_a_host_record_the_announced_subagents_stay_with_unknown_counts(
     assert {"event": "host-record", "found": False, "why": "no host record"}.items() <= next(
         e for e in a.events if e.get("event") == "host-record"
     ).items()
+
+
+def _asks(*calls: tuple[str, str, str]) -> list[dict]:
+    """Tool calls the window asks Delivery to confirm: (call id, tool name, input)."""
+    return [
+        a
+        for call, name, given in calls
+        for a in (
+            {"type": "chat/toolCallStart", "toolCallId": call, "toolName": name},
+            {"type": "chat/toolCallReady", "toolCallId": call, "toolInput": given, "confirmed": None},
+        )
+    ]
+
+
+def test_a_read_only_window_step_asks_and_the_sdk_policy_answers(wt: Path, tmp_path: Path) -> None:
+    inbox = tmp_path / "steps" / "1.json"
+    relay = wf.names(inbox)[0]
+    asks = _asks(
+        ("c1", "bash", json.dumps({"command": "touch judge-wrote.txt"})),
+        ("c2", "bash", json.dumps({"command": "git status --short"})),
+        ("c3", f"{relay}-submit_result", "{}"),
+        ("c4", "uv-init", "{}"),
+    )
+    a = Adapted(wt, inbox, [[*asks, USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    a.cfg = dataclasses.replace(a.cfg, policy=Policy(wt, write=False))
+    run = a.run()
+
+    confirms = {c["toolCallId"]: c["approved"] for _, c in a.host.actions("chat/toolCallConfirmed")}
+    assert confirms == {"c1": False, "c2": True, "c3": True, "c4": False}
+    assert a.host.config["copilotcli:/s0"] == vscode_adapter.READ_ONLY
+    assert a.host.config["copilotcli:/s0"]["autoApprove"] == "default"
+    assert any("touch" in d and "read-only" in d for d in run.denials)
+    assert "uv-init: uv-init is not allowed in a read-only step" in run.denials
+
+
+def test_a_read_only_answer_reads_the_whole_input_and_keeps_only_redacted_text(wt: Path, tmp_path: Path) -> None:
+    token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"  # noqa: S105 - a fake, to see it redacted
+    hidden = "git status" + " " * 2100 + "; touch judge-wrote.txt"  # the write past any preview
+    asks = _asks(
+        ("c1", "bash", json.dumps({"command": f"git config http.extraheader 'Authorization: Bearer {token}'"})),
+        ("c2", "bash", hidden),
+        ("c3", "bash", json.dumps({"command": "git log -1"})),
+    )
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [[*asks, USAGE, {"type": "chat/turnComplete"}]], [GOOD])
+    a.cfg = dataclasses.replace(a.cfg, policy=Policy(wt, write=False))
+    run = a.run()
+
+    confirms = {c["toolCallId"]: c["approved"] for _, c in a.host.actions("chat/toolCallConfirmed")}
+    assert confirms == {"c1": False, "c2": False, "c3": True}
+    kept = json.dumps([run.denials, run.denied, a.events])
+    assert token not in kept
+    assert "touch" in run.denied.get("touch", "")
+    assert "git" not in run.denied  # the later approval of git cleared its denial
