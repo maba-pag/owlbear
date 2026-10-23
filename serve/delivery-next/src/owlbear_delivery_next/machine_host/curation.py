@@ -16,7 +16,7 @@ import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_memory import MemoryEngine, MemoryState
 from pydantic import Field
@@ -42,6 +42,7 @@ LABEL = "memory-curation"
 STATE = "curation.json"
 SLOT = "memory"  # curation's own share of the machine's slots
 ALL = "all"
+type Trigger = Literal["merge", "idle"]  # each has its own machine setting (the owner, 2026-10-23)
 NO_SHARED = "no shared repository is set up, so there is no memory to curate"
 LEFT = "the last curation's processes may still run; stop them before curating again"
 LINGERING = "memory curation: its last session's processes may still run"
@@ -184,22 +185,22 @@ class Curation:
         seen = self.load().folders.get(folder, FolderRun()).seen
         return any(seen.get(e.id) != e.revision for e in _pending(shared.root / folder / "memory"))
 
-    def allowed(self, *, paused: bool) -> bool:
-        """Whether a merge or idle time may start a run now: while paused only with the machine's switch on."""
-        if not paused:
-            return True
+    def allowed(self, trigger: Trigger, *, paused: bool) -> bool:
+        """Whether a merge or idle time may start a run now: its machine setting on, and while paused set so."""
         try:
-            return registry.load().settings.curate_while_paused
+            settings = registry.load().settings
         except registry.RegistryError:
             return False
+        said = settings.curate_after_merge if trigger == "merge" else settings.curate_when_idle
+        return said == "paused" or (said == "on" and not paused)
 
-    def nudge(self, wanted: list[str] | None, *, paused: bool) -> list[str]:
-        """Start each of *wanted* (every folder for None) that is due, when a trigger may start runs now.
+    def nudge(self, wanted: list[str] | None, trigger: Trigger, *, paused: bool) -> list[str]:
+        """Start each of *wanted* (every folder for None) that is due, when *trigger* may start runs now.
 
         A folder already running gets one more run after it, if it is still due then.
         """
         shared = self.shared()
-        if shared is None or not self.allowed(paused=paused):
+        if shared is None or not self.allowed(trigger, paused=paused):
             return []
         known = folders(shared.root)
         candidates = [f for f in (known if wanted is None else wanted) if f in known]

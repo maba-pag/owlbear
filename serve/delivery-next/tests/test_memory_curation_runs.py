@@ -98,9 +98,9 @@ def test_without_a_shared_repository_nothing_is_curated() -> None:
         job.start("all")
 
 
-def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_while_paused_only_when_allowed(root) -> None:
-    """The merge and idle triggers: a skipped entry starts no run until it changes; Pause holds them unless the
-    machine's "Curate memory while paused" is on (the owner, 2026-10-22)."""
+def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_as_its_own_setting_says(root) -> None:
+    """The merge and idle triggers: a skipped entry starts no run until it changes; each trigger's machine setting
+    is off, on (not while paused, the default) or on even while paused (the owner, 2026-10-23)."""
     from owlbear_delivery_next.machine_host import registry  # noqa: PLC0415
 
     left = pending(root / "shop" / "memory", "Unsure lesson")
@@ -115,19 +115,19 @@ def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_while
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
     assert (job.due("shop"), job.due("owlbear")) == (True, False)
-    assert job.nudge(None, paused=True) == []  # paused, the switch off by default
-    assert job.nudge(None, paused=False) == ["shop"]
+    assert job.nudge(None, "idle", paused=True) == []  # paused: "on" holds it
+    assert job.nudge(None, "idle", paused=False) == ["shop"]
     finished(job)
-    assert (job.due("shop"), job.nudge(["shop"], paused=False)) == (False, [])  # unchanged: no other run
+    assert (job.due("shop"), job.nudge(["shop"], "merge", paused=False)) == (False, [])  # unchanged: no other run
 
     MemoryEngine(root / "shop" / "memory").edit(
         left.id, {"content": "Unsure lesson: now with evidence"}, left.updated_at
     )
     saved = registry.load()
-    registry.configure(
-        saved.settings.model_copy(update={"curate_while_paused": True}), registry.revision(saved.settings)
-    )
-    assert job.nudge(["shop"], paused=True) == ["shop"]  # changed, and allowed while paused
+    chosen = {"curate_after_merge": "paused", "curate_when_idle": "off"}
+    registry.configure(saved.settings.model_copy(update=chosen), registry.revision(saved.settings))
+    assert job.nudge(["shop"], "idle", paused=False) == []  # idle curation off
+    assert job.nudge(["shop"], "merge", paused=True) == ["shop"]  # changed, and the merge runs it while paused
     finished(job)
     assert runs == ["shop", "shop"]
 
@@ -141,7 +141,7 @@ def test_an_entry_saved_during_a_run_stays_due_and_a_trigger_meanwhile_runs_the_
         runs.append(cfg.session_id)
         if len(runs) == 1:  # an agent saves while the curator runs, and its Change merges
             pending(root / "shop" / "memory", "Saved meanwhile")
-            assert job.nudge(["shop"], paused=False) == []
+            assert job.nudge(["shop"], "merge", paused=False) == []
         report = MemoryCurationResult(summary="judged", entries=[])
         return Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True))
 

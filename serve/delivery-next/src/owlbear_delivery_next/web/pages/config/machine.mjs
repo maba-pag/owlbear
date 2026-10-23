@@ -6,9 +6,12 @@ import { button } from "./cells.mjs";
 
 // The machine's own values: changed only here, from a terminal, never in a settings layer (TD-243).
 const CHANNELS = [["minor", "Every minor version (v0.1, v0.2 …)"], ["major", "Major versions only (v1, v2 …)"]];
+// Each automatic curation trigger: off, on, or on even while paused; the Maintenance button always runs (2026-10-23).
+const CURATE = [["off", "Off"], ["on", "On, not while paused"], ["paused", "On, even while paused"]];
 const MACHINE_LABELS = {
   channel: "Versions this machine takes", update_when_idle: "Update itself when idle",
-  update_while_paused: "Update itself while paused", curate_while_paused: "Curate memory while paused",
+  update_while_paused: "Update itself while paused", curate_after_merge: "Curate memory after a merge",
+  curate_when_idle: "Curate memory when idle",
   sessions: "Agent sessions at once on this machine",
 };
 
@@ -30,6 +33,10 @@ function machineControls() {
   const channel = html`<p-select id="machine-channel" label="Versions this machine takes"
     .value=${live(machineValue("channel"))} ?disabled=${state.machineSaving} @change=${pick}>${CHANNELS.map(
     ([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
+  const curate = (key, label) => html`<p-select id=${`machine-${key}`} label=${label}
+    .value=${live(machineValue(key))} ?disabled=${state.machineSaving} @change=${(e) => machineEdit(key,
+      e.target.value)}>${CURATE.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}
+    </p-select>`;
   const box = (key, label) => {
     const flip = (e) => machineEdit(key, e.target.checked === true);
     return html`<p-checkbox label=${label} .checked=${live(machineValue(key))} ?disabled=${state.machineSaving}
@@ -46,7 +53,8 @@ function machineControls() {
     @change=${count}></p-input-text>`;
   return html`${channel}${box("update_when_idle", "Update itself when idle")}
     ${box("update_while_paused", "Update itself while paused")}
-    ${box("curate_while_paused", "Curate memory while paused (after merges and when idle; the button always runs)")}
+    ${curate("curate_after_merge", "Curate memory after a merge")}
+    ${curate("curate_when_idle", "Curate memory when idle (the Maintenance button always runs)")}
     ${sessions}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
       disabled: !state.machineDraft })}</div>`;
@@ -54,8 +62,9 @@ function machineControls() {
 
 async function saveMachine() {
   if (!state.machineDraft || state.machineSaving) return;
-  const said = (key, v) => (key === "channel" ? CHANNELS.find(([c]) => c === v)?.[1] ?? v : typeof v === "boolean"
-    ? (v ? "on" : "off") : String(v));
+  const said = (key, v) => (key === "channel" ? CHANNELS.find(([c]) => c === v)?.[1] ?? v
+    : key.startsWith("curate_") ? CURATE.find(([c]) => c === v)?.[1] ?? v
+      : typeof v === "boolean" ? (v ? "on" : "off") : String(v));
   if (!(await ask({
     title: "Change this machine's settings?", yes: "Save machine settings", no: "Keep editing",
     now: "These apply to this machine only:", items: Object.entries(state.machineDraft).map(([key, v]) =>

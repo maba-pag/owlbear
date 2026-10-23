@@ -188,8 +188,8 @@ function curationSection() {
     <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
     <p-text size="sm">The memory curator judges each folder's pending entries: alone at or above your threshold
       (Settings, Memory curation), and leaves the rest for you on the Memory page. It runs after a merge and when
-      OwlBear is idle, for folders with entries no run has seen; while paused only with "Curate memory while paused"
-      on. Each run is one agent session.</p-text>
+      OwlBear is idle, for folders with entries no run has seen, as each trigger's setting in Settings → This machine
+      says: off, on, or on even while paused. Each run is one agent session.</p-text>
     ${c.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
       <div><p-button id="curate-all" type="button" compact="true" .loading=${state.curating === "all"}
         @click=${() => curate("all")}>Curate all now</p-button></div>`

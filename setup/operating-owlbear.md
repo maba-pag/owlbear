@@ -81,7 +81,9 @@ project's Changes while that project's VS Code window is closed.
 
 **Pause Delivery** in the bar stops new automatic agent steps on every project until you press
 **Resume**; your own actions, such as settings, memory and **New Change**, still run. While paused,
-**Pause and stop when idle** stops OwlBear once the running steps end.
+**Pause and stop when idle** stops OwlBear once the running steps end. Automatic memory curation
+after a merge and when idle each has its own setting in **Settings → This machine**: off, on, or on
+even while paused; **Curate now** on the Maintenance page always runs.
 
 A shared settings repository is a local clone of a Git repository you choose, set with
 `owlbear data PATH` and used after `owlbear restart`. When one is set, project settings, agent
