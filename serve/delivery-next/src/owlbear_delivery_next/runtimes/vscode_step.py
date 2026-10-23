@@ -54,7 +54,7 @@ def _ended(out: Outcome, action: Json) -> None:
     out.detail = json.dumps(action.get("part") or action.get("error") or "")[:300] if out.end == "error" else ""
 
 
-def _command(tool_input: object) -> str:
+def shell_command(tool_input: object) -> str:
     """The shell command of a terminal tool call, whether the host sends it as text or as JSON with ``command``."""
     text = str(tool_input or "").strip()
     try:
@@ -206,7 +206,7 @@ class Step:
                 if call in handled:
                     continue
                 handled.add(call)
-                mine = _command(command) == f"echo {self.spec.marker}"
+                mine = shell_command(command) == f"echo {self.spec.marker}"
                 self._confirm(chat, {"turnId": boot, "toolCallId": call}, allowed=mine)
                 if not mine:
                     other = ("bootstrap-unexpected", "the window's first turn asked to run something else")

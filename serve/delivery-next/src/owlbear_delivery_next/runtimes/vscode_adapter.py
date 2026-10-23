@@ -1,10 +1,13 @@
 """Run one agent session as a C+ VS Code step (TD-35 "all in VS Code"), with the same contract as the SDK path.
 
-The window runs with the owner's session settings (D2, D4, D5): every tool call is approved by the harness, so
-Delivery's per-call policy does not apply; the agent's instructions carry the rules (D6). Results pass the same
-gate as SDK results. A turn billed to another model discards any result (TD-32), and so does a subagent the role may
-not start (TD-374). After the step, the host's own record of the session says what the window's connection does not:
-the tools the agent was given, which must be its allowlist, and what each subagent did (window-step gate, item 8).
+A writing step's window runs with the owner's session settings (D2, D4, D5): every tool call is approved by the
+harness, so Delivery's per-call policy does not apply; the agent's instructions carry the rules (D6). A read-only
+step's window asks instead, and the same permission policy as an SDK step answers; calls the harness approves itself
+(its read rules) stay inside the read-only worktree, whose ref and shared-setting changes void the run (TD-146).
+Results pass the same gate as SDK results. A turn billed to another model discards any result (TD-32), and so does a
+subagent the role may not start (TD-374). After the step, the host's own record of the session says what the
+window's connection does not: the tools the agent was given, which must be its allowlist, and what each subagent did
+(window-step gate, item 8).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.change_contracts import permissions
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import ahp, host_record, leftovers, readiness, step_input, subagents
 from owlbear_delivery_next.runtimes import window_files as wf
@@ -29,7 +33,7 @@ from owlbear_delivery_next.runtimes.sdk_adapter import DEADLINES, role_of
 from owlbear_delivery_next.runtimes.session_result import PROVEN, Run
 from owlbear_delivery_next.runtimes.step_inbox import Inbox
 from owlbear_delivery_next.runtimes.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall, launch_code_chat
-from owlbear_delivery_next.runtimes.vscode_step import Step
+from owlbear_delivery_next.runtimes.vscode_step import Step, shell_command
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,6 +43,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Effective
 
 CONFIG = {"autoApprove": "autoApprove", "sandboxEnabled": "off", "mode": "autopilot"}  # the owner's D2, D4, D5
+READ_ONLY = CONFIG | {"autoApprove": "default"}  # the window asks; Delivery's permission policy answers (item 8)
+SHELLS = frozenset({"bash", "powershell"})  # the runtime's shell tools, as the window names a call
 SHAPING = CONFIG | {"mode": "interactive"}  # the owner's chat: allow-all, but it waits for the owner (TD-83)
 GRACE = 30.0  # seconds an agent has to end its turn after its result was accepted
 START = 60.0  # seconds a started editor has to publish its agent host
@@ -123,6 +129,7 @@ class _Driver:
         self.placed: list[wf.Placed] = []
         self.gate = Gate(cfg, run, self.log, _grace(self.control))
         self.stepper: Step | None = None
+        self.inbox = Path()
 
     def log(self, **event: Any) -> None:  # noqa: ANN401 - JSON values
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
@@ -140,6 +147,31 @@ class _Driver:
         self.log(event="denied", tool=call.name, request=call.input[:200])
         return False
 
+    def approve(self, call: ToolCall) -> bool:
+        """Answer the harness: a writing step refuses whatever asks (D2); a read-only step's policy decides."""
+        if self.cfg.policy.write:
+            return self.deny(call)
+        if (why := self._judged(call)) is None:
+            self.log(event="approved", tool=call.name, request=call.input[:200])
+            return True
+        self.run.denials.append(text := f"{call.name}: {why}")
+        self.run.denied[call.name.lower()] = text
+        self.log(event="denied", tool=call.name, request=call.input[:200], why=why)
+        return False
+
+    def _judged(self, call: ToolCall) -> str | None:
+        """The SDK guard's verdict on one asking call: None to allow, else why not."""
+        cfg = self.cfg
+        if call.name in SHELLS:
+            command = shell_command(call.input)
+            return permissions.decide(cfg.policy, permissions.Request("shell", commands=(command,)))
+        offered = wf.agent_tools(
+            self.role, self.inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, subagents=cfg.subagents
+        )  # fmt: skip
+        if any("/" in name and call.name == name.replace("/", "-", 1) for name in offered):
+            return None  # the step's own relay or memory tool, as its agent names it
+        return f"{call.name} is not allowed in a read-only step"
+
     def drive(self, conn: ahp.Transport) -> Outcome:
         cfg, reminder = self.cfg, self.env.reminder
         hooks = Hooks(
@@ -154,14 +186,14 @@ class _Driver:
             model=cfg.model or "",
             effort=cfg.effort or "",
             prompt=cfg.fresh if cfg.resume and cfg.fresh else cfg.message,
-            config=CONFIG,
+            config=CONFIG if cfg.policy.write else READ_ONLY,
             context=cfg.context,
             reminder=step_input.reminder(self.role, judging=cfg.judging) if reminder is None else reminder,
             attachments=embedded(cfg.attachments),
             subagents=cfg.subagents,
         )
         limit = cfg.limit or DEADLINES.get(cfg.kind, 2400.0)  # the role's time limit (TD-286)
-        self.stepper = Step(conn, spec, self.deny, hooks=hooks)
+        self.stepper = Step(conn, spec, self.approve, hooks=hooks)
         out = self.stepper.run(self.control, limit=limit)
         self.log(event="vscode-step", end=out.end, detail=out.detail, session=out.session)
         return out
@@ -169,6 +201,7 @@ class _Driver:
     def step(self, inbox: Path) -> Outcome:
         """Run the attempts and close the gate before the inbox stops, so nothing is accepted afterwards."""
         cfg, conn = self.cfg, None
+        self.inbox = inbox
         try:
             for rel, render in wf.skills(self.role, ui=cfg.ui, job=cfg.job):
                 self.placed.append(wf.place(cfg.worktree, rel, render))
