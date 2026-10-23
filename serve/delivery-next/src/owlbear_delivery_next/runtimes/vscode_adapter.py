@@ -218,6 +218,7 @@ def _recorded(driver: _Driver, out: Outcome, inbox: Path, record: host_record.Re
         driver.log(event="host-record", found=False, why=record.why)
         for call, name in out.subagents.items():
             watch.started(SimpleNamespace(tool_call_id=call, agent_name=name, model=None))
+        _no_credits(watch)
         driver.run.subagents = watch.report()
         return
     allowed = wf.agent_tools(
@@ -237,7 +238,14 @@ def _recorded(driver: _Driver, out: Outcome, inbox: Path, record: host_record.Re
     starts = sum(kind == "subagent.started" for kind, _ in record.subagents)
     if starts != len(out.subagents):
         driver.log(event="host-record", found=True, why=f"{starts} subagent starts recorded, {len(out.subagents)} seen")
+    _no_credits(watch)
     driver.run.subagents = watch.report()
+
+
+def _no_credits(watch: subagents.Watch) -> None:
+    """The window reports no credits, so a window subagent's stay unknown, never zero (TD-94)."""
+    for seen in watch.seen.values():
+        seen.credits_known = False
 
 
 def _usage(out: Outcome, model: str | None) -> dict[str, Any]:

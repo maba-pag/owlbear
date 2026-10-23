@@ -1341,6 +1341,7 @@ def test_a_window_subagent_is_counted_from_the_host_record(wt: Path, tmp_path: P
     ((sub,),) = [run.subagents]
     assert (sub["agent"], sub["model"], sub["outcome"]) == ("explore", "gpt-5.6-luna", "completed")
     assert (sub["tokens"], sub["tool_calls"], sub["seconds"], sub["allowed"]) == (6958, 1, 2.929, True)
+    assert sub["credits_known"] is False
     assert "task" in (a.placed_agent or "")
 
 
