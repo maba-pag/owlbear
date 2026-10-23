@@ -10,7 +10,9 @@ A transition's files (a successor and what it retires, a kept decision and its w
 not at all. Every supersession says why: replace, withdraw, promote, keep and activating or proposing a draft that
 replaces one need a reason, recorded in the successor's (or withdrawn decision's) rationale. The owner's words are
 never stored (TD-449): what he confirmed is `decided` and its `read_back` is the day he confirmed it. A commit message
-names the action and the decisions' ids only, never text a person typed.
+names the action and the decisions' ids only, never text a person typed. An origin is corrected only downward
+(`decided`, `approved`, `autonomous`), on the owner's confirmed statement that he did not decide it, by a successor
+with the same rule.
 """
 
 from __future__ import annotations
@@ -36,6 +38,9 @@ RETIRED = (State.REPLACED, State.WITHDRAWN, State.SPENT)
 LINEAGE = (LinkType.REPLACES, LinkType.PROMOTED_FROM)
 WIDER = {Scope.CHANGE: Scope.PROJECT, Scope.PROJECT: Scope.GLOBAL}
 CHANGED, GONE = "Why it changed: ", "Why it was withdrawn: "
+CORRECTED = "Origin corrected: "
+AUTHORITY = {Origin.AUTONOMOUS: 0, Origin.APPROVED: 1, Origin.DECIDED: 2}
+UNSTATED = "only the owner corrects an origin: read his statement back to him, then pass confirmed=true"
 EFFECT = "Effect on existing work: "  # the owner's mark on a replacement (TD-428), read by `decision_impact`
 EFFECTS = {"forbids": "it forbids existing behaviour", "wording": "wording only"}
 type Effect = Literal["", "forbids", "wording"]  # empty: not said, treated as possibly forbidding
@@ -369,6 +374,46 @@ def read_back(  # noqa: PLR0913 - who confirmed and the revision read
     said = f"decisions: read-back {decision.id} ({by})"
     return [decision_store.save(shared, decision.model_copy(update=update), expected_revision=decision.revision,
                                 message=said)]  # fmt: skip
+
+
+def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and the revision read
+    shared: DataRepo | None, project: str, decision_id: str, revision: str, *, origin: Origin, reason: str,
+    confirmed: bool, by: str,
+) -> list[Receipt]:  # fmt: skip
+    """Lower a decision's origin on the owner's confirmed statement; its rationale says why.
+
+    Such as `decided` to `approved` for an agent's proposal he accepted without intent of his own. A draft is
+    corrected in place; a decision in force, whose origin never changes once accepted (TD-430), by a successor with
+    the same title, topic, statement, scope and read-back, marked wording only, which replaces it. Raising an origin
+    is his decision, a read-back or a replacement, never this.
+    """
+    if not confirmed:
+        raise Refused(UNSTATED, 422)
+    why = _reason(reason, "correcting an origin")
+    view = decision_store.load(shared, project)
+    old = _entry(view, decision_id).decision
+    if stale := _stale(view, old, revision):
+        return stale
+    if old.state in RETIRED:
+        msg = f"{old.id} is {old.state}: only a draft or a decision in force is corrected"
+        raise Refused(msg)
+    if AUTHORITY[origin] >= AUTHORITY[old.origin]:
+        msg = f"{old.id} is {old.origin}: an origin is only corrected downward; raising it is the owner's"
+        raise Refused(msg)
+    rationale = _because(old.rationale, CORRECTED, f"{old.origin} to {origin}: {why}")
+    if old.state is State.DRAFT:
+        update = {"origin": origin, "rationale": rationale}
+        said = f"decisions: correct-origin {old.id} ({by})"
+        return [decision_store.save(shared, old.model_copy(update=update), expected_revision=old.revision,
+                                    message=said)]  # fmt: skip
+    kept = tuple(link for link in old.links if link.type not in LINEAGE)
+    new = _new(
+        old, title=old.title, statement=old.statement, rationale=_marked(rationale, "wording"), scope=old.scope,
+        project=old.project, change=old.change, origin=origin, actor=old.actor, source=old.source,
+        read_back=old.read_back, inherited=old.inherited, state=State.IN_FORCE,
+        links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
+    )  # fmt: skip
+    return _retire(shared, new, old, f"decisions: correct-origin {old.id} with {new.id} ({by})")
 
 
 def _same(one: str, other: str) -> bool:

@@ -156,6 +156,20 @@ async function stillRight(e) {
   if (yes) act(e, "read-back", { confirmed: true });
 }
 
+// The owner says he never decided it: its origin goes one step down; its statement and state stay.
+const LOWER = { decided: "approved", approved: "autonomous" };
+const WAS = { approved: "an agent's proposal you accepted, not your own decision",
+  autonomous: "an agent's own choice, neither made nor accepted by you" };
+
+async function correct(e) {
+  const to = LOWER[e.origin];
+  const why = await ask({ title: `Mark “${e.title}” ${to}?`, yes: `Mark ${to}`,
+    now: `It is recorded as ${WAS[to]}; it applies as it reads.`, items: [e.statement],
+    after: "Making it yours again is a read-back or a replacement.", instead: `It stays ${e.origin}.`,
+    reason: "Where it really came from (recorded with it)" });
+  if (why) act(e, "correct-origin", { origin: to, reason: why, confirmed: true });
+}
+
 async function keep(e) {
   const why = await ask({ title: `Keep “${e.title}” in force?`, yes: "Keep this one",
     now: "The other successors of the same decision are withdrawn and the conflict is cleared.",
@@ -182,6 +196,9 @@ export function actions(e) {
     parts.push(asks("Activate", activate, "activate"), asks("Withdraw", withdraw, "withdraw"));
   }
   if (["in_force", "draft"].includes(e.state)) parts.push(opens("Queue a read-back", "queue-read-back"));
+  if (["in_force", "draft"].includes(e.state) && LOWER[e.origin]) {
+    parts.push(asks(`Mark ${LOWER[e.origin]}`, correct, "correct-origin"));
+  }
   return parts.length && !state.form ? html`<div class="row" role="group" aria-label="Actions">${parts}</div>`
     : nothing;
 }

@@ -611,6 +611,67 @@ def test_retire_decision_needs_the_owners_confirmation_and_a_decided_one_his_re_
     assert (now(shared, rule.id).state, now(shared, held.id).state) == (State.WITHDRAWN, State.WITHDRAWN)
 
 
+def test_an_origin_is_corrected_only_downward_on_the_owners_confirmed_statement(store, shared):
+    rule, proposal, gone = decided(), make(origin=Origin.APPROVED), decided(state=State.WITHDRAWN)
+    seed(shared, rule, proposal, gone)
+    head = git(shared.root, "rev-parse", "HEAD")
+    chat = client(store, CHAT)
+
+    refused = [
+        act(chat, rule, "correct-origin", origin="approved", reason="An agent proposed it."),
+        act(chat, rule, "correct-origin", origin="approved", confirmed=True),
+        act(chat, proposal, "correct-origin", origin="approved", reason="r", confirmed=True),
+        act(chat, gone, "correct-origin", origin="approved", reason="r", confirmed=True),
+        act(chat, rule, "correct-origin", origin="decided", reason="r", confirmed=True),
+    ]
+    assert [r.status_code for r in refused] == [422, 422, 409, 409, 422]
+    assert "confirmed=true" in refused[0].json()["detail"]
+    assert "only corrected downward" in refused[2].json()["detail"]
+    assert git(shared.root, "rev-parse", "HEAD") == head  # nothing written
+
+    got = act(chat, rule, "correct-origin", origin="approved", reason="An agent proposed it.", confirmed=True).json()
+
+    assert got["saved"] is True
+    new = now(shared, got["receipts"][0]["id"])
+    assert now(shared, rule.id).state is State.REPLACED  # an accepted origin never changes in place (TD-430)
+    assert (new.origin, new.title, new.statement, new.state, new.read_back, new.scope) == (
+        Origin.APPROVED, rule.title, rule.statement, State.IN_FORCE, rule.read_back, rule.scope)  # fmt: skip
+    assert [(link.type, link.target) for link in new.links] == [(LinkType.REPLACES, rule.id)]
+    assert "Origin corrected: decided to approved: An agent proposed it." in new.rationale
+    assert "Effect on existing work: wording only" in new.rationale
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: correct-origin {rule.id} with {new.id} (chat)"
+    assert act(chat, rule, "correct-origin", origin="approved", reason="r", confirmed=True).json()["saved"] is False
+
+
+def test_a_drafts_origin_is_corrected_in_place(store, shared):
+    draft = make(origin=Origin.APPROVED, state=State.DRAFT)
+    seed(shared, draft)
+
+    got = act(client(store), draft, "correct-origin", origin="autonomous", reason="r", confirmed=True).json()
+
+    assert (got["saved"], got["receipts"][0]["id"]) == (True, draft.id)
+    assert (now(shared, draft.id).origin, now(shared, draft.id).state) == (Origin.AUTONOMOUS, State.DRAFT)
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: correct-origin {draft.id} (owner)"
+
+
+@pytest.mark.usefixtures("chat")
+def test_correct_decision_origin_sends_the_confirmation_and_the_lower_origin(shared):
+    rule = decided()
+    seed(shared, rule)
+
+    unconfirmed = tool("correct_decision_origin", decision=rule.id, revision=rule.revision, origin="approved",
+                       reason="An agent proposed it.")  # fmt: skip
+    assert (unconfirmed["saved"], "confirmed=true" in unconfirmed["error"]) == (False, True)
+    got = tool("correct_decision_origin", decision=rule.id, revision=rule.revision, origin="approved",
+               reason="An agent proposed it.", confirmed=True)  # fmt: skip
+
+    assert got["saved"] is True
+    assert now(shared, got["receipts"][0]["id"]).origin is Origin.APPROVED
+    params = asyncio.run(mcp_server.mcp.list_tools())
+    fields = next(t for t in params if t.name == "correct_decision_origin").input_schema["properties"]
+    assert fields["origin"]["enum"] == ["approved", "autonomous"]
+
+
 @pytest.mark.usefixtures("chat")
 def test_read_back_decision_records_only_a_confirmation_and_a_stale_revision_is_refused(shared):
     rule = make()
