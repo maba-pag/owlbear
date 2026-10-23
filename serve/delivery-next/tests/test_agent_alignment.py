@@ -27,7 +27,8 @@ AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
     "test-curator", "picker", "curator",
 )  # fmt: skip
-PENDING: set[str] = set()  # every worker role has its own agent file (TD-106)
+PENDING: set[str] = {"watcher"}  # every worker role has its own agent file (TD-106); the watcher's comes
+# with its model judge (item 9)
 CHAT = "shaper"  # the owner's chat agent, checked with the chat (TD-93), not a worker role
 SDK_TOOLS = {  # the SDK runtime's built-in tools (tools.list, runtime research P24)
     *("bash", "read_bash", "list_bash", "stop_bash", "view", "create", "edit", "glob", "grep", "web_fetch"),

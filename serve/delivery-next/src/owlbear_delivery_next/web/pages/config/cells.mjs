@@ -107,6 +107,14 @@ export function curatorThreshold() {
   source(key, state.loaded.settings[key]));
 }
 
+// The watcher judges agent steps' outside actions; on in Global, a project may turn it off (owner, 2026-10-23).
+export function watcherSwitch() {
+  const key = "watcher", below = inherited()[key] ? "on" : "off";
+  return cell(choose("The watcher", [[INHERIT, `inherit (${below})`], ["on", "on: judge agent steps"],
+    ["off", "off: no watcher"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
+  source(key, state.loaded.settings[key]));
+}
+
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
 export function prLabels() {
   const key = "pr_labels", below = inherited()[key].join(", ") || "none";

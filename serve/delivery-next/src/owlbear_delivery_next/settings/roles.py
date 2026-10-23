@@ -25,6 +25,7 @@ DEFAULTS: dict[Role, RoleModel] = {
     "test-curator": RoleModel(model="claude-opus-5.5", effort="high", context="long"),  # applies what holds
     "picker": RoleModel(model="gpt-6.1-sol", effort="medium"),  # picks a brief's decisions from the list (TD-459)
     "curator": RoleModel(model="gpt-6.1-sol", effort="high"),  # automatic memory curation (TD-292, TD-400)
+    "watcher": RoleModel(model="gpt-6-luna", effort="medium"),  # judges one outside action; the owner's benchmark pick
 }
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
 MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the shaper's chat has none (TD-285)
@@ -40,6 +41,7 @@ MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the s
     "test-curator": 40,  # the builder's
     "picker": 10,  # a pick takes about a minute
     "curator": 20,  # one memory folder's pending entries
+    "watcher": 1,  # one judgement of one tool call, a few seconds
 }
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",

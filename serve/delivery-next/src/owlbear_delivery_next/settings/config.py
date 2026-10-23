@@ -21,8 +21,8 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 from owlbear_delivery_next.settings.roles import DEFAULTS
 from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 8  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
-# 8 the test reviewer and curator roles
+CONFIG_FORMAT = 9  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+# 8 the test reviewer and curator roles; 9 the watcher's role and switch
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -90,6 +90,7 @@ class Layer(Record):
     pr_labels: list[str] | None = None  # TD-308: on every PR OwlBear opens; a project's list replaces the global one
     pr_marker: bool | None = None  # TD-308: the "Opened by OwlBear Delivery" line, switched per project
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once in a project, layered
+    watcher: bool | None = None  # the watcher judges agent steps; on in Global, a project may turn it off (2026-10-23)
 
     @field_validator("format")
     @classmethod
@@ -186,6 +187,7 @@ class Settings(Record):
     pr_labels: list[str] = Field(default_factory=list)
     pr_marker: bool = True
     sessions: int = 2
+    watcher: bool = True
     curator_threshold: int = 95
     sources: dict[str, Source]
 
@@ -268,6 +270,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     labels = _pick("pr_labels", sources, *((s, layer.pr_labels) for s, layer in layers), ("default", []))
     marker = _pick("pr_marker", sources, ("project", project.pr_marker), ("default", True))
     at_once = _pick("sessions", sources, *((s, layer.sessions) for s, layer in layers), ("default", 2))  # TD-336
+    watching = _pick("watcher", sources, *((s, layer.watcher) for s, layer in layers), ("default", True))
     threshold = _pick(  # TD-400: global only, 95% at first
         "curator_threshold", sources, ("global", glob.curator_threshold), ("default", base.curator_threshold)
     )
@@ -283,6 +286,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         pr_labels=labels,
         pr_marker=bool(marker),
         sessions=int(at_once),
+        watcher=bool(watching),
         curator_threshold=int(threshold),
         sources=sources,
     )
