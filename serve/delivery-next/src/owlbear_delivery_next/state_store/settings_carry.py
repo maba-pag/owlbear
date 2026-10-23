@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.carried import filled
-from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer
+from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer, MachineValues
 from owlbear_delivery_next.state_store.store import read_layer, update_layer
 
 if TYPE_CHECKING:
@@ -27,10 +27,11 @@ def due(shared: DataRepo) -> bool:
     return _unfilled(shared) or _unpublished(shared)
 
 
-def carry(shared: DataRepo) -> str:
+def carry(shared: DataRepo, local: MachineValues | None = None) -> str:
     """Write the built-in values into the Global layer once and commit it; what the owner should know, else ''.
 
-    A layer already filled is only committed: a value the owner cleared after the carry is never filled again.
+    Its machine settings take *local*, this machine's own, first. A layer already filled is only committed: a value
+    the owner cleared after the carry is never filled again.
     """
     if not due(shared):
         return ""
@@ -40,7 +41,8 @@ def carry(shared: DataRepo) -> str:
         if not fill and not _unpublished(shared):  # another process carried and committed them meanwhile
             return ""
         if fill:
-            update_layer(shared.global_path, GlobalLayer, filled)
+            since = _found(shared)
+            update_layer(shared.global_path, GlobalLayer, lambda glob: filled(glob, since, local))
         else:  # an invalid layer is never published: it stays uncommitted, and the host says why (StoreError)
             read_layer(shared.global_path, GlobalLayer)
         return shared.publish(shared.global_path, MESSAGE, until)
@@ -53,6 +55,14 @@ def _format(text: str) -> int | None:
         return int(raw.get("format", 0)) if isinstance(raw, dict) else None
     except ValueError, TypeError:
         return None
+
+
+def _found(shared: DataRepo) -> int:
+    """The Global layer's format as written, before any migration; 0 when there is none."""
+    try:
+        return _format(shared.global_path.read_text()) or 0
+    except FileNotFoundError:
+        return 0
 
 
 def _unfilled(shared: DataRepo) -> bool:

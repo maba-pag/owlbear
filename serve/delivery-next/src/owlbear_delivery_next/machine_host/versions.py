@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.local_system import codebase, leases, local_home
-from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.machine_host import machine_settings, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -168,10 +168,14 @@ def mark(tag: str) -> Number | None:
 
 def target() -> Choice | None:
     """Fetch, then the version this machine would take now; None when it is up to date."""
+    channel = machine_settings.current().channel
+    if channel is None:
+        msg = "the versions this machine takes are unset; choose them on the Settings page"
+        raise VersionError(msg)
     path = repo()
     tags = fetch(path)
     tag, commit = active()
-    return choose(tags, registry.load().settings.channel, mark(tag), commit, descends(path))
+    return choose(tags, channel, mark(tag), commit, descends(path))
 
 
 def install(choice: Choice) -> Path:

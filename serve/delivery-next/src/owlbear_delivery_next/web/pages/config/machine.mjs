@@ -1,22 +1,33 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call, loaded as clones, project as current } from "/assets/ui.mjs";
-import { WRITE, state, show, notify } from "./state.mjs";
+import { INHERIT, SOURCES, WRITE, state, show, notify } from "./state.mjs";
 import { button } from "./cells.mjs";
+import { edit, own } from "./layers.mjs";
 
-// The machine's own values: changed only here, from a terminal, never in a settings layer (TD-243).
+// The machine settings: Global's for every machine, each machine may set its own (D-01M5MZKEPPVMFC9HK795MMG91B);
+// changed only here or in a terminal, never in a project's layer (TD-243).
 const CHANNELS = [["minor", "Every minor version (v0.1, v0.2 …)"], ["major", "Major versions only (v1, v2 …)"]];
 // Each automatic curation trigger: off, on, or on even while paused; the Maintenance button always runs (2026-10-23).
 const CURATE = [["off", "Off"], ["on", "On, not while paused"], ["paused", "On, even while paused"]];
+const SWITCH = [["true", "On"], ["false", "Off"]];
 const MACHINE_LABELS = {
   channel: "Versions this machine takes", update_when_idle: "Update itself when idle",
   update_while_paused: "Update itself while paused", curate_after_merge: "Curate memory after a merge",
-  curate_when_idle: "Curate memory when idle",
-  sessions: "Agent sessions at once on this machine",
+  curate_when_idle: "Curate memory when idle (the Maintenance button always runs)",
+  sessions: "Agent sessions at once on this machine, across its projects",
 };
+const CHOICES = { channel: CHANNELS, update_when_idle: SWITCH, update_while_paused: SWITCH,
+  curate_after_merge: CURATE, curate_when_idle: CURATE };
+
+// A machine setting's value in words; "unset" where none is set.
+function said(key, v) {
+  if (v === null || v === undefined || v === "") return "unset";
+  return (CHOICES[key] ?? []).find(([c]) => c === String(v))?.[1] ?? String(v);
+}
 
 // The machine's settings as shown: each edited one as edited, the others as saved (TD-288, TD-300); a save after
-// another page's lands only the edited ones on top of that page's.
+// another page's lands only the edited ones on top of that page's. ``null`` inherits Global's.
 function machineValue(key) {
   return state.machineDraft && key in state.machineDraft ? state.machineDraft[key] : state.machine.settings[key];
 }
@@ -28,47 +39,77 @@ function machineEdit(key, value) {
   show();
 }
 
+// Where a setting in force comes from, or that it is unset: an error, as nothing that needs it runs (2026-10-23).
+function machineSource(key) {
+  const r = state.machine.resolved ?? {}, from = SOURCES[r.sources?.[key]];
+  if (!from) {
+    return html`<p-text size="xs" color="error">unset: set it here or for every machine in the global layer;
+      what needs it does not run until then</p-text>`;
+  }
+  return html`<p-text size="xs" color="contrast-medium">in use: ${said(key, r[key])}, from ${from}</p-text>`;
+}
+
+// This machine's own value of one setting: inherit Global's, or its own.
+function ownControl(key) {
+  const below = `inherit (${said(key, state.machine.resolved?.shared?.[key])})`, value = machineValue(key);
+  const common = { disabled: state.machineSaving };
+  let control;
+  if (key === "sessions") {
+    const count = (e) => {
+      const v = (e.target.value ?? "").trim();
+      machineEdit(key, v === "" ? null : /^\d+$/.test(v) ? Number(v) : v);
+    };
+    control = html`<p-input-text id="machine-sessions" label=${MACHINE_LABELS[key]} inputmode="numeric"
+      placeholder=${below} .value=${live(value === null || value === undefined ? "" : String(value))}
+      ?disabled=${common.disabled} @input=${count} @change=${count}></p-input-text>`;
+  } else {
+    const pick = (e) => {
+      const v = e.target.value;
+      machineEdit(key, v === INHERIT ? null : CHOICES[key] === SWITCH ? v === "true" : v);
+    };
+    control = html`<p-select id=${`machine-${key}`} label=${MACHINE_LABELS[key]}
+      .value=${live(value === null || value === undefined ? INHERIT : String(value))} ?disabled=${common.disabled}
+      @change=${pick}>${[[INHERIT, below], ...CHOICES[key]].map(([v, text]) =>
+        html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`;
+  }
+  return html`<div>${control}${machineSource(key)}</div>`;
+}
+
+// Global's value of one setting, edited in the global layer and saved with it.
+function sharedControl(key) {
+  const draftKey = `machine.${key}`, value = own(draftKey), label = `Every machine: ${MACHINE_LABELS[key]}`;
+  if (key === "sessions") {
+    return html`<p-input-text id="global-machine-sessions" label=${label} inputmode="numeric" data-key=${draftKey}
+      placeholder="unset" .value=${live(value)} ?disabled=${state.saving}
+      @input=${(e) => edit(draftKey, e.target.value ?? "")}></p-input-text>`;
+  }
+  return html`<p-select id=${`global-machine-${key}`} label=${label} data-key=${draftKey}
+    .value=${live(value || INHERIT)} ?disabled=${state.saving} @change=${(e) => edit(draftKey, e.target.value)}>
+    ${[[INHERIT, "unset"], ...CHOICES[key]].map(([v, text]) =>
+      html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`;
+}
+
 function machineControls() {
-  const pick = (e) => machineEdit("channel", e.target.value);
-  const channel = html`<p-select id="machine-channel" label="Versions this machine takes"
-    .value=${live(machineValue("channel"))} ?disabled=${state.machineSaving} @change=${pick}>${CHANNELS.map(
-    ([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>`;
-  const curate = (key, label) => html`<p-select id=${`machine-${key}`} label=${label}
-    .value=${live(machineValue(key))} ?disabled=${state.machineSaving} @change=${(e) => machineEdit(key,
-      e.target.value)}>${CURATE.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`)}
-    </p-select>`;
-  const box = (key, label) => {
-    const flip = (e) => machineEdit(key, e.target.checked === true);
-    return html`<p-checkbox label=${label} .checked=${live(machineValue(key))} ?disabled=${state.machineSaving}
-      @change=${flip}></p-checkbox>`;
-  };
-  // TD-336: the machine's total of agent sessions at once, across every project it serves.
-  const count = (e) => {
-    const v = (e.target.value ?? "").trim();
-    machineEdit("sessions", /^\d+$/.test(v) ? Number(v) : v);
-  };
-  const label = "Agent sessions at once on this machine, across its projects";
-  const sessions = html`<p-input-text id="machine-sessions" label=${label} inputmode="numeric"
-    .value=${live(String(machineValue("sessions")))} ?disabled=${state.machineSaving} @input=${count}
-    @change=${count}></p-input-text>`;
-  return html`${channel}${box("update_when_idle", "Update itself when idle")}
-    ${box("update_while_paused", "Update itself while paused")}
-    ${curate("curate_after_merge", "Curate memory after a merge")}
-    ${curate("curate_when_idle", "Curate memory when idle (the Maintenance button always runs)")}
-    ${sessions}
+  const keys = Object.keys(MACHINE_LABELS);
+  if (state.layer === "global") {
+    return html`<p-text id="machine-global">Every machine's settings: each machine follows these unless it sets
+      its own (choose This project or This machine above to see this machine's). Save them with the global
+      defaults.</p-text>${keys.map(sharedControl)}`;
+  }
+  const notice = state.machine.resolved?.notice;
+  return html`${notice ? html`<p-text id="machine-notice" size="xs" color="error">${notice}</p-text>` : nothing}
+    ${keys.map(ownControl)}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
       disabled: !state.machineDraft })}</div>`;
 }
 
 async function saveMachine() {
   if (!state.machineDraft || state.machineSaving) return;
-  const said = (key, v) => (key === "channel" ? CHANNELS.find(([c]) => c === v)?.[1] ?? v
-    : key.startsWith("curate_") ? CURATE.find(([c]) => c === v)?.[1] ?? v
-      : typeof v === "boolean" ? (v ? "on" : "off") : String(v));
+  const shown = (key, v) => (v === null || v === undefined ? "inherited" : said(key, v));
   if (!(await ask({
     title: "Change this machine's settings?", yes: "Save machine settings", no: "Keep editing",
     now: "These apply to this machine only:", items: Object.entries(state.machineDraft).map(([key, v]) =>
-      `${MACHINE_LABELS[key] ?? key}: ${said(key, state.machine.settings[key])} → ${said(key, v)}`),
+      `${MACHINE_LABELS[key] ?? key}: ${shown(key, state.machine.settings[key])} → ${shown(key, v)}`),
     then: "Delivery here follows them from now on; other machines keep theirs.",
     after: "Change them back here at any time.",
     instead: "Your edits stay unsaved on this page.",

@@ -18,10 +18,9 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
-from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.project_host.host import RunnerRecord
 from owlbear_delivery_next.state_store import project_home, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
@@ -75,7 +74,7 @@ class Machine:
         self.lock = threading.RLock()
         self.stopping = threading.Event()
         self.on_stop: Callable[[], None] = lambda: None
-        self.total = Settings().sessions
+        self.total = 0  # until the machine's total is read; unset, no session starts (2026-10-23)
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
@@ -89,15 +88,28 @@ class Machine:
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
         with contextlib.suppress(registry.RegistryError):
-            self.total = registry.load().settings.sessions
+            self.total = machine_settings.current().sessions or 0
         return self.total
 
     def carry(self) -> None:
-        """Carry today's built-in settings into Global once; a failure is said and tried again at the next start."""
+        """Carry today's settings into Global once, this machine's own first, then clear those here.
+
+        So every machine follows Global (the owner, 2026-10-23); a failure is said and tried again at the next start.
+        """
         try:
-            if (shared := data_repo.locate()) is not None and settings_carry.due(shared):
-                notice = settings_carry.carry(shared)
+            if (shared := data_repo.locate()) is None:
+                return  # no Global to follow: this machine keeps its own values
+            moved = registry.load()
+            local = None if moved.settings_moved else moved.settings
+            if settings_carry.due(shared):
+                notice = settings_carry.carry(shared, local)
                 self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
+            if local is not None:
+                with registry.locked():
+                    machine = registry.load()
+                    machine.settings, machine.settings_moved = registry.Settings(), True
+                    registry.save(machine)
+                self.say("settings: this machine's settings moved into Global; it follows Global's from now on")
         except Exception as exc:  # noqa: BLE001 - the projects load either way; their steps say what is unset
             self.say(f"settings: carrying the built-in values into Global failed: {type(exc).__name__}: {exc}")
 

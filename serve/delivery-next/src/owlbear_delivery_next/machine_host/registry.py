@@ -14,13 +14,14 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from pydantic import Field, TypeAdapter, ValidationError, model_validator
+from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
+from owlbear_delivery_next.settings.config import MachineValues
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 
@@ -28,8 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 MACHINE, LOCK = project_home.MACHINE, "machine.lock"
-MACHINE_FORMAT = 5  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
-# 5: one curation setting per trigger (the owner, 2026-10-23)
+MACHINE_FORMAT = 6  # 2: the machine's own settings (TD-243, TD-288, TD-300); 3: its sessions (TD-336); 4: `active`;
+# 5: one curation setting per trigger; 6: settings inherit Global's and were moved there once (the owner, 2026-10-23)
 STALE = "the machine settings changed since this page loaded them"
 
 
@@ -45,11 +46,10 @@ class Project(Record):
     added_at: datetime
 
 
-type Curate = Literal["off", "on", "paused"]
+class Settings(MachineValues):
+    """This machine's own settings, each overriding Global's; changed only in Settings → This machine."""
 
-
-class Settings(Record):
-    """The machine's own settings, changed only in Settings → This machine."""
+    model_config = ConfigDict(extra="forbid", strict=False)  # machine.json as earlier formats wrote it
 
     @model_validator(mode="before")
     @classmethod
@@ -62,14 +62,6 @@ class Settings(Record):
             data.setdefault("curate_when_idle", both)
         return data
 
-    channel: Literal["minor", "major"] = "minor"  # every minor version, or major versions only (TD-300)
-    update_when_idle: bool = True  # TD-288
-    update_while_paused: bool = True
-    # automatic memory curation per trigger: off, on, or on even while paused (the owner, 2026-10-23)
-    curate_after_merge: Curate = "on"
-    curate_when_idle: Curate = "on"
-    sessions: int = Field(default=4, ge=1)  # TD-336: agent sessions at once on this machine, all projects together
-
 
 class Machine(Record):
     """``machine.json``: the registered projects, the last Resume and the machine's settings."""
@@ -77,8 +69,9 @@ class Machine(Record):
     format: int = MACHINE_FORMAT
     projects: list[Project] = Field(default_factory=list)
     resumed_at: datetime | None = None
-    settings: Settings = Field(default_factory=Settings)  # format 1 had none: the defaults
+    settings: Settings = Field(default_factory=Settings)  # each unset inherits Global's
     active: str = ""  # the highest version ever active here: never backwards (self-update build §4)
+    settings_moved: bool = False  # its settings were moved into Global once, so it follows Global (2026-10-23)
 
 
 def _home() -> Path:

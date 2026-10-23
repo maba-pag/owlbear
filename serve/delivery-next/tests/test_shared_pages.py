@@ -22,14 +22,14 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, registry
+from owlbear_delivery_next.machine_host import curation, machine_settings, registry
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings.config import Agent
+from owlbear_delivery_next.settings.config import Agent, GlobalLayer
 from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Store, read_layer
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -86,7 +86,11 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
         saved = registry.load()
         rev = registry.revision(saved.settings)
         answer = {"paused": False, "resumed_at": "2026-10-18T08:00:00Z", "login_item": "off"}
-        return JSONResponse(answer | {"settings": saved.settings.model_dump(), "settings_rev": rev})
+        glob, notice = machine_settings.shared_values(DataRepo(shared))
+        resolved = machine_settings.resolve(saved.settings, glob, notice).model_dump(mode="json")
+        return JSONResponse(
+            answer | {"settings": saved.settings.model_dump(), "settings_rev": rev, "resolved": resolved}
+        )
 
     async def configure(request):
         body = await request.json()
@@ -292,21 +296,21 @@ def test_an_older_scope_label_without_its_project_label_means_the_project_it_was
     )  # fmt: skip
 
 
-def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds) -> None:
+def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: DataRepo) -> None:
     """TD-288, TD-300: the machine section edits the machine's own settings against the revision it read."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()
     pds.pick(page, "Versions this machine takes", "major")
-    page.get_by_label("Update itself while paused").uncheck()
+    pds.pick(page, "Update itself while paused", "false")
     pds.pick(page, "Curate memory after a merge", "paused")  # on, not while paused, by default (owner, 2026-10-23)
     pds.pick(page, "Curate memory when idle (the Maintenance button always runs)", "off")
     page.get_by_label("Agent sessions at once on this machine, across its projects").fill("3")  # TD-336
     other = registry.load().settings  # another page saves first
     registry.configure(other.model_copy(update={"update_when_idle": False}), registry.revision(other))
     save.click()
-    expect(pds.modal(page)).to_contain_text("Versions this machine takes: Every minor version")  # TD-396
+    expect(pds.modal(page)).to_contain_text("Versions this machine takes: inherited → Major versions only")  # TD-396
     pds.modal(page).get_by_role("button", name="Save machine settings").click()
     expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
     expect(pds.select(page, "Versions this machine takes")).to_have_js_property("value", "major")
@@ -323,6 +327,7 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds) -> None:
     )
     assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
     a_read_begun_during_a_save_never_undoes_it(page, pds)
+    every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared)
 
 
 def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
@@ -338,7 +343,7 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
             held.append(route)
 
     page.route("**/api/next/machine**", hold)
-    page.get_by_label("Update itself when idle").check()
+    pds.pick(page, "Update itself when idle", "true")
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
     page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh begun before the save
     while not answered:
@@ -353,8 +358,33 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
         route.fulfill(response=before)  # the values from before the save, arriving after it
     page.wait_for_timeout(300)
     page.unroute("**/api/next/machine**")
-    expect(page.get_by_label("Update itself when idle")).to_be_checked()
+    expect(pds.select(page, "Update itself when idle")).to_have_js_property("value", "true")
     assert registry.load().settings.update_when_idle
+
+
+def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: DataRepo) -> None:
+    """Global's machine settings (2026-10-23): edited under the global layer, saved with it; this machine inherits."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    machine = page.get_by_role("region", name="This machine")
+    expect(machine).to_contain_text("in use: Major versions only (v1, v2 …), from this machine")
+    pds.pick(page, "Versions this machine takes", "inherit")  # this machine follows Global's again
+    machine.get_by_role("button", name="Save machine settings").click()
+    pds.modal(page).get_by_role("button", name="Save machine settings").click()
+    expect(machine).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from built-in default")
+    pds.pick(page, "Layer", "global")
+    expect(page.locator("#machine-global")).to_be_visible()
+    pds.pick(page, "Every machine: Versions this machine takes", "major")
+    page.get_by_label("Every machine: Agent sessions at once on this machine, across its projects").fill("5")
+    page.locator(".bar").get_by_role("button", name="Save global defaults").click()
+    expect(pds.modal(page)).to_contain_text("machine channel: inherited → major")
+    pds.modal(page).get_by_role("button", name="Save global defaults").click()
+    expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
+    glob = read_layer(shared.global_path, GlobalLayer).machine
+    assert (glob.channel, glob.sessions, glob.update_when_idle) == ("major", 5, None)
+    pds.pick(page, "Layer", "project")
+    expect(machine).to_contain_text("in use: Major versions only (v1, v2 …), from global")
+    expect(machine).to_contain_text("in use: 3, from this machine")  # its own sessions still override
 
 
 def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
@@ -432,7 +462,7 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             page.get_by_label("Show all settings").uncheck()
             expect(across).not_to_contain_text("planner · subagents")
             expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
-            machine_settings_are_saved_and_a_stale_save_is_refused(page, pds)
+            machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, DataRepo(shared_repo[0]))
             scope = pds.select(page, "Layer")
             expect(scope.locator("p-select-option")).to_have_text(
                 ["Project docs-site", "This machine (its projects)", "Global (every project)", "Project shop-site (/s)",
