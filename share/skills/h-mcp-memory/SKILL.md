@@ -114,7 +114,7 @@ See the [memory package README](../../../serve/memory/README.md) and
 | Tool | Description | Key parameters |
 | --- | --- | --- |
 | `save_memory` | Create a new `pending` memory entry in this project; scope is assigned later by curation | `title`, `content`, `categories`, `confidence`, `source_agent`, `where` |
-| `list_memories` | List metadata filtered by state/category/scope; each entry includes its revision | `states`, `categories`, `scope_agents` |
+| `list_memories` | List metadata filtered by state/category/scope; each entry includes its revision and `where` (`project` or `global`) | `states`, `categories`, `scope_agents`, `folder` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID, including its revision | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a substantive task attempt | `task_id`, `assessments` |

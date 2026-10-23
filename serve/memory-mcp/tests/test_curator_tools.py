@@ -162,3 +162,16 @@ async def test_make_global_refuses_a_contested_entry_and_a_global_folder_that_li
     with pytest.raises(ToolError, match="link out"):
         await tools.make_global(ctx, entry_id=other.id, revision=other.revision, folder="docs")
     assert {e.id for e in MemoryEngine(folder).get_entries()} == {entry.id, other.id}
+
+
+@pytest.mark.asyncio
+async def test_list_and_read_say_where_each_entry_is_kept(root: Path) -> None:
+    """The sort of 2026-10-23: a curator seeing Global beside its folder must know an entry is Global already."""
+    own = saved(root / "shop" / "memory", "Run ruff first", curated=True)
+    common = saved(root / "memory", "Sign every commit", curated=True)
+    ctx = bound(root)
+
+    listed = {e["id"]: e["where"] for e in await tools.list_memories(ctx)}
+    read = [(await tools.read_memory(ctx, entry_id=i))["where"] for i in (own.id, common.id)]
+
+    assert (listed, read) == ({own.id: "project", common.id: "global"}, ["project", "global"])
