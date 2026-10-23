@@ -105,8 +105,16 @@ class Machine:
                 notice = settings_carry.carry(shared, local)
                 self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
             if local is not None:
+                if notice := settings_carry.move(shared, local):  # an invalid Global raises: nothing is cleared
+                    self.say(
+                        f"settings: moving this machine's settings into Global failed: {notice}; tried again "
+                        "at the next start"
+                    )
+                    return
                 with registry.locked():
                     machine = registry.load()
+                    if machine.settings != local:
+                        return  # changed meanwhile: moved at the next start
                     machine.settings, machine.settings_moved = registry.Settings(), True
                     registry.save(machine)
                 self.say("settings: this machine's settings moved into Global; it follows Global's from now on")

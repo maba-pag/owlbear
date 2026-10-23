@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 MESSAGE = "settings: today's built-in values carried into Global"  # the carry's commit, found again in the history
+MOVED = "settings: this machine's settings moved into Global"
 
 
 def due(shared: DataRepo) -> bool:
@@ -48,6 +49,22 @@ def carry(shared: DataRepo, local: MachineValues | None = None) -> str:
         return shared.publish(shared.global_path, MESSAGE, until)
 
 
+def move(shared: DataRepo, local: MachineValues) -> str:
+    """Copy this machine's settings into Global's where Global has none, in one commit; what the owner should know.
+
+    An unreadable or invalid Global layer raises ``StoreError`` before anything changes, so the caller keeps its own
+    values and tries again at the next start (the owner, 2026-10-23: every machine follows Global).
+    """
+    until = time.monotonic() + data_repo.SAVE_SECONDS
+    with shared.locked():
+        have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(exclude_none=True)
+        if not local.model_dump(exclude_none=True).keys() - have.keys():
+            return ""
+        values = MachineValues.model_validate(local.model_dump(exclude_none=True) | have)
+        update_layer(shared.global_path, GlobalLayer, lambda glob: glob.model_copy(update={"machine": values}))
+        return shared.publish(shared.global_path, MOVED, until)
+
+
 def _format(text: str) -> int | None:
     """The layer's format; ``None`` when the text is no layer."""
     try:
@@ -58,11 +75,11 @@ def _format(text: str) -> int | None:
 
 
 def _found(shared: DataRepo) -> int:
-    """The Global layer's format as written, before any migration; 0 when there is none."""
+    """The Global layer's format as written, before any migration; the committed one's while it is deleted."""
     try:
         return _format(shared.global_path.read_text()) or 0
     except FileNotFoundError:
-        return 0
+        return _committed(shared) or 0  # deleted after a carry: what the owner cleared stays cleared
 
 
 def _unfilled(shared: DataRepo) -> bool:

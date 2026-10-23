@@ -119,3 +119,44 @@ def test_a_fresh_global_takes_this_machine_s_values_then_the_built_in_ones(share
     settings_carry.carry(shared, MachineValues(sessions=2))
     machine = read_layer(shared.global_path, GlobalLayer).machine
     assert machine == carried.MACHINE.model_copy(update={"sessions": 2})
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_global_without_machine_settings_takes_this_machine_s_before_it_clears_them(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))  # format 11, no machine section
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+
+    _carry(monkeypatch, shared)
+
+    assert read_layer(shared.global_path, GlobalLayer).machine == MachineValues.model_validate(LEGACY.model_dump())
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.MOVED
+    assert registry.load().settings_moved
+
+
+@pytest.mark.usefixtures("no_base")
+def test_an_unreadable_global_never_clears_this_machine_s_settings(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(machine=MachineValues(sessions=6)).model_dump(mode="json"))
+    shared.global_path.write_text("{ not json")
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+
+    said = _carry(monkeypatch, shared)
+
+    kept = registry.load()
+    assert (kept.settings, kept.settings_moved) == (LEGACY, False)  # moved at a later start
+    assert any("failed" in line for line in said)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_global_deleted_after_the_first_carry_gets_only_the_machine_settings(shared_repo):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, carried.layer().model_dump(mode="json", exclude={"machine"}) | {"format": 10})
+    shared.global_path.unlink()  # the owner's deletion, not committed yet
+
+    settings_carry.carry(shared, MachineValues(sessions=2))
+
+    glob = read_layer(shared.global_path, GlobalLayer)
+    assert (glob.machine.sessions, glob.pr_marker, glob.agents) == (2, None, {})  # nothing else comes back
