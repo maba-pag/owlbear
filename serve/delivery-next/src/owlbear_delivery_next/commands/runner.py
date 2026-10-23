@@ -255,7 +255,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
         widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
-        if widths and visual_settled.settled(store, lock, change, (head, tree, widths), out):
+        if visual_settled.settled(store, lock, change, (head, tree, widths or []), out):
             return  # the owner's decision on a captured round needs no judge
         settings.need(*(() if widths else ("widths",)), "design_failures", "agents.reviewer", "agents.design-judge")
         prepare.stepped(change, prepared=prepare.read(store, change.slug, VISUAL) is not None)  # TD-96
