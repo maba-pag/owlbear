@@ -447,7 +447,7 @@ class Step:
         elif kind == "chat/toolCallReady" and not action.get("confirmed"):
             call = ToolCall(
                 name=out.tools.get(call_id, ""),
-                input=str(action.get("toolInput") or "")[:2000],
+                input=str(action.get("toolInput") or ""),  # whole: the policy reads all of it
                 client=(action.get("contributor") or {}).get("clientId"),
             )
             allowed = self.approve(call)

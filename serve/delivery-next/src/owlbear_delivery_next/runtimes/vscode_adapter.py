@@ -25,6 +25,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import permissions
+from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import ahp, host_record, leftovers, readiness, step_input, subagents
 from owlbear_delivery_next.runtimes import window_files as wf
@@ -144,33 +145,42 @@ class _Driver:
         """The harness asked Delivery to confirm a call: refuse it, since nothing a step needs asks (D2)."""
         self.run.denials.append(text := f"{call.name} asked for confirmation; Delivery refuses")
         self.run.denied[call.name.lower()] = text
-        self.log(event="denied", tool=call.name, request=call.input[:200])
+        self.log(event="denied", tool=call.name, request=redact(call.input)[:200])
         return False
 
     def approve(self, call: ToolCall) -> bool:
-        """Answer the harness: a writing step refuses whatever asks (D2); a read-only step's policy decides."""
+        """Answer the harness: a writing step refuses whatever asks (D2); a read-only step's policy decides.
+
+        As the SDK's permission handler: the policy reads the whole input; what is kept and logged is redacted; a
+        denial is noted per program, and a later approval of the same program clears it (TD-36).
+        """
         if self.cfg.policy.write:
             return self.deny(call)
-        if (why := self._judged(call)) is None:
-            self.log(event="approved", tool=call.name, request=call.input[:200])
+        req, why = self._judged(call)
+        if why is None:
+            for name in permissions.identities(req):
+                self.run.denied.pop(name, None)
+            self.log(event="approved", tool=call.name, request=redact(call.input)[:200])
             return True
+        why = redact(why)
         self.run.denials.append(text := f"{call.name}: {why}")
-        self.run.denied[call.name.lower()] = text
-        self.log(event="denied", tool=call.name, request=call.input[:200], why=why)
+        self.run.denied |= dict.fromkeys(permissions.identities(req), text)
+        self.log(event="denied", tool=call.name, request=redact(call.input)[:200], why=why)
         return False
 
-    def _judged(self, call: ToolCall) -> str | None:
-        """The SDK guard's verdict on one asking call: None to allow, else why not."""
+    def _judged(self, call: ToolCall) -> tuple[permissions.Request, str | None]:
+        """The request one asking call makes and the SDK guard's verdict on it: None to allow, else why not."""
         cfg = self.cfg
         if call.name in SHELLS:
-            command = shell_command(call.input)
-            return permissions.decide(cfg.policy, permissions.Request("shell", commands=(command,)))
+            req = permissions.Request("shell", commands=(shell_command(call.input),))
+            return req, permissions.decide(cfg.policy, req)
+        req = permissions.Request("mcp", tool=call.name)
         offered = wf.agent_tools(
             self.role, self.inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, subagents=cfg.subagents
         )  # fmt: skip
         if any("/" in name and call.name == name.replace("/", "-", 1) for name in offered):
-            return None  # the step's own relay or memory tool, as its agent names it
-        return f"{call.name} is not allowed in a read-only step"
+            return req, None  # the step's own relay or memory tool, as its agent names it
+        return req, f"{call.name} is not allowed in a read-only step"
 
     def drive(self, conn: ahp.Transport) -> Outcome:
         cfg, reminder = self.cfg, self.env.reminder
