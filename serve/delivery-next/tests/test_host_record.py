@@ -36,6 +36,7 @@ def test_the_steps_record_is_the_one_in_its_folder_after_launch_that_selected_it
         extra=[{"type": "subagent.started", "data": started}, {"type": "subagent.completed", "data": done}],
     )
     _write(state, "old", folder, at=SINCE - timedelta(hours=1))
+    _write(state, "just-before", folder, at=SINCE - timedelta(seconds=3))
     _write(state, "other-folder", tmp_path)
     _write(state, "other-agent", folder, agent="owlbear-reviewer")
 

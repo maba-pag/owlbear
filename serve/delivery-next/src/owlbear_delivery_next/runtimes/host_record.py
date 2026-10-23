@@ -54,7 +54,7 @@ def _started(events: list[Event], folder: Path, since: datetime) -> bool:
         at = datetime.fromisoformat(str(data.get("startTime")))
     except ValueError:
         return False
-    return bool(cwd) and Path(cwd).resolve() == folder.resolve() and at >= since - timedelta(seconds=5)
+    return bool(cwd) and Path(cwd).resolve() == folder.resolve() and at >= since  # taken before the launch
 
 
 def _selected(events: list[Event], agent: str) -> list[str] | None:
