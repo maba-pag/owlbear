@@ -210,36 +210,43 @@ def _ending(out: Outcome, gate: Gate) -> None:
 def _recorded(driver: _Driver, out: Outcome, inbox: Path, record: host_record.Record) -> None:
     """What the host's record adds: the agent's tools must be its allowlist; each subagent is counted (item 8).
 
-    Without a single matching record, the subagents the window announced are kept with their counts unknown.
+    A start the window announced that the record does not hold (no single matching record, or its line not yet
+    written) is kept as unfinished, its counts unknown; record and announcements are matched per agent, never twice.
     """
     cfg, gate = driver.cfg, driver.gate
     watch = subagents.Watch(allowed=cfg.subagents)
+    recorded: list[str] = []
     if not record.found:
         driver.log(event="host-record", found=False, why=record.why)
-        for call, name in out.subagents.items():
+    else:
+        allowed = wf.agent_tools(
+            driver.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, subagents=cfg.subagents
+        )  # fmt: skip
+        if extra := host_record.unexpected(record.tools or [], allowed):
+            gate.revoke(f"the host gave the agent tools outside its allowlist: {', '.join(extra[:5])}")
+        for kind, data in record.subagents:
+            if kind == "subagent.started":
+                recorded.append(data.agent_name)
+                _start(watch, gate, data)
+            elif (ended := watch.ended(data, kind.removeprefix("subagent."))) is not None:
+                driver.log(event="subagent", **ended)
+    for call, name in out.subagents.items():
+        if name in recorded:
+            recorded.remove(name)  # the record holds this start
+        else:
             watch.started(SimpleNamespace(tool_call_id=call, agent_name=name, model=None))
-        _no_credits(watch)
-        driver.run.subagents = watch.report()
-        return
-    allowed = wf.agent_tools(
-        driver.role, inbox, cfg.memory, ui=cfg.ui, judging=cfg.judging, subagents=cfg.subagents
-    )  # fmt: skip
-    if extra := host_record.unexpected(record.tools or [], allowed):
-        gate.revoke(f"the host gave the agent tools outside its allowlist: {', '.join(extra[:5])}")
-    for kind, data in record.subagents:
-        if kind == "subagent.started":
-            why = watch.started(data)
-            if why == "auto":
-                gate.wrong_model("a subagent ran on auto")
-            elif why:
-                gate.revoke(why)
-        elif (ended := watch.ended(data, kind.removeprefix("subagent."))) is not None:
-            driver.log(event="subagent", **ended)
-    starts = sum(kind == "subagent.started" for kind, _ in record.subagents)
-    if starts != len(out.subagents):
-        driver.log(event="host-record", found=True, why=f"{starts} subagent starts recorded, {len(out.subagents)} seen")
-    _no_credits(watch)
+            _no_credits(watch)
     driver.run.subagents = watch.report()
+
+
+def _start(watch: subagents.Watch, gate: Gate, data: SimpleNamespace) -> None:
+    """Register a recorded start; one the role may not make, or on Auto, voids the result."""
+    why = watch.started(data)
+    _no_credits(watch)
+    if why == "auto":
+        gate.wrong_model("a subagent ran on auto")
+    elif why:
+        gate.revoke(why)
 
 
 def _no_credits(watch: subagents.Watch) -> None:

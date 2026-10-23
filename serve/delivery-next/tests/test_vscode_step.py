@@ -1365,6 +1365,23 @@ def test_a_recorded_subagent_the_role_may_not_start_voids_the_result(wt: Path, t
     assert "no subagent may run" in run.detail
 
 
+def test_an_announced_start_the_record_lacks_is_kept_and_none_is_counted_twice(wt: Path, tmp_path: Path) -> None:
+    done = [*_announced("t1", "explore"), *_announced("t2", "explore"), USAGE, {"type": "chat/turnComplete"}]
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
+    a.cfg = dataclasses.replace(a.cfg, subagents=True)
+    ended = _subagent(total_tokens=10, total_tool_calls=1, duration=timedelta(seconds=1))
+    record = _record(a, subagents=[("subagent.started", _subagent()), ("subagent.completed", ended)])
+    a.env = dataclasses.replace(a.env, record=lambda *_a: record)
+    run = a.run()
+
+    assert [(s["agent"], s["tokens"], s["outcome"]) for s in run.subagents] == [
+        ("explore", 10, "completed"),
+        ("explore", None, "unfinished"),
+    ]
+    logged = next(e for e in a.events if e.get("event") == "subagent")
+    assert (logged["credits_known"], all(s["credits_known"] is False for s in run.subagents)) == (False, True)
+
+
 def test_without_a_host_record_the_announced_subagents_stay_with_unknown_counts(wt: Path, tmp_path: Path) -> None:
     done = [*_announced("t1", "explore"), USAGE, {"type": "chat/turnComplete"}]
     a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])
