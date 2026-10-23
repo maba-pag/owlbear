@@ -99,7 +99,7 @@ def asked(store: Store, c: Change, body: ChallengeBody) -> str:
     if body.retry_pick:
         return picks.retry(c, body.version) if store.shared else "there are no decisions to pick here"
     try:
-        policy = rounds.policy(store.settings(), BRIEF, "shaper")
+        policy = rounds.pinned(c, BRIEF, store.settings(), "shaper")
     except SettingsUnset as exc:
         return str(exc)
     said = {r.finding: r.reason for r in body.rejected}

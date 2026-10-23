@@ -65,7 +65,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         store.write(lock, loop.apply(change, loop.StepResult(exit=Exit.DONE, reason="brief challenged"), now))
         return
     if _legacy(change):
-        brief_rounds.request(change, change.brief.version, {}, rounds.policy(store.settings(), BRIEF, "shaper"), now)
+        policy = rounds.pinned(change, BRIEF, store.settings(), "shaper")
+        brief_rounds.request(change, change.brief.version, {}, policy, now)
     if picks.owed(change):  # the version's decisions are picked before its challenger runs (TD-459)
         change = pick.run(store, lock, change)
         if change.step.mode not in brief_rounds.MODES:

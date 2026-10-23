@@ -80,7 +80,7 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
     store: Store, lock: Lock, change: Change, path: Path, profile: Profile, others: Mapping[str, Sequence[str]]
 ) -> Result:
     """One round on the Change's plan; a failed session counts none and its retry challenges the same plan."""
-    lp = plan_rounds.loop(change, rounds.policy(store.settings(), PLAN, "planner"), datetime.now(UTC))
+    lp = plan_rounds.loop(change, rounds.pinned(change, PLAN, store.settings(), "planner"), datetime.now(UTC))
     keys, cap = tuple(f.id for f in plan_rounds.pending(lp)), 0 if change.step.mode == RECHECK else None
     plan = change.plan
 

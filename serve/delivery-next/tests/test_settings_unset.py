@@ -9,11 +9,12 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import curation
-from owlbear_delivery_next.settings import carried, config, roles
+from owlbear_delivery_next.settings import carried, config, roles, rounds
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
 from owlbear_delivery_next.state_store import settings_carry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
@@ -184,3 +185,20 @@ def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled
     assert _git(shared.root, "rev-parse", "HEAD") == head
     shared.global_path.unlink()  # deleted after the carry committed: never carried again
     assert (settings_carry.due(shared), settings_carry.carry(shared), shared.global_path.exists()) == (False, "", False)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_loop_reads_only_round_values_and_a_pinned_loop_never_reads_them_again():
+    rounds_only = config.Agent.model_validate(carried.layer().agents["planner"].model_dump(
+        include=set(config.RoundPolicy.model_fields)))  # fmt: skip
+    settings = resolve(GlobalLayer(agents={"planner": rounds_only}), Layer())
+    assert rounds.policy(settings, "plan", "planner").max_rounds == rounds_only.max_rounds  # the model may be unset
+
+    c = change(StepKind.PLAN)
+    pinned = rounds.pinned(c, "plan", settings, "planner")
+    c.loops["plan"] = RoundLoop(subject="plan", policy=pinned)
+    cleared = resolve(None, Layer())  # the owner cleared the planner's rounds since the loop started
+    assert rounds.pinned(c, "plan", cleared, "planner") == pinned
+    assert rounds.loop(c, "plan", cleared, "planner").policy == pinned
+    with pytest.raises(SettingsUnset, match=r"agents\.planner\.max_rounds"):
+        rounds.pinned(change(StepKind.PLAN), "plan", cleared, "planner")

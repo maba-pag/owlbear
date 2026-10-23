@@ -23,6 +23,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import curation, curation_build, curation_shares, sessions
 
@@ -249,8 +250,11 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
     return done
 
 
-def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating):
+def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch):
     curating.curate = curated(applied=True)
+    base = carried.layer()  # the builder's own session values unset: the curator's build never needs them
+    builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
+    monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": base.agents | {"builder": builder}}))
     step(curating)
     [cfg] = curating.seen
     assert (cfg.role, cfg.model, cfg.effort, cfg.context, cfg.submit) == (

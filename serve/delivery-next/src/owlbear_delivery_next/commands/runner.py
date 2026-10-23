@@ -120,7 +120,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         change, new = session_choice.replaced(store, lock, change, repair)
         return new
 
-    role = roles.chosen(store.settings(), s.kind)
+    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
+    role = roles.chosen(store.settings(), session := curation_build.LABEL if curated else s.kind)  # its role's
     ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
     asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
 
@@ -142,7 +143,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             scope=tuple(change.brief.scope),
             model=role.model,
             effort=role.effort,
-            limit=roles.limit(store.settings(), s.kind),
+            limit=roles.limit(store.settings(), session),
             context=role.context,
             fresh=told,
             previous=sessions.previous(store, slug, s.session) if resume else {},
@@ -156,14 +157,13 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             cap=disputes.cap(change),
             plan_tasks=disputes.planned(change),
             amendable=amendments.amendable(change),
-            subagents=roles.subagents(store.settings(), s.kind),  # TD-374, TD-376: the role's setting
+            subagents=roles.subagents(store.settings(), session),  # TD-374, TD-376: the role's setting
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),
             preparing=ctx,
         )
 
-    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
     run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
     end = datetime.now(UTC)
