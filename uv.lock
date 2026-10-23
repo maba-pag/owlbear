@@ -842,7 +842,7 @@ http = [
 
 [[package]]
 name = "github-copilot-sdk"
-version = "1.0.22"
+version = "1.0.23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -850,7 +850,7 @@ dependencies = [
     { name = "python-dateutil" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/15/fbbf09a7e0b139667838cc4119b185f79ae32a2af50388bbf2e506e5ecc0/github_copilot_sdk-1.0.22-py3-none-any.whl", hash = "sha256:a3abdcf5145e096eebbfe3ab04179b0ce03922431e62eb6c52b6cfcb70bad948", size = 870060, upload-time = "2026-10-14T20:05:31.711Z" },
+    { url = "https://files.pythonhosted.org/packages/87/16/26acac7e3cd90721fd0eba232daef5c23db4e518ee202f9388ecba949222/github_copilot_sdk-1.0.23-py3-none-any.whl", hash = "sha256:dd50c74550c42437c55185c2b862ca758548c66ddfe6b0ade1cb1be5bd05c7a7", size = 906679, upload-time = "2026-10-19T18:56:28.9Z" },
 ]
 
 [[package]]
@@ -1885,7 +1885,7 @@ dependencies = [
 requires-dist = [
     { name = "cyclopts", specifier = ">=5.2.0" },
     { name = "fastapi", specifier = ">=0.142.2" },
-    { name = "github-copilot-sdk", specifier = "==1.0.22" },
+    { name = "github-copilot-sdk", specifier = "==1.0.23" },
     { name = "mcp", specifier = ">=2,<2.4" },
     { name = "owlbear-decisions", editable = "serve/decisions" },
     { name = "owlbear-memory", editable = "serve/memory" },
