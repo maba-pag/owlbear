@@ -151,8 +151,9 @@ function tokens(n) {
 // TD-376: whether a role's sessions may start the runtime's built-in subagents; on unless a layer says off.
 export function subagentsCell(role) {
   const key = `${role}.subagents`, below = onOff(inherited().agents[role].subagents);
-  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, `inherit (${said(below)})`], ["true", "on: may start them"],
-    ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
+  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, `inherit (${said(below)})`],
+    ["true", "on: may start them"], ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v),
+    { key, disabled: state.saving }),
   source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
 }
 
