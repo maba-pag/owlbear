@@ -65,3 +65,15 @@ def test_no_record_or_two_records_are_no_answer(tmp_path: Path) -> None:
 def test_only_tools_beyond_the_allowlist_and_the_runtimes_own_are_unexpected() -> None:
     given = ["bash", "skill", "sql", "task_complete", "parallel", "uv-init", "owlbear-browser-pilot/navigate"]
     assert host_record.unexpected(given, ["bash"]) == ["owlbear-browser-pilot/navigate", "uv-init"]
+
+
+def test_every_selection_of_the_steps_agent_counts_toward_its_tools(tmp_path: Path) -> None:
+    state, folder = tmp_path / "state", tmp_path / "wt"
+    folder.mkdir()
+    again = {"type": "subagent.selected", "data": {"agentName": "owlbear-builder", "tools": ["bash", "uv-init"]}}
+    _write(state, "a", folder, extra=[again])
+
+    record = host_record.read(folder, SINCE, "owlbear-builder", state)
+
+    assert record.tools == [*TOOLS, "uv-init"]
+    assert host_record.unexpected(record.tools, TOOLS) == ["uv-init"]

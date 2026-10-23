@@ -58,11 +58,13 @@ def _started(events: list[Event], folder: Path, since: datetime) -> bool:
 
 
 def _selected(events: list[Event], agent: str) -> list[str] | None:
+    """Every tool any selection of *agent* gave it, in first-seen order; None when it was never selected."""
+    tools: dict[str, None] | None = None
     for event in events:
         data = event.get("data") or {}
         if event.get("type") == "subagent.selected" and data.get("agentName") == agent:
-            return [str(t) for t in data.get("tools") or []]
-    return None
+            tools = (tools or {}) | dict.fromkeys(str(t) for t in data.get("tools") or [])
+    return None if tools is None else list(tools)
 
 
 def _subagent(data: dict[str, Any]) -> SimpleNamespace:
