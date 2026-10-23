@@ -162,9 +162,14 @@ def review_run(  # noqa: PLR0913, PLR0917 - the visual review has its own result
     label: str,
     *,
     submit: tools.Spec = tools.REVIEW,
+    settings: Settings | None = None,
 ) -> tuple[Result, session_result.Run]:
-    """The reviewer session's verdict and its run, whose payload is the submitted review."""
-    return judges(store, lock, change, source, lambda at: [(label, dataclasses.replace(made(at), submit=submit))])[0]
+    """The reviewer session's verdict and its run, whose payload is the submitted review; *settings* a snapshot."""
+
+    def one(at: Path) -> list[tuple[str, sdk_adapter.Session]]:
+        return [(label, dataclasses.replace(made(at), submit=submit))]
+
+    return judges(store, lock, change, source, one, settings)[0]
 
 
 def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot

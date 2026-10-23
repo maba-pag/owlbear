@@ -25,6 +25,8 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import amendments, sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import carried, config, roles
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import amend
 
@@ -96,15 +98,16 @@ def test_a_premise_may_propose_wording_only_for_generated_criteria(tmp_path, arg
     assert (ok, text) == (True, ACCEPTED) if error is None else (not ok and error in text)
 
 
-def proposing(store: Store, clone: Path, monkeypatch, args: dict) -> list:
+def proposing(store: Store, clone: Path, monkeypatch, args: dict, during=lambda: None) -> list:
     async def build(cfg):
+        during()  # what changes while the worker runs
         payload, _ = tool_schema.parse(tools.WrongPremise, args)
         return Run(cfg.session_id, "premise", payload, head=git(clone, "rev-parse", "HEAD"), termination=DONE)
 
     judged = []
 
-    def review_run(_store, _lock, _change, source, made, label, *, submit):
-        judged.append((label, submit, made(source).message))
+    def review_run(_store, _lock, _change, source, made, label, *, submit, settings):
+        judged.append((label, submit, made(source).message, settings))
         verdict = tools.VisualReviewResult(
             verdict="fix", findings=[{"place": "AC-1", "problem": "tabs could now pass", "fix": "keep trimming tabs"}]
         )
@@ -128,12 +131,26 @@ def test_a_proposal_is_recorded_exactly_and_challenged_while_the_premise_keeps_i
         ("AC-1", 1, "greet() trims the name", "greet() trims spaces, not tabs")
     ]
     assert (a.verdict, a.judged, a.challenger) == ("weaker", "AC-1: tabs could now pass", "c1-amend")
-    label, submit, message = judged[0]
+    label, submit, message, _ = judged[0]
     assert (label, submit) == (amendments.LABEL, amendments.SUBMIT)
     assert "approved: greet() trims the name" in message
     assert "proposed: greet() trims spaces, not tabs" in message
     assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)  # the builder's premise goes back to planning as before
     assert ([k.text for k in c.brief.criteria], c.brief.version) == (["greet() trims the name", "Says Hallo"], 3)
+
+
+def test_a_challenger_cleared_while_the_worker_runs_still_judges_its_proposal(tmp_path, clone, monkeypatch):
+    store = Store(tmp_path / "store")
+    store.write(Lock("c1"), change())
+    base = carried.layer()
+    cleared = base.model_copy(update={"agents": {r: a for r, a in base.agents.items() if r != "challenger"}})
+    judged = proposing(store, clone, monkeypatch, premise(("AC-1", "trims spaces")),
+                       during=lambda: monkeypatch.setattr(config, "BASE", cleared))  # fmt: skip
+    (_, _, _, settings) = judged[0]
+    assert roles.chosen(settings, amendments.LABEL).model == carried.MODELS["challenger"].model  # the start's snapshot
+    with pytest.raises(SettingsUnset):
+        store.settings().agent("challenger")  # cleared now
+    assert store.read("c1").amendments[0].verdict == "weaker"
 
 
 def test_a_premise_without_amendment_starts_no_challenge(tmp_path, clone, monkeypatch):

@@ -103,8 +103,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     change.names.worktree = str(path)
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
-    role = roles.chosen(store.settings(), session := curation_build.LABEL if curated else s.kind)  # its role's
-    review.started(change, task, path, store.settings())  # a build's base; a plan task's loop (TD-208)
+    role = roles.chosen(settings := store.settings(), session := curation_build.LABEL if curated else s.kind)
+    review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
@@ -122,7 +122,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         change, new = session_choice.replaced(store, lock, change, repair)
         return new
 
-    ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
+    ctx = prepare.context(store, change, settings, path) if s.kind == StepKind.CHECK else None  # TD-107
     asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
 
     def config(at: Path) -> sdk_adapter.Session:
@@ -143,7 +143,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             scope=tuple(change.brief.scope),
             model=role.model,
             effort=role.effort,
-            limit=roles.limit(store.settings(), session),
+            limit=roles.limit(settings, session),
             context=role.context,
             fresh=told,
             previous=sessions.previous(store, slug, s.session) if resume else {},
@@ -157,14 +157,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             cap=disputes.cap(change),
             plan_tasks=disputes.planned(change),
             amendable=amendments.amendable(change),
-            subagents=roles.subagents(store.settings(), session),  # TD-374, TD-376: the role's setting
+            subagents=roles.subagents(settings, session),  # TD-374, TD-376: the role's setting
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),
             preparing=ctx,
         )
 
-    made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
+    made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config
     run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
@@ -172,7 +172,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     curation_build.recorded(change, run, path)
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result)
-    result = amend.challenge(store, lock, change, path, run, result=result)  # TD-179: judged, never applied here
+    result = amend.challenge(store, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     sessions.logged(
