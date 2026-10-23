@@ -425,3 +425,19 @@ def test_a_long_checklist_takes_numbered_entries_listing_every_item_up_to_a_cap(
     with pytest.raises(Refused, match=r"needs .* backlog entries, more than 2"):
         decision_fixes.schedule(shared, Report(other, later, "forbids", (wide,)), later.revision)
     assert len(github.issues) == n  # nothing written
+
+
+def test_an_origin_correction_waits_until_the_rule_it_replaced_owes_no_fixes(tmp_path, shared, store):
+    old, new = pair()
+    new = new.model_copy(update={"origin": Origin.DECIDED})
+    publish(shared, old, new, records={"20261020-090000-c1": merged(old.id)})
+    owner = client(store, clone(tmp_path, "shop", ["a.py"]))
+    correct = {"revision": new.revision, "origin": "approved", "reason": "An agent proposed it.", "confirmed": True}
+
+    waiting = owner.post(f"/api/next/decisions/{new.id}/correct-origin?folder={PROJECT}", json=correct)
+    assert (waiting.status_code, f"still due in {PROJECT}" in waiting.json()["detail"]) == (409, True)
+    accept = {"revision": new.revision, "project": PROJECT, "reason": "Old notes stay in SQLite."}
+    assert owner.post(f"/api/next/decisions/{new.id}/accept-existing?folder={PROJECT}", json=accept).json()["saved"]
+
+    done = owner.post(f"/api/next/decisions/{new.id}/correct-origin?folder={PROJECT}", json=correct).json()
+    assert done["saved"] is True
