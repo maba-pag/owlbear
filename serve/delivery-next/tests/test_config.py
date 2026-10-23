@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
-from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store import profile_share
 from owlbear_delivery_next.state_store import store as store_mod
@@ -32,7 +32,7 @@ def test_each_field_comes_from_the_project_else_the_global_layer_else_the_defaul
         "g-1", "low", "sdk", False, [], "default"
     )  # fmt: skip
     assert (eff.visible, eff.widths, eff.runtimes) == (True, [1280, 1920], {"sdk": True, "window": False})
-    assert eff.agents["reviewer"].model == roles.DEFAULTS["reviewer"].model
+    assert eff.agents["reviewer"].model == carried.MODELS["reviewer"].model
     assert eff.sources["agents.builder.model"] == "global"
     assert eff.sources["agents.builder.effort"] == "project"
     assert eff.sources["agents.reviewer.model"] == "default"
@@ -87,16 +87,16 @@ def test_a_layer_refuses_anything_it_cannot_apply(raw):
         Layer.model_validate(raw)
 
 
-def test_pull_request_labels_replace_the_global_list_and_the_marker_is_a_project_switch():
-    """TD-308: a project's list replaces the global one whole, [] included; the marker line is on unless off."""
+def test_pull_request_labels_replace_the_global_list_and_the_marker_is_layered():
+    """TD-308: a project's list replaces the global one whole, [] included; the marker line is layered like the rest,
+    since code ships no defaults (2026-10-23)."""
     glob = GlobalLayer(pr_labels=["owlbear"])
     assert (resolve(None, Layer()).pr_labels, resolve(None, Layer()).pr_marker) == ([], True)
     assert resolve(glob, Layer()).pr_labels == ["owlbear"]
     mine = resolve(glob, Layer(pr_labels=["release:minor"], pr_marker=False))
     assert (mine.pr_labels, mine.pr_marker, mine.sources["pr_labels"]) == (["release:minor"], False, "project")
     assert resolve(glob, Layer(pr_labels=[])).pr_labels == []
-    with pytest.raises(ValidationError, match="project setting"):
-        GlobalLayer(pr_marker=False)
+    assert resolve(GlobalLayer(pr_marker=False), Layer()).sources["pr_marker"] == "global"
 
 
 def test_the_curators_threshold_is_95_percent_at_first_and_set_only_globally():
@@ -212,7 +212,7 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
 
     assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="m-1", effort="low")
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
-    assert roles.chosen(store.settings(), StepKind.PLAN) == roles.DEFAULTS["planner"]
+    assert roles.chosen(store.settings(), StepKind.PLAN) == carried.MODELS["planner"]
     prof = store.read_profile()
     assert (prof.format, prof.version, prof.runtime, prof.entries["rules"].evidence) == (2, 3, "vscode", "HTTP 403")
     assert "roles" not in prof.model_dump()
@@ -222,7 +222,7 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
 
     store.update_config(lambda _cur: Layer())  # the owner clears the overrides
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}})  # e.g. a crash before the profile rewrite
-    assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == roles.DEFAULTS["builder"]
+    assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
 
 
 def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo):
@@ -237,7 +237,7 @@ def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(
     assert store.read_config().widths == [1600]
 
     store.update_config(lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
-    assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
+    assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
 def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, monkeypatch):
@@ -256,7 +256,7 @@ def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, mon
     profile_share.move_roles(Store(root))
 
     assert raced
-    assert roles.chosen(Store(root).settings(), StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
+    assert roles.chosen(Store(root).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
 def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):

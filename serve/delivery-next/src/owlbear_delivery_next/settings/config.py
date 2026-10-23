@@ -1,13 +1,15 @@
 """Delivery's settings (§3.13, R3, TD-52): global with per-project overrides, resolved field by field.
 
-A layer leaves a field at ``None`` to inherit it: project, else global, else the built-in default. Any other
-value overrides, including ``[]`` and ``False``. Only model, effort and context are applied today (TD-27); the other
+A layer leaves a field at ``None`` to inherit it: project, else this machine, else global. Code ships no defaults
+(the owner, 2026-10-23): a field no layer sets is unset, listed in ``Settings.missing``, shown as an error on the
+Settings page, and a step that needs it refuses (``SettingsUnset``). Any other value overrides, including ``[]`` and
+``False``. Only model, effort and context are applied today (TD-27); the other
 fields are stored for the config page and stay inactive until routing, visibility and capture use them (TD-50).
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal, get_args
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -18,16 +20,16 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import (
     DesignFailures,  # noqa: TC001 - pydantic resolves it at runtime
 )
-from owlbear_delivery_next.settings.roles import DEFAULTS
-from owlbear_delivery_next.settings.roles import MINUTES as MINUTES_BY_ROLE
 
-CONFIG_FORMAT = 9  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
-# 8 the test reviewer and curator roles; 9 the watcher's role and switch
+CONFIG_FORMAT = 10  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+# 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults (2026-10-23)
+CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried into it (``carried.carry``)
+ROLES: tuple[Role, ...] = get_args(Role.__value__)
+RUNTIMES: tuple[str, ...] = ("sdk", "window")
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "machine", "project", "builder"]
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
-DEFAULT_WIDTHS = [1280, 1920, 2400]
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
 LABEL = 50  # GitHub's longest label name
 
@@ -132,13 +134,6 @@ class WideLayer(Layer):
             raise ValueError("test preparation is a project setting")  # noqa: EM101, TRY003
         return v
 
-    @field_validator("pr_marker")
-    @classmethod
-    def _marker(cls, v: bool | None) -> bool | None:  # noqa: FBT001 - a validator's value
-        if v is not None:
-            raise ValueError("the pull request marker line is a project setting")  # noqa: EM101, TRY003
-        return v
-
 
 class GlobalLayer(WideLayer):
     """The global settings; the visibility switch and the curator's threshold are global only (TD-35, TD-400)."""
@@ -173,120 +168,117 @@ class Effective(Record):
         return self
 
 
-class Settings(Record):
-    """Every setting resolved, with the layer each value came from, keyed ``agents.<role>.<field>``."""
+class SettingsUnset(Exception):  # noqa: N818 - says what happened
+    """A step needs settings no layer sets; the owner fills them in on the Settings page."""
 
-    visible: bool
+    def __init__(self, keys: list[str]) -> None:
+        self.keys = keys
+        super().__init__(f"settings unset: {', '.join(keys)}; fill them in on the Settings page")
+
+
+class Settings(Record):
+    """Every setting resolved, with the layer each value came from, keyed ``agents.<role>.<field>``.
+
+    ``agents`` holds the roles whose every field is set; ``roles`` holds every role's values, ``None`` where unset,
+    for the Settings page. A general field no layer sets is ``None``. ``missing`` lists every unset key.
+    """
+
+    visible: bool | None
     agents: dict[Role, Effective]
+    roles: dict[Role, dict[str, Any]]
     runtimes: dict[RuntimeName, bool]
-    widths: list[int]
+    widths: list[int] | None
     preparations: list[Preparation] = Field(default_factory=list)
     data: DataPermissions = Field(default_factory=DataPermissions)
-    design_failures: DesignFailures = "ask"
-    final_review: RoundPolicy = Field(default_factory=RoundPolicy)
-    pr_labels: list[str] = Field(default_factory=list)
-    pr_marker: bool = True
-    sessions: int = 2
-    watcher: bool = True
-    curator_threshold: int = 95
+    design_failures: DesignFailures | None = None
+    final_review: RoundPolicy | None = None
+    pr_labels: list[str] | None = None
+    pr_marker: bool | None = None
+    sessions: int | None = None
+    watcher: bool | None = None
+    curator_threshold: int | None = None
     sources: dict[str, Source]
+    missing: list[str] = Field(default_factory=list)
+
+    def need(self, *keys: str) -> None:
+        """Raise ``SettingsUnset`` when any of *keys*, or a key under it (``agents.builder``), is unset."""
+        found = [m for m in self.missing if any(m == k or m.startswith(f"{k}.") for k in keys)]
+        if found:
+            raise SettingsUnset(found)
+
+    def agent(self, role: Role) -> Effective:
+        """The role's resolved settings; ``SettingsUnset`` when any of them is unset."""
+        self.need(f"agents.{role}")
+        return self.agents[role]
+
+    def page(self) -> dict[str, Any]:
+        """The settings as the page reads them: every role, ``None`` where unset."""
+        return self.model_dump(mode="json", exclude={"roles"}) | {"agents": self.roles}
 
 
-def _defaults() -> GlobalLayer:
-    rounds = RoundPolicy().model_dump()
-    agents = {
-        role: Agent(
-            model=rm.model,
-            effort=rm.effort,
-            context=rm.context,
-            runtime="sdk",
-            visible=False,
-            categories=[],
-            minutes=MINUTES_BY_ROLE[role],
-            subagents=True,  # TD-376: on by default for every role
-            **rounds,
-        )
-        for role, rm in DEFAULTS.items()
-    }
-    return GlobalLayer(
-        visible=False,
-        agents=agents,
-        runtimes={"sdk": True, "window": True},
-        widths=DEFAULT_WIDTHS,
-        curator_threshold=95,
-    )
+BASE: GlobalLayer | None = None  # a layer under Global; empty in production (no code defaults), tests set one
 
 
 def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) -> object:
-    """The first value that is not ``None``, from the project down to the default; records its source."""
+    """The first value that is not ``None``, from the project down to Global; records its source, else ``None``."""
     for source, value in values:
         if value is not None:
             sources[key] = source
             return value
-    msg = f"no default for {key}"
-    raise KeyError(msg)
+    return None
 
 
 def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None = None) -> Settings:
-    """Resolve each field on its own: project, else this machine's, else global, else the built-in default (TD-336)."""
-    base, glob, sources = _defaults(), glob or GlobalLayer(), dict[str, Source]()
+    """Resolve each field on its own: project, else this machine's, else global (TD-336); unset where none sets it."""
+    glob, sources = glob or GlobalLayer(), dict[str, Source]()
     here = machine or MachineLayer()
     layers: list[tuple[Source, Layer]] = [("project", project), ("machine", here), ("global", glob)]
-    agents: dict[Role, Effective] = {}
-    for role, default in base.agents.items():
-        agents[role] = Effective.model_validate(
-            {
-                name: _pick(
-                    f"agents.{role}.{name}",
-                    sources,
-                    *((s, getattr(layer.agents.get(role) or Agent(), name)) for s, layer in layers),
-                    ("default", getattr(default, name)),
-                )
-                for name in Effective.model_fields
-            }
-        )
+    if BASE is not None:
+        layers.append(("default", BASE))
+    wide = [(s, layer) for s, layer in layers if s != "project"]
+    roles = {
+        role: {
+            name: _pick(f"agents.{role}.{name}", sources, *((s, getattr(layer.agents.get(role) or Agent(), name))
+                                                                for s, layer in layers))
+            for name in Effective.model_fields
+        }
+        for role in ROLES
+    }  # fmt: skip
+    agents = {r: Effective.model_validate(v) for r, v in roles.items() if all(x is not None for x in v.values())}
     runtimes = {
-        name: bool(
-            _pick(f"runtimes.{name}", sources, *((s, layer.runtimes.get(name)) for s, layer in layers), ("default", on))
-        )
-        for name, on in base.runtimes.items()
+        name: bool(on) for name in RUNTIMES
+        if (on := _pick(f"runtimes.{name}", sources, *((s, layer.runtimes.get(name)) for s, layer in layers)))
+        is not None
+    }  # fmt: skip
+    general = {
+        key: _pick(key, sources, *((s, getattr(layer, key)) for s, layer in layers))
+        for key in ("widths", "design_failures", "pr_labels", "pr_marker", "sessions", "watcher")
     }
-    widths = _pick("widths", sources, *((s, layer.widths) for s, layer in layers), ("default", base.widths))
-    visible = _pick("visible", sources, ("global", glob.visible), ("default", base.visible))
+    for key in ("visible", "curator_threshold"):  # global only (TD-35, TD-400)
+        general[key] = _pick(key, sources, *((s, getattr(layer, key, None)) for s, layer in wide if s != "machine"))
     prep = _pick("preparations", sources, ("project", project.preparations), ("default", []))
     data = _pick("data", sources, ("project", project.data), ("default", DataPermissions()))
-    design = _pick(  # autonomous default (TD-78)
-        "design_failures", sources, *((s, layer.design_failures) for s, layer in layers), ("default", "ask")
-    )
     final = {
         name: _pick(
             f"final_review.{name}",
             sources,
             *((s, getattr(layer.final_review or FinalReview(), name)) for s, layer in layers),
-            ("builder", getattr(agents["builder"], name)),
+            ("builder", roles["builder"][name]),
         )
         for name in RoundPolicy.model_fields
     }
-    labels = _pick("pr_labels", sources, *((s, layer.pr_labels) for s, layer in layers), ("default", []))
-    marker = _pick("pr_marker", sources, ("project", project.pr_marker), ("default", True))
-    at_once = _pick("sessions", sources, *((s, layer.sessions) for s, layer in layers), ("default", 2))  # TD-336
-    watching = _pick("watcher", sources, *((s, layer.watcher) for s, layer in layers), ("default", True))
-    threshold = _pick(  # TD-400: global only, 95% at first
-        "curator_threshold", sources, ("global", glob.curator_threshold), ("default", base.curator_threshold)
-    )
+    missing = [f"agents.{r}.{n}" for r, v in roles.items() for n, x in v.items() if x is None]
+    missing += [f"runtimes.{n}" for n in RUNTIMES if n not in runtimes]
+    missing += [k for k, v in general.items() if v is None]
+    missing += [f"final_review.{n}" for n, v in final.items() if v is None]
     return Settings(
-        visible=visible,
+        **general,
         agents=agents,
+        roles=roles,
         runtimes=runtimes,
-        widths=widths,
         preparations=prep,
         data=data,
-        design_failures=design,
-        final_review=RoundPolicy.model_validate(final),
-        pr_labels=labels,
-        pr_marker=bool(marker),
-        sessions=int(at_once),
-        watcher=bool(watching),
-        curator_threshold=int(threshold),
+        final_review=RoundPolicy.model_validate(final) if None not in final.values() else None,
         sources=sources,
+        missing=missing,
     )

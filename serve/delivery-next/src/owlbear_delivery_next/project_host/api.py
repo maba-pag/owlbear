@@ -48,6 +48,7 @@ from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
@@ -252,7 +253,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     def start_chat(prompt: str, done: Ended | None = None) -> dict[str, Any]:
         """Open the shaping chat with ``prompt`` in the background, or say why not and give the command by hand."""
         try:
-            shaper = store.settings().agents["shaper"]
+            shaper = store.settings().agent("shaper")
+        except SettingsUnset as exc:
+            command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
+            return {"started": False, "command": command, "reason": str(exc)}
         except StoreError as exc:
             command = shlex.join(["code", "chat", "-m", SHAPER_MODE, prompt])
             return {"started": False, "command": command, "reason": f"the settings are unreadable ({exc})"}

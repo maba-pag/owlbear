@@ -17,7 +17,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, window_files
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
-from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Layer, resolve
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import disposable, judges, sessions
@@ -211,7 +211,7 @@ def test_findings_keep_their_image_and_delivery_marks_what_the_change_introduced
     look = judged("fail", [problem("home-1280-A.png"), problem("home-1280-B.png"), problem("new-1280-A.png", rule="x")])
     final = design_tools.DesignResult(**look.model_dump())
     done = Run("d", ending="result", payload=final, first=look, termination=Termination(confirmed=True))
-    record = judges.design([done], list(NAMED.values()), roles.DEFAULTS["design-judge"], datetime.now(UTC))
+    record = judges.design([done], list(NAMED.values()), carried.MODELS["design-judge"], datetime.now(UTC))
     assert [(f.image, f.introduced) for f in record.findings] == [
         ("home-1280-A.png", False),
         ("home-1280-B.png", False),  # before had it too

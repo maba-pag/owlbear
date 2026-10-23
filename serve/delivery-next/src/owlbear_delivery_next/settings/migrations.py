@@ -125,6 +125,11 @@ def watcher_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def defaults_removed(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 9 to 10: code ships no defaults (2026-10-23); ``carried.carry`` fills Global once."""
+    return data
+
+
 def tests_added(data: dict[str, Any]) -> dict[str, Any]:
     """Change format 5 to 6: a test review's record and step (TD-373); older runtimes refuse format 6."""
     return data
@@ -153,4 +158,5 @@ CONFIG: Migrations = {
     6: sessions_added,
     7: test_roles_added,
     8: watcher_added,
+    9: defaults_removed,
 }

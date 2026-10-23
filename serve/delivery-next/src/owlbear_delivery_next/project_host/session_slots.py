@@ -53,9 +53,12 @@ def project(host: Host) -> str:
 
 
 def limit(host: Host) -> int:
-    """The project's sessions at once; 1 while its settings do not read, which stops its runners anyway."""
+    """The project's sessions at once; 1 while its settings do not read, which stops its runners anyway.
+
+    While no layer sets it, none: code ships no defaults, and the Settings page shows it unset (2026-10-23).
+    """
     try:
-        return host.store.settings().sessions
+        return host.store.settings().sessions or 0
     except StoreError:
         return 1
 

@@ -14,8 +14,9 @@ if TYPE_CHECKING:
 def policy(settings: Settings, subject: str, role: Role = "builder") -> RoundPolicy:
     """The values a loop of *role*'s work runs with: the final review's own (TD-211), else the role's."""
     if subject == FINAL:
+        settings.need("final_review")
         return settings.final_review.model_copy()
-    return RoundPolicy.model_validate(settings.agents[role].model_dump(include=set(RoundPolicy.model_fields)))
+    return RoundPolicy.model_validate(settings.agent(role).model_dump(include=set(RoundPolicy.model_fields)))
 
 
 def loop(c: Change, subject: str, settings: Settings, role: Role = "builder") -> RoundLoop:

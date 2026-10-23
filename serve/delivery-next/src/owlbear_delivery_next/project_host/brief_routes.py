@@ -17,6 +17,7 @@ from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.change_flow import brief_rounds, picks
 from owlbear_delivery_next.settings import rounds
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
 
@@ -97,7 +98,10 @@ def asked(store: Store, c: Change, body: ChallengeBody) -> str:
     """
     if body.retry_pick:
         return picks.retry(c, body.version) if store.shared else "there are no decisions to pick here"
-    policy = rounds.policy(store.settings(), BRIEF, "shaper")
+    try:
+        policy = rounds.policy(store.settings(), BRIEF, "shaper")
+    except SettingsUnset as exc:
+        return str(exc)
     said = {r.finding: r.reason for r in body.rejected}
     if why := brief_rounds.request(c, body.version, said, policy, datetime.now(UTC)):
         return why

@@ -104,6 +104,7 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
     """Find the open PR of the branch or create a draft; an unknown create is read back, never repeated blindly."""
     repo, branch, target = ctx.repository, c.names.branch, c.names.target
     settings = ctx.store.settings()
+    settings.need("pr_marker", "pr_labels")
     pr = ctx.gh.find_pull_request(repo, branch, target)
     if pr is None:
         title = c.brief.title or (c.plan.tasks[0].title if c.plan and c.plan.tasks else c.slug)

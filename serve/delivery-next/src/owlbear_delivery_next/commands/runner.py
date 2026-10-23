@@ -31,6 +31,7 @@ from owlbear_delivery_next.runtimes import (
     step_input,
 )
 from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
@@ -60,6 +61,7 @@ from owlbear_delivery_next.workflow_steps import (
     review,
     session_choice,
     sessions,
+    unset_settings,
     visual,
 )
 from owlbear_delivery_next.workflow_steps.sessions import UsageUnreadError
@@ -68,6 +70,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
+    from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
@@ -232,6 +235,13 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
     return plan_round.scopes(store, slug)
 
 
+def _judged_with(store: Store) -> Settings:
+    """The settings a visual check runs with; ``SettingsUnset`` when one it needs is unset."""
+    settings = store.settings()
+    settings.need("widths", "design_failures", "agents.reviewer", "agents.design-judge")
+    return settings
+
+
 def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     """B23: capture the brief's states from the ready environment and judge the screenshots in a reviewer session."""
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
@@ -239,8 +249,8 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, change)
     url = change.env.ready_url if change.env else ""
     mine, theirs, ran = [], [], []  # the judges' sessions and how they ended
+    settings = _judged_with(store)  # one snapshot: what the round records is what it ran with; unset asks the owner
     try:
-        settings = store.settings()  # one snapshot: what the round records is what it ran with
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
         widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
@@ -308,6 +318,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
     settings, log = store.settings(), lambda e: store.log(lock, change.slug, e)
+    settings.need("widths")
     change.before = shots = before.capture(
         change,
         repo,
@@ -410,10 +421,14 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
             store.write(lock, loop.apply(change, stop, now))
             return
-        if (resumed := decision_publication.resume(store, lock, change, datetime.now(UTC))) is None:
+        try:
+            if (resumed := decision_publication.resume(store, lock, change, datetime.now(UTC))) is None:
+                return
+            if step.kind in AGENT and (resumed := clarification.checked(store, lock, resumed)) is None:
+                return  # TD-461: the clarification's check asked the owner, or waits to run again
+        except SettingsUnset as exc:
+            unset_settings.asked(store, lock, exc)
             return
-        if step.kind in AGENT and (resumed := clarification.checked(store, lock, resumed)) is None:
-            return  # TD-461: the clarification's check asked the owner, or waits to run again
         change = resumed
     with decisions_gate.gated(store, lock, change, step) as passed:
         if passed is None:  # a gone check's end runs whatever the decisions say
@@ -454,6 +469,8 @@ def _run(  # noqa: C901 - one branch per phase
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
+    except SettingsUnset as exc:
+        unset_settings.asked(store, lock, exc)
 
 
 def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:

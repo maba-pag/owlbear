@@ -42,8 +42,8 @@ function scopeSection() {
     <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
       : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
         + "machine's settings can be saved, locally."}</p-text></div>
-    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one; a blank
-      global value uses the built-in default.</p-text>
+    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
+      code has no defaults: a value no layer sets is unset, and a step that needs it asks you to fill it in.</p-text>
   </section>`;
 }
 
@@ -118,7 +118,14 @@ function settingsSections() {
     ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
   const { baseline, runtimes, categories } = loaded.catalogue;
   const text = (v) => cell(html`<p-text>${v}</p-text>`);
+  const unset = loaded.settings.missing ?? [];
   return html`
+    ${unset.length ? html`<section class="panel" id="unset" aria-labelledby="unset-title">
+      <p-heading size="lg"><h2 id="unset-title">Unset settings</h2></p-heading>
+      <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
+        defaults: set ${unset.length === 1 ? "it" : "them"} below, best in the global layer; a step that needs one asks
+        you until then.</p-text>
+      <p-text size="xs">${unset.join(", ")}</p-text></section>` : nothing}
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
       ${table("Agents: model, effort and context apply to the next session",

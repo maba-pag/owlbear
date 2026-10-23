@@ -384,7 +384,6 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
 @pytest.mark.parametrize(
     "layer",
     [
-        {"pr_marker": False},
         {"data": {}},
         {"visible": True},
         {"curator_threshold": 90},
