@@ -16,7 +16,7 @@ from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.settings import carried, config, roles
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
 from owlbear_delivery_next.state_store import settings_carry
-from owlbear_delivery_next.state_store.store import read_layer
+from owlbear_delivery_next.state_store.store import StoreError, read_layer
 from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, unset_settings
 
 
@@ -172,3 +172,9 @@ def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled
     assert _git(shared.root, "log", "-1", "--format=%s") == "settings: today's built-in values carried into Global"
     assert read_layer(shared.global_path, GlobalLayer).sessions is None
     assert not settings_carry.due(shared)
+
+    head = _git(shared.root, "rev-parse", "HEAD")
+    shared.global_path.write_text("{ not json")  # an invalid layer left uncommitted is never published
+    with pytest.raises(StoreError):
+        settings_carry.carry(shared)
+    assert (_git(shared.root, "rev-parse", "HEAD"), shared.global_path.read_text()) == (head, "{ not json")

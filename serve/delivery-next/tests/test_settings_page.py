@@ -301,6 +301,7 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
         expect(page.locator("#agents")).to_contain_text("no layer sets a context tier")
         page.locator("#agents").get_by_role("button", name="Use the default tier").click()
         pds.pick(page, "Effort for watcher", "medium")
+        pds.pick(page, "Model for reviewer", "claude-opus-5.5")  # its effort unset: listed, never blocking the save
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")

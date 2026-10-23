@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.carried import filled
 from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer
-from owlbear_delivery_next.state_store.store import update_layer
+from owlbear_delivery_next.state_store.store import read_layer, update_layer
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -39,6 +39,8 @@ def carry(shared: DataRepo) -> str:
             return ""
         if fill:
             update_layer(shared.global_path, GlobalLayer, filled)
+        else:  # an invalid layer is never published: it stays uncommitted, and the host says why (StoreError)
+            read_layer(shared.global_path, GlobalLayer)
         return shared.publish(shared.global_path, "settings: today's built-in values carried into Global", until)
 
 

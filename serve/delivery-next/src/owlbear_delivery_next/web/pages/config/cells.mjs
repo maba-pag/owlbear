@@ -171,7 +171,7 @@ function offeredModel(role) {
 export function mismatch(role) {
   const model = offeredModel(role), mine = own(`${role}.effort`);
   const effort = mine || inherited().agents[role].effort;
-  if (!model || !model.efforts.length || model.efforts.includes(effort)) return "";
+  if (!effort || !model || !model.efforts.length || model.efforts.includes(effort)) return "";  // unset: listed
   return `${model.id} does not offer effort ${effort}${mine ? "" : " (inherited)"}; choose one it offers`;
 }
 
