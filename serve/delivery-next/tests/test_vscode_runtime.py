@@ -80,6 +80,7 @@ def test_window_files_never_reach_a_commit_and_are_restored(repo: Path) -> None:
     git(repo, "commit", "-qm", "settings")
     placed = [
         wf.place(repo, wf.SETTINGS, wf.settings("gpt-6-luna")),
+        wf.place(repo, wf.HOOKS, wf.hooks_off),
         wf.place(repo, wf.MCP, wf.mcp(Path("/inbox.json"))),
         wf.place(repo, wf.agent_path("builder"), wf.agent("builder", Path("/inbox.json"))),
     ]
@@ -94,9 +95,30 @@ def test_window_files_never_reach_a_commit_and_are_restored(repo: Path) -> None:
     assert wf.restore(repo, placed) == []
     assert (repo / wf.SETTINGS).read_text() == '{ // team\n  "a": 1,\n}\n'
     assert not (repo / wf.MCP).exists()
+    assert not (repo / ".github" / "copilot").exists()
     assert not (repo / wf.agent_path("builder")).exists()
     assert git(repo, "ls-files", "-v", wf.SETTINGS).startswith("H ")
     assert git(repo, "status", "--porcelain") == ""
+
+
+def test_hooks_go_off_beside_the_repositorys_own_local_copilot_settings(repo: Path) -> None:
+    path = repo / wf.HOOKS
+    path.parent.mkdir(parents=True)
+    path.write_text('{"model": "x", "disableAllHooks": false}\n')
+    placed = wf.place(repo, wf.HOOKS, wf.hooks_off)
+    assert json.loads(path.read_text()) == {"model": "x", "disableAllHooks": True}
+    assert wf.restore(repo, [placed]) == []
+    assert path.read_text() == '{"model": "x", "disableAllHooks": false}\n'
+
+
+@pytest.mark.parametrize("content", ["[]", "{ // mine\n}", "not json"])
+def test_local_copilot_settings_delivery_cannot_edit_refuse_the_step(repo: Path, content: str) -> None:
+    path = repo / wf.HOOKS
+    path.parent.mkdir(parents=True)
+    path.write_text(content)
+    with pytest.raises(wf.SettingsError, match="cannot turn its hooks off"):
+        wf.place(repo, wf.HOOKS, wf.hooks_off)
+    assert path.read_text() == content
 
 
 def test_a_locally_edited_tracked_file_is_refused_and_kept(repo: Path) -> None:

@@ -23,7 +23,15 @@ from owlbear_delivery_next.runtimes import ahp, readiness, sdk_adapter, session_
 from owlbear_delivery_next.runtimes.ahp import HostError
 from owlbear_delivery_next.runtimes.vscode_contract import Control, Hooks, Outcome, StepSpec, ToolCall
 from owlbear_delivery_next.runtimes.vscode_step import ACK, Step
-from owlbear_delivery_next.runtimes.window_files import DEFAULT_MODEL, HARNESS, SettingsError, write_window_settings
+from owlbear_delivery_next.runtimes.window_files import (
+    DEFAULT_MODEL,
+    HARNESS,
+    HOOKS,
+    MCP_ACCESS,
+    NO_HOOKS,
+    SettingsError,
+    write_window_settings,
+)
 from owlbear_delivery_next.settings.config import Layer, resolve
 
 MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agent.md"
@@ -599,6 +607,7 @@ def test_window_settings_pin_harness_and_model_and_keep_other_keys(tmp_path: Pat
         "editor.tabSize": 2,
         HARNESS: True,
         DEFAULT_MODEL: MODEL,
+        MCP_ACCESS: "none",
     }
 
 
@@ -607,6 +616,7 @@ def test_window_settings_pin_harness_and_model_and_keep_other_keys(tmp_path: Pat
     [
         ("[]", MODEL),
         ('{ // mine\n  "chat.defaultModel": "x",\n}', MODEL),
+        ('{ // mine\n  "chat.mcp.access": "all",\n}', MODEL),
         ("// x\n[1,]", MODEL),
         (None, "auto"),
         (None, " "),
@@ -628,7 +638,8 @@ def test_settings_with_comments_get_the_pins_after_the_opening_brace(tmp_path: P
     write_window_settings(tmp_path, MODEL)
 
     assert (tmp_path / ".vscode" / "settings.json").read_text() == (
-        f'// team settings\n{{\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": "{MODEL}", // mine\n  "a": 1,\n}}\n'
+        f'// team settings\n{{\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": "{MODEL}",\n'
+        f'  "{MCP_ACCESS}": "none", // mine\n  "a": 1,\n}}\n'
     )
 
 
@@ -938,7 +949,8 @@ class Adapted:
 
         def dispatch(channel: str, action: dict) -> None:
             if action["type"] == "chat/turnStarted":
-                self.files_during.append(str(inbox) in (folder / ".mcp.json").read_text())
+                relay = str(inbox) in (folder / ".mcp.json").read_text()
+                self.files_during.append(relay and json.loads((folder / HOOKS).read_text()) == {NO_HOOKS: True})
                 if self.submit and (args := self.submit.pop(0)) is not None:
                     body = {"name": "submit_result", "arguments": args}
                     self.replies.append(step_mcp.forward(inbox, "POST", "/call", body))

@@ -1,4 +1,8 @@
-"""Files a C+ step needs in its worktree: the window's model pin, the step's MCP relay and its agent (TD-36).
+"""Files a C+ step needs in its worktree: the window's pins, the step's MCP relay, its agent and hooks off (TD-36).
+
+The window settings pin the harness and model and keep the owner's VS Code MCP servers from starting
+(``chat.mcp.access``); ``.github/copilot/settings.local.json`` turns every repository, user and plugin hook off
+(``disableAllHooks``), since VS Code's own hook setting does not reach the harness (window-step gate, item 8).
 
 None of them reaches the agent's commits: an untracked file is listed in the clone's ``info/exclude``, a tracked
 one is marked ``skip-worktree``; ``restore`` puts back what the step found. The owner's own folder gets only the
@@ -24,7 +28,9 @@ if TYPE_CHECKING:
 HARNESS, DEFAULT_MODEL = "chat.defaultToCopilotHarness", "chat.defaultModel"
 HARNESS_LINE = f'\n  "{HARNESS}": true'  # the one line Delivery adds to an owner's settings
 HARNESS_ADDED = re.compile(re.escape(HARNESS_LINE) + ",?")
+MCP_ACCESS = "chat.mcp.access"  # "none": the owner's VS Code MCP servers stay off; the step's .mcp.json still loads
 SETTINGS, MCP = ".vscode/settings.json", ".mcp.json"
+HOOKS, NO_HOOKS = ".github/copilot/settings.local.json", "disableAllHooks"
 SERVER = "owlbear-step"  # a step's relay is SERVER-<inbox>: the host disables a name another session holds (P21)
 
 type Render = Callable[[str | None], str]
@@ -56,14 +62,14 @@ def _with_settings(old: str | None, model: str) -> str:
     except ValueError:
         current = None
     if isinstance(current, dict):
-        return json.dumps(current | {HARNESS: True, DEFAULT_MODEL: model}, indent=2) + "\n"
+        return json.dumps(current | {HARNESS: True, DEFAULT_MODEL: model, MCP_ACCESS: "none"}, indent=2) + "\n"
     text = old or ""
     if current is not None or (at := _opening(text)) is None:
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
-    if f'"{HARNESS}"' in text or f'"{DEFAULT_MODEL}"' in text:
-        msg = f"{SETTINGS} pins the harness or model in a form Delivery can't edit"
+    if any(f'"{key}"' in text for key in (HARNESS, DEFAULT_MODEL, MCP_ACCESS)):
+        msg = f"{SETTINGS} pins the harness, model or MCP access in a form Delivery can't edit"
         raise SettingsError(msg)
-    pins = f'\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": {json.dumps(model)},'
+    pins = f'\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": {json.dumps(model)},\n  "{MCP_ACCESS}": "none",'
     return text[:at] + pins + text[at:]
 
 
@@ -72,6 +78,17 @@ def settings(model: str) -> Render:
     if not model.strip() or model.strip().lower() == "auto":
         raise SettingsError("the step model must be named; auto is never used (TD-32)")  # noqa: EM101, TRY003
     return lambda old: _with_settings(old, model)
+
+
+def hooks_off(old: str | None) -> str:
+    """The repository's local Copilot settings with every hook off; its other settings stay."""
+    try:
+        data = json.loads(old) if old and old.strip() else {}
+    except ValueError as exc:
+        raise SettingsError(f"{HOOKS} is not plain JSON; Delivery cannot turn its hooks off") from exc  # noqa: EM102, TRY003
+    if not isinstance(data, dict):
+        raise SettingsError(f"{HOOKS} is not a JSON object; Delivery cannot turn its hooks off")  # noqa: EM102, TRY003
+    return json.dumps(data | {NO_HOOKS: True}, indent=2) + "\n"
 
 
 def write_window_settings(folder: Path, model: str) -> None:
