@@ -551,7 +551,7 @@ def test_the_maintenance_button_curates_a_memory_folder_now_also_while_paused(ht
     assert http.get("/api/next/curation").json()["folders"][0]["summary"] == "nothing pending"
 
 
-@pytest.mark.parametrize(("old", "both"), [(False, "on"), (True, "paused")])
+@pytest.mark.parametrize(("old", "both"), [(False, "on"), (True, "paused"), ("false", "on"), ("true", "paused")])
 def test_format_4s_one_curation_switch_becomes_a_setting_per_trigger(old, both) -> None:
     raw = {"channel": "minor", "update_when_idle": True, "update_while_paused": True, "curate_while_paused": old,
            "sessions": 4}  # fmt: skip

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import Field, ValidationError, model_validator
+from pydantic import Field, TypeAdapter, ValidationError, model_validator
 
 from owlbear_delivery_next.change_contracts.models import Record
 from owlbear_delivery_next.local_system import local_home
@@ -57,7 +57,7 @@ class Settings(Record):
         """Format 4's one switch for both triggers becomes their two settings: on, or on even while paused."""
         if isinstance(data, dict) and "curate_while_paused" in data:
             data = dict(data)
-            both = "paused" if data.pop("curate_while_paused") else "on"
+            both = "paused" if TypeAdapter(bool).validate_python(data.pop("curate_while_paused")) else "on"
             data.setdefault("curate_after_merge", both)
             data.setdefault("curate_when_idle", both)
         return data
