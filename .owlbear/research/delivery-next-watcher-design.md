@@ -1,30 +1,38 @@
 # Watcher Agent: Design Draft
 
 > **Owning task:** Delivery rebuild, phase 3 "N1 design" ([rebuild §3.12](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#312-repair-plan-2026-10-11))
-> **Date:** 2026-10-14
+> **Date:** 2026-10-14, revised 2026-10-23
 > **Question:** How should the watcher read, judge, stop and summarise running steps in both runtimes,
 > within the decided rules? This is a draft for the owner's design session. It builds on the
 > [options research](delivery-next-watcher-options.md) and decides nothing.
-> **Status 2026-10-19:** draft, nothing decided or built (the plan's item 9). It predates TD-320 and TD-365: nothing
-> blocks outside writes any more and the watcher judges each one afterwards, so the TD-45 guard it assumes for SDK
-> steps is gone. Revise it before the owner's session, which comes when window steps are about to return (TD-224,
-> TD-316); TD-27's benchmark runs first (TD-378). See [the plan](owlbear-plan.md) §3.5. The owner's input of
-> 2026-10-21 for the revision is §3.4b.
+> **Status 2026-10-23:** revised draft, nothing built (the plan's item 9). Revised to TD-320 and TD-365 (no guard
+> blocks outside writes; the watcher judges each one afterwards), to the window-step gate as built (item 8,
+> [gate build](window-step-gate-build.md)), and to the owner's statement of 2026-10-23 that the C-04 watcher rules he
+> did not make himself are `approved`, not his intent. His own (`decided`) watcher rules are TD-55, TD-365, the
+> stages (TD-61, TD-66), the lessons and the benchmark pair. §4 lists what still needs him; the rest are
+> `autonomous` proposals. TD-27's benchmark runs before the model is chosen (TD-378). See [the plan](owlbear-plan.md)
+> §3.5.
 
 ## 1. Context and Question
 
 The decided requirements are listed in the options research §1. Since then:
 
-- TD-55 decided the watcher's stance: it intervenes after an action and prevents nothing. It judges
-  actions, not reasoning. It stops an outgoing transfer of local data it notices, and it is
-  multi-purpose, for example summarising status for Cockpit.
-- TD-61 and TD-66 asked for per-agent stages, which the watcher infers.
-- TD-69 narrowed what a window step can do. Each agent now has only its own tools, and windows no
-  longer offer `ask_user` or the owner's MCP tools (P25). What remains for the watcher in windows:
-  - shell and file tools writing outside the worktree;
-  - commands that send local data out.
-
-  SDK steps keep the hard guard (TD-45), which denies such calls before they run.
+- TD-55 (the owner's) decided the watcher's stance: it acts only after an action (stop, then retry) and prevents
+  nothing. It judges actions, not reasoning, which only prompts a closer look or feeds learning. Catching
+  exfiltration is no goal yet. It is multi-purpose, for example summarising status for Cockpit.
+- TD-365 (the owner's) decided what it judges: each write outside the worktree and each outgoing data transfer,
+  after the fact. It stops the step only if the action is dangerous or inappropriate for the task; harmless ones
+  are reported. TD-46 (`approved`) keeps Delivery's own state, temporary files and the user's tool caches out of
+  judging.
+- TD-320 and TD-366 changed the SDK guard: it now refuses only a hook or signing bypass, a force push and, in a
+  read-only step, any write (`permissions.py`). Outside writes in a writing step run in both runtimes, so the
+  watcher judges them in both. TD-45's guard, which this draft first assumed, is gone.
+- TD-61 and TD-66 (the owner's) asked for per-agent stages, which the watcher infers.
+- The window-step gate is built (item 8): windows run with repository hooks and the owner's VS Code MCP servers
+  off, each agent has only its own tools, subagents are seen live and counted from the host's record, and
+  read-only window steps ask and are answered by the SDK policy. Window steps stay paused until the watcher needs
+  them (`autonomous`, 2026-10-23). **So the runtime in use is the SDK alone, and the watcher can be built for it
+  first**; the window feed follows when window steps reopen.
 
 ## 2. Sources Studied
 
@@ -60,9 +68,11 @@ subscribe to it like any chat.
 How the feed works:
 - **SDK:** the runner's existing event callback passes every tool start, with `agent_id`, to the
   watcher.
-- **Window:** the runner already holds the agent-host connection. It reads `toolInput` from every
-  `chat/toolCallReady`, not only unconfirmed ones. On a `subagent` content part it subscribes to the
-  named chat, recursively. It keeps each subscription until the step's attempt ends (§3.5).
+- **Window (when window steps reopen):** the runner already holds the agent-host connection, keeps each call's
+  whole input (item 8) and notes every `subagent` announcement (`Step.announced`). It must still read `toolInput`
+  from every `chat/toolCallReady`, not only asked ones, and subscribe to each announced subagent chat,
+  recursively, until the step's attempt ends (§3.5). After the step, `host_record` already reads the host's record
+  of the session (item 8); the same reader serves catch-up.
 - **Catch-up after a restart:** the session record is read from a stored byte offset. Each read
   seeks to it and reads only lines appended since, so after ten lines the next read starts at line
   eleven. Incomplete last lines wait for the next read. A truncated or replaced record is detected.
@@ -79,17 +89,20 @@ model.
 ### 3.2 Judging: rules first, a model for the rest
 
 Each `tool.execution_start` is classified by its **write targets**, not by every path it reaches.
-Reading outside the worktree is not controlled in windows: TD-50 changes only how outside writes are
-controlled. So `cp /elsewhere/input ./out` and `git -C /elsewhere log` pass.
+Reading outside the worktree is not judged: TD-50 changes only how outside writes are controlled. So
+`cp /elsewhere/input ./out` and `git -C /elsewhere log` pass. TD-365 gives three outcomes: not judged, stopped as
+dangerous or inappropriate for the task, or reported as harmless. Rules settle the clear cases; a model judges the
+rest against the task.
 
-| Class | Examples | Verdict |
+| Class | Examples | Outcome |
 | --- | --- | --- |
-| Writes inside this Change's worktree | edits; shell commands whose write targets resolve inside it | Pass |
-| Git in this Change's worktree | `git add`, `commit`, `stash` run there. A linked worktree writes into the main clone's `.git/worktrees/<name>`, objects and its own branch, which the command alone does not show | Pass |
-| Allowed outside (TD-46) | temporary folders (`/tmp`, the expanded `$TMPDIR`, `/private/var/folders`); the user's tool caches (`~/.cache`, `~/Library/Caches`, uv, npm, pip, Playwright); this Change's own Delivery state; paths the brief names | Pass, logged |
-| Unwanted outside writes | a write, redirect, `cp`/`mv` destination, `rm` or editor call on any other path: the main checkout, other worktrees and their `.git` administration, other Changes' state and documents, unrelated refs or Git config | Stop |
-| Noticed transfer of local data (TD-55) | an upload whose payload is a local file or data and whose destination is not local: `curl -T`, `-F @file`, `--data-binary @file`; `scp` or `rsync` with a local source and a remote destination. Also any `git push` by an agent, since only Delivery publishes | Stop |
-| Unknown | inline interpreter code (`python -c`, `node -e`), scripts, shell forms the parser does not follow (subshells, `;` chains with `cd`, command-specific working directories) | Model judgement |
+| Writes inside this Change's worktree | edits; shell commands whose write targets resolve inside it | Not judged |
+| Git in this Change's worktree | `git add`, `commit`, `stash` run there. A linked worktree writes into the main clone's `.git/worktrees/<name>`, objects and its own branch, which the command alone does not show | Not judged |
+| Never judged (TD-46) | temporary folders (`/tmp`, the expanded `$TMPDIR`, `/private/var/folders`); the user's tool caches (`~/.cache`, `~/Library/Caches`, uv, npm, pip, Playwright); Delivery's own state | Not judged, logged |
+| Clearly inappropriate | writes into the main checkout, other Changes' worktrees, state and documents, their `.git` administration, or unrelated refs or Git config; any `git push` by an agent, since only Delivery publishes | Stop (rule) |
+| Other outside writes | a write, redirect, `cp`/`mv` destination, `rm` or editor call on any other path, including paths the brief names | Model: stop if dangerous or inappropriate for the task, else report |
+| Outgoing transfer of local data | an upload whose payload is a local file or data and whose destination is not local: `curl -T`, `-F @file`, `--data-binary @file`; `scp` or `rsync` with a local source and a remote destination | Model: stop or report, as above |
+| Unknown | inline interpreter code (`python -c`, `node -e`), scripts, shell forms the parser does not follow (subshells, `;` chains with `cd`, command-specific working directories) | Model: whether it writes outside or transfers out, then as above |
 
 - Downloads and ordinary network use pass. Catching exfiltration in general is not a goal (TD-55).
 - Precedence: protection of other Changes' worktrees, state and documents wins over a broad allowed
@@ -97,16 +110,16 @@ controlled. So `cp /elsewhere/input ./out` and `git -C /elsewhere log` pass.
 - Paths are canonicalised: `~` and `$TMPDIR` expanded, symlinks resolved for the allowed roots and
   for the targets. Relative targets resolve against the command's working directory as far as the
   parser follows it. Anything further is "unknown", never pass or stop by guess.
-- The rules reuse the guard's helpers (S5) under a separate window policy. The SDK guard itself
-  stays unchanged, since it also denies outside reads.
+- The rules reuse the guard's path helpers (S5) under a separate watcher policy. The SDK guard itself stays as it
+  is (TD-366): hook and signing bypasses, force pushes and writes in read-only steps.
 - Reasoning never stops a step (TD-55). An assistant message may only mark the next calls for model
   judgement.
-- **Before N2** (TD-47): D5 requires judgement for unknown calls, and §3.12 places N2 before the
-  model-backed build. So a rules-only watcher can be built, but switching it on before N2 changes the
-  interim (TD-44, TD-50: window steps unguarded until the watcher exists). That is the owner's call
-  (O2).
-- The brief has no field for outside paths today. The design adds `Brief.outside`, a short list of
-  canonical paths approved with the brief (TD-46 "unless the brief names it").
+- **Before the model is chosen** (TD-378, D-…009AV: Luna max against Haiku high, Haiku xhigh against Sol low):
+  the rules-only slices can run first. They stop the clear cases and report every other outside write and
+  transfer unjudged, so the owner sees them; the model judge then turns the reports into stop or harmless.
+  Proposed, `autonomous`.
+- A path the brief names is evidence for the model that a write there fits the task, not an automatic pass. The
+  design adds `Brief.outside`, a short list of canonical paths approved with the brief.
 
 Confidence: high for the classes; the parser's coverage and the model's share are open until
 measured.
@@ -124,10 +137,12 @@ measured.
   A cancel acknowledgement covers only the named turn (`vscode_step.py:256`), and the leftover scan
   finds processes by worktree. So unconfirmed termination blocks the retry and goes to the owner. The
   shared editor host and the owner's own turns are never touched.
-- **The SDK route.** The guard denies outside writes and URL-reaching shell calls before they run
-  (TD-45). The watcher still reads SDK steps and keeps its steer and stop there for what the guard
-  lets through, for example a transfer from an allowed command's script. TD-50 holds, because the
-  stop applies the same rules in both runtimes.
+- **Both runtimes alike.** No guard refuses outside writes any more (TD-320), so the watcher's judging, steer and
+  stop are the only control of them in both runtimes. TD-50 holds: watching SDK steps changes only how outside
+  writes are controlled. An SDK stop reuses `sdk_teardown.teardown`: it cancels the session's tasks, disconnects,
+  stops the runtime with signal fallbacks and checks every recorded process ID against the OS (`abort()` alone
+  stopped no process, options L6; `test_worker_contract.py` requires this evidence). Unconfirmed termination blocks
+  the retry.
 - **Result.** A stop overrides an already submitted result. It clears the accepted payload, refuses
   later results, and is never offered for "accept" (TD-56). The cause is `watcher-stop`. The class,
   target and evidence go in the detail. The detail reports "observed a command writing to X": a
@@ -138,11 +153,19 @@ measured.
   (`budgets.py:256`). The first stop retries once. The next session's first message gives the
   reason: "Your previous attempt was stopped: it ran a command writing to X outside the worktree.
   Stay inside the worktree, or report that you need X."
-- **Second stop** asks the owner, with the gate-question pattern (S6):
-  - add the path to the brief's `outside` list. This makes a new brief version, approved by that
-    answer (TD-46: the brief names it);
-  - run again with the reason;
-  - stop the Change.
+- **Second stop** asks the owner (his answer of 2026-10-23), with the gate-question pattern (S6). The Change is
+  already paused then, so each answer lets the work go on or adjusts it:
+  - allow it: a brief amendment that his answer approves, adding the path to the brief's `outside` list. For this
+    Change, a path the owner approved overrides rule stops as well as the model's: the same write is not stopped
+    again. Publishing (a push, a pull request, a release) is never offered for allowing, since only Delivery
+    publishes;
+  - run the step again with the reason;
+  - replan the stopped task with the reason and the evidence; the planner sees the whole plan and may propose
+    changes to later tasks, which the owner sees.
+
+  Until item 16's amendment design exists, TD-185 permits recording an amendment but not applying it. So the
+  answer records the amendment as approved but unapplied, and the watcher honours the approved paths of that
+  Change from the record; item 16 decides how such amendments reach the brief. Proposed, `autonomous`.
 - **Writes already made** stay in place and are named in the question. The watcher does not undo
   them.
 - **Steering.** One use only, proposed: when the model judges a call doubtful but not a stop, the
@@ -236,9 +259,10 @@ surfaces: a note on the Change's row of the Changes page, and a read-back on the
 decision (TD-427 queues one only for ambiguity, new evidence, a conflict or changed consequences). The style rules
 match what the owner asks of reports: plain words, no hashes or line references, no context assumed.
 
-**For the session:** whether heads-ups belong to the watcher or are a separate observer; window and SDK steps only,
-or the owner's chats too (VS Code offers no surface above the chat input); cadence and backoff against credits; the
-model, after TD-27's benchmark.
+**Decided 2026-10-23** (D-01M5MFATRF5RFMJY9C8284FDV5): heads-ups are not the watcher's job. A separate "rethinker"
+agent on a stronger model runs about every 10th agent turn, slow but smart; the watcher stays cheap and fast. The
+rethinker may read the watcher's event feed. Its surface, backoff and model are decided when it is designed, after
+the watcher.
 
 ### 3.5 Placement, concurrency and lifecycle
 
@@ -251,7 +275,7 @@ model, after TD-27's benchmark.
     subscriptions on one connection, and each event names its chat. In the SDK all of them arrive in
     one stream, each marked with its agent.
 
-  Rules judge each call as it arrives, whichever chat it comes from. After N2, model judgements of
+  Rules judge each call as it arrives, whichever chat it comes from. Model judgements of
   unknown calls run concurrently, up to a limit.
 - **A finished turn is not the end.** A turn completing ends nothing. Steering and reminders start
   new turns in the same chat, the host resumes a finished subagent when the agent writes to it again
@@ -267,45 +291,49 @@ model, after TD-27's benchmark.
 
 ### 3.6 Build slices
 
-1. Measurements left: background subagents, a subagent's own subagents, and a second model.
-2. Feed: the SDK callback and the window's tool-call actions with subagent chats subscribed, both
-   normalised into one event (kind, tool, arguments, agent, parent, time). The session-record
-   catch-up (offset, partial lines, truncation) comes with restart recovery.
-3. Attempt identity stored before work; per-step watcher state; restart recovery of identified
-   attempts.
-4. Window policy: write targets, TD-46 classes with precedence, transfer evidence, Git in the owned
-   worktree, `Brief.outside`; test-first per class, including symlinks, `cd` chains and other
-   Changes' paths.
-5. Stop latch, late-stop override, persistent watcher-stop count, the owner question with a brief
-   amendment.
-6. Stages and the Cockpit field.
-7. Context advice (§3.4a): compaction events per role, attempt and model, kept across attempts. The
-   recommendation shown beside the role's context setting.
-8. After N2: model judgement for unknown calls, steering, status summary.
+SDK first, since window steps stay paused; the window feed comes with their reopening.
 
-Proof, as in §3.12's row, in a throwaway repository: the watcher reads a running window step and
-stops an outside write. The step is retried with its reason, a second stop asks the owner, and one
-doubtful call is steered. Also: a stop after `submit_result` voids the result, and an SDK step's
-stages appear in Cockpit.
+1. TD-27's benchmark on OwlBear work for the two decided pairs (D-…009AV); the owner chooses model and effort.
+2. SDK feed: the runner's event callback normalised into one event (kind, tool, arguments, agent, parent, time),
+   subagents included by `agent_id`; attempt identity stored before work; one watcher per step.
+3. Watcher policy: write targets, the TD-46 never-judged classes, the clearly inappropriate classes with precedence
+   over broad roots, transfer evidence, Git in the owned worktree, `Brief.outside`; test-first per class, including
+   symlinks, `cd` chains and other Changes' paths. Everything else outside is reported unjudged.
+4. Stop latch through `sdk_teardown`, late-stop override, persistent watcher-stop count, the second-stop question
+   to the owner with the approved-path record (§3.3; applying amendments to the brief waits for item 16).
+5. Model judge for the rest, with the chosen model: stop if dangerous or inappropriate for the task, else
+   harmless and reported; one steering message for a doubtful call.
+6. Stages (TD-61, TD-66) and the Changes page field; lessons saved as pending, role-scoped memories
+   (D-…0088E), with evidence that the agent's behaviour caused the signal (D-…YS7YN).
+7. Context advice (§3.4a). Heads-ups are the separate rethinker's (§3.4b), not a watcher slice.
+8. Window feed when window steps reopen: every `chat/toolCallReady`, subscribed subagent chats, catch-up from
+   the host record; then the suspended routing decisions are reviewed (D-…5KGRQ).
+
+Proof, in a throwaway repository: the watcher reads a running SDK step and stops a clearly inappropriate outside
+write. The step is retried with its reason, a second stop asks the owner, a harmless outside write is reported,
+and one doubtful call is steered. Also: a stop after `submit_result` voids the result, and a step's stages appear
+on the Changes page.
 
 ## 4. Recommendation, Confidence, and Limits
 
-Proposals for the owner (all `autonomous` until decided). Sol challenged the first draft; 17
-findings are folded in above.
+Revised 2026-10-23. Sol challenged the first draft; its 17 findings are folded in above.
 
-- O1 The watcher follows each runtime's live stream, including subagents' own chats, and reads the
-  session record only to catch up after a runner restart (§3.1).
-- O2 Switch on a rules-only watcher for window steps before N2, with unknown calls logged and shown?
-  Or keep it off until the model judge exists after N2? The first guards window steps sooner. The
-  second keeps D5's judgement complete. Either way the interim of TD-44 and TD-50 changes only by
-  the owner's choice.
-- O3 The second stop can add the path to the brief's `outside` list as a new brief version, approved
-  by that answer.
-- O4 A feed failure stops a window step with an operational cause that never counts as a watcher
-  stop.
-- O5 SDK steps keep the guard unchanged. The watcher reads them and can steer and stop there by the
-  same rules, for what the guard lets through.
-- O6 The brief gains an `outside` list of canonical paths, approved with the brief.
+**Needs the owner** (his own decisions, asked one at a time):
+
+- Q1 Heads-ups (§3.4b, his input): answered 2026-10-23, a separate rethinker agent, not the watcher.
+- Q2 The second stop of a step: answered 2026-10-23, allow (a brief amendment his answer approves), run again, or
+  replan the stopped task (§3.3).
+- Q3 TD-27's benchmark: run it now on OwlBear work (it spends credits on four model settings), then choose the
+  watcher's model and effort from the results (D-…009AV).
+
+**Proposed, `autonomous`** (the agent's choices, recorded as drafts):
+
+- A1 SDK first: the watcher is built for SDK steps; the window feed follows when window steps reopen (§3.6).
+- A2 Rules settle the clear cases (never judged, clearly inappropriate); a model judges the other outside writes and
+  transfers against the task; the rules-only slices run before the model, reporting what they cannot judge.
+- A3 The live stream is the feed in both runtimes; the host's record only catches up after a runner restart (§3.1).
+- A4 A feed failure stops a step with an operational cause that never counts as a watcher stop.
+- A5 The brief gains an `outside` list of canonical paths: evidence for the model, not an automatic pass.
 
 Limits:
 - S2 is five Luna runs.
