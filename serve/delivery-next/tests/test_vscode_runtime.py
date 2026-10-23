@@ -111,14 +111,25 @@ def test_hooks_go_off_beside_the_repositorys_own_local_copilot_settings(repo: Pa
     assert path.read_text() == '{"model": "x", "disableAllHooks": false}\n'
 
 
-@pytest.mark.parametrize("content", ["[]", "{ // mine\n}", "not json"])
+@pytest.mark.parametrize("content", ["[]", "{ // mine\n}", "not json", '{"a": NaN}', '{"a": Infinity}', '{"a": 1e999}'])
 def test_local_copilot_settings_delivery_cannot_edit_refuse_the_step(repo: Path, content: str) -> None:
     path = repo / wf.HOOKS
     path.parent.mkdir(parents=True)
     path.write_text(content)
-    with pytest.raises(wf.SettingsError, match="cannot turn its hooks off"):
+    with pytest.raises(wf.SettingsError, match=r"cannot turn its hooks off|JSON cannot carry"):
         wf.place(repo, wf.HOOKS, wf.hooks_off)
     assert path.read_text() == content
+
+
+@pytest.mark.parametrize(
+    ("rel", "render"), [(wf.SETTINGS, wf.settings("gpt-6-luna")), (wf.MCP, wf.mcp(Path("/i.json")))]
+)
+def test_window_files_never_write_a_number_json_cannot_carry(repo: Path, rel: str, render) -> None:
+    (repo / rel).parent.mkdir(exist_ok=True)
+    (repo / rel).write_text('{"a": NaN}')
+    with pytest.raises(wf.SettingsError, match="JSON cannot carry"):
+        wf.place(repo, rel, render)
+    assert (repo / rel).read_text() == '{"a": NaN}'
 
 
 def test_a_locally_edited_tracked_file_is_refused_and_kept(repo: Path) -> None:

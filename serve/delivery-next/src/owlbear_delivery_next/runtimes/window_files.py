@@ -55,6 +55,15 @@ def _opening(text: str) -> int | None:
     return sum(len(ln) for ln in lines[:first]) + lines[first].index("{") + 1
 
 
+def _strict(data: dict[str, Any], rel: str) -> str:
+    """``data`` as strict JSON; NaN or infinity, which Python reads but JSON readers refuse, refuse the step."""
+    try:
+        return json.dumps(data, indent=2, allow_nan=False) + "\n"
+    except ValueError as exc:
+        msg = f"{rel} holds a number JSON cannot carry; Delivery writes nothing"
+        raise SettingsError(msg) from exc
+
+
 def _plain_json(text: str) -> str:
     """JSON with comments as plain JSON: comments and trailing commas outside strings go."""
     out: list[str] = []
@@ -90,7 +99,7 @@ def _with_settings(old: str | None, model: str) -> str:
     except ValueError:
         current = None
     if isinstance(current, dict):
-        return json.dumps(current | {HARNESS: True, DEFAULT_MODEL: model, MCP_ACCESS: "none"}, indent=2) + "\n"
+        return _strict(current | {HARNESS: True, DEFAULT_MODEL: model, MCP_ACCESS: "none"}, SETTINGS)
     text = old or ""
     if current is not None or (at := _opening(text)) is None:
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
@@ -123,7 +132,7 @@ def hooks_off(old: str | None) -> str:
         raise SettingsError(msg) from exc
     if not isinstance(data, dict):
         raise SettingsError(f"{HOOKS} is not a JSON object; Delivery cannot turn its hooks off")  # noqa: EM102, TRY003
-    return json.dumps(data | {NO_HOOKS: True}, indent=2) + "\n"
+    return _strict(data | {NO_HOOKS: True}, HOOKS)
 
 
 def write_window_settings(folder: Path, model: str) -> None:
@@ -203,7 +212,7 @@ def mcp(inbox: Path, memory: Path | None = None) -> Render:
         own = {relay: {"type": "stdio", "command": sys.executable, "args": args, "tools": ["*"]}}
         if (server := preload.memory(memory)) is not None:
             own[memory_name] = {"type": "stdio", **server}
-        return json.dumps({**data, "mcpServers": {**data.get("mcpServers", {}), **own}}, indent=2) + "\n"
+        return _strict({**data, "mcpServers": {**data.get("mcpServers", {}), **own}}, MCP)
 
     return render
 
