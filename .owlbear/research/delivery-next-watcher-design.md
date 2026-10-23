@@ -151,11 +151,12 @@ measured.
   (`budgets.py:256`). The first stop retries once. The next session's first message gives the
   reason: "Your previous attempt was stopped: it ran a command writing to X outside the worktree.
   Stay inside the worktree, or report that you need X."
-- **Second stop** asks the owner, with the gate-question pattern (S6):
-  - add the path to the brief's `outside` list. This makes a new brief version, approved by that
-    answer (TD-46: the brief names it);
-  - run again with the reason;
-  - stop the Change.
+- **Second stop** asks the owner (his answer of 2026-10-23), with the gate-question pattern (S6). The Change is
+  already paused then, so each answer lets the work go on or adjusts it:
+  - allow it: a brief amendment that his answer approves, adding the path to the brief's `outside` list;
+  - run the step again with the reason;
+  - replan the stopped task with the reason and the evidence; the planner sees the whole plan and may propose
+    changes to later tasks, which the owner sees.
 - **Writes already made** stay in place and are named in the question. The watcher does not undo
   them.
 - **Steering.** One use only, proposed: when the model judges a call doubtful but not a stop, the
@@ -310,8 +311,8 @@ Revised 2026-10-23. Sol challenged the first draft; its 17 findings are folded i
 **Needs the owner** (his own decisions, asked one at a time):
 
 - Q1 Heads-ups (§3.4b, his input): answered 2026-10-23, a separate rethinker agent, not the watcher.
-- Q2 The second stop of a step: what the owner's question offers (§3.3): add the path to the brief's `outside`
-  list as a new brief version, run again with the reason, or stop the Change.
+- Q2 The second stop of a step: answered 2026-10-23, allow (a brief amendment his answer approves), run again, or
+  replan the stopped task (§3.3).
 - Q3 TD-27's benchmark: run it now on OwlBear work (it spends credits on four model settings), then choose the
   watcher's model and effort from the results (D-…009AV).
 
