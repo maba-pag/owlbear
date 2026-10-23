@@ -102,6 +102,7 @@ class Step:
         self.opened: list[Transport] = []  # connections this step opened; it closes them when it ends
         self.schema: Json | None = None  # the model's config properties as the host lists them
         self.agent_uri = ""  # the agent file as the session lists it; the turns name it so
+        self.announced: dict[str, str] = {}  # every subagent start the host announced, kept if a send raises
 
     def run(self, control: Control, limit: float, bind_limit: float = 60) -> Outcome:
         """Pin, launch, bind, let the bootstrap end, sign in again, check the model, configure, run."""
@@ -458,7 +459,7 @@ class Step:
         """A subagent the host announced on its starting call; one the role may not start ends the step (TD-374)."""
         if call_id in out.subagents:
             return
-        out.subagents[call_id] = name
+        out.subagents[call_id] = self.announced[call_id] = name
         if not self.spec.subagents:
             out.end, out.detail = "subagent", f"a subagent started: {name or 'unnamed'}; no subagent may run"
         elif name not in BUILTINS:

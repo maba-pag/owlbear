@@ -1382,6 +1382,28 @@ def test_an_announced_start_the_record_lacks_is_kept_and_none_is_counted_twice(w
     assert (logged["credits_known"], all(s["credits_known"] is False for s in run.subagents)) == (False, True)
 
 
+def test_an_announced_subagent_survives_a_send_that_raises(wt: Path, tmp_path: Path) -> None:
+    ask = [
+        {"type": "chat/toolCallStart", "toolCallId": "c1", "toolName": "bash"},
+        {"type": "chat/toolCallReady", "toolCallId": "c1", "toolInput": "{}", "confirmed": None},
+    ]
+    a = Adapted(wt, tmp_path / "steps" / "1.json", [[*_announced("t1", "explore"), *ask]], [None])
+    a.cfg = dataclasses.replace(a.cfg, subagents=True)
+    sent = a.host.dispatch
+
+    def dispatch(channel: str, action: dict) -> None:
+        if action["type"] == "chat/toolCallConfirmed":
+            msg = "chat/toolCallConfirmed: connection closed: server closed"
+            raise HostError(msg)
+        sent(channel, action)
+
+    a.host.dispatch = dispatch
+    run = a.run()
+
+    assert "connection closed" in run.detail
+    assert [(s["agent"], s["tokens"], s["outcome"]) for s in run.subagents] == [("explore", None, "unfinished")]
+
+
 def test_without_a_host_record_the_announced_subagents_stay_with_unknown_counts(wt: Path, tmp_path: Path) -> None:
     done = [*_announced("t1", "explore"), USAGE, {"type": "chat/turnComplete"}]
     a = Adapted(wt, tmp_path / "steps" / "1.json", [done], [GOOD])

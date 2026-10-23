@@ -122,6 +122,7 @@ class _Driver:
         self.control = Control()
         self.placed: list[wf.Placed] = []
         self.gate = Gate(cfg, run, self.log, _grace(self.control))
+        self.stepper: Step | None = None
 
     def log(self, **event: Any) -> None:  # noqa: ANN401 - JSON values
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
@@ -160,7 +161,8 @@ class _Driver:
             subagents=cfg.subagents,
         )
         limit = cfg.limit or DEADLINES.get(cfg.kind, 2400.0)  # the role's time limit (TD-286)
-        out = Step(conn, spec, self.deny, hooks=hooks).run(self.control, limit=limit)
+        self.stepper = Step(conn, spec, self.deny, hooks=hooks)
+        out = self.stepper.run(self.control, limit=limit)
         self.log(event="vscode-step", end=out.end, detail=out.detail, session=out.session)
         return out
 
@@ -184,6 +186,8 @@ class _Driver:
         except (OSError, KeyError, TypeError, wf.SettingsError, ahp.HostError, subprocess.SubprocessError) as exc:
             end = "closed" if self.control.started.is_set() else "error"
             out = Outcome(end, f"{type(exc).__name__}: {exc}"[:300])
+            if self.stepper is not None:  # what the host announced before the send that raised
+                out.subagents = dict(self.stepper.announced)
             _ending(out, self.gate)
             return out
         finally:
