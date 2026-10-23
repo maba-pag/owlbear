@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
@@ -205,3 +206,10 @@ def test_a_loop_reads_only_round_values_and_a_pinned_loop_never_reads_them_again
     assert rounds.loop(c, "plan", cleared, "planner").policy == pinned
     with pytest.raises(SettingsUnset, match=r"agents\.planner\.max_rounds"):
         rounds.pinned(change(StepKind.PLAN), "plan", cleared, "planner")
+
+
+@pytest.mark.usefixtures("no_base")
+def test_round_values_that_do_not_hold_together_are_refused_while_the_role_is_incomplete():
+    bad = config.Agent(max_rounds=3, max_findings=10, last_round_at=8, ask_owner_at=7)  # its model unset
+    with pytest.raises(ValidationError, match="must be below"):
+        resolve(GlobalLayer(agents={"shaper": bad}), Layer())

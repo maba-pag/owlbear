@@ -257,7 +257,8 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         }
         for role in ROLES
     }  # fmt: skip
-    agents = {r: Effective.model_validate(v) for r, v in roles.items() if all(v[n] is not None for n in used(r))}
+    every = {r: Effective.model_validate(v) for r, v in roles.items()}  # set round values hold together, used or not
+    agents = {r: e for r, e in every.items() if all(roles[r][n] is not None for n in used(r))}
     runtimes = {
         name: bool(on) for name in RUNTIMES
         if (on := _pick(f"runtimes.{name}", sources, *((s, layer.runtimes.get(name)) for s, layer in layers)))
