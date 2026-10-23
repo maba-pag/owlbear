@@ -92,9 +92,10 @@ across clones and machines. Without one, they stay on this Mac in `~/.owlbear/pr
 
 OwlBear's code ships no settings defaults: every model, effort, limit and switch comes from the
 global settings in the shared repository, this machine's, or the project's. A setting no layer
-sets shows as unset on the Settings page, and a step that needs it asks you to fill it in. A new
-machine that uses your shared repository takes its global settings; one without starts with every
-setting unset.
+sets shows as unset on the Settings page, and a step that needs it asks you to fill it in;
+automatic memory curation does not start until its role and threshold are set. Settings nothing
+applies yet (runtimes, visibility, tool categories) may stay unset. A new machine that uses your
+shared repository takes its global settings; one without starts with every setting unset.
 
 ## Upgrading OwlBear
 

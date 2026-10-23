@@ -7,12 +7,14 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
+from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.settings import carried, config, roles
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, SettingsUnset, resolve
 from owlbear_delivery_next.state_store import settings_carry
 from owlbear_delivery_next.state_store.store import read_layer
-from owlbear_delivery_next.workflow_steps import unset_settings
+from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, unset_settings
 
 
 @pytest.fixture
@@ -24,9 +26,10 @@ def no_base(monkeypatch):
 def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     empty = resolve(None, Layer())
     assert (empty.agents, empty.sessions, empty.watcher, empty.final_review) == ({}, None, None, None)
-    assert {"agents.builder.model", "agents.watcher.effort", "sessions", "watcher", "runtimes.sdk"} <= set(
-        empty.missing
-    )
+    assert {"agents.builder.model", "agents.watcher.effort", "sessions", "watcher"} <= set(empty.missing)
+    inactive = {"runtimes.sdk", "visible", "agents.builder.runtime", "agents.watcher.minutes"}
+    inactive |= {"agents.picker.max_rounds"}
+    assert not inactive & set(empty.missing)  # nothing reads them, and the page edits none of them
     assert empty.page()["agents"]["builder"]["model"] is None
     assert "sessions" not in empty.sources
 
@@ -96,3 +99,66 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)  # no Global file yet: today's values in full
     assert resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing == []
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_role_needs_only_the_fields_its_work_reads():
+    fields = ("model", "effort", "context")
+    watcher = carried.layer().agents["watcher"].model_dump(include=set(fields))
+    shaper = carried.layer().agents["shaper"].model_dump(include={*fields, *config.RoundPolicy.model_fields})
+    agents = {"watcher": config.Agent.model_validate(watcher), "shaper": config.Agent.model_validate(shaper)}
+    some = resolve(GlobalLayer(agents=agents), Layer())
+    assert (some.agent("watcher").model, some.agent("watcher").minutes) == (carried.MODELS["watcher"].model, None)
+    assert some.agent("shaper").max_rounds is not None
+    assert not [k for k in some.missing if k.startswith(("agents.watcher.", "agents.shaper."))]
+    picker = carried.layer().agents["picker"].model_dump(include=set(fields))
+    with pytest.raises(SettingsUnset, match=r"agents\.picker\.minutes"):  # a picker session has a time limit
+        resolve(GlobalLayer(agents={"picker": config.Agent.model_validate(picker)}), Layer()).agent("picker")
+    assert set(config.used("builder")) == set(config.Effective.model_fields) - {"runtime", "visible", "categories"}
+
+
+def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch):
+    asked: list[SettingsUnset] = []
+    c = change(StepKind.BUILD)
+    store = SimpleNamespace(settings=lambda: None)
+    monkeypatch.setattr(decision_publication, "resume", lambda *_a: c)
+    monkeypatch.setattr(runner.clarification, "checked", lambda _s, _l, c: c)
+    monkeypatch.setattr(unset_settings, "asked", lambda _s, _l, exc: asked.append(exc))
+
+    def gated(*_a):
+        raise SettingsUnset(["agents.picker.model"])
+
+    monkeypatch.setattr(decisions_gate, "gated", gated)
+    runner._step(store, SimpleNamespace(slug="c1"), c, c.step, None)  # noqa: SLF001
+    assert [e.keys for e in asked] == [["agents.picker.model"]]
+
+
+@pytest.mark.usefixtures("no_base")
+def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
+    shared = DataRepo(shared_repo[0])
+    settings_carry.carry(shared)
+    assert curation._unset(shared) == ""  # noqa: SLF001
+    glob = read_layer(shared.global_path, GlobalLayer)
+    shared.global_path.write_text(glob.model_copy(update={"curator_threshold": None}).model_dump_json())
+    assert "curator_threshold" in curation._unset(shared)  # noqa: SLF001
+    agents = {r: a for r, a in glob.agents.items() if r != "curator"}
+    shared.global_path.write_text(glob.model_copy(update={"agents": agents}).model_dump_json())
+    assert "agents.curator.model" in curation._unset(shared)  # noqa: SLF001
+
+
+def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled_again(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "publish", lambda *_a: "the commit failed")
+        assert settings_carry.carry(shared) == "the commit failed"
+    assert _git(shared.root, "status", "--porcelain")  # filled, left uncommitted
+    glob = read_layer(shared.global_path, GlobalLayer)
+    shared.global_path.write_text(glob.model_copy(update={"sessions": None}).model_dump_json())  # the owner cleared it
+
+    assert settings_carry.due(shared)
+    settings_carry.carry(shared)
+
+    assert _git(shared.root, "status", "--porcelain") == ""
+    assert _git(shared.root, "log", "-1", "--format=%s") == "settings: today's built-in values carried into Global"
+    assert read_layer(shared.global_path, GlobalLayer).sessions is None
+    assert not settings_carry.due(shared)

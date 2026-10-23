@@ -4,8 +4,9 @@ import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit } from "./layers.mjs";
 
 // Code ships no defaults (2026-10-23): a value no layer sets is unset, an error until it is filled in.
-function source(key, inUse) {
+function source(key, inUse, needed = true) {
   const from = SOURCES[state.loaded.settings.sources[key]];
+  if (!from && !needed) return html`<p-text size="xs" color="contrast-medium">unset; nothing applies it yet</p-text>`;
   if (!from) {
     return html`<p-text size="xs" color="error">unset: set it here or in a wider layer; steps that need it ask you
       until then</p-text>`;
@@ -278,5 +279,5 @@ export function inactive(label, value, key) {
   } else {
     control = typed(label, shown(value), () => {}, { disabled: true });
   }
-  return cell(control, source(key));
+  return cell(control, source(key, undefined, false));
 }

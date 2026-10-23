@@ -430,11 +430,14 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             unset_settings.asked(store, lock, exc)
             return
         change = resumed
-    with decisions_gate.gated(store, lock, change, step) as passed:
-        if passed is None:  # a gone check's end runs whatever the decisions say
-            prepare.ran(store, lock, store.read(lock.slug), repo, runnable=False)
-        else:
-            _run(store, lock, passed, step, repo)
+    try:
+        with decisions_gate.gated(store, lock, change, step) as passed:
+            if passed is None:  # a gone check's end runs whatever the decisions say
+                prepare.ran(store, lock, store.read(lock.slug), repo, runnable=False)
+            else:
+                _run(store, lock, passed, step, repo)
+    except SettingsUnset as exc:  # the gate's reassessment picks with the picker's settings (TD-459)
+        unset_settings.asked(store, lock, exc)
 
 
 def _run(  # noqa: C901 - one branch per phase

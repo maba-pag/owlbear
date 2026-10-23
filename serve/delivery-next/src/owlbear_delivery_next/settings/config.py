@@ -147,25 +147,37 @@ class MachineLayer(WideLayer):
 
 
 class Effective(Record):
-    """One agent's resolved settings."""
+    """One agent's resolved settings; a field its role does not use (``used``) may be unset."""
 
-    model: str
-    effort: Effort
-    context: Context
-    runtime: RuntimeName
-    visible: bool
-    categories: list[Category]
-    max_rounds: int
-    max_findings: int
-    last_round_at: int
-    ask_owner_at: int
-    minutes: int
-    subagents: bool
+    model: str | None
+    effort: Effort | None
+    context: Context | None
+    runtime: RuntimeName | None
+    visible: bool | None
+    categories: list[Category] | None
+    max_rounds: int | None
+    max_findings: int | None
+    last_round_at: int | None
+    ask_owner_at: int | None
+    minutes: int | None
+    subagents: bool | None
 
     @model_validator(mode="after")
     def _rounds(self) -> Effective:
-        RoundPolicy.model_validate(self.model_dump(include=set(RoundPolicy.model_fields)))
+        values = self.model_dump(include=set(RoundPolicy.model_fields))
+        if None not in values.values():
+            RoundPolicy.model_validate(values)
         return self
+
+
+LOOPED: tuple[Role, ...] = ("shaper", "planner", "builder", "updater")  # whose work runs a challenge loop (TD-209)
+UNTIMED: tuple[Role, ...] = ("shaper", "watcher")  # the shaping chat has no session limit; the watcher is no session
+
+
+def used(role: Role) -> tuple[str, ...]:
+    """The fields *role*'s work reads and needs set; runtime, visibility and categories are inactive (TD-50)."""
+    timed = () if role in UNTIMED else ("minutes", "subagents")
+    return ("model", "effort", "context", *timed, *(tuple(RoundPolicy.model_fields) if role in LOOPED else ()))
 
 
 class SettingsUnset(Exception):  # noqa: N818 - says what happened
@@ -179,8 +191,9 @@ class SettingsUnset(Exception):  # noqa: N818 - says what happened
 class Settings(Record):
     """Every setting resolved, with the layer each value came from, keyed ``agents.<role>.<field>``.
 
-    ``agents`` holds the roles whose every field is set; ``roles`` holds every role's values, ``None`` where unset,
-    for the Settings page. A general field no layer sets is ``None``. ``missing`` lists every unset key.
+    ``agents`` holds the roles whose every used field (``used``) is set; ``roles`` holds every role's values, ``None``
+    where unset, for the Settings page. A general field no layer sets is ``None``. ``missing`` lists every unset key a
+    step reads; inactive settings (runtimes, visibility, tool categories) may stay unset.
     """
 
     visible: bool | None
@@ -244,7 +257,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         }
         for role in ROLES
     }  # fmt: skip
-    agents = {r: Effective.model_validate(v) for r, v in roles.items() if all(x is not None for x in v.values())}
+    agents = {r: Effective.model_validate(v) for r, v in roles.items() if all(v[n] is not None for n in used(r))}
     runtimes = {
         name: bool(on) for name in RUNTIMES
         if (on := _pick(f"runtimes.{name}", sources, *((s, layer.runtimes.get(name)) for s, layer in layers)))
@@ -267,9 +280,8 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         )
         for name in RoundPolicy.model_fields
     }
-    missing = [f"agents.{r}.{n}" for r, v in roles.items() for n, x in v.items() if x is None]
-    missing += [f"runtimes.{n}" for n in RUNTIMES if n not in runtimes]
-    missing += [k for k, v in general.items() if v is None]
+    missing = [f"agents.{r}.{n}" for r, v in roles.items() for n in used(r) if v[n] is None]
+    missing += [k for k, v in general.items() if v is None and k != "visible"]
     missing += [f"final_review.{n}" for n, v in final.items() if v is None]
     return Settings(
         **general,

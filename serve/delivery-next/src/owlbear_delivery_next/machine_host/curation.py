@@ -30,6 +30,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
@@ -256,7 +257,7 @@ class Curation:
 
     def _one(self, folder: str, started: datetime) -> None:
         shared = self.shared()
-        why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
+        why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced() or _unset(shared)
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return
@@ -327,3 +328,14 @@ def _pending(store: Path) -> list[Any]:
     if not store.is_dir():
         return []
     return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]
+
+
+def _unset(shared: data_repo.DataRepo) -> str:
+    """Why a run cannot start for unset settings: the curator's role or its threshold; empty when both are set."""
+    try:
+        settings = lookup.machine(shared)
+        settings.agent(roles.SESSIONS[LABEL])
+        settings.need("curator_threshold")
+    except SettingsUnset as exc:
+        return str(exc)
+    return ""
