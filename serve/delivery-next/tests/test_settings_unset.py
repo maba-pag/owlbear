@@ -162,19 +162,23 @@ def test_a_carry_whose_commit_failed_is_committed_at_the_next_start_never_filled
         m.setattr(DataRepo, "publish", lambda *_a: "the commit failed")
         assert settings_carry.carry(shared) == "the commit failed"
     assert _git(shared.root, "status", "--porcelain")  # filled, left uncommitted
-    glob = read_layer(shared.global_path, GlobalLayer)
-    shared.global_path.write_text(glob.model_copy(update={"sessions": None}).model_dump_json())  # the owner cleared it
-
-    assert settings_carry.due(shared)
-    settings_carry.carry(shared)
-
-    assert _git(shared.root, "status", "--porcelain") == ""
-    assert _git(shared.root, "log", "-1", "--format=%s") == "settings: today's built-in values carried into Global"
-    assert read_layer(shared.global_path, GlobalLayer).sessions is None
-    assert not settings_carry.due(shared)
+    cleared = read_layer(shared.global_path, GlobalLayer).model_copy(update={"sessions": None}).model_dump_json()
 
     head = _git(shared.root, "rev-parse", "HEAD")
-    shared.global_path.write_text("{ not json")  # an invalid layer left uncommitted is never published
+    shared.global_path.write_text("{ not json")  # an invalid layer is never published
     with pytest.raises(StoreError):
         settings_carry.carry(shared)
     assert (_git(shared.root, "rev-parse", "HEAD"), shared.global_path.read_text()) == (head, "{ not json")
+
+    shared.global_path.write_text(cleared)  # the owner cleared a carried value before the retry
+    assert settings_carry.due(shared)
+    settings_carry.carry(shared)
+    assert _git(shared.root, "status", "--porcelain") == ""
+    assert _git(shared.root, "log", "-1", "--format=%s") == "settings: today's built-in values carried into Global"
+    assert read_layer(shared.global_path, GlobalLayer).sessions is None
+
+    shared.global_path.write_text(read_layer(shared.global_path, GlobalLayer).model_copy(
+        update={"sessions": 7}).model_dump_json())  # fmt: skip
+    head = _git(shared.root, "rev-parse", "HEAD")
+    assert (settings_carry.due(shared), settings_carry.carry(shared)) == (False, "")  # a later edit: a save's to share
+    assert _git(shared.root, "rev-parse", "HEAD") == head

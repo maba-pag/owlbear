@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
@@ -70,7 +70,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
-    from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
@@ -235,11 +234,14 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
     return plan_round.scopes(store, slug)
 
 
-def _judged_with(store: Store) -> Settings:
-    """The settings a visual check runs with; ``SettingsUnset`` when one it needs is unset."""
-    settings = store.settings()
-    settings.need("widths", "design_failures", "agents.reviewer", "agents.design-judge")
-    return settings
+def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:
+    """The brief's states captured at *widths* from the ready environment, and the design scans they and the UI hold."""
+    pack, url = design.pack(), change.env.ready_url if change.env else ""
+    shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
+    states = {s.name: s.version for s in change.brief.visual}
+    source = design.sources(path, visual.ui_paths(change, head), pack)
+    found = [s.design for s in shots if s.design] + ([source] if source else [])
+    return shots, design.marked(found, change.before, states)
 
 
 def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -247,22 +249,19 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
     store.write(lock, change)
-    url = change.env.ready_url if change.env else ""
     mine, theirs, ran = [], [], []  # the judges' sessions and how they ended
-    settings = _judged_with(store)  # one snapshot: what the round records is what it ran with; unset asks the owner
+    settings = store.settings()  # one snapshot: what the round records is what it ran with
     try:
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
         widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
-        if visual_settled.settled(store, lock, change, (head, tree, widths), out):
-            return
+        if widths and visual_settled.settled(store, lock, change, (head, tree, widths), out):
+            return  # the owner's decision on a captured round needs no judge
+        settings.need(*(() if widths else ("widths",)), "design_failures", "agents.reviewer", "agents.design-judge")
         prepare.stepped(change, prepared=prepare.read(store, change.slug, VISUAL) is not None)  # TD-96
-        pack = design.pack()
-        shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
-        states = {s.name: s.version for s in change.brief.visual}
-        source = design.sources(path, visual.ui_paths(change, head), pack)
-        found = [s.design for s in shots if s.design] + ([source] if source else [])
-        scans = design.marked(found, change.before, states)
+        shots, scans = _captured(change, path, head, out, widths)
+    except SettingsUnset:  # the runner's handler asks the owner: never a capture error
+        raise
     except prepare.PrepareError as exc:
         result = exc.result
     except visual.BrowserMissingError as exc:

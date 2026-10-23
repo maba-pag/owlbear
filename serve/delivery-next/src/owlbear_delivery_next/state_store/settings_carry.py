@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 
 
 def due(shared: DataRepo) -> bool:
-    """Whether the carry has work: values to fill in, or a filled Global layer an earlier start left uncommitted."""
-    return _unfilled(shared) or _uncommitted(shared)
+    """Whether the carry has work: values to fill in, or a filled Global layer whose carry was never committed."""
+    return _unfilled(shared) or _unpublished(shared)
 
 
 def carry(shared: DataRepo) -> str:
@@ -35,7 +35,7 @@ def carry(shared: DataRepo) -> str:
     until = time.monotonic() + data_repo.SAVE_SECONDS
     with shared.locked():
         fill = _unfilled(shared)
-        if not fill and not _uncommitted(shared):  # another process carried and committed them meanwhile
+        if not fill and not _unpublished(shared):  # another process carried and committed them meanwhile
             return ""
         if fill:
             update_layer(shared.global_path, GlobalLayer, filled)
@@ -44,18 +44,32 @@ def carry(shared: DataRepo) -> str:
         return shared.publish(shared.global_path, "settings: today's built-in values carried into Global", until)
 
 
+def _format(text: str) -> int | None:
+    """The layer's format; ``None`` when the text is no layer."""
+    try:
+        raw = json.loads(text)
+        return int(raw.get("format", 0)) if isinstance(raw, dict) else None
+    except ValueError, TypeError:
+        return None
+
+
 def _unfilled(shared: DataRepo) -> bool:
     """Whether the Global layer has not had the built-in values carried into it yet."""
     try:
-        raw = json.loads(shared.global_path.read_text())
+        found = _format(shared.global_path.read_text())
     except FileNotFoundError:
         return True
-    except OSError, ValueError:
+    except OSError:
         return False  # an unreadable layer is reported where it is read, never overwritten here
-    return not isinstance(raw, dict) or int(raw.get("format", 0)) < CARRIED_FORMAT
+    return found is not None and found < CARRIED_FORMAT
 
 
-def _uncommitted(shared: DataRepo) -> bool:
-    """Whether the Global layer differs from what is committed; a failed git status counts as committed."""
-    found = shared.git("status", "--porcelain", "--", shared.global_path.relative_to(shared.root).as_posix())
-    return found.returncode == 0 and bool(found.stdout.strip())
+def _unpublished(shared: DataRepo) -> bool:
+    """Whether the committed Global layer predates the carry: an earlier start filled it, and its commit failed.
+
+    Later edits to a carried layer are never published here; a Settings save publishes them.
+    """
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    committed = shared.git("show", f"HEAD:{rel}")
+    found = _format(committed.stdout) if committed.returncode == 0 else 0
+    return found is not None and found < CARRIED_FORMAT
