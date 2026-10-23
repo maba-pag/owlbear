@@ -139,8 +139,10 @@ measured.
   shared editor host and the owner's own turns are never touched.
 - **Both runtimes alike.** No guard refuses outside writes any more (TD-320), so the watcher's judging, steer and
   stop are the only control of them in both runtimes. TD-50 holds: watching SDK steps changes only how outside
-  writes are controlled. An SDK stop is the runner's own `abort` and disconnect, with processes confirmed gone
-  through `tasks.list` (platform probe 4).
+  writes are controlled. An SDK stop reuses `sdk_teardown.teardown`: it cancels the session's tasks, disconnects,
+  stops the runtime with signal fallbacks and checks every recorded process ID against the OS (`abort()` alone
+  stopped no process, options L6; `test_worker_contract.py` requires this evidence). Unconfirmed termination blocks
+  the retry.
 - **Result.** A stop overrides an already submitted result. It clears the accepted payload, refuses
   later results, and is never offered for "accept" (TD-56). The cause is `watcher-stop`. The class,
   target and evidence go in the detail. The detail reports "observed a command writing to X": a
@@ -153,10 +155,17 @@ measured.
   Stay inside the worktree, or report that you need X."
 - **Second stop** asks the owner (his answer of 2026-10-23), with the gate-question pattern (S6). The Change is
   already paused then, so each answer lets the work go on or adjusts it:
-  - allow it: a brief amendment that his answer approves, adding the path to the brief's `outside` list;
+  - allow it: a brief amendment that his answer approves, adding the path to the brief's `outside` list. For this
+    Change, a path the owner approved overrides rule stops as well as the model's: the same write is not stopped
+    again. Publishing (a push, a pull request, a release) is never offered for allowing, since only Delivery
+    publishes;
   - run the step again with the reason;
   - replan the stopped task with the reason and the evidence; the planner sees the whole plan and may propose
     changes to later tasks, which the owner sees.
+
+  Until item 16's amendment design exists, TD-185 permits recording an amendment but not applying it. So the
+  answer records the amendment as approved but unapplied, and the watcher honours the approved paths of that
+  Change from the record; item 16 decides how such amendments reach the brief. Proposed, `autonomous`.
 - **Writes already made** stay in place and are named in the question. The watcher does not undo
   them.
 - **Steering.** One use only, proposed: when the model judges a call doubtful but not a stop, the
@@ -290,7 +299,8 @@ SDK first, since window steps stay paused; the window feed comes with their reop
 3. Watcher policy: write targets, the TD-46 never-judged classes, the clearly inappropriate classes with precedence
    over broad roots, transfer evidence, Git in the owned worktree, `Brief.outside`; test-first per class, including
    symlinks, `cd` chains and other Changes' paths. Everything else outside is reported unjudged.
-4. Stop latch, late-stop override, persistent watcher-stop count, the second-stop question to the owner.
+4. Stop latch through `sdk_teardown`, late-stop override, persistent watcher-stop count, the second-stop question
+   to the owner with the approved-path record (§3.3; applying amendments to the brief waits for item 16).
 5. Model judge for the rest, with the chosen model: stop if dangerous or inappropriate for the task, else
    harmless and reported; one steering message for a doubtful call.
 6. Stages (TD-61, TD-66) and the Changes page field; lessons saved as pending, role-scoped memories
