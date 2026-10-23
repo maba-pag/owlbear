@@ -190,7 +190,7 @@ def offered(store: Store, change: Change, question: Question) -> list[Option]:
 def _visual_holds(store: Store, change: Change, kept: VisualRound, where: Path) -> bool:
     """The round's capture and every input its verdicts depended on, widths included, are still the Change's."""
     try:
-        widths = (change.before.widths if change.before else None) or store.settings().widths
+        widths = (change.before.widths if change.before else None) or store.settings().widths or []
     except Exception:  # noqa: BLE001 - unreadable settings offer no accept rather than fail the page
         return False
     return decision.matches(change, kept, head(where), widths)

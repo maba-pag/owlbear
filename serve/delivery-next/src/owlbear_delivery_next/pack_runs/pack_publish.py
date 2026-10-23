@@ -27,6 +27,7 @@ from owlbear_delivery_next.github.provider import (
     Refusal,
     classify_checks,
 )
+from owlbear_delivery_next.settings.config import SettingsUnset
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -131,6 +132,10 @@ def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> 
         msg = f"the pull request {pr.url} was closed; reopen it and try again, or discard"
         raise Held(msg)
     settings = job.store.settings()
+    try:
+        settings.need("pr_labels", *(() if pr else ("pr_marker",)))  # the marker only for a new pull request
+    except SettingsUnset as exc:
+        raise Held(str(exc)) from exc
     if pr is None:
         text = f"{body}\n\n{MARKER}" if settings.pr_marker else body
         pr = gh.create_pull_request(pub.repository, pub.branch, pack_git.BASE, title, text)

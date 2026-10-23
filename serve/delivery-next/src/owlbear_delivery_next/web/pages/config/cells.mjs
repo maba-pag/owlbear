@@ -3,10 +3,25 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit } from "./layers.mjs";
 
-function source(key, inUse) {
+// Code ships no defaults (2026-10-23): a value no layer sets is unset, an error until it is filled in.
+function source(key, inUse, needed = true) {
   const from = SOURCES[state.loaded.settings.sources[key]];
+  if (!from && !needed) return html`<p-text size="xs" color="contrast-medium">unset; nothing applies it yet</p-text>`;
+  if (!from) {
+    return html`<p-text size="xs" color="error">unset: set it here or in a wider layer; steps that need it ask you
+      until then</p-text>`;
+  }
   const line = inUse === undefined ? `from ${from}` : `in use: ${shown(inUse)}, from ${from}`;
   return html`<p-text size="xs" color="contrast-medium">${line}</p-text>`;
+}
+
+// What a blank field inherits, in words; "unset" where no layer below sets it.
+function said(value) {
+  return value === null || value === undefined ? "unset" : value;
+}
+
+function onOff(value) {
+  return value === null || value === undefined ? value : value ? "on" : "off";
 }
 
 export function cell(...parts) {
@@ -59,9 +74,9 @@ export function button(label, onclick, { id, icon, variant, busy = false, disabl
 export function numberCell(owner, field, label) {
   const key = `${owner}.${field}`, final = owner === "final_review";
   const below = final ? finalBelow(field) : inherited().agents[owner][field];
-  const inUse = final ? state.loaded.settings.final_review[field] : state.loaded.settings.agents[owner][field];
+  const inUse = final ? state.loaded.settings.final_review?.[field] : state.loaded.settings.agents[owner][field];
   return cell(typed(`${label}, ${owner.replace("_", " ")}`, own(key), (v) => edit(key, v),
-    { key, placeholder: `inherit (${below})`, inputmode: "numeric", disabled: state.saving }),
+    { key, placeholder: `inherit (${said(below)})`, inputmode: "numeric", disabled: state.saving }),
   source(final ? key : `agents.${key}`, inUse));
 }
 
@@ -76,15 +91,15 @@ function finalBelow(field) {
 // TD-78: a design judge's fail goes back to the build, or to the owner's decision page.
 export function designFailures() {
   const key = "design_failures", below = inherited()[key];
-  return cell(choose("When the design judge fails a change", [[INHERIT, `inherit (${below})`],
+  return cell(choose("When the design judge fails a change", [[INHERIT, `inherit (${said(below)})`],
     ["back", "back: send it back to the build"], ["ask", "ask: show it to me first"]], own(key) || INHERIT,
   (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings.design_failures));
 }
 
 export function widths() {
-  const below = inherited().widths.join(", ");
+  const below = inherited().widths?.join(", ");
   return cell(typed("Screenshot widths in px, comma-separated (1280 to 2400)", own("widths"),
-    (v) => edit("widths", v), { key: "widths", placeholder: `inherit (${below})`, disabled: state.saving }),
+    (v) => edit("widths", v), { key: "widths", placeholder: `inherit (${said(below)})`, disabled: state.saving }),
   source("widths", state.loaded.settings.widths));
 }
 
@@ -92,7 +107,7 @@ export function widths() {
 export function sessionsAtOnce() {
   const key = "sessions", below = inherited()[key];
   return cell(typed("Agent sessions at once in one project", own(key), (v) => edit(key, v),
-    { key, placeholder: `inherit (${below})`, inputmode: "numeric", disabled: state.saving }),
+    { key, placeholder: `inherit (${said(below)})`, inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
 
@@ -103,34 +118,31 @@ export function curatorThreshold() {
     return cell(html`<p-text>Set for all projects</p-text>`, source(key, state.loaded.settings[key]));
   }
   return cell(typed("Curator's confidence threshold in percent (50 to 100)", own(key), (v) => edit(key, v),
-    { key, placeholder: `inherit (${inherited()[key]})`, inputmode: "numeric", disabled: state.saving }),
+    { key, placeholder: `inherit (${said(inherited()[key])})`, inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
 
 // The watcher judges agent steps' outside actions; on in Global, a project may turn it off (owner, 2026-10-23).
 export function watcherSwitch() {
-  const key = "watcher", below = inherited()[key] ? "on" : "off";
-  return cell(choose("The watcher", [[INHERIT, `inherit (${below})`], ["on", "on: judge agent steps"],
+  const key = "watcher", below = onOff(inherited()[key]);
+  return cell(choose("The watcher", [[INHERIT, `inherit (${said(below)})`], ["on", "on: judge agent steps"],
     ["off", "off: no watcher"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
 
 // TD-308: the labels on every pull request OwlBear opens; a project's list replaces the global one.
 export function prLabels() {
-  const key = "pr_labels", below = inherited()[key].join(", ") || "none";
+  const key = "pr_labels", below = inherited()[key] && (inherited()[key].join(", ") || "none");
   return cell(typed("Labels, comma-separated; none for no labels", own(key), (v) => edit(key, v, true),
-    { key, placeholder: `inherit (${below})`, disabled: state.saving }), source(key, state.loaded.settings[key]));
+    { key, placeholder: `inherit (${said(below)})`, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 
-// TD-308: the line "Opened by OwlBear Delivery for …" at the end of a pull request's text, switched per project.
+// TD-308: the line "Opened by OwlBear Delivery for …" at the end of a pull request's text; layered (2026-10-23).
 export function prMarker() {
-  const key = "pr_marker";
-  if (state.layer !== "project") {
-    return cell(html`<p-text>Set in each project</p-text>`, source(key, state.loaded.settings[key]));
-  }
-  return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, "inherit (on)"], ["on", "on: end with the line"],
-    ["off", "off: leave it out"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
-  source(key, state.loaded.settings[key]));
+  const key = "pr_marker", below = onOff(inherited()[key]);
+  return cell(choose("The line Opened by OwlBear Delivery", [[INHERIT, `inherit (${said(below)})`],
+    ["on", "on: end with the line"], ["off", "off: leave it out"]], own(key) || INHERIT, (v) => edit(key, v),
+  { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 
 function tokens(n) {
@@ -139,9 +151,10 @@ function tokens(n) {
 
 // TD-376: whether a role's sessions may start the runtime's built-in subagents; on unless a layer says off.
 export function subagentsCell(role) {
-  const key = `${role}.subagents`, below = inherited().agents[role].subagents ? "on" : "off";
-  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, `inherit (${below})`], ["true", "on: may start them"],
-    ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v), { key, disabled: state.saving }),
+  const key = `${role}.subagents`, below = onOff(inherited().agents[role].subagents);
+  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, `inherit (${said(below)})`],
+    ["true", "on: may start them"], ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v),
+    { key, disabled: state.saving }),
   source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
 }
 
@@ -158,7 +171,7 @@ function offeredModel(role) {
 export function mismatch(role) {
   const model = offeredModel(role), mine = own(`${role}.effort`);
   const effort = mine || inherited().agents[role].effort;
-  if (!model || !model.efforts.length || model.efforts.includes(effort)) return "";
+  if (!effort || !model || !model.efforts.length || model.efforts.includes(effort)) return "";  // unset: listed
   return `${model.id} does not offer effort ${effort}${mine ? "" : " (inherited)"}; choose one it offers`;
 }
 
@@ -192,13 +205,13 @@ export function contextCell(role) {
       ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
         aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`;
   } else if (model) {
-    const wrong = tierMismatch(role);
+    const wrong = tierMismatch(role) || (tierOf(role) ? "" : "no layer sets a context tier");
     control = html`<p-text size="sm">${tokens(model.context)} \u00b7 only tier</p-text>${wrong ? html`
       <p-text size="xs" color="error">${wrong}</p-text>${pure("Use the default tier", () => edit(key, "default"))}`
-      : nothing}`;  // the default tier overrides an inherited long one
+      : nothing}`;  // the default tier fills an unset one and overrides an inherited long one
   } else {
     const below = inherited().agents[role].context;
-    control = choose(label, [[INHERIT, `inherit (${below})`], ["default", "default"], ["long", "long"]],
+    control = choose(label, [[INHERIT, `inherit (${said(below)})`], ["default", "default"], ["long", "long"]],
       mine || INHERIT, (v) => edit(key, v), { key, disabled: state.saving });
   }
   const reset = model && mine ? pure("Use inherited", () => edit(key, "")) : nothing;
@@ -226,18 +239,19 @@ export function editable(role, field) {
   const set = (v) => edit(key, v), common = { key, disabled: state.saving };
   let control, note = nothing;
   if (field === "effort") {
-    const efforts = model ? model.efforts : EFFORTS;
-    const options = [[INHERIT, `inherit (${below})`],
+    const efforts = model?.efforts.length ? model.efforts : EFFORTS;  // a model without efforts ignores the value
+    const options = [[INHERIT, `inherit (${said(below)})`],
       ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
     if (value && !efforts.includes(value)) {
       options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
     }
     control = choose(label, options, value || INHERIT, set, { ...common, wrong: mismatch(role) });
     if (model && !model.efforts.length) {
-      note = html`<p-text size="xs" color="contrast-medium">${model.id} takes no effort setting</p-text>`;
+      note = html`<p-text size="xs" color="contrast-medium">${model.id} takes no effort setting; it ignores
+        this one</p-text>`;
     }
   } else if (state.offered?.length) {
-    const options = [[INHERIT, `inherit (${below})`], ...state.offered.map((m) => {
+    const options = [[INHERIT, `inherit (${said(below)})`], ...state.offered.map((m) => {
       const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
       const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
       return [m.id, `${m.name} (${m.id})${sizes}`];
@@ -245,7 +259,7 @@ export function editable(role, field) {
     if (value && !state.offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
     control = choose(label, options, value || INHERIT, set, { ...common, filter: true });
   } else {
-    control = typed(label, value, set, { ...common, placeholder: `inherit (${below})` });
+    control = typed(label, value, set, { ...common, placeholder: `inherit (${said(below)})` });
   }
   return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]));
 }
@@ -253,7 +267,9 @@ export function editable(role, field) {
 // A setting Delivery does not apply yet: its control, disabled, with where its value comes from.
 export function inactive(label, value, key) {
   let control;
-  if (typeof value === "boolean") {
+  if (value === null || value === undefined) {
+    control = typed(label, "", () => {}, { disabled: true });
+  } else if (typeof value === "boolean") {
     control = tick(label, value);
   } else if (key.endsWith(".runtime")) {
     control = choose(label, state.loaded.catalogue.runtimes.map((r) => [r.runtime, r.runtime]), value, () => {},
@@ -264,5 +280,5 @@ export function inactive(label, value, key) {
   } else {
     control = typed(label, shown(value), () => {}, { disabled: true });
   }
-  return cell(control, source(key));
+  return cell(control, source(key, undefined, false));
 }

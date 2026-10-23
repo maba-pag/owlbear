@@ -59,7 +59,8 @@ SLOT_EXPLORE = 2
 SLOT_CHALLENGE = 2
 GLOBAL = "memory"  # Global memory: the shared repository's own memory folder (TD-241)
 FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")  # a project folder's name in the shared repository
-CONFIG, THRESHOLD = "config.json", 95  # the global settings; the curator's threshold without one (TD-400)
+CONFIG = "config.json"  # the global settings, which hold the curator's threshold (TD-400)
+UNSET_THRESHOLD = "the curator's confidence threshold is unset; the owner sets it on the Settings page"
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
 
 
@@ -841,7 +842,10 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
 
 
 async def curation_threshold(ctx: Context) -> dict[str, Any]:
-    """The curator's confidence threshold in percent: the global settings' value, else 95 (TD-400)."""
+    """The curator's confidence threshold in percent from the global settings (TD-400); unset when they hold none.
+
+    Code ships no default (the owner, 2026-10-23): unset, the curator acts on nothing alone.
+    """
     root = _shared_root(ctx)
     try:
         value = json.loads((root / CONFIG).read_text(encoding="utf-8")).get("curator_threshold") if root else None
@@ -849,4 +853,4 @@ async def curation_threshold(ctx: Context) -> dict[str, Any]:
         value = None
     if isinstance(value, int) and not isinstance(value, bool) and 50 <= value <= 100:  # noqa: PLR2004
         return {"threshold": value, "source": "global"}
-    return {"threshold": THRESHOLD, "source": "default"}
+    return {"threshold": None, "source": "unset", "error": UNSET_THRESHOLD}

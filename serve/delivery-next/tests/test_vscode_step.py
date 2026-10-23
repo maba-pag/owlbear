@@ -34,7 +34,7 @@ from owlbear_delivery_next.runtimes.window_files import (
     SettingsError,
     write_window_settings,
 )
-from owlbear_delivery_next.settings.config import Layer, resolve
+from owlbear_delivery_next.settings import carried
 
 MODEL, EFFORT, AGENT = "gpt-6-luna", "max", ".github/agents/owlbear-builder.agent.md"
 
@@ -1126,7 +1126,7 @@ def test_a_process_left_in_the_worktree_stops_the_step(wt: Path, tmp_path: Path)
     assert "4242" in result.reason
 
 
-SHAPER = resolve(None, Layer()).agents["shaper"]
+SHAPER = carried.layer().agents["shaper"]  # module level runs before the carried-settings fixture
 SIZES = {"enum": [200000, 1000000], "enumDescriptions": ["Default", "Longer sessions"], "default": 1000000}
 
 

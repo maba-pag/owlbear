@@ -14,7 +14,8 @@ the folder. The owner sees your report on the Maintenance page and decides what 
 <critical_rules>
 
 - **Threshold first.** Call `curation_threshold` once; its `threshold` is the confidence, in percent, at or above
-  which you act alone (TD-400).
+  which you act alone (TD-400). When it is unset (`null`), change nothing and report every entry as skipped with its
+  `error`.
 - **One confidence per entry.** For each entry decide everything you would do to it (keep, edit, scope, merge,
   prune, make global) and state one confidence that this whole set is right. At or above the threshold, do it. Below
   it, change nothing and report the entry as skipped with the reason. A conflict with curated or approved memory or

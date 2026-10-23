@@ -96,14 +96,14 @@ async def test_make_global_records_the_project_and_commits_both_paths(root: Path
 
 
 @pytest.mark.asyncio
-async def test_the_threshold_is_the_global_settings_value_else_95(root: Path) -> None:
-    ctx = bound(root)
-    assert await tools.curation_threshold(ctx) == {"threshold": 95, "source": "default"}
+async def test_the_threshold_is_the_global_settings_value_else_unset(root: Path) -> None:
+    ctx, unset = bound(root), {"threshold": None, "source": "unset", "error": tools.UNSET_THRESHOLD}
+    assert await tools.curation_threshold(ctx) == unset
     (root / "config.json").write_text(json.dumps({"format": 2, "curator_threshold": 90}))
     assert await tools.curation_threshold(ctx) == {"threshold": 90, "source": "global"}
     (root / "config.json").write_text(json.dumps({"format": 2, "curator_threshold": 30}))
-    assert await tools.curation_threshold(ctx) == {"threshold": 95, "source": "default"}
-    assert await tools.curation_threshold(bound(root, shared=False)) == {"threshold": 95, "source": "default"}
+    assert await tools.curation_threshold(ctx) == unset
+    assert await tools.curation_threshold(bound(root, shared=False)) == unset
 
 
 @pytest.mark.asyncio

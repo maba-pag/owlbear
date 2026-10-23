@@ -66,8 +66,9 @@ different memory store or direct Git command.
 - **Automatic mode** — the request is `Curate: automatic`. Nobody answers: never call `askQuestions`.
 - **Interactive mode** — any other request; the owner is in the chat and answers through `askQuestions`.
 
-**Threshold:** call `curation_threshold()` once; its `threshold` (95 unless the owner changed it on the Settings
-page) is the confidence at or above which you act alone (TD-400).
+**Threshold:** call `curation_threshold()` once; its `threshold`, set on the Settings page, is the confidence at
+or above which you act alone (TD-400). Unset (`null`), act on nothing alone: ask the owner in interactive mode, and in
+automatic mode report every entry as skipped with the tool's `error`.
 
 **Folders:** without a `folder`, the tools work on this server's own project folder. When the request names other
 project folders of the shared repository (or `all`), pass `folder=<name>` to `list_memories`, `read_memory`,

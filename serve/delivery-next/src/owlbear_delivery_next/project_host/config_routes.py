@@ -118,11 +118,11 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "global_location": global_path is not None,
         "folder": store.name or None,
         "notice": notice or (store.shared.pending() if store.shared else ""),
-        "settings": settings.model_dump(mode="json"),
-        "inherited": {  # what a blank field in each layer resolves to: the layers below it only
-            "project": below.model_dump(mode="json"),
-            "machine": _resolved(glob, Layer(), None, []).model_dump(mode="json"),
-            "global": resolve(None, Layer()).model_dump(mode="json"),
+        "settings": settings.page(),
+        "inherited": {  # what a blank field in each layer resolves to: the layers below it only; None where unset
+            "project": below.page(),
+            "machine": _resolved(glob, Layer(), None, []).page(),
+            "global": resolve(None, Layer()).page(),
         },
         "applied": APPLIED,
         "catalogue": CATALOGUE,

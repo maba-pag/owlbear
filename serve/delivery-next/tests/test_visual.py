@@ -51,6 +51,7 @@ from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, decision, held, judges, merge, sessions, visual
@@ -674,6 +675,9 @@ def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):
     passed, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="pass", round=kept.number)], NOW)
     assert (passed.visual_rounds[-1].decision.outcome, step) == ("pass", passed.step)
     flow.store.write(Lock("c1"), passed)
+    base = carried.layer()  # the owner cleared the judges' settings and the widths since: a decided round needs none
+    agents = {r: a for r, a in base.agents.items() if r not in {"reviewer", "design-judge"}}
+    flow.mp.setattr(config, "BASE", base.model_copy(update={"agents": agents, "widths": None}))
     runner._visual(flow.store, Lock("c1"), passed, flow.clone)  # noqa: SLF001
     done = flow.store.read("c1")
     head = git(flow.clone, "rev-parse", "HEAD")

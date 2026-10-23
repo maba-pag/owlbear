@@ -121,7 +121,7 @@ See the [memory package README](../../../serve/memory/README.md) and
 | `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, required `revision`, optional mutable fields, `scope_agents`, `folder` |
 | `make_global` | Curator: move a curated or approved entry into Global memory, recording its project as `origin` (TD-292), and commit both paths | `entry_id`, required `revision`, `folder` |
-| `curation_threshold` | Curator: the confidence threshold in percent at or above which it acts alone (TD-400); the global settings' value, else 95 | — |
+| `curation_threshold` | Curator: the confidence threshold in percent at or above which it acts alone (TD-400); the global settings' value; unset (`null`, with an `error`) when they hold none, and then it acts on nothing alone | — |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id`, required `revision` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
 | `delete_agent_memories` | Remove retired scope references, hard-delete pending orphans, and tombstone reviewed orphans | `agent` |

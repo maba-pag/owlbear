@@ -27,7 +27,8 @@ from owlbear_delivery_next.project_host import answers, api, pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import copilot_cli, readiness, step_input
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
-from owlbear_delivery_next.settings.config import Agent, Layer, resolve
+from owlbear_delivery_next.settings import carried
+from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import Store
@@ -439,7 +440,7 @@ def command(prompt: str) -> str:
 
 PROMPT = api.START_PROMPT + api.PICKER_NOTE.format(model="claude-opus-5.5", effort="medium")
 COMMAND = command(PROMPT)
-SHAPER = resolve(None, Layer()).agents["shaper"]
+SHAPER = carried.layer().agents["shaper"]  # module level runs before the carried-settings fixture
 
 
 @pytest.mark.parametrize(

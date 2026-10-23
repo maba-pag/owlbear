@@ -16,13 +16,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import registry
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.project_host.host import RunnerRecord
-from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store import project_home, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
@@ -91,6 +92,15 @@ class Machine:
             self.total = registry.load().settings.sessions
         return self.total
 
+    def carry(self) -> None:
+        """Carry today's built-in settings into Global once; a failure is said and tried again at the next start."""
+        try:
+            if (shared := data_repo.locate()) is not None and settings_carry.due(shared):
+                notice = settings_carry.carry(shared)
+                self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
+        except Exception as exc:  # noqa: BLE001 - the projects load either way; their steps say what is unset
+            self.say(f"settings: carrying the built-in values into Global failed: {type(exc).__name__}: {exc}")
+
     def say(self, text: str) -> None:
         """Write one line to the machine host's log."""
         sys.stdout.write(f"{datetime.now(UTC):%H:%M:%SZ} {text}\n")
@@ -132,7 +142,11 @@ class Machine:
         ]  # fmt: skip
 
     def load_all(self) -> None:
-        """Load every registered project; one that fails is listed with its reason."""
+        """Load every registered project; one that fails is listed with its reason.
+
+        First, once, today's built-in settings go into the shared repository's Global layer (2026-10-23).
+        """
+        self.carry()
         with self.lock:
             for entry in registry.load().projects:
                 self._load(entry)

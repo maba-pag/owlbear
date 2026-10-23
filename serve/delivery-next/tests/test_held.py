@@ -19,6 +19,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import held, sessions
 
@@ -120,6 +121,21 @@ def test_an_unread_build_result_is_held_and_accepting_it_processes_it_without_a_
     accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
     assert [e["session"] for e in accepted] == [session]
     assert not (store.root / "changes" / "c1" / "held.json").exists()
+
+
+def test_an_accepted_hold_waits_untaken_while_its_role_s_settings_are_unset(gated, clone, monkeypatch):
+    store, c = gated
+    c = answer(store, c, "accept")
+    spans = list(c.plan.tasks[0].spans)
+    base = carried.layer()  # the owner cleared the builder's model since
+    builder = base.agents["builder"].model_copy(update={"model": None})
+    monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": base.agents | {"builder": builder}}))
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("no session while a setting is unset"))
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    asked = store.read("c1")
+    assert loop.open_question(asked).cause == "state:build:settings-unset"
+    assert (store.root / "changes" / "c1" / "held.json").exists()  # the result is kept for after the owner fills it
+    assert asked.plan.tasks[0].spans == spans  # no build span was opened
 
 
 @pytest.mark.parametrize("change_", ["retry", "head", "brief"])

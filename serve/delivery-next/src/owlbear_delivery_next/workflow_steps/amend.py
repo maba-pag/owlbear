@@ -17,16 +17,25 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_flow.loop import StepResult
     from owlbear_delivery_next.runtimes.session_result import Run
+    from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 
 def challenge(  # noqa: PLR0913 - the proposing run and its result decide whether a challenge may start
-    store: Store, lock: Lock, change: Change, path: Path, run: Run, *, result: StepResult
+    store: Store,
+    lock: Lock,
+    change: Change,
+    path: Path,
+    run: Run,
+    *,
+    result: StepResult,
+    settings: Settings | None = None,
 ) -> StepResult:
     """Record the exact candidate first, then judge it; the proposing step's own result keeps its route.
 
     Nothing starts while the proposer's processes are not confirmed gone (its result is then a stop); a challenger
-    whose own processes are not confirmed gone stops the Change instead, its proposal left unjudged.
+    whose own processes are not confirmed gone stops the Change instead, its proposal left unjudged. *settings* is the
+    snapshot the proposer started with, which checked the challenger's (``review.started``).
     """
     if result.exit == Exit.STOP or not (run.termination and run.termination.confirmed):
         return result
@@ -49,7 +58,9 @@ def challenge(  # noqa: PLR0913 - the proposing run and its result decide whethe
             memory=sessions.memory(store),
         )
 
-    verdict, done = sessions.review_run(store, lock, change, path, config, amendments.LABEL, submit=amendments.SUBMIT)
+    verdict, done = sessions.review_run(
+        store, lock, change, path, config, amendments.LABEL, submit=amendments.SUBMIT, settings=settings
+    )
     amendments.judged(made, done)
     store.write(lock, change)
     return verdict if verdict.exit == Exit.STOP else result

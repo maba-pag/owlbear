@@ -90,6 +90,13 @@ A shared settings repository is a local clone of a Git repository you choose, se
 memory and the backlog live there, and OwlBear commits and pushes each save, so they follow you
 across clones and machines. Without one, they stay on this Mac in `~/.owlbear/projects/<id>/`.
 
+OwlBear's code ships no settings defaults: every model, effort, limit and switch comes from the
+global settings in the shared repository, this machine's, or the project's. A setting no layer
+sets shows as unset on the Settings page, and a step that needs it asks you to fill it in;
+automatic memory curation does not start until its role and threshold are set. Settings nothing
+applies yet (runtimes, visibility, tool categories) may stay unset. A new machine that uses your
+shared repository takes its global settings; one without starts with every setting unset.
+
 ## Upgrading OwlBear
 
 OwlBear's versions are Git tags such as `v1.0`. OwlBear installs a new version beside the running

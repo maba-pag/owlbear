@@ -146,7 +146,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         pds.pick(page, "Layer", "global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
-        expect(page.locator("#pr")).to_contain_text("Set in each project")  # TD-308: the marker is per project
+        expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults
         threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")  # TD-400
         expect(threshold).to_have_attribute("placeholder", "inherit (95)")
         threshold.fill("90")
@@ -279,3 +279,34 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
     finally:
         server.should_exit = True
     assert saved.is_set()
+
+
+@pytest.mark.browser
+def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_save_fills_one(
+    store, pds, monkeypatch
+) -> None:
+    """Code ships no defaults (2026-10-23): unset values are errors on the page, never filled from code."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)
+    with settings_page(store, pds) as page:
+        expect(page.locator("#unset")).to_contain_text("settings are unset")
+        expect(page.locator("#unset")).to_contain_text("agents.builder.model")
+        at_once = page.get_by_label("Agent sessions at once in one project")
+        expect(at_once).to_have_attribute("placeholder", "inherit (unset)")
+        at_once.fill("3")
+        pds.pick(page, "Model for watcher", "tiny")  # one tier and no efforts: both still fillable
+        expect(page.locator("#agents")).to_contain_text("no layer sets a context tier")
+        page.locator("#agents").get_by_role("button", name="Use the default tier").click()
+        pds.pick(page, "Effort for watcher", "medium")
+        pds.pick(page, "Model for reviewer", "claude-opus-5.5")  # its effort unset: listed, never blocking the save
+        page.get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#unset")).not_to_contain_text("sessions,")
+        expect(page.locator("#unset")).not_to_contain_text("agents.watcher.")
+    assert store.read_config().sessions == 3
+    watcher = store.settings().agent("watcher")  # the watcher needs only its model, effort and context
+    assert (watcher.model, watcher.effort, watcher.context) == ("tiny", "medium", "default")

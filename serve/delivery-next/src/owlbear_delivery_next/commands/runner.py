@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
@@ -31,6 +31,7 @@ from owlbear_delivery_next.runtimes import (
     step_input,
 )
 from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
@@ -60,6 +61,7 @@ from owlbear_delivery_next.workflow_steps import (
     review,
     session_choice,
     sessions,
+    unset_settings,
     visual,
 )
 from owlbear_delivery_next.workflow_steps.sessions import UsageUnreadError
@@ -100,9 +102,11 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
-    answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)
+    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
+    role = roles.chosen(settings := store.settings(), session := curation_build.LABEL if curated else s.kind)
+    review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
+    answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
-    review.started(change, task, path, store.settings())  # a build's base; a plan task's loop (TD-208)
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
@@ -118,8 +122,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         change, new = session_choice.replaced(store, lock, change, repair)
         return new
 
-    role = roles.chosen(store.settings(), s.kind)
-    ctx = prepare.context(store, change, store.settings(), path) if s.kind == StepKind.CHECK else None  # TD-107
+    ctx = prepare.context(store, change, settings, path) if s.kind == StepKind.CHECK else None  # TD-107
     asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
 
     def config(at: Path) -> sdk_adapter.Session:
@@ -140,7 +143,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             scope=tuple(change.brief.scope),
             model=role.model,
             effort=role.effort,
-            limit=roles.limit(store.settings(), s.kind),
+            limit=roles.limit(settings, session),
             context=role.context,
             fresh=told,
             previous=sessions.previous(store, slug, s.session) if resume else {},
@@ -154,15 +157,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             cap=disputes.cap(change),
             plan_tasks=disputes.planned(change),
             amendable=amendments.amendable(change),
-            subagents=roles.subagents(store.settings(), s.kind),  # TD-374, TD-376: the role's setting
+            subagents=roles.subagents(settings, session),  # TD-374, TD-376: the role's setting
             memory=sessions.memory(store),
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),
             preparing=ctx,
         )
 
-    curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
-    made = (lambda at: curation_build.curator(config(at), change, store.settings())) if curated else config
+    made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config
     run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
@@ -170,7 +172,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     curation_build.recorded(change, run, path)
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result)
-    result = amend.challenge(store, lock, change, path, run, result=result)  # TD-179: judged, never applied here
+    result = amend.challenge(store, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     sessions.logged(
@@ -232,27 +234,34 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
     return plan_round.scopes(store, slug)
 
 
+def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:
+    """The brief's states captured at *widths* from the ready environment, and the design scans they and the UI hold."""
+    pack, url = design.pack(), change.env.ready_url if change.env else ""
+    shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
+    states = {s.name: s.version for s in change.brief.visual}
+    source = design.sources(path, visual.ui_paths(change, head), pack)
+    found = [s.design for s in shots if s.design] + ([source] if source else [])
+    return shots, design.marked(found, change.before, states)
+
+
 def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     """B23: capture the brief's states from the ready environment and judge the screenshots in a reviewer session."""
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), datetime.now(UTC)
     store.write(lock, change)
-    url = change.env.ready_url if change.env else ""
     mine, theirs, ran = [], [], []  # the judges' sessions and how they ended
+    settings = store.settings()  # one snapshot: what the round records is what it ran with
     try:
-        settings = store.settings()  # one snapshot: what the round records is what it ran with
         head = worktree.head(path)
         tree, out = visual.tree(path, head), store.visual_dir(change.slug, head)
         widths = (change.before.widths if change.before else None) or settings.widths  # pairs with before
-        if visual_settled.settled(store, lock, change, (head, tree, widths), out):
-            return
+        if visual_settled.settled(store, lock, change, (head, tree, widths or []), out):
+            return  # the owner's decision on a captured round needs no judge
+        settings.need(*(() if widths else ("widths",)), "design_failures", "agents.reviewer", "agents.design-judge")
         prepare.stepped(change, prepared=prepare.read(store, change.slug, VISUAL) is not None)  # TD-96
-        pack = design.pack()
-        shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
-        states = {s.name: s.version for s in change.brief.visual}
-        source = design.sources(path, visual.ui_paths(change, head), pack)
-        found = [s.design for s in shots if s.design] + ([source] if source else [])
-        scans = design.marked(found, change.before, states)
+        shots, scans = _captured(change, path, head, out, widths)
+    except SettingsUnset:  # the runner's handler asks the owner: never a capture error
+        raise
     except prepare.PrepareError as exc:
         result = exc.result
     except visual.BrowserMissingError as exc:
@@ -308,6 +317,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
     settings, log = store.settings(), lambda e: store.log(lock, change.slug, e)
+    settings.need("widths")
     change.before = shots = before.capture(
         change,
         repo,
@@ -410,16 +420,23 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
             store.write(lock, loop.apply(change, stop, now))
             return
-        if (resumed := decision_publication.resume(store, lock, change, datetime.now(UTC))) is None:
+        try:
+            if (resumed := decision_publication.resume(store, lock, change, datetime.now(UTC))) is None:
+                return
+            if step.kind in AGENT and (resumed := clarification.checked(store, lock, resumed)) is None:
+                return  # TD-461: the clarification's check asked the owner, or waits to run again
+        except SettingsUnset as exc:
+            unset_settings.asked(store, lock, exc)
             return
-        if step.kind in AGENT and (resumed := clarification.checked(store, lock, resumed)) is None:
-            return  # TD-461: the clarification's check asked the owner, or waits to run again
         change = resumed
-    with decisions_gate.gated(store, lock, change, step) as passed:
-        if passed is None:  # a gone check's end runs whatever the decisions say
-            prepare.ran(store, lock, store.read(lock.slug), repo, runnable=False)
-        else:
-            _run(store, lock, passed, step, repo)
+    try:
+        with decisions_gate.gated(store, lock, change, step) as passed:
+            if passed is None:  # a gone check's end runs whatever the decisions say
+                prepare.ran(store, lock, store.read(lock.slug), repo, runnable=False)
+            else:
+                _run(store, lock, passed, step, repo)
+    except SettingsUnset as exc:  # the gate's reassessment picks with the picker's settings (TD-459)
+        unset_settings.asked(store, lock, exc)
 
 
 def _run(  # noqa: C901 - one branch per phase
@@ -454,6 +471,8 @@ def _run(  # noqa: C901 - one branch per phase
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
+    except SettingsUnset as exc:
+        unset_settings.asked(store, lock, exc)
 
 
 def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:

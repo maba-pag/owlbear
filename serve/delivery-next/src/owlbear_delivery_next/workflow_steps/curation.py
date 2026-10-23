@@ -95,11 +95,11 @@ def offer(store: Store, repo: Path) -> dict[str, Any]:
             {"path": p.path, "files": len(p.files), "lines": p.lines, "shares": len(curation_shares.split([p]))}
             for p in curation_shares.packages(repo, commit)
         ]
-    chosen = {r: settings.agents[r] for r in ("test-reviewer", "test-curator")}
+    chosen = {r: settings.roles[r] for r in ("test-reviewer", "test-curator")}  # None where unset
     return {
         "open": {"slug": open_.slug, "handle": open_.handle} if open_ else None,
         "packages": found,
-        "roles": {r: {"model": a.model, "effort": a.effort, "context": a.context} for r, a in chosen.items()},
+        "roles": {r: {k: a[k] for k in ("model", "effort", "context")} for r, a in chosen.items()},
         "sessions": settings.sessions,
     }
 

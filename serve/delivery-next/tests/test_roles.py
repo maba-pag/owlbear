@@ -17,7 +17,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter, vscode_adapter
-from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.settings import carried, profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer, resolve
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -43,13 +43,13 @@ def test_each_session_runs_with_its_roles_model_and_effort(session, model, effor
 def test_plan_challenge_is_the_challenger_not_the_planner():
     settings = resolve(None, Layer(agents={"planner": Agent(model="p", effort="low")}))
     assert roles.chosen(settings, StepKind.PLAN) == RoleModel(model="p", effort="low")
-    assert roles.chosen(settings, "plan-challenge") == roles.DEFAULTS["challenger"]
+    assert roles.chosen(settings, "plan-challenge") == carried.MODELS["challenger"]
 
 
 def test_a_project_override_wins_and_is_marked_in_the_table():
     settings = resolve(None, Layer(agents={"builder": Agent(model="m-1", effort="low")}))
     assert roles.chosen(settings, StepKind.BUILD) == RoleModel(model="m-1", effort="low")
-    assert roles.chosen(settings, StepKind.REVIEW) == roles.DEFAULTS["reviewer"]
+    assert roles.chosen(settings, StepKind.REVIEW) == carried.MODELS["reviewer"]
     assert "builder: m-1 effort low (project)" in roles.table(settings)
     assert "reviewer: gpt-6.1-sol effort xhigh\n" in roles.table(settings)
 
@@ -95,7 +95,7 @@ def test_a_role_model_is_refused_everywhere_it_is_built(tmp_path, model, effort)
 def test_luna_low_and_haiku_medium_load_and_the_defaults_are_valid():
     assert roles.parse("builder=gpt-6-luna:low") == ("builder", RoleModel(model="gpt-6-luna", effort="low"))
     assert roles.parse("reviewer=claude-haiku-5.5:medium")[1].effort == "medium"
-    assert all(RoleModel.model_validate(rm.model_dump()) == rm for rm in roles.DEFAULTS.values())
+    assert all(RoleModel.model_validate(rm.model_dump()) == rm for rm in carried.MODELS.values())
 
 
 def test_sdk_options_carry_the_model_reasoning_effort_and_context_tier():

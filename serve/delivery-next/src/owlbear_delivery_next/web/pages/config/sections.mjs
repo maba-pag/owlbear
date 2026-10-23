@@ -42,8 +42,8 @@ function scopeSection() {
     <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
       : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
         + "machine's settings can be saved, locally."}</p-text></div>
-    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one; a blank
-      global value uses the built-in default.</p-text>
+    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
+      code has no defaults: a value no layer sets is unset, and a step that needs it asks you to fill it in.</p-text>
   </section>`;
 }
 
@@ -56,7 +56,8 @@ export function unsaved() {
 
 // A value in the overview: a list or a record in full, never "[object Object]".
 function plain(value) {
-  return value !== null && typeof value === "object" && !(Array.isArray(value) && value.every((v) => typeof v
+  if (value === null || value === undefined) return "unset";
+  return typeof value === "object" && !(Array.isArray(value) && value.every((v) => typeof v
     !== "object")) ? JSON.stringify(value) : shown(value);
 }
 
@@ -68,9 +69,10 @@ function at(value, key) {
 function acrossSection() {
   if (!clones()) return nothing;  // a clone's own host serves one project
   const loaded = state.loaded, all = [{ name: named(), config: loaded }, ...state.others];
-  const rows = Object.keys(loaded.settings.sources).map((key) => {
+  const keys = new Set([...Object.keys(loaded.settings.sources), ...(loaded.settings.missing ?? [])]);
+  const rows = [...keys].map((key) => {
     const below = loaded.inherited.project, wide = loaded.inherited.machine, source = wide.sources[key];
-    const global = at(wide, key), from = SOURCES[source] ?? source;  // global, built-in or the builder's
+    const global = at(wide, key), from = SOURCES[source] ?? source ?? "no layer";  // global or the builder's
     const here = at(below, key), apart = JSON.stringify(here) !== JSON.stringify(global);  // derived values too
     const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(here));
     return { key, global, from, machine: apart ? plain(here) : "same", differ, apart };
@@ -118,7 +120,14 @@ function settingsSections() {
     ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
   const { baseline, runtimes, categories } = loaded.catalogue;
   const text = (v) => cell(html`<p-text>${v}</p-text>`);
+  const unset = loaded.settings.missing ?? [];
   return html`
+    ${unset.length ? html`<section class="panel" id="unset" aria-labelledby="unset-title">
+      <p-heading size="lg"><h2 id="unset-title">Unset settings</h2></p-heading>
+      <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
+        defaults: set ${unset.length === 1 ? "it" : "them"} below, best in the global layer; a step that needs one asks
+        you until then.</p-text>
+      <p-text size="xs">${unset.join(", ")}</p-text></section>` : nothing}
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title">Agents</h2></p-heading>
       ${table("Agents: model, effort and context apply to the next session",

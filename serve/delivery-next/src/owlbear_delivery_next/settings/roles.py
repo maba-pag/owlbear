@@ -12,37 +12,8 @@ from owlbear_delivery_next.change_contracts.profile_record import RoleModel
 if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Settings
 
-DEFAULTS: dict[Role, RoleModel] = {
-    "planner": RoleModel(model="claude-opus-5.5", effort="high"),
-    "builder": RoleModel(model="claude-opus-5.5", effort="medium"),
-    "reviewer": RoleModel(model="gpt-6.1-sol", effort="xhigh"),
-    "challenger": RoleModel(model="gpt-6.1-sol", effort="high"),
-    "design-judge": RoleModel(model="claude-opus-5.5", effort="high"),  # the visual review's design judge (TD-169)
-    "preparer": RoleModel(model="claude-haiku-5.5", effort="low"),  # check prep: finds the launch recipe
-    "shaper": RoleModel(model="claude-opus-5.5", effort="medium"),  # the New Change chat (TD-83); owner's effort
-    "updater": RoleModel(model="claude-opus-5.5", effort="high"),  # writes the design pack's skills (TD-125)
-    "test-reviewer": RoleModel(model="gpt-6.1-sol", effort="medium"),  # one share of a test review (TD-339)
-    "test-curator": RoleModel(model="claude-opus-5.5", effort="high", context="long"),  # applies what holds
-    "picker": RoleModel(model="gpt-6.1-sol", effort="medium"),  # picks a brief's decisions from the list (TD-459)
-    "curator": RoleModel(model="gpt-6.1-sol", effort="high"),  # automatic memory curation (TD-292, TD-400)
-    "watcher": RoleModel(model="gpt-6-luna", effort="medium"),  # judges one outside action; the owner's benchmark pick
-}
+ROLES: tuple[Role, ...] = get_args(Role.__value__)  # their values come from the settings layers, none from code
 EFFORTS: tuple[str, ...] = get_args(Effort.__value__)
-MINUTES: dict[Role, int] = {  # TD-286: each session's total running time; the shaper's chat has none (TD-285)
-    "planner": 30,
-    "builder": 40,
-    "reviewer": 20,
-    "challenger": 20,
-    "design-judge": 20,
-    "preparer": 30,
-    "shaper": 40,
-    "updater": 40,
-    "test-reviewer": 20,  # the reviewer's
-    "test-curator": 40,  # the builder's
-    "picker": 10,  # a pick takes about a minute
-    "curator": 20,  # one memory folder's pending entries
-    "watcher": 1,  # one judgement of one tool call, a few seconds
-}
 SESSIONS: dict[str, Role] = {
     StepKind.PLAN: "planner",
     StepKind.TESTS: "test-reviewer",  # a test review's shares (TD-373)
@@ -70,18 +41,18 @@ SESSIONS: dict[str, Role] = {
 
 def chosen(settings: Settings, session: str) -> RoleModel:
     """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings."""
-    agent = settings.agents[SESSIONS[session]]
+    agent = settings.agent(SESSIONS[session])
     return RoleModel(model=agent.model, effort=agent.effort, context=agent.context)
 
 
 def limit(settings: Settings, session: str) -> float:
     """Seconds one session of this kind or reviewer label may run in total, from the resolved settings (TD-286)."""
-    return settings.agents[SESSIONS[session]].minutes * 60.0
+    return settings.agent(SESSIONS[session]).minutes * 60.0
 
 
 def subagents(settings: Settings, session: str) -> bool:
     """Whether a session of this kind or reviewer label may start built-in subagents (TD-374, TD-376)."""
-    return settings.agents[SESSIONS[session]].subagents
+    return settings.agent(SESSIONS[session]).subagents
 
 
 def parse(text: str) -> tuple[Role, RoleModel]:
@@ -92,8 +63,8 @@ def parse(text: str) -> tuple[Role, RoleModel]:
     """
     role, _, rest = text.partition("=")
     model, _, effort = rest.rpartition(":")
-    if role not in DEFAULTS:
-        raise ValueError(f"role must be one of {', '.join(DEFAULTS)}, got {role!r}")  # noqa: EM102, TRY003
+    if role not in ROLES:
+        raise ValueError(f"role must be one of {', '.join(ROLES)}, got {role!r}")  # noqa: EM102, TRY003
     try:
         return role, RoleModel(model=model.strip(), effort=effort)
     except ValidationError as exc:
@@ -105,7 +76,10 @@ def parse(text: str) -> tuple[Role, RoleModel]:
 def table(settings: Settings) -> str:
     """The effective role table, marking values set in the global or project settings."""
     lines = ["Models"]
-    for role, agent in settings.agents.items():
+    for role, agent in settings.roles.items():
+        if agent["model"] is None or agent["effort"] is None:
+            lines.append(f"  {role}: unset; fill it in on the Settings page")
+            continue
         set_in = sorted({settings.sources[f"agents.{role}.{f}"] for f in ("model", "effort")} - {"default"})
-        lines.append(f"  {role}: {agent.model} effort {agent.effort}{f' ({"/".join(set_in)})' if set_in else ''}")
+        lines.append(f"  {role}: {agent['model']} effort {agent['effort']}{f' ({"/".join(set_in)})' if set_in else ''}")
     return "\n".join(lines)
