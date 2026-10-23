@@ -85,7 +85,8 @@ def hooks_off(old: str | None) -> str:
     try:
         data = json.loads(old) if old and old.strip() else {}
     except ValueError as exc:
-        raise SettingsError(f"{HOOKS} is not plain JSON; Delivery cannot turn its hooks off") from exc  # noqa: EM102, TRY003
+        msg = f"{HOOKS} is not plain JSON; Delivery cannot turn its hooks off"
+        raise SettingsError(msg) from exc
     if not isinstance(data, dict):
         raise SettingsError(f"{HOOKS} is not a JSON object; Delivery cannot turn its hooks off")  # noqa: EM102, TRY003
     return json.dumps(data | {NO_HOOKS: True}, indent=2) + "\n"
