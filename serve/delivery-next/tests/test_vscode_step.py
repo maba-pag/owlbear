@@ -617,6 +617,9 @@ def test_window_settings_pin_harness_and_model_and_keep_other_keys(tmp_path: Pat
         ("[]", MODEL),
         ('{ // mine\n  "chat.defaultModel": "x",\n}', MODEL),
         ('{ // mine\n  "chat.mcp.access": "all",\n}', MODEL),
+        ('// team\n{ "chat.mcp.\\u0061ccess": "all" }', MODEL),
+        ('{ /* c */ "chat.default\\u004dodel": "x", }', MODEL),
+        ('// team\n{ "a": 1 "b": 2 }', MODEL),
         ("// x\n[1,]", MODEL),
         (None, "auto"),
         (None, " "),
@@ -1262,3 +1265,13 @@ def test_an_unreachable_editor_leaves_no_shaping_files(wt: Path) -> None:
     out, warning = shape(wt, vscode_adapter.Env(connect=refuse, shaper=None))
     assert (out.end, out.detail, warning) == ("error", "HostError: VS Code published no agent host within 60 s", "")
     assert git(wt, "status", "--porcelain", "--ignored") == ""
+
+
+def test_comments_and_slashes_inside_strings_still_get_the_pins(tmp_path: Path) -> None:
+    (tmp_path / ".vscode").mkdir()
+    text = '// team\n{ /* proxy */ "http.proxy": "http://x//y", "a": [1,], }\n'
+    (tmp_path / ".vscode" / "settings.json").write_text(text)
+    write_window_settings(tmp_path, MODEL)
+
+    assert f'"{MCP_ACCESS}": "none",' in (tmp_path / ".vscode" / "settings.json").read_text()
+    assert (tmp_path / ".vscode" / "settings.json").read_text().endswith(text.split("{", 1)[1])

@@ -55,6 +55,34 @@ def _opening(text: str) -> int | None:
     return sum(len(ln) for ln in lines[:first]) + lines[first].index("{") + 1
 
 
+def _plain_json(text: str) -> str:
+    """JSON with comments as plain JSON: comments and trailing commas outside strings go."""
+    out: list[str] = []
+    i, comma = 0, None  # comma: where in ``out`` the last comma outside a string went, until something follows it
+    while i < len(text):
+        c = text[i]
+        if c == '"':
+            end = i + 1
+            while end < len(text) and text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            out.append(text[i : end + 1])
+            i, comma = end + 1, None
+        elif text.startswith("//", i):
+            end = text.find("\n", i)
+            i = len(text) if end < 0 else end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end < 0 else end + 2
+        else:
+            if c in "}]" and comma is not None:
+                out[comma] = ""
+            if not c.isspace():
+                comma = len(out) if c == "," else None
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
 def _with_settings(old: str | None, model: str) -> str:
     """``old`` with the harness and model pinned; JSON with comments gets the keys after its opening brace."""
     try:
@@ -66,7 +94,13 @@ def _with_settings(old: str | None, model: str) -> str:
     text = old or ""
     if current is not None or (at := _opening(text)) is None:
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
-    if any(f'"{key}"' in text for key in (HARNESS, DEFAULT_MODEL, MCP_ACCESS)):
+    try:
+        decoded = json.loads(_plain_json(text))
+    except ValueError:
+        decoded = None
+    if not isinstance(decoded, dict):
+        raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
+    if {HARNESS, DEFAULT_MODEL, MCP_ACCESS} & set(decoded):  # decoded, so an escaped spelling cannot hide one
         msg = f"{SETTINGS} pins the harness, model or MCP access in a form Delivery can't edit"
         raise SettingsError(msg)
     pins = f'\n  "{HARNESS}": true,\n  "{DEFAULT_MODEL}": {json.dumps(model)},\n  "{MCP_ACCESS}": "none",'
