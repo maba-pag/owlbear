@@ -109,6 +109,7 @@ def _with_settings(old: str | None, model: str) -> str:
         decoded = None
     if not isinstance(decoded, dict):
         raise SettingsError(f"{SETTINGS} is not a JSON object; set {DEFAULT_MODEL} by hand")  # noqa: EM102, TRY003
+    _strict(decoded, SETTINGS)  # the owner's text stays, so it must already be strict JSON
     if {HARNESS, DEFAULT_MODEL, MCP_ACCESS} & set(decoded):  # decoded, so an escaped spelling cannot hide one
         msg = f"{SETTINGS} pins the harness, model or MCP access in a form Delivery can't edit"
         raise SettingsError(msg)

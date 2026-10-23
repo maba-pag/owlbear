@@ -620,6 +620,8 @@ def test_window_settings_pin_harness_and_model_and_keep_other_keys(tmp_path: Pat
         ('// team\n{ "chat.mcp.\\u0061ccess": "all" }', MODEL),
         ('{ /* c */ "chat.default\\u004dodel": "x", }', MODEL),
         ('// team\n{ "a": 1 "b": 2 }', MODEL),
+        ('// team\n{"a": NaN}', MODEL),
+        ('// team\n{"a": {"b": [-Infinity]}}', MODEL),
         ("// x\n[1,]", MODEL),
         (None, "auto"),
         (None, " "),
