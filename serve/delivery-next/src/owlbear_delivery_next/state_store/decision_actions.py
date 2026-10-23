@@ -400,6 +400,9 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
     if AUTHORITY[origin] >= AUTHORITY[old.origin]:
         msg = f"{old.id} is {old.origin}: an origin is only corrected downward; raising it is the owner's"
         raise Refused(msg)
+    if old.state is State.IN_FORCE and (old.conflict or rivals(view, old, shared)):
+        msg = f"{old.id} competes with another successor: the owner resolves the conflict first, then corrects it"
+        raise Refused(msg)
     rationale = _because(old.rationale, CORRECTED, f"{old.origin} to {origin}: {why}")
     if old.state is State.DRAFT:
         update = {"origin": origin, "rationale": rationale}
@@ -410,7 +413,8 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
     new = _new(
         old, title=old.title, statement=old.statement, rationale=_marked(rationale, "wording"), scope=old.scope,
         project=old.project, change=old.change, origin=origin, actor=old.actor, source=old.source,
-        read_back=old.read_back, inherited=old.inherited, state=State.IN_FORCE,
+        read_back=old.read_back, read_back_why=old.read_back_why, read_back_kind=old.read_back_kind,
+        inherited=old.inherited, state=State.IN_FORCE,
         links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
     return _retire(shared, new, old, f"decisions: correct-origin {old.id} with {new.id} ({by})")

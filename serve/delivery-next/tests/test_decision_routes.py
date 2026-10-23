@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Scope, State, new_id, write
 from owlbear_decisions.validate import validate_repo
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import chat_client, mcp_server
@@ -641,6 +641,29 @@ def test_an_origin_is_corrected_only_downward_on_the_owners_confirmed_statement(
     assert "Effect on existing work: wording only" in new.rationale
     assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: correct-origin {rule.id} with {new.id} (chat)"
     assert act(chat, rule, "correct-origin", origin="approved", reason="r", confirmed=True).json()["saved"] is False
+
+
+def test_a_correction_keeps_a_pending_read_back_and_waits_for_a_conflict_to_be_resolved(store, shared):
+    old = make(state=State.REPLACED)
+    ours = after(old, title="Ours", origin=Origin.DECIDED, conflict=True)
+    theirs = after(old, title="Theirs", origin=Origin.DECIDED, conflict=True)
+    asked = make(origin=Origin.DECIDED, read_back="pending", read_back_why="Still wanted?",
+                 read_back_kind=ReadBackKind.UNCERTAIN)  # fmt: skip
+    seed(shared, old, ours, theirs, asked)
+    chat = client(store, CHAT)
+
+    competing = act(chat, ours, "correct-origin", origin="approved", reason="r", confirmed=True)
+    assert competing.status_code == 409
+    assert "resolves the conflict first" in competing.json()["detail"]
+    got = act(chat, asked, "correct-origin", origin="approved", reason="r", confirmed=True).json()
+
+    new = now(shared, got["receipts"][0]["id"])
+    assert got["saved"] is True
+    assert (new.read_back, new.read_back_why, new.read_back_kind) == (
+        "pending",
+        "Still wanted?",
+        ReadBackKind.UNCERTAIN,
+    )
 
 
 def test_a_drafts_origin_is_corrected_in_place(store, shared):
