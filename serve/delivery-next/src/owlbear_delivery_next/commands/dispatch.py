@@ -1,8 +1,9 @@
 """The one entry of every Delivery process (TD-173): it reads the command, then imports only what that command needs.
 
 ``python -m owlbear_delivery_next run <change> --repo PATH`` starts a step runner, ``mcp --repo PATH`` the chat
-server, ``step-mcp --inbox PATH`` a window step's relay and ``machine`` the machine host (TD-242); anything else is
-a command of the owner's CLI, such as ``--repo PATH status``.
+server, ``serve memory`` (``knowledge``, ``browser``) another chat server, ``step-mcp --inbox PATH`` a window step's
+relay and ``machine`` the machine host (TD-242); anything else is a command of the owner's CLI, such as
+``--repo PATH status``.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from importlib import import_module
 PROCESSES = {  # started by Delivery itself
     "run": "commands.runner",
     "mcp": "commands.mcp_server",
+    "serve": "commands.mcp_launch",  # memory, knowledge and browser, pinned like the chat server
     "step-mcp": "commands.step_mcp",
     "machine": "machine_host.serve",
     "selfcheck": "machine_host.selfcheck",  # a new version's check before it takes over (self-update §5.1)

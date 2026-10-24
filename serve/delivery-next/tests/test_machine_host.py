@@ -88,14 +88,21 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
     p = add(http, clone(tmp_path / "a"))
     sent = []
 
+    class Answer(io.BytesIO):
+        status = 200
+
     class Opener:
         def open(self, request, **_kw):
-            sent.append(request.full_url)
+            sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
+            if request.full_url.endswith("/chat/contract"):
+                return Answer(b'{"supported": [1]}')
             raise OSError
 
     monkeypatch.setattr(chat_client, "_LOCAL", Opener())
-    chat_client.Chat(Path(p["path"])).call("GET", "/changes")
-    assert sent == [f"http://127.0.0.1:9/p/{p['id']}/api/next/changes"]
+    chat = chat_client.workspace(Path(p["path"]))
+    chat.call("GET", "/changes")
+    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "1"),
+                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "1")]  # fmt: skip
 
 
 class Answer(io.BytesIO):
@@ -107,8 +114,8 @@ class Answer(io.BytesIO):
 class Loopback:
     """The chat server's opener, answered in-process by the machine host."""
 
-    def __init__(self, http: TestClient) -> None:
-        self.http = http
+    def __init__(self, http: TestClient, replied=lambda *_a: None) -> None:
+        self.http, self.replied = http, replied
 
     def open(self, request, **_kw):
         url = urllib.parse.urlsplit(request.full_url)
@@ -116,6 +123,7 @@ class Loopback:
                               headers=dict(request.header_items()))  # fmt: skip
         if r.status_code >= 400:
             raise urllib.error.HTTPError(request.full_url, r.status_code, "", r.headers, io.BytesIO(r.content))
+        self.replied(request.get_method(), url.path, r.json())
         return Answer(r.content, r.status_code)
 
 
@@ -128,14 +136,14 @@ def origin(path: Path, url: str) -> Path:
     return path
 
 
-def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and_found_from_a_project(
-    tmp_path, http, machine, shared_repo, monkeypatch
+def test_a_decision_confirmed_in_owlbears_unregistered_workspace_is_in_force_and_found_from_a_project(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, machine, shared_repo, monkeypatch, chat_replied
 ):
     """TD-435, TD-450: a chat server on OwlBear's own clone writes OwlBear's folder through the machine host."""
     (shared_repo[0] / "owlbear").mkdir()
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
     monkeypatch.setattr(chat_client.OwlBear, "record", lambda _self: machine.record)
-    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(http))
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(http, chat_replied))
     p = add(http, clone(tmp_path / "shop"))
     own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
     monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(own))  # noqa: SLF001 - the server's chat
@@ -165,7 +173,7 @@ def test_only_the_registry_makes_a_clone_a_project_never_an_id_and_folder_left_b
 
 
 def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
-    tmp_path, shared_repo, monkeypatch
+    tmp_path, shared_repo, monkeypatch, http, machine
 ):
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
     other = origin(clone(tmp_path / "other"), "https://github.com/acme/other.git")
@@ -177,6 +185,21 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
             chat_tool("show_status")]  # fmt: skip
 
     assert said == [{"error": chat_client.NOT_OWLBEAR.format(repo=other)}] * 4
+    monkeypatch.setattr(chat_client.OwlBear, "record", lambda _self: machine.record)
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(http))
+    monkeypatch.setattr(chat_client.chat_contract, "CHAT", 0)  # a contract this host does not serve
+    own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(own))  # noqa: SLF001
+    stale = chat_tool("find_decisions")["error"]
+    for message in (said[0]["error"], stale):  # only the chat's own server needs a fresh start
+        assert "new Copilot-runtime chat" in message
+        assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
+        assert "Restart Local Agent Host" not in message
+    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1)"
+    assert stale.startswith(unsupported)  # the chat asks the host's contracts first
+    chat = mcp_server._STATE["chat"]  # noqa: SLF001
+    chat.checked = (machine.record.pid, machine.record.started_at.isoformat())  # past the contract check
+    assert chat_tool("find_decisions")["error"].startswith(unsupported)  # the host refuses before any route runs
     assert DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout == head
     assert not (other / ".git" / "owlbear-delivery").exists()
 
@@ -500,10 +523,15 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
     saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     wrong = http.put("/api/next/machine/settings", json={"rev": "x", "settings": {"channel": "nightly"}})
-    assert (read["settings"]["channel"], saved.json()["settings"], registry.load().settings.channel) == (
-        "minor", chosen, "major"
+    assert (read["settings"]["channel"], read["resolved"]["channel"], read["resolved"]["sources"]["channel"]) == (
+        None, "minor", "default"
     )  # fmt: skip
+    assert (saved.json()["settings"], registry.load().settings.channel) == (chosen, "major")
+    assert saved.json()["resolved"]["sources"]["channel"] == "machine"
     assert (stale.status_code, "changed since" in stale.json()["detail"], wrong.status_code) == (409, True, 422)
+    inherit = http.put("/api/next/machine/settings", json={"rev": saved.json()["settings_rev"],
+                                                           "settings": chosen | {"channel": None}})  # fmt: skip
+    assert (inherit.json()["settings"]["channel"], inherit.json()["resolved"]["channel"]) == (None, "minor")
 
 
 def test_a_decision_lists_the_changes_of_every_loaded_project_whose_baseline_pins_it(tmp_path, http, machine):

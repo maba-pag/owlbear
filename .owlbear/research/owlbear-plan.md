@@ -2,8 +2,8 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-23, status at `main` after #599 and this pull request, decisions to TD-469, item 5's
-> decisions of 2026-10-22 and the owner's of 2026-10-23
+> **Date:** 2026-10-24, status at `main` `cf9f9981f` after #636 and this pull request, decisions to TD-469, item 5's
+> decisions of 2026-10-22 and the owner's of 2026-10-23 and 2026-10-24
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -25,7 +25,8 @@ registered: `owlbear-sandbox` and `owlbear-sandbox-protected`. OwlBear itself is
 both), through pull requests to `main` with the required `CI` check, strictly up to date, merged as merge commits.
 
 **Runtime.** `~/.owlbear/runtime` is an alias to the active version under `~/.owlbear/versions/`; OwlBear updates
-itself to each new tag when idle, or at once with `owlbear update` or Run updates now (TD-415, items 3 and 4).
+itself to each new tag when idle, or at once with `owlbear update` or Run updates now (TD-415, items 3 and 4). This
+laptop updates only when the owner runs it (its own `update_when_idle` off, D-01M5Q5GKHX7BJTXPEW2MHGS9E0).
 
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
 passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags from `v0.1` exist; v1.0 is the merge of the
@@ -81,8 +82,9 @@ names, not positions: the table lists the items in their order.
 | 14 | Decision system: decisions as their own system for OwlBear's work and every project, in `owlbear-data`, scoped Change, project and Global; Decisions page with read-backs; impact of a change of mind | TD-419, TD-418, TD-424..TD-430 | [decision system](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md) | Built: slices 1 to 4 and 5a (#538 to #542: file contract and validator, Change decisions archived, store with receipts and index, step context with the runner's gate, Decisions tab with owner actions and chat tools), 6 (#543: generated `.owlbear/decisions.md`, its hash checked on pull requests and against owlbear-data by `decisions-view.yml`, TD-436) and 5b part 1 (the read-back queue on the Decisions tab, at most three at a checkpoint, `queue_read_back`, and OwlBear's own decisions as a fixed scope, TD-427, TD-435) and 5b part 2 (an impact report per project for a replaced or withdrawn decision, the owner's "forbids existing behaviour" or "wording only" mark, scheduling fixes as grouped backlog entries and accepting a project's existing code, each the owner's click, TD-428). Next: the owner reviewed the migration preview on 2026-10-21 (TD-439 to TD-446), then had decision management rethought end to end and decided it the same day (TD-448 to TD-455): decisions record his confirmed intent only, a lead chat saves at confirmation, workers get the Change's whole picked set while challengers check all, today's rules come over as inherited. A picker on Sol medium picks each Change's rules at shaping and answers lookups; every worker gets the whole picked set (TD-456 to TD-459, from a model test on 13 past pull requests). Next: the six slices of [decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md), the migration being the last; slices 1, 2 and 3 are built (slice 3: a brief's project decisions published in force by its approval, which a failed save refuses; a failed push shown on the Change and sent by the next save; never demoted at its end), and of slice 4 the picker (a brief version's decisions picked before its first challenge, checked and pinned at approval) and the runtime switch (every role of a step gets the pinned picked set plus the Change's own, whole and without a size limit; challengers get the complete list beside it; decisions new since the pick go to the picker in one batch at the next step boundary, a failed pick waiting and retrying; path, role and step selectors removed, TD-460) and the lookup (`lookup_decisions` for a step's own worker, its spend on the Change, and for lead chats through the project host or the machine host's OwlBear mount: the picker over the complete list, a failed lookup reported as failed, TD-456, TD-459) with the agents' boundary in their files (TD-451); slice 4 is complete. Slice 5 is built: the relayer of an answer to a worker's question (a lead chat's `answer_question` or the Changes page) classes it as event, clarification or brief change; a clarification carries the statement the owner confirmed when it was read back, a Sol check on the picker's role compares it with the approved brief, and within it the statement becomes a decision of the Change, in force from that step; a brief change, or a clarification the check finds changing the brief, is never delivered and stops the work with the owner's choice to answer within the brief or stop the Change, until item 16 designs amendments (TD-461). Slice 6 is built: the converter applied `.owlbear/migration/decisions-overlay.json` (130 lines reworded to stand alone after two Sol checks, TD-462; 22 Global by TD-442) and its `REPORT.md` shows each original beside its rewording; the owner reviewed it on 2026-10-22: he checked only the four Sol left uncertain (TD-464), which were split or retired (TD-467 to TD-469); lines of mixed origin carry decided (TD-465); the 28 orphan rows were cited, spent or restored (TD-40), and the quality-service line split by TD-442. The past-work test on the final preview missed nothing new, and the record switched to owlbear-data (TD-466): 22 Global and 324 OwlBear decisions are authoritative there, and the record, converter and overlay are in Git history. Item 14 is complete |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once; from the closed memory issues: a test for two writes in the same microsecond (#238), dispute history in the memory tools' answers (#244), the memory handbook's revision parameter (#249) | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400; the session's four of 2026-10-22 (threshold measure, triggers, move back, sort) | [memory work](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-work-build.md) | Done (#581 to #588): the saver's recommended scope; Make global records its origin and Move back returns it; steps without discovered or bundled agents and skills; the curator's threshold (global, 95%, Settings page), its tools across folders, `make_global` and its automatic and interactive modes; Delivery's `owlbear-curator` role with Curate now, after-merge and idle runs and a machine setting per trigger, "Curate after merge" and "Curate when idle", each off, on or on even while paused (the owner, 2026-10-23). The one-off sort ran on 2026-10-23 on v1.34: 11 promoted, 6 pruned, 1 made global; the owner settled the 6 it left (3 promoted, one of them split in two; 3 pruned). The three residuals from #238, #244 and #249 are built |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Building: TD-267 is built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); Built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held. Window steps stay paused until item 9 needs them (`autonomous`) |
-| 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Building: layered settings first, machine settings next; it goes before item 9's SDK feed (the owner, 2026-10-23) |
-| 9 | Watcher: the draft revised, the owner's questions (Q1–Q3) and TD-27's benchmark, then the build (SDK first) and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Started: the draft is revised and the owner's three questions answered (2026-10-23); the watcher's settings exist (gpt-6-luna medium, on/off per layer); item 18 comes first, then the SDK feed (§3.5) |
+| 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop |
+| 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (this pull request); item 9 next |
+| 9 | Watcher: the draft revised, the owner's questions (Q1–Q3) and TD-27's benchmark, then the build (SDK first) and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Started: the draft is revised and the owner's three questions answered (2026-10-23); the watcher's settings exist (gpt-6-luna medium, on/off per layer); its switches decided (D-01M5Q5HJBVZY4SYN9D4MANY374); item 19 comes first, then the SDK feed (§3.5) |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
@@ -114,7 +116,7 @@ flowchart LR
   I5["5 Memory work"] -.-> I8["8 Window-step gate"]
   I8 -.-> I9["9 Watcher"]
   B27["TD-27 benchmark"] --> I9
-  I18["18 Settings without code defaults"] -.-> I9
+  I19["19 Pinned OwlBear"] -.-> I9
   I9 --> I16["16 Amendment design"]
   I16 --> I10
   I9 --> I10
@@ -211,6 +213,27 @@ key gaps confirmed in the code), updated for the owner's answers TD-392..TD-403 
 2026-10-21 after #535 to #553. Only gaps are listed;
 every other line is built as decided. Action: **align** the code to the decision, **build** planned work, **keep**
 as is for the reason given. Item: the plan item of §2 that picks it up.
+
+That earlier alignment pass is not a correctness certification. The
+[implementation audit of 2026-10-24](https://github.com/maba-pag/owlbear-data/blob/94e36035c625af211d57fc61b8a7fe4ae6927e09/owlbear/research/delivery-implementation-audit-2026-10-24/README.md)
+found 26 supported defects at `ebf7bbbeb`, grouped into 21 repair packages under
+[#606](https://github.com/maba-pag/owlbear/issues/606). Their issues hold current repair
+and verification status; #605 was not part of that baseline. The decision-page scope
+repair (#607) binds displayed decisions, confirmations and mutations to the same
+captured scope and rejects superseded responses. Cleanup preservation (#610) keeps
+unsupported nested repositories and entries in their workspace instead of omitting
+them from a verified archive; supported links and file modes are preserved without
+following symlink parents. Other packages remain open until their own merged-code
+acceptance evidence is verified.
+
+Shared-settings publication (#622) distinguishes a missing path from failed Git
+tracking or staged-diff probes and stops before acknowledging a failed commit.
+Pending-status failures are reported instead of reading as fully published;
+unchanged saves still retry prior commits without consuming unrelated staging.
+
+Change creation (#609) allocates handles, slugs and new records across processes in
+one transaction. Maintenance test-review setup reserves its identity before Git
+work, retains it after failed setup, and publishes only into its own reservation.
 
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |

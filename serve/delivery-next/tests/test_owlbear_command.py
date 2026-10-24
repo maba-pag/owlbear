@@ -177,6 +177,15 @@ def test_doctor_runs_each_tool_and_checks_the_login_items_path(monkeypatch, tmp_
     assert login_item() == [f"login item: copilot at its COPILOT_CLI_PATH {real / 'copilot'} not found"]
 
 
+@pytest.fixture
+def no_host_left():
+    """A test that starts real hosts stops what it left running, even when it fails partway."""
+    yield
+    if control.serve.running() is not None:
+        control.stop(lambda _said: None)
+
+
+@pytest.mark.usefixtures("no_host_left")
 def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     said = []
     assert control.start(said.append) == 0
@@ -187,9 +196,9 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     listed = control.projects()
     assert listed is not None
     assert listed | {"update": None} == {
-        "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": True,
+        "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": False,
         "update": None, "updated": "", "announce": None,
-    }  # fmt: skip
+    }  # fmt: skip  # a real host: no Global and nothing set here, so it never updates while paused (2026-10-23)
     assert listed["update"]["phase"] == "idle"
     assert control.stop(said.append) == 0
     assert (control.serve.running(), said[-1]) == (None, "OwlBear stopped; running steps finish on their own")
@@ -198,6 +207,7 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
 
 
 @pytest.mark.timeout(120)  # six real hosts start and stop in turn; a loaded CI runner needs more than 30 s
+@pytest.mark.usefixtures("no_host_left")
 def test_a_start_asked_for_paused_or_after_a_crash_is_paused_and_a_restart_keeps_the_state(monkeypatch) -> None:
     """TD-350: only a login start, a start after a crash and one asked for paused wait for Resume."""
     said = []

@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, loaded } from "/assets/ui.mjs";
-import { DIALOG, notify, show, state, untagged, WRITE } from "./state.mjs";
+import { DIALOG, notify, sameAddress, show, state, untagged, WRITE } from "./state.mjs";
 import { button, listed } from "./widgets.mjs";
 
 // The owner's mark on a replacement (TD-428); not saying it counts as possibly forbidding.
@@ -14,18 +14,19 @@ export function reported(e) {
 
 // Under the machine host the report covers every project it serves; a clone's own host reports its project.
 function route(e, action) {
-  const folder = encodeURIComponent(state.loaded.project);
+  const folder = encodeURIComponent(e.address.project);
   return [`/decisions/${encodeURIComponent(e.id)}/${action}?folder=${folder}`, { machine: Boolean(loaded()) }];
 }
 
 async function check(e) {
-  state.impact = { id: e.id, busy: true };
+  const got = { id: e.id, address: e.address, busy: true };
+  state.impact = got;
   show();
   try {
     const [path, how] = route(e, "impact");
-    state.impact = { id: e.id, report: await call(path, { ...how, timeout: WRITE }) };
+    Object.assign(got, { busy: false, report: await call(path, { ...how, timeout: WRITE }) });
   } catch (error) {
-    state.impact = { id: e.id, error: error.message };
+    Object.assign(got, { busy: false, error: error.message });
   }
   show();
 }
@@ -44,8 +45,8 @@ async function write(action, work) {
   if (failed) notify(failed);
 }
 
-async function schedule(e, r) {
-  const due = r.projects.filter((p) => p.status !== "unaffected" && !p.accepted);
+async function schedule(e, got) {
+  const r = got.report, due = r.projects.filter((p) => p.status !== "unaffected" && !p.accepted);
   const yes = await window.ask({ title: `Schedule fixes for “${r.new.title}”?`, yes: "Schedule fixes",
     now: "Backlog entries are made, one per project (split by folder when its files are many, and into parts when its "
       + "checklist is long), each naming both rules' revisions with a checklist of its Changes and files.",
@@ -57,7 +58,7 @@ async function schedule(e, r) {
   await write("schedule", async () => {
     const [path, how] = route(e, "schedule-fixes");
     const done = await call(path, { ...how, body: { revision: r.new.revision }, timeout: WRITE });
-    state.impact.scheduled = done.entries;
+    got.scheduled = done.entries;
   });
 }
 
@@ -100,15 +101,15 @@ function place(p, e, r) {
   </li>`;
 }
 
-function report(e, r) {
-  const made = state.impact.scheduled;
+function report(e, got) {
+  const r = got.report, made = got.scheduled;
   return html`<dl class="facts">
       <dt>Old rule</dt><dd class="old">${r.old.statement}</dd>
       <dt>New rule</dt><dd class="new">${r.new ? r.new.statement : "none: withdrawn"}</dd>
     </dl>
     <p-text size="sm" class="divergence">${untagged(r.divergence)}</p-text>
     <ul class="impacts">${r.projects.map((p) => place(p, e, r))}</ul>
-    ${r.fixes ? html`<div class="row">${button("Schedule fixes", () => schedule(e, r), { aria: DIALOG,
+    ${r.fixes ? html`<div class="row">${button("Schedule fixes", () => schedule(e, got), { aria: DIALOG,
       busy: state.pending === "schedule" })}</div>` : nothing}
     ${made ? listed("Backlog entries", made, (x) =>
       `#${x.id} ${untagged(x.title)} · ${x.project}${x.new ? "" : ` · updated, ${x.added} new item(s)`}`) : nothing}`;
@@ -116,10 +117,10 @@ function report(e, r) {
 
 export function impact(e) {
   if (!reported(e)) return nothing;
-  const got = state.impact?.id === e.id ? state.impact : null;
+  const got = state.impact?.id === e.id && sameAddress(state.impact.address, e.address) ? state.impact : null;
   return html`<section id="impact" aria-label="Impact"><p-heading size="sm"><h3>Impact</h3></p-heading>
     ${got?.error ? html`<p-text size="sm" color="notification-error">${got.error}</p-text>` : nothing}
-    ${got?.report ? report(e, got.report) : button("Check the impact", () => check(e), { variant: "secondary",
+    ${got?.report ? report(e, got) : button("Check the impact", () => check(e), { variant: "secondary",
       busy: Boolean(got?.busy) })}
   </section>`;
 }

@@ -32,6 +32,30 @@ from owlbear_delivery_next.state_store import backlog, backlog_issues
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
+CHAT_REPLIES = json.loads((Path(__file__).parent / "fixtures" / "chat_contract_1.json").read_text())["replies"]
+
+
+def has(out: object, field: str) -> bool:
+    """Whether *out* has *field*: dotted, ``[]`` for each item of a list (and a list, when it is the last)."""
+    head, _, rest = field.partition(".")
+    if head.endswith("[]"):
+        items = out if head == "[]" else out.get(head[:-2]) if isinstance(out, dict) else None
+        return isinstance(items, list) and all(has(i, rest) for i in items) if rest else isinstance(items, list)
+    return isinstance(out, dict) and head in out and (not rest or has(out[head], rest))
+
+
+def _chat_replied(method: str, url: str, out: object) -> None:
+    path = re.sub(r"^.*/api/next(/owlbear)?", "", url).split("?")[0]
+    for route, fields in CHAT_REPLIES.items():
+        verb, template = route.split(" ")
+        if verb == method and re.fullmatch(re.sub(r"\{[^/]+\}", "[^/]+", template), path):
+            assert [f for f in fields if not has(out, f)] == [], f"{route} lost what chat contract 1 reads"
+
+
+@pytest.fixture
+def chat_replied() -> Callable[[str, str, object], None]:
+    """Asserts a host's answer to a chat keeps every field a chat of contract 1 reads from it."""
+    return _chat_replied
 
 
 @pytest.fixture
@@ -63,11 +87,13 @@ def page_source() -> Callable[[TestClient, str], str]:
 def _carried_settings(monkeypatch):
     """Code ships no settings defaults (2026-10-23); tests resolve over the carried values as a layer under Global.
 
-    A test of unset settings sets ``config.BASE`` to ``None``.
+    A test of unset settings sets ``config.BASE`` or ``machine_settings.BASE`` to ``None``.
     """
+    from owlbear_delivery_next.machine_host import machine_settings  # noqa: PLC0415
     from owlbear_delivery_next.settings import carried, config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", carried.layer())
+    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE)
 
 
 @pytest.fixture(autouse=True)

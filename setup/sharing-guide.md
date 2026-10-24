@@ -88,7 +88,9 @@ No further platform-specific configuration is required:
 
 - **Hooks** — the seeded hook `deny-src-writes.py` is a Python script executed by VS Code's
   extension host — no shell dependency
-- **MCP servers** — started via `uv run`
+- **MCP servers** — OwlBear's memory, knowledge and browser servers start from the installed
+  runtime (`python -m owlbear_delivery_next serve <name>`) and stay on the version they started
+  with; markitdown starts via `uvx`
 
 ## What's Shared vs. Project-Local
 
@@ -101,7 +103,7 @@ No further platform-specific configuration is required:
 | Skills (`SKILL.md`) | `~/.owlbear/runtime/share/skills/` | Yes — all teammates get the same skills |
 | Instructions (`*.instructions.md`) | `~/.owlbear/runtime/share/instructions/` | Yes — shared baseline |
 | Prompts (`*.prompt.md`) | `~/.owlbear/runtime/share/prompts/` | Yes — shared baseline |
-| MCP server code | `~/.owlbear/runtime/serve/` | Yes — started from owlbear via `uv run --project` |
+| MCP server code | `~/.owlbear/versions/<tag>/serve/` | Yes — each server runs from the version it started with, through `~/.owlbear/runtime` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |

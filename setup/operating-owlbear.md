@@ -97,6 +97,18 @@ automatic memory curation does not start until its role and threshold are set. S
 applies yet (runtimes, visibility, tool categories) may stay unset. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset.
 
+The machine settings in **Settings → This machine** (versions, updating itself, curation per
+trigger, sessions at once) work the same way: each machine follows the global ones, which you
+edit there with the Global layer chosen, unless it sets its own. Each start of OwlBear first
+brings the shared repository up to date, so a machine follows what another one saved. With one unset in both, the
+machine does not update by itself, curate automatically or start agent sessions. The first start
+after this change moves the values in `machine.json` into the global settings where those have
+none, then clears them, so every machine follows Global; a later machine copies nothing. Until
+that is published (the shared repository is offline, or Global has an edit you have not saved),
+**Settings → This machine** says why, the machine keeps its own values, and the next start tries
+again. If another machine changed the global settings meanwhile, nothing is undone for you: the
+page names the shared repository, where you publish or undo this machine's change by hand.
+
 ## Upgrading OwlBear
 
 OwlBear's versions are Git tags such as `v1.0`. OwlBear installs a new version beside the running
@@ -106,9 +118,22 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   pages 2 minutes ahead. **Settings → This machine** chooses major versions only, and whether it
   updates when idle or while paused.
 - **Run updates now** on a paused page, or `owlbear update`, updates at once.
-- After an update, the pages say once which version OwlBear now runs. A chat whose Delivery server
-  is older answers `OwlBear updated: …`: reload the VS Code window, or in the Copilot runtime run
-  **Restart Local Agent Host**; a window reload does not restart that runtime's tool servers.
+- After an update, the pages say once which version OwlBear now runs. Open chats keep their
+  Delivery tools: a chat's `owlbear-delivery` server reads and writes nothing itself, and asks the
+  host in a chat contract that later versions keep serving. With Delivery stopped, its tools say so
+  and read nothing. A chat whose server the host no longer serves answers `OwlBear does not serve
+  this chat's …`, and one started before OwlBear had the chat contract answers `OwlBear updated: …`
+  once more: start a new Copilot-runtime chat, or focus that chat and use **MCP: List Servers** →
+  `owlbear-delivery` → **Stop Server**, then **Start Server**. Neither the agent host nor the window
+  needs restarting; a window reload does not restart that runtime's tool servers. A chat whose
+  server is newer than the running host says so: let the update finish, or run `owlbear restart`.
+- OwlBear's memory, knowledge and browser servers run from the installed version too
+  (`python -m owlbear_delivery_next serve memory`, through `~/.owlbear/runtime`): each keeps the
+  version it started with until its chat ends or you stop and start it, and no update removes that
+  version while it runs. Chats started before and after an update can thus use two versions of a
+  server over the same memory and knowledge stores, so a version that changes how they store data
+  must read and write what the versions still running write, with tests that an older server's
+  writes survive.
 
 The agent workspace follows these updates: setup writes its paths through `~/.owlbear/runtime`, so
 they stay valid. Rerun setup from the project root after an update to refresh copied files:
@@ -308,6 +333,13 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
    **Approve merge** for merge consent.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
+
+Cleanup verifies the preservation of work held only in a Change's worktree before removing it.
+Archives retain regular-file permissions and symbolic links, including dangling links, without
+following their targets. If an entry cannot be represented safely, such as a nested Git
+repository, cleanup stops and leaves the worktree intact. Copy that work elsewhere or explicitly
+remove the unsupported entry before retrying; a verified archive must not be assumed to contain
+an entry that cleanup refused.
 
 The other pages serve the same projects:
 

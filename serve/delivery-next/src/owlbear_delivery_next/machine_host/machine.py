@@ -18,10 +18,9 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
-from owlbear_delivery_next.machine_host.registry import Settings
 from owlbear_delivery_next.project_host.host import RunnerRecord
 from owlbear_delivery_next.state_store import project_home, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
@@ -75,7 +74,7 @@ class Machine:
         self.lock = threading.RLock()
         self.stopping = threading.Event()
         self.on_stop: Callable[[], None] = lambda: None
-        self.total = Settings().sessions
+        self.total = 0  # until the machine's total is read; unset, no session starts (2026-10-23)
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
         from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
@@ -89,17 +88,29 @@ class Machine:
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
         with contextlib.suppress(registry.RegistryError):
-            self.total = registry.load().settings.sessions
+            self.total = machine_settings.current().sessions or 0
         return self.total
 
     def carry(self) -> None:
-        """Carry today's built-in settings into Global once; a failure is said and tried again at the next start."""
+        """Carry today's built-in settings into Global once, then move this machine's own settings and clear them here.
+
+        The first machine's move fills Global's machine settings; so every machine follows Global (the owner,
+        2026-10-23). Both run on a current checkout. Until they are done, why is kept for the Settings page and the
+        next start tries again; this machine keeps its own values meanwhile.
+        """
         try:
-            if (shared := data_repo.locate()) is not None and settings_carry.due(shared):
-                notice = settings_carry.carry(shared)
-                self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
+            why = _switched(self.say)
         except Exception as exc:  # noqa: BLE001 - the projects load either way; their steps say what is unset
-            self.say(f"settings: carrying the built-in values into Global failed: {type(exc).__name__}: {exc}")
+            why = f"the settings carry failed: {type(exc).__name__}: {exc}"
+        if why:
+            self._pending(why)
+        else:
+            _pending("")
+
+    def _pending(self, why: str) -> None:
+        """Keep why the carry or the move is not done, and say it; tried again at the next start."""
+        _pending(why)
+        self.say(f"settings: {why}; tried again at the next start")
 
     def say(self, text: str) -> None:
         """Write one line to the machine host's log."""
@@ -341,3 +352,62 @@ class Machine:
                 if p.state != "stopped":
                     p.stop()
         self.say("stopped: every project closed")
+
+
+def _moving() -> registry.Settings:
+    """The values this machine's move takes: chosen at its first try, kept until it is done."""
+    with registry.locked():
+        machine = registry.load()
+        if machine.settings_moving is None:
+            machine.settings_moving = machine.settings
+            registry.save(machine)
+        return machine.settings_moving
+
+
+def _switched(say: Callable[[str], None]) -> str:
+    """The carry and this machine's move, each once and silently (D-01M5MZKEPWNASF6X3CNF4FEWZH); why not, else ''."""
+    shared, state = data_repo.locate(), registry.load()
+    if shared is None:
+        return ""  # without Global this machine keeps its own values
+    why = settings_carry.sync(shared, state.global_written)  # every start: Global as the other machines left it
+    if state.settings_moved and not settings_carry.due(shared):
+        if why:
+            say(f"settings: the shared repository could not be brought current: {why}")
+        return ""
+    if why:
+        return f"the shared repository could not be brought current: {why}"
+    if settings_carry.due(shared) and (notice := settings_carry.carry(shared, _written)):
+        return f"carrying the built-in values into Global: {notice}"
+    return "" if state.settings_moved else _move(shared, say)
+
+
+def _move(shared: data_repo.DataRepo, say: Callable[[str], None]) -> str:
+    """Move this machine's settings into Global, then clear those still as they were; why not, else ''."""
+    local = _moving()
+    if notice := settings_carry.move(shared, local, _written):
+        return f"moving this machine's settings into Global: {notice}"
+    with registry.locked():
+        machine = registry.load()
+        since = {k: v for k, v in machine.settings.model_dump().items() if v != getattr(local, k)}
+        machine.settings = registry.Settings.model_validate(since)  # what the owner saved since stays
+        machine.settings_moved, machine.settings_moving = True, None
+        registry.save(machine)
+    say("settings: this machine's settings moved into Global; it follows Global's from now on")
+    return ""
+
+
+def _pending(why: str) -> None:
+    """Keep why the carry or the move is not done for the Settings page; empty once both are."""
+    with registry.locked():
+        machine = registry.load()
+        if machine.settings_pending != why or (not why and machine.global_written):
+            machine.settings_pending, machine.global_written = why, machine.global_written if why else []
+            registry.save(machine)
+
+
+def _written(digest: str) -> None:
+    """Keep the digest of what the carry or the move wrote to Global, so a later start knows that write as its own."""
+    with registry.locked():
+        machine = registry.load()
+        machine.global_written = [digest]  # the last write: what an unsaved Global may hold as this machine's own
+        registry.save(machine)

@@ -120,7 +120,8 @@ function settingsSections() {
     ...Object.entries(loaded.settings.runtimes).map(([n, on]) => [`Runtime ${n} switched on`, on, `runtimes.${n}`])];
   const { baseline, runtimes, categories } = loaded.catalogue;
   const text = (v) => cell(html`<p-text>${v}</p-text>`);
-  const unset = loaded.settings.missing ?? [];
+  const machine = (state.machine?.resolved?.missing ?? []).map((k) => `machine.${k}`);  // this machine's in force
+  const unset = [...(loaded.settings.missing ?? []), ...machine];
   return html`
     ${unset.length ? html`<section class="panel" id="unset" aria-labelledby="unset-title">
       <p-heading size="lg"><h2 id="unset-title">Unset settings</h2></p-heading>
