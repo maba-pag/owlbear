@@ -239,3 +239,17 @@ def test_the_page_shows_final_review_values_set_while_others_are_unset():
     assert some.final_review is None  # a loop needs all four
     assert some.page()["final_review"] == {"max_rounds": 5, "max_findings": None, "last_round_at": None,
                                            "ask_owner_at": None}  # fmt: skip
+
+
+@pytest.mark.usefixtures("no_base")
+def test_an_unset_watcher_switch_asks_before_a_step_records_anything(monkeypatch, tmp_path):
+    no_switch = resolve(carried.layer().model_copy(update={"watcher": None}), Layer())
+    recorded: list[object] = []
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
+    monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
+    monkeypatch.setattr(runner.review, "started", lambda *a: recorded.append(a))
+    store = SimpleNamespace(read_profile=lambda: None, settings=lambda: no_switch, write=lambda *a: recorded.append(a))
+    c = change(StepKind.BUILD)
+    with pytest.raises(SettingsUnset, match="watcher"):
+        runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
+    assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind
