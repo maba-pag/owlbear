@@ -14,7 +14,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.machine_host import registry, versions
+from owlbear_delivery_next.machine_host import machine_settings, registry, versions
 from owlbear_delivery_next.machine_host.update import ATTEMPTS
 
 if TYPE_CHECKING:
@@ -59,10 +59,10 @@ class Auto:
     def permitted(self) -> bool:
         """Whether the machine's settings let it update by itself now (TD-288)."""
         try:
-            settings = registry.load().settings
+            settings = machine_settings.current()
         except registry.RegistryError:
-            return False
-        return settings.update_when_idle and (not self.machine.paused or settings.update_while_paused)
+            return False  # unset or unreadable: no update by itself (2026-10-23)
+        return settings.update_when_idle is True and (not self.machine.paused or settings.update_while_paused is True)
 
     def _allowed(self) -> bool:
         m = self.machine

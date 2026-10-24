@@ -21,14 +21,16 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     DesignFailures,  # noqa: TC001 - pydantic resolves it at runtime
 )
 
-CONFIG_FORMAT = 10  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
-# 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults (2026-10-23)
+CONFIG_FORMAT = 11  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+# 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 RUNTIMES: tuple[str, ...] = ("sdk", "window")
 type RuntimeName = Literal["sdk", "window"]
 type Category = Literal["browser"]
 type Source = Literal["default", "global", "machine", "project", "builder"]
+type Channel = Literal["minor", "major"]  # every minor version, or major versions only (TD-300)
+type Curate = Literal["off", "on", "paused"]  # an automatic curation trigger: off, on, or on even while paused
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
 LABEL = 50  # GitHub's longest label name
@@ -135,11 +137,29 @@ class WideLayer(Layer):
         return v
 
 
+class MachineValues(Record):
+    """The machine settings (TD-243): Global's for every machine, or one machine's own in ``machine.json``.
+
+    ``None`` inherits: this machine's value, else Global's, else unset (D-01M5MZKEPPVMFC9HK795MMG91B).
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    channel: Channel | None = None
+    update_when_idle: bool | None = None  # TD-288
+    update_while_paused: bool | None = None
+    curate_after_merge: Curate | None = None  # automatic memory curation per trigger (the owner, 2026-10-23)
+    curate_when_idle: Curate | None = None
+    sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once on the machine, all projects
+
+
 class GlobalLayer(WideLayer):
     """The global settings; the visibility switch and the curator's threshold are global only (TD-35, TD-400)."""
 
     visible: bool | None = None
     curator_threshold: int | None = Field(default=None, ge=50, le=100)  # percent: the curator decides alone at or above
+    machine: MachineValues | None = None  # every machine's settings, each machine may set its own
+    machine_moved: bool | None = None  # a machine's settings were moved in once (2026-10-23); no machine copies again
 
 
 class MachineLayer(WideLayer):

@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.machine_host import registry
+from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
@@ -189,10 +189,10 @@ class Curation:
     def allowed(self, trigger: Trigger, *, paused: bool) -> bool:
         """Whether a merge or idle time may start a run now: its machine setting on, and while paused set so."""
         try:
-            settings = registry.load().settings
+            settings = machine_settings.current()
         except registry.RegistryError:
             return False
-        said = settings.curate_after_merge if trigger == "merge" else settings.curate_when_idle
+        said = settings.curate_after_merge if trigger == "merge" else settings.curate_when_idle  # unset: no run
         return said == "paused" or (said == "on" and not paused)
 
     def nudge(self, wanted: list[str] | None, trigger: Trigger, *, paused: bool) -> list[str]:
