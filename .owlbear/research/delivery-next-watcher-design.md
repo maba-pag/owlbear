@@ -299,8 +299,8 @@ SDK first, since window steps stay paused; the window feed comes with their reop
 2. SDK feed: the runner's event callback normalised into one event (kind, tool, arguments, agent, parent, time),
    subagents included by `agent_id`; attempt identity stored before work; one watcher per step.
    Built in W1a (2026-10-24), report-only: each `tool.execution_start`, enriched by the `permission.requested` events
-   of the same call in either order; the agent is the event's `agent_id`, else the subagent its parent call launched,
-   else "unknown"; one watcher per Change-owned session (its runner step, rounds and judges), on by the master switch;
+   of the same call in either order; the agent is the event's (or the permission request's) agent id, else the
+   subagent its parent call launched, else "main" for a started call under no parent, else "unknown"; one watcher per Change-owned session (its runner step, rounds and judges), on by the master switch;
    reports in the database's `watch` table, written by a bounded writer thread that the session's teardown drains,
    shown as the Change's "Watcher" list with a count on its row. The attempt identity waits for slice 4.
 3. Watcher policy: write targets, the TD-46 never-judged classes, the clearly inappropriate classes with precedence

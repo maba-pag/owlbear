@@ -16,6 +16,7 @@ and window steps until they reopen (slice 8).
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -27,7 +28,7 @@ from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.state_store import watch_reports
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from owlbear_delivery_next.runtimes.subagents import Watch
@@ -118,6 +119,7 @@ class Feed:
             seen = self.calls.setdefault((self.session(), cid), _Seen(stamp))
             seen.call = replace(seen.call, asked=(*seen.call.asked, asked(request)))
             seen.command = seen.command or _command(request)
+            seen.agent_id = seen.agent_id or getattr(data, "owner_agent_id", None) or ""  # the agent it asked for
         seen.agent_id = seen.agent_id or getattr(ev, "agent_id", None) or ""
         return (self.session(), cid), seen
 
@@ -140,12 +142,15 @@ class Feed:
     def _agent(self, seen: _Seen) -> str:
         """The event's agent id, named when it is a launcher's; else the subagent the parent call launched.
 
-        A call under no parent call is the step's own agent's, as the model check counts it (TD-94); one under a
-        parent this session never saw launch is "unknown".
+        A started call under no parent call is the step's own agent's, as the model check counts it (TD-94); one
+        under a parent this session never saw launch, or seen only in a permission request naming no agent, is
+        "unknown".
         """
         if seen.agent_id:
             launched = self.agents.seen.get(seen.agent_id)
             return launched.agent if launched else seen.agent_id
+        if not seen.started:  # only a start shows whether a call has a parent
+            return "unknown"
         if not seen.parent:
             return "main"
         launched = self.agents.seen.get(seen.parent)
@@ -166,6 +171,35 @@ def _command(request: Any) -> str:  # noqa: ANN401 - one of the SDK's permission
     if req.commands:
         return summary("bash", {"command": req.commands[0]})
     return summary(req.kind, {"path": req.paths[0] if req.paths else ""})
+
+
+async def around[T](feed: Feed | None, work: Awaitable[T]) -> T:
+    """Await *work*, then close *feed* off the loop; a cancellation meanwhile waits until its writer is gone.
+
+    So no writer outlives the session's run: a cancellation is raised once the close finished, unless an error or
+    cancellation was already on its way out.
+    """
+    propagating = False
+    try:
+        return await work
+    except BaseException:
+        propagating = True
+        raise
+    finally:
+        if feed is not None and await _closed(feed) and not propagating:
+            raise asyncio.CancelledError
+
+
+async def _closed(feed: Feed) -> bool:
+    """Close *feed* in a thread, whatever cancels the caller meanwhile; whether it was cancelled."""
+    closing, cancelled = asyncio.ensure_future(asyncio.to_thread(feed.close)), False
+    while not closing.done():
+        try:
+            await asyncio.shield(closing)
+        except asyncio.CancelledError:
+            cancelled = True
+    closing.result()
+    return cancelled
 
 
 def opened(watching: Watching | None, own: Path, session: Callable[[], str], agents: Watch) -> Feed | None:

@@ -266,3 +266,33 @@ def test_a_judges_session_is_watched_in_the_folder_it_runs_in(place, tmp_path, m
         sessions.judges(place.store, Lock("c1"), None, place.own, lambda _at: [("review", config(place, watch=False))])
     (cfg,) = built
     assert (cfg.worktree, cfg.watch.slug, cfg.watch.step) == (tmp_path / "read-only", "c1", "review")
+
+
+def test_a_call_seen_only_in_a_permission_request_is_its_owners_or_unknown_never_main(place) -> None:
+    outside = str(place.elsewhere / "x")
+    owned = write("p1", outside)
+    owned.data.owner_agent_id = "subagent-7"
+    stepped(place, owned, write("p2", outside))
+    assert {c: r["agent"] for c, r in rows(place).items()} == {"p1": "subagent-7", "p2": "unknown"}
+
+
+def test_a_cancelled_run_waits_until_its_watcher_closed_then_is_cancelled() -> None:
+    release, closed = threading.Event(), threading.Event()
+    feed = SimpleNamespace(close=lambda: (release.wait(5), closed.set()))
+
+    async def work() -> str:
+        return "done"
+
+    async def main() -> None:
+        task = asyncio.ensure_future(watch_feed.around(feed, work()))
+        await asyncio.sleep(0.05)  # the work returned; the watcher is closing
+        for _ in range(2):  # cancelled twice while it closes
+            task.cancel()
+            await asyncio.sleep(0.05)
+        assert not task.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert closed.is_set()
+
+    asyncio.run(main())

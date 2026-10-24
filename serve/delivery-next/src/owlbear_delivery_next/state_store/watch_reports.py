@@ -114,6 +114,10 @@ class Writer:
         self.open = True
         self._counted = threading.Lock()
         self._stopping = threading.Event()
+        self._until: float | None = None  # the drain's deadline, once closing: no operation starts after it
+        self._row: Operation | None = None  # the summary row, which is no report
+        self.missed = 0  # operations the deadline stopped before they ran
+        self.summed = False  # the summary row was committed
         self.thread = threading.Thread(target=self._work, name=f"watch-{lock.slug}", daemon=True)
         self.thread.start()
 
@@ -143,16 +147,16 @@ class Writer:
         *summary* makes the summary row from its text; it is written only when the queue drained in time.
         """
         self.open = False
-        until = time.monotonic() + deadline
+        until = self._until = time.monotonic() + deadline
         drained = self._drained(until)
         told, row, failed = "", None, self.failed
         if drained and (said := self._said(0)):
-            row = put(self.lock.slug, summary(said))
+            row = self._row = put(self.lock.slug, summary(said))
             self.queue.put_nowait(row)
-            told = said if self._drained(until) and self.failed == failed else ""
+            told = said if self._drained(until) and self.summed else ""  # only a committed row tells it
         self._stopping.set()
         self.thread.join()  # each write gives up within WAIT and none starts once stopping
-        undrained = 0
+        undrained = self.missed
         while not self.queue.empty():
             undrained += self.queue.get_nowait() is not row
         if row is not None:
@@ -185,12 +189,28 @@ class Writer:
             finally:
                 self.queue.task_done()
 
+    def _attempt(self, operation: Operation) -> bool:
+        """Run *operation* in one write; False when the drain's deadline came first, before or while it waited."""
+        self.lock.check(self.lock.slug)
+        if (wait := self._left()) <= 0:
+            return False
+        with self.db.write(wait=wait) as connection:
+            if self._left() <= 0:  # it got the database only after the deadline: an empty transaction
+                return False
+            operation(connection)
+        return True
+
+    def _left(self) -> float:
+        """How long the next attempt may wait: ``WAIT``, or what is left before the drain's deadline."""
+        return WAIT if self._until is None else min(WAIT, self._until - time.monotonic())
+
     def _write(self, operation: Operation) -> None:
         while True:
             try:
-                self.lock.check(self.lock.slug)
-                with self.db.write(wait=WAIT) as connection:
-                    operation(connection)
+                if not self._attempt(operation):
+                    self.missed += operation is not self._row
+                elif operation is self._row:
+                    self.summed = True
             except BusyError as exc:
                 if not self._stopping.wait(RETRY):
                     continue

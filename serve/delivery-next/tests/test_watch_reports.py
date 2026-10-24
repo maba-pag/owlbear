@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import re
 import sqlite3
 import subprocess
 import sys
@@ -179,7 +181,9 @@ def test_a_migration_fence_held_through_the_deadline_stops_the_writer_and_the_lo
         assert time.monotonic() - started < 2
         assert not w.thread.is_alive()
         assert not threads()
-    assert notes == ["watcher c1: 2 not written by the deadline; 1 failed (the Delivery database is being migrated)"]
+    assert len(notes) == 1  # the one in progress at the deadline is failed or not written, whichever saw it first
+    told = {int(n): what for n, what in re.findall(r"(\d+) (not written by the deadline|failed)", notes[0])}
+    assert (notes[0].startswith("watcher c1: "), sum(told)) == (True, 3)
     assert watch_reports.reports(store.db, "c1") == []  # nothing written after the deadline, the summary neither
 
 
@@ -227,3 +231,42 @@ def test_a_storage_failure_is_counted_and_told_in_the_runners_log_when_its_summa
     w.close(summary)
     assert not w.thread.is_alive()
     assert notes == ["watcher c1: 2 failed (the Delivery database failed: disk I/O error)"]
+
+
+def test_a_write_that_gets_the_database_only_after_the_deadline_does_not_run(store, monkeypatch) -> None:
+    notes: list[str] = []
+    late = store.db.write
+
+    @contextlib.contextmanager
+    def slow(**kw):
+        time.sleep(0.3)  # the database comes free only after the drain's deadline
+        with late(**kw) as connection:
+            yield connection
+
+    monkeypatch.setattr(store.db, "write", slow)
+    w = writer(store, notes)
+    w.put(watch_reports.put("c1", report(0)))
+    time.sleep(0.05)  # the writer is waiting for the database
+    began = time.monotonic()
+    w.close(summary, deadline=0.1)
+    assert time.monotonic() - began < 1.0
+    assert (w.thread.is_alive(), threads()) == (False, [])
+    monkeypatch.undo()
+    assert watch_reports.reports(store.db, "c1") == []
+    assert notes == ["watcher c1: 1 not written by the deadline"]
+
+
+def test_a_summary_row_the_deadline_skipped_is_told_in_the_log(store, monkeypatch) -> None:
+    notes: list[str] = []
+    w = writer(store, notes)
+    w.late()  # one report dropped, so a summary row is due
+    attempt = w._attempt  # noqa: SLF001
+
+    def expired(operation):
+        w._until = 0.0  # noqa: SLF001 - the deadline passed while the summary was made
+        return attempt(operation)
+
+    monkeypatch.setattr(w, "_attempt", expired)
+    w.close(summary, deadline=1.0)
+    assert (w.summed, notes) == (False, ["watcher c1: 1 report dropped"])
+    assert watch_reports.reports(store.db, "c1") == []

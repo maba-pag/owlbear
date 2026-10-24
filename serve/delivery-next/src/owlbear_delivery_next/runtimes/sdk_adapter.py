@@ -438,11 +438,7 @@ async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, await its result, tear down within bounds, then the watcher."""
     st = _Step(cfg, asyncio.get_running_loop())
     st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
-    try:
-        return await _run(st)
-    finally:
-        if st.feed is not None:
-            await asyncio.to_thread(st.feed.close)
+    return await watch_feed.around(st.feed, _run(st))
 
 
 async def _run(st: _Step) -> Run:
