@@ -74,8 +74,8 @@ class Machine(Record):
     settings_moved: bool = False  # its settings were moved into Global once, so it follows Global (2026-10-23)
     settings_moving: Settings | None = None  # the values a move took, kept across its retries until it is done
     settings_pending: str = ""  # why the carry or the move is not done yet; shown on the Settings page
-    global_written: list[str] = Field(default_factory=list)  # digests of what the carry and the move wrote to Global,
-    # each kept until they are published
+    global_written: list[str] = Field(default_factory=list)  # the digest of the last carry or move write to Global,
+    # kept until both are published
 
 
 def _home() -> Path:

@@ -401,5 +401,5 @@ def _written(digest: str) -> None:
     """Keep the digest of what the carry or the move wrote to Global, so a later start knows that write as its own."""
     with registry.locked():
         machine = registry.load()
-        machine.global_written = [*machine.global_written, digest]
+        machine.global_written = [digest]  # the last write: what an unsaved Global may hold as this machine's own
         registry.save(machine)

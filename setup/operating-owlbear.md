@@ -105,7 +105,8 @@ after this change moves the values in `machine.json` into the global settings wh
 none, then clears them, so every machine follows Global; a later machine copies nothing. Until
 that is published (the shared repository is offline, or Global has an edit you have not saved),
 **Settings → This machine** says why, the machine keeps its own values, and the next start tries
-again.
+again. If another machine changed the global settings meanwhile, nothing is undone for you: the
+page names the shared repository, where you publish or undo this machine's change by hand.
 
 ## Upgrading OwlBear
 
