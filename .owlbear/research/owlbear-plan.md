@@ -226,6 +226,11 @@ them from a verified archive; supported links and file modes are preserved witho
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
+Shared-settings publication (#622) distinguishes a missing path from failed Git
+tracking or staged-diff probes and stops before acknowledging a failed commit.
+Pending-status failures are reported instead of reading as fully published;
+unchanged saves still retry prior commits without consuming unrelated staging.
+
 Brief approval (#617) rejects blank required decision wording and refuses the
 whole approval if any current ID-bearing project rule cannot be built or saved.
 It never publishes a valid subset or acknowledges project rules without shared
