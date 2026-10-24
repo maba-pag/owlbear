@@ -1,5 +1,8 @@
 # Watcher Agent: Design Draft
 
+> **Superseded 2026-10-25** by [the improvement watcher](watcher-coach-design.md): the owner chose improvement over
+> per-call outside-write judging. This draft stays as history; W1a (#640) was built from it.
+
 > **Owning task:** Delivery rebuild, phase 3 "N1 design" ([rebuild §3.12](https://github.com/maba-pag/owlbear/blob/04b1d8ec4f288aa56b1128149d5cb0ac825f1575/.owlbear/research/delivery-liveness-first-rebuild.md#312-repair-plan-2026-10-11))
 > **Date:** 2026-10-14, revised 2026-10-23
 > **Question:** How should the watcher read, judge, stop and summarise running steps in both runtimes,
