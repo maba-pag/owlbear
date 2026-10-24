@@ -2,7 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
 import { refresh } from "./list.mjs";
 import { EFFECTS } from "./impact.mjs";
-import { at, DIALOG, KINDS, notify, readBack, show, state, untagged, WRITE } from "./state.mjs";
+import { at, DIALOG, KINDS, notify, projectName, readBack, show, state, untagged, WRITE } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
 const SUBMIT = { replace: "Replace", exception: "Record the exception", "queue-read-back": "Queue the read-back" };
@@ -32,7 +32,7 @@ async function act(e, action, body = {}) {
   show();
   let failed = "";
   try {
-    const r = await call(at(`/decisions/${encodeURIComponent(e.id)}/${action}`),
+    const r = await call(at(`/decisions/${encodeURIComponent(e.id)}/${action}`, e.address),
       { body: action === "keep" ? body : { revision: e.revision, ...body }, timeout: WRITE });
     state.receipts = r.receipts;
     if (r.saved) state.form = null;
@@ -63,8 +63,8 @@ const ASKS = {
     instead: "The decision stays in force as it reads.", tick: redecide(e).tick, reason: WHY,
   }),
   exception: (e, d) => ({
-    title: `Record an exception to “${e.title}” for ${state.loaded.project}?`, yes: "Record the exception",
-    now: `${state.loaded.project} works by your exception; the Global decision stays in force for every other `
+    title: `Record an exception to “${e.title}” for ${projectName(e.address)}?`, yes: "Record the exception",
+    now: `${projectName(e.address)} works by your exception; the Global decision stays in force for every other `
       + "project.", items: [`Global: ${e.statement}`, `Here: ${d.statement}`],
     instead: "The Global decision applies here too.",
   }),

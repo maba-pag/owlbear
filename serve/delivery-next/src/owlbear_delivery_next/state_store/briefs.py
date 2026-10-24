@@ -24,7 +24,8 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store.store import HANDLE, LockHeldError, StoreError
+from owlbear_delivery_next.state_store import identities
+from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
@@ -120,24 +121,6 @@ def new_slug(title: str, taken: list[str]) -> str:
     return next(s for n in range(1, 1000) if (s := base if n == 1 else f"{base}-{n}") not in taken)
 
 
-def _handles(store: Store) -> dict[str, str]:
-    """Each issued handle and its Change; an unloadable Change still holds its number."""
-    handles = {}
-    for s in store.slugs():
-        try:
-            handles[store.read(s).handle] = s
-        except StoreError:
-            if raw := store.raw_handle(s):
-                handles.setdefault(raw, s)
-    return handles
-
-
-def next_number(store: Store, handles: dict[str, str] | None = None) -> int:
-    """The next handle number: above every handle held and every number ever issued."""
-    held = _handles(store) if handles is None else handles
-    return max(max((int(h[1:]) for h in held if HANDLE.fullmatch(h)), default=0), store.issued()) + 1
-
-
 def _visual_of(c: Change) -> dict[str, Any]:
     """A Change's visual check as draft fields."""
     states = [{"name": s.name, "path": s.path, "expect": s.expect, "owner": f"screen:{s.name}" in c.brief.specified}
@@ -151,7 +134,7 @@ def _kept(store: Store, body: object) -> object:
     if not (isinstance(body, dict) and body.get("change")) or {"ui", "visual", "steps"} & body.keys():
         return body
     try:
-        slug = _handles(store).get(body["change"])
+        slug = identities.handles(store).get(body["change"])
         return body | _visual_of(store.read(slug)) if slug else body
     except StoreError:
         return body
@@ -163,25 +146,36 @@ def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     errors = brief_tools.check_brief(draft) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
-    handles, slugs = _handles(store), store.slugs()
-    slug = handles.get(draft.change) if draft.change else new_slug(draft.title, slugs)
-    if slug is None:
+    return _revise(store, draft) if draft.change else _create(store, draft)
+
+
+def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]:
+    if (slug := identities.handles(store).get(draft.change)) is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
-    number = next_number(store, handles)
     try:
         with store.lock(slug) as lock:
-            old = store.read(slug) if draft.change else None
-            if old and (old.step.kind != StepKind.SHAPE or old.finished_at):
+            old = store.read(slug)
+            if old.step.kind != StepKind.SHAPE or old.finished_at:
                 return 409, {"errors": [f"change: {draft.change} is approved; ask for changes in the Changes page"]}
-            if old and (why := brief_rounds.saving(old)):
+            if why := brief_rounds.saving(old):
                 return 409, {"errors": [f"change: {why}"]}
-            if old is None:
-                store.issue(number)  # reserved before the Change file holds it
-            c = drafted(old, draft, slug, f"c{number}", store.read_profile() or Profile())
+            c = drafted(old, draft, slug, old.handle, store.read_profile() or Profile())
             store.write(lock, c)
     except (LockHeldError, StoreError) as exc:
         return 409, {"errors": [f"change: {exc}; try again"]}
     return 200, {"change": c.handle, "version": c.brief.version, "slug": slug}
+
+
+def _create(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]:
+    try:
+        prof = store.read_profile() or Profile()
+        c = identities.publish_new(
+            store,
+            lambda number, taken: drafted(None, draft, new_slug(draft.title, taken), f"c{number}", prof),
+        )
+    except StoreError as exc:
+        return 409, {"errors": [f"change: {exc}; try again"]}
+    return 200, {"change": c.handle, "version": c.brief.version, "slug": c.slug}
 
 
 def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
@@ -189,7 +183,7 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     draft, errors = tool_schema.parse(brief_tools.VisualDraft, body)
     if draft is None:
         return 422, {"errors": errors}
-    if (slug := _handles(store).get(draft.change)) is None:
+    if (slug := identities.handles(store).get(draft.change)) is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - use a handle from show_status"]}
     try:
         c = store.read(slug)
