@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 MESSAGE = "settings: today's built-in values carried into Global"  # the carry's commit, found again in the history
 MOVED = "settings: this machine's settings moved into Global"
+EDITED = "the global settings have an edit that is not saved; the carry waits until it is saved or undone"
 
 
 def _ignore(_digest: str) -> None:
@@ -74,7 +75,7 @@ def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
     with shared.locked():
         if not read_layer(shared.global_path, GlobalLayer).machine_moved:
             if _dirty(shared, until):
-                return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
+                return EDITED
             deleted = not shared.global_path.exists() and _ran(shared, "HEAD", MOVED, until)
             if not deleted:  # a Global the owner deleted after a move stays deleted; what is unpushed is still pushed
                 have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(
@@ -106,8 +107,10 @@ def sync(shared: DataRepo, written: str) -> str:
             why := _give_way(shared, rel, written, until)
         ):
             return why
-        if _dirty(shared, until) or _checked(shared, until, "rev-list", "--count", "HEAD..@{upstream}") == "0":
-            return ""  # an unpublished carry or move is published by its own step
+        if _dirty(shared, until):  # this machine's own unpublished write is published by its step; else it waits
+            return "" if _own(shared, written) else EDITED
+        if _checked(shared, until, "rev-list", "--count", "HEAD..@{upstream}") == "0":
+            return ""
         return shared.pull(until)
 
 
@@ -123,12 +126,21 @@ def _give_way(shared: DataRepo, rel: str, written: str, until: float) -> str:
             return "this machine has unpublished commits in the shared repository; push or undo them by hand"
         _checked(shared, until, "reset", "-q", "--soft", base)
     elif _dirty(shared, until):
-        if not (written and shared.global_path.exists() and _digest(shared.global_path) == written):
-            return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
+        if not _own(shared, written):
+            return EDITED
     else:
         return ""
-    _checked(shared, until, "restore", "--source=HEAD", "--staged", "--worktree", "--", rel)
+    if _checked(shared, until, "ls-tree", "--name-only", "HEAD", "--", rel):
+        _checked(shared, until, "restore", "--source=HEAD", "--staged", "--worktree", "--", rel)
+    else:  # it created Global: it goes again, staged or not
+        _checked(shared, until, "rm", "-q", "--cached", "--ignore-unmatch", "--", rel)
+        shared.global_path.unlink(missing_ok=True)
     return ""
+
+
+def _own(shared: DataRepo, written: str) -> bool:
+    """Whether Global holds exactly what this machine's carry or move last wrote."""
+    return bool(written) and shared.global_path.exists() and _digest(shared.global_path) == written
 
 
 def _checked(shared: DataRepo, until: float, *args: str) -> str:
@@ -191,16 +203,10 @@ def _committed(shared: DataRepo) -> int | None:
     """The committed Global layer's format; ``None`` when it is no layer.
 
     With none committed it is 0, unless the history holds the carry or a move: a deletion committed after either is
-    the owner's. A git command that fails makes it ``None`` too, so nothing is carried on an unknown state.
+    the owner's. A git command that fails raises ``DataRepoError``, so nothing goes on from an unknown state.
     """
+    until = time.monotonic() + data_repo.GIT_SECONDS
     rel = shared.global_path.relative_to(shared.root).as_posix()
-    listed = shared.git("ls-tree", "--name-only", "HEAD", "--", rel)
-    if listed.returncode:
-        return None  # unknown: nothing is carried on it
-    if listed.stdout.strip():
-        committed = shared.git("show", f"HEAD:{rel}")
-        return _format(committed.stdout) if committed.returncode == 0 else None
-    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", f"--grep={MOVED}")
-    if found.returncode:
-        return None
-    return CARRIED_FORMAT if found.stdout.strip() else 0
+    if _checked(shared, until, "ls-tree", "--name-only", "HEAD", "--", rel):
+        return _format(_checked(shared, until, "show", f"HEAD:{rel}"))
+    return CARRIED_FORMAT if _ran(shared, "HEAD", MESSAGE, until) or _ran(shared, "HEAD", MOVED, until) else 0
