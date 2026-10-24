@@ -250,3 +250,27 @@ def test_a_machine_with_a_checkout_from_before_another_s_move_takes_that_move_in
     assert _git(second, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")  # nothing filled again
     assert read_layer(DataRepo(second).global_path, GlobalLayer).machine.sessions == 6
     assert registry.load().settings_moved
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_value_the_owner_saves_before_a_failed_move_is_retried_stays_this_machine_s(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+    real = settings_carry.move
+
+    def unpushed(repo, local):
+        real(repo, local)
+        return "committed, but the push failed"
+
+    with monkeypatch.context() as m:
+        m.setattr(settings_carry, "move", unpushed)
+        _carry(monkeypatch, shared)
+    saved = registry.load().settings
+    registry.configure(saved.model_copy(update={"sessions": 5}), registry.revision(saved))  # the owner, meanwhile
+
+    _carry(monkeypatch, shared)
+
+    after = registry.load()
+    assert (after.settings, after.settings_moved, after.settings_moving) == (registry.Settings(sessions=5), True, None)
+    assert read_layer(shared.global_path, GlobalLayer).machine.sessions == LEGACY.sessions  # the move's values

@@ -100,8 +100,7 @@ class Machine:
         try:
             if (shared := data_repo.locate()) is None:
                 return  # no Global to follow: this machine keeps its own values
-            moved = registry.load()
-            local = None if moved.settings_moved else moved.settings
+            local = None if registry.load().settings_moved else _moving()
             if settings_carry.due(shared):
                 notice = settings_carry.carry(shared)
                 self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
@@ -114,9 +113,9 @@ class Machine:
                     return
                 with registry.locked():
                     machine = registry.load()
-                    if machine.settings != local:
-                        return  # changed meanwhile: moved at the next start
-                    machine.settings, machine.settings_moved = registry.Settings(), True
+                    since = {k: v for k, v in machine.settings.model_dump().items() if v != getattr(local, k)}
+                    machine.settings = registry.Settings.model_validate(since)  # what the owner saved since stays
+                    machine.settings_moved, machine.settings_moving = True, None
                     registry.save(machine)
                 self.say("settings: this machine's settings moved into Global; it follows Global's from now on")
         except Exception as exc:  # noqa: BLE001 - the projects load either way; their steps say what is unset
@@ -362,3 +361,13 @@ class Machine:
                 if p.state != "stopped":
                     p.stop()
         self.say("stopped: every project closed")
+
+
+def _moving() -> registry.Settings:
+    """The values this machine's move takes: chosen at its first try, kept until it is done."""
+    with registry.locked():
+        machine = registry.load()
+        if machine.settings_moving is None:
+            machine.settings_moving = machine.settings
+            registry.save(machine)
+        return machine.settings_moving

@@ -72,6 +72,7 @@ class Machine(Record):
     settings: Settings = Field(default_factory=Settings)  # each unset inherits Global's
     active: str = ""  # the highest version ever active here: never backwards (self-update build §4)
     settings_moved: bool = False  # its settings were moved into Global once, so it follows Global (2026-10-23)
+    settings_moving: Settings | None = None  # the values a move took, kept across its retries until it is done
 
 
 def _home() -> Path:
