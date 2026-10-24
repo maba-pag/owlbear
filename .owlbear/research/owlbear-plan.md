@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `f1f18fabad` after #630 and this pull request, decisions to TD-469, item 5's
+> **Date:** 2026-10-24, status at `main` `5274ed4168` after #631 and this pull request, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -227,6 +227,11 @@ acceptance evidence is verified.
 Change creation (#609) allocates handles, slugs and new records across processes in
 one transaction. Maintenance test-review setup reserves its identity before Git
 work, retains it after failed setup, and publishes only into its own reservation.
+
+Integration collision consent (#620) runs on the supported integration BUILD task.
+Its durable task base survives restart, owner choices resume that task, and a new
+integration task requires its own consent. Missing bases or failed Git probes stop
+instead of passing; conflict paths retain whitespace without Git quoting losses.
 
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |
