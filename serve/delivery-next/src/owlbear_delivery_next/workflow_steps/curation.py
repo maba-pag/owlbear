@@ -33,7 +33,8 @@ from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store.briefs import new_slug, next_number
+from owlbear_delivery_next.state_store import identities
+from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import curation_shares, sessions
 
@@ -124,9 +125,7 @@ def _start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change
     picked = {p.path: p for p in curation_shares.packages(repo, commit) if p.path in chosen}
     if not picked:
         raise StartError(422, "choose at least one package with tests")
-    number = next_number(store)
-    store.issue(number)
-    slug = new_slug(f"{TITLE} {number}", store.slugs())
+    number, slug = identities.reserve(store, lambda n, taken: new_slug(f"{TITLE} {n}", taken))
     branch = f"owlbear/{slug}"
     path = worktree.ensure(repo, git_common_dir(repo), slug, branch, target)
     head = worktree.head(path)
@@ -143,7 +142,7 @@ def _start(store: Store, repo: Path, chosen: list[str], now: datetime) -> Change
         tests=TestReview(commit=head, packages=scope, shares=curation_shares.split(packages)),
     )  # fmt: skip
     with store.lock(slug) as lock:
-        store.write(lock, c)
+        identities.publish_reserved(store, lock, c)
     return c
 
 

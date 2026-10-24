@@ -118,9 +118,15 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   pages 2 minutes ahead. **Settings → This machine** chooses major versions only, and whether it
   updates when idle or while paused.
 - **Run updates now** on a paused page, or `owlbear update`, updates at once.
-- After an update, the pages say once which version OwlBear now runs. A chat whose Delivery server
-  is older answers `OwlBear updated: …`: reload the VS Code window, or in the Copilot runtime run
-  **Restart Local Agent Host**; a window reload does not restart that runtime's tool servers.
+- After an update, the pages say once which version OwlBear now runs. Open chats keep their
+  Delivery tools: a chat's `owlbear-delivery` server reads and writes nothing itself, and asks the
+  host in a chat contract that later versions keep serving. With Delivery stopped, its tools say so
+  and read nothing. A chat whose server the host no longer serves answers `OwlBear does not serve
+  this chat's …`, and one started before OwlBear had the chat contract answers `OwlBear updated: …`
+  once more: start a new Copilot-runtime chat, or focus that chat and use **MCP: List Servers** →
+  `owlbear-delivery` → **Stop Server**, then **Start Server**. Neither the agent host nor the window
+  needs restarting; a window reload does not restart that runtime's tool servers. A chat whose
+  server is newer than the running host says so: let the update finish, or run `owlbear restart`.
 
 The agent workspace follows these updates: setup writes its paths through `~/.owlbear/runtime`, so
 they stay valid. Rerun setup from the project root after an update to refresh copied files:
@@ -320,6 +326,13 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
    **Approve merge** for merge consent.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
+
+Cleanup verifies the preservation of work held only in a Change's worktree before removing it.
+Archives retain regular-file permissions and symbolic links, including dangling links, without
+following their targets. If an entry cannot be represented safely, such as a nested Git
+repository, cleanup stops and leaves the worktree intact. Copy that work elsewhere or explicitly
+remove the unsupported entry before retrying; a verified archive must not be assumed to contain
+an entry that cleanup refused.
 
 The other pages serve the same projects:
 

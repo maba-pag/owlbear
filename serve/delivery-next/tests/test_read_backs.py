@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -90,7 +91,7 @@ def queue(c: TestClient, **query) -> list[dict[str, Any]]:
 def chat(store, monkeypatch) -> chat_client.Chat:
     http = client(store, CHAT)
     tools = chat_client.Chat.__new__(chat_client.Chat)
-    tools.store = store
+    tools.repo, tools.home = Path(), store.root
 
     def call(method: str, path: str, body: object = None) -> tuple[int, Any]:
         r = http.request(method, f"/api/next{path}", json=body)

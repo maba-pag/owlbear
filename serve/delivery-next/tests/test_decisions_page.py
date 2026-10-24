@@ -86,9 +86,106 @@ def decisions_page(store: Store, pds: Any) -> Iterator[Any]:
         server.should_exit = True
 
 
-def in_force(store: Store) -> dict[str, Decision]:
-    view = decision_store.load(store.shared, PROJECT).snapshot
+def in_force(store: Store, project: str = PROJECT) -> dict[str, Decision]:
+    view = decision_store.load(store.shared, project).snapshot
     return {e.decision.statement: e.decision for e in view.entries if e.decision.state is State.IN_FORCE}
+
+
+def held_once(page: Any, held: list[Any]) -> Any:
+    """The first request the test holds, once the page has sent it."""
+    for _ in range(100):
+        if held:
+            return held.pop(0)
+        page.wait_for_timeout(50)
+    pytest.fail("the page sent no request to hold")
+
+
+@pytest.mark.browser
+def test_a_late_global_list_cannot_name_or_retarget_the_owlbear_list(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
+          store.shared.root / "owlbear")  # fmt: skip
+    with decisions_page(store, pds) as page:
+        held: list[Any] = []
+        page.route(lambda url: "/decisions?" in url and "where=global" in url,
+                   lambda route, _request: held.append(route))  # fmt: skip
+        pds.pick(page, "Show", "global")
+        global_list = held_once(page, held)
+        pds.pick(page, "Show", "owlbear")
+        expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
+        global_list.continue_()
+        page.wait_for_load_state("networkidle")
+        expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
+        card = page.locator(".entry", has_text="Pages are plain HTML")
+        card.get_by_role("button", name="Open").click()
+        card.get_by_role("button", name="Record an exception").click()
+        page.get_by_label("New rule").fill("Pages may use a build step in OwlBear.")
+        card.get_by_role("button", name="Record the exception").click()
+        dialog = pds.modal(page)
+        expect(dialog).to_contain_text("for OwlBear?")
+        with page.expect_request(lambda r: r.url.endswith("/exception?where=owlbear")) as sent:
+            dialog.get_by_role("button", name="Record the exception").click()
+        expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+        body = sent.value.post_data_json
+    assert body["confirmed"] is True
+    assert "Pages may use a build step in OwlBear." in in_force(store, "owlbear")
+    assert "Pages may use a build step in OwlBear." not in in_force(store)
+
+
+@pytest.mark.browser
+def test_a_form_opened_in_one_scope_stays_in_it_when_the_owner_switches_scope(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
+          store.shared.root / "owlbear")  # fmt: skip
+    with decisions_page(store, pds) as page:
+        card = page.locator(".entry", has_text="Pages are plain HTML")
+        card.get_by_role("button", name="Open").click()
+        card.get_by_role("button", name="Record an exception").click()
+        page.get_by_label("New rule").fill("Pages may use a build step here.")
+        pds.pick(page, "Show", "owlbear")
+        expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
+        expect(page.get_by_label("New rule")).to_have_count(0)
+        pds.pick(page, "Show", "all")
+        expect(page.get_by_label("New rule")).to_have_count(1)
+        card = page.locator(".entry", has_text="Pages are plain HTML")
+        card.get_by_role("button", name="Record the exception").click()
+        dialog = pds.modal(page)
+        expect(dialog).to_contain_text("for shop-site?")
+        with page.expect_request(lambda r: r.url.endswith("/exception")) as sent:
+            dialog.get_by_role("button", name="Record the exception").click()
+        expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+        posted_to = sent.value.url
+    assert "where=" not in posted_to
+    assert "Pages may use a build step here." in in_force(store)
+    assert "Pages may use a build step here." not in in_force(store, "owlbear")
+
+
+@pytest.mark.browser
+def test_a_confirmed_write_still_in_flight_keeps_the_scope_it_was_confirmed_in(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
+          store.shared.root / "owlbear")  # fmt: skip
+    with decisions_page(store, pds) as page:
+        held: list[Any] = []
+        page.route(lambda url: url.endswith("/exception"), lambda route, _request: held.append(route))
+        card = page.locator(".entry", has_text="Pages are plain HTML")
+        card.get_by_role("button", name="Open").click()
+        card.get_by_role("button", name="Record an exception").click()
+        page.get_by_label("New rule").fill("Pages may use a build step here.")
+        card.get_by_role("button", name="Record the exception").click()
+        pds.modal(page).get_by_role("button", name="Record the exception").click()
+        in_flight = held_once(page, held)
+        posted_to = in_flight.request.url
+        pds.pick(page, "Show", "owlbear")
+        expect(page.locator(".entry", has_text="Lint once")).to_have_count(1)
+        in_flight.continue_()
+        expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+    assert "where=" not in posted_to
+    assert "Pages may use a build step here." in in_force(store)
+    assert "Pages may use a build step here." not in in_force(store, "owlbear")
 
 
 @pytest.mark.browser

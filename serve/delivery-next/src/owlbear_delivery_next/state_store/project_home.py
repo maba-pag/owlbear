@@ -14,7 +14,7 @@ import secrets
 import shutil
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, FormatTooNewError, StoreError
@@ -169,7 +169,7 @@ def located(cwd: Path) -> Path:
             elif (target / path.name).exists():
                 msg = (
                     f"{path} and {target / path.name} both exist: an older OwlBear process may still use the clone; "
-                    "reload its VS Code windows, move one of them away, then start again"
+                    f"stop it (a chat's server: {codebase.STOP}), move one of them away, then start it again"
                 )
                 raise StoreError(msg)
             else:
