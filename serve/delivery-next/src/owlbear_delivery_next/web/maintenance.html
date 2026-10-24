@@ -39,7 +39,7 @@ import { call, defined, here } from "/assets/ui.mjs";
 
 const RESULTS = { passed: "success", "up-to-date": "success", failed: "error", running: "info" };
 const state = { actions: [], use: [], error: "", tests: null, skipped: new Set(), starting: false, curation: null,
-  curating: "" };
+  curating: "", unread: { tests: "", curation: "" }, refused: { tests: "", curation: new Map() }, reading: 0 };
 
 // The last run in words, so its state never rests on the tag's colour alone.
 function lastRun(a) {
@@ -94,21 +94,23 @@ function runs() {
 }
 
 function testsPart() {
+  return html`<div id="tests">${refusal("tests")}${readError("tests")}${testsBody()}</div>`;
+}
+
+function testsBody() {
   const t = state.tests;
-  if (!t) return html`<p-text id="tests" size="sm">Reading the project's tests…</p-text>`;
-  if (t.problem) return html`<p-text id="tests" size="sm">${t.problem}</p-text>`;
+  if (!t) return state.unread.tests ? nothing : html`<p-text size="sm">Reading the project's tests…</p-text>`;
+  if (t.problem) return html`<p-text size="sm">${t.problem}</p-text>`;
   if (t.open) {
-    return html`<p-text id="tests" size="sm">Test review ${t.open.handle} has not finished; follow it on the
+    return html`<p-text size="sm">Test review ${t.open.handle} has not finished; follow it on the
       <a href=${here({}, "/")}>Changes page</a>.</p-text>`;
   }
-  if (!t.packages.length) return html`<p-text id="tests" size="sm">No test files found on the target branch.</p-text>`;
-  return html`<div id="tests">
-    <fieldset><legend><p-text size="sm" weight="semibold">Packages to review</p-text></legend>
+  if (!t.packages.length) return html`<p-text size="sm">No test files found on the target branch.</p-text>`;
+  return html`<fieldset><legend><p-text size="sm" weight="semibold">Packages to review</p-text></legend>
       ${t.packages.map(box)}</fieldset>
     <p-text id="tests-runs" size="sm">${runs()}</p-text>
     <div><p-button id="tests-start" type="button" compact="true" .loading=${state.starting}
-      ?disabled=${!chosen().length} @click=${startReview}>Review tests</p-button></div>
-  </div>`;
+      ?disabled=${!chosen().length} @click=${startReview}>Review tests</p-button></div>`;
 }
 
 async function startReview() {
@@ -132,11 +134,12 @@ async function startReview() {
     const started = await call("/maintenance/test-review", { body: { packages }, timeout: 30000 });
     document.getElementById("status").textContent = `Started test review ${started.handle}; it runs on the `
       + "Changes page.";
-    state.error = "";
+    state.refused.tests = "";
   } catch (e) {
-    state.error = e.message;
+    state.refused.tests = e.message;
   } finally {
     state.starting = false;
+    show();
     await refresh();
   }
 }
@@ -183,17 +186,18 @@ function folderRun(f) {
 
 function curationSection() {
   const c = state.curation;
-  if (!c) return nothing;  // a host serving one clone has no machine to curate with
+  if (!c && !state.unread.curation && !state.refused.curation.size) return nothing;
   return html`<section aria-labelledby="curation-title">
     <p-heading size="lg"><h2 id="curation-title">Memory curation</h2></p-heading>
     <p-text size="sm">The memory curator judges each folder's pending entries: alone at or above your threshold
       (Settings, Memory curation), and leaves the rest for you on the Memory page. It runs after a merge and when
       OwlBear is idle, for folders with entries no run has seen, as each trigger's setting in Settings → This machine
       says: off, on, or on even while paused. Each run is one agent session.</p-text>
-    ${c.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
+    ${refusal("curation")}${readError("curation")}
+    ${c?.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
       <div><p-button id="curate-all" type="button" compact="true" .loading=${state.curating === "all"}
         @click=${() => curate("all")}>Curate all now</p-button></div>`
-      : html`<p-text id="curation-none" size="sm">${c.reason.charAt(0).toUpperCase() + c.reason.slice(1)}.</p-text>`}
+      : c ? html`<p-text id="curation-none" size="sm">${sentence(c.reason)}.</p-text>` : nothing}
   </section>`;
 }
 
@@ -214,17 +218,49 @@ async function curate(folder) {
     await call("/curation", { machine: true, body: { folder }, timeout: 30000 });
     document.getElementById("status").textContent = `Curating ${folder === "all" ? "every memory folder" : folder}; `
       + "this page shows each report when it ends.";
-    state.error = "";
+    if (folder === "all") state.refused.curation.clear();
+    else state.refused.curation.delete(folder);
   } catch (e) {
-    state.error = e.message;
+    state.refused.curation.set(folder, e.message);
   } finally {
     state.curating = "";
+    show();
     await refresh();
   }
 }
 
+function sentence(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function refusal(kind) {
+  const errors = kind === "curation" ? [...state.refused.curation]
+    : state.refused.tests ? [["tests", state.refused.tests]] : [];
+  if (!errors.length) return nothing;
+  return html`<div id="${kind}-refused">${errors.map(([key, message]) => html`
+    <p-inline-notification state="error" dismiss-button="false">
+      ${kind === "curation" ? `${key}: ` : ""}${sentence(message)}
+    </p-inline-notification>
+    <p-button type="button" compact="true" variant="secondary" @click=${() => {
+      if (kind === "curation") state.refused.curation.delete(key);
+      else state.refused.tests = "";
+      show();
+    }}>Dismiss</p-button>`)}</div>`;
+}
+
+function readError(kind) {
+  if (!state.unread[kind]) return nothing;
+  const what = kind === "curation" ? "memory curation" : "the project's tests";
+  return html`<p-inline-notification id="${kind}-error" state="error" dismiss-button="false">
+    Could not read ${what}: ${state.unread[kind]}.
+    ${state[kind] ? "The last successful result remains below." : ""}
+    </p-inline-notification>
+    <p-button id="${kind}-retry" type="button" compact="true" variant="secondary"
+      @click=${refresh}>Try again</p-button>`;
+}
+
 function view() {
-  const error = state.error ? state.error.charAt(0).toUpperCase() + state.error.slice(1) : "";
+  const error = state.error ? sentence(state.error) : "";
   return html`
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!error}>${error}
     </p-inline-notification>
@@ -242,18 +278,39 @@ function show() {
 }
 
 async function refresh() {
-  try {
-    [state.actions, state.use] = await Promise.all([
+  const generation = ++state.reading;
+  // Keep the established read order, collecting failures without losing another section's data.
+  const [overview] = await Promise.allSettled([
+    Promise.all([
       call("/maintenance", { timeout: 15000 }), call("/maintenance/subagents", { timeout: 15000 }),
-    ]);
+    ]),
+  ]);
+  const [tests] = await Promise.allSettled([
+    call("/maintenance/test-review", { timeout: 30000 }),
+  ]);
+  const [curation] = await Promise.allSettled([
+    call("/curation", { machine: true, timeout: 15000 }),
+  ]);
+  if (generation !== state.reading) return;
+  if (overview.status === "fulfilled") {
+    [state.actions, state.use] = overview.value;
     state.error = "";
-  } catch (e) {
-    state.error = e.message;
+  } else {
+    state.error = overview.reason.message;
   }
-  // The test review's offer reads the project's tests from Git: its failure never hides the rest of the page.
-  state.tests = await call("/maintenance/test-review", { timeout: 30000 })
-    .catch((e) => ({ problem: `Could not read the project's tests: ${e.message}` }));
-  state.curation = await call("/curation", { machine: true, timeout: 15000 }).catch(() => null);
+  if (tests.status === "fulfilled") {
+    state.tests = tests.value;
+    state.unread.tests = "";
+  } else {
+    state.unread.tests = tests.reason.message;
+  }
+  if (curation.status === "fulfilled") {
+    state.curation = curation.value;
+    state.unread.curation = "";
+  } else {
+    // Only a missing route before any successful read is expected clone-host capability absence.
+    state.unread.curation = curation.reason.status === 404 && !state.curation ? "" : curation.reason.message;
+  }
   show();
   clearTimeout(state.again);  // a run in progress: look again until its report is in
   const busy = (state.curation?.folders ?? []).some((f) => ["waiting", "running"].includes(f.state));

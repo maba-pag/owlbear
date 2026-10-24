@@ -257,6 +257,13 @@ fetching that exact object, without a normal-clone tracking ref or shared
 FETCH_HEAD. Detached installed versions on main stay valid; dirty, off-main,
 wrong-identity and failed-fetch sources still refuse without checkout changes.
 
+Maintenance errors (#625) keep mutation refusals separate from read failures.
+Successful refreshes do not acknowledge failed actions; only dismissal or a
+relevant successful action does, with curation refusals retained per folder.
+Failed reads keep the last good data with an explicit error and retry; an initial
+missing clone-host curation route remains capability absence. Superseded refreshes
+cannot overwrite a newer result.
+
 Integration collision consent (#620) runs on the supported integration BUILD task.
 Its durable task base survives restart and owner choices resume that task. Every
 new planner result advances the plan generation; consent binds to that task, the
