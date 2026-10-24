@@ -224,6 +224,10 @@ them from a verified archive; supported links and file modes are preserved witho
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
+Change creation (#609) allocates handles, slugs and new records across processes in
+one transaction. Maintenance test-review setup reserves its identity before Git
+work, retains it after failed setup, and publishes only into its own reservation.
+
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |
 | C-03 | TD-27's benchmark, then the watcher's model | Not run | build | 9 |
