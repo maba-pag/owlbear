@@ -476,3 +476,24 @@ def test_an_older_global_the_owner_restores_after_the_carry_is_never_filled_agai
 
     assert (_git(shared.root, "rev-parse", "HEAD"), settings_carry.due(shared)) == (head, False)
     assert read_layer(shared.global_path, GlobalLayer).agents == {}
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_move_a_settings_save_committed_counts_as_done_for_a_later_machine(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))
+    _local()
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        _carry(monkeypatch, shared)  # the move is written and marked, its commit fails
+    assert not shared.publish(shared.global_path, "settings: global")  # a Settings save commits it with the mark
+    _carry(monkeypatch, shared)
+    assert _done()
+    assert settings_carry.MOVED not in _git(shared.root, "log", "--format=%s")  # no commit of its own
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))  # the owner remakes Global without it
+
+    _local()  # a later machine
+    _carry(monkeypatch, shared)
+
+    assert read_layer(shared.global_path, GlobalLayer).machine is None
+    assert _done()

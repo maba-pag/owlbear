@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 MESSAGE = "settings: today's built-in values carried into Global"  # the carry's commit, found again in the history
 MOVED = "settings: this machine's settings moved into Global"
+MARK = '"machine_moved": true'  # the moved mark as every write of Global spells it (``model_dump_json(indent=1)``)
 EDITED = "the global settings have an edit that is not saved; the carry waits until it is saved or undone"
 
 
@@ -82,7 +83,7 @@ def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
             if _dirty(shared, until):
                 return EDITED
             gone = not shared.global_path.exists() and _ran(shared, "HEAD", MESSAGE, until)
-            if not gone and not _ran(shared, "HEAD", MOVED, until):  # a Global the owner deleted or remade stays his
+            if not gone and not _moved(shared, until):  # a Global the owner deleted or remade stays his
                 have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(
                     exclude_none=True
                 )
@@ -215,4 +216,14 @@ def _committed(shared: DataRepo) -> int | None:
 
 def _done(shared: DataRepo, until: float) -> bool:
     """Whether a carry or a move is in the history: the built-in values were carried once."""
-    return _ran(shared, "HEAD", MESSAGE, until) or _ran(shared, "HEAD", MOVED, until)
+    return _ran(shared, "HEAD", MESSAGE, until) or _moved(shared, until)
+
+
+def _moved(shared: DataRepo, until: float) -> bool:
+    """Whether Global's history ever held the moved mark, whichever commit brought it.
+
+    That is the move's own commit, or a Settings save that committed it after the move's commit failed. Its removal
+    by a deletion or a remake is found too.
+    """
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    return bool(_checked(shared, until, "log", "-1", "--format=%H", f"-G{MARK}", "HEAD", "--", rel))
