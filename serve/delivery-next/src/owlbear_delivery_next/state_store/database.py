@@ -1,9 +1,10 @@
 """The project's Delivery database (TD-265): ``delivery.db`` in the store, beside the run locks and artifacts.
 
-Change records, inbox items, activity, the now line and the issued handles live here; locks, runner records,
-logs, screenshots and worktrees stay files. WAL, ``synchronous=FULL``, a 10 s busy timeout, one connection per
-thread. Every operation holds ``migrate.lock`` shared for itself alone, so an import waits for running ones
-while an idle client never blocks it.
+Change records, inbox items, activity, the now line, the watcher's reports and the issued handles live here; locks,
+runner records, logs, screenshots and worktrees stay files. WAL, ``synchronous=FULL``, a 10 s busy timeout, one
+connection per thread. Every operation holds ``migrate.lock`` shared for itself alone, so an import waits for running
+ones while an idle client never blocks it. The reports' table is added when any process first opens the database,
+so a database an older runtime made gains it without a format step.
 
 A store of the file format is imported by the machine host alone, fenced and resumable: the format marker
 becomes ``STORE_FORMAT`` first, so every older runtime refuses the store on open; the files are read into
@@ -19,6 +20,7 @@ import os
 import sqlite3
 import subprocess
 import threading
+import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Stop
@@ -43,6 +45,15 @@ CREATE TABLE now(slug TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE imported(slug TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY(slug, name));
 """
+WATCH = (  # the watcher's reports (W1a): added to any database on open, which older runtimes ignore
+    (
+        "CREATE TABLE IF NOT EXISTS watch(id INTEGER PRIMARY KEY, slug TEXT NOT NULL, session TEXT NOT NULL, "
+        "call_id TEXT NOT NULL, at TEXT NOT NULL, step TEXT, agent TEXT, tool TEXT, command TEXT, targets TEXT, "
+        "verdict TEXT, unresolved TEXT, source TEXT, UNIQUE(slug, session, call_id))"
+    ),
+    "CREATE INDEX IF NOT EXISTS watch_slug ON watch(slug, id)",
+)
+RETRY = 0.05  # seconds between tries of a bounded write's fence
 _local_devices: set[int] = set()
 
 
@@ -62,6 +73,10 @@ class FormatTooNewError(StoreError):
 
     action = "Upgrade OwlBear"
     resume = "State loads on the newer OwlBear"
+
+
+class BusyError(StoreError):
+    """A bounded write gave up: the fence or SQLite's write lock stayed held for its whole wait."""
 
 
 class NotImportedError(StoreError):
@@ -149,6 +164,7 @@ class Database:
             connection = self._connection()
             if not connection.execute("SELECT 1 FROM meta WHERE key = 'retired'").fetchone():
                 self._retire(connection)
+            _watched(connection)
         self._ready = True
 
     @contextlib.contextmanager
@@ -168,10 +184,27 @@ class Database:
         finally:
             os.close(fd)
 
-    def _lock(self, *, shared: bool) -> int:
+    @contextlib.contextmanager
+    def _shared_until(self, until: float) -> Iterator[None]:
+        """Hold ``migrate.lock`` shared, tried without blocking until *until* (monotonic); else ``BusyError``."""
+        while True:
+            try:
+                fd = self._lock(shared=True, blocking=False)
+                break
+            except BlockingIOError:
+                if (left := until - time.monotonic()) <= 0:
+                    msg = "the Delivery database is being migrated"
+                    raise BusyError(msg) from None
+                time.sleep(min(RETRY, left))
+        try:
+            yield
+        finally:
+            os.close(fd)
+
+    def _lock(self, *, shared: bool, blocking: bool = True) -> int:
         dir_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
-            return open_lock(dir_fd, blocking=True, shared=shared, name=MIGRATE)
+            return open_lock(dir_fd, blocking=blocking, shared=shared, name=MIGRATE)
         finally:
             os.close(dir_fd)
 
@@ -196,12 +229,23 @@ class Database:
                 raise StoreError(msg) from exc
 
     @contextlib.contextmanager
-    def write(self) -> Iterator[sqlite3.Connection]:
-        """One writing operation in one transaction, committed when the block ends without an error."""
-        self.check()
-        with self._shared():
+    def write(self, wait: float | None = None) -> Iterator[sqlite3.Connection]:
+        """One writing operation in one transaction, committed when the block ends without an error.
+
+        With *wait*, it gives up after that many seconds with ``BusyError``: the fence is tried without blocking and
+        the connection waits no longer for SQLite's lock. Such a write needs the database opened (``check``) before.
+        """
+        if wait is None:
+            self.check()
+        elif not self._ready:
+            msg = "the Delivery database is not open yet"
+            raise BusyError(msg)
+        until = time.monotonic() + (wait or 0.0)
+        with self._shared() if wait is None else self._shared_until(until):
             connection = self._connection()
+            busy = BUSY_MS if wait is None else max(1, int((until - time.monotonic()) * 1000))
             try:
+                connection.execute(f"PRAGMA busy_timeout={busy}")
                 connection.execute("BEGIN IMMEDIATE")
                 try:
                     yield connection
@@ -211,7 +255,9 @@ class Database:
                 connection.execute("COMMIT")
             except sqlite3.Error as exc:
                 msg = f"the Delivery database failed: {exc}"
-                raise StoreError(msg) from exc
+                code = (getattr(exc, "sqlite_errorcode", 0) or 0) & 0xFF  # an extended code's primary one
+                held = wait is not None and code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
+                raise (BusyError if held else StoreError)(msg) from exc
 
     def import_files(self) -> None:
         """Move the file format into the database; the caller holds the host lock and every Change lock.
@@ -296,6 +342,20 @@ class Database:
         for path in files:
             with contextlib.suppress(FileNotFoundError):
                 path.rename(path.with_name(path.name + RETIRED))
+
+
+def _watched(connection: sqlite3.Connection) -> None:
+    """Add the watcher's table to a database made before it, once; another process may add it at the same time."""
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE name = 'watch_slug'").fetchone():
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        for statement in WATCH:
+            connection.execute(statement)
+    except BaseException:
+        connection.execute("ROLLBACK")
+        raise
+    connection.execute("COMMIT")
 
 
 UNREADABLE = "(not UTF-8: unreadable)"  # what an undecodable file becomes; it parses as no record or item

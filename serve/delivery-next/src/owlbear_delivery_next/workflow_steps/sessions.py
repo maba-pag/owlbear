@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result, vscode_adapter
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.workflow_steps import disposable, ro_installs
+from owlbear_delivery_next.workflow_steps import disposable, ro_installs, watched
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -206,6 +206,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
                     limit=roles.limit(settings, label), subagents=roles.subagents(settings, label),
                     previous={}, journal=journal, worktree=at, policy=Policy(at, write=False),
                     judging=label in tools.VERDICTS, job=label,
+                    watch=watched.watching(store, lock, label, settings, at, out),
                 )
             )  # fmt: skip
         return cfgs

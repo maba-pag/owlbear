@@ -63,6 +63,7 @@ from owlbear_delivery_next.workflow_steps import (
     sessions,
     unset_settings,
     visual,
+    watched,
 )
 from owlbear_delivery_next.workflow_steps.sessions import UsageUnreadError
 
@@ -167,6 +168,7 @@ def _agent(  # noqa: PLR0915 - durable session lifecycle orchestration
             ui=change.brief.ui,
             helpers=_helpers(change, at, asked),
             preparing=ctx,
+            watch=watched.watching(store, lock, session, settings, at, _out),  # its master switch (W1a)
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config

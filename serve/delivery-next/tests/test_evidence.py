@@ -18,7 +18,8 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.runtimes import sdk_adapter
-from owlbear_delivery_next.runtimes.sdk_adapter import NOW_LIMIT, Journal, summary
+from owlbear_delivery_next.runtimes.sdk_adapter import Journal
+from owlbear_delivery_next.runtimes.watch_feed import NOW_LIMIT, summary
 from owlbear_delivery_next.workflow_steps import check, publish
 
 
@@ -196,7 +197,7 @@ def test_the_now_line_summarises_redacts_and_caps_a_tool_call():
 def test_tool_events_write_the_now_line_at_most_once_a_second(monkeypatch):
     writes, clock = [], [100.0]
     step = object.__new__(sdk_adapter._Step)  # noqa: SLF001 - the SDK event handler under test
-    step.cfg, step.shown = SimpleNamespace(journal=Journal(now=writes.append)), float("-inf")
+    step.cfg, step.shown, step.feed = SimpleNamespace(journal=Journal(now=writes.append)), float("-inf"), None
     monkeypatch.setattr(sdk_adapter.time, "monotonic", lambda: clock[0])
 
     def tool_event(at, path):
