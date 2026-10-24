@@ -65,6 +65,7 @@ def move(shared: DataRepo, local: MachineValues) -> str:
             return why
         glob = read_layer(shared.global_path, GlobalLayer)
         before = shared.git("rev-parse", "HEAD", until=until).stdout.strip()
+        existed = shared.git("cat-file", "-e", f"{before}:{rel}", until=until).returncode == 0
         if not _moved(shared):
             have = (glob.machine or MachineValues()).model_dump(exclude_none=True)
             values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
@@ -78,8 +79,25 @@ def move(shared: DataRepo, local: MachineValues) -> str:
             failed = f"the move was not pushed: {sent.stderr.strip()[:200]}" if sent.returncode else ""
         if failed:
             shared.git("reset", "-q", "--keep", before, until=until)
-            shared.git("checkout", "-q", before, "--", rel, until=until)  # its file and index as they were
+            if existed:
+                shared.git("checkout", "-q", before, "--", rel, until=until)  # its file and index as they were
+            else:
+                shared.git("rm", "-q", "--cached", "--ignore-unmatch", "--", rel, until=until)
+                shared.global_path.unlink(missing_ok=True)
         return failed
+
+
+def sync(shared: DataRepo) -> str:
+    """Before any carry writes: fetch, and take in upstream commits this checkout lacks; why not, else ''.
+
+    A Global layer with an uncommitted edit, such as a carry an earlier start could not commit, is left as it is.
+    """
+    until = time.monotonic() + data_repo.SAVE_SECONDS
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    with shared.locked():
+        if shared.git("status", "--porcelain", "--", rel, until=until).stdout.strip():
+            return ""
+        return _ready(shared, rel, until)
 
 
 def _upstream(shared: DataRepo, until: float) -> bool:
@@ -96,8 +114,9 @@ def _ready(shared: DataRepo, rel: str, until: float) -> str:
     """Why a move waits: an uncommitted edit of Global, or a checkout that cannot be brought current; else ''."""
     if shared.git("status", "--porcelain", "--", rel, until=until).stdout.strip():
         return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
-    if not _upstream(shared, until):
-        return ""
+    if not _upstream(shared, until):  # a local-only repository has nothing to fetch; a remote-backed one waits
+        remotes = shared.git("remote", until=until).stdout.strip()
+        return "the shared repository's branch tracks no upstream; the move waits until it does" if remotes else ""
     if (fetched := shared.git("fetch", "-q", until=until)).returncode:
         return f"the shared repository could not be fetched: {fetched.stderr.strip()[:200]}"
     behind = shared.git("rev-list", "--count", "HEAD..@{upstream}", until=until).stdout.strip()

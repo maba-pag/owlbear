@@ -101,6 +101,8 @@ class Machine:
             if (shared := data_repo.locate()) is None:
                 return  # no Global to follow: this machine keeps its own values
             local = None if registry.load().settings_moved else _moving()
+            if why := settings_carry.sync(shared):  # a checkout from before another machine's carry takes it in
+                self.say(f"settings: the shared repository could not be brought current: {why}")
             if settings_carry.due(shared):
                 notice = settings_carry.carry(shared)
                 self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))

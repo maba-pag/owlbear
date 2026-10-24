@@ -325,3 +325,50 @@ def test_a_move_whose_push_fails_is_undone_and_done_at_the_next_start(shared_rep
     _carry(monkeypatch, shared)
     assert registry.load().settings_moved
     assert _git(shared.root, "rev-parse", "HEAD") == _git(shared_repo[1], "rev-parse", "HEAD")
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_checkout_with_a_remote_but_no_upstream_keeps_the_move_pending(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _git(shared.root, "branch", "--unset-upstream")
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+    said = _carry(monkeypatch, shared)
+    assert any("tracks no upstream" in line for line in said)
+    assert not registry.load().settings_moved
+    assert read_layer(shared.global_path, GlobalLayer).machine is None  # the format carry's file, without the move
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_failed_move_where_global_was_deleted_leaves_it_deleted(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, carried.layer().model_dump(mode="json") | {"format": 10})
+    shared.global_path.unlink()
+    _git(shared.root, "add", "-A")
+    _git(shared.root, "commit", "-qm", "the owner deletes Global")
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        assert settings_carry.move(shared, MachineValues(sessions=2)) == "the commit failed"
+    assert (_git(shared.root, "status", "--porcelain"), shared.global_path.exists()) == ("", False)
+    assert settings_carry.move(shared, MachineValues(sessions=2)) == ""  # the next start is not blocked
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_checkout_from_before_another_machine_s_carry_takes_it_in_before_writing(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    _committed(first, {"format": 2, "agents": {}, "runtimes": {}})  # an old Global
+    _git(first.root, "push", "-q")
+    second = tmp_path / "second"
+    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        _git(second, "config", key, value)
+    settings_carry.carry(first)
+    settings_carry.move(first, MachineValues(sessions=6))  # the first machine's carry and move, pushed
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+
+    said = _carry(monkeypatch, DataRepo(second))
+
+    assert not any("carried into Global" in line for line in said)  # it took the first's in: no carry of its own
+    assert _git(second, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
+    assert (_git(second, "status", "--porcelain"), registry.load().settings_moved) == ("", True)
