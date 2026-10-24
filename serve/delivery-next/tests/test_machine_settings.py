@@ -214,7 +214,9 @@ def test_a_global_deleted_and_committed_after_a_move_alone_is_never_carried_agai
 def test_a_move_that_changes_nothing_is_recorded_so_a_later_machine_copies_nothing(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
     full = GlobalLayer(machine=carried.MACHINE)
-    _committed(shared, full.model_dump(mode="json"))  # the owner set every machine value before any move
+    shared.global_path.write_text(full.model_dump_json(indent=1))  # as a save writes it: a move changes nothing
+    _git(shared.root, "add", "-A")
+    _git(shared.root, "commit", "-qm", "the owner set every machine value before any move")
     with registry.locked():
         registry.save(registry.Machine(settings=LEGACY))
     _carry(monkeypatch, shared)
