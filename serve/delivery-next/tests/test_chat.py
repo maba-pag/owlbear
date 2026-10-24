@@ -139,7 +139,7 @@ DECIDED = [
 ]
 
 
-def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and_are_read_back(repo):
+def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and_are_read_back(repo, chat_replied):
     store = Store.open(repo)
     c = client(store)
     body = {**BRIEF, "non_goals": ["No translations"], "decisions": DECIDED}
@@ -154,7 +154,7 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
         assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
-    read_back = hosted(store).show_status("c1")["brief"]
+    read_back = hosted(store, chat_replied).show_status("c1")["brief"]
     assert read_back["decisions"] == [{**d, "scope": "change"} for d in DECIDED]  # what the shaper sends again
     assert (read_back["non_goals"], read_back["version"]) == (["No translations"], 2)
     bad = {**body, "decisions": [{"question": "Which?", "answer": "this", "origin": "guessed"}]}
@@ -246,20 +246,21 @@ def test_plan_scopes_stay_within_the_approved_brief():
     assert tools.check_plan(plan, tools.Worktree("a", "a"), ["make"], []) == []
 
 
-def hosted(store: Store) -> Chat:
+def hosted(store: Store, replied=lambda *_a: None) -> Chat:
     """The chat tools of the clone of *store*, calling its host in-process as a chat does (chat contract 1)."""
     http, chat = client(store), Chat(Path(), store.root)
 
     def call(method: str, path: str, body: object = None) -> tuple[int, object]:
         r = http.request(method, f"/api/next{path}", json=body, headers={chat_contract.HEADER: str(chat_contract.CHAT)})
-        out = r.json()
-        return r.status_code, out
+        if r.status_code == 200:
+            replied(method, path, r.json())
+        return r.status_code, r.json()
 
     chat.call = call
     return chat
 
 
-def test_chat_refuses_recovery_decisions(repo):
+def test_chat_refuses_recovery_decisions(repo, chat_replied):
     store = Store.open(repo)
     closed = [Option(id="abandon", label="Abandon", next="abandon"), Option(id="reopen", label="Reopen")]
     change = Change(
@@ -273,7 +274,7 @@ def test_chat_refuses_recovery_decisions(repo):
     )
     with store.lock("greet") as lock:
         store.write(lock, change)
-    chat = hosted(store)
+    chat = hosted(store, chat_replied)
     refused = chat.answer_question("c1.q2", "abandon", "", {"kind": "event"})
     assert (refused["answered"], refused["error"].startswith(answers.T6)) == (False, True)
     down = {"answered": False, "error": NOT_RUNNING.format(repo=repo)}

@@ -1,4 +1,22 @@
 {
+  "replies": {
+    "GET /changes": ["[].handle", "[].slug"],
+    "GET /chat/challenge/{slug}": ["running"],
+    "GET /chat/contract": ["supported"],
+    "GET /decisions": [
+      "available",
+      "decisions[].id",
+      "decisions[].title",
+      "decisions[].statement",
+      "decisions[].scope",
+      "decisions[].origin",
+      "decisions[].state",
+      "decisions[].conflict",
+      "decisions[].read_back",
+      "decisions[].revision"
+    ],
+    "POST /briefs/challenge": ["slug", "attempt", "paused"]
+  },
   "routes": {
     "GET /changes": {
       "body": null,

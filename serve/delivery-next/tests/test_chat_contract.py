@@ -326,3 +326,25 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
     assert http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json() == {"supported": [1]}
+
+
+def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied):
+    chat_replied("POST", "/briefs/challenge", {"slug": "c1-shop", "attempt": 1, "paused": False, "more": 1})
+    lost = [
+        ("POST", "/briefs/challenge", {"attempt": 1, "paused": False}),  # the chat would never read its outcome
+        ("GET", "/p/x/api/next/changes", [{"handle": "c1"}]),
+        ("GET", "/api/next/owlbear/decisions?text=", {"available": True, "decisions": [{"id": "D-1"}]}),
+        ("GET", "/api/next/chat/contract", {"served": [1]}),
+    ]
+    for method, url, out in lost:
+        with pytest.raises(AssertionError, match="lost what chat contract 1 reads"):
+            chat_replied(method, url, out)
+
+
+def test_a_brief_the_host_could_not_give_is_told_not_left_out(monkeypatch):
+    chat, _ = hosted(monkeypatch, {
+        "GET /chat/contract": {"supported": [1]}, "GET /changes": [{"handle": "c1", "slug": "c1-shop"}],
+        "GET /chat/brief/c1-shop": (503, {"error": "handing over"}),
+    }, record())  # fmt: skip
+    status = chat.show_status("c1")
+    assert ("brief" in status, status["error"]) == (False, "brief: handing over; call show_status again")

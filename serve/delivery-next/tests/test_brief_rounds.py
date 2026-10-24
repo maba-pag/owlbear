@@ -195,7 +195,7 @@ def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
     assert "asked to shape the brief again after round 1" in brief_rounds.status(c)["why_again"]
 
 
-def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shaping, monkeypatch):
+def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shaping, monkeypatch, chat_replied):
     shaping.save()
     shaping.host.paused = lambda: True  # TD-287: the challenge the owner's chat asks for runs while paused
     shaping.verdicts += [verdict("AC-1")]
@@ -204,6 +204,8 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
 
     def call(method, path, body=None):
         r = shaping.http.request(method, f"/api/next{path}", json=body)
+        if r.status_code == 200:
+            chat_replied(method, path, r.json())
         return r.status_code, r.json()
 
     chat.call = call

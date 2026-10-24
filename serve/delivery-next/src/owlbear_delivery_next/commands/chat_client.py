@@ -179,6 +179,8 @@ class Chat:
             found, brief = self.call("GET", f"/chat/brief/{urllib.parse.quote(out['changes'][0].get('slug', ''))}")
             if found == OK:
                 out["brief"] = brief
+            else:  # the host handed over meanwhile, or refused: no brief is not "no brief"
+                out["error"] = f"brief: {brief.get('error') or brief.get('detail')}; call show_status again"
         return out
 
     def challenge_brief(
