@@ -226,6 +226,11 @@ them from a verified archive; supported links and file modes are preserved witho
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
+SDK cleanup (#611) owns the client across startup, usage and proof, and completes
+its bounded teardown before propagating the original error or cancellation.
+Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
+stays unconfirmed, so a known orphan cannot authorize a successor.
+
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.
 Pending-status failures are reported instead of reading as fully published;
