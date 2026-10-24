@@ -97,6 +97,18 @@ automatic memory curation does not start until its role and threshold are set. S
 applies yet (runtimes, visibility, tool categories) may stay unset. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset.
 
+The machine settings in **Settings → This machine** (versions, updating itself, curation per
+trigger, sessions at once) work the same way: each machine follows the global ones, which you
+edit there with the Global layer chosen, unless it sets its own. Each start of OwlBear first
+brings the shared repository up to date, so a machine follows what another one saved. With one unset in both, the
+machine does not update by itself, curate automatically or start agent sessions. The first start
+after this change moves the values in `machine.json` into the global settings where those have
+none, then clears them, so every machine follows Global; a later machine copies nothing. Until
+that is published (the shared repository is offline, or Global has an edit you have not saved),
+**Settings → This machine** says why, the machine keeps its own values, and the next start tries
+again. If another machine changed the global settings meanwhile, nothing is undone for you: the
+page names the shared repository, where you publish or undo this machine's change by hand.
+
 ## Upgrading OwlBear
 
 OwlBear's versions are Git tags such as `v1.0`. OwlBear installs a new version beside the running

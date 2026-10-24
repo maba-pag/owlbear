@@ -63,11 +63,13 @@ def page_source() -> Callable[[TestClient, str], str]:
 def _carried_settings(monkeypatch):
     """Code ships no settings defaults (2026-10-23); tests resolve over the carried values as a layer under Global.
 
-    A test of unset settings sets ``config.BASE`` to ``None``.
+    A test of unset settings sets ``config.BASE`` or ``machine_settings.BASE`` to ``None``.
     """
+    from owlbear_delivery_next.machine_host import machine_settings  # noqa: PLC0415
     from owlbear_delivery_next.settings import carried, config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", carried.layer())
+    monkeypatch.setattr(machine_settings, "BASE", carried.MACHINE)
 
 
 @pytest.fixture(autouse=True)

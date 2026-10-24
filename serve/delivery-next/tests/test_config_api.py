@@ -166,7 +166,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
                                                          "final_review": None, "pr_labels": None,
                                                          "pr_marker": None, "sessions": None, "watcher": None,
                                                          "visible": None,
-                                                         "curator_threshold": None},
+                                                         "curator_threshold": None, "machine": None,
+                                                         "machine_moved": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})
     assert data.status_code == 422  # test preparation is a project setting (TD-96)

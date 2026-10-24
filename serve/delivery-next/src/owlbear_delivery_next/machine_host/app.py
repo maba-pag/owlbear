@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
 from owlbear_delivery_next.local_system import data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, registry, versions
+from owlbear_delivery_next.machine_host import control, machine_settings, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import api, decision_routes, impact_routes, pages
 from owlbear_delivery_next.state_store import decision_impact
@@ -151,7 +151,7 @@ def _routes(machine: Machine) -> APIRouter:
         return {
             "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
             "left": machine.left() if machine.ending else [],
-            "update_while_paused": registry.load().settings.update_while_paused,
+            "update_while_paused": machine_settings.current().update_while_paused is True,
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
             "announce": machine.auto.read(),
         }  # fmt: skip
@@ -276,6 +276,8 @@ def machine_values(machine: Machine) -> dict[str, Any]:
     return {
         "paused": machine.paused, "resumed_at": saved.resumed_at, "login_item": login,
         "settings": saved.settings.model_dump(), "settings_rev": registry.revision(saved.settings),
+        "resolved": machine_settings.current(saved.settings).model_dump(),  # with Global's, unset ones listed
+        "pending": saved.settings_pending,  # why moving this machine's settings into Global is not done yet
         "legacy": [str(p) for p in versions.legacy()],
     }  # fmt: skip
 
