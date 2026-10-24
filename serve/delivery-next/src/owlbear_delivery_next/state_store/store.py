@@ -141,6 +141,11 @@ def read_layer[T: Layer](path: Path, model: type[T]) -> T:
     return read_layer_bytes(path, model)[0]
 
 
+def parse_layer[T: Layer](raw: str, model: type[T], name: str = "config") -> T:
+    """One settings layer from its text, such as a committed one, under its format gate."""
+    return _parse(raw, name, model, CONFIG_FORMAT, migrations.CONFIG)
+
+
 def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
     """One settings layer and the exact bytes it was parsed from; an absent file is the empty layer."""
     try:

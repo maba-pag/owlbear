@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.carried import MACHINE, filled
 from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer, MachineValues
-from owlbear_delivery_next.state_store.store import read_layer, update_layer
+from owlbear_delivery_next.state_store.store import StoreError, parse_layer, read_layer, update_layer
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -93,8 +93,27 @@ def _synced(shared: DataRepo, until: float) -> str:
     if (fetched := shared.git("fetch", "-q", until=until)).returncode:
         return f"the shared repository could not be fetched: {fetched.stderr.strip()[:200]}"
     if _moved(shared, "@{upstream}") and not _moved(shared):
+        _unpend(shared)
         return shared.pull(until)
     return ""
+
+
+def _unpend(shared: DataRepo) -> None:
+    """Drop this machine's own uncommitted move before taking in another's.
+
+    That is a Global layer that differs from the committed one in its machine settings alone. Any other uncommitted
+    edit is the owner's: kept, so the pull waits.
+    """
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    committed = shared.git("show", f"HEAD:{rel}")
+    if committed.returncode:
+        return
+    try:
+        here, there = read_layer(shared.global_path, GlobalLayer), parse_layer(committed.stdout, GlobalLayer)
+    except StoreError:
+        return
+    if here != there and here.model_copy(update={"machine": None}) == there.model_copy(update={"machine": None}):
+        shared.git("checkout", "--", rel)
 
 
 def _format(text: str) -> int | None:

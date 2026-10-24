@@ -274,3 +274,27 @@ def test_a_value_the_owner_saves_before_a_failed_move_is_retried_stays_this_mach
     after = registry.load()
     assert (after.settings, after.settings_moved, after.settings_moving) == (registry.Settings(sessions=5), True, None)
     assert read_layer(shared.global_path, GlobalLayer).machine.sessions == LEGACY.sessions  # the move's values
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_move_whose_commit_failed_gives_way_to_another_machine_s_published_move(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    _committed(first, GlobalLayer(sessions=2).model_dump(mode="json"))
+    _git(first.root, "push", "-q")
+    second = tmp_path / "second"
+    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        _git(second, "config", key, value)
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "publish", lambda *_a: "the commit failed")
+        _carry(monkeypatch, DataRepo(second))  # its move written, not committed
+    assert _git(second, "status", "--porcelain")
+    settings_carry.move(first, MachineValues(sessions=6))  # meanwhile the other machine's move is published
+
+    _carry(monkeypatch, DataRepo(second))
+
+    assert _git(second, "status", "--porcelain") == ""
+    assert read_layer(DataRepo(second).global_path, GlobalLayer).machine.sessions == 6  # the published move's
+    assert registry.load().settings_moved
