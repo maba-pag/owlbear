@@ -75,15 +75,15 @@ def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
         if not read_layer(shared.global_path, GlobalLayer).machine_moved:
             if _dirty(shared, until):
                 return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
-            if not shared.global_path.exists() and _ran(shared, "HEAD", MOVED, until):
-                return ""  # the owner deleted Global after a move: his deletion stands
-            have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(
-                exclude_none=True
-            )
-            values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
-            update_layer(shared.global_path, GlobalLayer,
-                         lambda g: g.model_copy(update={"machine": values, "machine_moved": True}))  # fmt: skip
-            keep(_digest(shared.global_path))
+            deleted = not shared.global_path.exists() and _ran(shared, "HEAD", MOVED, until)
+            if not deleted:  # a Global the owner deleted after a move stays deleted; what is unpushed is still pushed
+                have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(
+                    exclude_none=True
+                )
+                values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
+                update_layer(shared.global_path, GlobalLayer,
+                             lambda g: g.model_copy(update={"machine": values, "machine_moved": True}))  # fmt: skip
+                keep(_digest(shared.global_path))
         return shared.publish(shared.global_path, MOVED, until)
 
 

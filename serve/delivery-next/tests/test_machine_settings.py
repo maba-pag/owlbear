@@ -325,3 +325,23 @@ def test_a_checkout_from_before_another_machine_s_carry_takes_it_in_before_writi
     assert not any("carried into Global" in line for line in said)  # it took the first's in: no carry of its own
     assert _git(second.root, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
     assert (_git(second.root, "status", "--porcelain"), _done()) == ("", True)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_global_deleted_after_an_unpushed_move_stays_pending_until_both_are_pushed(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))
+    _local()
+    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared.root / "nowhere"))
+    _carry(monkeypatch, shared)  # the move commits, its push fails
+    shared.global_path.unlink()
+    _git(shared.root, "add", "-A")
+    _git(shared.root, "commit", "-qm", "the owner deletes Global")
+
+    _carry(monkeypatch, shared)  # still no push
+    assert (shared.global_path.exists(), registry.load().settings, _done()) == (False, LEGACY, False)
+
+    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared_repo[1]))
+    _carry(monkeypatch, shared)
+    assert _git(shared.root, "rev-parse", "HEAD") == _git(shared_repo[1], "rev-parse", "HEAD")
+    assert (shared.global_path.exists(), _done()) == (False, True)
