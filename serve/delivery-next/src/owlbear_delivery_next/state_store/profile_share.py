@@ -166,7 +166,9 @@ def _replaced(store: Store, shared: DataRepo, old: Profile, new: Profile) -> boo
         current = store.read_profile()
         if current is None or _shared_part(current) != _shared_part(old):
             return False
-        _publish(store, shared, new, f"settings: {store.name}: project profile detected in a clone")
+        notice = _publish(store, shared, new, f"settings: {store.name}: project profile detected in a clone")
+        if notice:
+            raise DataRepoError(notice)
     return True
 
 

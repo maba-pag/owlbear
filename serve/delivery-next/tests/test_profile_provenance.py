@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.models import Change, Names
+from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.github.merge_offer import Block, decide
@@ -14,7 +14,8 @@ from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequ
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import briefs, profile_share
-from owlbear_delivery_next.state_store.store import Store, StoreError
+from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
+from owlbear_delivery_next.workflow_steps import engine, follow
 
 NOW = datetime(2026, 10, 24, tzinfo=UTC)
 
@@ -285,10 +286,12 @@ def test_empty_local_facts_clear_the_old_overlay_instead_of_resurrecting_it(tmp_
     assert profile.value(store.read_profile(), profile.PUSH) == ""
 
 
+@pytest.mark.parametrize("signal", ["error", "notice"])
 def test_detection_publication_failure_preserves_local_progress_and_retries_without_file_undo(
     shared,
     tmp_path,
     monkeypatch,
+    signal,
 ):
     repo = clone(tmp_path, "shop")
     store = Store.open(repo)
@@ -300,6 +303,8 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     def offline(*_a, **_kw):
         calls.append("failed")
         msg = "synthetic publication failure"
+        if signal == "notice":
+            return msg
         raise DataRepoError(msg)
 
     monkeypatch.setattr(DataRepo, "publish", offline)
@@ -315,3 +320,32 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     published = git(shared, "--git-dir", str(shared.parent / "remote.git"), "show", "main:shop-site/profile.json")
     assert json.loads(published)["entries"][profile.DEFAULT]["value"] == "main"
     assert calls == ["failed"]
+
+
+@pytest.mark.parametrize("reconfirm", [False, True])
+def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path, reconfirm):
+    repo = clone(tmp_path, "shop")
+    raw = profile.detect(repo, GitHub(), None)
+    chosen = profile.confirm(raw, profile.DECLARED, "lint", NOW)
+    if reconfirm:
+        chosen = profile.confirm(chosen, profile.DECLARED, "lint", NOW)
+    head = git(repo, "rev-parse", "HEAD")
+    pr = PullRequest(
+        repository="acme/shop-site",
+        number=1,
+        node_id="n1",
+        url="https://github.com/acme/shop-site/pull/1",
+        head_branch="owlbear/c1",
+        head_sha=head,
+        base_branch="main",
+        draft=False,
+        state="open",
+        merged=False,
+    )
+    c = Change(slug="c1", names=Names(worktree=str(repo), target="main", pr=1))
+    ctx = engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo, chosen, GitHub(), NOW)
+    declared, held = follow.declared(ctx, c, pr, StepKind.FOLLOW)
+    assert held is None
+    assert declared == ("lint",)
+    assert profile.digest_of(chosen.entries[profile.DECLARED]) == profile.digest_of(raw.entries[profile.DECLARED])
+    assert chosen.entries[profile.DECLARED].evidence.count("observed:") == 1

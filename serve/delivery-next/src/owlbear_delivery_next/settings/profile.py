@@ -34,6 +34,7 @@ METHOD, DELETE, HOOKS = "merge:method", "cleanup:delete-remote-branch", "git:pre
 POLL, WINDOW, ASK = "poll:ci-seconds", "ci:start-window-seconds", "merge:ask-before"
 SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # owner settings; kept across re-detection
 CONFIRMED = "owner confirmed"
+OBSERVED = "; observed: "
 DIGEST = "; workflows "  # declared-CI evidence ends with the digest of the workflow files it was read from
 FLOWS = ".github/workflows"
 _PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
@@ -299,7 +300,8 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
             new = _entry("unknown", "", f"{key}: not detected in this clone")
             entries[key] = new
         if is_confirmed(old) and holds(old, new):
-            entries[key] = old
+            stamp = old.evidence.partition(OBSERVED)[0]
+            entries[key] = old.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
     changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
 
@@ -310,10 +312,11 @@ def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
     if is_confirmed(old) and not old.observed and _detected(key):
         msg = f"{key}: a legacy confirmation has no observation to bind; detect the profile first"
         raise ValueError(msg)
+    label = old.evidence.partition(OBSERVED)[2] if is_confirmed(old) else old.evidence
     entry = ProfileEntry(
         state="known",
         value=value,
-        evidence=f"{CONFIRMED} {now:%Y-%m-%d}",
+        evidence=f"{CONFIRMED} {now:%Y-%m-%d}{OBSERVED}{label or old.evidence}",
         observed=old.observed or fingerprint(old),
     )
     entries = {**profile.entries, key: entry}
