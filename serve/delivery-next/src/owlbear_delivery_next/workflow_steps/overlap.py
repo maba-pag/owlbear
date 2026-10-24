@@ -158,9 +158,14 @@ def collision(
         for n in near
     ]
     hits = [(n, ps) for n, ps in hits if ps]
-    subject = [c.step.task] if c.step.kind == StepKind.BUILD and c.step.task else []
+    # Task numbers restart on replanning; their brief and replan generation survive restart.
+    subject = (
+        [f"brief-{c.brief.version}", f"replan-{c.budgets.replans}", c.step.task]
+        if c.step.kind == StepKind.BUILD and c.step.task
+        else []
+    )
     cause = cause_key(ErrorKind.CONFLICT, c.step.kind, ["collision", *subject, *(n.handle for n, _ in hits)])
-    if not hits or any(q.cause == cause and q.answer for q in c.questions):
+    if not hits or any(q.cause == cause and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
         return None
     others = ", ".join(n.handle for n, _ in hits)
     wants = " ".join(f"{n.handle} ({'merged' if n.merged else 'open'}) wants: {n.outcome or '?'}." for n, _ in hits)
@@ -208,7 +213,7 @@ def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, s
     """
     start, ending = session
     resolved = result.exit == Exit.DONE
-    if not integrates(c) or not (resolved or ending in {"ask", "premise"}):
+    if result.exit == Exit.STOP or not integrates(c) or not (resolved or ending in {"ask", "premise"}):
         return result
     if start is None:
         return _unverified("The integration start head is missing, so collisions cannot be checked")

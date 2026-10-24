@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
@@ -14,6 +14,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Question,
     Step,
     StepKind,
+    Stop,
     Task,
 )
 from owlbear_delivery_next.change_flow import loop
@@ -221,6 +222,68 @@ def test_a_new_integration_task_does_not_reuse_an_earlier_collision_answer():
     asked = overlap.collision(c, ["src/app.ts"], near)
     assert asked.exit == Exit.ASK
     assert asked.cause != first.cause
+
+
+def test_replanning_with_reused_task_numbers_requires_fresh_collision_consent(tmp_path):
+    c = building()
+    near = [overlap.Neighbour("c3", ["src"], "cache pages", merged=False)]
+    first = overlap.collision(c, ["src/app.ts"], near)
+    c = loop.apply(c, first, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="conflict:build:replan", reason="replan"), NOW)
+    assert c.budgets.replans == 1
+    c = loop.apply(c, StepResult(exit=Exit.DONE, plan=plan("src")), NOW)
+    c.plan.tasks[0].done = True
+    c.plan.tasks.append(Task(id="t2", title="new integration", scope=["src"], origin="integration"))
+    c.step = Step(kind=K.BUILD, task="t2")
+    store = Store(tmp_path / "store")
+    with store.lock(c.slug) as lock:
+        store.write(lock, c)
+    c = store.read(c.slug)
+
+    asked = overlap.collision(c, ["src/app.ts"], near)
+
+    assert asked is not None
+    assert asked.cause != first.cause
+    assert c.questions[0].answer.option == "keep"
+
+
+@pytest.mark.parametrize("choice", ["keep", "adopt"])
+def test_pause_then_resume_does_not_authorize_collision_resolution(choice):
+    c = building()
+    near = [overlap.Neighbour("c3", ["src"], "cache pages", merged=False)]
+    c = loop.apply(c, overlap.collision(c, ["src/app.ts"], near), NOW)
+    question = loop.open_question(c)
+    paused, step = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="pause")], NOW)
+    assert step is None
+    resumed, step = loop.schedule(paused, [IntentItem(at=NOW, intent="resume")], NOW)
+    assert step.kind == K.BUILD
+
+    asked = overlap.collision(resumed, ["src/app.ts"], near)
+
+    assert asked is not None
+    resumed = loop.apply(resumed, asked, NOW)
+    fresh = loop.open_question(resumed)
+    assert fresh.id != question.id
+    answered, step = loop.schedule(resumed, [AnswerItem(at=NOW, question=fresh.id, option=choice)], NOW)
+    assert step.kind == K.BUILD
+    assert overlap.collision(answered, ["src/app.ts"], near) is None
+
+
+@pytest.mark.parametrize("ending", ["ask", "premise"])
+def test_unverified_integration_termination_keeps_its_stop_and_recovery(conflicted, tmp_path, ending):
+    repo, start = conflicted
+    stop = Stop(
+        kind=ErrorKind.CAPACITY, reason="runtime termination is unverified", action="Stop the old worker",
+        resume="The old worker is confirmed stopped", at=NOW,
+    )  # fmt: skip
+    stopped = StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
+
+    observed = overlap.integrated(shared_store(tmp_path), building(), repo, (start, ending), stopped)
+
+    assert observed is stopped
+    assert observed.stop == stop
 
 
 def test_a_failed_git_collision_probe_stops_instead_of_passing(tmp_path, monkeypatch):
