@@ -199,9 +199,18 @@ def test_tasks_journal_failure_still_disconnects_and_stops_without_confirming(wo
     assert "tasks log failed (OSError)" in run.termination.problems
 
 
-def test_usage_error_is_preserved_when_force_journaling_also_fails(world):
+@pytest.mark.parametrize("phase", ["usage", "proof"])
+def test_usage_or_proof_error_is_preserved_when_force_journaling_also_fails(world, monkeypatch, phase):
     original = StoreError("synthetic usage storage failure")
-    world.usage_error, world.stop_error = original, RuntimeError("synthetic stop failure")
+    if phase == "usage":
+        world.usage_error = original
+    else:
+
+        async def failed(*_args):
+            raise original
+
+        monkeypatch.setattr(sdk_adapter, "_proven", failed)
+    world.stop_error = RuntimeError("synthetic stop failure")
     world.fail_event = "force-stop"
     with pytest.raises(StoreError) as caught:
         asyncio.run(sdk_adapter.run(world.cfg))
