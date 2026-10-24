@@ -139,6 +139,7 @@ def sent(events: Iterable[Any], message: str) -> bool:
 class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
+        self.client: CopilotClient | None = None
         self.turn = self.idle = False
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
         self.session: CopilotSession | None = None  # kept as soon as it opens, even if the first send fails
@@ -452,25 +453,24 @@ async def run(cfg: Session) -> Run:
         st.finish("error", detail=refused)
         st.run.termination = Termination(confirmed=True)
         return st.run
-    client, session = None, None
-    try:
-        async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
-            client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
-            await _call(client.start(), "runtime start", START)
-            st.runtime(client)
-            session = await _open(client, st)
-            if session is not None:
-                await st.wait(session)
-    except TimeoutError as exc:
-        st.finish("deadline", detail=str(exc) or "step deadline")
-    except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
-        st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
-    session = st.session
-    st.run.usage = await usage_read(session, cfg.model) if session else {}
-    limit_reached(st.run, cfg.credit_limit)
-    st.run.subagents = st.watch.report()
-    await _proven(st, session)
-    st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)
+    async with sdk_teardown.managed(st):
+        try:
+            async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
+                client = st.client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
+                await _call(client.start(), "runtime start", START)
+                st.runtime(client)
+                session = await _open(client, st)
+                if session is not None:
+                    await st.wait(session)
+        except TimeoutError as exc:
+            st.finish("deadline", detail=str(exc) or "step deadline")
+        except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
+            st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
+        session = st.session
+        st.run.usage = await usage_read(session, cfg.model) if session else {}
+        limit_reached(st.run, cfg.credit_limit)
+        st.run.subagents = st.watch.report()
+        await _proven(st, session)
     return st.run
 
 
