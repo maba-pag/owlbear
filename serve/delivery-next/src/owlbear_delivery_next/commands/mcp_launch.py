@@ -26,7 +26,8 @@ def main(argv: list[str]) -> int:
         return 2
     module = SERVERS[argv[0]]
     if importlib.util.find_spec(module) is None:
-        print(f"{module} is not installed in {sys.prefix}: this OwlBear install is incomplete", file=sys.stderr)  # noqa: T201
+        lacking = f"{module} is not installed in {sys.prefix}: this OwlBear install is incomplete"
+        print(lacking, file=sys.stderr)  # noqa: T201
         return 2
     sys.argv = [sys.argv[0]]  # the servers read no arguments
     runpy.run_module(module, run_name="__main__", alter_sys=True)  # an import error inside it is its own, raised
