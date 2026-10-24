@@ -421,6 +421,8 @@ def test_the_old_runtime_stays_while_a_process_still_runs_it(monkeypatch):
 
     assert said.status_code == 409
     assert "processes 4242 still run it" in said.json()["detail"]
+    assert "Stop Server" in said.json()["detail"]
+    assert "reload the VS Code" not in said.json()["detail"]
     assert len(versions.legacy()) == 1
 
 

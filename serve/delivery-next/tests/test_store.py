@@ -109,7 +109,7 @@ def test_a_store_in_the_clone_moves_to_its_folder_once_and_older_runtimes_refuse
     (folder / "late.json").write_text("{}")  # what a move cut short left behind
     assert (Store.open(repo).root / "late.json").exists()
     (folder / "late.json").write_text("{}")
-    with pytest.raises(StoreError, match="both exist"):
+    with pytest.raises(StoreError, match=r"both exist: .*stop it \(a chat's server: MCP: List Servers"):
         Store.open(repo)
 
 

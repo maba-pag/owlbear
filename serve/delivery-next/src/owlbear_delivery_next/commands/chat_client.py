@@ -35,12 +35,15 @@ NOT_SERVED = (
     "`owlbear doctor` names the fix. Nothing advances until it is served."
 )
 OWLBEAR_DOWN = "Delivery is not running - run `owlbear start`; OwlBear's own clone is never added as a project (TD-435)"
-RESTART = "reload the VS Code window; in the Copilot runtime, run Restart Local Agent Host instead"
+RESTART = (
+    f"start a new Copilot-runtime chat, or focus this chat and use {codebase.STOP_START}; "
+    "neither the agent host nor the window needs restarting"
+)
 NOT_OWLBEAR = "{repo} is not an OwlBear project: add its clone on the Changes page, then " + RESTART
 NO_CHANGES = "OwlBear's own workspace has no Changes: only the decision tools work here"
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 OK = 200
-UPDATED = "OwlBear updated: " + RESTART  # a chat server older than the host (self-update §5.6)
+UPDATED = "OwlBear updated: this chat's owlbear-delivery MCP server still runs the old version; " + RESTART
 STALE = 409
 
 

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
-from owlbear_delivery_next.local_system import data_repo, leases, local_home
+from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import control, machine_settings, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import api, decision_routes, impact_routes, pages
@@ -307,6 +307,7 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
                 raise HTTPException(409, f"{path} is the running version")
             if users := leases.unpinned():  # it holds no leases: processes started through the alias before
                 pids = ", ".join(map(str, users[:5]))
-                raise HTTPException(409, f"processes {pids} still run it: reload the VS Code windows, then try again")
+                said = f"processes {pids} still run it: stop each one; for a chat's server use {codebase.STOP_START}"
+                raise HTTPException(409, f"{said}, then try again")
             shutil.rmtree(path)
         return machine_values(machine)

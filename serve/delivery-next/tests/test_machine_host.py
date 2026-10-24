@@ -177,6 +177,15 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
             chat_tool("show_status")]  # fmt: skip
 
     assert said == [{"error": chat_client.NOT_OWLBEAR.format(repo=other)}] * 4
+    monkeypatch.setattr(chat_client, "updated", lambda _rec: True)  # a self-update since this chat's server started
+    own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(own))  # noqa: SLF001
+    stale = chat_tool("find_decisions")["error"]
+    for message in (said[0]["error"], stale):  # only the chat's own server needs a fresh start
+        assert "new Copilot-runtime chat" in message
+        assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
+        assert "Restart Local Agent Host" not in message
+    assert stale.startswith("OwlBear updated: this chat's owlbear-delivery MCP server still runs the old version")
     assert DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout == head
     assert not (other / ".git" / "owlbear-delivery").exists()
 
