@@ -42,6 +42,22 @@ class ProviderError(RuntimeError):
         self.code, self.operation, self.retry_safe = code, operation, retry_safe
 
 
+class BranchState(StrEnum):
+    """Outcome of retiring a branch at its proven merged head."""
+
+    DELETED = "deleted"
+    GONE = "gone"
+    MOVED = "moved"
+
+
+@dataclass(frozen=True)
+class BranchDelete:
+    """A moved branch is retained at `head`; deleted/gone outcomes carry no remaining head."""
+
+    state: BranchState
+    head: str = ""
+
+
 def bounded(message: str | None) -> str | None:
     """Return a single-line provider message bounded for persisted diagnostics."""
     collapsed = " ".join((message or "").split())
@@ -359,8 +375,8 @@ class Provider(Protocol):
         """Send one merge submission guarded by the expected head."""
         ...
 
-    def delete_branch(self, repository: str, branch: str) -> None:
-        """Delete one remote branch."""
+    def delete_branch(self, repository: str, branch: str, expected_head: str) -> BranchDelete:
+        """Retire the branch only while it still points to its merged head; retain/report another head."""
         ...
 
     def update_branch(self, repository: str, number: int, expected_head: str) -> bool:

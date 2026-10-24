@@ -226,6 +226,12 @@ them from a verified archive; supported links and file modes are preserved witho
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
+Remote-branch retirement (#612) uses an atomic expected-head ref update, never
+name-only deletion. Advanced or recreated heads stay intact; Change cleanup asks
+to keep that head and finish or pause, and pack updates log retained or uncertain
+cleanup without losing a proven merge. Lost acknowledgements are read back before
+any guarded retry.
+
 SDK cleanup (#611) owns the client across startup, usage and proof, and completes
 its bounded teardown before propagating the original error or cancellation.
 Journal failures cannot skip disconnect, stop or force fallback; failed cleanup

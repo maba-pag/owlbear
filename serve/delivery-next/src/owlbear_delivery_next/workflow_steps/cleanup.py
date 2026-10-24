@@ -14,11 +14,12 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, Stop, Waiting
+from owlbear_delivery_next.change_contracts import failures
+from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, Option, StepKind, Stop, Waiting
 from owlbear_delivery_next.change_flow import budgets, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError, run_remote_git
-from owlbear_delivery_next.github.provider import classify_checks
+from owlbear_delivery_next.github.provider import BranchState, classify_checks
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import briefs, change_record, decision_fixes, project_home
@@ -333,12 +334,45 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
     return c, None
 
 
+def _retire_branch(ctx: Ctx, c: Change, pr: PullRequest | None) -> StepResult | None:
+    if not pr or not pr.merged or profile.value(ctx.profile, profile.DELETE) != "yes":
+        return None
+    branch = c.names.branch
+    retired = ctx.gh.delete_branch(ctx.repository, branch, pr.head_sha)
+    if retired.state is not BranchState.MOVED:
+        ctx.log(c.slug, "branch-retired", branch=branch, result=retired.state)
+        return None
+    cause = failures.cause_key(
+        ErrorKind.STATE,
+        StepKind.CLEANUP,
+        [f"pr-{pr.number}", f"merged-{pr.head_sha}", f"current-{retired.head}", "branch-moved"],
+    )
+    ctx.log(c.slug, "branch-kept", branch=branch, head=retired.head, merged=pr.head_sha)
+    if any(q.cause == cause and q.answer and q.answer.option == "keep" for q in c.questions):
+        return None
+    text = (
+        f"origin/{branch} now points to {retired.head[:12]}, not the merged head {pr.head_sha[:12]}. "
+        "Delivery kept it rather than risk other work. Keep that branch and finish cleanup, or pause."
+    )
+    return engine.ask(
+        StepKind.CLEANUP,
+        text,
+        cause,
+        [
+            Option(id="keep", label="Keep the remote branch and finish cleanup", next=StepKind.CLEANUP),
+            Option(id="pause", label="Pause", next="pause"),
+        ],
+    )
+
+
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     """Check the merged result, close an abandoned PR, preserve what the worktree alone holds, remove it, pull back."""
     pr = ctx.gh.read_pull_request(ctx.repository, c.names.pr) if c.names.pr else None
     c, held = target_check(ctx, c, pr)
     if held is not None:
         return c, held
+    if retired := _retire_branch(ctx, c, pr):
+        return c, retired
     if c.step.mode == "abandon" and pr and pr.state == "open":
         ctx.gh.close_pull_request(ctx.repository, pr.number)
     path, saved, kept = Path(c.names.worktree), [], False
@@ -348,8 +382,6 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
             return c, stopped
     if not kept and (why := disposable.remove(ctx.repo, ctx.store, c.slug)):
         ctx.log(c.slug, "read-only-kept", why=why)
-    if pr and pr.merged and profile.value(ctx.profile, profile.DELETE) == "yes":
-        ctx.gh.delete_branch(ctx.repository, c.names.branch)
     line = {"slug": c.slug, "at": ctx.now.isoformat(), "pr": c.names.pr, "merged": bool(pr and pr.merged)}
     line |= {"merge": pr.merge_commit_sha if pr else None, "preserved": [str(s) for s in saved]}
     line |= {"kept": str(path)} if kept else {}
