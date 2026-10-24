@@ -110,6 +110,7 @@ def _agent(  # noqa: PLR0915 - durable session lifecycle orchestration
     if stopped := overlap.starting(change, task):
         store.write(lock, loop.apply(change, stopped, now))
         return
+    settings.need("watcher")  # before anything is recorded: an unset switch asks the owner, leaving no open span
     review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now

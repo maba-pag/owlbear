@@ -31,7 +31,7 @@ SHOWN = 200  # the newest reports a page reads
 SIZE = 1000  # operations a session's queue holds; more are dropped and counted
 WAIT = 2.0  # seconds one write may wait for the fence or SQLite's lock before it is tried again
 DRAIN = 10.0  # seconds the close waits for the queue to empty
-SUMMARY = "(not recorded)"  # the call id of a session's summary row
+SUMMARY = "(not recorded)"  # how a summary row's call id begins; each run of a session writes its own
 FIELDS = ("session", "call_id", "at", "step", "agent", "tool", "command", "targets", "verdict", "unresolved", "source")
 PUT = (
     "INSERT INTO watch(slug, session, call_id, at, step, agent, tool, command, targets, verdict, unresolved, source) "
@@ -41,7 +41,7 @@ PUT = (
 )
 READ = (
     "SELECT session, call_id, at, step, agent, tool, command, targets, verdict, unresolved, source FROM watch "
-    "WHERE slug = ? ORDER BY at DESC, id DESC LIMIT ?"
+    "WHERE slug = ? AND (targets != '[]') = ? ORDER BY at DESC, id DESC LIMIT ?"
 )
 
 type Operation = Callable[[sqlite3.Connection], None]
@@ -84,9 +84,13 @@ def drop(slug: str, session: str, call_id: str) -> Operation:
 
 
 def reports(db: Database, slug: str, limit: int = SHOWN) -> list[dict[str, Any]]:
-    """The Change's newest reports, newest first."""
+    """The Change's newest outside writes and its newest other rows, each at most *limit*, newest first.
+
+    Outside writes are read apart, so unresolved shell calls never push one off the page.
+    """
     with db.read() as connection:
-        rows = connection.execute(READ, (slug, limit)).fetchall()
+        rows = [*connection.execute(READ, (slug, 1, limit)), *connection.execute(READ, (slug, 0, limit))]
+    rows.sort(key=lambda r: r[2], reverse=True)
     found = [dict(zip(FIELDS, row, strict=True)) for row in rows]
     return [r | {"targets": json.loads(r["targets"] or "[]")} for r in found]
 
@@ -96,8 +100,8 @@ def counts(db: Database, slug: str) -> dict[str, int]:
     with db.read() as connection:
         row = connection.execute(
             "SELECT count(*) FILTER (WHERE targets != '[]'), count(*) FILTER (WHERE unresolved != '') FROM watch "
-            "WHERE slug = ? AND call_id != ?",
-            (slug, SUMMARY),
+            "WHERE slug = ? AND source != ?",
+            (slug, "writer"),
         ).fetchone()
     return {"outside": row[0], "unresolved": row[1]}
 
@@ -223,4 +227,4 @@ class Writer:
 def summary_row(session: str, step: str, said: str) -> Report:
     """A session's summary row: what its writer did not record."""
     at = datetime.now(UTC).isoformat(timespec="milliseconds")
-    return Report(session, SUMMARY, at, step, "", "", "", (), f"not recorded: {said}", "", "writer")
+    return Report(session, f"{SUMMARY} {at}", at, step, "", "", "", (), f"not recorded: {said}", "", "writer")

@@ -44,6 +44,8 @@ def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings a
     store.db.check()  # the writer's bounded writes need the database open
     home, changes = Path.home(), store.root / "changes"
     guarded = [worktree.data_root(), changes, *sorted(local_home.root().glob(f"{project_home.PROJECTS}/*/changes"))]
+    if (clone := project_home.checkout(store.root.name)) is not None:  # the registered clone, wherever its git is
+        guarded.append(clone)
     with contextlib.suppress(subprocess.CalledProcessError, OSError):
         common = git_common_dir(at)
         guarded += [common.parent, common] if common.name == ".git" else [common]

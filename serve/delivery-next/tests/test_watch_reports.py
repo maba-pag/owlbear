@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.state_store import database, watch_reports
 from owlbear_delivery_next.state_store.database import STORE_FORMAT, BusyError
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.state_store.watch_reports import SUMMARY, Report, Writer
+from owlbear_delivery_next.state_store.watch_reports import Report, Writer
 
 OPEN_AT_ONCE = """
 import sys, time
@@ -123,7 +123,9 @@ def test_reports_are_one_row_per_call_never_capped_and_read_newest_first_and_bou
     put(store, *(report(n) for n in range(250)), report(7, targets=(), unresolved="shell effects not classified yet"))
     again = Store(store.root)
     shown = watch_reports.reports(again.db, "c1")
-    assert (len(shown), shown[0]["call_id"], shown[-1]["call_id"]) == (200, "call-249", "call-50")
+    outside = [r["call_id"] for r in shown if r["targets"]]
+    assert (len(outside), outside[0], outside[-1]) == (200, "call-249", "call-50")  # bounded apart from the others
+    assert [r["call_id"] for r in shown if not r["targets"]] == ["call-7"]
     assert watch_reports.counts(again.db, "c1") == {"outside": 249, "unresolved": 1}  # call-7 was replaced
     with again.db.write() as connection:
         watch_reports.drop("c1", "s1", "call-8")(connection)
@@ -158,8 +160,8 @@ def test_a_full_queue_drops_exactly_what_it_cannot_hold_and_the_summary_row_says
     release.set()
     w.close(summary)
     rows = watch_reports.reports(store.db, "c1")
-    assert [r["call_id"] for r in rows if r["call_id"] != SUMMARY] == ["call-1", "call-0"]
-    assert [r["verdict"] for r in rows if r["call_id"] == SUMMARY] == ["not recorded: 3 reports dropped"]
+    assert [r["call_id"] for r in rows if r["source"] != "writer"] == ["call-1", "call-0"]
+    assert [r["verdict"] for r in rows if r["source"] == "writer"] == ["not recorded: 3 reports dropped"]
     assert watch_reports.counts(store.db, "c1") == {"outside": 2, "unresolved": 0}  # the summary is no report
     assert notes == []
     w.late()  # an event after the close is counted, never written
@@ -270,3 +272,15 @@ def test_a_summary_row_the_deadline_skipped_is_told_in_the_log(store, monkeypatc
     w.close(summary, deadline=1.0)
     assert (w.summed, notes) == (False, ["watcher c1: 1 report dropped"])
     assert watch_reports.reports(store.db, "c1") == []
+
+
+def test_each_run_of_a_session_keeps_its_own_summary_and_an_outside_write_outlasts_unresolved_rows(store) -> None:
+    for said in ("3 reports dropped", "1 report dropped"):  # a run, then its resumed run: the same session
+        put(store, watch_reports.summary_row("s1", "build", said))
+        time.sleep(0.002)  # the next run closes later
+    put(store, report(0), *(report(n, targets=(), unresolved="shell effects not classified yet") for n in (1, 2, 3)))
+    shown = watch_reports.reports(store.db, "c1", limit=2)
+    assert [r["verdict"] for r in shown if r["source"] == "writer"] == ["not recorded: 1 report dropped",
+                                                                         "not recorded: 3 reports dropped"]  # fmt: skip
+    assert "call-0" in [r["call_id"] for r in shown]  # the outside write, older than every unresolved row
+    assert watch_reports.counts(store.db, "c1") == {"outside": 1, "unresolved": 3}

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
+import subprocess
 import threading
 import uuid
 from functools import partial
@@ -18,10 +20,11 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_contracts.watch_policy import Places
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown, sdk_usage, watch_feed
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
-from owlbear_delivery_next.state_store import watch_reports
+from owlbear_delivery_next.state_store import project_home, watch_reports
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import sessions, watched
 
@@ -296,3 +299,13 @@ def test_a_cancelled_run_waits_until_its_watcher_closed_then_is_cancelled() -> N
         assert closed.is_set()
 
     asyncio.run(main())
+
+
+def test_a_checkout_whose_git_folder_lives_elsewhere_is_guarded_with_it(place, tmp_path) -> None:
+    checkout, meta = tmp_path / "tmp" / "project", tmp_path / "metadata" / "project.git"
+    meta.parent.mkdir()
+    subprocess.run(["git", "init", "-q", f"--separate-git-dir={meta}", str(checkout)], check=True)  # noqa: S603, S607
+    listed = {"projects": [{"id": place.store.root.name, "path": str(checkout), "added_at": "2026-10-24"}]}
+    (local_home.root() / project_home.MACHINE).write_text(json.dumps(listed))  # Git cannot name such a checkout
+    on = watched.watching(place.store, Lock("c1"), "build", resolve(None, Layer(watcher=True)), checkout, print)
+    assert {checkout.resolve(), meta.resolve()} <= {p.resolve() for p in on.places.guarded}

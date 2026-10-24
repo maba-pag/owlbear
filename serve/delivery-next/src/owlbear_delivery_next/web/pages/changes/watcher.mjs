@@ -2,7 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { toggle, info, text } from "./widgets.mjs";
 
 // W1a: the watcher only reports. A report says a command was observed writing somewhere, never that it wrote.
-const SUMMARY = "(not recorded)";
+const WRITER = "writer"; // the source of a run's summary row: what its writer did not record
 
 function when(iso) {
   const t = new Date(iso);
@@ -28,7 +28,7 @@ function plural(n, one) {
 // The Change's "Watcher" list: outside writes first, calls not classified yet apart and counted on their own.
 export function watcherSection(w) {
   if (!w) return nothing;
-  const calls = w.reports.filter((r) => r.call_id !== SUMMARY), lost = w.reports.filter((r) => r.call_id === SUMMARY);
+  const calls = w.reports.filter((r) => r.source !== WRITER), lost = w.reports.filter((r) => r.source === WRITER);
   const outside = calls.filter((r) => r.targets.length), open = calls.filter((r) => !r.targets.length);
   const state = w.on === false ? "The watcher is off for this project: nothing is observed or recorded."
     : w.on === true ? "Report only: nothing is judged or stopped yet." : "The watcher's switch could not be read.";
