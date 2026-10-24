@@ -4,7 +4,7 @@ import { call } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { queue } from "./queue.mjs";
-import { filter, readBack, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
+import { addressOf, filter, readBack, sameAddress, STATES, scopeOf, show, state, TAGS } from "./state.mjs";
 import { button, field, select } from "./widgets.mjs";
 
 const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"],
@@ -21,12 +21,17 @@ function query() {
   return q.toString();
 }
 
-// The list as the filters ask for it, then the opened decision again so its actions use its current revision.
+let listTurn = 0;
+
 export async function refresh() {
+  const turn = ++listTurn, where = filter.where;
   try {
-    state.loaded = await call(`/decisions?${query()}`);
+    const list = await call(`/decisions?${query()}`);
+    if (turn !== listTurn) return;
+    state.loaded = { ...list, address: addressOf(where, list.project) };
     state.error = "";
   } catch (error) {
+    if (turn !== listTurn) return;
     state.error = error.message;
   }
   show();
@@ -54,8 +59,8 @@ function filters() {
   </section>`;
 }
 
-function card(d) {
-  const opened = state.opened === d.id && state.from === "list";
+function card(d, address) {
+  const opened = state.opened === d.id && state.from === "list" && sameAddress(state.address, address);
   return html`<li class="entry" data-id=${d.id}>
     <div class="title"><p-text weight="semibold">${d.title}</p-text>
       <p-tag compact="true" class="scope">${scopeOf(d)}</p-tag>
@@ -66,7 +71,7 @@ function card(d) {
       ${d.read_back === "none" && !d.inherited ? nothing : html`<p-tag compact="true" class="read-back">${readBack(d)}
         </p-tag>`}</div>
     <p-text class="said" size="sm">${d.statement}</p-text>
-    <div class="row">${button(opened ? "Close" : "Open", () => open(d.id), { variant: "secondary",
+    <div class="row">${button(opened ? "Close" : "Open", () => open(d.id, { address }), { variant: "secondary",
       aria: `{ 'aria-expanded': ${opened} }` })}</div>
     ${opened ? detail() : nothing}
   </li>`;
@@ -86,7 +91,7 @@ export function view() {
     ${receipts()}
     ${available ? queue() : nothing}
     ${available ? filters() : nothing}
-    ${available && rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id, card)}</ul>`
-      : nothing}
+    ${available && rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id,
+      (d) => card(d, loaded.address))}</ul>` : nothing}
     ${available && !rows.length ? html`<p-text class="empty" color="contrast-medium">${empty}</p-text>` : nothing}`;
 }
