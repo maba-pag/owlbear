@@ -208,3 +208,22 @@ def test_a_global_deleted_and_committed_after_a_move_alone_is_never_carried_agai
     _git(shared.root, "add", "-A")
     _git(shared.root, "commit", "-qm", "the owner deletes Global")
     assert not settings_carry.due(shared)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_move_that_changes_nothing_is_recorded_so_a_later_machine_copies_nothing(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    full = GlobalLayer(machine=carried.MACHINE)
+    _committed(shared, full.model_dump(mode="json"))  # the owner set every machine value before any move
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+    _carry(monkeypatch, shared)
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.MOVED  # an empty commit records it
+    assert registry.load().settings_moved
+
+    cleared = full.model_copy(update={"machine": carried.MACHINE.model_copy(update={"sessions": None})})
+    _committed(shared, cleared.model_dump(mode="json"))
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))  # another machine
+    _carry(monkeypatch, shared)
+    assert read_layer(shared.global_path, GlobalLayer).machine.sessions is None

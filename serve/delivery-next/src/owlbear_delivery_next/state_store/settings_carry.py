@@ -64,13 +64,20 @@ def move(shared: DataRepo, local: MachineValues) -> str:
             have = (glob.machine or MachineValues()).model_dump(exclude_none=True)
             values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
             update_layer(shared.global_path, GlobalLayer, lambda g: g.model_copy(update={"machine": values}))
-        return shared.publish(shared.global_path, MOVED, until)  # also what an earlier start left unpublished
+        if failed := shared.publish(shared.global_path, MOVED, until):  # also what an earlier start left unpublished
+            return failed
+        if _moved(shared):
+            return ""
+        rel = shared.global_path.relative_to(shared.root).as_posix()  # Global had them all: the move is recorded
+        made = shared.git("commit", "-q", "--allow-empty", "-m", MOVED, "--", rel, until=until)
+        if made.returncode:
+            return f"the move was not recorded: {made.stderr.strip()[:200]}"
+        return shared.publish(shared.global_path, MOVED, until)
 
 
 def _moved(shared: DataRepo) -> bool:
-    """Whether a machine's move is in the Global layer's history."""
-    rel = shared.global_path.relative_to(shared.root).as_posix()
-    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MOVED}", "--", rel)
+    """Whether a machine's move is in the history; its commit may change nothing, so no path limits the search."""
+    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MOVED}")
     return found.returncode == 0 and bool(found.stdout.strip())
 
 
@@ -113,5 +120,5 @@ def _committed(shared: DataRepo) -> int | None:
     committed = shared.git("show", f"HEAD:{rel}")
     if committed.returncode == 0:
         return _format(committed.stdout)
-    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", f"--grep={MOVED}", "--", rel)
+    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", f"--grep={MOVED}")
     return CARRIED_FORMAT if found.returncode == 0 and found.stdout.strip() else 0
