@@ -97,9 +97,7 @@ ENGINE: dict[StepKind, engine.Step] = {
 _out = sessions.out
 
 
-def _agent(  # noqa: PLR0915 - durable session lifecycle orchestration
-    store: Store, lock: Lock, change: Change, repo: Path
-) -> None:
+def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
@@ -447,9 +445,7 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         unset_settings.asked(store, lock, exc)
 
 
-def _run(  # noqa: C901 - one branch per phase
-    store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
-) -> None:
+def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:  # noqa: C901 - per phase
     """The step's phase: a test copy's end, the visual capture, "before", a test review, an agent or engine step."""
     try:
         if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
