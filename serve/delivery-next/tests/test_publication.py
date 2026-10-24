@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.models import (
     ItemRef,
     MergeConsent,
     Names,
+    Option,
     PersonCheck,
     Plan,
     Question,
@@ -296,6 +297,49 @@ def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearanc
     assert ready is not None
     _, result = cleanup.run(fresh, c)
     assert result.exit is Exit.DONE
+
+
+@pytest.mark.parametrize("surface", ["list", "detail"])
+def test_a_paused_cleanup_decision_is_hidden_in_the_changes_api_until_resume(tmp_path, surface):
+    store = Store(tmp_path)
+    c = change(StepKind.CLEANUP)
+    q = Question(
+        step=StepKind.CLEANUP,
+        text="Keep the moved remote branch?",
+        cause="state:cleanup:branch-moved",
+        options=[
+            Option(id="keep", label="Keep", next="retry"),
+            Option(id="pause", label="Pause", next="pause"),
+        ],
+    )
+    c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=q), NOW)
+    store.write(Lock("c1"), c)
+    client = TestClient(api.create_app(store, "tok", scheduler.Host(store, tmp_path)), base_url="http://127.0.0.1",
+                        headers={"authorization": "Bearer tok"})  # fmt: skip
+    path = "/api/next/changes" if surface == "list" else "/api/next/changes/c1"
+
+    def read():
+        response = client.get(path)
+        assert response.status_code == 200
+        return response.json()[0] if surface == "list" else response.json()
+
+    assert read()["question"]
+    c, ready = loop.schedule(c, [AnswerItem(at=NOW, question=loop.open_question(c).id, option="pause")], NOW)
+    assert ready is None
+    store.write(Lock("c1"), c)
+    shown = read()
+    assert not shown.get("question")
+    if surface == "detail":
+        assert shown["paused"] is True
+    else:
+        assert "paused by you" in shown["line"]
+    assert c.intent.paused_at is not None
+    assert loop.next_step(store.read("c1"), NOW) is None
+    resumed = client.post("/api/next/changes/c1/intent", json={"intent": "resume"})
+    assert resumed.status_code == 200
+    c, _ = store.fold(Lock("c1"), "c1", NOW + timedelta(seconds=1))
+    assert c.intent.paused_at is None
+    assert loop.next_step(c, NOW + timedelta(seconds=1)) is not None
 
 
 def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path):

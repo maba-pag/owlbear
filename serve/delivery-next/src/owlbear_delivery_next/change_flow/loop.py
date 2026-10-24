@@ -131,9 +131,9 @@ def consent_moved(c: Change, offered: str | None, head: str, opened: Iterable[st
 
 
 def open_question(c: Change) -> Question | None:
-    """The question the Change waits on, if any."""
+    """The unanswered question the Change waits on, if any; a paused decision's hold is not a new question."""
     o = c.outcome
-    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question), None)
+    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and q.answer is None), None)
 
 
 def ordinary(q: Question) -> bool:
