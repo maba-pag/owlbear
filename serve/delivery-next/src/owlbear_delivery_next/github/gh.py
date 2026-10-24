@@ -58,8 +58,11 @@ _UNCERTAIN = frozenset({FailureCode.RESPONSE_UNKNOWN, FailureCode.TIMEOUT})
 
 def _pull(repository: str, p: Json, operation: str) -> PullRequest:
     try:
+        actual = p["base"]["repo"]["full_name"]
+        if not isinstance(actual, str) or actual.casefold() != repository.casefold():
+            invalid(operation, "GitHub returned a pull request for an unexpected repository")
         return PullRequest(
-            repository=repository,
+            repository=actual,
             number=p["number"],
             node_id=p["node_id"],
             url=p["html_url"],
