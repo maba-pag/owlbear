@@ -95,33 +95,22 @@ class Machine:
         """Carry today's built-in settings into Global once, then move this machine's own settings and clear them here.
 
         The first machine's move fills Global's machine settings; so every machine follows Global (the owner,
-        2026-10-23). A failure is said and tried again at the next start.
+        2026-10-23). Both run on a current checkout. Until they are done, why is kept for the Settings page and the
+        next start tries again; this machine keeps its own values meanwhile.
         """
         try:
-            if (shared := data_repo.locate()) is None:
-                return  # no Global to follow: this machine keeps its own values
-            local = None if registry.load().settings_moved else _moving()
-            if why := settings_carry.sync(shared):  # a checkout from before another machine's carry takes it in
-                self.say(f"settings: the shared repository could not be brought current: {why}")
-            if settings_carry.due(shared):
-                notice = settings_carry.carry(shared)
-                self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
-            if local is not None:
-                if notice := settings_carry.move(shared, local):  # an invalid Global raises: nothing is cleared
-                    self.say(
-                        f"settings: moving this machine's settings into Global failed: {notice}; tried again "
-                        "at the next start"
-                    )
-                    return
-                with registry.locked():
-                    machine = registry.load()
-                    since = {k: v for k, v in machine.settings.model_dump().items() if v != getattr(local, k)}
-                    machine.settings = registry.Settings.model_validate(since)  # what the owner saved since stays
-                    machine.settings_moved, machine.settings_moving = True, None
-                    registry.save(machine)
-                self.say("settings: this machine's settings moved into Global; it follows Global's from now on")
+            why = _switched(self.say)
         except Exception as exc:  # noqa: BLE001 - the projects load either way; their steps say what is unset
-            self.say(f"settings: carrying the built-in values into Global failed: {type(exc).__name__}: {exc}")
+            why = f"the settings carry failed: {type(exc).__name__}: {exc}"
+        if why:
+            self._pending(why)
+        else:
+            _pending("")
+
+    def _pending(self, why: str) -> None:
+        """Keep why the carry or the move is not done, and say it; tried again at the next start."""
+        _pending(why)
+        self.say(f"settings: {why}; tried again at the next start")
 
     def say(self, text: str) -> None:
         """Write one line to the machine host's log."""
@@ -373,3 +362,44 @@ def _moving() -> registry.Settings:
             machine.settings_moving = machine.settings
             registry.save(machine)
         return machine.settings_moving
+
+
+def _switched(say: Callable[[str], None]) -> str:
+    """The carry and this machine's move, each once and silently (D-01M5MZKEPWNASF6X3CNF4FEWZH); why not, else ''."""
+    shared, state = data_repo.locate(), registry.load()
+    if shared is None or (state.settings_moved and not settings_carry.due(shared)):
+        return ""  # without Global this machine keeps its own values; with it, nothing is left to do
+    if why := settings_carry.sync(shared, state.global_written):
+        return f"the shared repository could not be brought current: {why}"
+    if settings_carry.due(shared) and (notice := settings_carry.carry(shared, _written)):
+        return f"carrying the built-in values into Global: {notice}"
+    if state.settings_moved:
+        return ""
+    local = _moving()
+    if notice := settings_carry.move(shared, local, _written):
+        return f"moving this machine's settings into Global: {notice}"
+    with registry.locked():
+        machine = registry.load()
+        since = {k: v for k, v in machine.settings.model_dump().items() if v != getattr(local, k)}
+        machine.settings = registry.Settings.model_validate(since)  # what the owner saved since stays
+        machine.settings_moved, machine.settings_moving = True, None
+        registry.save(machine)
+    say("settings: this machine's settings moved into Global; it follows Global's from now on")
+    return ""
+
+
+def _pending(why: str) -> None:
+    """Keep why the carry or the move is not done for the Settings page; empty once both are."""
+    with registry.locked():
+        machine = registry.load()
+        if machine.settings_pending != why or (not why and machine.global_written):
+            machine.settings_pending, machine.global_written = why, machine.global_written if why else ""
+            registry.save(machine)
+
+
+def _written(digest: str) -> None:
+    """Keep the digest of what the carry or the move wrote to Global, so a later start knows that write as its own."""
+    with registry.locked():
+        machine = registry.load()
+        machine.global_written = digest
+        registry.save(machine)

@@ -1,5 +1,6 @@
 """Machine settings with a Global layer (D-01M5MZKEPPVMFC9HK795MMG91B): each machine follows Global unless it sets its
-own; unset in both is an error, and what needs it does not run. The switch-over moves this machine's into Global."""
+own; unset in both is an error, and what needs it does not run. Each machine's first start moves its own settings into
+Global once (the owner, 2026-10-23: move all), on a current checkout, keeping its progress when publishing fails."""
 
 import json
 import subprocess
@@ -11,6 +12,7 @@ from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation, machine_settings, registry, versions
+from owlbear_delivery_next.machine_host.auto_update import Auto
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
@@ -32,10 +34,21 @@ def _git(root, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
 
 
-def _committed(shared: DataRepo, layer: dict) -> None:
+def _committed(shared: DataRepo, layer: dict, *, push: bool = True) -> None:
     shared.global_path.write_text(json.dumps(layer))
     _git(shared.root, "add", "-A")
     _git(shared.root, "commit", "-qm", "global")
+    if push:
+        _git(shared.root, "push", "-q")
+
+
+def _clone(tmp_path, shared_repo) -> DataRepo:
+    """Another machine's checkout of the shared repository."""
+    second = tmp_path / "second"
+    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        _git(second, "config", key, value)
+    return DataRepo(second)
 
 
 def _staged_only(repo: DataRepo, path, _message: str, _until: float | None = None) -> str:
@@ -44,11 +57,24 @@ def _staged_only(repo: DataRepo, path, _message: str, _until: float | None = Non
     return "the commit failed"
 
 
+def _local(settings: registry.Settings = LEGACY) -> None:
+    with registry.locked():
+        registry.save(registry.Machine(settings=settings))
+
+
 def _carry(monkeypatch, shared: DataRepo | None) -> list[str]:
+    """One machine host start's carry; what it said."""
     monkeypatch.setenv(data_repo.VIEW, str(shared.root) if shared else "")
     said: list[str] = []
-    Machine.carry(SimpleNamespace(say=said.append))
+    host = SimpleNamespace(say=said.append)
+    host._pending = lambda why: Machine._pending(host, why)  # noqa: SLF001
+    Machine.carry(host)
     return said
+
+
+def _done() -> bool:
+    machine = registry.load()
+    return machine.settings_moved and not machine.settings_pending
 
 
 @pytest.mark.usefixtures("no_base")
@@ -69,24 +95,24 @@ def test_with_its_settings_unset_nothing_that_needs_them_runs(monkeypatch):
     assert not job.allowed("merge", paused=False)
     assert not job.allowed("idle", paused=False)
     assert Machine._sessions(SimpleNamespace(total=4)) == 0  # noqa: SLF001 - no session starts
+    assert not Auto.permitted(SimpleNamespace(machine=SimpleNamespace(paused=False)))  # never updates by itself
 
 
 @pytest.mark.usefixtures("no_base")
 def test_the_switch_over_moves_this_machine_s_settings_into_a_carried_global_and_clears_them(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
-    old = carried.layer().model_dump(mode="json", exclude={"machine"}) | {"format": 10, "pr_marker": None}
-    _committed(shared, old)  # what #604's carry left, with a value the owner cleared since
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
+    old = carried.layer().model_dump(mode="json", exclude={"machine", "machine_moved"}) | {"format": 10}
+    _committed(shared, old | {"pr_marker": None})  # what #604's carry left, with a value the owner cleared since
+    _local()
 
     said = _carry(monkeypatch, shared)
 
     glob = read_layer(shared.global_path, GlobalLayer)
-    assert glob.machine == MachineValues.model_validate(LEGACY.model_dump())  # this machine's, not the built-in ones
+    assert (glob.machine, glob.machine_moved) == (MachineValues.model_validate(LEGACY.model_dump()), True)
     assert glob.pr_marker is None  # cleared before: never filled again
     assert _git(shared.root, "status", "--porcelain") == ""
-    moved = registry.load()
-    assert (moved.settings, moved.settings_moved) == (registry.Settings(), True)
+    assert _git(shared.root, "rev-parse", "HEAD") == _git(shared_repo[1], "rev-parse", "HEAD")  # published
+    assert (registry.load().settings, _done()) == (registry.Settings(), True)
     assert any("moved into Global" in line for line in said)
     resolved = machine_settings.current()
     assert (resolved.channel, resolved.sessions, resolved.sources["channel"]) == ("major", 3, "global")
@@ -97,278 +123,205 @@ def test_the_switch_over_moves_this_machine_s_settings_into_a_carried_global_and
 
 
 @pytest.mark.usefixtures("no_base")
-def test_another_machine_follows_the_global_settings_it_finds(shared_repo, monkeypatch):
+def test_a_later_machine_copies_nothing_and_a_value_the_owner_cleared_stays_cleared(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
-    settings_carry.move(shared, MachineValues(sessions=6))  # the first machine's switch-over
+    _local(registry.Settings(sessions=6))
+    _carry(monkeypatch, shared)  # the first machine
+    glob = read_layer(shared.global_path, GlobalLayer)
+    cleared = glob.model_copy(update={"machine": glob.machine.model_copy(update={"sessions": None})})
+    _committed(shared, cleared.model_dump(mode="json"))  # the owner clears it on the Settings page
     head = _git(shared.root, "rev-parse", "HEAD")
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))  # this machine's own, from before
+    _local()  # another machine, with its own from before
 
     _carry(monkeypatch, shared)
 
     assert _git(shared.root, "rev-parse", "HEAD") == head  # Global stays as it is
-    assert registry.load().settings == registry.Settings()
-    assert machine_settings.current().sessions == 6
+    assert (registry.load().settings, _done(), machine_settings.current().sessions) == (registry.Settings(), True, None)
 
 
 def test_without_a_shared_repository_this_machine_keeps_its_own(monkeypatch):
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
+    _local()
     assert _carry(monkeypatch, None) == []
     kept = registry.load()
     assert (kept.settings, kept.settings_moved) == (LEGACY, False)
 
 
 @pytest.mark.usefixtures("no_base")
-def test_a_fresh_global_takes_this_machine_s_values_then_the_built_in_ones(shared_repo):
+def test_a_fresh_global_takes_this_machine_s_values_then_the_built_in_ones(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
-    settings_carry.carry(shared)
-    settings_carry.move(shared, MachineValues(sessions=2))
-    machine = read_layer(shared.global_path, GlobalLayer).machine
-    assert machine == carried.MACHINE.model_copy(update={"sessions": 2})
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_global_without_machine_settings_takes_this_machine_s_before_it_clears_them(shared_repo, monkeypatch):
-    shared = DataRepo(shared_repo[0])
-    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))  # format 11, no machine section
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-
+    _local(registry.Settings(sessions=2))
     _carry(monkeypatch, shared)
-
-    assert read_layer(shared.global_path, GlobalLayer).machine == MachineValues.model_validate(LEGACY.model_dump())
-    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.MOVED
-    assert registry.load().settings_moved
+    glob = read_layer(shared.global_path, GlobalLayer)
+    assert glob.machine == carried.MACHINE.model_copy(update={"sessions": 2})
+    assert glob.agents  # #604's carry ran first
+    assert _done()
 
 
 @pytest.mark.usefixtures("no_base")
-def test_an_unreadable_global_never_clears_this_machine_s_settings(shared_repo, monkeypatch):
+def test_an_unreadable_global_never_counts_as_moved_and_the_page_says_why(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
     _committed(shared, GlobalLayer(machine=MachineValues(sessions=6)).model_dump(mode="json"))
     shared.global_path.write_text("{ not json")
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
+    _local()
 
-    said = _carry(monkeypatch, shared)
+    _carry(monkeypatch, shared)
 
     kept = registry.load()
     assert (kept.settings, kept.settings_moved) == (LEGACY, False)  # moved at a later start
-    assert any("failed" in line for line in said)
+    assert "unreadable" in kept.settings_pending
 
 
 @pytest.mark.usefixtures("no_base")
-def test_a_global_deleted_after_the_first_carry_is_never_carried_again_and_the_move_waits(shared_repo):
-    shared = DataRepo(shared_repo[0])
-    _committed(shared, carried.layer().model_dump(mode="json") | {"format": 10})
-    shared.global_path.unlink()  # the owner's deletion, not committed yet
-
-    assert not settings_carry.due(shared)
-    assert "uncommitted edit" in settings_carry.move(shared, MachineValues(sessions=2))
-    assert not shared.global_path.exists()
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_move_whose_commit_failed_is_committed_before_this_machine_s_settings_are_cleared(shared_repo, monkeypatch):
+def test_a_move_keeps_its_progress_when_its_commit_fails_and_publishes_it_at_the_next_start(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
     _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-    head = _git(shared.root, "rev-parse", "HEAD")
+    (shared.root / "elsewhere.txt").write_text("the owner's")
+    _git(shared.root, "add", "elsewhere.txt")  # unrelated staged work
+    _local()
     with monkeypatch.context() as m:
         m.setattr(DataRepo, "commit", _staged_only)
-        said = _carry(monkeypatch, shared)
-    assert any("the commit failed" in line for line in said)
-    assert (_git(shared.root, "status", "--porcelain"), _git(shared.root, "rev-parse", "HEAD")) == ("", head)  # undone
-    assert not registry.load().settings_moved  # kept here until a move succeeds
-
-    _carry(monkeypatch, shared)  # the next start: nothing left to copy, the commit made
-
-    assert _git(shared.root, "status", "--porcelain") == ""
-    assert json.loads(_git(shared.root, "show", "HEAD:config.json"))["machine"]["sessions"] == LEGACY.sessions
-    assert registry.load().settings_moved
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_machine_starting_after_the_owner_cleared_a_global_value_never_restores_it(shared_repo, monkeypatch):
-    shared = DataRepo(shared_repo[0])
-    settings_carry.move(shared, MachineValues(sessions=6))  # the first machine
-    cleared = read_layer(shared.global_path, GlobalLayer)
-    _committed(shared, cleared.model_copy(update={"machine": cleared.machine.model_copy(update={"sessions": None})})
-               .model_dump(mode="json"))  # fmt: skip
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))  # a second machine, with its own from before
-
-    _carry(monkeypatch, shared)
-
-    assert read_layer(shared.global_path, GlobalLayer).machine.sessions is None  # the owner's choice stands
-    assert (registry.load().settings_moved, machine_settings.current().sessions) == (True, None)
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_global_deleted_and_committed_after_a_move_alone_is_never_carried_again(shared_repo):
-    shared = DataRepo(shared_repo[0])
-    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))  # format 11, never carried
-    settings_carry.move(shared, MachineValues(sessions=3))
-    shared.global_path.unlink()
-    _git(shared.root, "add", "-A")
-    _git(shared.root, "commit", "-qm", "the owner deletes Global")
-    assert not settings_carry.due(shared)
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_move_that_changes_nothing_is_recorded_so_a_later_machine_copies_nothing(shared_repo, monkeypatch):
-    shared = DataRepo(shared_repo[0])
-    full = GlobalLayer(machine=carried.MACHINE)
-    shared.global_path.write_text(full.model_dump_json(indent=1))  # as a save writes it: a move changes nothing
-    _git(shared.root, "add", "-A")
-    _git(shared.root, "commit", "-qm", "the owner set every machine value before any move")
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-    _carry(monkeypatch, shared)
-    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.MOVED  # an empty commit records it
-    assert registry.load().settings_moved
-
-    cleared = full.model_copy(update={"machine": carried.MACHINE.model_copy(update={"sessions": None})})
-    _committed(shared, cleared.model_dump(mode="json"))
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))  # another machine
-    _carry(monkeypatch, shared)
-    assert read_layer(shared.global_path, GlobalLayer).machine.sessions is None
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_machine_with_a_checkout_from_before_another_s_move_takes_that_move_in(shared_repo, tmp_path, monkeypatch):
-    first = DataRepo(shared_repo[0])
-    _committed(first, GlobalLayer(sessions=2).model_dump(mode="json"))
-    _git(first.root, "push", "-q")
-    second = tmp_path / "second"  # another machine's checkout, cloned before the first machine's move
-    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        _git(second, "config", key, value)
-    settings_carry.move(first, MachineValues(sessions=6))  # committed and pushed
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-
-    _carry(monkeypatch, DataRepo(second))
-
-    assert _git(second, "status", "--porcelain") == ""
-    assert _git(second, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")  # nothing filled again
-    assert read_layer(DataRepo(second).global_path, GlobalLayer).machine.sessions == 6
-    assert registry.load().settings_moved
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_value_the_owner_saves_before_a_failed_move_is_retried_stays_this_machine_s(shared_repo, monkeypatch):
-    shared = DataRepo(shared_repo[0])
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-    real = settings_carry.move
-
-    def unpushed(repo, local):
-        real(repo, local)
-        return "committed, but the push failed"
-
-    with monkeypatch.context() as m:
-        m.setattr(settings_carry, "move", unpushed)
         _carry(monkeypatch, shared)
+    assert "the commit failed" in registry.load().settings_pending
+    assert not registry.load().settings_moved  # its own values stay until the move is published
+    assert read_layer(shared.global_path, GlobalLayer).machine_moved  # filled and marked: never filled again
+    glob = read_layer(shared.global_path, GlobalLayer)
+    shared.global_path.write_text(glob.model_copy(update={"machine": glob.machine.model_copy(
+        update={"sessions": None})}).model_dump_json())  # fmt: skip  # the owner clears one before the retry
+
+    _carry(monkeypatch, shared)
+
+    assert _done()
+    assert json.loads(_git(shared.root, "show", "HEAD:config.json"))["machine"]["sessions"] is None
+    assert _git(shared.root, "status", "--porcelain") == "A  elsewhere.txt"  # the owner's staged work, untouched
+    assert _git(shared.root, "show", "--name-only", "--format=", "HEAD") == "config.json"  # the move commits Global
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_move_whose_push_fails_keeps_its_commit_and_pushes_it_at_the_next_start(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))
+    _local()
+    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared.root / "nowhere"))
+    _carry(monkeypatch, shared)
+    assert registry.load().settings_pending
+    assert not registry.load().settings_moved
+    assert _git(shared.root, "log", "-1", "--format=%s") == settings_carry.MOVED  # kept, not undone
     saved = registry.load().settings
     registry.configure(saved.model_copy(update={"sessions": 5}), registry.revision(saved))  # the owner, meanwhile
+    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared_repo[1]))
 
     _carry(monkeypatch, shared)
 
-    after = registry.load()
-    assert (after.settings, after.settings_moved, after.settings_moving) == (registry.Settings(sessions=5), True, None)
+    assert _git(shared.root, "rev-parse", "HEAD") == _git(shared_repo[1], "rev-parse", "HEAD")
+    assert (registry.load().settings, _done()) == (registry.Settings(sessions=5), True)  # his own value stays
     assert read_layer(shared.global_path, GlobalLayer).machine.sessions == LEGACY.sessions  # the move's values
 
 
 @pytest.mark.usefixtures("no_base")
-def test_a_move_whose_commit_failed_gives_way_to_another_machine_s_published_move(shared_repo, tmp_path, monkeypatch):
+@pytest.mark.parametrize("failed", ["commit", "push"])
+def test_an_unpublished_move_gives_way_to_another_machine_s_published_one(failed, shared_repo, tmp_path, monkeypatch):
     first = DataRepo(shared_repo[0])
     _committed(first, GlobalLayer(sessions=2).model_dump(mode="json"))
-    _git(first.root, "push", "-q")
-    second = tmp_path / "second"
-    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        _git(second, "config", key, value)
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
+    second = _clone(tmp_path, shared_repo)
+    _local()
     with monkeypatch.context() as m:
-        m.setattr(DataRepo, "commit", _staged_only)
-        _carry(monkeypatch, DataRepo(second))  # its move failed after staging: undone
-    assert _git(second, "status", "--porcelain") == ""
-    settings_carry.move(first, MachineValues(sessions=6))  # meanwhile the other machine's move is published
+        if failed == "commit":
+            m.setattr(DataRepo, "commit", _staged_only)
+        else:
+            _git(second.root, "remote", "set-url", "--push", "origin", str(tmp_path / "nowhere"))
+        _carry(monkeypatch, second)  # its move filled, not published
+    _git(second.root, "remote", "set-url", "--push", "origin", str(shared_repo[1]))
+    settings_carry.move(first, MachineValues(sessions=6))  # meanwhile the first machine's move is published
 
-    _carry(monkeypatch, DataRepo(second))
+    _carry(monkeypatch, second)
 
-    assert _git(second, "status", "--porcelain") == ""
-    assert read_layer(DataRepo(second).global_path, GlobalLayer).machine.sessions == 6  # the published move's
-    assert registry.load().settings_moved
+    assert _git(second.root, "status", "--porcelain") == ""
+    assert _git(second.root, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
+    assert read_layer(second.global_path, GlobalLayer).machine.sessions == 6  # the published move's
+    assert _done()
 
 
 @pytest.mark.usefixtures("no_base")
-def test_a_move_whose_push_fails_is_undone_and_done_at_the_next_start(shared_repo, monkeypatch):
+def test_an_owner_edit_never_gives_way(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    _committed(first, GlobalLayer(sessions=2).model_dump(mode="json"))
+    second = _clone(tmp_path, shared_repo)
+    settings_carry.move(first, MachineValues(sessions=6))
+    edited = GlobalLayer(sessions=9).model_dump_json()
+    second.global_path.write_text(edited)  # the owner's unsaved edit in the stale checkout
+    _local()
+
+    _carry(monkeypatch, second)
+
+    assert second.global_path.read_text() == edited
+    assert "uncommitted edit" in registry.load().settings_pending
+    assert not registry.load().settings_moved
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_failed_git_probe_never_counts_as_done(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
     _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))
-    _git(shared.root, "push", "-q")
+    _local()
     head = _git(shared.root, "rev-parse", "HEAD")
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared.root / "nowhere"))
-
-    said = _carry(monkeypatch, shared)
-
-    assert any("not pushed" in line for line in said)
-    assert (_git(shared.root, "status", "--porcelain"), _git(shared.root, "rev-parse", "HEAD")) == ("", head)
-    assert not registry.load().settings_moved
-    _git(shared.root, "remote", "set-url", "--push", "origin", str(shared_repo[1]))
-    _carry(monkeypatch, shared)
-    assert registry.load().settings_moved
-    assert _git(shared.root, "rev-parse", "HEAD") == _git(shared_repo[1], "rev-parse", "HEAD")
+    real = DataRepo.git
+    for probe in ("fetch", "status", "rev-list"):
+        with monkeypatch.context() as m:
+            m.setattr(DataRepo, "git", lambda self, *a, until=None, p=probe: real(self, *a, until=until)
+                      if a[0] != p else subprocess.CompletedProcess(a, 128, "", "broken"))  # fmt: skip
+            _carry(monkeypatch, shared)
+        assert (registry.load().settings_moved, _git(shared.root, "rev-parse", "HEAD")) == (False, head), probe
+        assert "broken" in registry.load().settings_pending, probe
 
 
 @pytest.mark.usefixtures("no_base")
-def test_a_checkout_with_a_remote_but_no_upstream_keeps_the_move_pending(shared_repo, monkeypatch):
+def test_a_failed_sync_stops_the_carry_before_it_writes(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, {"format": 2, "agents": {}, "runtimes": {}})  # the carry is due
+    _local()
+    _git(shared.root, "remote", "set-url", "origin", str(shared.root / "nowhere"))  # fetch fails
+    _carry(monkeypatch, shared)
+    assert json.loads(shared.global_path.read_text())["format"] == 2
+    assert "git fetch failed" in registry.load().settings_pending
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_checkout_with_a_remote_but_no_upstream_keeps_everything_pending(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
     _git(shared.root, "branch", "--unset-upstream")
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
-    said = _carry(monkeypatch, shared)
-    assert any("tracks no upstream" in line for line in said)
-    assert not registry.load().settings_moved
-    assert read_layer(shared.global_path, GlobalLayer).machine is None  # the format carry's file, without the move
+    _local()
+    _carry(monkeypatch, shared)
+    assert "tracks no upstream" in registry.load().settings_pending
+    assert (registry.load().settings_moved, shared.global_path.exists()) == (False, False)
 
 
 @pytest.mark.usefixtures("no_base")
-def test_a_failed_move_where_global_was_deleted_leaves_it_deleted(shared_repo, monkeypatch):
+def test_a_global_deleted_after_a_move_stays_deleted_and_an_uncommitted_deletion_waits(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
-    _committed(shared, carried.layer().model_dump(mode="json") | {"format": 10})
-    shared.global_path.unlink()
+    _local(registry.Settings(sessions=3))
+    _carry(monkeypatch, shared)  # carried and moved
+    shared.global_path.unlink()  # the owner deletes Global, not committed yet
+    assert not settings_carry.due(shared)
+    assert "uncommitted edit" in settings_carry.move(shared, MachineValues(sessions=2))
     _git(shared.root, "add", "-A")
     _git(shared.root, "commit", "-qm", "the owner deletes Global")
-    with monkeypatch.context() as m:
-        m.setattr(DataRepo, "commit", _staged_only)
-        assert settings_carry.move(shared, MachineValues(sessions=2)) == "the commit failed"
-    assert (_git(shared.root, "status", "--porcelain"), shared.global_path.exists()) == ("", False)
-    assert settings_carry.move(shared, MachineValues(sessions=2)) == ""  # the next start is not blocked
+    _git(shared.root, "push", "-q")
+    _local(registry.Settings(sessions=4))  # another machine
+    _carry(monkeypatch, shared)
+    assert (shared.global_path.exists(), _done()) == (False, True)
 
 
 @pytest.mark.usefixtures("no_base")
 def test_a_checkout_from_before_another_machine_s_carry_takes_it_in_before_writing(shared_repo, tmp_path, monkeypatch):
     first = DataRepo(shared_repo[0])
     _committed(first, {"format": 2, "agents": {}, "runtimes": {}})  # an old Global
-    _git(first.root, "push", "-q")
-    second = tmp_path / "second"
-    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        _git(second, "config", key, value)
-    settings_carry.carry(first)
-    settings_carry.move(first, MachineValues(sessions=6))  # the first machine's carry and move, pushed
-    with registry.locked():
-        registry.save(registry.Machine(settings=LEGACY))
+    second = _clone(tmp_path, shared_repo)
+    _local()
+    _carry(monkeypatch, first)  # the first machine's carry and move, pushed
+    _local()
 
-    said = _carry(monkeypatch, DataRepo(second))
+    said = _carry(monkeypatch, second)
 
     assert not any("carried into Global" in line for line in said)  # it took the first's in: no carry of its own
-    assert _git(second, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
-    assert (_git(second, "status", "--porcelain"), registry.load().settings_moved) == ("", True)
+    assert _git(second.root, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
+    assert (_git(second.root, "status", "--porcelain"), _done()) == ("", True)

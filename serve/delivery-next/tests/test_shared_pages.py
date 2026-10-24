@@ -88,9 +88,8 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
         answer = {"paused": False, "resumed_at": "2026-10-18T08:00:00Z", "login_item": "off"}
         glob, notice = machine_settings.shared_values(DataRepo(shared))
         resolved = machine_settings.resolve(saved.settings, glob, notice).model_dump(mode="json")
-        return JSONResponse(
-            answer | {"settings": saved.settings.model_dump(), "settings_rev": rev, "resolved": resolved}
-        )
+        mine = {"settings": saved.settings.model_dump(), "settings_rev": rev, "resolved": resolved}
+        return JSONResponse(answer | mine | {"pending": saved.settings_pending})
 
     async def configure(request):
         body = await request.json()
@@ -486,6 +485,44 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             page.goto(f"{base}/config?project={DOCS}")
             pds.pick(page, "Layer", f"go:{SHOP}")
             expect(page).to_have_url(f"{base}/config?project={SHOP}")
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_move(
+    tmp_path: Path, shared_repo, pds, monkeypatch
+) -> None:
+    """Code ships no defaults (2026-10-23): with no built-in layer, every unset machine setting is an error."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(machine_settings, "BASE", None)
+    monkeypatch.setattr(config, "BASE", None)
+    with registry.locked():
+        registry.save(registry.Machine(settings_pending="the shared repository could not be brought current: offline"))
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/config?project={DOCS}#token=t")
+            region = page.get_by_role("region", name="This machine")
+            expect(page.locator("#machine-pending")).to_contain_text("offline")
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(6)
+            expect(page.locator("#unset")).to_contain_text("machine.channel")
+            expect(page.locator("#unset")).to_contain_text("machine.sessions")
+            pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
+            region.get_by_role("button", name="Save machine settings").click()
+            pds.modal(page).get_by_role("button", name="Save machine settings").click()
+            expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(5)
             browser.close()
     finally:
         server.should_exit = True

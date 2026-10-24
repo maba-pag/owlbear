@@ -3,11 +3,13 @@
 The update that removed code defaults runs it when the machine host starts: a Global layer below
 ``CARRIED_FORMAT`` gets every field it leaves unset from ``carried.layer``, in one commit; a start after a failed
 commit commits the filled layer without filling it again; afterwards nothing does. Each machine's first start then
-moves its own machine settings: the first move fills Global's, later ones copy nothing (``move``).
+moves its own machine settings: the first move fills Global's and marks it moved, later ones copy nothing (``move``).
+Both run on a current checkout (``sync``) and, like every Settings save, keep their progress when publishing fails.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from typing import TYPE_CHECKING
@@ -18,10 +20,19 @@ from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer, M
 from owlbear_delivery_next.state_store.store import read_layer, update_layer
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from owlbear_delivery_next.local_system.data_repo import DataRepo
+
+    type Keep = Callable[[str], None]
 
 MESSAGE = "settings: today's built-in values carried into Global"  # the carry's commit, found again in the history
 MOVED = "settings: this machine's settings moved into Global"
+
+
+def _ignore(_digest: str) -> None:
+    """What a carry wrote, unrecorded: a caller without a record of its own."""
 
 
 def due(shared: DataRepo) -> bool:
@@ -29,11 +40,11 @@ def due(shared: DataRepo) -> bool:
     return _unfilled(shared) or _unpublished(shared)
 
 
-def carry(shared: DataRepo) -> str:
+def carry(shared: DataRepo, keep: Keep = _ignore) -> str:
     """Write the built-in values into the Global layer once and commit it; what the owner should know, else ''.
 
     A layer already filled is only committed: a value the owner cleared after the carry is never filled again. The
-    machine settings are ``move``'s.
+    machine settings are ``move``'s. *keep* records what it wrote, so ``sync`` knows the write as its own.
     """
     if not due(shared):
         return ""
@@ -44,83 +55,107 @@ def carry(shared: DataRepo) -> str:
             return ""
         if fill:
             update_layer(shared.global_path, GlobalLayer, filled)
+            keep(_digest(shared.global_path))
         else:  # an invalid layer is never published: it stays uncommitted, and the host says why (StoreError)
             read_layer(shared.global_path, GlobalLayer)
         return shared.publish(shared.global_path, MESSAGE, until)
 
 
-def move(shared: DataRepo, local: MachineValues) -> str:
-    """The first machine's move fills Global's machine settings, in one commit; what the owner should know, else ''.
+def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
+    """Fill Global's machine settings once, marked as moved, and publish them; what the owner should know, else ''.
 
-    Global's values stay; where it has none, this machine's own *local* values go in, else the built-in ones. Once a
-    move is committed, a later machine copies nothing: it follows Global, whose values the owner may have cleared
-    since (the owner, 2026-10-23: move all, once). It runs only on a fetched, current checkout whose Global has no
-    uncommitted edit, and a move that cannot commit and push is undone at once, so nothing is left half done: the
-    caller keeps its own values and tries again at the next start. An invalid Global layer raises ``StoreError``.
+    Where Global has none, this machine's own *local* values go in, else the built-in ones. The mark is written with
+    the values, so a retry only publishes what is there, and a later machine copies nothing: it follows Global, whose
+    values the owner may have cleared since (the owner, 2026-10-23: move all, once). A publication that fails keeps
+    its progress, as every Settings save does. An invalid Global raises ``StoreError``; a git command that fails
+    raises ``DataRepoError``: neither ever counts as done.
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
-    rel = shared.global_path.relative_to(shared.root).as_posix()
     with shared.locked():
-        if why := _ready(shared, rel, until):
-            return why
-        glob = read_layer(shared.global_path, GlobalLayer)
-        before = shared.git("rev-parse", "HEAD", until=until).stdout.strip()
-        existed = shared.git("cat-file", "-e", f"{before}:{rel}", until=until).returncode == 0
-        if not _moved(shared):
-            have = (glob.machine or MachineValues()).model_dump(exclude_none=True)
+        if not read_layer(shared.global_path, GlobalLayer).machine_moved:
+            if _dirty(shared, until):
+                return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
+            if not shared.global_path.exists() and _ran(shared, "HEAD", MOVED, until):
+                return ""  # the owner deleted Global after a move: his deletion stands
+            have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(
+                exclude_none=True
+            )
             values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
-            update_layer(shared.global_path, GlobalLayer, lambda g: g.model_copy(update={"machine": values}))
-        failed = shared.commit(shared.global_path, MOVED, until)
-        if not failed and not _moved(shared):  # Global had them all: an empty commit records the move
-            made = shared.git("commit", "-q", "--allow-empty", "-m", MOVED, "--", rel, until=until)
-            failed = f"the move was not recorded: {made.stderr.strip()[:200]}" if made.returncode else ""
-        if not failed and _upstream(shared, until):
-            sent = shared.git("push", "-q", until=until)  # also what was unpushed before it
-            failed = f"the move was not pushed: {sent.stderr.strip()[:200]}" if sent.returncode else ""
-        if failed:
-            shared.git("reset", "-q", "--keep", before, until=until)
-            if existed:
-                shared.git("checkout", "-q", before, "--", rel, until=until)  # its file and index as they were
-            else:
-                shared.git("rm", "-q", "--cached", "--ignore-unmatch", "--", rel, until=until)
-                shared.global_path.unlink(missing_ok=True)
-        return failed
+            update_layer(shared.global_path, GlobalLayer,
+                         lambda g: g.model_copy(update={"machine": values, "machine_moved": True}))  # fmt: skip
+            keep(_digest(shared.global_path))
+        return shared.publish(shared.global_path, MOVED, until)
 
 
-def sync(shared: DataRepo) -> str:
-    """Before any carry writes: fetch, and take in upstream commits this checkout lacks; why not, else ''.
+def sync(shared: DataRepo, written: str) -> str:
+    """Bring the checkout current before a carry or a move writes; why it cannot be, else ''.
 
-    A Global layer with an uncommitted edit, such as a carry an earlier start could not commit, is left as it is.
+    It fetches. When the remote changed Global meanwhile, this machine's own unpublished carry or move (its file
+    still holding *written*, the digest of what it wrote) gives way: it is undone for Global alone and redone on
+    the current layer if still due. Anything else unpublished in Global is the owner's: kept, and nothing moves on.
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
     rel = shared.global_path.relative_to(shared.root).as_posix()
     with shared.locked():
-        if shared.git("status", "--porcelain", "--", rel, until=until).stdout.strip():
-            return ""
-        return _ready(shared, rel, until)
+        if shared.git("rev-parse", "--abbrev-ref", "@{upstream}", until=until).returncode:
+            return (
+                "the shared repository's branch tracks no upstream, or it cannot be read; nothing moves until it does"
+            )
+        _checked(shared, until, "fetch", "-q")
+        if _checked(shared, until, "log", "-1", "--format=%H", "HEAD..@{upstream}", "--", rel) and (
+            why := _give_way(shared, rel, written, until)
+        ):
+            return why
+        if _dirty(shared, until) or _checked(shared, until, "rev-list", "--count", "HEAD..@{upstream}") == "0":
+            return ""  # an unpublished carry or move is published by its own step
+        return shared.pull(until)
 
 
-def _upstream(shared: DataRepo, until: float) -> bool:
-    return shared.git("rev-parse", "--abbrev-ref", "@{upstream}", until=until).returncode == 0
+def _give_way(shared: DataRepo, rel: str, written: str, until: float) -> str:
+    """Undo this machine's own unpublished carry or move of Global, and nothing else; why not, else ''."""
+    base = _checked(shared, until, "merge-base", "HEAD", "@{upstream}")
+    mine = _checked(shared, until, "log", "--format=%s", f"{base}..HEAD").splitlines()
+    if mine:
+        touched = set(_checked(shared, until, "diff", "--name-only", base, "HEAD").splitlines())
+        shown = shared.git("show", f"HEAD:{rel}", until=until)
+        own = set(mine) <= {MESSAGE, MOVED} and touched == {rel} and shown.returncode == 0
+        if not (own and written and _digest_of(shown.stdout.encode()) == written and not _dirty(shared, until)):
+            return "this machine has unpublished commits in the shared repository; push or undo them by hand"
+        _checked(shared, until, "reset", "-q", "--soft", base)
+    elif _dirty(shared, until):
+        if not (written and shared.global_path.exists() and _digest(shared.global_path) == written):
+            return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
+    else:
+        return ""
+    _checked(shared, until, "restore", "--source=HEAD", "--staged", "--worktree", "--", rel)
+    return ""
 
 
-def _moved(shared: DataRepo, ref: str = "HEAD") -> bool:
-    """Whether a machine's move is in *ref*'s history; its commit may change nothing, so no path limits the search."""
-    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MOVED}", ref)
-    return found.returncode == 0 and bool(found.stdout.strip())
+def _checked(shared: DataRepo, until: float, *args: str) -> str:
+    """One git command's output; ``DataRepoError`` when it fails, so an unknown state never counts as known."""
+    done = shared.git(*args, until=until)
+    if done.returncode:
+        msg = f"git {args[0]} failed in {shared.root}: {done.stderr.strip()[:200]}"
+        raise data_repo.DataRepoError(msg)
+    return done.stdout.strip()
 
 
-def _ready(shared: DataRepo, rel: str, until: float) -> str:
-    """Why a move waits: an uncommitted edit of Global, or a checkout that cannot be brought current; else ''."""
-    if shared.git("status", "--porcelain", "--", rel, until=until).stdout.strip():
-        return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
-    if not _upstream(shared, until):  # a local-only repository has nothing to fetch; a remote-backed one waits
-        remotes = shared.git("remote", until=until).stdout.strip()
-        return "the shared repository's branch tracks no upstream; the move waits until it does" if remotes else ""
-    if (fetched := shared.git("fetch", "-q", until=until)).returncode:
-        return f"the shared repository could not be fetched: {fetched.stderr.strip()[:200]}"
-    behind = shared.git("rev-list", "--count", "HEAD..@{upstream}", until=until).stdout.strip()
-    return shared.pull(until) if behind not in {"", "0"} else ""
+def _dirty(shared: DataRepo, until: float) -> bool:
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    return bool(_checked(shared, until, "status", "--porcelain", "--", rel))
+
+
+def _ran(shared: DataRepo, ref: str, message: str, until: float) -> bool:
+    """Whether *ref*'s history holds a commit with *message*; a failed search raises."""
+    return bool(_checked(shared, until, "log", "-1", "--format=%H", "--fixed-strings", f"--grep={message}", ref))
+
+
+def _digest(path: Path) -> str:
+    return _digest_of(path.read_bytes())
+
+
+def _digest_of(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _format(text: str) -> int | None:
@@ -156,11 +191,16 @@ def _committed(shared: DataRepo) -> int | None:
     """The committed Global layer's format; ``None`` when it is no layer.
 
     With none committed it is 0, unless the history holds the carry or a move: a deletion committed after either is
-    the owner's.
+    the owner's. A git command that fails makes it ``None`` too, so nothing is carried on an unknown state.
     """
     rel = shared.global_path.relative_to(shared.root).as_posix()
-    committed = shared.git("show", f"HEAD:{rel}")
-    if committed.returncode == 0:
-        return _format(committed.stdout)
+    listed = shared.git("ls-tree", "--name-only", "HEAD", "--", rel)
+    if listed.returncode:
+        return None  # unknown: nothing is carried on it
+    if listed.stdout.strip():
+        committed = shared.git("show", f"HEAD:{rel}")
+        return _format(committed.stdout) if committed.returncode == 0 else None
     found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", f"--grep={MOVED}")
-    return CARRIED_FORMAT if found.returncode == 0 and found.stdout.strip() else 0
+    if found.returncode:
+        return None
+    return CARRIED_FORMAT if found.stdout.strip() else 0

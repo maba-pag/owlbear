@@ -159,6 +159,7 @@ class GlobalLayer(WideLayer):
     visible: bool | None = None
     curator_threshold: int | None = Field(default=None, ge=50, le=100)  # percent: the curator decides alone at or above
     machine: MachineValues | None = None  # every machine's settings, each machine may set its own
+    machine_moved: bool | None = None  # a machine's settings were moved in once (2026-10-23); no machine copies again
 
 
 class MachineLayer(WideLayer):

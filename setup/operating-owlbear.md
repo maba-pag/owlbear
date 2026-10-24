@@ -102,7 +102,10 @@ trigger, sessions at once) work the same way: each machine follows the global on
 edit there with the Global layer chosen, unless it sets its own. With one unset in both, the
 machine does not update by itself, curate automatically or start agent sessions. The first start
 after this change moves the values in `machine.json` into the global settings where those have
-none, then clears them, so every machine follows Global.
+none, then clears them, so every machine follows Global; a later machine copies nothing. Until
+that is published (the shared repository is offline, or Global has an edit you have not saved),
+**Settings → This machine** says why, the machine keeps its own values, and the next start tries
+again.
 
 ## Upgrading OwlBear
 

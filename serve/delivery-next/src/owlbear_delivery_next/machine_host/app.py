@@ -277,6 +277,7 @@ def machine_values(machine: Machine) -> dict[str, Any]:
         "paused": machine.paused, "resumed_at": saved.resumed_at, "login_item": login,
         "settings": saved.settings.model_dump(), "settings_rev": registry.revision(saved.settings),
         "resolved": machine_settings.current(saved.settings).model_dump(),  # with Global's, unset ones listed
+        "pending": saved.settings_pending,  # why moving this machine's settings into Global is not done yet
         "legacy": [str(p) for p in versions.legacy()],
     }  # fmt: skip
 

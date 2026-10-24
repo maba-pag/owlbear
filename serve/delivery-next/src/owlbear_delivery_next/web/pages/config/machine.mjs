@@ -96,8 +96,11 @@ function machineControls() {
       its own (choose This project or This machine above to see this machine's). Save them with the global
       defaults.</p-text>${keys.map(sharedControl)}`;
   }
-  const notice = state.machine.resolved?.notice;
+  const notice = state.machine.resolved?.notice, pending = state.machine.pending;
   return html`${notice ? html`<p-text id="machine-notice" size="xs" color="error">${notice}</p-text>` : nothing}
+    ${pending ? html`<p-text id="machine-pending" color="error">Moving this machine's settings into the global ones
+      is not done: ${pending}. OwlBear tries again at its next start (<code>owlbear restart</code>); until then
+      this machine keeps its own values.</p-text>` : nothing}
     ${keys.map(ownControl)}
     <div class="row">${button("Save machine settings", saveMachine, { busy: state.machineSaving,
       disabled: !state.machineDraft })}</div>`;
