@@ -12,7 +12,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.state_store.decision_archive import WHOLE
+from owlbear_delivery_next.state_store.decision_archive import WHOLE, whole
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator, Sequence
@@ -44,9 +44,9 @@ def entry(decision: Decision, *, replaced: bool = False) -> str:
     names = ", ".join([decision.id, *decision.aliases])
     note = " [this Change's brief replaces it]" if replaced else ""
     statement = " ".join(decision.statement.split())
-    whole = " ".join(decision.rationale.partition(WHOLE)[2].split())
-    if statement.endswith("\u2026") and whole.startswith(statement[:-1].rstrip()):
-        statement += f" ({WHOLE}{whole})"  # the archive cut a long answer and kept it whole in the rationale
+    expanded = " ".join(whole(decision).split())
+    if expanded != statement:
+        statement += f" ({WHOLE}{expanded})"  # the archive cut a long answer and kept it whole in the rationale
     return f"- {names} ({decision.scope}, {decision.origin}): {' '.join(decision.title.split())}: {statement}{note}"
 
 

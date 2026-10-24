@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.runtimes import step_decisions
 from owlbear_delivery_next.state_store import decision_store, read_backs
+from owlbear_delivery_next.state_store.decision_archive import whole
 from owlbear_delivery_next.workflow_steps import before, check, engine, pick, prepare, sessions
 
 if TYPE_CHECKING:
@@ -98,7 +99,7 @@ def _picked(c: Change) -> set[str] | None:
 
 
 def _said(d: Decision) -> Said:
-    return Said(title=d.title, statement=d.statement)
+    return Said(title=d.title, statement=whole(d))
 
 
 def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline:
@@ -165,7 +166,7 @@ def differences(seen: Snapshot, pinned_at: DecisionBaseline, now: DecisionBaseli
         elif old is None:
             lines.append(f"- new: {key} {title}: {_quoted(now.said[key].statement)}")
         else:
-            lines.append(f"- changed: {key} {title}: was {was}; now {_quoted(entry.decision.statement)}")
+            lines.append(f"- changed: {key} {title}: was {was}; now {_quoted(whole(entry.decision))}")
     return lines
 
 

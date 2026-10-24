@@ -281,3 +281,13 @@ def _said(text: str, origin: str, at: datetime, note: str) -> dict[str, Any]:
 def _short(text: str) -> str:
     text = " ".join(text.split())
     return text if len(text) <= TITLE else text[: TITLE - 1].rstrip() + "\u2026"
+
+
+def whole(decision: Decision) -> str:
+    """The binding wording, including the full answer an archived cut statement keeps in its rationale."""
+    statement = " ".join(decision.statement.split())
+    kept = decision.rationale.partition(WHOLE)[2].strip()
+    expanded, stub = " ".join(kept.split()), statement[:-1].rstrip()
+    if statement.endswith("\u2026") and len(expanded) > len(stub) and expanded.startswith(stub):
+        return kept
+    return decision.statement

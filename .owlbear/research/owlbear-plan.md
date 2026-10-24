@@ -239,6 +239,12 @@ its bounded teardown before propagating the original error or cancellation.
 Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
 stays unconfirmed, so a known orphan cannot authorize a successor.
 
+Decision lookup (#616) fails closed for any unresolved in-scope authority, even
+beside valid rules: worker and lead-chat replies name the unresolved rules and
+reasons without a governing answer or picker run. The full binding wording kept
+by a shortened archived statement reaches shaping and boundary picks, lookup
+replies, pinned baselines and step input through one shared representation.
+
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.
 Pending-status failures are reported instead of reading as fully published;
