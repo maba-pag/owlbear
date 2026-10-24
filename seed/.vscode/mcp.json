@@ -2,18 +2,18 @@
   "servers": {
     "owlbear-knowledge": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_knowledge_mcp"]
+      "command": "${userHome}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "serve", "knowledge"]
     },
     "owlbear-memory": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_memory_mcp"]
+      "command": "${userHome}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "serve", "memory"]
     },
     "owlbear-browser": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_browser_mcp"],
+      "command": "${userHome}/.owlbear/runtime/.venv/bin/python",
+      "args": ["-m", "owlbear_delivery_next", "serve", "browser"],
       "env": {
         "BROWSER_ALLOWED_DOMAINS": "*"
       }
