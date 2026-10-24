@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.models import (
     ItemRef,
     MergeConsent,
     Names,
+    Option,
     PersonCheck,
     Plan,
     Question,
@@ -39,6 +40,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import gh_queue, merge_offer
+from owlbear_delivery_next.github import provider as provider_contract
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     Check,
@@ -198,6 +200,160 @@ def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
     plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])])
     names = Names(branch="owlbear/c1", target="main", worktree=worktree, pr=7)
     return Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=kind), names=names, **fields)
+
+
+class RetiringGh(FakeGh):
+    """A real local branch; the optional argument models the old unsafe transport for baseline proof only."""
+
+    def __init__(self, current, remote):
+        super().__init__(current)
+        self.remote, self.deleted = remote, []
+        self.commit_checks = (Check(name="test", status="completed", conclusion="success"),)
+
+    def delete_branch(self, _repository, branch, expected_head=None):
+        ref = f"refs/heads/{branch}"
+        current = git(self.remote, "for-each-ref", "--format=%(objectname)", ref)
+        if expected_head is None:
+            git(self.remote, "update-ref", "-d", ref)
+            self.deleted.append(branch)
+            return None
+        if not current:
+            return provider_contract.BranchDelete(provider_contract.BranchState.GONE)
+        if current != expected_head:
+            return provider_contract.BranchDelete(provider_contract.BranchState.MOVED, current)
+        git(self.remote, "update-ref", "-d", ref, expected_head)
+        self.deleted.append(branch)
+        return provider_contract.BranchDelete(provider_contract.BranchState.DELETED)
+
+
+@pytest.mark.parametrize("move_again", [False, True])
+@pytest.mark.parametrize("mode", [None, "abandon"])
+def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(
+    clone,
+    tmp_path,
+    move_again,
+    mode,
+):
+    remote = tmp_path / "origin.git"
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
+    moved = git(clone, "rev-parse", "HEAD")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    c.step.mode = mode
+    cx.store.write(cx.lock, c)
+
+    c, result = cleanup.run(cx, c)
+
+    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == moved
+    assert result.exit == Exit.ASK
+    assert gh.deleted == []
+    c = loop.apply(c, result, NOW)
+    cx.store.write(cx.lock, c)
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    cx = ctx(tmp_path, gh, p, repo=clone)
+    c = cx.store.read("c1")
+    question = loop.open_question(c)
+    assert "keep" in {option.id for option in question.options}
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    assert c.step.mode == mode
+    if move_again:
+        git(clone, "commit", "-q", "--allow-empty", "-m", "still newer work")
+        moved = git(clone, "rev-parse", "HEAD")
+        git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    _, finished = cleanup.run(cx, c)
+    assert finished.exit == (Exit.ASK if move_again else Exit.DONE)
+    if move_again:
+        assert finished.question.cause != question.cause
+    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == moved
+    assert gh.deleted == []
+
+
+def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(clone, tmp_path):
+    remote = tmp_path / "origin.git"
+    git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    cx.store.write(cx.lock, c)
+    c, result = cleanup.run(cx, c)
+    c = loop.apply(c, result, NOW)
+    question = loop.open_question(c)
+    c, ready = loop.schedule(c, [IntentItem(at=NOW, intent="resume")], NOW)
+    assert ready is None  # Resume cannot waive a still-unanswered cleanup question.
+
+    c, ready = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="pause")], NOW)
+
+    assert ready is None
+    cx.store.write(cx.lock, c)
+    fresh = ctx(tmp_path, gh, p, repo=clone)
+    c = fresh.store.read("c1")
+    git(remote, "update-ref", "-d", "refs/heads/owlbear/c1")
+    assert loop.next_step(c, NOW + timedelta(seconds=1)) is None
+    c, ready = loop.schedule(c, [IntentItem(at=NOW, intent="resume")], NOW + timedelta(seconds=2))
+    assert ready is not None
+    _, result = cleanup.run(fresh, c)
+    assert result.exit is Exit.DONE
+
+
+@pytest.mark.parametrize("surface", ["list", "detail"])
+def test_a_paused_cleanup_decision_is_hidden_in_the_changes_api_until_resume(tmp_path, surface):
+    store = Store(tmp_path)
+    c = change(StepKind.CLEANUP)
+    q = Question(
+        step=StepKind.CLEANUP,
+        text="Keep the moved remote branch?",
+        cause="state:cleanup:branch-moved",
+        options=[
+            Option(id="keep", label="Keep", next="retry"),
+            Option(id="pause", label="Pause", next="pause"),
+        ],
+    )
+    c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=q), NOW)
+    store.write(Lock("c1"), c)
+    client = TestClient(api.create_app(store, "tok", scheduler.Host(store, tmp_path)), base_url="http://127.0.0.1",
+                        headers={"authorization": "Bearer tok"})  # fmt: skip
+    path = "/api/next/changes" if surface == "list" else "/api/next/changes/c1"
+
+    def read():
+        response = client.get(path)
+        assert response.status_code == 200
+        return response.json()[0] if surface == "list" else response.json()
+
+    assert read()["question"]
+    c, ready = loop.schedule(c, [AnswerItem(at=NOW, question=loop.open_question(c).id, option="pause")], NOW)
+    assert ready is None
+    store.write(Lock("c1"), c)
+    shown = read()
+    assert not shown.get("question")
+    if surface == "detail":
+        assert shown["paused"] is True
+    else:
+        assert "paused by you" in shown["line"]
+    assert c.intent.paused_at is not None
+    assert loop.next_step(store.read("c1"), NOW) is None
+    resumed = client.post("/api/next/changes/c1/intent", json={"intent": "resume"})
+    assert resumed.status_code == 200
+    c, _ = store.fold(Lock("c1"), "c1", NOW + timedelta(seconds=1))
+    assert c.intent.paused_at is None
+    assert loop.next_step(c, NOW + timedelta(seconds=1)) is not None
+
+
+def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path):
+    remote = tmp_path / "origin.git"
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    cx.store.write(cx.lock, c)
+    _, result = cleanup.run(cx, c)
+
+    assert result.exit == Exit.DONE
+    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == ""
 
 
 # Consent voiding on head change

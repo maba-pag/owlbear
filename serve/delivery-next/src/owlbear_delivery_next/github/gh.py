@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from urllib.parse import quote, urlencode
 
@@ -14,6 +15,8 @@ from owlbear_delivery_next.github.gh_client import API_VERSION, Json, Missing, i
 from owlbear_delivery_next.github.gh_conversation import Conversation
 from owlbear_delivery_next.github.gh_queue import Queue
 from owlbear_delivery_next.github.provider import (
+    BranchDelete,
+    BranchState,
     FailureCode,
     MergeMethod,
     MergeRequest,
@@ -43,6 +46,14 @@ _READY = """mutation Ready($id: ID!) {
 _MERGED = """query Merged($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { mergeCommit { oid } } }
 }"""
+_BRANCH = """query Branch($owner: String!, $name: String!, $ref: String!) {
+  repository(owner: $owner, name: $name) { id ref(qualifiedName: $ref) { target { oid } } }
+}"""
+_RETIRE = """mutation Retire($input: UpdateRefsInput!) {
+  updateRefs(input: $input) { __typename }
+}"""
+_OID = re.compile(r"[0-9a-f]{40}")
+_UNCERTAIN = frozenset({FailureCode.RESPONSE_UNKNOWN, FailureCode.TIMEOUT})
 
 
 def _pull(repository: str, p: Json, operation: str) -> PullRequest:
@@ -238,7 +249,66 @@ class GhProvider(Queue, Conversation):
             return MergeResult(status=MergeStatus.MERGED, sha=payload["sha"], message=message)
         return MergeResult(status=MergeStatus.UNKNOWN, message=message)
 
-    def delete_branch(self, repository: str, branch: str) -> None:
-        """Delete one remote branch; an already absent branch is fine."""
-        endpoint = f"{repo(repository)}/git/refs/heads/{quote(branch, safe='/')}"
-        self._api("delete_branch", "DELETE", endpoint, write=True, absent={_NOT_FOUND, 422}, raw=True)
+    def delete_branch(self, repository: str, branch: str, expected_head: str) -> BranchDelete:
+        """Atomically delete only the merged head; reconcile a lost response without deleting a newer head."""
+        op, ref = "delete_branch", f"refs/heads/{branch}"
+        if not branch or not _OID.fullmatch(expected_head):
+            raise ProviderError(FailureCode.INVALID_RESPONSE, op, "a branch and proven merged SHA are required",
+                                retry_safe=False)  # fmt: skip
+        node, head = self._branch_head(repository, ref)
+        if head is None:
+            return BranchDelete(BranchState.GONE)
+        if head != expected_head:
+            return BranchDelete(BranchState.MOVED, head)
+        update = {
+            "repositoryId": node,
+            "refUpdates": [{"name": ref, "beforeOid": expected_head, "afterOid": "0" * 40, "force": False}],
+        }
+        try:
+            answer = self._graphql(op, _RETIRE, {"input": update}, write=True)
+            if (
+                isinstance(answer, dict)
+                and not answer.get("errors")
+                and isinstance(data := answer.get("data"), dict)
+                and isinstance(payload := data.get("updateRefs"), dict)
+                and payload.get("__typename") == "UpdateRefsPayload"
+            ):
+                return BranchDelete(BranchState.DELETED)
+            failed = ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "the ref update was not acknowledged",
+                                   retry_safe=False)  # fmt: skip
+        except ProviderError as exc:
+            failed = exc
+        after_node, after = self._branch_head(repository, ref)
+        if after_node != node:
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "repository identity changed during ref retirement",
+                                retry_safe=False) from failed  # fmt: skip
+        if after is None:
+            return BranchDelete(BranchState.GONE)
+        if after != expected_head:
+            return BranchDelete(BranchState.MOVED, after)
+        if failed.code in _UNCERTAIN:
+            raise ProviderError(failed.code, op, "the merged head is still present; guarded retirement may retry",
+                                retry_safe=True) from failed  # fmt: skip
+        raise failed
+
+    def _branch_head(self, repository: str, ref: str) -> tuple[str, str | None]:
+        owner, name = repository.split("/", 1)
+        found = self._graphql("delete_branch", _BRANCH, {"owner": owner, "name": name, "ref": ref})
+        if not isinstance(found, dict) or found.get("errors"):
+            invalid("delete_branch", "GitHub could not read the repository reference")
+        try:
+            node = found["data"]["repository"]
+            if node is None:
+                raise ProviderError(FailureCode.NOT_FOUND, "delete_branch", "repository is not readable",
+                                    retry_safe=False)  # fmt: skip
+            ident, target = node["id"], node["ref"]
+            if not isinstance(ident, str) or not ident.strip():
+                invalid("delete_branch", "GitHub omitted the repository identity")
+            if target is None:
+                return ident, None
+            head = target["target"]["oid"]
+            if not isinstance(head, str) or not _OID.fullmatch(head):
+                invalid("delete_branch", "GitHub omitted the branch's commit identity")
+        except (KeyError, TypeError) as exc:
+            invalid("delete_branch", "GitHub returned an invalid repository reference", exc)
+        return ident, head

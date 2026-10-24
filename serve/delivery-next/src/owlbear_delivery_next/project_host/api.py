@@ -332,7 +332,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         o, prof = c.outcome, store.read_profile() or Profile()
         events = store.events(slug)
         merge = offer(c, events)
-        q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
+        q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
         shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | {"ordinary": loop.ordinary(q)}
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"

@@ -34,6 +34,19 @@ def enter(c: Change, kind: StepKind, task: str | None = None) -> None:
     go(c, kind, keep, caller if kind == StepKind.INTEGRATE else final)
 
 
+def resume(c: Change) -> None:
+    """Resume a paused Change, releasing a pause chosen on cleanup's own decision without waiving an open gate."""
+    q = next((q for q in c.questions if c.outcome and q.id == c.outcome.question), None)
+    if (
+        c.step.kind == StepKind.CLEANUP
+        and q
+        and q.answer
+        and any(o.id == q.answer.option and o.next == "pause" for o in q.options)
+    ):
+        c.outcome = None
+    c.intent.paused_at, c.intent.pause_reason = None, ""
+
+
 def subject_of(c: Change, task: Task) -> str:
     """The task a review repair descends from, or ``final`` for a final-review repair (TD-208).
 
