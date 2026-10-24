@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `f3e34aa459` after #605 and this pull request, decisions to TD-469, item 5's
+> **Date:** 2026-10-24, status at `main` `8e3c45f839` after #628 and this pull request, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -220,6 +220,10 @@ and verification status; #605 was not part of that baseline. The decision-page s
 repair (#607) binds displayed decisions, confirmations and mutations to the same
 captured scope and rejects superseded responses. The other packages remain open
 until their own merged-code acceptance evidence is verified.
+
+Change creation (#609) allocates handles, slugs and new records across processes in
+one transaction. Maintenance test-review setup reserves its identity before Git
+work, retains it after failed setup, and publishes only into its own reservation.
 
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |
