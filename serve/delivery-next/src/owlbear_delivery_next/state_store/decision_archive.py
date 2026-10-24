@@ -134,6 +134,7 @@ def _history(root: Path | None, project: str, c: Change, stem: str) -> tuple[Cha
     try:
         files = {p.stem: p for p in (root / project / "decisions").iterdir() if p.suffix == ".md"}
     except FileNotFoundError:
+        root.stat()  # An unavailable checkout is not proof that historical authority never existed.
         files = {}
     saved = {p.id for p in c.decisions_published if p.saved}
     parents = {d.id: d.replaces for d, _ in _approved(c)}
