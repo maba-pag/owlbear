@@ -373,6 +373,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "asks_merge": profile.value(prof, profile.ASK) == "yes",
                 "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
                 "paused": c.intent.paused_at is not None,
+                "finished": c.finished_at is not None,
                 "merge": merge,
                 "consent": c.consent.model_dump(mode="json") if c.consent else None,
                 "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
