@@ -88,14 +88,21 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
     p = add(http, clone(tmp_path / "a"))
     sent = []
 
+    class Answer(io.BytesIO):
+        status = 200
+
     class Opener:
         def open(self, request, **_kw):
-            sent.append(request.full_url)
+            sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
+            if request.full_url.endswith("/chat/contract"):
+                return Answer(b'{"supported": [1]}')
             raise OSError
 
     monkeypatch.setattr(chat_client, "_LOCAL", Opener())
-    chat_client.Chat(Path(p["path"])).call("GET", "/changes")
-    assert sent == [f"http://127.0.0.1:9/p/{p['id']}/api/next/changes"]
+    chat = chat_client.workspace(Path(p["path"]))
+    chat.call("GET", "/changes")
+    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "1"),
+                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "1")]  # fmt: skip
 
 
 class Answer(io.BytesIO):
@@ -165,7 +172,7 @@ def test_only_the_registry_makes_a_clone_a_project_never_an_id_and_folder_left_b
 
 
 def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing_written(
-    tmp_path, shared_repo, monkeypatch
+    tmp_path, shared_repo, monkeypatch, http, machine
 ):
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
     other = origin(clone(tmp_path / "other"), "https://github.com/acme/other.git")
@@ -177,7 +184,9 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
             chat_tool("show_status")]  # fmt: skip
 
     assert said == [{"error": chat_client.NOT_OWLBEAR.format(repo=other)}] * 4
-    monkeypatch.setattr(chat_client, "updated", lambda _rec: True)  # a self-update since this chat's server started
+    monkeypatch.setattr(chat_client.OwlBear, "record", lambda _self: machine.record)
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(http))
+    monkeypatch.setattr(chat_client.chat_contract, "CHAT", 0)  # a contract this host does not serve
     own = origin(clone(tmp_path / "owlbear"), "https://github.com/maba-pag/owlbear.git")
     monkeypatch.setitem(mcp_server._STATE, "chat", chat_client.workspace(own))  # noqa: SLF001
     stale = chat_tool("find_decisions")["error"]
@@ -185,7 +194,11 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
         assert "new Copilot-runtime chat" in message
         assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
         assert "Restart Local Agent Host" not in message
-    assert stale.startswith("OwlBear updated: this chat's owlbear-delivery MCP server still runs the old version")
+    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1)"
+    assert stale.startswith(unsupported)  # the chat asks the host's contracts first
+    chat = mcp_server._STATE["chat"]  # noqa: SLF001
+    chat.checked = (machine.record.pid, machine.record.started_at.isoformat())  # past the contract check
+    assert chat_tool("find_decisions")["error"].startswith(unsupported)  # the host refuses before any route runs
     assert DataRepo(shared_repo[0]).git("rev-parse", "HEAD").stdout == head
     assert not (other / ".git" / "owlbear-delivery").exists()
 

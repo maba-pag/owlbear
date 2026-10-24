@@ -200,7 +200,7 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
     shaping.host.paused = lambda: True  # TD-287: the challenge the owner's chat asks for runs while paused
     shaping.verdicts += [verdict("AC-1")]
     chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.store = shaping.store
+    chat.repo, chat.home = Path(), shaping.store.root
 
     def call(method, path, body=None):
         r = shaping.http.request(method, f"/api/next{path}", json=body)
@@ -218,7 +218,7 @@ def test_a_challenge_asked_before_a_stop_when_idle_is_recorded_and_the_chat_retu
     shaping.save()
     shaping.host.draining = lambda: True
     chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.store = shaping.store
+    chat.repo, chat.home = Path(), shaping.store.root
     chat.call = lambda method, path, body=None: (
         200,
         shaping.http.request(method, f"/api/next{path}", json=body).json(),

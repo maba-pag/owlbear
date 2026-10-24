@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import psutil
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Record, StepKind, Waiting
@@ -81,8 +81,8 @@ def running(store: Store) -> HostRecord | None:
     return running_at(store.root)
 
 
-def running_at(root: Path) -> HostRecord | None:
-    """The record of the host whose ``host.lock`` and ``host.json`` are in *root*, if one holds the lock."""
+def running_at[R: BaseModel](root: Path, model: type[R] = HostRecord) -> R | None:
+    """The record of the host whose ``host.lock`` and ``host.json`` are in *root* as *model*, if one holds the lock."""
     try:
         fd = os.open(root / "host.lock", os.O_RDONLY | os.O_NOFOLLOW)
     except FileNotFoundError:
@@ -91,8 +91,10 @@ def running_at(root: Path) -> HostRecord | None:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
     except BlockingIOError:
         with contextlib.suppress(OSError, ValidationError):
-            return HostRecord.model_validate_json((root / "host.json").read_text())
-        return HostRecord(url="(starting)", token="", pid=0, started_at=datetime.now(UTC), code="")
+            return model.model_validate_json((root / "host.json").read_text())
+        return model.model_validate(
+            {"url": "(starting)", "token": "", "pid": 0, "started_at": datetime.now(UTC), "code": ""}
+        )
     finally:
         os.close(fd)
     return None

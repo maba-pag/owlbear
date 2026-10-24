@@ -1,26 +1,28 @@
-"""The chat tools' client of the running host, one per workspace, with a read-only status fallback (D4 §3.1, §3.3).
+"""The chat tools' client of the running host, one per workspace (D4 §3.1), under chat contract 1.
 
 The workspace is told before any state is made: a registered project's clone gets every tool; OwlBear's own
 repository, by its identity, gets OwlBear's decisions through the machine host (TD-435, TD-450); any other folder
-is no OwlBear project, and every tool says so.
+is no OwlBear project, and every tool says so. The client reads and writes no state itself: everything goes through
+the host over HTTP, naming the chat contract, so a chat keeps its tools while OwlBear updates beneath it
+(D-01M5Q5GKHX7BJTXPEW2MHGS9E0). With the host down, the tools say so; nothing is read from the state then (D4 §3.3's
+read-only status fallback is gone, since an older chat server could misread what a newer host wrote).
 """
 
 from __future__ import annotations
 
+import http.client
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_contracts import pick_tools
-from owlbear_delivery_next.change_flow import brief_rounds, loop, picks
+from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
-from owlbear_delivery_next.project_host import answers, api, brief_routes, host
+from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
-from owlbear_delivery_next.state_store.store import Store, StoreError
+from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,13 +45,21 @@ NOT_OWLBEAR = "{repo} is not an OwlBear project: add its clone on the Changes pa
 NO_CHANGES = "OwlBear's own workspace has no Changes: only the decision tools work here"
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 OK = 200
-UPDATED = "OwlBear updated: this chat's owlbear-delivery MCP server still runs the old version; " + RESTART
+OLDER_HOST = (
+    "the running OwlBear host is older than this chat's owlbear-delivery server (it has no chat contract "
+    f"{chat_contract.CHAT}): let `owlbear update` finish, or run `owlbear restart`, then call again"
+)
+UNKNOWN = (
+    "the host's answer was lost, so it may have done it: check with show_status or find_decisions before trying again"
+)
 STALE = 409
+LOST = 0  # a write the host may have done: its outcome is unknown, never "not done"
+CUT = (OSError, ValueError, http.client.HTTPException)  # no answer, or one cut short or not JSON
 
 
-def updated(rec: host.HostRecord | None) -> bool:
-    """Whether OwlBear runs other code than this chat server loaded: the host's, or the files under it changed."""
-    return host.stale(rec) or codebase.identity() != codebase.CURRENT
+def done(code: int) -> bool | None:
+    """Whether a write was done: None when its answer was lost, so it may have been."""
+    return None if code == LOST else code == OK
 
 
 WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
@@ -61,89 +71,115 @@ SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "re
 
 
 class Chat:
-    """The chat tools of one clone; every write goes through the running host."""
+    """The chat tools of one clone; every read and write goes through the running host."""
 
     prefix = ""  # where its decisions are, under the host's API
     not_running = NOT_RUNNING
+    checked: tuple[int, str] | None = None  # the host (pid, start) whose chat contract was checked
 
-    def __init__(self, repo: Path) -> None:
-        self.repo, self.store = repo, Store.open(repo)
+    def __init__(self, repo: Path, home: Path) -> None:
+        self.repo, self.home = repo, home  # the project's home: its host's record, never its state
 
-    def record(self) -> host.HostRecord | None:
+    def record(self) -> chat_contract.HostFound | None:
         """The running host this workspace's tools call."""
-        return host.running(self.store)
+        return host.running_at(self.home, chat_contract.HostFound)
 
     def down(self) -> str:
         """Why the tools reach no host: Delivery is not running, or it runs without this project."""
-        machine = host.running_at(local_home.root())
+        machine = host.running_at(local_home.root(), chat_contract.HostFound)
         return (NOT_SERVED if machine and machine.token else self.not_running).format(repo=self.repo)
 
     def call(self, method: str, path: str, body: object = None, timeout: float = 15.0) -> tuple[int, Any]:
-        """One request to the host with its token; 503 when it is not running."""
+        """One request to the host with its token, naming the chat contract; 503 when it is not running.
+
+        A request the host may have received but did not answer is 0: its effect is unknown, never "not done".
+        """
         rec = self.record()
-        if updated(rec):  # it reads no state either: a newer version may have written it
-            return STALE, {"error": UPDATED}
         if rec is None or not rec.token:
             return 503, {"error": self.down()}
-        headers = {"Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "chat"}
-        data = None if body is None else json.dumps(body).encode()
+        if (refused := self.contract(rec)) is not None:
+            return refused[0], {"error": refused[1]}
         url = f"{rec.url}{f'p/{rec.project}/' if rec.project else ''}api/next{self.prefix}{path}"  # TD-242
+        return self.send(rec, method, url, body, timeout)
+
+    def send(
+        self, rec: chat_contract.HostFound, method: str, url: str, body: object, timeout: float
+    ) -> tuple[int, Any]:
+        """One request to *url* at the host of *rec*, with this chat's headers."""
+        headers = {
+            "Authorization": f"Bearer {rec.token}", "Content-Type": "application/json", "X-OwlBear-Use": "chat",
+            chat_contract.HEADER: str(chat_contract.CHAT),
+        }  # fmt: skip
+        data = None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(url, data=data, method=method, headers=headers)  # noqa: S310 - loopback
         try:
             with _LOCAL.open(request, timeout=timeout) as response:
                 return response.status, json.load(response)
         except urllib.error.HTTPError as exc:
             try:
-                return exc.code, json.load(exc)
-            except ValueError:
-                return exc.code, {"error": str(exc.reason)}
-        except (urllib.error.URLError, OSError) as exc:
-            return 503, {"error": f"{self.not_running.format(repo=self.repo)} ({exc})"}
+                out = json.load(exc)
+            except CUT:
+                out = {"error": str(exc.reason)}
+            if out.get("contract") == "unsupported":  # refused before any route ran
+                return STALE, {"error": out.get("detail") or chat_contract.UNSUPPORTED.format(sent="?", served="?")}
+            if method != "GET" and exc.code >= 500 and exc.code != 503:  # noqa: PLR2004 - it failed partway, maybe
+                return LOST, {"error": f"{UNKNOWN} ({out.get('detail') or out.get('error')})"}
+            return exc.code, out
+        except CUT as exc:  # URLError included; a refused connection never reached the host
+            refused = isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, ConnectionRefusedError)
+            if not refused and method != "GET":  # a timeout, a reset or a cut answer after sending: maybe done
+                return LOST, {"error": f"{UNKNOWN} ({exc})"}
+            why = self.not_running.format(repo=self.repo) if refused else "the host did not answer; call again"
+            return 503, {"error": f"{why} ({exc})"}
+
+    def contract(self, rec: chat_contract.HostFound) -> tuple[int, str] | None:
+        """Why the host of *rec* cannot serve this chat's contract now, with its code; None when it can.
+
+        A host from before the contract ignores the header, so its support is asked first, before any write; once a
+        host said yes it is not asked again. A host that does not answer (503) is asked again on the next call.
+        """
+        if self.checked == (rec.pid, rec.started_at.isoformat()):
+            return None
+        code, out = self.send(rec, "GET", f"{rec.url}{chat_contract.CAPABILITY.lstrip('/')}", None, 15.0)
+        if code == 404:  # noqa: PLR2004 - the route does not exist there
+            return STALE, OLDER_HOST
+        if code != OK:
+            return code, out.get("error") or out.get("detail") or f"the host answered {code}"
+        if chat_contract.CHAT not in (served := out.get("supported", [])):
+            listed = ", ".join(map(str, served)) or "none"
+            return STALE, chat_contract.UNSUPPORTED.format(sent=chat_contract.CHAT, served=listed)
+        self.checked = (rec.pid, rec.started_at.isoformat())
+        return None
 
     def save_brief(self, fields: dict[str, Any], path: str = "/briefs") -> dict[str, Any]:
         """Create or revise a brief draft; the host returns the handle or one error per field."""
         code, out = self.call("POST", path, fields)
-        return {"saved": code == OK, **out}
+        return {"saved": done(code), **out}
 
     def show_status(self, change: str = "") -> dict[str, Any]:
-        """Every Change (or one) with its line, next action and open question; read from the state when down."""
+        """Every Change (or one) with its line, next action and open question, as the host reports them."""
         code, rows = self.call("GET", "/changes")
-        if code == STALE:
-            return {"running": False, "error": UPDATED}
-        rec = host.running(self.store)
-        out: dict[str, Any] = {"running": code == OK, "changes_page": api.link(rec) if code == OK else None}
-        if code == OK and rec:
-            out["readiness"] = "checking" if rec.ready is None else rec.ready or "ok"
         if code != OK:
-            now = datetime.now(UTC)
-            rows = [api.summary(self.store, s, host.activity(self.store, s, None), now) for s in self.store.slugs()]
-            out["message"] = self.down()
+            return {
+                "running": False,
+                "changes_page": None,
+                "changes": [],
+                "message": rows.get("error") or rows.get("detail"),
+            }
+        rec = self.record()
+        out: dict[str, Any] = {"running": True, "changes_page": api.link(rec)}
+        if rec:
+            out["readiness"] = "checking" if rec.ready is None else rec.ready or "ok"
         out["changes"] = [r for r in rows if not change or r.get("handle") == change]
         if not change:
             out["changes"] = [{k: v for k, v in r.items() if k not in PAGE_ONLY} for r in out["changes"]]
         if change and not out["changes"]:
             out["error"] = f"change: {change} is not a Change here - leave it empty to list all"
-        elif change and (brief := self.brief(out["changes"][0].get("slug", ""))):
-            out["brief"] = brief
+        elif change:
+            found, brief = self.call("GET", f"/chat/brief/{urllib.parse.quote(out['changes'][0].get('slug', ''))}")
+            if found == OK:
+                out["brief"] = brief
         return out
-
-    def brief(self, slug: str) -> dict[str, Any] | None:
-        """The Change's current brief as the chat saved it, decisions and non-goals included, to read back."""
-        try:
-            change = self.store.read(slug)
-        except StoreError:
-            return None
-        b = change.brief
-        out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals"})
-        out["decisions"] = [d.model_dump(mode="json", exclude={"id", "replaces"}) for d in b.decisions]  # as drafted
-        owner = set(b.specified)  # sent back as saved, so a resave keeps who stated what
-        states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]
-        checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in change.checks]
-        out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
-        proposed = [i.model_dump(include={"criterion", "old", "new", "why"}) | {"verdict": a.verdict or "not judged"}
-                    for a in change.amendments for i in a.items]  # fmt: skip
-        out |= {"challenge": brief_rounds.status(change)}  # TD-221: the brief challenge's findings by ID
-        return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}
 
     def challenge_brief(
         self, change: str, version: int, rejected: list[dict[str, str]], *, retry_pick: bool = False
@@ -152,47 +188,43 @@ class Chat:
         body = {"change": change, "version": version, "rejected": rejected, "retry_pick": retry_pick}
         code, out = self.call("POST", "/briefs/challenge", body)
         if code != OK:
-            return {"requested": False, **out}
+            return {"requested": done(code), **out}
         if out.get("paused"):  # TD-283: recorded now, judged once the owner resumes Delivery
             return {"requested": True, "running": False, "next": PAUSED}
-        slug, attempt = brief_routes.slug_of(self.store, change) or "", out.get("attempt", 0)
-        deadline = time.monotonic() + WAIT
-        while time.monotonic() < deadline:
-            try:
-                c = self.store.read(slug)
-            except StoreError:
+        slug, attempt = urllib.parse.quote(out.get("slug", "")), out.get("attempt", 0)
+        deadline, why = time.monotonic() + WAIT, {}
+        while slug and time.monotonic() < deadline:  # the request is never sent again; only its outcome is read
+            code, now = self.call("GET", f"/chat/challenge/{slug}?version={version}&attempt={attempt}")
+            if code == OK and not now.get("running"):
+                return {"requested": True, **{k: v for k, v in now.items() if k != "running"}}
+            if code not in {OK, 503}:  # 503: the host is handing over, so read again; anything else ends the wait
+                why = {"error": now.get("error") or now.get("detail")}
                 break
-            if not (brief_rounds.running(c, version, attempt) or picks.owed(c)):
-                return {"requested": True, **brief_rounds.status(c)}
             _pause(POLL)
         return {
             "requested": True,
             "running": True,
             "next": "the challenge still runs; call show_status with the handle",
-        }
+        } | why
 
     def answer_question(self, question: str, option: str, text: str, said: dict[str, Any]) -> dict[str, Any]:
         """Answer one worker question with its class (*said*); recovery decisions are refused with the page (T6)."""
-        if updated(host.running(self.store)):
-            return {"answered": False, "error": UPDATED}
         handle, _, qid = question.partition(".")
-        for slug in self.store.slugs():
-            try:
-                c = self.store.read(slug)
-            except StoreError:
-                continue
-            if c.handle == handle:
-                break
-        else:
+        code, rows = self.call("GET", "/changes")
+        if code != OK:
+            return {"answered": False, "error": rows.get("error") or rows.get("detail")}
+        slug = next((r.get("slug") for r in rows if r.get("handle") == handle), None)
+        if slug is None or not qid:
             return {"answered": False, "error": f"question: {question} is not a question id; show_status gives them"}
-        q = next((q for q in c.questions if q.id == qid and q.answer is None), None)
-        if q is None:
-            return {"answered": False, "error": f"question: {question} is not open"}
-        if not loop.ordinary(q):
-            return {"answered": False, "error": answers.T6, "changes_page": api.link(host.running(self.store))}
         body = {"question": qid, "option": option or None, "text": text, "channel": "chat"} | said
-        code, out = self.call("POST", f"/changes/{slug}/answers", body)
-        return {"answered": code == OK, **out}
+        code, out = self.call("POST", f"/changes/{urllib.parse.quote(slug)}/answers", body)
+        if code == 403 and out.get("detail") == answers.T6:  # noqa: PLR2004 - a recovery decision, the page's
+            return {"answered": False, "error": answers.T6, "changes_page": api.link(self.record())}
+        if code == 409 and str(out.get("detail", "")).endswith("is not open"):  # noqa: PLR2004
+            return {"answered": False, "error": f"question: {question} is not open"}
+        if code != OK:
+            return {"answered": done(code), "error": out.get("detail") or out.get("error"), **out}
+        return {"answered": True, **out}
 
     def page(self) -> str | None:
         """The Decisions page with its token, where the owner looks decisions up and changes them."""
@@ -220,7 +252,7 @@ class Chat:
         """One decision write through the host: its receipts, or why it was refused."""
         code, out = self.call("POST", path, body)
         if code != OK:
-            return {"saved": False, "error": out.get("detail") or out.get("error"), "decisions_page": self.page()}
+            return {"saved": done(code), "error": out.get("detail") or out.get("error"), "decisions_page": self.page()}
         return out | {"decisions_page": self.page()}
 
 
@@ -231,11 +263,11 @@ class OwlBear(Chat):
     not_running = OWLBEAR_DOWN
 
     def __init__(self, repo: Path) -> None:  # no store: opening one makes Delivery state for this clone
-        self.repo = repo
+        super().__init__(repo, local_home.root())
 
-    def record(self) -> host.HostRecord | None:
+    def record(self) -> chat_contract.HostFound | None:
         """The machine host's record."""
-        return host.running_at(local_home.root())
+        return host.running_at(local_home.root(), chat_contract.HostFound)
 
     def save_brief(self, *_args: object, **_kwargs: object) -> dict[str, Any]:  # type: ignore[override]
         """No Change tool works here."""
@@ -266,7 +298,7 @@ def workspace(repo: Path) -> Chat | Closed:
     if pid is not None:
         listed = project_home.registered(pid)
         if listed or (listed is None and project_home.home(pid).is_dir()):  # an unreadable registry: its folder tells
-            return Chat(repo)
+            return Chat(repo, project_home.home(pid))
     if data_repo.identity(repo) == data_repo.remote_identity(codebase.URL):
         return OwlBear(repo)
     return Closed(repo)

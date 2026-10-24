@@ -20,10 +20,11 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
+from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import control, machine_settings, registry, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
-from owlbear_delivery_next.project_host import api, decision_routes, impact_routes, pages
+from owlbear_delivery_next.project_host import api, chat_routes, decision_routes, impact_routes, pages
 from owlbear_delivery_next.state_store import decision_impact
 
 if TYPE_CHECKING:
@@ -123,6 +124,8 @@ def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIAp
     async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if not _local(request.headers.get("host", "")):  # DNS rebinding
             return JSONResponse({"detail": "host not allowed"}, status_code=403)
+        if not chat_contract.served(sent := request.headers.get(chat_contract.HEADER)):  # before any route runs
+            return JSONResponse(chat_contract.refusal(sent or ""), status_code=409)
         return await call_next(request)
 
     def auth(request: Request) -> None:
@@ -189,6 +192,7 @@ def _routes(machine: Machine) -> APIRouter:
 
     owlbear = decision_routes.router(_shared, lambda: decision_routes.OWLBEAR, lambda: _places(machine))
     routes.include_router(owlbear, prefix="/owlbear", dependencies=[Depends(fenced)])  # chats in OwlBear's workspace
+    routes.add_api_route("/chat/contract", chat_routes.contract, methods=["GET"])  # what a chat server asks first
     _machine_routes(routes, machine)
     _curation_routes(routes, machine)
     _update_routes(routes, machine)

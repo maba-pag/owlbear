@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts import chat_contract, tool_schema, tools
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
@@ -154,7 +154,7 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
         assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
-    read_back = Chat(repo).show_status("c1")["brief"]
+    read_back = hosted(store).show_status("c1")["brief"]
     assert read_back["decisions"] == [{**d, "scope": "change"} for d in DECIDED]  # what the shaper sends again
     assert (read_back["non_goals"], read_back["version"]) == (["No translations"], 2)
     bad = {**body, "decisions": [{"question": "Which?", "answer": "this", "origin": "guessed"}]}
@@ -197,7 +197,7 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     assert c.get(f"/api/next/changes/{slug}").json()["brief"]["specified"] == owned
     assert c.post("/api/next/briefs", json={**body, "change": "c1"}).status_code == 200  # keeps the visual check
     assert store.read(slug).brief.specified == owned
-    read_back = Chat(repo).show_status("c1")["brief"]  # what a resumed chat resaves
+    read_back = hosted(Store.open(repo)).show_status("c1")["brief"]  # what a resumed chat resaves
     assert read_back["specified"] == ["AC-2"]
     assert read_back["states"] == [{"name": "home", "owner": True}, {"name": "copy", "owner": False}]
     assert read_back["person_checks"] == [{"name": "feel", "owner": True}, {"name": "copy", "owner": False}]
@@ -246,6 +246,19 @@ def test_plan_scopes_stay_within_the_approved_brief():
     assert tools.check_plan(plan, tools.Worktree("a", "a"), ["make"], []) == []
 
 
+def hosted(store: Store) -> Chat:
+    """The chat tools of the clone of *store*, calling its host in-process as a chat does (chat contract 1)."""
+    http, chat = client(store), Chat(Path(), store.root)
+
+    def call(method: str, path: str, body: object = None) -> tuple[int, object]:
+        r = http.request(method, f"/api/next{path}", json=body, headers={chat_contract.HEADER: str(chat_contract.CHAT)})
+        out = r.json()
+        return r.status_code, out
+
+    chat.call = call
+    return chat
+
+
 def test_chat_refuses_recovery_decisions(repo):
     store = Store.open(repo)
     closed = [Option(id="abandon", label="Abandon", next="abandon"), Option(id="reopen", label="Reopen")]
@@ -260,15 +273,17 @@ def test_chat_refuses_recovery_decisions(repo):
     )
     with store.lock("greet") as lock:
         store.write(lock, change)
-    chat = Chat(repo)
+    chat = hosted(store)
     refused = chat.answer_question("c1.q2", "abandon", "", {"kind": "event"})
     assert (refused["answered"], refused["error"].startswith(answers.T6)) == (False, True)
     down = {"answered": False, "error": NOT_RUNNING.format(repo=repo)}
-    assert chat.answer_question("c1.q1", "o1", "", {"kind": "event"}) == down
+    assert Chat(repo, store.root).answer_question("c1.q1", "o1", "", {"kind": "event"}) == down
+    unknown = chat.answer_question("c9.q1", "o1", "", {"kind": "event"})
+    assert unknown == {"answered": False, "error": "question: c9.q1 is not a question id; show_status gives them"}
     with store.db.read() as db:
         assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
     status = chat.show_status("c1")
-    assert (status["running"], status["changes"][0]["question"]["answer_in"]) == (False, "changes-page")
+    assert (status["running"], status["changes"][0]["question"]["answer_in"]) == (True, "changes-page")
     assert {"progress", "spend", "tool_use"} <= set(status["changes"][0])
     [listed] = chat.show_status()["changes"]  # every Change: the page's details stay out
     assert (listed["question"]["id"], {"progress", "spend", "tool_use", "pullback"} & set(listed)) == ("c1.q2", set())
@@ -280,11 +295,12 @@ def test_chat_refuses_recovery_decisions(repo):
 
 def test_a_host_running_without_this_project_says_so_and_owlbears_clone_is_never_told_to_add_itself(repo, monkeypatch):
     machine = HostRecord(url="http://127.0.0.1:9/", token="t", pid=9, started_at=NOW, code=CURRENT)  # noqa: S106
-    monkeypatch.setattr(chat_client.host, "running_at", lambda root: machine if root == local_home.root() else None)
-    chat, served = Chat(repo), NOT_SERVED.format(repo=repo)
+    found = {local_home.root(): machine}
+    monkeypatch.setattr(chat_client.host, "running_at", lambda root, _m=None: found.get(root))
+    chat, served = Chat(repo, repo / "home"), NOT_SERVED.format(repo=repo)
     assert chat.find_decisions("x", "all", include_retired=False) == {"found": False, "error": served}
     assert chat.show_status()["message"] == served
-    monkeypatch.setattr(chat_client.host, "running_at", lambda _root: None)
+    monkeypatch.setattr(chat_client.host, "running_at", lambda _root, _m=None: None)
     assert chat.show_status()["message"] == NOT_RUNNING.format(repo=repo)
     own = OwlBear(repo).find_decisions("x", "all", include_retired=False)
     assert (own["error"], "add this project" in own["error"]) == (OWLBEAR_DOWN, False)

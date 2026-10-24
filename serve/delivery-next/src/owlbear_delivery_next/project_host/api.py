@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import evidence
+from owlbear_delivery_next.change_contracts import chat_contract, evidence
 from owlbear_delivery_next.change_contracts.inbox import (
     CheckResult,
     ConsentItem,
@@ -35,6 +35,7 @@ from owlbear_delivery_next.project_host import (
     answers,
     backlog_routes,
     brief_routes,
+    chat_routes,
     config_routes,
     decision_routes,
     memory_routes,
@@ -213,6 +214,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if request.headers.get("host", "").rsplit(":", 1)[0] not in LOCAL_HOSTS:  # DNS rebinding
             return JSONResponse({"detail": "host not allowed"}, status_code=403)
+        if not chat_contract.served(sent := request.headers.get(chat_contract.HEADER)):  # before any route runs
+            return JSONResponse(chat_contract.refusal(sent or ""), status_code=409)
         return await call_next(request)
 
     def auth(request: Request) -> None:
@@ -444,6 +447,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
+    router.include_router(chat_routes.router(read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))

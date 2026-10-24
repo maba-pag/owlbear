@@ -385,7 +385,7 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
 ):
     rule, general = picking.put(make()), picking.put(fonts(scope=Scope.GLOBAL, project=""))
     chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.repo, chat.store = picking.repo, picking.store
+    chat.repo, chat.home = picking.repo, picking.store.root
     opener = Loopback(picking.http)
     monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
     monkeypatch.setattr(chat_client, "_LOCAL", opener)
@@ -396,7 +396,7 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
 
     assert [(d["id"], d["scope"]) for d in found["decisions"]] == [(general.id, "global")]
     assert failed["failed"].startswith("its session ended error")
-    assert opener.waited == [pick_tools.WAIT] * 2
+    assert opener.waited == [15.0, pick_tools.WAIT, pick_tools.WAIT]  # the host's chat contract is asked once first
     assert pick_tools.WAIT > 15  # the chat's other calls wait 15 seconds
     message = picking.pickers()[0].message
     assert all(x in message for x in (QUESTION, rule.id, general.id))
@@ -434,7 +434,7 @@ def test_a_lead_chats_lookup_in_owlbears_workspace_goes_through_the_machine_host
         machine.stop_all()
 
     assert [d["id"] for d in found["decisions"]] == [own.id]
-    assert opener.waited == [pick_tools.WAIT]
+    assert opener.waited == [15.0, pick_tools.WAIT]  # the host's chat contract first
     [cfg] = told
     assert (cfg.role, own.id in cfg.message, general.id in cfg.message, project.id in cfg.message) == (
         tools.PICKER, True, True, False
