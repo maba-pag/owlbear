@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.models import VISUAL
@@ -70,6 +70,14 @@ class DecisionDraft(Args):
         description="project: a lasting rule for later Changes in this project; change: only this Change",
         examples=["project"],
     )
+
+    @field_validator("question", "answer")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            msg = "must not be blank"
+            raise ValueError(msg)
+        return value
 
 
 class Replacement(Args):

@@ -10,6 +10,7 @@ import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, validate_repo, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop, status
 from owlbear_delivery_next.change_flow.status import Activity
@@ -443,3 +444,62 @@ def test_a_project_successor_of_the_changes_own_decision_is_published_without_a_
     assert (read(kept).scope, read(kept).state) == (Scope.CHANGE, State.WITHDRAWN)
     assert read(root / rel(later.id)) == rule
     assert validate_repo(root) == []
+
+
+def reviewed_legacy_decisions(picking, field: str, value: str, count: int) -> Change:
+    """Load an older stored draft before challenge, bypassing only today's draft-input validator."""
+    drafts = [LASTING | {"question": f"Where do notes live {i}?"} for i in range(count)]
+    assert picking.save(decisions=drafts)["version"] == 1
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        c.brief.decisions[-1] = c.brief.decisions[-1].model_copy(update={field: value})
+        picking.store.write(lock, c)
+    assert picking.ask(1).status_code == 200
+    picking.picks.append(pick_tools.PickResult(picked=[]))
+    picking.verdicts.append(tools.ReviewResult(verdict="pass", findings=[]))
+    picking.step()
+    picking.picks.clear()
+    return picking.change()
+
+
+@pytest.mark.parametrize(("field", "value"), [("question", "   "), ("answer", "\t\n")])
+@pytest.mark.parametrize("count", [1, 2])
+def test_unbuildable_stored_project_decisions_refuse_the_entire_approval(picking, shared_repo, field, value, count):
+    root, remote = shared_repo
+    c = reviewed_legacy_decisions(picking, field, value, count)
+    before = commits(remote)
+    head = git(root, "rev-parse", "HEAD")
+
+    said = picking.approve(1)
+
+    assert said.status_code == 409
+    a = picking.approved()
+    assert (a.brief.approved_version, a.step.kind, a.decisions_published) == (None, StepKind.SHAPE, [])
+    assert (commits(remote), git(root, "rev-parse", "HEAD")) == (before, head)
+    assert not list((root / PROJECT / "decisions").glob("*.md"))
+    assert c.brief.decisions[-1].id in said.json()["detail"]
+
+
+def test_project_decisions_without_shared_storage_cannot_be_acknowledged_as_published(picking, monkeypatch):
+    shape(picking, 1, LASTING)
+    monkeypatch.setattr(picking.store, "shared", None)
+    with picking.store.lock(picking.slug) as lock:
+        before = picking.store.read(picking.slug)
+        why = decision_publication.approve(picking.store, lock, before, BriefApproval(at=AT, version=1))
+
+    assert why
+    assert picking.store.read(picking.slug).brief.approved_version is None
+    assert picking.store.read(picking.slug).decisions_published == []
+
+
+def test_genuinely_legacy_idless_project_decisions_keep_their_compatibility_path(picking, monkeypatch):
+    shape(picking, 1, LASTING)
+    monkeypatch.setattr(picking.store, "shared", None)
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        c.brief.decisions[0] = c.brief.decisions[0].model_copy(update={"id": ""})
+        picking.store.write(lock, c)
+        assert decision_publication.approve(picking.store, lock, c, BriefApproval(at=AT, version=1)) == ""
+
+    assert picking.store.read(picking.slug).brief.approved_version == 1
+    assert picking.store.read(picking.slug).decisions_published == []

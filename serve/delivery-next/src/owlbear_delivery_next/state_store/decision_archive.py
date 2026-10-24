@@ -65,8 +65,8 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
 def lasting(project: str, c: Change, stem: str) -> list[Decision]:
     """The approved brief's project decisions as its approval puts them in force, retired ones by a later version.
 
-    Built from the approvals alone, so a retry or a restart builds the same files. One without an id (a Change older
-    than TD-419) or that is not a valid decision is left to the archive, which reports it.
+    Built from the approvals alone, so a retry or a restart builds the same files. Genuinely legacy ID-less decisions
+    remain for the archive. An invalid ID-bearing project decision refuses the whole approval, never a subset.
     """
     ids = {d.id for d, _ in _approved(c) if d.id}
     found = []
@@ -74,8 +74,9 @@ def lasting(project: str, c: Change, stem: str) -> list[Decision]:
         if fields["scope"] is Scope.PROJECT and fields["id"] in ids:
             try:
                 found.append(Decision.model_validate(fields))
-            except ValidationError:
-                continue
+            except ValidationError as exc:
+                msg = f"decision {fields['id']} of {c.slug} cannot be published: {' '.join(str(exc).split())}"[:240]
+                raise DecisionError(msg) from exc
     return found
 
 

@@ -45,6 +45,7 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
 
     The approval is written with its saves planned before Git is touched, then their receipts: an interruption
     between them leaves an approved Change whose next step saves them again (`resume`), files being rebuilt the same.
+    An unbuildable project decision refuses the approval before any Change or decision is written.
     A save that is refused or fails writes *c* back as it was.
     """
     after = loop.fold(c, [approval], approval.at)
@@ -87,9 +88,12 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
 
 def _items(store: Store, c: Change) -> list[Item]:
     """What the approved *c*'s project decisions save: rebuilt from its approvals, so the same on every retry."""
-    if store.shared is None:
-        return []
     found = decision_archive.lasting(store.name, c, decisions_gate.stem(c))
+    if store.shared is None:
+        if found:
+            msg = "no shared data repository is available to publish the brief's project decisions"
+            raise DecisionError(msg)
+        return []
     return [item for d in found if (item := _item(store.shared.root, c, d)) is not None]
 
 
