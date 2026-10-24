@@ -54,6 +54,7 @@ def maintenance(tmp_path, pds):
                     state["reads"] += 1
                     if state.get("hold_next"):
                         state["hold_next"], state["held"] = False, route
+                        page.evaluate("window.maintenanceReadHeld = true")
                         return
                     code = state["curation"]
                     data = {
@@ -212,6 +213,7 @@ def test_an_older_failed_refresh_cannot_replace_a_newer_success(maintenance):
     before = state["reads"]
     state["hold_next"] = True
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    page.wait_for_function("window.maintenanceReadHeld === true")
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     marker = f"Read generation {before + 2}"
     expect(page.locator("#curation")).to_contain_text(marker)

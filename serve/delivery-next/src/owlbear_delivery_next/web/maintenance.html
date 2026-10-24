@@ -279,11 +279,16 @@ function show() {
 
 async function refresh() {
   const generation = ++state.reading;
-  const [overview, tests, curation] = await Promise.allSettled([
+  // Keep the established read order, collecting failures without losing another section's data.
+  const [overview] = await Promise.allSettled([
     Promise.all([
       call("/maintenance", { timeout: 15000 }), call("/maintenance/subagents", { timeout: 15000 }),
     ]),
+  ]);
+  const [tests] = await Promise.allSettled([
     call("/maintenance/test-review", { timeout: 30000 }),
+  ]);
+  const [curation] = await Promise.allSettled([
     call("/curation", { machine: true, timeout: 15000 }),
   ]);
   if (generation !== state.reading) return;
