@@ -298,9 +298,19 @@ SDK first, since window steps stay paused; the window feed comes with their reop
    on/off switch (D-01M5MWY8P1SXVJ7QVY7RA1PA8D). The settings exist; nothing reads them until the watcher does.
 2. SDK feed: the runner's event callback normalised into one event (kind, tool, arguments, agent, parent, time),
    subagents included by `agent_id`; attempt identity stored before work; one watcher per step.
+   Built in W1a (2026-10-24), report-only: each `tool.execution_start`, enriched by the `permission.requested` events
+   of the same call in either order; the agent is the event's (or the permission request's) agent id, else the
+   subagent its parent call launched, else "main" for a started call under no parent, else "unknown"; one watcher per Change-owned session (its runner step, rounds and judges), on by the master switch;
+   reports in the database's `watch` table, written by a bounded writer thread that the session's teardown drains,
+   shown as the Change's "Watcher" list with a count on its row. The attempt identity waits for slice 4.
 3. Watcher policy: write targets, the TD-46 never-judged classes, the clearly inappropriate classes with precedence
    over broad roots, transfer evidence, Git in the owned worktree, `Brief.outside`; test-first per class, including
    symlinks, `cd` chains and other Changes' paths. Everything else outside is reported unjudged.
+   W1a: only the write paths the runtime names (file tools, write requests, file edits), judged by root: the own
+   worktree, then this Change's state, are inside; other Changes' worktrees and state and the main checkout are
+   reported even under an exempt root; then the TD-46 roots are inside. Every shell call is reported as unresolved
+   unless the runtime proves each of its commands read-only without a redirection. W1b next: shell effect
+   classification, rule verdicts and the rule-verdict switch.
 4. Stop latch through `sdk_teardown`, late-stop override, persistent watcher-stop count, the second-stop question
    to the owner with the approved-path record (§3.3; applying amendments to the brief waits for item 16).
 5. Model judge for the rest, with the chosen model: stop if dangerous or inappropriate for the task, else
