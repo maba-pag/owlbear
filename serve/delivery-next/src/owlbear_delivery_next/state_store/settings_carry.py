@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.carried import MACHINE, filled
 from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer, MachineValues
-from owlbear_delivery_next.state_store.store import StoreError, parse_layer, read_layer, update_layer
+from owlbear_delivery_next.state_store.store import read_layer, update_layer
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -54,27 +54,36 @@ def move(shared: DataRepo, local: MachineValues) -> str:
 
     Global's values stay; where it has none, this machine's own *local* values go in, else the built-in ones. Once a
     move is committed, a later machine copies nothing: it follows Global, whose values the owner may have cleared
-    since (the owner, 2026-10-23: move all, once). An unreadable or invalid Global layer raises ``StoreError`` before
-    anything changes, so the caller keeps its own values and tries again at the next start.
+    since (the owner, 2026-10-23: move all, once). It runs only on a fetched, current checkout whose Global has no
+    uncommitted edit, and a move that cannot commit and push is undone at once, so nothing is left half done: the
+    caller keeps its own values and tries again at the next start. An invalid Global layer raises ``StoreError``.
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
+    rel = shared.global_path.relative_to(shared.root).as_posix()
     with shared.locked():
-        if why := _synced(shared, until):
+        if why := _ready(shared, rel, until):
             return why
         glob = read_layer(shared.global_path, GlobalLayer)
+        before = shared.git("rev-parse", "HEAD", until=until).stdout.strip()
         if not _moved(shared):
             have = (glob.machine or MachineValues()).model_dump(exclude_none=True)
             values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
             update_layer(shared.global_path, GlobalLayer, lambda g: g.model_copy(update={"machine": values}))
-        if failed := shared.publish(shared.global_path, MOVED, until):  # also what an earlier start left unpublished
-            return failed
-        if _moved(shared):
-            return ""
-        rel = shared.global_path.relative_to(shared.root).as_posix()  # Global had them all: the move is recorded
-        made = shared.git("commit", "-q", "--allow-empty", "-m", MOVED, "--", rel, until=until)
-        if made.returncode:
-            return f"the move was not recorded: {made.stderr.strip()[:200]}"
-        return shared.publish(shared.global_path, MOVED, until)
+        failed = shared.commit(shared.global_path, MOVED, until)
+        if not failed and not _moved(shared):  # Global had them all: an empty commit records the move
+            made = shared.git("commit", "-q", "--allow-empty", "-m", MOVED, "--", rel, until=until)
+            failed = f"the move was not recorded: {made.stderr.strip()[:200]}" if made.returncode else ""
+        if not failed and _upstream(shared, until):
+            sent = shared.git("push", "-q", until=until)  # also what was unpushed before it
+            failed = f"the move was not pushed: {sent.stderr.strip()[:200]}" if sent.returncode else ""
+        if failed:
+            shared.git("reset", "-q", "--keep", before, until=until)
+            shared.git("checkout", "-q", before, "--", rel, until=until)  # its file and index as they were
+        return failed
+
+
+def _upstream(shared: DataRepo, until: float) -> bool:
+    return shared.git("rev-parse", "--abbrev-ref", "@{upstream}", until=until).returncode == 0
 
 
 def _moved(shared: DataRepo, ref: str = "HEAD") -> bool:
@@ -83,37 +92,16 @@ def _moved(shared: DataRepo, ref: str = "HEAD") -> bool:
     return found.returncode == 0 and bool(found.stdout.strip())
 
 
-def _synced(shared: DataRepo, until: float) -> str:
-    """Fetch, and take in another machine's move: a checkout from before it never moves again; why not, else ''.
-
-    A shared repository without an upstream has nothing to fetch.
-    """
-    if shared.git("rev-parse", "--abbrev-ref", "@{upstream}", until=until).returncode:
+def _ready(shared: DataRepo, rel: str, until: float) -> str:
+    """Why a move waits: an uncommitted edit of Global, or a checkout that cannot be brought current; else ''."""
+    if shared.git("status", "--porcelain", "--", rel, until=until).stdout.strip():
+        return "the global settings have an uncommitted edit; the move waits until it is saved or undone"
+    if not _upstream(shared, until):
         return ""
     if (fetched := shared.git("fetch", "-q", until=until)).returncode:
         return f"the shared repository could not be fetched: {fetched.stderr.strip()[:200]}"
-    if _moved(shared, "@{upstream}") and not _moved(shared):
-        _unpend(shared)
-        return shared.pull(until)
-    return ""
-
-
-def _unpend(shared: DataRepo) -> None:
-    """Drop this machine's own uncommitted move before taking in another's.
-
-    That is a Global layer that differs from the committed one in its machine settings alone. Any other uncommitted
-    edit is the owner's: kept, so the pull waits.
-    """
-    rel = shared.global_path.relative_to(shared.root).as_posix()
-    committed = shared.git("show", f"HEAD:{rel}")
-    if committed.returncode:
-        return
-    try:
-        here, there = read_layer(shared.global_path, GlobalLayer), parse_layer(committed.stdout, GlobalLayer)
-    except StoreError:
-        return
-    if here != there and here.model_copy(update={"machine": None}) == there.model_copy(update={"machine": None}):
-        shared.git("checkout", "--", rel)
+    behind = shared.git("rev-list", "--count", "HEAD..@{upstream}", until=until).stdout.strip()
+    return shared.pull(until) if behind not in {"", "0"} else ""
 
 
 def _format(text: str) -> int | None:
