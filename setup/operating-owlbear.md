@@ -119,8 +119,10 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   updates when idle or while paused.
 - **Run updates now** on a paused page, or `owlbear update`, updates at once.
 - After an update, the pages say once which version OwlBear now runs. A chat whose Delivery server
-  is older answers `OwlBear updated: …`: reload the VS Code window, or in the Copilot runtime run
-  **Restart Local Agent Host**; a window reload does not restart that runtime's tool servers.
+  is older answers `OwlBear updated: …`: start a new Copilot-runtime chat, or focus that chat and use
+  **MCP: List Servers** → `owlbear-delivery` → **Stop Server**, then **Start Server**. Neither the
+  agent host nor the window needs restarting; a window reload does not restart that runtime's tool
+  servers.
 
 The agent workspace follows these updates: setup writes its paths through `~/.owlbear/runtime`, so
 they stay valid. Rerun setup from the project root after an update to refresh copied files:

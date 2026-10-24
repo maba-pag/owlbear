@@ -8,6 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]  # the package, whose data files sit at its root
 URL = "https://github.com/maba-pag/owlbear.git"  # OwlBear's own repository: its versions and its own decisions
 UNREADABLE = "unreadable: "
+# How a chat's OwlBear MCP server gets fresh code in VS Code's agent host, where Restart Server is refused
+STOP = "MCP: List Servers → owlbear-delivery → Stop Server"
+STOP_START = f"{STOP}, then Start Server"
 SHIPPED = (
     "**/*.py",
     "design_pack.json",
