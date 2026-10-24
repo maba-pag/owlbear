@@ -96,7 +96,9 @@ ENGINE: dict[StepKind, engine.Step] = {
 _out = sessions.out
 
 
-def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
+def _agent(  # noqa: PLR0915 - durable session lifecycle orchestration
+    store: Store, lock: Lock, change: Change, repo: Path
+) -> None:
     now, s, slug = datetime.now(UTC), change.step, change.slug
     profile = store.read_profile() or Profile()
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
@@ -104,11 +106,14 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     role = roles.chosen(settings := store.settings(), session := curation_build.LABEL if curated else s.kind)
+    if stopped := overlap.starting(change, task):
+        store.write(lock, loop.apply(change, stopped, now))
+        return
     review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
-    start = worktree.head(path) if s.kind == StepKind.INTEGRATE else None
+    start = worktree.head(path) if s.kind == StepKind.INTEGRATE else since
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
     others = _planning(store, lock, slug, path) if s.kind == StepKind.PLAN else {}
 

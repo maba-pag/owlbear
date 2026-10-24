@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.failures import cause_key
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Overlap, StepKind
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Overlap, StepKind, Stop
+from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.worktree import GIT, git
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import engine
@@ -20,8 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from pathlib import Path
 
-    from owlbear_delivery_next.change_contracts.models import Change, Plan
-    from owlbear_delivery_next.change_flow.loop import StepResult
+    from owlbear_delivery_next.change_contracts.models import Change, Plan, Task
     from owlbear_delivery_next.state_store.store import Store
 
 RECENT = timedelta(days=14)  # a merged Change's scope still explains a collision this long
@@ -98,22 +98,32 @@ def record(c: Change, result: StepResult, others: Mapping[str, Iterable[str]], r
         c.overlaps = found(result.plan, others, generated(repo))
 
 
-def _quiet(path: Path, *args: str) -> str | None:
+def _quiet(path: Path, *args: str, missing: bool = False) -> str | None:
     run = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
         [GIT, *args], cwd=path, capture_output=True, text=True, check=False, timeout=60
     )
-    return run.stdout.strip() if run.returncode == 0 else None
+    if run.returncode == 0:
+        return run.stdout.strip()
+    if missing and run.returncode == 1:
+        return None
+    run.check_returncode()
+    return None
 
 
 def _sides(path: Path, since: str | None) -> tuple[str, str] | None:
     """Both sides of the unfinished update, else of the latest merge commit since *since* (or of HEAD)."""
-    if theirs := _quiet(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"):
+    if theirs := _quiet(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD", missing=True):
         return "HEAD", theirs
     merge = _quiet(
         path, "rev-list", "--merges", "--max-count=1", *([f"{since}..HEAD"] if since else ["--no-walk", "HEAD"])
     )
-    parents = _quiet(path, "rev-parse", f"{merge}^1", f"{merge}^2") if merge else None
-    return tuple(parents.split()) if parents else None  # type: ignore[return-value]
+    if not merge:
+        return None
+    parents = (_quiet(path, "rev-parse", f"{merge}^1", f"{merge}^2") or "").split()
+    if len(parents) != 2:  # noqa: PLR2004 - a target integration has two merge parents
+        msg = "Git did not return both integration parents"
+        raise ValueError(msg)
+    return parents[0], parents[1]
 
 
 def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]:
@@ -122,11 +132,19 @@ def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]:
     if not sides:
         return []
     if resolved:
-        tree = [GIT, "merge-tree", "--write-tree", "--name-only", "--no-messages", *sides]
+        tree = [GIT, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", *sides]
         run = subprocess.run(tree, cwd=path, capture_output=True, text=True, check=False, timeout=60)  # noqa: S603
-        return list(itertools.takewhile(bool, run.stdout.splitlines()[1:])) if run.returncode == 1 else []
+        if run.returncode == 0:
+            return []
+        if run.returncode != 1:
+            run.check_returncode()
+        paths = list(itertools.takewhile(bool, run.stdout.split("\0")[1:]))
+        if not paths:
+            msg = "Git reported an integration conflict without identifying its paths"
+            raise ValueError(msg)
+        return paths
     base = git(path, "merge-base", *sides).strip()
-    ours, theirs = ({p for p in git(path, "diff", "--name-only", base, s).splitlines() if p} for s in sides)
+    ours, theirs = ({p for p in git(path, "diff", "--name-only", "-z", base, s).split("\0") if p} for s in sides)
     return sorted(ours & theirs)
 
 
@@ -140,7 +158,8 @@ def collision(
         for n in near
     ]
     hits = [(n, ps) for n, ps in hits if ps]
-    cause = cause_key(ErrorKind.CONFLICT, StepKind.INTEGRATE, ["collision", *(n.handle for n, _ in hits)])
+    subject = [c.step.task] if c.step.kind == StepKind.BUILD and c.step.task else []
+    cause = cause_key(ErrorKind.CONFLICT, c.step.kind, ["collision", *subject, *(n.handle for n, _ in hits)])
     if not hits or any(q.cause == cause and q.answer for q in c.questions):
         return None
     others = ", ".join(n.handle for n, _ in hits)
@@ -149,25 +168,55 @@ def collision(
     text = f"Updating with the target collided with {on}. This Change wants: {c.brief.outcome or '?'}. {wants}"
     text += f" The Builder said: {said}" if said else ""
     options = [
-        Option(id="keep", label="Keep this Change's behaviour", next=StepKind.INTEGRATE),
-        Option(id="adopt", label=f"Adopt {others}'s behaviour", next=StepKind.INTEGRATE),
+        Option(id="keep", label="Keep this Change's behaviour", next=c.step.kind),
+        Option(id="adopt", label=f"Adopt {others}'s behaviour", next=c.step.kind),
         Option(id="pause", label="Pause this Change", next="pause"),
     ]
-    return engine.ask(StepKind.INTEGRATE, text, cause, options)
+    return engine.ask(c.step.kind, text, cause, options)
+
+
+def integrates(c: Change) -> bool:
+    """Recognize the supported integration BUILD as well as the legacy INTEGRATE step."""
+    if c.step.kind == StepKind.INTEGRATE:
+        return True
+    tasks = c.plan.tasks if c.plan and c.step.kind == StepKind.BUILD else []
+    return any(task.id == c.step.task and task.origin == "integration" for task in tasks)
+
+
+def _unverified(reason: str) -> StepResult:
+    stop = Stop(
+        kind=ErrorKind.STATE, reason=reason, action="Restore Git access or redo the integration task",
+        resume="The integration collision check completes", at=datetime.now(UTC),
+    )  # fmt: skip
+    return StepResult(exit=Exit.STOP, reason=reason, stop=stop)
+
+
+def starting(c: Change, task: Task | None) -> StepResult | None:
+    """Refuse a resumed integration with no durable base instead of inventing a base from its current HEAD."""
+    resumed = c.step.session is not None or c.step.started_at is not None
+    if c.step.kind == StepKind.BUILD and task and task.origin == "integration" and task.base is None and resumed:
+        return _unverified("The resumed integration start head is missing, so collisions cannot be checked")
+    return None
 
 
 def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, str], result: StepResult) -> StepResult:
     """An integration's result, or the collision question when it touched another Change's scope.
 
-    *session* is the head before the session and how it ended. A resolved update collides on the paths the
+    *session* is the durable integration base and how the session ended. A resolved update collides on the paths the
     Builder resolved; one the Builder could not finish (it asked or reported a wrong premise, e.g. failing
     checks) collides on the paths both sides changed.
     """
     start, ending = session
     resolved = result.exit == Exit.DONE
-    if c.step.kind != StepKind.INTEGRATE or not (resolved or ending in {"ask", "premise"}):
+    if not integrates(c) or not (resolved or ending in {"ask", "premise"}):
         return result
+    if start is None:
+        return _unverified("The integration start head is missing, so collisions cannot be checked")
     said = "" if resolved else result.reason or (result.question.text if result.question else "")
     near = neighbours(store, c.slug, datetime.now(UTC))
-    hit = collision(c, collided(path, start, resolved=resolved), near, said, generated(path))
+    try:
+        paths = collided(path, start, resolved=resolved)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        return _unverified(f"Integration collisions could not be checked: {exc}"[:300])
+    hit = collision(c, paths, near, said, generated(path))
     return hit or result
