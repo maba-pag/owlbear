@@ -19,6 +19,7 @@ from owlbear_decisions import DecisionError, LinkType, Scope, State, check_write
 from owlbear_decisions.models import STATEMENT_LIMIT, Decision
 from owlbear_decisions.snapshot import read_repo
 from owlbear_decisions.validate import Entry, Layer, check
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_store
 
 if TYPE_CHECKING:
@@ -88,7 +89,7 @@ def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tu
     published = {p.id for p in c.decisions_published if p.saved}
     try:
         source, legacy = _history(root, project, c, stem)
-    except (DecisionError, ValidationError, OSError) as exc:
+    except (decision_store.DecisionsUnavailable, DecisionError, ValidationError, OSError) as exc:
         return [], [f"decision history of {c.slug}: {' '.join(str(exc).split())}"[:240]]
     for fields in [*_brief(project, source, stem, outcome), *_changed(project, c, stem, outcome)]:
         if fields["scope"] is Scope.PROJECT and fields["id"] in published:
@@ -129,21 +130,21 @@ def _invalid_history(project: str, c: Change, stem: str) -> list[dict[str, Any]]
 
 def _history(root: Path | None, project: str, c: Change, stem: str) -> tuple[Change, dict[str, Decision]]:
     invalid = _invalid_history(project, c, stem)
-    if not invalid or root is None:
+    if not invalid or root is None or not project:
         return c, {}
-    try:
-        files = {p.stem: p for p in (root / project / "decisions").iterdir() if p.suffix == ".md"}
-    except FileNotFoundError:
-        root.stat()  # An unavailable checkout is not proof that historical authority never existed.
-        files = {}
+    seen = decision_store.file_snapshot(DataRepo(root), project)
     saved = {p.id for p in c.decisions_published if p.saved}
     parents = {d.id: d.replaces for d, _ in _approved(c)}
     omitted: dict[str, str | None] = {}
     legacy: dict[str, Decision] = {}
     for fields in invalid:
         ident = fields["id"]
-        if path := files.get(ident):
-            current = read(path)
+        matches = [e.decision for e in seen.entries if e.decision.id == ident]
+        if len(matches) > 1:
+            msg = f"historical decision {ident} has ambiguous authoritative files"
+            raise decision_store.DecisionsUnavailable(msg, decision_store.READ)
+        if matches:
+            current = matches[0]
             if (current.id, current.scope, current.project) != (ident, Scope.PROJECT, project):
                 msg = f"historical decision {ident} does not match its authoritative file"
                 raise DecisionError(msg)

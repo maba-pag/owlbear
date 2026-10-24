@@ -592,13 +592,18 @@ def test_a_published_predecessor_retires_from_authority_without_rewriting_malfor
     assert change_record.save(picking.store, c, MERGED, AT + timedelta(days=1)) == ""
 
 
-def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_published(picking, shared_repo):
+@pytest.mark.parametrize("missing", ["checkout", "project", "decisions-link"])
+def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_published(picking, shared_repo, missing):
     root, _ = shared_repo
     reviewed_legacy_decisions(picking, "answer", "   ", 1)
     legacy_approved(picking, 1)
     reshape(picking)
     shape(picking, 2)
-    root.rename(root.with_name("temporarily-unavailable"))
+    if missing == "decisions-link":
+        (root / PROJECT / "decisions").symlink_to(root / "missing-decisions", target_is_directory=True)
+    else:
+        path = root if missing == "checkout" else root / PROJECT
+        path.rename(path.with_name("temporarily-unavailable"))
     with picking.store.lock(picking.slug) as lock:
         c = picking.store.read(picking.slug)
         why = decision_publication.approve(picking.store, lock, c, BriefApproval(at=AT, version=2))

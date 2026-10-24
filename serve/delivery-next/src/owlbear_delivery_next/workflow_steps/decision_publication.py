@@ -51,7 +51,7 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
     after = loop.fold(c, [approval], approval.at)
     try:
         items = _items(store, after)
-    except (DecisionError, OSError) as exc:
+    except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
         return f"{REFUSED}: {exc}"[:600]
     if items:
         planned = [_record(d, None, approval.at) for d, _ in items]
@@ -74,7 +74,7 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
         return c
     try:
         done, why = _published(store, c, _items(store, c))
-    except (DecisionError, OSError) as exc:
+    except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
         done, why = c, str(exc)
     if not why:
         store.write(lock, done)
