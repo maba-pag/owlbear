@@ -99,7 +99,8 @@ shared repository takes its global settings; one without starts with every setti
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
-edit there with the Global layer chosen, unless it sets its own. With one unset in both, the
+edit there with the Global layer chosen, unless it sets its own. Each start of OwlBear first
+brings the shared repository up to date, so a machine follows what another one saved. With one unset in both, the
 machine does not update by itself, curate automatically or start agent sessions. The first start
 after this change moves the values in `machine.json` into the global settings where those have
 none, then clears them, so every machine follows Global; a later machine copies nothing. Until

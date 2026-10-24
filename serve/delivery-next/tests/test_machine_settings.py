@@ -497,3 +497,21 @@ def test_a_move_a_settings_save_committed_counts_as_done_for_a_later_machine(sha
 
     assert read_layer(shared.global_path, GlobalLayer).machine is None
     assert _done()
+
+
+@pytest.mark.usefixtures("no_base")
+def test_every_start_takes_in_what_another_machine_changed_in_global(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    _local()
+    _carry(monkeypatch, first)  # carried and moved
+    second = _clone(tmp_path, shared_repo)
+    _carry(monkeypatch, second)  # this machine is done too
+    glob = read_layer(first.global_path, GlobalLayer)
+    cleared = glob.model_copy(update={"machine": glob.machine.model_copy(update={"sessions": None})})
+    _committed(first, cleared.model_dump(mode="json"))  # the owner clears it on the other machine
+
+    _carry(monkeypatch, second)  # this machine restarts
+
+    monkeypatch.setenv(data_repo.VIEW, str(second.root))
+    assert machine_settings.current().sessions is None  # no stale value from before
+    assert _done()
