@@ -1231,6 +1231,32 @@ def test_a_merge_that_landed_before_the_retry_is_read_back_and_nothing_is_pushed
     assert git(checkout.parents[1], "ls-remote", "origin", f"refs/heads/{pr.head_branch}") == ""  # not pushed again
 
 
+def test_the_final_merge_readback_after_a_lost_last_round_answer_carries_the_merged_head(
+    tmp_path,
+    checkout,
+    clone,
+    monkeypatch,
+):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    original, calls = fakes.github.request_merge, []
+
+    def uncertain(request):
+        calls.append(request)
+        if len(calls) == pack_publish.ROUNDS:
+            original(request)
+        return MergeResult(status=MergeStatus.UNKNOWN)
+
+    monkeypatch.setattr(fakes.github, "request_merge", uncertain)
+    state = run(job)
+    assert state["state"] == "passed", state["reason"]
+    assert len(calls) == pack_publish.ROUNDS
+    assert state["published"]["merged"] == fakes.github.prs[1]["sha"]
+    branch = state["published"]["branch"]
+    assert git(fakes.github.remote, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}") == ""
+    assert "delete" in fakes.github.calls
+
+
 @pytest.mark.parametrize("read_back", [False, True])
 @pytest.mark.parametrize("retirement", ["advanced", "error"])
 def test_pack_retirement_retains_other_work_and_durably_reports_incomplete_cleanup(  # noqa: PLR0913, PLR0917

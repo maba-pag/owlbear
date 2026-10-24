@@ -231,6 +231,8 @@ name-only deletion. Advanced or recreated heads stay intact; Change cleanup asks
 to keep that head and finish or pause, and pack updates log retained or uncertain
 cleanup without losing a proven merge. Lost acknowledgements are read back before
 any guarded retry.
+The cleanup decision's Pause holds across restart until Resume; Keep preserves
+abandonment mode. An ordinary pause still permits cleanup.
 
 SDK cleanup (#611) owns the client across startup, usage and proof, and completes
 its bounded teardown before propagating the original error or cancellation.

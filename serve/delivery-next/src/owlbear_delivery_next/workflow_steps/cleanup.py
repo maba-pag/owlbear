@@ -359,7 +359,7 @@ def _retire_branch(ctx: Ctx, c: Change, pr: PullRequest | None) -> StepResult | 
         text,
         cause,
         [
-            Option(id="keep", label="Keep the remote branch and finish cleanup", next=StepKind.CLEANUP),
+            Option(id="keep", label="Keep the remote branch and finish cleanup", next="retry"),
             Option(id="pause", label="Pause", next="pause"),
         ],
     )

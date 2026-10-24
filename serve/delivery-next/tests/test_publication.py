@@ -226,7 +226,13 @@ class RetiringGh(FakeGh):
 
 
 @pytest.mark.parametrize("move_again", [False, True])
-def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(clone, tmp_path, move_again):
+@pytest.mark.parametrize("mode", [None, "abandon"])
+def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(
+    clone,
+    tmp_path,
+    move_again,
+    mode,
+):
     remote = tmp_path / "origin.git"
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
@@ -235,6 +241,7 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
     p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    c.step.mode = mode
     cx.store.write(cx.lock, c)
 
     c, result = cleanup.run(cx, c)
@@ -250,6 +257,7 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
     question = loop.open_question(c)
     assert "keep" in {option.id for option in question.options}
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    assert c.step.mode == mode
     if move_again:
         git(clone, "commit", "-q", "--allow-empty", "-m", "still newer work")
         moved = git(clone, "rev-parse", "HEAD")
@@ -260,6 +268,34 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
         assert finished.question.cause != question.cause
     assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == moved
     assert gh.deleted == []
+
+
+def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(clone, tmp_path):
+    remote = tmp_path / "origin.git"
+    git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    cx.store.write(cx.lock, c)
+    c, result = cleanup.run(cx, c)
+    c = loop.apply(c, result, NOW)
+    question = loop.open_question(c)
+    c, ready = loop.schedule(c, [IntentItem(at=NOW, intent="resume")], NOW)
+    assert ready is None  # Resume cannot waive a still-unanswered cleanup question.
+
+    c, ready = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="pause")], NOW)
+
+    assert ready is None
+    cx.store.write(cx.lock, c)
+    fresh = ctx(tmp_path, gh, p, repo=clone)
+    c = fresh.store.read("c1")
+    git(remote, "update-ref", "-d", "refs/heads/owlbear/c1")
+    assert loop.next_step(c, NOW + timedelta(seconds=1)) is None
+    c, ready = loop.schedule(c, [IntentItem(at=NOW, intent="resume")], NOW + timedelta(seconds=2))
+    assert ready is not None
+    _, result = cleanup.run(fresh, c)
+    assert result.exit is Exit.DONE
 
 
 def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path):

@@ -184,7 +184,7 @@ def _merged(job: Job, gh: Provider, pub: Publication) -> tuple[str, str]:
         job.log(f"the merge of {pr.url} did not land ({done.status}); reading it back")  # a lost answer is read first
     pr = gh.read_pull_request(pub.repository, pub.number)
     if pr.merged:
-        return pr.merge_commit_sha or ""
+        return pr.merge_commit_sha or "", pr.head_sha
     msg = f"{pr.url} could not be merged after {ROUNDS} rounds of bringing it up to date; try again or discard"
     raise Held(msg)
 

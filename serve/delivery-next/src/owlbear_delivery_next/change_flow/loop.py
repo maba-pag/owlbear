@@ -52,7 +52,7 @@ from owlbear_delivery_next.change_flow import (
     rebuilds,
     round_flow,
 )
-from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved
+from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -267,7 +267,7 @@ def _intent(c: Change, item: IntentItem) -> None:
         case "pause":
             c.intent.paused_at, c.intent.pause_reason = item.at, item.text
         case "resume":
-            c.intent.paused_at, c.intent.pause_reason = None, ""
+            resume(c)
         case "abandon":
             c.intent.abandoned_at = item.at
         case "change":
@@ -303,7 +303,7 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
-    if gate:
+    if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
     if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
         ask(c, answer_kinds.question(c, q), now)
