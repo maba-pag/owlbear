@@ -241,8 +241,8 @@ its bounded teardown before propagating the original error or cancellation.
 Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
 stays unconfirmed, so a known orphan cannot authorize a successor.
 
-SDK result deadlines (#627) close acceptance before helpers and before and after
-validation, and bound active snapshot/reminder RPCs by the remaining result budget
+SDK result deadlines (#627) close acceptance before helpers and after validation
+and synchronous recording, and bound active snapshot/reminder RPCs by the remaining result budget
 without waiting for cancellation cooperation. Outstanding request tasks stay owned
 through teardown; pending requests cannot produce confirmed termination. The budget
 still starts at wait entry, without changing startup or cumulative-resume policy.

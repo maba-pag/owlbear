@@ -202,6 +202,39 @@ def test_helper_validation_cannot_spend_past_the_cutoff(tmp_path, clock, monkeyp
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("helper", [False, True])
+def test_recording_a_tool_cannot_waive_the_result_cutoff(tmp_path, clock, monkeypatch, helper):
+    async def scenario():
+        cfg = configured(tmp_path)
+        calls, replies = [], []
+        if helper:
+            cfg = dataclasses.replace(cfg, helpers=((cfg.submit, lambda _args: calls.append("work") or "done"),))
+        step = STEP(cfg, asyncio.get_running_loop())
+        log = step.gate.log
+
+        def recording(**event):
+            if event.get("event") == "tool" and event.get("accepted"):
+                clock.now += 1
+            log(**event)
+
+        monkeypatch.setattr(step.gate, "log", recording)
+
+        async def listing():
+            replies.append(step.gate.call(cfg.submit, PAYLOAD.model_dump()))
+            return SimpleNamespace(tasks=[])
+
+        await asyncio.wait_for(step.wait(Session(listing)), 1)
+        assert [ok for _, ok in replies] == [False]
+        assert calls == []
+        assert step.run.ending == "deadline"
+        assert step.run.payload is None
+        assert step.run.head is None
+        assert step.run.tool_calls[cfg.submit.name]["late"] == 1
+        assert step.run.tool_calls[cfg.submit.name]["calls"] == 1
+
+    asyncio.run(scenario())
+
+
 def test_normal_reminder_rpc_cap_still_reports_a_named_timeout(tmp_path, clock):
     async def scenario():
         step = STEP(dataclasses.replace(configured(tmp_path), limit=100), asyncio.get_running_loop())

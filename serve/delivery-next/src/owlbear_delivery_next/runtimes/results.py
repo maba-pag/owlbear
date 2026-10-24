@@ -113,6 +113,7 @@ class Gate:
                 accepted=not (closed or errors),
                 errors=["the step has already ended"] if closed else errors,
             )
+            closed = self._closed()
             self._tally(spec.name, "late" if closed else "rejected" if errors else "")
         if closed:
             self.ended()
@@ -165,10 +166,12 @@ class Gate:
     def _settle(
         self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None
     ) -> tuple[str, bool]:
-        if tree is not None:
-            self.run.head = None if errors else tree.head
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
+        if self._closed():
+            return self._late(spec)
+        if tree is not None:
+            self.run.head = None if errors else tree.head
         linted = bool(errors) and all(e.startswith("lint: ") for e in errors)
         self._tally(spec.name, "lint" if linted else "rejected" if errors else "")
         if errors:
