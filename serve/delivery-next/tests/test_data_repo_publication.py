@@ -127,9 +127,12 @@ def test_tracking_preserves_whitespace_in_deleted_paths(shared, name) -> None:
     path = repo.root / name
     path.write_text("tracked data\n")
     assert publish(repo, path, "save whitespace path") == ""
+    before = git(repo.root, "rev-parse", "HEAD")
+    assert git(repo.root, "ls-tree", "-z", "--name-only", "HEAD", "--", name)
     path.unlink()
     assert publish(repo, path, "delete whitespace path") == ""
-    assert git(repo.root, "ls-tree", "--name-only", "HEAD", "--", name) == ""
+    assert git(repo.root, "ls-tree", "-z", "--name-only", "HEAD", "--", name) == ""
+    assert git(repo.root, "rev-parse", "HEAD") != before
     assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
 
 
