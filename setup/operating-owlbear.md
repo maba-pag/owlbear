@@ -127,6 +127,13 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   `owlbear-delivery` → **Stop Server**, then **Start Server**. Neither the agent host nor the window
   needs restarting; a window reload does not restart that runtime's tool servers. A chat whose
   server is newer than the running host says so: let the update finish, or run `owlbear restart`.
+- OwlBear's memory, knowledge and browser servers run from the installed version too
+  (`python -m owlbear_delivery_next serve memory`, through `~/.owlbear/runtime`): each keeps the
+  version it started with until its chat ends or you stop and start it, and no update removes that
+  version while it runs. Chats started before and after an update can thus use two versions of a
+  server over the same memory and knowledge stores, so a version that changes how they store data
+  must read and write what the versions still running write, with tests that an older server's
+  writes survive.
 
 The agent workspace follows these updates: setup writes its paths through `~/.owlbear/runtime`, so
 they stay valid. Rerun setup from the project root after an update to refresh copied files:

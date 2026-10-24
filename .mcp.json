@@ -2,20 +2,20 @@
   "mcpServers": {
     "owlbear-browser": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "-m", "owlbear_browser_mcp"],
+      "command": "/bin/sh",
+      "args": ["-c", "exec \"$HOME/.owlbear/runtime/.venv/bin/python\" -m owlbear_delivery_next serve browser"],
       "tools": ["*"]
     },
     "owlbear-knowledge": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "-m", "owlbear_knowledge_mcp"],
+      "command": "/bin/sh",
+      "args": ["-c", "exec \"$HOME/.owlbear/runtime/.venv/bin/python\" -m owlbear_delivery_next serve knowledge"],
       "tools": ["*"]
     },
     "owlbear-memory": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "-m", "owlbear_memory_mcp"],
+      "command": "/bin/sh",
+      "args": ["-c", "exec \"$HOME/.owlbear/runtime/.venv/bin/python\" -m owlbear_delivery_next serve memory"],
       "tools": ["*"]
     }
   }
