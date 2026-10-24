@@ -121,7 +121,11 @@ def _origin_head(run: Git, root: Path, branch: str) -> str:
     if not said:
         return ""
     fields = said.split()
-    if len(fields) != 2 or fields[1] != ref or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[0]):  # noqa: PLR2004 - oid and ref
+    if (
+        len(fields) != 2  # noqa: PLR2004 - oid/ref pair
+        or fields[1] != ref
+        or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[0])
+    ):
         msg = f"origin did not identify one valid commit for {ref}"
         raise design_pack.PackError(msg)
     return fields[0]
