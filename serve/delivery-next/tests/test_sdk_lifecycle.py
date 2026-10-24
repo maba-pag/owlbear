@@ -191,6 +191,40 @@ def test_repeated_cancellation_during_stop_does_not_cancel_cleanup(world):
     assert world.steps[0].run.termination.confirmed
 
 
+def test_cleanup_cancellation_inside_a_callers_except_handler_still_propagates(world):
+    world.hold_stop = True
+
+    async def scenario():
+        caller = asyncio.current_task()
+        assert caller is not None
+
+        async def cancel_after_stop_starts():
+            await world.entered_stop.wait()
+            caller.cancel()
+            await asyncio.sleep(0)
+            world.release_stop.set()
+
+        canceller = asyncio.create_task(cancel_after_stop_starts())
+
+        def caller_error():
+            msg = "an already-handled caller error"
+            raise LookupError(msg)
+
+        try:
+            try:
+                caller_error()
+            except LookupError:
+                with pytest.raises(asyncio.CancelledError):
+                    await sdk_adapter.run(world.cfg)
+        finally:
+            world.release_stop.set()
+            await canceller
+
+    asyncio.run(scenario())
+    assert world.stop_calls == 1
+    assert world.steps[0].run.termination.confirmed
+
+
 def test_tasks_journal_failure_still_disconnects_and_stops_without_confirming(world):
     world.fail_event = "tasks"
     run = asyncio.run(sdk_adapter.run(world.cfg))

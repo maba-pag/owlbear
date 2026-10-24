@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import signal
-import sys
 import time
 from typing import TYPE_CHECKING
 
@@ -144,10 +143,13 @@ async def _protected(client: CopilotClient, st: _Step) -> tuple[Termination, boo
 @contextlib.asynccontextmanager
 async def managed(st: _Step) -> AsyncIterator[None]:
     """Always finish owned SDK cleanup before propagating the original error or cancellation."""
+    propagating = False
     try:
         yield
+    except BaseException:
+        propagating = True
+        raise
     finally:
-        propagating = sys.exception() is not None
         termination, cancelled = (
             await _protected(st.client, st) if st.client is not None else (Termination(confirmed=True), False)
         )
