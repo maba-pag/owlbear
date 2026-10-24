@@ -247,6 +247,11 @@ Change creation (#609) allocates handles, slugs and new records across processes
 one transaction. Maintenance test-review setup reserves its identity before Git
 work, retains it after failed setup, and publishes only into its own reservation.
 
+Installed pack-update preflight (#621) captures origin's main commit before
+fetching that exact object, without a normal-clone tracking ref or shared
+FETCH_HEAD. Detached installed versions on main stay valid; dirty, off-main,
+wrong-identity and failed-fetch sources still refuse without checkout changes.
+
 Integration collision consent (#620) runs on the supported integration BUILD task.
 Its durable task base survives restart and owner choices resume that task. Every
 new planner result advances the plan generation; consent binds to that task, the
