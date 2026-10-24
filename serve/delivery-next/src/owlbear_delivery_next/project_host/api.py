@@ -50,6 +50,7 @@ from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store import watch_reports
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
@@ -168,11 +169,21 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out["spend"] = c.spend.model_dump()
     out["tool_use"] = c.tool_use.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
+    out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
         where = "chat" if loop.ordinary(q) else "changes-page"
         out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "options": options, "answer_in": where}
     return out
+
+
+def watcher(store: Store, slug: str) -> dict[str, Any]:
+    """The Change's watcher list: its newest reports, their counts and the master switch (None when unreadable)."""
+    try:
+        on = store.settings().watcher
+    except StoreError:
+        on = None
+    return {"on": on, "reports": watch_reports.reports(store.db, slug)} | watch_reports.counts(store.db, slug)
 
 
 def new_chat(
@@ -379,6 +390,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
                 "restartable": not round_flow.restartable(c),
                 "activity": events[-20:],
+                "watcher": watcher(store, slug),
             }
         )
 

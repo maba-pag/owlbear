@@ -215,10 +215,10 @@ def test_a_judge_runs_as_its_labels_role_in_both_runtimes(label, role, monkeypat
         raise _Made
 
     monkeypatch.setattr(sessions, "isolated", isolated)
-    store = SimpleNamespace(read_profile=lambda: None)
+    store, settings = SimpleNamespace(read_profile=lambda: None), resolve(None, Layer(watcher=False))  # no database
     with pytest.raises(_Made):
         sessions.judges(store, SimpleNamespace(slug="c1"), None, Path(), lambda _at: [(label, _session(label))],
-                        resolve(None, Layer()))  # fmt: skip
+                        settings)  # fmt: skip
     (cfg,) = built
     assert sdk_adapter.role_of(cfg) == role
     opts = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001

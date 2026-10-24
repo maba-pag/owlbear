@@ -12,15 +12,12 @@ import json
 import os
 import secrets
 import shutil
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, FormatTooNewError, StoreError
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 STORE_DIR = "owlbear-delivery"
 PROJECTS = "projects"
@@ -69,6 +66,17 @@ def ensure_id(folder: Path) -> str:
 def home(pid: str) -> Path:
     """The project's folder in ``~/.owlbear``."""
     return local_home.root() / PROJECTS / pid
+
+
+def checkout(pid: str) -> Path | None:
+    """The clone the machine's registry lists for project *pid*; None when it lists none or cannot be read."""
+    try:
+        machine = json.loads((local_home.root() / MACHINE).read_text())
+    except OSError, ValueError:
+        return None
+    projects = machine.get("projects") if isinstance(machine, dict) else None
+    found = [p.get("path") for p in projects or () if isinstance(p, dict) and p.get("id") == pid]
+    return Path(found[0]) if found and isinstance(found[0], str) else None
 
 
 def registered(pid: str) -> bool | None:
