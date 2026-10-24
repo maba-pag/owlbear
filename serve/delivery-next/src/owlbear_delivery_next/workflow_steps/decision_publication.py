@@ -45,12 +45,13 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
 
     The approval is written with its saves planned before Git is touched, then their receipts: an interruption
     between them leaves an approved Change whose next step saves them again (`resume`), files being rebuilt the same.
+    An unbuildable project decision refuses the approval before any Change or decision is written.
     A save that is refused or fails writes *c* back as it was.
     """
     after = loop.fold(c, [approval], approval.at)
     try:
         items = _items(store, after)
-    except (DecisionError, OSError) as exc:
+    except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
         return f"{REFUSED}: {exc}"[:600]
     if items:
         planned = [_record(d, None, approval.at) for d, _ in items]
@@ -73,7 +74,7 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
         return c
     try:
         done, why = _published(store, c, _items(store, c))
-    except (DecisionError, OSError) as exc:
+    except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
         done, why = c, str(exc)
     if not why:
         store.write(lock, done)
@@ -87,9 +88,14 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
 
 def _items(store: Store, c: Change) -> list[Item]:
     """What the approved *c*'s project decisions save: rebuilt from its approvals, so the same on every retry."""
+    found = decision_archive.lasting(
+        store.name, c, decisions_gate.stem(c), root=store.shared.root if store.shared is not None else None
+    )
     if store.shared is None:
+        if found:
+            msg = "no shared data repository is available to publish the brief's project decisions"
+            raise DecisionError(msg)
         return []
-    found = decision_archive.lasting(store.name, c, decisions_gate.stem(c))
     return [item for d in found if (item := _item(store.shared.root, c, d)) is not None]
 
 

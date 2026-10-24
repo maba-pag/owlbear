@@ -120,8 +120,7 @@ def _project(shared: DataRepo, project: str) -> None:
         raise DecisionsUnavailable(msg, READ)
 
 
-def _view(shared: DataRepo, project: str) -> DataView:
-    commit = _head(shared)
+def _files(shared: DataRepo, project: str) -> Snapshot:
     if project:
         _project(shared, project)
     try:
@@ -129,7 +128,25 @@ def _view(shared: DataRepo, project: str) -> DataView:
     except OSError as exc:
         msg = f"the decisions in {shared.root} cannot be read: {exc}"
         raise DecisionsUnavailable(msg, READ) from exc
-    return DataView(seen, commit)
+    return seen
+
+
+def _usable(seen: Snapshot, project: str) -> Snapshot:
+    if bad := seen.unreadable:
+        named = "; ".join(f"{f.path}: {f.message}" for f in bad[:3])
+        msg = f"{len(bad)} file(s) among the decisions of {project or 'Global'} cannot be used: {named}"
+        raise DecisionsUnavailable(msg[:600], READ)
+    return seen
+
+
+def file_snapshot(shared: DataRepo | None, project: str) -> Snapshot:
+    """A readable file-only view, with the same checkout, project and unreadable-file checks as `load`."""
+    return _usable(_files(_checkout(shared), project), project)
+
+
+def _view(shared: DataRepo, project: str) -> DataView:
+    commit = _head(shared)
+    return DataView(_files(shared, project), commit)
 
 
 def load(shared: DataRepo | None, project: str) -> DataView:
@@ -139,10 +156,7 @@ def load(shared: DataRepo | None, project: str) -> DataView:
     unknown, so nothing may run as if it were absent. Findings stay in the snapshot for the caller to judge.
     """
     view = _view(_checkout(shared), project)
-    if bad := view.snapshot.unreadable:
-        named = "; ".join(f"{f.path}: {f.message}" for f in bad[:3])
-        msg = f"{len(bad)} file(s) among the decisions of {project or 'Global'} cannot be used: {named}"
-        raise DecisionsUnavailable(msg[:600], READ)
+    _usable(view.snapshot, project)
     return view
 
 
