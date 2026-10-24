@@ -321,6 +321,13 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
 
+Cleanup verifies the preservation of work held only in a Change's worktree before removing it.
+Archives retain regular-file permissions and symbolic links, including dangling links, without
+following their targets. If an entry cannot be represented safely, such as a nested Git
+repository, cleanup stops and leaves the worktree intact. Copy that work elsewhere or explicitly
+remove the unsupported entry before retrying; a verified archive must not be assumed to contain
+an entry that cleanup refused.
+
 The other pages serve the same projects:
 
 | Page | What it holds |
