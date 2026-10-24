@@ -66,6 +66,7 @@ from owlbear_delivery_next.github.provider import (
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as scheduler
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
@@ -1715,6 +1716,140 @@ def test_a_target_premise_from_a_session_whose_processes_remain_is_never_acted_o
     runner._agent(cx.store, cx.lock, cx.store.read("c1"), clone)  # noqa: SLF001
     after = cx.store.read("c1")
     assert (after.outcome.exit, [t.id for t in after.plan.tasks]) == (Exit.STOP, ["t1"])
+
+
+@pytest.fixture
+def integration_collision_setup(tmp_path, clone):
+    (clone / "src").mkdir()
+    (clone / "src/app.py").write_text("mine\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "mine")
+    mine = git(clone, "rev-parse", "HEAD")
+    git(clone, "switch", "-q", "main")
+    (clone / "src").mkdir(exist_ok=True)
+    (clone / "src/app.py").write_text("theirs\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "theirs")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
+    git(clone, "switch", "-q", "owlbear/c1")
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    neighbour = Plan(tasks=[Task(id="t1", title="one", scope=["src/app.py"])])
+    with store.lock("c3") as other_lock:
+        store.write(other_lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=neighbour))
+    c = change(StepKind.MERGE, worktree=str(clone))
+    c.plan.tasks[0].done = True
+    c = loop.apply(c, engine.integrate(c, StepKind.MERGE, "origin/main"), NOW)
+    tid = c.step.task
+    assert (c.step.kind, tid, c.plan.tasks[-1].origin) == (StepKind.BUILD, "t2", "integration")
+    store.write(lock, c)
+    return clone, mine, store, lock, tid
+
+
+@pytest.mark.parametrize("lose_base", [False, True], ids=["base-present", "base-missing"])
+def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_then_continues(
+    tmp_path, integration_collision_setup, monkeypatch, lose_base
+):
+    clone, mine, store, lock, tid = integration_collision_setup
+    built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Merged."})
+    runs = []
+
+    async def build(cfg):
+        if not runs:
+            with pytest.raises(subprocess.CalledProcessError):
+                git(clone, "merge", "-q", "--no-edit", "origin/main")
+            (clone / "src/app.py").write_text("both\n")
+            git(clone, "add", "src/app.py")
+            git(clone, "commit", "-q", "-m", "merge origin/main")
+        runs.append(cfg.session_id)
+        head = git(clone, "rev-parse", "HEAD")
+        return Run(cfg.session_id, "result", built, head=head, termination=processes.Termination(confirmed=True))
+
+    real, died = runner.overlap.integrated, []
+
+    def dies_once(*args):
+        if not died:
+            died.append(True)
+            raise Interrupted
+        return real(*args)
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", build)
+    monkeypatch.setattr(runner.overlap, "integrated", dies_once)
+    with pytest.raises(Interrupted):
+        runner._agent(store, lock, store.read("c1"), clone)  # noqa: SLF001
+    paused = store.read("c1")
+    base = next(t.base for t in paused.plan.tasks if t.id == tid)
+    assert (paused.step.kind, base, paused.questions) == (StepKind.BUILD, mine, [])
+    if lose_base:
+        paused.plan.tasks[-1].base = None
+        store.write(lock, paused)
+    restarted = Store(tmp_path / "store")
+    runner._agent(restarted, Lock("c1"), restarted.read("c1"), clone)  # noqa: SLF001
+    asked = restarted.read("c1")
+    if lose_base:
+        assert asked.outcome.exit == Exit.STOP
+        assert "start head" in asked.stop.reason
+        assert len(runs) == 1
+        return
+    q = loop.open_question(asked)
+    assert (len(asked.questions), q.step) == (1, StepKind.BUILD)
+    assert [(o.id, o.next) for o in q.options] == [
+        ("keep", StepKind.BUILD),
+        ("adopt", StepKind.BUILD),
+        ("pause", "pause"),
+    ]
+    assert "collided with c3 on src/app.py" in q.text
+    answered, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
+    assert (step.kind, step.task) == (StepKind.BUILD, tid)
+    restarted.write(Lock("c1"), answered)
+    runner._agent(restarted, Lock("c1"), restarted.read("c1"), clone)  # noqa: SLF001
+    after = restarted.read("c1")
+    assert (len(after.questions), after.step.kind) == (1, StepKind.REVIEW)
+    assert [t.id for t in after.plan.tasks] == ["t1", "t2"]
+
+
+@pytest.mark.parametrize("option", ["retry", "accept"])
+@pytest.mark.parametrize("evidence", ["spans", "built_by"])
+def test_owner_usage_continuation_cannot_replace_a_missing_integration_base(
+    integration_collision_setup, monkeypatch, option, evidence
+):
+    clone, mine, store, lock, tid = integration_collision_setup
+    with pytest.raises(subprocess.CalledProcessError):
+        git(clone, "merge", "-q", "--no-edit", "origin/main")
+    (clone / "src/app.py").write_text("both\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "integration completed before continuation")
+    head = git(clone, "rev-parse", "HEAD")
+    c = store.read("c1")
+    task = c.plan.tasks[-1]
+    task.base = None
+    if evidence == "spans":
+        task.spans = [f"{mine}..{head}"]
+    else:
+        task.built_by = "prior-integration"
+    c.step.session, c.step.started_at = "prior-integration", NOW
+    held_run = Run("prior-integration", "result", usage_unread="metrics unavailable", head=head)
+    c = loop.apply(c, session_result.usage_gate(held_run, StepKind.BUILD, accept=True), NOW)
+    q = loop.open_question(c)
+    c, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option=option)], NOW)
+    assert (step.kind, step.task, step.session, step.started_at) == (StepKind.BUILD, tid, None, None)
+    store.write(lock, c)
+    calls = []
+
+    async def forbidden(_cfg):
+        calls.append(True)
+        pytest.fail("A continuation with missing integration provenance must not start an SDK session")
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", forbidden)
+
+    runner._agent(store, lock, store.read("c1"), clone)  # noqa: SLF001
+
+    stopped = store.read("c1")
+    assert stopped.outcome.exit == Exit.STOP
+    assert "start head" in stopped.stop.reason
+    assert stopped.plan.tasks[-1].base is None
+    assert calls == []
 
 
 def commit(cwd, name):
