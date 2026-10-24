@@ -239,7 +239,11 @@ Integration collision consent (#620) runs on the supported integration BUILD tas
 Its durable task base survives restart and owner choices resume that task. Every
 new planner result advances the plan generation; consent binds to that task, the
 actual merge sides, paths and behaviours, never a pause answer. Termination stops
-retain their recovery action. Missing bases or failed Git probes stop
+retain their recovery action. Every relevant merge since the durable base is
+checked, so a later clean update cannot hide an earlier collision; a resolved
+subset retains the consent given to its pending merge. Durable task progress
+keeps a missing base stopped even after owner continuation clears Step markers.
+Missing bases or failed Git probes stop
 instead of passing; conflict paths retain whitespace without Git quoting losses.
 
 | Line | Decision | Code today | Action | Item |

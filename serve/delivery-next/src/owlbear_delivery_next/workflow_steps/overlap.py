@@ -43,6 +43,11 @@ class Neighbour(NamedTuple):
     merged: bool
 
 
+class _Merge(NamedTuple):
+    sides: tuple[str, str]
+    pending: bool = False
+
+
 def neighbours(store: Store, slug: str, now: datetime) -> list[Neighbour]:
     """The other open or recently merged Changes with their plan's task scopes, else their brief's."""
     out = []
@@ -112,28 +117,41 @@ def _quiet(path: Path, *args: str, missing: bool = False) -> str | None:
     return None
 
 
-def _sides(path: Path, since: str | None) -> tuple[str, str] | None:
-    """Both sides of the unfinished update, else of the latest merge commit since *since* (or of HEAD)."""
+def _merges(path: Path, since: str | None) -> list[_Merge]:
+    """The Change's merge history since its durable base, oldest first, then any unfinished merge."""
+    if since and _quiet(path, "merge-base", "--is-ancestor", since, "HEAD", missing=True) is None:
+        msg = "The integration start head is not an ancestor of the current work"
+        raise ValueError(msg)
+    commits = (
+        _quiet(
+            path,
+            "rev-list",
+            "--first-parent",
+            "--merges",
+            "--reverse",
+            *([f"{since}..HEAD"] if since else ["--no-walk", "HEAD"]),
+        )
+        or ""
+    )
+    found = []
+    for commit in commits.splitlines():
+        parents = (_quiet(path, "show", "--no-patch", "--format=%P", commit) or "").split()
+        if len(parents) != 2:  # noqa: PLR2004 - one target update has exactly two parents
+            msg = "Git did not return exactly two integration parents"
+            raise ValueError(msg)
+        found.append(_Merge((parents[0], parents[1])))
     if theirs := _quiet(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD", missing=True):
         if not (ours := _quiet(path, "rev-parse", "--verify", "HEAD")):
             msg = "Git did not identify the unfinished integration's start head"
             raise ValueError(msg)
-        return ours, theirs
-    merge = _quiet(
-        path, "rev-list", "--merges", "--max-count=1", *([f"{since}..HEAD"] if since else ["--no-walk", "HEAD"])
-    )
-    if not merge:
-        return None
-    parents = (_quiet(path, "rev-parse", f"{merge}^1", f"{merge}^2") or "").split()
-    if len(parents) != 2:  # noqa: PLR2004 - a target integration has two merge parents
-        msg = "Git did not return both integration parents"
-        raise ValueError(msg)
-    return parents[0], parents[1]
+        found.append(_Merge((ours, theirs), pending=True))
+    return found
 
 
 def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]:
-    """Paths the Builder resolved in the update's merge; while it cannot finish, paths both sides changed."""
-    return _collision_paths(path, _sides(path, since), resolved=resolved)
+    """Paths in every update since the task base; unfinished updates use both sides' changed paths."""
+    return sorted({p for merge in _merges(path, since)
+                   for p in _collision_paths(path, merge.sides, resolved=resolved and not merge.pending)})  # fmt: skip
 
 
 def _collision_paths(path: Path, sides: tuple[str, str] | None, *, resolved: bool) -> list[str]:
@@ -156,22 +174,18 @@ def _collision_paths(path: Path, sides: tuple[str, str] | None, *, resolved: boo
     return sorted(ours & theirs)
 
 
-def collision(  # noqa: PLR0913 - collision context, path policy and observed merge proof
-    c: Change,
-    paths: Iterable[str],
-    near: Iterable[Neighbour],
-    said: str = "",
-    patterns: Iterable[str] = (),
-    *,
-    merge: tuple[str, str] | None = None,
-) -> StepResult | None:
-    """Ask which behaviour to keep when an update collided on paths of another Change's scope; once per collision."""
-    patterns = list(patterns)
+def _hits(
+    paths: Iterable[str], near: Iterable[Neighbour], patterns: Iterable[str]
+) -> list[tuple[Neighbour, list[str]]]:
+    paths = list(paths)
     hits = [
         (n, sorted({p for p in paths if not incidental(p, patterns) and any(evidence.within(p, s) for s in n.scope)}))
         for n in near
     ]
-    hits = [(n, ps) for n, ps in hits if ps]
+    return [(n, ps) for n, ps in hits if ps]
+
+
+def _cause(c: Change, hits: list[tuple[Neighbour, list[str]]], merge: tuple[str, str] | None) -> str:
     material = [merge, c.brief.outcome, sorted((n.handle, n.outcome, ps) for n, ps in hits)]
     binding = hashlib.sha256(json.dumps(material, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
     # Task numbers restart on replanning; the adopted plan version advances even on an owner's replan.
@@ -180,8 +194,32 @@ def collision(  # noqa: PLR0913 - collision context, path policy and observed me
         if c.step.kind == StepKind.BUILD and c.step.task and c.plan
         else []
     )
-    cause = cause_key(ErrorKind.CONFLICT, c.step.kind, ["collision", binding, *subject, *(n.handle for n, _ in hits)])
-    if not hits or any(q.cause == cause and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
+    return cause_key(ErrorKind.CONFLICT, c.step.kind, ["collision", binding, *subject, *(n.handle for n, _ in hits)])
+
+
+def collision(  # noqa: PLR0913 - collision context, path policy and the pending/completed merge proof
+    c: Change,
+    paths: Iterable[str],
+    near: Iterable[Neighbour],
+    said: str = "",
+    patterns: Iterable[str] = (),
+    *,
+    merge: tuple[str, str] | None = None,
+    pending_paths: Iterable[str] | None = None,
+) -> StepResult | None:
+    """Ask for a collision once; completing an approved pending merge may narrow its affected paths."""
+    near, patterns = list(near), list(patterns)
+    hits = _hits(paths, near, patterns)
+    if not hits:
+        return None
+    cause = _cause(c, hits, merge)
+    consent = {cause}
+    if pending_paths is not None:
+        pending = _hits(pending_paths, near, patterns)
+        covered = {n.handle: set(ps) for n, ps in pending}
+        if all(set(ps) <= covered.get(n.handle, set()) for n, ps in hits):
+            consent.add(_cause(c, pending, merge))
+    if any(q.cause in consent and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
         return None
     others = ", ".join(n.handle for n, _ in hits)
     wants = " ".join(f"{n.handle} ({'merged' if n.merged else 'open'}) wants: {n.outcome or '?'}." for n, _ in hits)
@@ -240,9 +278,16 @@ def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, s
     said = "" if resolved else result.reason or (result.question.text if result.question else "")
     near = neighbours(store, c.slug, datetime.now(UTC))
     try:
-        sides = _sides(path, start)
-        paths = _collision_paths(path, sides, resolved=resolved)
+        merges = _merges(path, start)
+        if resolved and any(m.pending for m in merges):
+            return _unverified("The integration reported completion while a merge is still unfinished")
+        patterns = generated(path)
+        for merge in merges:
+            paths = _collision_paths(path, merge.sides, resolved=resolved)
+            pending = _collision_paths(path, merge.sides, resolved=False) if resolved and paths else None
+            hit = collision(c, paths, near, said, patterns, merge=merge.sides, pending_paths=pending)
+            if hit:
+                return hit
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         return _unverified(f"Integration collisions could not be checked: {exc}"[:300])
-    hit = collision(c, paths, near, said, generated(path), merge=sides)
-    return hit or result
+    return result

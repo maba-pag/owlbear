@@ -59,10 +59,10 @@ def building(origin: str = "integration") -> Change:
     return integrating(plan=Plan(tasks=[t1, t2]), step=Step(kind=K.BUILD, task="t2"))
 
 
-def shared_store(tmp_path) -> Store:
+def shared_store(tmp_path, scope="src/app.ts") -> Store:
     store = Store(tmp_path / "store")
     with store.lock("c3") as lock:
-        store.write(lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=plan("src/app.ts")))
+        store.write(lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=plan(scope)))
     return store
 
 
@@ -325,6 +325,91 @@ def test_changed_neighbour_behaviour_cannot_reuse_consent_for_its_old_outcome():
 
     assert asked is not None
     assert asked.cause != first.cause
+
+
+def test_resolving_a_pending_merge_keeps_consent_when_shared_clean_paths_drop_out(merged_cleanly, tmp_path):
+    repo, _ = merged_cleanly
+    (repo / "src/conflict.ts").write_text("ours\n")
+    git(repo, "add", "src/conflict.ts")
+    git(repo, "commit", "-qm", "our next task")
+    start = git(repo, "rev-parse", "HEAD")
+    git(repo, "switch", "-q", "main")
+    (repo / "src/conflict.ts").write_text("theirs\n")
+    lines = (repo / "src/app.ts").read_text().splitlines(keepends=True)
+    lines[8] = "a clean target change\n"
+    (repo / "src/app.ts").write_text("".join(lines))
+    git(repo, "add", "src")
+    git(repo, "commit", "-qm", "target changes both files")
+    git(repo, "switch", "-q", "change")
+    git(repo, "merge", "-q", "main", check=False)
+    store, c = shared_store(tmp_path, "src"), building()
+    worker = StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="resolve"))
+    first = overlap.integrated(store, c, repo, (start, "ask"), worker)
+    assert "src/app.ts" in first.question.text
+    assert "src/conflict.ts" in first.question.text
+    c = loop.apply(c, first, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    (repo / "src/conflict.ts").write_text("ours\n")
+    git(repo, "add", "src/conflict.ts")
+    git(repo, "commit", "-qm", "finish the approved update")
+    done = StepResult(exit=Exit.DONE)
+
+    assert overlap.integrated(store, c, repo, (start, "result"), done) is done
+
+
+def test_a_later_clean_merge_cannot_hide_an_earlier_unconsented_collision_after_restart(conflicted, tmp_path):
+    repo, start = conflicted
+    (repo / "src/app.ts").write_text("both\n")
+    (repo / "uv.lock").write_text("both\n")
+    git(repo, "commit", "-qam", "resolve conflicting update")
+    git(repo, "switch", "-q", "main")
+    (repo / "src/new.ts").write_text("a clean later target update\n")
+    git(repo, "add", "src/new.ts")
+    git(repo, "commit", "-qm", "later clean update")
+    git(repo, "switch", "-q", "change")
+    git(repo, "merge", "-q", "--no-edit", "main")
+    store, c = shared_store(tmp_path), building()
+    c.plan.tasks[-1].base = start
+    c.plan.tasks[-1].spans = [f"{start}..{git(repo, 'rev-parse', 'HEAD')}"]
+    with store.lock(c.slug) as lock:
+        store.write(lock, c)
+    c = store.read(c.slug)
+    done = StepResult(exit=Exit.DONE)
+
+    asked = overlap.integrated(store, c, repo, (start, "result"), done)
+
+    assert asked is not done
+    assert asked.exit == Exit.ASK
+    assert "src/app.ts" in asked.question.text
+    c = loop.apply(c, asked, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    assert overlap.integrated(store, c, repo, (start, "result"), done) is done
+
+
+def test_pending_consent_does_not_cover_a_different_resolved_path():
+    c = building()
+    near = [overlap.Neighbour("c3", ["src"], "cache pages", merged=False)]
+    merge = ("a" * 40, "b" * 40)
+    first = overlap.collision(c, ["src/a.ts"], near, merge=merge)
+    c = loop.apply(c, first, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+
+    asked = overlap.collision(c, ["src/b.ts"], near, merge=merge, pending_paths=["src/a.ts"])
+
+    assert asked is not None
+    assert asked.cause != first.cause
+
+
+def test_a_completed_result_with_an_unfinished_merge_stays_stopped(conflicted, tmp_path):
+    repo, start = conflicted
+    stopped = overlap.integrated(
+        shared_store(tmp_path), building(), repo, (start, "result"), StepResult(exit=Exit.DONE)
+    )
+    assert stopped.exit == Exit.STOP
+    assert stopped.stop.kind == ErrorKind.STATE
 
 
 @pytest.mark.parametrize("choice", ["keep", "adopt"])
