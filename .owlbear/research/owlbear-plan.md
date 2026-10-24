@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `8e3c45f839` after #628 and this pull request, decisions to TD-469, item 5's
+> **Date:** 2026-10-24, status at `main` `f1f18fabad` after #630 and this pull request, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
