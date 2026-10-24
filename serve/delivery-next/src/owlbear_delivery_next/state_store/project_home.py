@@ -169,7 +169,7 @@ def located(cwd: Path) -> Path:
             elif (target / path.name).exists():
                 msg = (
                     f"{path} and {target / path.name} both exist: an older OwlBear process may still use the clone; "
-                    f"stop it (a chat's server: {codebase.STOP_START}), move one of them away, then start again"
+                    f"stop it (a chat's server: {codebase.STOP}), move one of them away, then start it again"
                 )
                 raise StoreError(msg)
             else:
