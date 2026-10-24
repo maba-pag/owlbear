@@ -238,7 +238,9 @@ including a cleanup whose displayed stage is already Done or Abandoned.
 
 Terminal PR delivery (#614) is checked against the Change's repository, PR number,
 own branch and stored integration target, not a default branch convention. A
-different delivery asks the owner to pause or abandon without fulfillment; its
+persisted discrepancy holds across unavailable PR reads, including Pause then
+Resume; person-only checks cannot settle or relaunch past it. A different
+delivery asks the owner to pause or abandon without fulfillment; its
 work is preserved against the intended target, fixes and curation get no success
 credit, and the observed other PR is recorded separately from delivery evidence.
 Lost-runner accounting cannot replace that terminal owner disposition with a retry.

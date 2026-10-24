@@ -36,7 +36,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import budgets, loop, round_flow, worktree
+from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
@@ -2533,6 +2533,47 @@ def test_observing_a_wrong_target_merge_asks_the_owner_without_scheduling_cleanu
     assert {o.id for o in q.options} == {"abandon", "pause"}
     assert "main" in q.text
     assert "not" in q.text
+
+
+def test_paused_build_discrepancy_restores_its_owner_gate_after_restart_and_resume_without_a_pr_read(tmp_path):
+    store = Store(tmp_path)
+    c, _ = loop.schedule(change(StepKind.BUILD), [], NOW, "misdelivered")
+    q = loop.open_question(c)
+    store.write(Lock("c1"), c)
+    store.put_inbox("c1", AnswerItem(at=NOW, question=q.id, option="pause"))
+    with store.lock("c1") as lock:
+        paused, ready = store.fold(lock, "c1", NOW, None)
+    assert ready is None
+    assert paused.intent.paused_at is not None
+    assert paused.outcome is None
+
+    store = Store(tmp_path)
+    later = NOW + timedelta(hours=1)
+    store.put_inbox("c1", IntentItem(at=later, intent="resume"))
+    with store.lock("c1") as lock:
+        resumed, ready = store.fold(lock, "c1", later, None)
+    assert ready is None
+    restored = loop.open_question(resumed)
+    assert restored is not None
+    assert {o.id for o in restored.options} == {"abandon", "pause"}
+    assert restored.id != q.id
+    assert resumed.questions[0].answer.option == "pause"
+    again, ready = loop.schedule(resumed, [], later, None)
+    assert ready is None
+    assert loop.open_question(again).id == restored.id
+
+
+def test_paused_delivery_discrepancy_owns_accounting_even_without_a_current_ask():
+    c, _ = loop.schedule(change(StepKind.BUILD), [], NOW, "misdelivered")
+    q = loop.open_question(c)
+    paused, _ = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="pause")], NOW, None)
+    assert paused.outcome is None
+    cause = failures.cause_key(ErrorKind.LIVENESS, StepKind.BUILD, "runner-gone")
+    retry = loop.StepResult(exit=Exit.RETRY, cause=cause, reason="runner disappeared")
+    after = delivery_target.accounted(paused, retry, NOW)
+    assert after.outcome is None
+    assert after.stop == paused.stop
+    assert after.budgets.causes[cause].count == 1
 
 
 def test_a_direct_merge_read_of_wrong_target_does_not_acknowledge_fulfillment(tmp_path):

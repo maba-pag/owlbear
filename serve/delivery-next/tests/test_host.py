@@ -32,7 +32,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
-from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.change_flow import delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
@@ -493,6 +493,36 @@ def test_the_environment_launches_after_the_builder_is_gone_and_is_disposed_on_t
     assert fake.host.tick() == ["c1"]
     done = store.read("c1")
     assert (done.env, done.step.kind) == (None, StepKind.MERGE)
+
+
+@pytest.mark.parametrize("passed", [None, False, True])
+def test_a_delivery_discrepancy_disposes_person_check_without_settling_or_relaunching(
+    store,
+    tmp_path,
+    monkeypatch,
+    passed,
+):
+    fake = Fake(store, tmp_path)
+    calls = environment(store, fake, monkeypatch, ready_at=NOW, pids={900: 2.0}, pgid=900)
+    c = store.read("c1")
+    c.names.pr, c.names.branch, c.names.target = 7, "owlbear/c1", "main"
+    if passed is not None:
+        answered(c, NOW, passed=passed, inputs=check_inputs(c, c.checks[0], check.fingerprints(c, c.checks[0])))
+    delivery_target.halt(c, "PR #7 merged into the wrong target", NOW)
+    gate = loop.open_question(c).id
+    save(store, c)
+    fake.host.observe_pr = lambda _slug: (None, False)
+
+    assert fake.host.tick(NOW) == []
+
+    after = store.read("c1")
+    assert calls["start"] == []
+    assert calls["dispose"]
+    assert after.env is None
+    assert after.step.kind is StepKind.CHECK
+    assert delivery_target.held(after)
+    assert loop.open_question(after).id == gate
+    assert loop.next_step(after, NOW) is None
 
 
 def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_charged(store, tmp_path, monkeypatch):

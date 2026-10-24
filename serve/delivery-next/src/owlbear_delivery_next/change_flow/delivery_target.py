@@ -88,7 +88,7 @@ def accounted(c: Change, result: StepResult, now: datetime) -> Change:
     """Charge an ended runner without displacing the terminal owner gate, including its paused hold."""
     from owlbear_delivery_next.change_flow.loop import apply  # noqa: PLC0415 - loop imports this module
 
-    saved = (c.stop, c.outcome) if _owned_question(c) is not None else None
+    saved = (c.stop, c.outcome) if held(c) else None
     after = apply(c, result, now)
     if saved is not None:
         after.stop, after.outcome = saved
@@ -104,7 +104,7 @@ def route(c: Change, observed: PrState | None, now: datetime) -> bool:
             go(c, StepKind.CLEANUP, mode="abandon")
             c.stop, c.outcome = None, None
         return True
-    if observed != "misdelivered":
+    if observed != "misdelivered" and not held(c):
         return False
     if not held(c):
         halt(c, f"PR #{c.names.pr} merged, but not as {c.names.branch} into {c.names.target}", now)
