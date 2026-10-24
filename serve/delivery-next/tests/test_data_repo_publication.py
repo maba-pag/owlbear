@@ -121,6 +121,18 @@ def test_a_missing_untracked_path_still_retries_earlier_unpushed_commits(shared)
     assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
 
 
+@pytest.mark.parametrize("name", [" ", "\n"])
+def test_tracking_preserves_whitespace_in_deleted_paths(shared, name) -> None:
+    repo, remote = shared
+    path = repo.root / name
+    path.write_text("tracked data\n")
+    assert publish(repo, path, "save whitespace path") == ""
+    path.unlink()
+    assert publish(repo, path, "delete whitespace path") == ""
+    assert git(repo.root, "ls-tree", "--name-only", "HEAD", "--", name) == ""
+    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
+
+
 def test_an_unchanged_save_preserves_unrelated_staging_and_retries_publication(shared) -> None:
     repo, remote = shared
     path = tracked(repo)

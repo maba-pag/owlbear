@@ -240,11 +240,11 @@ class DataRepo:
 
     def _tracked(self, rel: str, until: float) -> bool:
         """Whether the index holds ``rel``; a failed probe cannot establish absence."""
-        probe = _git(self.root, "ls-files", "--", rel, until=until)
+        probe = _git(self.root, "ls-files", "-z", "--", rel, until=until)
         if probe.returncode:
             msg = f"git cannot tell whether {rel} is tracked: {probe.stderr.strip()[:200] or 'tracking probe failed'}"
             raise DataRepoError(msg)
-        return bool(probe.stdout.strip())
+        return bool(probe.stdout)
 
     def _push(self, until: float) -> str:
         """Push; once rejected, rebase on the remote and push again."""

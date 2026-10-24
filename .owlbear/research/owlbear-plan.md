@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `5274ed416` after #631 and this pull request, decisions to TD-469, item 5's
+> **Date:** 2026-10-24, status at `main` `6c07094cc` after #632 and this pull request, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 and 2026-10-24
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -225,6 +225,11 @@ unsupported nested repositories and entries in their workspace instead of omitti
 them from a verified archive; supported links and file modes are preserved without
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
+
+Shared-settings publication (#622) distinguishes a missing path from failed Git
+tracking or staged-diff probes and stops before acknowledging a failed commit.
+Pending-status failures are reported instead of reading as fully published;
+unchanged saves still retry prior commits without consuming unrelated staging.
 
 Change creation (#609) allocates handles, slugs and new records across processes in
 one transaction. Maintenance test-review setup reserves its identity before Git
