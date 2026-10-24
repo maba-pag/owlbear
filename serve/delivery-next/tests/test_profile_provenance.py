@@ -1,14 +1,16 @@
 """Observation-bound confirmations and clone-local facts, using synthetic repositories and GitHub observations."""
 
+import contextlib
 import json
 import subprocess
+import threading
 from datetime import UTC, datetime
 
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.change_flow import brief_tools
+from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.github.merge_offer import Block, decide
 from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Repository, Rules
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
@@ -349,3 +351,95 @@ def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmatio
     assert declared == ("lint",)
     assert profile.digest_of(chosen.entries[profile.DECLARED]) == profile.digest_of(raw.entries[profile.DECLARED])
     assert chosen.entries[profile.DECLARED].evidence.count("observed:") == 1
+
+
+def _pair(default, push):
+    return Profile(
+        version=1,
+        entries={
+            profile.DEFAULT: ProfileEntry(state="known", value=default, evidence="owner"),
+            profile.PUSH: ProfileEntry(state="known", value=push, evidence="owner"),
+        },
+    )
+
+
+@pytest.mark.usefixtures("shared")
+def test_overlapping_profile_saves_keep_one_writers_shared_copy_and_overlay(tmp_path, monkeypatch):
+    store = Store.open(clone(tmp_path, "shop"))
+    real_locked = DataRepo.locked
+    entered, release = threading.Event(), threading.Event()
+    errors = []
+
+    @contextlib.contextmanager
+    def latched(self, wait=None):
+        if threading.current_thread().name == "first-profile-save":
+            entered.set()
+            assert release.wait(10)
+        with real_locked(self, wait):
+            yield
+
+    def first():
+        try:
+            store.write_profile(_pair("first", "yes"))
+        except Exception as exc:  # noqa: BLE001 - propagate the thread's failure to the test
+            errors.append(exc)
+
+    monkeypatch.setattr(DataRepo, "locked", latched)
+    writer = threading.Thread(target=first, name="first-profile-save")
+    writer.start()
+    try:
+        assert entered.wait(10)
+        store.write_profile(_pair("second", "no"))
+    finally:
+        release.set()
+        writer.join(10)
+    assert not writer.is_alive()
+    assert not errors
+    saved = store.read_profile()
+    assert profile.value(saved, profile.DEFAULT) == "first"
+    assert profile.value(saved, profile.PUSH) == "yes"
+
+
+@pytest.mark.parametrize("owner", ["confirm", "clear"])
+@pytest.mark.parametrize("channel", ["local", "shared"])
+@pytest.mark.usefixtures("shared")
+def test_owner_local_edit_during_detection_survives_the_race(tmp_path, monkeypatch, owner, channel):
+    repo = clone(tmp_path, "shop")
+    store = Store.open(repo)
+    monkeypatch.setattr(profile, "provider", lambda *_a: GitHub(push=True))
+    prev = profile.detect(repo, GitHub(push=False), None)
+    missing = ProfileEntry(state="unknown", evidence="install:vendor: not detected in this clone")
+    store.write_profile(prev.model_copy(update={"entries": {**prev.entries, "install:vendor": missing}}))
+    real_detect = profile.detect
+
+    def detect_while_owner_edits(repo_, gh, previous):
+        fresh = real_detect(repo_, gh, previous)
+        base = store.read_profile()
+        if owner == "confirm":
+            edit = profile.confirm(base, "install:vendor", "make deps", NOW)
+        else:
+            edit = base.model_copy(update={"entries": {k: e for k, e in base.entries.items() if k != "install:vendor"}})
+        version = base.version if channel == "local" else base.version + 1
+        store.write_profile(edit.model_copy(update={"version": version, "confirmed_at": base.confirmed_at}))
+        return fresh
+
+    monkeypatch.setattr(profile, "detect", detect_while_owner_edits)
+    result = profile_share.checked(store, repo)
+    for kept in (result, store.read_profile()):
+        assert profile.value(kept, profile.PUSH) == "yes"
+        if owner == "confirm":
+            assert worktree.installs(kept, ["vendor/lib.py"]) == [("vendor", "make deps")]
+        else:
+            assert "install:vendor" not in kept.entries
+    assert not (store.root / profile_share.DETECTED).exists()
+    monkeypatch.setattr(profile, "detect", real_detect)
+    retried = profile_share.checked(store, repo)
+    assert (store.root / profile_share.DETECTED).exists()
+    assert profile.value(retried, "install:vendor") == ("make deps" if owner == "confirm" else "")
+
+
+def test_a_confirmed_absent_install_survives_detection_and_reaches_the_worktree(tmp_path):
+    repo = clone(tmp_path, "shop")
+    chosen = profile.confirm(profile.detect(repo, GitHub(), None), "install:vendor", "make deps", NOW)
+    again = profile.detect(repo, GitHub(), chosen)
+    assert worktree.installs(again, ["vendor/lib.py"]) == [("vendor", "make deps")]

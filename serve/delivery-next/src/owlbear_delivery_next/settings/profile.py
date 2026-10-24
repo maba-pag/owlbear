@@ -92,6 +92,10 @@ def _entry(state: str, value: str, evidence: str) -> ProfileEntry:
     return ProfileEntry(state=state, value=value, evidence=evidence)  # type: ignore[arg-type]
 
 
+def _absent(key: str) -> ProfileEntry:
+    return _entry("unknown", "", f"{key}: not detected in this clone")
+
+
 def local_key(key: str) -> bool:
     """Clone-local detected capabilities, never another clone's shared facts."""
     return key in {PUSH, HOOKS} or key.startswith("install:")
@@ -297,7 +301,7 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
             if not _detected(key):
                 entries[key] = old
                 continue
-            new = _entry("unknown", "", f"{key}: not detected in this clone")
+            new = _absent(key)
             entries[key] = new
         if is_confirmed(old) and holds(old, new):
             stamp = old.evidence.partition(OBSERVED)[0]
@@ -308,7 +312,7 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
 
 def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
     """Record the owner's value independently of the complete raw observation it is confirmed against."""
-    old = profile.entries.get(key) or _entry("unknown", "", "not detected")
+    old = profile.entries.get(key) or _absent(key)
     if is_confirmed(old) and not old.observed and _detected(key):
         msg = f"{key}: a legacy confirmation has no observation to bind; detect the profile first"
         raise ValueError(msg)

@@ -8,6 +8,7 @@ clone's overlay; another clone's shared copy of those facts never counts.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from typing import TYPE_CHECKING
@@ -20,6 +21,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 from owlbear_delivery_next.settings import migrations, profile
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.profile_record import ProfileEntry
@@ -39,12 +41,27 @@ def path(store: Store) -> Path:
 
 def write(store: Store, prof: Profile) -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing."""
-    _keep_local(store, prof)
-    if not store.shared:
-        atomic_write(path(store), _shared_part(prof).model_dump_json(indent=1))
-        return ""
-    with store.shared.locked():
+    with _writer(store):
+        _keep_local(store, prof)
         return _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
+
+
+@contextlib.contextmanager
+def _writer(store: Store) -> Iterator[None]:
+    if store.shared:
+        with store.shared.locked():
+            yield
+        return
+    store.root.mkdir(parents=True, exist_ok=True)
+    directory = os.open(store.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        fd = open_lock(directory, blocking=True, name=".profile.lock")
+    finally:
+        os.close(directory)
+    try:
+        yield
+    finally:
+        os.close(fd)
 
 
 def read(store: Store) -> Profile | None:
@@ -72,8 +89,12 @@ def _shared_part(prof: Profile) -> Profile:
     return prof.model_copy(update={"entries": profile.shared_entries(prof.entries)})
 
 
+def _local_part(prof: Profile) -> dict[str, ProfileEntry]:
+    return {key: entry for key, entry in prof.entries.items() if profile.local_key(key)}
+
+
 def _keep_local(store: Store, prof: Profile) -> None:
-    local = {key: entry for key, entry in prof.entries.items() if profile.local_key(key)}
+    local = _local_part(prof)
     store.root.mkdir(parents=True, exist_ok=True)
     overlay = store.root / LOCAL
     if local:
@@ -111,11 +132,11 @@ def _local(store: Store) -> dict[str, ProfileEntry]:
     return local.entries
 
 
-def _publish(store: Store, shared: DataRepo, prof: Profile, message: str) -> str:
+def _publish(store: Store, shared: DataRepo | None, prof: Profile, message: str) -> str:
     target = path(store)
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(target, _shared_part(prof).model_dump_json(indent=1))
-    return shared.publish(target, message)
+    return shared.publish(target, message) if shared else ""
 
 
 def adopt(store: Store) -> None:
@@ -148,10 +169,10 @@ def checked(store: Store, repo: Path) -> Profile | None:
     except DetectorError, ProviderError:
         return prof
     try:
-        if shared is None:
-            write(store, fresh)
-        elif not _replaced(store, shared, prof, fresh):
-            return store.read_profile()  # retain the other writer's intent and this clone's fresh capabilities
+        kept = _replaced(store, prof, fresh)
+        if kept is None:
+            return store.read_profile()  # a changed snapshot must be reconciled before detection is acknowledged
+        fresh = kept
     except DataRepoError as exc:
         msg = f"the detected profile could not be published: {exc}"
         raise StoreError(msg) from exc
@@ -159,17 +180,25 @@ def checked(store: Store, repo: Path) -> Profile | None:
     return fresh
 
 
-def _replaced(store: Store, shared: DataRepo, old: Profile, new: Profile) -> bool:
-    """Write *new* only while the shared profile is still *old*; whether it was written."""
-    with shared.locked():
-        _keep_local(store, new)
+def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None:
+    """Keep concurrent local intent; publish fresh shared facts only against the snapshot they observed."""
+    with _writer(store):
         current = store.read_profile()
+        before, now = _local_part(old), _local_part(current) if current is not None else _local(store)
+        found = _local_part(new)
+        local: dict[str, ProfileEntry] = {}
+        for key in sorted(before.keys() | now.keys() | found.keys()):
+            entry = now.get(key) if now.get(key) != before.get(key) else found.get(key)
+            if entry is not None:
+                local[key] = entry
+        kept = new.model_copy(update={"entries": {**profile.shared_entries(new.entries), **local}})
+        _keep_local(store, kept)
         if current is None or _shared_part(current) != _shared_part(old):
-            return False
-        notice = _publish(store, shared, new, f"settings: {store.name}: project profile detected in a clone")
+            return None
+        notice = _publish(store, store.shared, kept, f"settings: {store.name}: project profile detected in a clone")
         if notice:
             raise DataRepoError(notice)
-    return True
+    return None if now != before else kept
 
 
 def move_roles(store: Store) -> None:

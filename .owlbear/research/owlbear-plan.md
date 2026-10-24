@@ -255,6 +255,10 @@ use the current target while existing Changes retain their stored target.
 Confirmation retains the raw workflow digest without nesting its evidence label,
 so owner-selected CI checks still govern the same workflows. A returned publication
 failure notice leaves detection incomplete and retryable, just like a raised failure.
+Profile pairs use their writer lock; detection preserves newer local edits and
+clears per key, retains unchanged fresh capabilities, and retries before acknowledging
+a raced snapshot. Explicit install commands for undetected packages bind to the same
+absence observation on confirmation and refresh.
 
 Brief approval (#617) rejects blank required decision wording and refuses the
 whole approval if any current ID-bearing project rule cannot be built or saved.
