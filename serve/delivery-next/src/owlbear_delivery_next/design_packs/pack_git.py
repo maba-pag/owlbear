@@ -1,7 +1,7 @@
 """A design pack update's commit (TD-101, step 3c): one commit on its own branch, from a clean checkout of main.
 
 The package's own Git checkout stands in for the runtime's repository: its ``origin`` must be OwlBear's repository,
-its tracked files clean and its ``HEAD``, pinned when the candidate is made, on the freshly fetched ``origin/main``.
+its tracked files clean and its ``HEAD``, pinned when the candidate is made, on a captured and freshly fetched main.
 The commit is made in a disposable worktree at that pinned commit, so the running checkout is never touched, and
 pushed to its own branch, never forced. A pull request takes it to ``main`` (``pack_publish``).
 """
@@ -71,9 +71,13 @@ def source(package: Path, run: Git = git, repository: str = REPOSITORY) -> Sourc
     if dirty := run(top, ["status", "--porcelain", "--untracked-files=no"]):
         msg = f"the checkout {top} has uncommitted changes, commit or stash them first: {dirty.splitlines()[0]} …"
         raise design_pack.PackError(msg)
-    run(top, ["fetch", "--quiet", "origin", BASE])
+    fresh = _origin_head(run, top, BASE)
+    if not fresh:
+        msg = f"origin has no {BASE} branch, so the pack update's source cannot be verified"
+        raise design_pack.PackError(msg)
+    run(top, ["fetch", "--quiet", "origin", fresh])
     head = run(top, ["rev-parse", "HEAD"])
-    if not _holds(run, top, head, f"origin/{BASE}"):
+    if not _holds(run, top, head, fresh):
         msg = f"the checkout {top} is at {head[:12]}, which is not on {BASE}; check out {BASE} or a commit on it"
         raise design_pack.PackError(msg)
     return Source(top, repository, head)
@@ -108,8 +112,19 @@ def commit(src: Source, files: dict[str, str | None], message: str, at: Path, ru
 
 def remote_head(src: Source, branch: str, run: Git = git) -> str:
     """The commit *branch* holds on ``origin``, or "" when it is not there."""
-    said = run(src.root, ["ls-remote", "origin", f"refs/heads/{branch}"])
-    return said.split()[0] if said else ""
+    return _origin_head(run, src.root, branch)
+
+
+def _origin_head(run: Git, root: Path, branch: str) -> str:
+    ref = f"refs/heads/{branch}"
+    said = run(root, ["ls-remote", "origin", ref])
+    if not said:
+        return ""
+    fields = said.split()
+    if len(fields) != 2 or fields[1] != ref or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", fields[0]):  # noqa: PLR2004 - oid and ref
+        msg = f"origin did not identify one valid commit for {ref}"
+        raise design_pack.PackError(msg)
+    return fields[0]
 
 
 def push(src: Source, made: str, branch: str, run: Git = git) -> None:
