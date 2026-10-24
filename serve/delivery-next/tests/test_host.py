@@ -506,11 +506,12 @@ def test_a_delivery_discrepancy_disposes_person_check_without_settling_or_relaun
     calls = environment(store, fake, monkeypatch, ready_at=NOW, pids={900: 2.0}, pgid=900)
     c = store.read("c1")
     c.names.pr, c.names.branch, c.names.target = 7, "owlbear/c1", "main"
-    if passed is not None:
-        answered(c, NOW, passed=passed, inputs=check_inputs(c, c.checks[0], check.fingerprints(c, c.checks[0])))
     delivery_target.halt(c, "PR #7 merged into the wrong target", NOW)
     gate = loop.open_question(c).id
     save(store, c)
+    if passed is not None:
+        inputs = check_inputs(c, c.checks[0], check.fingerprints(c, c.checks[0]))
+        store.put_inbox("c1", CheckResult(at=NOW, check="preview", passed=passed, inputs=inputs))
     fake.host.observe_pr = lambda _slug: (None, False)
 
     assert fake.host.tick(NOW) == []
@@ -523,6 +524,8 @@ def test_a_delivery_discrepancy_disposes_person_check_without_settling_or_relaun
     assert delivery_target.held(after)
     assert loop.open_question(after).id == gate
     assert loop.next_step(after, NOW) is None
+    if passed is not None:
+        assert after.checks[0].answer.passed is passed
 
 
 def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_charged(store, tmp_path, monkeypatch):

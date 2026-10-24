@@ -202,11 +202,11 @@ def unsupported(c: Change, now: datetime) -> StepResult:
 
 def landed(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult | None:
     """Validate a terminal merge before releasing its queue claim; otherwise ask or keep waiting."""
+    if not pr.merged:
+        return pending(Waiting.GITHUB, f"PR #{pr.number} is not confirmed merged", ctx.poll())
     if why := delivery_target.mismatch(c, pr, ctx.repository):
         c.stop = delivery_target.stop(c, why, ctx.now)
         return StepResult(exit=Exit.ASK, question=delivery_target.question(c, why))
-    if not pr.merged:
-        return pending(Waiting.GITHUB, f"PR #{pr.number} is not confirmed merged", ctx.poll())
     c.queue = None
     return None
 

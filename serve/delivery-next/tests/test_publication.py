@@ -2694,6 +2694,31 @@ def test_a_queue_readback_keeps_its_claim_without_valid_terminal_delivery(tmp_pa
     assert c.queue == before
 
 
+@pytest.mark.parametrize(
+    "changed",
+    [{"repository": "o/other"}, {"number": 8}, {"head_branch": "owlbear/other"}, {"base_branch": "release/other"}],
+)
+def test_a_stale_nonterminal_queue_readback_does_not_create_a_permanent_delivery_discrepancy(tmp_path, changed):
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    before = c.queue.model_copy(deep=True)
+    stale = pr(head=A, merged=False, state="open", **changed)
+
+    waiting = queue._merged(ctx(tmp_path, FakeGh(stale)), c, pr(head=A, merged=True))  # noqa: SLF001
+
+    assert waiting.exit is Exit.PENDING
+    assert c.stop is None
+    assert c.queue == before
+    pending = loop.apply(c, waiting, NOW)
+    terminal = pr(head=A, merged=True, state="closed", merge_commit_sha=A)
+    landed = queue._merged(ctx(tmp_path, FakeGh(terminal)), pending, terminal)  # noqa: SLF001
+    assert landed.exit is Exit.DONE
+    after = loop.apply(pending, landed, NOW)
+    assert after.step.kind is StepKind.CLEANUP
+    assert after.stop is None
+    assert after.queue is None
+
+
 @pytest.mark.parametrize("machine_paused", [False, True])
 def test_lost_build_runner_is_charged_without_displacing_the_terminal_owner_gate(tmp_path, machine_paused):
     store = Store(tmp_path)
