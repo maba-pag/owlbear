@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.permissions import decide, identitie
 from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
-from owlbear_delivery_next.runtimes import sdk_teardown, step_decisions, step_input, subagents, watch_feed
+from owlbear_delivery_next.runtimes import sdk_teardown, step_budget, step_decisions, step_input, subagents, watch_feed
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -144,6 +144,7 @@ class _Step:
         self.skills = cfg.skills or preload.directory()  # the folder its skills load from
         self.watch = subagents.Watch(allowed=cfg.subagents)
         self.feed: watch_feed.Feed | None = None  # its watcher, for the run only
+        self.requests: set[asyncio.Task[None]] = set()
 
     @property
     def done(self) -> bool:
@@ -309,10 +310,10 @@ class _Step:
         with contextlib.suppress(psutil.Error, OSError, ValueError):
             self.record(*(k.pid for k in psutil.Process(self.run.runtime_pid or -1).children(recursive=True)))
 
-    async def snapshot(self, session: CopilotSession) -> None:
+    async def snapshot(self, session: CopilotSession, budget: step_budget.Budget) -> None:
         with contextlib.suppress(Exception):
-            listed = (await _call(session.rpc.tasks.list(), "tasks.list")).tasks
-            self.record(*(getattr(t, "pid", None) for t in listed))
+            if (listed := await budget.run(session.rpc.tasks.list, "tasks.list", POLL)) is not None:
+                self.record(*(getattr(t, "pid", None) for t in listed.tasks))
         self.record_tree()
 
     def options(self) -> dict[str, Any]:
@@ -355,26 +356,9 @@ class _Step:
         return None
 
     async def wait(self, session: CopilotSession) -> None:
-        end, reminded = time.monotonic() + (self.cfg.limit or DEADLINES.get(self.cfg.kind, 2400.0)), False
-        while not self.done:
-            left = end - time.monotonic()
-            if left <= 0:
-                self.finish("deadline", detail="step deadline")
-                break
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self.changed.wait(), min(POLL, left))
-            self.changed.clear()
-            if self.done:
-                break
-            await self.snapshot(session)
-            if self.idle and not self.done:
-                self.idle = False
-                if reminded:
-                    self.finish("no-result")
-                else:
-                    reminded = True
-                    self.log(event="reminder")
-                    await _call(session.send(step_input.reminder(role_of(self.cfg), judging=self.cfg.judging)), "send")
+        await step_budget.wait(
+            self, session, self.cfg.limit or DEADLINES.get(self.cfg.kind, 2400.0), time.monotonic, POLL
+        )
 
 
 async def _efforts(client: CopilotClient, model: str) -> bool:

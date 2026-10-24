@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import signal
 import time
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from copilot.rpc import TasksCancelRequest
@@ -104,7 +105,21 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         problems.append("runtime PID unknown")
     elif processes.alive(rt, st.run.pids.get(rt)) is not False:
         await force(st, "runtime still present after stop", problems)
-    return await settle(dict(st.run.pids), problems)
+    pending = await _requests(st, problems)
+    observed = await settle(dict(st.run.pids), problems)
+    return replace(observed, confirmed=False) if pending else observed
+
+
+async def _requests(st: _Step, problems: list[str]) -> bool:
+    requests = tuple(st.requests)
+    if not requests:
+        return False
+    for task in requests:
+        task.cancel()
+    _, pending = await asyncio.wait(requests, timeout=STOP_CALL)
+    if pending:
+        problems.append(f"{len(pending)} runtime request task(s) still pending")
+    return bool(pending)
 
 
 async def _wait[T](task: asyncio.Future[T]) -> bool:
