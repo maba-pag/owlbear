@@ -500,10 +500,15 @@ def test_the_machine_s_settings_are_saved_against_the_revision_the_page_read(htt
     saved = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     stale = http.put("/api/next/machine/settings", json={"rev": read["settings_rev"], "settings": chosen})
     wrong = http.put("/api/next/machine/settings", json={"rev": "x", "settings": {"channel": "nightly"}})
-    assert (read["settings"]["channel"], saved.json()["settings"], registry.load().settings.channel) == (
-        "minor", chosen, "major"
+    assert (read["settings"]["channel"], read["resolved"]["channel"], read["resolved"]["sources"]["channel"]) == (
+        None, "minor", "default"
     )  # fmt: skip
+    assert (saved.json()["settings"], registry.load().settings.channel) == (chosen, "major")
+    assert saved.json()["resolved"]["sources"]["channel"] == "machine"
     assert (stale.status_code, "changed since" in stale.json()["detail"], wrong.status_code) == (409, True, 422)
+    inherit = http.put("/api/next/machine/settings", json={"rev": saved.json()["settings_rev"],
+                                                           "settings": chosen | {"channel": None}})  # fmt: skip
+    assert (inherit.json()["settings"]["channel"], inherit.json()["resolved"]["channel"]) == (None, "minor")
 
 
 def test_a_decision_lists_the_changes_of_every_loaded_project_whose_baseline_pins_it(tmp_path, http, machine):
