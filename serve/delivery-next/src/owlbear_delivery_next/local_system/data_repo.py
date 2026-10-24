@@ -88,7 +88,8 @@ def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.Comple
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return subprocess.CompletedProcess(["git", *args], 1, "", str(exc))
+        # Exit 1 can mean no match or a difference; failure to run Git cannot answer either probe.
+        return subprocess.CompletedProcess(["git", *args], 128, "", str(exc))
 
 
 def _top(root: Path) -> Path | None:
@@ -219,18 +220,31 @@ class DataRepo:
         """Commit ``paths`` alone if they changed; why that failed, else nothing. The caller holds ``locked``."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         rels = [p.relative_to(self.root).as_posix() for p in ([paths] if isinstance(paths, Path) else paths)]
-        rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
+        try:
+            rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
+        except DataRepoError as exc:
+            return f"saved, but not committed: {exc}"
         if not rels:
             return ""  # removed before it was ever committed: nothing to commit
         if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
             return f"saved, but not committed: {added.stderr.strip()[:200]}"
-        staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until).returncode
-        if staged and (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode:
+        staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until)
+        if staged.returncode not in (0, 1):
+            return f"saved, but not committed: {staged.stderr.strip()[:200] or 'git could not read staged changes'}"
+        if (
+            staged.returncode == 1
+            and (made := _git(self.root, "commit", "-q", "-m", message, "--", *rels, until=until)).returncode
+        ):
             return f"saved, but not committed: {made.stderr.strip()[:200]}"
         return ""
 
     def _tracked(self, rel: str, until: float) -> bool:
-        return _git(self.root, "ls-files", "--error-unmatch", "--", rel, until=until).returncode == 0
+        """Whether the index holds ``rel``; a failed probe cannot establish absence."""
+        probe = _git(self.root, "ls-files", "-z", "--", rel, until=until)
+        if probe.returncode:
+            msg = f"git cannot tell whether {rel} is tracked: {probe.stderr.strip()[:200] or 'tracking probe failed'}"
+            raise DataRepoError(msg)
+        return bool(probe.stdout)
 
     def _push(self, until: float) -> str:
         """Push; once rejected, rebase on the remote and push again."""
@@ -270,11 +284,26 @@ class DataRepo:
         if status.returncode:
             return f"the shared settings repository {self.root} cannot be read: {status.stderr.strip()[:200]}"
         files = status.stdout.splitlines()
-        unpushed = _git(self.root, "rev-list", "--count", "HEAD", "--not", "--remotes", until=until).stdout.strip()
+        unpushed, why = self._unpushed(until)
+        if why:
+            return f"the shared settings repository {self.root} cannot be read: {why}"
         parts = [f"{len(files)} file(s) not committed"] if files else []
-        if unpushed.isdigit() and int(unpushed):
+        if unpushed:
             parts.append(f"{unpushed} commit(s) not pushed")
         return f"unpublished in {self.root}: {', '.join(parts)}; the next save retries" if parts else ""
+
+    def _unpushed(self, until: float) -> tuple[int, str]:
+        """Count commits no remote has, distinguishing an unborn checkout from a failed probe."""
+        head = _git(self.root, "rev-parse", "--verify", "--quiet", "HEAD", until=until)
+        if head.returncode == 1:
+            return 0, ""
+        if head.returncode:
+            return 0, head.stderr.strip()[:200] or "git could not resolve HEAD"
+        counted = _git(self.root, "rev-list", "--count", "HEAD", "--not", "--remotes", until=until)
+        raw = counted.stdout.strip()
+        if counted.returncode or not (raw.isascii() and raw.isdecimal()):
+            return 0, counted.stderr.strip()[:200] or "git printed no valid commit count"
+        return int(raw), ""
 
 
 def locate() -> DataRepo | None:
