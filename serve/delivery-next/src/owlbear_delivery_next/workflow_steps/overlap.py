@@ -214,7 +214,11 @@ def _unverified(reason: str) -> StepResult:
 
 def starting(c: Change, task: Task | None) -> StepResult | None:
     """Refuse a resumed integration with no durable base instead of inventing a base from its current HEAD."""
-    resumed = c.step.session is not None or c.step.started_at is not None
+    resumed = (
+        c.step.session is not None
+        or c.step.started_at is not None
+        or bool(task and (task.spans or task.built_by or task.done))
+    )
     if c.step.kind == StepKind.BUILD and task and task.origin == "integration" and task.base is None and resumed:
         return _unverified("The resumed integration start head is missing, so collisions cannot be checked")
     return None

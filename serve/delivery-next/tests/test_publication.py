@@ -66,6 +66,7 @@ from owlbear_delivery_next.github.provider import (
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as scheduler
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
@@ -1805,6 +1806,50 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
     after = restarted.read("c1")
     assert (len(after.questions), after.step.kind) == (1, StepKind.REVIEW)
     assert [t.id for t in after.plan.tasks] == ["t1", "t2"]
+
+
+@pytest.mark.parametrize("option", ["retry", "accept"])
+@pytest.mark.parametrize("evidence", ["spans", "built_by"])
+def test_owner_usage_continuation_cannot_replace_a_missing_integration_base(
+    integration_collision_setup, monkeypatch, option, evidence
+):
+    clone, mine, store, lock, tid = integration_collision_setup
+    with pytest.raises(subprocess.CalledProcessError):
+        git(clone, "merge", "-q", "--no-edit", "origin/main")
+    (clone / "src/app.py").write_text("both\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "integration completed before continuation")
+    head = git(clone, "rev-parse", "HEAD")
+    c = store.read("c1")
+    task = c.plan.tasks[-1]
+    task.base = None
+    if evidence == "spans":
+        task.spans = [f"{mine}..{head}"]
+    else:
+        task.built_by = "prior-integration"
+    c.step.session, c.step.started_at = "prior-integration", NOW
+    held_run = Run("prior-integration", "result", usage_unread="metrics unavailable", head=head)
+    c = loop.apply(c, session_result.usage_gate(held_run, StepKind.BUILD, accept=True), NOW)
+    q = loop.open_question(c)
+    c, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option=option)], NOW)
+    assert (step.kind, step.task, step.session, step.started_at) == (StepKind.BUILD, tid, None, None)
+    store.write(lock, c)
+    calls = []
+
+    async def forbidden(_cfg):
+        calls.append(True)
+        pytest.fail("A continuation with missing integration provenance must not start an SDK session")
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", forbidden)
+
+    runner._agent(store, lock, store.read("c1"), clone)  # noqa: SLF001
+
+    stopped = store.read("c1")
+    assert stopped.outcome.exit == Exit.STOP
+    assert "start head" in stopped.stop.reason
+    assert stopped.plan.tasks[-1].base is None
+    assert calls == []
 
 
 def commit(cwd, name):
