@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tarfile
 from datetime import UTC, datetime, timedelta
@@ -1510,6 +1511,106 @@ def test_a_staged_version_the_working_tree_replaced_is_archived_and_verified(wor
         assert tar.extractfile("index/0/a.txt").read() == b"staged B\n"
         assert tar.extractfile("files/a.txt").read() == b"worktree C\n"
         assert b"+staged B" in tar.extractfile("staged.diff").read()
+
+
+def make_nested_repo(where):
+    where.mkdir(parents=True)
+    git(where, "init", "-q")
+    (where / "unique.txt").write_text("only here\n")
+    git(where, "add", "unique.txt")
+    git(where, "-c", "user.name=Owlbear", "-c", "user.email=owlbear@example.test", "commit", "-q", "-m", "unique")
+    return git(where, "rev-parse", "HEAD")
+
+
+def test_a_nested_repository_stops_the_cleanup_and_keeps_its_unique_work(worktree_with_work, tmp_path):
+    clone, wt = worktree_with_work
+    nested = wt / "vendor" / "lib"
+    head = make_nested_repo(nested)
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.names.pr = "owlbear/c2", None
+    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
+    assert (result.exit, wt.exists()) == (Exit.STOP, True)
+    assert result.stop.action.startswith(f"Copy or delete {wt}")
+    assert "vendor" in result.reason
+    assert (wt / "new.txt").read_text() == "untracked\n"
+    assert (git(nested, "rev-parse", "HEAD"), (nested / "unique.txt").read_text()) == (head, "only here\n")
+
+
+def test_an_ignored_nested_repository_stops_the_cleanup_and_is_not_dropped(worktree_with_work, tmp_path):
+    clone, wt = worktree_with_work
+    (tmp_path / "ignore").write_text("vendor/\n")
+    git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
+    nested = wt / "vendor" / "lib"
+    head = make_nested_repo(nested)
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.names.pr = "owlbear/c2", None
+    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
+    assert (result.exit, wt.exists()) == (Exit.STOP, True)
+    assert (git(nested, "rev-parse", "HEAD"), (nested / "unique.txt").read_text()) == (head, "only here\n")
+
+
+def test_links_and_file_modes_round_trip_through_the_archive(worktree_with_work, tmp_path):
+    _, wt = worktree_with_work
+    (wt / "run.sh").write_text("#!/bin/sh\n")
+    (wt / "run.sh").chmod(0o755)
+    (wt / "live-link").symlink_to("a.txt")
+    (wt / "dangling-link").symlink_to("missing-target")
+    inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main"])
+    assert {"run.sh", "live-link", "dangling-link"} <= set(inv.dirty)
+    archive = cleanup.preserve(wt, "owlbear/c2", inv, tmp_path / "kept", "links")[-1]
+    restored = tmp_path / "restored"
+    restored.mkdir()
+    with tarfile.open(archive) as tar:
+        for name in ("run.sh", "live-link", "dangling-link"):
+            member = tar.getmember(f"files/{name}")
+            if member.issym():
+                (restored / name).symlink_to(member.linkname)
+            else:
+                (restored / name).write_bytes(tar.extractfile(member).read())
+                (restored / name).chmod(member.mode)
+    assert (restored / "run.sh").stat().st_mode & 0o777 == 0o755
+    assert (restored / "live-link").readlink().as_posix() == "a.txt"
+    assert (restored / "dangling-link").readlink().as_posix() == "missing-target"
+    assert not (restored / "dangling-link").exists()
+
+
+def test_ignored_links_are_archived_and_a_dangling_one_does_not_break_the_size_check(worktree_with_work, tmp_path):
+    clone, wt = worktree_with_work
+    (tmp_path / "ignore").write_text("local-link\n")
+    git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
+    (wt / "local-link").symlink_to("missing-target")
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.names.pr = "owlbear/c2", None
+    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
+    assert (result.exit, wt.exists()) == (Exit.DONE, False)
+    with tarfile.open(result.preserved[-1]) as tar:
+        member = tar.getmember("files/local-link")
+        assert (member.issym(), member.linkname) == (True, "missing-target")
+
+
+def test_an_entry_that_cannot_be_kept_is_refused_before_anything_is_written(worktree_with_work, tmp_path):
+    _, wt = worktree_with_work
+    os.mkfifo(wt / "pipe")
+    dest = tmp_path / "kept"
+    with pytest.raises(cleanup.PreservationError):
+        cleanup.preserve(wt, "owlbear/c2", cleanup.Inventory((), ("pipe",)), dest, "fifo")
+    assert not dest.exists()
+    git(wt, "checkout", "-q", "--detach")
+    with pytest.raises(cleanup.PreservationError):
+        cleanup.inventory(wt, "owlbear/c2", ["origin/main"])
+
+
+def test_preservation_never_reads_through_a_link_in_a_dirty_paths_parent(worktree_with_work, tmp_path):
+    _, wt = worktree_with_work
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "only-outside.txt").write_text("not part of the worktree\n")
+    (wt / "linked").symlink_to(outside, target_is_directory=True)
+    dest = tmp_path / "kept"
+    with pytest.raises(OSError, match=r"Not a directory|Too many levels"):
+        cleanup.preserve(wt, "owlbear/c2", cleanup.Inventory((), ("linked/only-outside.txt",)), dest, "linked")
+    assert not dest.exists()
+    assert (outside / "only-outside.txt").read_text() == "not part of the worktree\n"
 
 
 # CI detection from workflow files

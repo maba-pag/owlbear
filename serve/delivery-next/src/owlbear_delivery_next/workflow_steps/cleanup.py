@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
+import stat
 import subprocess
 import tarfile
 from dataclasses import dataclass
@@ -33,7 +35,7 @@ if TYPE_CHECKING:
 
 
 class PreservationError(Exception):
-    """A bundle or archive could not be verified; the workspace stays untouched."""
+    """Preservation cannot represent or verify an entry; the workspace stays untouched."""
 
 
 # Ignored directories a build or install recreates; never preserved.
@@ -62,7 +64,7 @@ class Inventory:
 
     commits: tuple[str, ...]
     dirty: tuple[str, ...]
-    ignored: tuple[str, ...] = ()  # ignored files outside regenerable directories
+    ignored: tuple[str, ...] = ()  # ignored files and links outside regenerable directories
 
 
 def _bytes(path: Path, *args: str) -> bytes:
@@ -71,40 +73,121 @@ def _bytes(path: Path, *args: str) -> bytes:
     ).stdout
 
 
-def _ignored(path: Path, name: str) -> list[str]:
-    """The regular files of one ignored entry (a file or a directory), outside regenerable directories."""
-    full = path / name.rstrip("/")
-    files = [full] if full.is_file() else sorted(full.rglob("*")) if full.is_dir() and not full.is_symlink() else []
-    rels = [p.relative_to(path) for p in files if p.is_file() and not p.is_symlink()]
-    return [r.as_posix() for r in rels if not REGENERABLE & set(r.parts)]
+def _present(path: Path) -> bool:
+    return path.is_symlink() or path.exists()
+
+
+def _kind(full: Path) -> str:
+    try:
+        mode = full.lstat().st_mode
+    except FileNotFoundError:
+        return "gone"
+    if stat.S_ISLNK(mode):
+        return "link"
+    if stat.S_ISREG(mode):
+        return "file"
+    msg = f"{full} is not a regular file or a symlink; keep it in the workspace"
+    raise PreservationError(msg)
+
+
+def _linked(path: Path, branch: str) -> None:
+    out = _bytes(path, "rev-parse", "--git-dir", "--git-common-dir", "--symbolic-full-name", "HEAD")
+    git_dir, common, head = out.decode().splitlines()
+    if (path / git_dir).resolve() == (path / common).resolve() or head != f"refs/heads/{branch}":
+        msg = f"{path} is not a linked worktree on the expected branch {branch}"
+        raise PreservationError(msg)
+
+
+def _ignored(path: Path, rel: str) -> list[str]:
+    """Inventory ignored entries without following links or silently skipping nested repositories."""
+    if REGENERABLE & set(Path(rel).parts):
+        return []
+    full = path / rel
+    if full.is_symlink() or not full.is_dir():
+        _kind(full)
+        return [rel]
+    if _present(full / ".git"):
+        msg = f"{full} is a nested repository; keep it in the workspace"
+        raise PreservationError(msg)
+    children = sorted(full.iterdir())
+    if not children:
+        msg = f"{full} is an empty directory that the archive cannot represent"
+        raise PreservationError(msg)
+    return [kept for child in children for kept in _ignored(path, f"{rel}/{child.name}")]
 
 
 def inventory(path: Path, branch: str, keep: Sequence[str]) -> Inventory:
     """Commits outside every kept ref, every path ``git status`` reports, and ignored files worth keeping."""
+    _linked(path, branch)
     kept = [k for k in keep if engine.git_ok(path, "rev-parse", "--verify", "--quiet", f"{k}^{{commit}}")]
     commits = worktree.git(path, "rev-list", f"refs/heads/{branch}", "--not", *kept, "--").split()
     args = ("status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all")
     dirty, ignored, entries = [], [], iter(_bytes(path, *args).split(b"\0"))
     for entry in entries:
         if entry[:3] == b"!! ":
-            ignored += _ignored(path, entry[3:].decode(errors="surrogateescape"))
+            ignored += _ignored(path, entry[3:].decode(errors="surrogateescape").rstrip("/"))
         elif entry:
             dirty.append(entry[3:].decode(errors="surrogateescape"))
             if entry[:1] in {b"R", b"C"}:
                 next(entries, None)  # the rename's source path
+    for rel in dirty:
+        _kind(path / rel)
     return Inventory(tuple(commits), tuple(dirty), tuple(ignored))
 
 
 def large(path: Path, inv: Inventory) -> bool:
     """Whether the ignored files are too large to archive."""
-    return sum((path / p).stat().st_size for p in inv.ignored) > LARGE
+    return sum((path / p).lstat().st_size for p in inv.ignored) > LARGE
 
 
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _parts(path: Path, dirty: Sequence[str], ignored: Sequence[str] = ()) -> tuple[dict[str, bytes], dict[str, str]]:
+def _regular(name: str, data: bytes, mode: int = 0o644) -> tarfile.TarInfo:
+    info = tarfile.TarInfo(name)
+    info.size, info.mode = len(data), mode
+    return info
+
+
+def _worktree_member(path: Path, rel: str) -> tuple[tarfile.TarInfo, bytes] | None:
+    """Read a leaf entry through no-follow directory descriptors, retaining links and file modes."""
+    name = Path(rel)
+    if name.is_absolute() or ".." in name.parts or not name.parts:
+        raise PreservationError(rel)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(path, flags)
+    try:
+        for part in name.parts[:-1]:
+            child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        leaf = name.parts[-1]
+        try:
+            mode = os.stat(leaf, dir_fd=directory, follow_symlinks=False).st_mode
+        except FileNotFoundError:
+            return None
+        if stat.S_ISLNK(mode):
+            info = tarfile.TarInfo(f"files/{rel}")
+            info.type = tarfile.SYMTYPE
+            info.linkname = os.readlink(leaf, dir_fd=directory)
+            return info, b""
+        if not stat.S_ISREG(mode):
+            raise PreservationError(path / rel)
+        descriptor = os.open(leaf, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(descriptor, "rb") as handle:
+            mode = os.fstat(handle.fileno()).st_mode
+            if not stat.S_ISREG(mode):
+                raise PreservationError(path / rel)
+            data = handle.read()
+        return _regular(f"files/{rel}", data, stat.S_IMODE(mode)), data
+    finally:
+        os.close(directory)
+
+
+def _parts(
+    path: Path, dirty: Sequence[str], ignored: Sequence[str] = ()
+) -> tuple[list[tuple[tarfile.TarInfo, bytes]], dict[str, str]]:
     """Archive parts: both diffs, the index listing, each index blob (conflict stages too), dirty and ignored files.
 
     Returns the parts and, for each index blob, the object id its bytes must hash to.
@@ -122,9 +205,9 @@ def _parts(path: Path, dirty: Sequence[str], ignored: Sequence[str] = ()) -> tup
         "index.txt": index.replace(b"\0", b"\n"),
     }
     parts |= {name: _bytes(path, "cat-file", "blob", oid) for name, oid in blobs.items()}
-    parts |= {f"files/{p}": (path / p).read_bytes() for p in dirty if (path / p).is_file()}
-    parts |= {f"files/{p}": (path / p).read_bytes() for p in ignored}
-    return parts, blobs
+    members = [(_regular(name, data), data) for name, data in parts.items()]
+    members.extend(member for rel in dict.fromkeys([*dirty, *ignored]) if (member := _worktree_member(path, rel)))
+    return members, blobs
 
 
 def _oid(algorithm: str, data: bytes) -> str:
@@ -139,6 +222,7 @@ def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> 
     Raises:
         PreservationError: A bundle or archive did not verify.
     """
+    members, blobs = _parts(path, inv.dirty, inv.ignored)
     dest.mkdir(mode=0o700, parents=True, exist_ok=True)
     saved: list[Path] = []
     if inv.commits:
@@ -148,22 +232,22 @@ def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> 
             raise PreservationError(bundle)
         saved.append(bundle)
     if inv.dirty or inv.ignored:
-        archive, expected = dest / f"{stem}.tar", {}
-        parts, blobs = _parts(path, inv.dirty, inv.ignored)
+        archive = dest / f"{stem}.tar"
         algorithm = worktree.git(path, "rev-parse", "--show-object-format").strip()
         with tarfile.open(archive, "w") as tar:
-            for name, data in parts.items():
-                info = tarfile.TarInfo(name)
-                info.size = len(data)
+            for info, data in members:
                 tar.addfile(info, io.BytesIO(data))
-                expected[name] = _digest(data)
         with tarfile.open(archive) as tar:
-            for name, digest in expected.items():
-                member = tar.extractfile(name)
-                data = member.read() if member else b""
-                blob = name in blobs and blobs[name] != _oid(algorithm, data)
-                if member is None or _digest(data) != digest or blob:
-                    raise PreservationError(archive, name)
+            read = {m.name: m for m in tar.getmembers()}
+            for info, data in members:
+                back = read.get(info.name)
+                if back is None or (back.type, back.mode, back.linkname) != (info.type, info.mode, info.linkname):
+                    raise PreservationError(archive, info.name)
+                reader = tar.extractfile(back) if back.isreg() else None
+                body = reader.read() if reader is not None else b""
+                blob = info.name in blobs and blobs[info.name] != _oid(algorithm, body)
+                if _digest(body) != _digest(data) or blob:
+                    raise PreservationError(archive, info.name)
         saved.append(archive)
     return saved
 
@@ -241,13 +325,9 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
         ctx.gh.close_pull_request(ctx.repository, pr.number)
     path, saved, kept = Path(c.names.worktree), [], False
     if c.names.worktree and (path / ".git").exists():
-        inv = inventory(path, c.names.branch, _keep(ctx, path, c, pr))
-        if kept := large(path, inv):
-            ctx.log(c.slug, "workspace-kept", path=str(path), reason="large ignored files")
-        else:
-            saved, stopped = _retire(ctx, c, path, inv)
-            if stopped is not None:
-                return c, stopped
+        saved, kept, stopped = _workspace(ctx, c, path, pr)
+        if stopped is not None:
+            return c, stopped
     if not kept and (why := disposable.remove(ctx.repo, ctx.store, c.slug)):
         ctx.log(c.slug, "read-only-kept", why=why)
     if pr and pr.merged and profile.value(ctx.profile, profile.DELETE) == "yes":
@@ -290,16 +370,33 @@ def fixes(ctx: Ctx, c: Change, pr: PullRequest | None) -> None:
         ctx.log(c.slug, "decision-fixes", notice=f"the decision fixes of {c.slug} were not updated: {exc}"[:300])
 
 
+def _workspace(ctx: Ctx, c: Change, path: Path, pr: PullRequest | None) -> tuple[list[Path], bool, StepResult | None]:
+    keep = _keep(ctx, path, c, pr)
+    try:
+        inv = inventory(path, c.names.branch, keep)
+        kept = large(path, inv)
+    except (PreservationError, OSError, subprocess.SubprocessError) as exc:
+        return [], False, _stopped(ctx, path, f"could not inventory {path}: {exc}")
+    if kept:
+        ctx.log(c.slug, "workspace-kept", path=str(path), reason="large ignored files")
+        return [], True, None
+    saved, stopped = _retire(ctx, c, path, inv)
+    return saved, False, stopped
+
+
+def _stopped(ctx: Ctx, path: Path, reason: str) -> StepResult:
+    action = f"Copy or delete {path}; Delivery left it untouched"
+    stop = Stop(kind=ErrorKind.STATE, reason=reason, action=action, resume=f"{path} clean or gone", at=ctx.now)
+    return StepResult(exit=Exit.STOP, reason=reason, stop=stop)
+
+
 def _retire(ctx: Ctx, c: Change, path: Path, inv: Inventory) -> tuple[list[Path], StepResult | None]:
     """Preserve and verify what the worktree alone holds, then remove it; a failed verification stops untouched."""
     dest = ctx.store.root / "changes" / c.slug / "preserved"
     try:
         saved = preserve(path, c.names.branch, inv, dest, f"{c.slug}-{len(c.names.preserved) + 1}")
     except (PreservationError, subprocess.CalledProcessError, OSError, tarfile.TarError) as exc:
-        reason = f"could not save {path}: {exc}"
-        action = f"Copy or delete {path}; Delivery left it untouched"
-        stop = Stop(kind=ErrorKind.STATE, reason=reason, action=action, resume=f"{path} clean or gone", at=ctx.now)
-        return [], StepResult(exit=Exit.STOP, reason=reason, stop=stop)
+        return [], _stopped(ctx, path, f"could not save {path}: {exc}")
     dirty, ignored = list(inv.dirty)[:50], list(inv.ignored)[:50]
     saved_paths = [str(s) for s in saved]
     ctx.log(c.slug, "preserved", commits=len(inv.commits), dirty=dirty, ignored=ignored, saved=saved_paths)
