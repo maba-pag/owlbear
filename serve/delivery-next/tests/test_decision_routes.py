@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -435,7 +436,7 @@ def chat(store, monkeypatch) -> chat_client.Chat:
     """The chat tools of a clone whose host answers in-process, every call marked as the chat's."""
     http = client(store, CHAT)
     tools = chat_client.Chat.__new__(chat_client.Chat)
-    tools.store = store
+    tools.repo, tools.home = Path(), store.root
 
     def call(method: str, path: str, body: object = None) -> tuple[int, Any]:
         r = http.request(method, f"/api/next{path}", json=body)

@@ -249,7 +249,7 @@ class Loopback:
 def test_the_chat_tool_takes_the_kind_and_passes_only_a_confirmed_statement(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.repo, chat.store = picking.repo, picking.store
+    chat.repo, chat.home = picking.repo, picking.store.root
     monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
     monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
     monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
