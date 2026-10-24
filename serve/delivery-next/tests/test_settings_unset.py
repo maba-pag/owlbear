@@ -100,7 +100,7 @@ def test_todays_built_in_values_are_carried_into_global_once_keeping_what_it_set
     )
     assert (glob.agents["watcher"].model, glob.sessions, glob.pr_marker, glob.curator_threshold) == (
         "gpt-6-luna", 2, True, 95)  # fmt: skip
-    assert json.loads(shared.global_path.read_text())["format"] == config.CARRIED_FORMAT
+    assert json.loads(shared.global_path.read_text())["format"] == config.CONFIG_FORMAT >= config.CARRIED_FORMAT
     assert _git(shared.root, "log", "-1", "--format=%s") == "settings: today's built-in values carried into Global"
     assert _git(shared.root, "status", "--porcelain") == ""
     head = _git(shared.root, "rev-parse", "HEAD")

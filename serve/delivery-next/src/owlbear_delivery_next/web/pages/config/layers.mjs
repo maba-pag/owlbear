@@ -14,7 +14,8 @@ function saved(layer, key) {
     return key === "pr_labels" ? v.join(", ") || "none" : v ? "on" : "off";
   }
   const [role, field] = key.split(".");
-  const value = role === "final_review" ? loaded[layer]?.final_review?.[field] : loaded[layer]?.agents?.[role]?.[field];
+  const value = role === "final_review" ? loaded[layer]?.final_review?.[field]
+    : role === "machine" ? loaded[layer]?.machine?.[field] : loaded[layer]?.agents?.[role]?.[field];
   return value === null || value === undefined ? "" : String(value);
 }
 
@@ -82,6 +83,12 @@ function edited(layer) {
     }
     const [role, field] = key.split(".");
     const number = !NUMBERS.includes(field) || value === "" ? null : /^\d+$/.test(value) ? Number(value) : value;
+    if (role === "machine") {  // Global's machine settings (2026-10-23): "true"/"false" for the switches
+      const flag = value === "" ? null : value === "true";
+      const mine = { ...(next.machine ?? {}), [field]: field.startsWith("update_") ? flag : number ?? (value || null) };
+      next.machine = Object.values(mine).some((v) => v !== null) ? mine : null;
+      continue;
+    }
     if (role === "final_review") {
       const mine = { ...(next.final_review ?? {}), [field]: number };
       next.final_review = Object.values(mine).some((v) => v !== null) ? mine : null;

@@ -2,25 +2,27 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, loaded } from "/assets/ui.mjs";
 import { actions, form } from "./actions.mjs";
 import { impact } from "./impact.mjs";
-import { at, readBack, STATES, show, state, untagged } from "./state.mjs";
+import { at, readBack, sameAddress, STATES, show, state, untagged } from "./state.mjs";
 import { listed } from "./widgets.mjs";
 
-// Open one decision in full (or close it), under its read-back (*from* "queue") or in the list; *again* reads the
-// opened one afresh and keeps its form.
-export async function open(id, { again = false, from = "list" } = {}) {
-  if (state.opened === id && !again && state.from === from) {
-    Object.assign(state, { opened: null, entry: null, form: null });
+let detailTurn = 0;
+
+export async function open(id, { again = false, from = "list", address = null } = {}) {
+  if (!again && state.opened === id && state.from === from && sameAddress(state.address, address)) {
+    detailTurn++;
+    Object.assign(state, { opened: null, entry: null, form: null, address: null });
     return show();
   }
-  if (!again) Object.assign(state, { opened: id, from, entry: null, form: null, effect: "" });
+  const turn = ++detailTurn, reading = again ? state.address : address;
+  if (!again) Object.assign(state, { opened: id, from, address, entry: null, form: null, effect: "" });
   show();
   const path = `/decisions/${encodeURIComponent(id)}`;
   try {
-    const entry = await call(at(path));
+    const entry = await call(at(path, reading));
     if (loaded()) entry.changes = (await call(`${path}/changes`, { machine: true })).changes;  // every project's
-    if (state.opened === id) state.entry = entry;
+    if (turn === detailTurn && state.opened === id) state.entry = { ...entry, address: reading };
   } catch (error) {
-    state.error = error.message;
+    if (turn === detailTurn) state.error = error.message;
   }
   show();
 }

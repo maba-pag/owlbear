@@ -15,18 +15,31 @@ export const state = {
   loaded: null, error: "", receipts: [], notice: "",
   opened: null,  // the id of the decision shown in full
   from: "list",  // where it is shown: under its read-back in the queue, or in the list
+  address: null,
   entry: null,  // its details as last read
   form: null,  // { action, draft } of the opened decision's form
   pending: "",  // the action whose request is under way
-  impact: null,  // { id, report | error | busy, scheduled } of the opened decision's impact (TD-428)
+  impact: null,  // { id, address, report | error | busy, scheduled } of the opened decision's impact (TD-428)
   effect: "",  // the owner's mark on a draft that replaces one, sent when he activates it
 };
 // where: project | global | all | owlbear; state: "" (in force and drafts), a state, or "all" (retired included)
 export const filter = { where: "all", topic: "", origin: "", state: "", read_back: "", text: "" };
 
-// A decision's address: OwlBear's own decisions are read and acted on with where=owlbear (TD-435).
-export function at(path) {
-  return filter.where === "owlbear" ? `${path}?where=owlbear` : path;
+// Capture the list's address so a later filter cannot retarget its reads, confirmations or writes.
+export function addressOf(where, project = "") {
+  return { where: where === "owlbear" ? "owlbear" : "", project };
+}
+
+export function at(path, address) {
+  return address.where ? `${path}?where=${address.where}` : path;
+}
+
+export function sameAddress(a, b) {
+  return (a?.where ?? "") === (b?.where ?? "");
+}
+
+export function projectName(address) {
+  return address.where === "owlbear" ? "OwlBear" : address.project;
 }
 
 export function show() {
