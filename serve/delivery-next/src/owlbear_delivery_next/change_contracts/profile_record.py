@@ -27,11 +27,15 @@ def named(model: str) -> str:
 
 
 class ProfileEntry(Record):
-    """One detected project fact with its evidence (DR1); an HTTP 403 on rules is unknown."""
+    """A detected fact or confirmed intent; ``observed`` binds the latter to the complete raw observation.
+
+    The owner's replacement value is not the observation. An HTTP 403 on rules remains unknown.
+    """
 
     state: Literal["known", "unknown", "unsupported"]
     value: str = ""
     evidence: str = ""
+    observed: str = Field(default="", pattern=r"^(?:[0-9a-f]{64})?$", exclude_if=lambda value: not value)
 
 
 class RoleModel(Record):
