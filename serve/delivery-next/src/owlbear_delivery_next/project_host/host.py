@@ -313,7 +313,7 @@ class Host:
         prior = self.store.read(slug)  # before the inbox, which may clear a committed outcome
         state, moved = self.observe_pr(slug)
         if paused:
-            state, moved = (state if state in {"merged", "closed"} else None), False
+            state, moved = (state if state in {"merged", "closed", "misdelivered"} else None), False
         c, _ = self.store.fold(lock, slug, now, state, moved=moved, leave=queue.barrier(self.store, self.repo))
         if state == "merged" and prior.step.kind != StepKind.CLEANUP and c.step.kind == StepKind.CLEANUP:
             self.merged()  # its project's memory may hold what the Change's agents saved (item 5 slice 4)

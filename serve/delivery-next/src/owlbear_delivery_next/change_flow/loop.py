@@ -46,6 +46,7 @@ from owlbear_delivery_next.change_flow import (
     budgets,
     curation_flow,
     decision_baseline,
+    delivery_target,
     disputes,
     picks,
     plan_rounds,
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Change
 
-type PrState = Literal["open", "merged", "closed"]
+type PrState = Literal["open", "merged", "closed", "misdelivered"]
 type Seen = tuple[PrState | None, bool]  # the PR's end state; whether a consent wait saw a comment or a new head
 
 _FIVE = frozenset(Exit) - {Exit.PENDING}
@@ -187,7 +188,8 @@ def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent se
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
     c = fold(change, items, now)
-    if not c.finished_at and c.step.kind != StepKind.CLEANUP:
+    routed = delivery_target.route(c, pr_state, now)
+    if not routed and not c.finished_at and c.step.kind != StepKind.CLEANUP:
         if not asking and waiting_consent(c) and (q := open_question(c)) is not None:
             q.answer = Answer(option=OBSOLETE, text="ask before merge is off", at=now)
             c.outcome = None  # the merge gate runs again without asking
