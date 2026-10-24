@@ -309,3 +309,14 @@ def test_a_checkout_whose_git_folder_lives_elsewhere_is_guarded_with_it(place, t
     (local_home.root() / project_home.MACHINE).write_text(json.dumps(listed))  # Git cannot name such a checkout
     on = watched.watching(place.store, Lock("c1"), "build", resolve(None, Layer(watcher=True)), checkout, print)
     assert {checkout.resolve(), meta.resolve()} <= {p.resolve() for p in on.places.guarded}
+
+
+def test_a_call_reported_before_its_launcher_was_announced_gets_its_subagent_without_another_event(place) -> None:
+    outside = str(place.elsewhere / "y.py")
+    stepped(place, start("e7", "edit", parent="t8", path=outside), launched("t8", "explore"))
+    assert rows(place)["e7"]["agent"] == "explore"
+
+
+def test_a_shell_call_seen_only_in_its_permission_request_shows_its_whole_command(place) -> None:
+    stepped(place, shell("p3", read_only=False))
+    assert rows(place)["p3"]["command"] == "ran make p3"

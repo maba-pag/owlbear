@@ -36,7 +36,7 @@ export function watcherSection(w) {
     + `${plural(w.unresolved, "call")} whose shell effects are not classified yet`;
   return info("Watcher", text(state, { size: "xs", color: "contrast-medium" }), text(counted),
     outside.length ? entries(outside) : nothing,
-    open.length ? toggle("watcher-open", `Not classified yet (${w.unresolved})`, text("Shell effects are not "
+    open.length ? toggle("watcher-open", `Not classified yet (${open.length})`, text("Shell effects are not "
       + "classified yet: every shell command that may write is listed here.", { size: "xs" }), entries(open)) : nothing,
     lost.map((r) => text(r.verdict, { size: "xs", color: "contrast-medium" })));
 }

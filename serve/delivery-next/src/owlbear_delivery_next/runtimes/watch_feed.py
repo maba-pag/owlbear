@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.subagents import Watch
 
 NOW_LIMIT = 80  # characters of the now line's summary, and of a report's command
-START, ASKED = "tool.execution_start", "permission.requested"
+START, ASKED, LAUNCHED = "tool.execution_start", "permission.requested", "subagent.started"
 
 
 def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
@@ -78,11 +78,15 @@ class Feed:
         self.places = watching.places.resolved()
         self.own = watch_policy.canonical(str(own), own, self.places)
         self.calls: dict[tuple[str, str], _Seen] = {}
+        self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
         self.open = True
         self.writer = watching.writer()
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
         """Observe one event; a start or a permission request updates its call's report."""
+        if kind == LAUNCHED:
+            self._launched(ev)
+            return
         if kind not in {START, ASKED}:
             return
         if not self.open:  # the runtime is stopped; a late callback is counted, never written
@@ -123,6 +127,19 @@ class Feed:
         seen.agent_id = seen.agent_id or getattr(ev, "agent_id", None) or ""
         return (self.session(), cid), seen
 
+    def _launched(self, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
+        """Name a subagent's launcher, and report again the calls already reported under it as "unknown"."""
+        launcher, name = getattr(ev.data, "tool_call_id", "") or "", getattr(ev.data, "agent_name", "") or ""
+        if not (launcher and name) or not self.open:
+            return
+        self.launched[launcher] = name
+        try:
+            for key, seen in list(self.calls.items()):
+                if seen.reported and launcher in {seen.parent, seen.agent_id}:
+                    self._judged(key, seen)
+        except Exception as exc:  # noqa: BLE001 - an observation never ends the step
+            self.writer.lost(f"{type(exc).__name__}: {exc}"[:200])
+
     def _judged(self, key: tuple[str, str], seen: _Seen) -> None:
         outcome = watch_policy.judge(seen.call, self.own, self.places)
         slug, (session, cid) = self.watching.slug, key
@@ -147,14 +164,17 @@ class Feed:
         "unknown".
         """
         if seen.agent_id:
-            launched = self.agents.seen.get(seen.agent_id)
-            return launched.agent if launched else seen.agent_id
+            return self._named(seen.agent_id) or seen.agent_id
         if not seen.started:  # only a start shows whether a call has a parent
             return "unknown"
         if not seen.parent:
             return "main"
-        launched = self.agents.seen.get(seen.parent)
-        return launched.agent if launched and launched.agent else "unknown"
+        return self._named(seen.parent) or "unknown"
+
+    def _named(self, launcher: str) -> str:
+        """The subagent *launcher* started, by the step's subagent record or this feed's; "" when neither saw it."""
+        found = self.agents.seen.get(launcher)
+        return (found.agent if found else "") or self.launched.get(launcher, "")
 
 
 def asked(request: Any) -> watch_policy.Asked:  # noqa: ANN401 - one of the SDK's permission request classes
@@ -168,6 +188,8 @@ def asked(request: Any) -> watch_policy.Asked:  # noqa: ANN401 - one of the SDK'
 
 def _command(request: Any) -> str:  # noqa: ANN401 - one of the SDK's permission request classes
     req = view(request)
+    if whole := getattr(request, "full_command_text", None):  # the command as given, not its programs' names
+        return summary("bash", {"command": whole})
     if req.commands:
         return summary("bash", {"command": req.commands[0]})
     return summary(req.kind, {"path": req.paths[0] if req.paths else ""})

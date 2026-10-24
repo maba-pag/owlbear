@@ -46,6 +46,8 @@ def reported(store: Store) -> None:
                (SECRET,), "outside write (not judged yet)", "", "enriched"),
         Report("s1", "c2", "2026-10-24T10:00:02.000+00:00", "build", "unknown", "bash", "ran make install", (),
                "unresolved (shell effects not classified yet)", "shell effects not classified yet", "start"),
+        Report("s1", "c3", "2026-10-24T10:00:03.000+00:00", "build", "main", "bash", "ran cp a /elsewhere/z",
+               ("/elsewhere/z",), "outside write (not judged yet)", "shell effects not classified yet", "enriched"),
         watch_reports.summary_row("s1", "build", "2 reports dropped"),
     ]  # fmt: skip
     with store.db.write() as connection:
@@ -64,10 +66,11 @@ def test_the_changes_row_counts_its_outside_writes_and_its_page_lists_the_report
     http = TestClient(api.create_app(store, "tok", Host()), base_url="http://127.0.0.1",
                       headers={"authorization": "Bearer tok"})  # fmt: skip
     (row,) = http.get("/api/next/changes").json()
-    assert row["watcher"] == {"outside": 1, "unresolved": 1}
+    assert row["watcher"] == {"outside": 2, "unresolved": 2}
     w = http.get("/api/next/changes/flip").json()["watcher"]
-    assert (w["on"], w["outside"], w["unresolved"]) == (True, 1, 1)
+    assert (w["on"], w["outside"], w["unresolved"]) == (True, 2, 2)
     assert [(r["agent"], r["command"], r["targets"], r["verdict"]) for r in w["reports"][1:]] == [
+        ("main", "ran cp a /elsewhere/z", ["/elsewhere/z"], "outside write (not judged yet)"),
         ("unknown", "ran make install", [], "unresolved (shell effects not classified yet)"),
         ("explore", f"edit {SECRET}", [SECRET], "outside write (not judged yet)"),
     ]
@@ -130,14 +133,14 @@ def test_the_watcher_list_shows_observed_writes_and_unclassified_calls_apart_and
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with opened(page_url, "flip", pds) as page:
-        expect(page.locator("#changes").get_by_text("1 outside write observed")).to_be_visible()
+        expect(page.locator("#changes").get_by_text("2 outside writes observed")).to_be_visible()
         section = page.locator("section.info").filter(has=page.get_by_role("heading", name="Watcher"))
         expect(section.get_by_text("Report only: nothing is judged or stopped yet.")).to_be_visible()
-        expect(section.get_by_text("1 call observed writing outside the worktree")).to_be_visible()
+        expect(section.get_by_text("2 calls observed writing outside the worktree")).to_be_visible()
         expect(section.get_by_text(f"explore · edit {SECRET}")).to_be_visible()
         observed = f"observed a command writing to {SECRET} · outside write (not judged yet)"
         expect(section.get_by_text(observed)).to_be_visible()
         expect(section.get_by_text("ran make install")).to_be_hidden()  # collapsed apart
-        section.get_by_text("Not classified yet (1)").click()
+        section.get_by_text("Not classified yet (1)").click()  # the shell call with a known target is listed above
         expect(section.get_by_text("unknown · ran make install")).to_be_visible()
         expect(section.get_by_text("not recorded: 2 reports dropped")).to_be_visible()
