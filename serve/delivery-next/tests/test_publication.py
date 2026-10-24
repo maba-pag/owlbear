@@ -1613,6 +1613,30 @@ def test_preservation_never_reads_through_a_link_in_a_dirty_paths_parent(worktre
     assert (outside / "only-outside.txt").read_text() == "not part of the worktree\n"
 
 
+@pytest.mark.parametrize("replacement", [False, True])
+def test_cleanup_preserves_deleted_subtrees_and_directory_replacements(worktree_with_work, tmp_path, replacement):
+    clone, wt = worktree_with_work
+    subtree = wt / "tracked"
+    subtree.mkdir()
+    (subtree / "child.txt").write_text("original subtree content\n")
+    git(wt, "add", "tracked/child.txt")
+    git(wt, "commit", "-qm", "track subtree")
+    (subtree / "child.txt").unlink()
+    subtree.rmdir()
+    if replacement:
+        subtree.write_text("replacement file\n")
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.names.pr = "owlbear/c2", None
+    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
+    assert (result.exit, wt.exists()) == (Exit.DONE, False)
+    with tarfile.open(result.preserved[-1]) as archive:
+        assert b"tracked/child.txt" in archive.extractfile("changes.diff").read()
+        assert archive.extractfile("index/0/tracked/child.txt").read() == b"original subtree content\n"
+        assert "files/tracked/child.txt" not in archive.getnames()
+        if replacement:
+            assert archive.extractfile("files/tracked").read() == b"replacement file\n"
+
+
 # CI detection from workflow files
 
 

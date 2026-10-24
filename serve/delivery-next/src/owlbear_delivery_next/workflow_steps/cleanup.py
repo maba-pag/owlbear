@@ -80,7 +80,7 @@ def _present(path: Path) -> bool:
 def _kind(full: Path) -> str:
     try:
         mode = full.lstat().st_mode
-    except FileNotFoundError:
+    except FileNotFoundError, NotADirectoryError:
         return "gone"
     if stat.S_ISLNK(mode):
         return "link"
@@ -150,6 +150,22 @@ def _regular(name: str, data: bytes, mode: int = 0o644) -> tarfile.TarInfo:
     return info
 
 
+def _parent(directory: int, name: str) -> int | None:
+    """Open a no-follow parent; absent or regular-file replacements mean its old children were deleted."""
+    try:
+        return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+    except FileNotFoundError:
+        return None
+    except NotADirectoryError:
+        try:
+            mode = os.stat(name, dir_fd=directory, follow_symlinks=False).st_mode
+        except FileNotFoundError:
+            return None
+        if stat.S_ISREG(mode):
+            return None
+        raise
+
+
 def _worktree_member(path: Path, rel: str) -> tuple[tarfile.TarInfo, bytes] | None:
     """Read a leaf entry through no-follow directory descriptors, retaining links and file modes."""
     name = Path(rel)
@@ -159,7 +175,9 @@ def _worktree_member(path: Path, rel: str) -> tuple[tarfile.TarInfo, bytes] | No
     directory = os.open(path, flags)
     try:
         for part in name.parts[:-1]:
-            child = os.open(part, flags, dir_fd=directory)
+            child = _parent(directory, part)
+            if child is None:
+                return None
             os.close(directory)
             directory = child
         leaf = name.parts[-1]
