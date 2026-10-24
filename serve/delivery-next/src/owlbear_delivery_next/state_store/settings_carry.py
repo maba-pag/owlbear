@@ -20,7 +20,7 @@ from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer, M
 from owlbear_delivery_next.state_store.store import read_layer, update_layer
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -76,8 +76,7 @@ def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
         if not read_layer(shared.global_path, GlobalLayer).machine_moved:
             if _dirty(shared, until):
                 return EDITED
-            deleted = not shared.global_path.exists() and _ran(shared, "HEAD", MOVED, until)
-            if not deleted:  # a Global the owner deleted after a move stays deleted; what is unpushed is still pushed
+            if not _ran(shared, "HEAD", MOVED, until):  # after a move, a Global the owner deleted or remade stays his
                 have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(
                     exclude_none=True
                 )
@@ -88,11 +87,11 @@ def move(shared: DataRepo, local: MachineValues, keep: Keep = _ignore) -> str:
         return shared.publish(shared.global_path, MOVED, until)
 
 
-def sync(shared: DataRepo, written: str) -> str:
+def sync(shared: DataRepo, written: Sequence[str]) -> str:
     """Bring the checkout current before a carry or a move writes; why it cannot be, else ''.
 
     It fetches. When the remote changed Global meanwhile, this machine's own unpublished carry or move (its file
-    still holding *written*, the digest of what it wrote) gives way: it is undone for Global alone and redone on
+    holding only what it wrote, whose digests are *written*) gives way: it is undone for Global alone and redone on
     the current layer if still due. Anything else unpublished in Global is the owner's: kept, and nothing moves on.
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
@@ -108,28 +107,32 @@ def sync(shared: DataRepo, written: str) -> str:
         ):
             return why
         if _dirty(shared, until):  # this machine's own unpublished write is published by its step; else it waits
-            return "" if _own(shared, written) else EDITED
+            return "" if _own(shared, rel, written, until) else EDITED
         if _checked(shared, until, "rev-list", "--count", "HEAD..@{upstream}") == "0":
             return ""
         return shared.pull(until)
 
 
-def _give_way(shared: DataRepo, rel: str, written: str, until: float) -> str:
-    """Undo this machine's own unpublished carry or move of Global, and nothing else; why not, else ''."""
+def _give_way(shared: DataRepo, rel: str, written: Sequence[str], until: float) -> str:
+    """Undo this machine's own unpublished carry and move of Global, and nothing else; why not, else ''.
+
+    Its commits since the remote's must be carries or moves of Global alone, ending in a content it wrote, and an
+    unsaved Global (file and index) must hold only contents it wrote, or the committed one.
+    """
     base = _checked(shared, until, "merge-base", "HEAD", "@{upstream}")
     mine = _checked(shared, until, "log", "--format=%s", f"{base}..HEAD").splitlines()
     if mine:
         touched = set(_checked(shared, until, "diff", "--name-only", base, "HEAD").splitlines())
         shown = shared.git("show", f"HEAD:{rel}", until=until)
         own = set(mine) <= {MESSAGE, MOVED} and touched == {rel} and shown.returncode == 0
-        if not (own and written and _digest_of(shown.stdout.encode()) == written and not _dirty(shared, until)):
+        if not (own and _digest_of(shown.stdout.encode()) in written):
             return "this machine has unpublished commits in the shared repository; push or undo them by hand"
-        _checked(shared, until, "reset", "-q", "--soft", base)
-    elif _dirty(shared, until):
-        if not _own(shared, written):
-            return EDITED
-    else:
+    if _dirty(shared, until) and not _own(shared, rel, written, until):
+        return EDITED
+    if not mine and not _dirty(shared, until):
         return ""
+    if mine:
+        _checked(shared, until, "reset", "-q", "--soft", base)
     if _checked(shared, until, "ls-tree", "--name-only", "HEAD", "--", rel):
         _checked(shared, until, "restore", "--source=HEAD", "--staged", "--worktree", "--", rel)
     else:  # it created Global: it goes again, staged or not
@@ -138,9 +141,23 @@ def _give_way(shared: DataRepo, rel: str, written: str, until: float) -> str:
     return ""
 
 
-def _own(shared: DataRepo, written: str) -> bool:
-    """Whether Global holds exactly what this machine's carry or move last wrote."""
-    return bool(written) and shared.global_path.exists() and _digest(shared.global_path) == written
+def _own(shared: DataRepo, rel: str, written: Sequence[str], until: float) -> bool:
+    """Whether unsaved Global, in the file and in the index, holds only what this machine wrote or what is committed."""
+    if not shared.global_path.exists() or _digest(shared.global_path) not in written:
+        return False
+    if not _checked(shared, until, "ls-files", "--", rel):
+        return True  # never staged
+    staged = _digest_of(_blob(shared, f":{rel}", until))
+    committed = shared.git("show", f"HEAD:{rel}", until=until)
+    return staged in written or (committed.returncode == 0 and staged == _digest_of(committed.stdout.encode()))
+
+
+def _blob(shared: DataRepo, spec: str, until: float) -> bytes:
+    done = shared.git("show", spec, until=until)
+    if done.returncode:
+        msg = f"git show {spec} failed in {shared.root}: {done.stderr.strip()[:200]}"
+        raise data_repo.DataRepoError(msg)
+    return done.stdout.encode()
 
 
 def _checked(shared: DataRepo, until: float, *args: str) -> str:

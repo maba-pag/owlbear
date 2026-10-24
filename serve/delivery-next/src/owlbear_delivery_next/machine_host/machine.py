@@ -393,7 +393,7 @@ def _pending(why: str) -> None:
     with registry.locked():
         machine = registry.load()
         if machine.settings_pending != why or (not why and machine.global_written):
-            machine.settings_pending, machine.global_written = why, machine.global_written if why else ""
+            machine.settings_pending, machine.global_written = why, machine.global_written if why else []
             registry.save(machine)
 
 
@@ -401,5 +401,5 @@ def _written(digest: str) -> None:
     """Keep the digest of what the carry or the move wrote to Global, so a later start knows that write as its own."""
     with registry.locked():
         machine = registry.load()
-        machine.global_written = digest
+        machine.global_written = [*machine.global_written, digest]
         registry.save(machine)

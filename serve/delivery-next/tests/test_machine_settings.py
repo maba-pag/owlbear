@@ -398,3 +398,65 @@ def test_a_carry_that_could_not_stage_its_new_global_gives_way_to_another_machin
 
     assert _git(second.root, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
     assert (_git(second.root, "status", "--porcelain"), _done()) == ("", True)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_global_the_owner_remade_after_a_move_is_never_filled_again(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _local()
+    _carry(monkeypatch, shared)  # carried and moved
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))  # deleted, then remade by a Settings save
+    _local()  # another machine
+    _carry(monkeypatch, shared)
+    assert read_layer(shared.global_path, GlobalLayer).machine is None  # what the owner left unset stays unset
+    assert _done()
+
+
+@pytest.mark.usefixtures("no_base")
+def test_an_unpushed_carry_and_an_uncommitted_move_both_give_way(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    second = _clone(tmp_path, shared_repo)
+    _local()
+    _git(second.root, "remote", "set-url", "--push", "origin", str(tmp_path / "nowhere"))
+    _carry(monkeypatch, second)  # the carry commits, its push fails
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        _carry(monkeypatch, second)  # the move is staged, its commit fails
+    assert _git(second.root, "log", "-1", "--format=%s") == settings_carry.MESSAGE
+    assert _git(second.root, "status", "--porcelain") == "M  config.json"
+    _git(second.root, "remote", "set-url", "--push", "origin", str(shared_repo[1]))
+    its_own = registry.load()
+    _local()
+    _carry(monkeypatch, first)  # the first machine's carry and move, published
+    with registry.locked():
+        registry.save(its_own)
+
+    _carry(monkeypatch, second)
+
+    assert _git(second.root, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")
+    assert (_git(second.root, "status", "--porcelain"), _done()) == ("", True)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_an_owner_edit_staged_over_a_failed_move_never_gives_way(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    _committed(first, GlobalLayer(sessions=2).model_dump(mode="json"))
+    second = _clone(tmp_path, shared_repo)
+    _local()
+    with monkeypatch.context() as m:
+        m.setattr(DataRepo, "commit", _staged_only)
+        _carry(monkeypatch, second)  # the move is staged, its commit fails
+    moved = second.global_path.read_bytes()
+    owners = GlobalLayer(sessions=7).model_dump_json()
+    second.global_path.write_text(owners)
+    _git(second.root, "add", "config.json")  # the owner stages his own edit
+    second.global_path.write_bytes(moved)  # and leaves the move's bytes in the file
+    its_own = registry.load()
+    settings_carry.move(first, MachineValues(sessions=6))
+    with registry.locked():
+        registry.save(its_own)
+
+    _carry(monkeypatch, second)
+
+    assert _git(second.root, "show", ":config.json") == owners  # his staged edit is kept
+    assert "not saved" in registry.load().settings_pending
