@@ -503,3 +503,90 @@ def test_genuinely_legacy_idless_project_decisions_keep_their_compatibility_path
 
     assert picking.store.read(picking.slug).brief.approved_version == 1
     assert picking.store.read(picking.slug).decisions_published == []
+
+
+def legacy_approved(picking, version):
+    """Seed an approval written by the old software, which could omit malformed authority records."""
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        c.brief.challenged = version
+        approval = BriefApproval(at=AT, version=version, published=c.decisions_published)
+        picking.store.write(lock, loop.fold(c, [approval], AT))
+
+
+@pytest.mark.parametrize("replace", [False, True])
+def test_a_corrected_version_can_drop_or_replace_a_never_published_malformed_history(picking, shared_repo, replace):
+    root, _ = shared_repo
+    old = reviewed_legacy_decisions(picking, "answer", "   ", 1).brief.decisions[0]
+    legacy_approved(picking, 1)
+    assert not (root / rel(old.id)).exists()
+    reshape(picking)
+    drafts = [LASTING | {"question": old.question, "answer": "Use a corrected SQLite rule."}] if replace else []
+    c = shape(picking, 2, *drafts)
+    if replace:
+        assert c.brief.decisions[0].replaces == old.id
+
+    assert picking.approve(2).status_code == 200
+
+    assert not (root / rel(old.id)).exists()
+    if replace:
+        current = read(root / rel(c.brief.decisions[0].id))
+        assert (current.state, current.links) == (State.IN_FORCE, ())
+    assert validate_repo(root) == []
+    assert change_record.save(picking.store, picking.approved(), MERGED, AT + timedelta(days=1)) == ""
+
+
+def test_correction_preserves_the_published_predecessor_across_an_omitted_history_record(picking, shared_repo):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    picking.approved()
+    reshape(picking)
+    assert picking.save(decisions=[LASTING | {"answer": "A different intermediate rule."}])["version"] == 2
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        omitted = c.brief.decisions[0]
+        assert omitted.replaces == first.id
+        c.brief.decisions[0] = omitted.model_copy(update={"answer": "   "})
+        picking.store.write(lock, c)
+    legacy_approved(picking, 2)
+    reshape(picking)
+    (current,) = shape(picking, 3, LASTING | {"answer": "A corrected current rule."}).brief.decisions
+    assert current.replaces == omitted.id
+
+    assert picking.approve(3).status_code == 200
+
+    assert read(root / rel(first.id)).state == State.REPLACED
+    assert not (root / rel(omitted.id)).exists()
+    rule = read(root / rel(current.id))
+    assert [(link.type, link.target) for link in rule.links] == [(LinkType.REPLACES, first.id)]
+    assert validate_repo(root) == []
+    assert change_record.save(picking.store, picking.approved(), MERGED, AT + timedelta(days=1)) == ""
+
+
+def test_a_published_predecessor_retires_from_authority_without_rewriting_malformed_history(picking, shared_repo):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    picking.approved()
+    reshape(picking)
+    assert picking.save(decisions=[])["version"] == 2
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        old = c.brief.approved[0].decisions[0]
+        c.brief.approved[0].decisions[0] = old.model_copy(update={"answer": "   "})
+        picking.store.write(lock, c)
+    assert picking.ask(2).status_code == 200
+    picking.picks.append(pick_tools.PickResult(picked=[]))
+    picking.verdicts.append(tools.ReviewResult(verdict="pass", findings=[]))
+    picking.step()
+    picking.picks.clear()
+
+    assert picking.approve(2).status_code == 200
+
+    rule = read(root / rel(first.id))
+    assert (rule.state, rule.statement) == (State.WITHDRAWN, LASTING["answer"])
+    c = picking.approved()
+    assert c.brief.approved[0].decisions[0].answer == "   "
+    assert validate_repo(root) == []
+    assert change_record.save(picking.store, c, MERGED, AT + timedelta(days=1)) == ""

@@ -88,7 +88,9 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
 
 def _items(store: Store, c: Change) -> list[Item]:
     """What the approved *c*'s project decisions save: rebuilt from its approvals, so the same on every retry."""
-    found = decision_archive.lasting(store.name, c, decisions_gate.stem(c))
+    found = decision_archive.lasting(
+        store.name, c, decisions_gate.stem(c), root=store.shared.root if store.shared is not None else None
+    )
     if store.shared is None:
         if found:
             msg = "no shared data repository is available to publish the brief's project decisions"
