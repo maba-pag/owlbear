@@ -22,7 +22,7 @@ from pydantic import BaseModel, ValidationError
 from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Record, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import delivery_target, loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
 from owlbear_delivery_next.local_system import codebase, data_repo, processes
 from owlbear_delivery_next.local_system.process_probe import ProcessTableWorktreeProbe, WorktreeProcessScanError
@@ -321,7 +321,7 @@ class Host:
             self.pr_seen.pop(slug, None)  # not applied again to the merge step's next offer
         c = self._woken(self._pull(lock, c, now) if not paused or self.owner_runs() else c, now)
         if rec and disappeared(prior, rec, now) and c.step == prior.step:
-            c = loop.apply(c, gone(c.step.kind), now)  # its outcome postdates the runner: charged once
+            c = delivery_target.accounted(c, gone(c.step.kind), now)
             self.say(f"{slug}: runner {rec.pid} ended without recording an exit")
         return c
 

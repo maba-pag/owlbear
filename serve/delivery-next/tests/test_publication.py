@@ -2653,6 +2653,28 @@ def test_a_queue_readback_keeps_its_claim_without_valid_terminal_delivery(tmp_pa
     assert c.queue == before
 
 
+@pytest.mark.parametrize("machine_paused", [False, True])
+def test_lost_build_runner_is_charged_without_displacing_the_terminal_owner_gate(tmp_path, machine_paused):
+    store = Store(tmp_path)
+    store.write(Lock("c1"), change(StepKind.BUILD))
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    host = scheduler.Host(store, tmp_path)
+    host.observe_pr = lambda slug: engine.pr_state(gh, "o/r", store.read(slug))
+    lost = scheduler.RunnerRecord(pid=4242, created=1.0, started_at=NOW - timedelta(seconds=1), sessions=1)
+    with store.lock("c1") as lock:
+        after = host._folded(lock, "c1", lost, NOW, paused=machine_paused)  # noqa: SLF001
+        store.write(lock, after)
+        again = host._folded(lock, "c1", lost, NOW + timedelta(hours=1), paused=machine_paused)  # noqa: SLF001
+    q = loop.open_question(after)
+    assert q is not None
+    assert {o.id for o in q.options} == {"abandon", "pause"}
+    assert loop.next_step(after, NOW + timedelta(hours=1)) is None
+    assert loop.open_question(again).id == q.id
+    cause = failures.cause_key(ErrorKind.LIVENESS, StepKind.BUILD, "runner-gone")
+    assert after.budgets.causes[cause].count == 1
+    assert again.budgets.causes[cause].count == 1
+
+
 def test_owner_abandonment_of_a_queued_misdelivery_crosses_the_actual_queue_barrier(tmp_path, monkeypatch):
     store = Store(tmp_path)
     store.write_profile(prof())

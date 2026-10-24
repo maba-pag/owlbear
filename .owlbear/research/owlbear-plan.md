@@ -241,6 +241,7 @@ own branch and stored integration target, not a default branch convention. A
 different delivery asks the owner to pause or abandon without fulfillment; its
 work is preserved against the intended target, fixes and curation get no success
 credit, and the observed other PR is recorded separately from delivery evidence.
+Lost-runner accounting cannot replace that terminal owner disposition with a retry.
 
 SDK cleanup (#611) owns the client across startup, usage and proof, and completes
 its bounded teardown before propagating the original error or cancellation.

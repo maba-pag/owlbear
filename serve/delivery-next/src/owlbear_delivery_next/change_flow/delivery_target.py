@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Option, Question, StepKind, Stop
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Question, StepKind, Stop
 from owlbear_delivery_next.change_flow.moves import ask, go
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change
-    from owlbear_delivery_next.change_flow.loop import PrState
+    from owlbear_delivery_next.change_flow.loop import PrState, StepResult
     from owlbear_delivery_next.github.provider import PullRequest
 
 ACTION = "Resolve the PR delivery discrepancy"
@@ -71,6 +71,30 @@ def held(c: Change) -> bool:
     return c.stop is not None and c.stop.action == ACTION
 
 
+def _owned_question(c: Change) -> Question | None:
+    o = c.outcome
+    if not held(c) or o is None or o.exit is not Exit.ASK:
+        return None
+    return next((q for q in c.questions if q.id == o.question and (q.cause or "").startswith(PREFIX)), None)
+
+
+def waiting(c: Change) -> bool:
+    """Whether the current outcome still presents the unanswered delivery disposition."""
+    q = _owned_question(c)
+    return q is not None and q.answer is None
+
+
+def accounted(c: Change, result: StepResult, now: datetime) -> Change:
+    """Charge an ended runner without displacing the terminal owner gate, including its paused hold."""
+    from owlbear_delivery_next.change_flow.loop import apply  # noqa: PLC0415 - loop imports this module
+
+    saved = (c.stop, c.outcome) if _owned_question(c) is not None else None
+    after = apply(c, result, now)
+    if saved is not None:
+        after.stop, after.outcome = saved
+    return after
+
+
 def route(c: Change, observed: PrState | None, now: datetime) -> bool:
     """A terminal discrepancy is visible even while paused; only an explicit abandonment ends it."""
     if c.finished_at:
@@ -84,6 +108,6 @@ def route(c: Change, observed: PrState | None, now: datetime) -> bool:
         return False
     if not held(c):
         halt(c, f"PR #{c.names.pr} merged, but not as {c.names.branch} into {c.names.target}", now)
-    elif c.outcome is None and c.intent.paused_at is None and c.stop is not None:
+    elif c.intent.paused_at is None and not waiting(c) and c.stop is not None:
         halt(c, c.stop.reason, now)
     return True
