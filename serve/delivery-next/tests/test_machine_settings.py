@@ -229,3 +229,24 @@ def test_a_move_that_changes_nothing_is_recorded_so_a_later_machine_copies_nothi
         registry.save(registry.Machine(settings=LEGACY))  # another machine
     _carry(monkeypatch, shared)
     assert read_layer(shared.global_path, GlobalLayer).machine.sessions is None
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_machine_with_a_checkout_from_before_another_s_move_takes_that_move_in(shared_repo, tmp_path, monkeypatch):
+    first = DataRepo(shared_repo[0])
+    _committed(first, GlobalLayer(sessions=2).model_dump(mode="json"))
+    _git(first.root, "push", "-q")
+    second = tmp_path / "second"  # another machine's checkout, cloned before the first machine's move
+    _git(tmp_path, "clone", "-q", str(shared_repo[1]), str(second))
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        _git(second, "config", key, value)
+    settings_carry.move(first, MachineValues(sessions=6))  # committed and pushed
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))
+
+    _carry(monkeypatch, DataRepo(second))
+
+    assert _git(second, "status", "--porcelain") == ""
+    assert _git(second, "rev-parse", "HEAD") == _git(first.root, "rev-parse", "HEAD")  # nothing filled again
+    assert read_layer(DataRepo(second).global_path, GlobalLayer).machine.sessions == 6
+    assert registry.load().settings_moved

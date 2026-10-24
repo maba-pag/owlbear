@@ -59,6 +59,8 @@ def move(shared: DataRepo, local: MachineValues) -> str:
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
     with shared.locked():
+        if why := _synced(shared, until):
+            return why
         glob = read_layer(shared.global_path, GlobalLayer)
         if not _moved(shared):
             have = (glob.machine or MachineValues()).model_dump(exclude_none=True)
@@ -75,10 +77,24 @@ def move(shared: DataRepo, local: MachineValues) -> str:
         return shared.publish(shared.global_path, MOVED, until)
 
 
-def _moved(shared: DataRepo) -> bool:
-    """Whether a machine's move is in the history; its commit may change nothing, so no path limits the search."""
-    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MOVED}")
+def _moved(shared: DataRepo, ref: str = "HEAD") -> bool:
+    """Whether a machine's move is in *ref*'s history; its commit may change nothing, so no path limits the search."""
+    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MOVED}", ref)
     return found.returncode == 0 and bool(found.stdout.strip())
+
+
+def _synced(shared: DataRepo, until: float) -> str:
+    """Fetch, and take in another machine's move: a checkout from before it never moves again; why not, else ''.
+
+    A shared repository without an upstream has nothing to fetch.
+    """
+    if shared.git("rev-parse", "--abbrev-ref", "@{upstream}", until=until).returncode:
+        return ""
+    if (fetched := shared.git("fetch", "-q", until=until)).returncode:
+        return f"the shared repository could not be fetched: {fetched.stderr.strip()[:200]}"
+    if _moved(shared, "@{upstream}") and not _moved(shared):
+        return shared.pull(until)
+    return ""
 
 
 def _format(text: str) -> int | None:
