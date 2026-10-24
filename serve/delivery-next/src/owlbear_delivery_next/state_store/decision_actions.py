@@ -371,9 +371,19 @@ def read_back(  # noqa: PLR0913 - who confirmed and the revision read
                                 message=said)]  # fmt: skip
 
 
+def _reason_key(reason: str) -> str:
+    return " ".join(reason.split()).casefold()
+
+
 def _same(one: str, other: str) -> bool:
     """Two reasons alike but for case and spacing."""
-    return " ".join(one.split()).casefold() == " ".join(other.split()).casefold()
+    return _reason_key(one) == _reason_key(other)
+
+
+def _settled_reasons(decision: Decision) -> tuple[str, ...]:
+    answered = decision.read_back not in {"none", "pending"} and bool(decision.read_back_why)
+    latest = (decision.read_back_why,) if answered else ()
+    return tuple(dict.fromkeys(_reason_key(why) for why in (*decision.read_back_settled, *latest)))
 
 
 def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the caller read
@@ -381,8 +391,8 @@ def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the ca
 ) -> list[Receipt]:
     """Queue the decision's read-back with why and how urgent (TD-427); its origin, wording and state stay.
 
-    Consent already given is not asked again: the reason a read-back waits on, or was answered on, stays in the
-    decision's file, and the same reason never queues it again; only a new one does.
+    Consent already given is not asked again: settled reason identities stay in the decision's file across later
+    read-backs. Pending and ignored reasons do not become consent; only a genuinely new reason asks again.
     """
     said = _reason(why, "queueing a read-back")
     view = decision_store.load(shared, project)
@@ -392,10 +402,12 @@ def queue_read_back(  # noqa: PLR0913 - why, how urgent, and the revision the ca
     if decision.state in RETIRED:
         msg = f"{decision.id} is {decision.state}: only a draft or a decision in force is read back"
         raise Refused(msg)
-    if decision.read_back != "none" and _same(decision.read_back_why, said):
+    settled = _settled_reasons(decision)
+    waiting = decision.read_back == "pending" and _same(decision.read_back_why, said)
+    if waiting or _reason_key(said) in settled:
         msg = f"{decision.id} was already read back or waits for this reason: only a new one asks again"
         raise Refused(msg)
-    update = {"read_back": "pending", "read_back_why": said, "read_back_kind": kind}
+    update = {"read_back": "pending", "read_back_why": said, "read_back_kind": kind, "read_back_settled": settled}
     queued = Decision.model_validate(decision.content() | update)
     message = f"decisions: queue-read-back {decision.id} ({kind})"
     return [decision_store.save(shared, queued, expected_revision=decision.revision, message=message)]
