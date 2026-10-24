@@ -92,9 +92,10 @@ class Machine:
         return self.total
 
     def carry(self) -> None:
-        """Carry today's settings into Global once, this machine's own first, then clear those here.
+        """Carry today's built-in settings into Global once, then move this machine's own settings and clear them here.
 
-        So every machine follows Global (the owner, 2026-10-23); a failure is said and tried again at the next start.
+        The first machine's move fills Global's machine settings; so every machine follows Global (the owner,
+        2026-10-23). A failure is said and tried again at the next start.
         """
         try:
             if (shared := data_repo.locate()) is None:
@@ -102,7 +103,7 @@ class Machine:
             moved = registry.load()
             local = None if moved.settings_moved else moved.settings
             if settings_carry.due(shared):
-                notice = settings_carry.carry(shared, local)
+                notice = settings_carry.carry(shared)
                 self.say("settings: today's built-in values carried into Global" + (f"; {notice}" if notice else ""))
             if local is not None:
                 if notice := settings_carry.move(shared, local):  # an invalid Global raises: nothing is cleared

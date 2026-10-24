@@ -4,8 +4,8 @@ Code ships no settings defaults: every value comes from Global, this machine or 
 error that refuses the steps needing it. These are the values that were built in until then. The update that
 removed them writes them where the Global layer leaves a field unset, once, in one commit
 (``state_store.settings_carry``); resolution never reads them. A setting added later starts unset
-(D-01M5MZKEPW6WCSM8SZ6DH783EN). The machine settings take the carrying machine's own values first, which it then
-clears, so every machine follows Global (the owner, 2026-10-23).
+(D-01M5MZKEPW6WCSM8SZ6DH783EN). ``MACHINE`` fills Global's machine settings where the first machine's own leave
+them unset; each machine then clears its own, so every machine follows Global (the owner, 2026-10-23).
 """
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ MACHINE = MachineValues(
     channel="minor", update_when_idle=True, update_while_paused=True, curate_after_merge="on", curate_when_idle="on",
     sessions=4,
 )  # fmt: skip
-WHOLE = 10  # a Global layer below this format had nothing carried; one at it lacks only the machine settings
 
 
 def layer() -> GlobalLayer:
@@ -57,20 +56,15 @@ def layer() -> GlobalLayer:
     }  # fmt: skip
     return GlobalLayer(
         agents=agents, runtimes={"sdk": True, "window": True}, widths=[1280, 1920, 2400], design_failures="ask",
-        pr_labels=[], pr_marker=True, sessions=2, watcher=True, visible=False, curator_threshold=95, machine=MACHINE,
+        pr_labels=[], pr_marker=True, sessions=2, watcher=True, visible=False, curator_threshold=95,
     )  # fmt: skip
 
 
-def filled(glob: GlobalLayer, since: int = 0, local: MachineValues | None = None) -> GlobalLayer:
-    """*glob* with what it leaves unset taken from the built-in values; what it sets stays.
+def filled(glob: GlobalLayer) -> GlobalLayer:
+    """*glob* with every field it leaves unset taken from the built-in values; what it sets stays.
 
-    A layer of format *since* ``WHOLE`` or later had the rest carried already: only its machine settings are filled.
-    They take *local*, the carrying machine's own values, before the built-in ones.
+    Its machine settings are the first machine's move's (``settings_carry.move``).
     """
-    machine = MACHINE.model_dump() | (local or MachineValues()).model_dump(exclude_none=True)
-    machine |= (glob.machine or MachineValues()).model_dump(exclude_none=True)
-    if since >= WHOLE:
-        return glob.model_copy(update={"machine": MachineValues.model_validate(machine)})
     base = layer()
     agents = {
         role: Agent.model_validate(base.agents[role].model_dump() | (glob.agents.get(role) or Agent()).model_dump(
@@ -79,5 +73,4 @@ def filled(glob: GlobalLayer, since: int = 0, local: MachineValues | None = None
     }  # fmt: skip
     top = base.model_dump(exclude={"agents"}) | glob.model_dump(exclude={"agents", "format"}, exclude_none=True)
     top["runtimes"] = base.runtimes | glob.runtimes
-    top["machine"] = machine
     return GlobalLayer.model_validate(top | {"agents": {r: a.model_dump() for r, a in agents.items()}})

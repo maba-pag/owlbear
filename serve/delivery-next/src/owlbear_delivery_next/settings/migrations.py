@@ -131,7 +131,7 @@ def defaults_removed(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def machine_added(data: dict[str, Any]) -> dict[str, Any]:
-    """Settings format 10 to 11: Global's machine settings (2026-10-23); ``settings_carry.carry`` fills them once."""
+    """Settings format 10 to 11: Global's machine settings (2026-10-23); the first machine's move fills them."""
     return data
 
 

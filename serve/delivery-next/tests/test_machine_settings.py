@@ -93,7 +93,7 @@ def test_the_switch_over_moves_this_machine_s_settings_into_a_carried_global_and
 @pytest.mark.usefixtures("no_base")
 def test_another_machine_follows_the_global_settings_it_finds(shared_repo, monkeypatch):
     shared = DataRepo(shared_repo[0])
-    settings_carry.carry(shared, MachineValues(sessions=6))  # the first machine's switch-over
+    settings_carry.move(shared, MachineValues(sessions=6))  # the first machine's switch-over
     head = _git(shared.root, "rev-parse", "HEAD")
     with registry.locked():
         registry.save(registry.Machine(settings=LEGACY))  # this machine's own, from before
@@ -116,7 +116,8 @@ def test_without_a_shared_repository_this_machine_keeps_its_own(monkeypatch):
 @pytest.mark.usefixtures("no_base")
 def test_a_fresh_global_takes_this_machine_s_values_then_the_built_in_ones(shared_repo):
     shared = DataRepo(shared_repo[0])
-    settings_carry.carry(shared, MachineValues(sessions=2))
+    settings_carry.carry(shared)
+    settings_carry.move(shared, MachineValues(sessions=2))
     machine = read_layer(shared.global_path, GlobalLayer).machine
     assert machine == carried.MACHINE.model_copy(update={"sessions": 2})
 
@@ -156,7 +157,8 @@ def test_a_global_deleted_after_the_first_carry_gets_only_the_machine_settings(s
     _committed(shared, carried.layer().model_dump(mode="json", exclude={"machine"}) | {"format": 10})
     shared.global_path.unlink()  # the owner's deletion, not committed yet
 
-    settings_carry.carry(shared, MachineValues(sessions=2))
+    assert not settings_carry.due(shared)
+    settings_carry.move(shared, MachineValues(sessions=2))
 
     glob = read_layer(shared.global_path, GlobalLayer)
     assert (glob.machine.sessions, glob.pr_marker, glob.agents) == (2, None, {})  # nothing else comes back
@@ -179,3 +181,30 @@ def test_a_move_whose_commit_failed_is_committed_before_this_machine_s_settings_
     assert _git(shared.root, "status", "--porcelain") == ""
     assert json.loads(_git(shared.root, "show", "HEAD:config.json"))["machine"]["sessions"] == LEGACY.sessions
     assert registry.load().settings_moved
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_machine_starting_after_the_owner_cleared_a_global_value_never_restores_it(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    settings_carry.move(shared, MachineValues(sessions=6))  # the first machine
+    cleared = read_layer(shared.global_path, GlobalLayer)
+    _committed(shared, cleared.model_copy(update={"machine": cleared.machine.model_copy(update={"sessions": None})})
+               .model_dump(mode="json"))  # fmt: skip
+    with registry.locked():
+        registry.save(registry.Machine(settings=LEGACY))  # a second machine, with its own from before
+
+    _carry(monkeypatch, shared)
+
+    assert read_layer(shared.global_path, GlobalLayer).machine.sessions is None  # the owner's choice stands
+    assert (registry.load().settings_moved, machine_settings.current().sessions) == (True, None)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_a_global_deleted_and_committed_after_a_move_alone_is_never_carried_again(shared_repo):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, GlobalLayer(sessions=2).model_dump(mode="json"))  # format 11, never carried
+    settings_carry.move(shared, MachineValues(sessions=3))
+    shared.global_path.unlink()
+    _git(shared.root, "add", "-A")
+    _git(shared.root, "commit", "-qm", "the owner deletes Global")
+    assert not settings_carry.due(shared)

@@ -2,7 +2,8 @@
 
 The update that removed code defaults runs it when the machine host starts: a Global layer below
 ``CARRIED_FORMAT`` gets every field it leaves unset from ``carried.layer``, in one commit; a start after a failed
-commit commits the filled layer without filling it again; afterwards nothing does.
+commit commits the filled layer without filling it again; afterwards nothing does. Each machine's first start then
+moves its own machine settings: the first move fills Global's, later ones copy nothing (``move``).
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import time
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import data_repo
-from owlbear_delivery_next.settings.carried import filled
+from owlbear_delivery_next.settings.carried import MACHINE, filled
 from owlbear_delivery_next.settings.config import CARRIED_FORMAT, GlobalLayer, MachineValues
 from owlbear_delivery_next.state_store.store import read_layer, update_layer
 
@@ -28,11 +29,11 @@ def due(shared: DataRepo) -> bool:
     return _unfilled(shared) or _unpublished(shared)
 
 
-def carry(shared: DataRepo, local: MachineValues | None = None) -> str:
+def carry(shared: DataRepo) -> str:
     """Write the built-in values into the Global layer once and commit it; what the owner should know, else ''.
 
-    Its machine settings take *local*, this machine's own, first. A layer already filled is only committed: a value
-    the owner cleared after the carry is never filled again.
+    A layer already filled is only committed: a value the owner cleared after the carry is never filled again. The
+    machine settings are ``move``'s.
     """
     if not due(shared):
         return ""
@@ -42,28 +43,35 @@ def carry(shared: DataRepo, local: MachineValues | None = None) -> str:
         if not fill and not _unpublished(shared):  # another process carried and committed them meanwhile
             return ""
         if fill:
-            since = _found(shared)
-            update_layer(shared.global_path, GlobalLayer, lambda glob: filled(glob, since, local))
+            update_layer(shared.global_path, GlobalLayer, filled)
         else:  # an invalid layer is never published: it stays uncommitted, and the host says why (StoreError)
             read_layer(shared.global_path, GlobalLayer)
         return shared.publish(shared.global_path, MESSAGE, until)
 
 
 def move(shared: DataRepo, local: MachineValues) -> str:
-    """Copy this machine's settings into Global's where Global has none, in one commit; what the owner should know.
+    """The first machine's move fills Global's machine settings, in one commit; what the owner should know, else ''.
 
-    An unreadable or invalid Global layer raises ``StoreError`` before anything changes, so the caller keeps its own
-    values and tries again at the next start (the owner, 2026-10-23: every machine follows Global).
+    Global's values stay; where it has none, this machine's own *local* values go in, else the built-in ones. Once a
+    move is committed, a later machine copies nothing: it follows Global, whose values the owner may have cleared
+    since (the owner, 2026-10-23: move all, once). An unreadable or invalid Global layer raises ``StoreError`` before
+    anything changes, so the caller keeps its own values and tries again at the next start.
     """
     until = time.monotonic() + data_repo.SAVE_SECONDS
     with shared.locked():
-        have = (read_layer(shared.global_path, GlobalLayer).machine or MachineValues()).model_dump(exclude_none=True)
-        if local.model_dump(exclude_none=True).keys() - have.keys():
-            values = MachineValues.model_validate(local.model_dump(exclude_none=True) | have)
-            update_layer(shared.global_path, GlobalLayer, lambda glob: glob.model_copy(update={"machine": values}))
-        return shared.publish(
-            shared.global_path, MOVED, until
-        )  # also what an earlier start left uncommitted or unpushed
+        glob = read_layer(shared.global_path, GlobalLayer)
+        if not _moved(shared):
+            have = (glob.machine or MachineValues()).model_dump(exclude_none=True)
+            values = MachineValues.model_validate(MACHINE.model_dump() | local.model_dump(exclude_none=True) | have)
+            update_layer(shared.global_path, GlobalLayer, lambda g: g.model_copy(update={"machine": values}))
+        return shared.publish(shared.global_path, MOVED, until)  # also what an earlier start left unpublished
+
+
+def _moved(shared: DataRepo) -> bool:
+    """Whether a machine's move is in the Global layer's history."""
+    rel = shared.global_path.relative_to(shared.root).as_posix()
+    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MOVED}", "--", rel)
+    return found.returncode == 0 and bool(found.stdout.strip())
 
 
 def _format(text: str) -> int | None:
@@ -73,14 +81,6 @@ def _format(text: str) -> int | None:
         return int(raw.get("format", 0)) if isinstance(raw, dict) else None
     except ValueError, TypeError:
         return None
-
-
-def _found(shared: DataRepo) -> int:
-    """The Global layer's format as written, before any migration; the committed one's while it is deleted."""
-    try:
-        return _format(shared.global_path.read_text()) or 0
-    except FileNotFoundError:
-        return _committed(shared) or 0  # deleted after a carry: what the owner cleared stays cleared
 
 
 def _unfilled(shared: DataRepo) -> bool:
@@ -106,11 +106,12 @@ def _unpublished(shared: DataRepo) -> bool:
 def _committed(shared: DataRepo) -> int | None:
     """The committed Global layer's format; ``None`` when it is no layer.
 
-    With none committed it is 0, unless the history holds the carry: a deletion committed after it is the owner's.
+    With none committed it is 0, unless the history holds the carry or a move: a deletion committed after either is
+    the owner's.
     """
     rel = shared.global_path.relative_to(shared.root).as_posix()
     committed = shared.git("show", f"HEAD:{rel}")
     if committed.returncode == 0:
         return _format(committed.stdout)
-    carried = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", "--", rel)
-    return CARRIED_FORMAT if carried.returncode == 0 and carried.stdout.strip() else 0
+    found = shared.git("log", "-1", "--format=%H", "--fixed-strings", f"--grep={MESSAGE}", f"--grep={MOVED}", "--", rel)
+    return CARRIED_FORMAT if found.returncode == 0 and found.stdout.strip() else 0
