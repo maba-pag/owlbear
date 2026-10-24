@@ -68,7 +68,7 @@ class ReadBackKind(enum.StrEnum):
     IMPROVEMENT = "improvement"  # deferred improvement
 
 
-READ_BACK_EXTRAS = ("read_back_why", "read_back_kind")  # left out of a decision's content while empty
+READ_BACK_EXTRAS = ("read_back_why", "read_back_kind", "read_back_settled")  # omitted while empty
 OMITTED_WHEN_EMPTY = (*READ_BACK_EXTRAS, "inherited")
 # files hashed empty `owner_words` and selectors before TD-449 and TD-460 removed them; hashing them keeps revisions
 _LEGACY_HASHED = {"owner_words": [], "applies_to": {"paths": [], "roles": [], "steps": []}}
@@ -115,6 +115,7 @@ class Decision(_Frozen):
     read_back: str = Field(default="none", pattern=r"^(none|pending|\d{4}-\d{2}-\d{2})$")
     read_back_why: str = ""
     read_back_kind: ReadBackKind | None = None
+    read_back_settled: tuple[NonBlank, ...] = ()
     created_at: datetime
 
     @model_validator(mode="before")
@@ -158,8 +159,8 @@ class Decision(_Frozen):
         if pending and not (self.read_back_why and self.read_back_kind):
             msg = "a pending read-back needs read_back_why and read_back_kind"
             raise ValueError(msg)
-        if self.read_back == "none" and (self.read_back_why or self.read_back_kind):
-            msg = "read_back_why and read_back_kind belong to a read-back: pending, or the one answered on its date"
+        if self.read_back == "none" and (self.read_back_why or self.read_back_kind or self.read_back_settled):
+            msg = "read_back_why, read_back_kind and read_back_settled belong to a read-back: pending or answered"
             raise ValueError(msg)
         return self
 

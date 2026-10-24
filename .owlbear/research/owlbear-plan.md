@@ -249,6 +249,11 @@ storage; genuinely legacy ID-less records retain their compatibility path.
 Malformed, never-published historical rows do not block a corrected version;
 their stored history stays intact and published predecessors still retire.
 
+Read-back consent (#626) keeps normalized settled-reason identities in the
+portable decision file across later reasons and host reloads, without changing
+the rule revision. Ignoring or leaving a reason pending is not consent.
+Origin-only correction preserves the same rule's history; new rules start fresh.
+
 Change creation (#609) allocates handles, slugs and new records across processes in
 one transaction. Maintenance test-review setup reserves its identity before Git
 work, retains it after failed setup, and publishes only into its own reservation.

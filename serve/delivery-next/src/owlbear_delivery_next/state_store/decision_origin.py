@@ -81,6 +81,7 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
         old, title=old.title, statement=old.statement, rationale=_marked(rationale, "wording"), scope=old.scope,
         project=old.project, change=old.change, origin=origin, actor=old.actor, source=old.source,
         read_back=old.read_back, read_back_why=old.read_back_why, read_back_kind=old.read_back_kind,
+        read_back_settled=old.read_back_settled,
         inherited=old.inherited, state=State.IN_FORCE,
         links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
