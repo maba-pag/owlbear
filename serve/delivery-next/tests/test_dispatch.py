@@ -21,6 +21,7 @@ def started(*args: str) -> subprocess.CompletedProcess[str]:
         (["--help"], "usage: owlbear-next"),
         (["run", "--help"], "usage: python -m owlbear_delivery_next run"),
         (["mcp", "--help"], "usage: python -m owlbear_delivery_next mcp"),
+        (["serve", "--help"], "usage: python -m owlbear_delivery_next serve"),
         (["step-mcp", "--help"], "usage: python -m owlbear_delivery_next step-mcp"),
     ],
 )
