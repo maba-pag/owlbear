@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `5274ed416` after #631 and this pull request, decisions to TD-469, item 5's
+> **Date:** 2026-10-24, status at `main` `3b757c249` after #634 and this pull request, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23 and 2026-10-24
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -225,6 +225,11 @@ unsupported nested repositories and entries in their workspace instead of omitti
 them from a verified archive; supported links and file modes are preserved without
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
+
+Brief approval (#617) rejects blank required decision wording and refuses the
+whole approval if any current ID-bearing project rule cannot be built or saved.
+It never publishes a valid subset or acknowledges project rules without shared
+storage; genuinely legacy ID-less records retain their compatibility path.
 
 Change creation (#609) allocates handles, slugs and new records across processes in
 one transaction. Maintenance test-review setup reserves its identity before Git
