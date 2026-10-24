@@ -6,7 +6,13 @@ start and as often as it comes. Every change classifies the call again (``watch_
 or removes it once the call is found inside; a writer thread persists them (``watch_reports``). The callback only
 classifies and queues: it never waits, never raises into the session, and changes neither a step's outcome nor the
 guard's decisions. The agent is the event's ``agent_id``, else the subagent its parent call launched, else "main"
-for a call under no parent (the step's own agent, as the model check counts it), else "unknown".
+for a call under no parent (the step's own agent, as the model check counts it), else "unknown". The runtime's shell
+may persist between calls: once a call may have moved a shell or changed its HOME or TMPDIR, later calls of that
+shell (its ``shellId``; a call naming none, or a changer whose start is not seen: any in the session) are judged with
+that change, each call's once. Calls run in their starts' order (else their first request's); equal times count as
+before, and whenever a call's change is new, grows or moves in time, the session's calls are judged again. This
+over-approximates on purpose: an unresolved report means the watcher cannot tell. Each shell is assumed to start in
+the session's folder; one that moved before the watcher saw it is not covered.
 
 Watched: every Change-owned session, each in its own folder: the runner's steps, the brief and plan rounds,
 reconsideration, the amendment challenge, the visual and design judges and a test review's shares. Not watched: the
@@ -60,7 +66,8 @@ class Watching:
 class _Seen:
     """One call as observed so far."""
 
-    at: str
+    at: str  # its start's time, else its first permission request's: the order calls ran in
+    shell: str = ""  # the bash tool's shell id; "" for its default shell or when not seen
     call: watch_policy.Call = field(default_factory=watch_policy.Call)
     agent_id: str = ""
     parent: str = ""
@@ -79,6 +86,7 @@ class Feed:
         self.own = watch_policy.canonical(str(own), own, self.places)
         self.calls: dict[tuple[str, str], _Seen] = {}
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
+        self.changers: dict[tuple[str, str], tuple[str, str, bool, frozenset[str]]] = {}  # at, shell, moves, changes
         self.open = True
         self.writer = watching.writer()
 
@@ -93,8 +101,8 @@ class Feed:
             self.writer.late()
             return
         try:
-            key, seen = self._observed(kind, ev)
-            self._judged(key, seen)
+            key, _ = self._observed(kind, ev)
+            self._judged(key)
         except Exception as exc:  # noqa: BLE001 - an observation never ends the step
             self.writer.lost(f"{type(exc).__name__}: {exc}"[:200])
 
@@ -110,8 +118,10 @@ class Feed:
         data = ev.data
         if kind == START:
             cid = getattr(data, "tool_call_id", "") or ""
-            seen = self.calls.setdefault((self.session(), cid), _Seen(stamp))
+            seen = self._call(cid, stamp)
             tool, args = getattr(data, "tool_name", "") or "", getattr(data, "arguments", None)
+            shell = args.get("shellId") if isinstance(args, dict) else None
+            seen.shell = shell if isinstance(shell, str) else ""
             info = getattr(data, "shell_tool_info", None)
             redirect = bool(getattr(info, "has_write_file_redirection", False))
             seen.call = replace(seen.call, tool=tool, arguments=args, redirect=redirect)
@@ -120,12 +130,33 @@ class Feed:
         else:
             request = data.permission_request  # one without a call id is a call of its own
             cid = getattr(request, "tool_call_id", None) or f"request {getattr(data, 'request_id', '')}"
-            seen = self.calls.setdefault((self.session(), cid), _Seen(stamp))
+            seen = self._call(cid, stamp)
             seen.call = replace(seen.call, asked=(*seen.call.asked, asked(request)))
             seen.command = seen.command or _command(request)
             seen.agent_id = seen.agent_id or getattr(data, "owner_agent_id", None) or ""  # the agent it asked for
         seen.agent_id = seen.agent_id or getattr(ev, "agent_id", None) or ""
         return (self.session(), cid), seen
+
+    def _call(self, cid: str, stamp: str) -> _Seen:
+        key = (self.session(), cid)
+        if key not in self.calls:
+            self.calls[key] = _Seen(stamp)
+        return self.calls[key]
+
+    def _shares(self, changer: tuple[str, str], key: tuple[str, str]) -> bool:
+        """Whether *changer* may have run before *key* in its shell: a call naming no shell id, or a changer whose
+        start is not seen, shares any; equal times cannot be told apart, so they count as before."""  # noqa: D205, D209
+        if changer == key or changer[0] != key[0]:
+            return False
+        before, after = self.calls[changer], self.calls[key]
+        shared = not after.shell or not before.started or before.shell == after.shell
+        return shared and before.at <= after.at
+
+    def _shell_state(self, key: tuple[str, str], seen: _Seen) -> watch_policy.Call:
+        """The call with what earlier calls of its shell may have changed there."""
+        earlier = [(moves, changes) for k, (_, _, moves, changes) in self.changers.items() if self._shares(k, key)]
+        moved = any(m for m, _ in earlier)
+        return replace(seen.call, moved=moved, changed=frozenset().union(*(c for _, c in earlier)))
 
     def _launched(self, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
         """Name a subagent's launcher, and report again the calls already reported under it as "unknown"."""
@@ -136,12 +167,30 @@ class Feed:
         try:
             for key, seen in list(self.calls.items()):
                 if seen.reported and launcher in {seen.parent, seen.agent_id}:
-                    self._judged(key, seen)
+                    self._judged(key)
         except Exception as exc:  # noqa: BLE001 - an observation never ends the step
             self.writer.lost(f"{type(exc).__name__}: {exc}"[:200])
 
-    def _judged(self, key: tuple[str, str], seen: _Seen) -> None:
-        outcome = watch_policy.judge(seen.call, self.own, self.places)
+    def _judged(self, key: tuple[str, str]) -> None:
+        """Judge the call; when what it may change in its shell is new, grew or moved in time, judge the calls of its
+        session again, from their kept observations."""  # noqa: D205, D209 - two facts per line
+        pending = [key]
+        while pending:
+            k = pending.pop(0)
+            if self._judged_once(k, self.calls[k]):
+                pending += [o for o in self.calls if o not in pending and o != k and o[0] == k[0]]
+
+    def _judged_once(self, key: tuple[str, str], seen: _Seen) -> bool:
+        """Judge one call and upsert or drop its report; whether its record of shell changes is new or changed."""
+        outcome = watch_policy.judge(self._shell_state(key, seen), self.own, self.places)
+        old = self.changers.get(key)
+        if outcome.moves or outcome.changes or old:  # by call id: a call judged again changes its shell once
+            _, _, moves, changes = old or ("", "", False, frozenset())
+            self.changers[key] = (seen.at, seen.shell, moves or outcome.moves, changes | outcome.changes)
+        self._report(key, seen, outcome)
+        return self.changers.get(key) != old
+
+    def _report(self, key: tuple[str, str], seen: _Seen, outcome: watch_policy.Outcome) -> None:
         slug, (session, cid) = self.watching.slug, key
         if outcome.inside:
             if seen.reported:
@@ -178,12 +227,24 @@ class Feed:
 
 
 def asked(request: Any) -> watch_policy.Asked:  # noqa: ANN401 - one of the SDK's permission request classes
-    """One SDK permission request as the policy reads it: the guard's view plus the runtime's read-only evidence."""
+    """One SDK permission request as the policy reads it: the guard's view plus a shell request's evidence.
+
+    That is its command text, the runtime's segments and commands with their read-only marks, its possible and
+    resolved paths and its resolved working directory.
+    """
     req = view(request)
-    commands = getattr(request, "commands", None) or ()
-    read_only = bool(commands) and all(getattr(c, "read_only", False) for c in commands)
-    redirect = bool(getattr(request, "has_write_file_redirection", False))
-    return watch_policy.Asked(req.kind, req.paths if req.kind == "write" else (), read_only, redirect)
+    commands = tuple((str(c.identifier), bool(c.read_only)) for c in getattr(request, "commands", None) or ())
+    segments = getattr(request, "command_segments", None) or ()
+    resolved = getattr(request, "resolved_paths", None) or {}
+    return watch_policy.Asked(
+        req.kind, req.paths if req.kind == "write" else (), bool(commands) and all(r for _, r in commands),
+        bool(getattr(request, "has_write_file_redirection", False)),
+        str(getattr(request, "full_command_text", "") or "") if req.kind == "shell" else "",
+        tuple((str(s.full_command_text), str(s.identifier)) for s in segments), commands,
+        tuple(str(p) for p in getattr(request, "possible_paths", None) or ()),
+        tuple((str(k), str(v)) for k, v in resolved.items()),
+        str(getattr(request, "resolved_working_directory", "") or ""),
+    )  # fmt: skip
 
 
 def _command(request: Any) -> str:  # noqa: ANN401 - one of the SDK's permission request classes

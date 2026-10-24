@@ -1,0 +1,579 @@
+{
+  "about": "Commands agents run, from the skills, agent files, setup docs, sessions and common use",
+  "paths": "relative: in a fake worktree (src, tests, docs, dist, build, packages/app, templates); ~/: home",
+  "budget_note": "unresolved commands per reason; the test fails when a count grows",
+  "budget": { "CWD": 1, "ENV": 1, "FORM": 1, "HEREDOC": 1, "PROGRAM": 78, "RECURSIVE": 1, "STARTUP": 1, "SYNTAX": 3 },
+  "commands": [
+    {
+      "command": "git status",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git status --short",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git diff",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git diff --cached",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git diff --check",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git log --oneline -5",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git --no-pager log -3 --format=%s",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git add -A",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git add src/app.py tests/test_app.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git commit -m \"feat: add greeting\"",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git show --stat HEAD",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git rev-parse --git-path info/exclude",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git push",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git status --short && git diff -- src/app.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git diff --cached share/agents/",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git add src/a.py && git commit -m \"fix: y\" -m \"Co-authored-by: A <a@b.c>\"",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git diff > changes.patch",
+      "targets": [["write", "changes.patch"]],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "git diff --no-index /dev/null src/greet.md; git diff --check",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv sync --locked",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv sync --locked --all-packages --all-extras --all-groups",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run pytest -q",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run pytest -q tests/test_app.py -k smoke",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run --locked ruff check .",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run ruff format --check",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run test --changed",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run test --changed --base origin/main",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "python -m pytest -q",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "ruff check src tests",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run python .owlbear/scripts/validate_agents.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run python -c 'print(1)'",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "timeout 60 uv run pytest -q",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv --version",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "python3 -m pytest tests/ -x 2>&1 | tail -20",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run pytest -q > .owlbear/scratch/pytest-output.txt 2>&1",
+      "targets": [["write", ".owlbear/scratch/pytest-output.txt"]],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "python3 - <<'EOF'\nimport json\nprint(json.dumps({'a': 1}))\nEOF",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "uv run --locked python - <<'EOF' 2>&1 | tail -12\nimport sys\nprint(sys.path)\nEOF",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npm ci",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npm install",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npm test",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npm run build",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npm run lint -- --fix",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npx biome check .",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "node --version",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "cd packages/app && npm test",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "cd packages/app && npm run build && npm run preview",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "npm test -- --coverage > coverage.txt",
+      "targets": [["write", "coverage.txt"]],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "cd packages/app && npm run build > build.log 2>&1",
+      "targets": [["write", "packages/app/build.log"]],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "mkdir -p src/utils",
+      "targets": [["write", "src/utils"]],
+      "unresolved": []
+    },
+    {
+      "command": "mkdir -p tests/fixtures && touch tests/fixtures/__init__.py",
+      "targets": [["write", "tests/fixtures"], ["write", "tests/fixtures/__init__.py"]],
+      "unresolved": []
+    },
+    {
+      "command": "touch src/__init__.py",
+      "targets": [["write", "src/__init__.py"]],
+      "unresolved": []
+    },
+    {
+      "command": "cat > src/greet.py <<'EOF'\ndef greet(name):\n    return f\"hello {name}\"\nEOF",
+      "targets": [["write", "src/greet.py"]],
+      "unresolved": []
+    },
+    {
+      "command": "cat > README.md <<EOF\n# Title\nBuilt on $(date)\nEOF",
+      "targets": [["write", "README.md"]],
+      "unresolved": ["HEREDOC"]
+    },
+    {
+      "command": "cat >> notes.md <<'EOF'\n- item $(not run)\nEOF",
+      "targets": [["write", "notes.md"]],
+      "unresolved": []
+    },
+    {
+      "command": "cat <<EOF > docs/usage.md\nRun from $HOME\nEOF",
+      "targets": [["write", "docs/usage.md"]],
+      "unresolved": []
+    },
+    {
+      "command": "echo \"node_modules/\" >> .gitignore",
+      "targets": [["write", ".gitignore"]],
+      "unresolved": []
+    },
+    {
+      "command": "printf 'hello\\n' > greet.txt",
+      "targets": [["write", "greet.txt"]],
+      "unresolved": []
+    },
+    {
+      "command": "rm -rf build dist",
+      "targets": [["remove", "build"], ["remove", "dist"]],
+      "unresolved": []
+    },
+    {
+      "command": "rm -rf .pytest_cache",
+      "targets": [["remove", ".pytest_cache"]],
+      "unresolved": []
+    },
+    {
+      "command": "rm -f src/old.py",
+      "targets": [["remove", "src/old.py"]],
+      "unresolved": []
+    },
+    {
+      "command": "rm -rf node_modules/.cache",
+      "targets": [["remove", "node_modules/.cache"]],
+      "unresolved": []
+    },
+    {
+      "command": "rm -f build/*.pyc",
+      "targets": [["remove", "build/*.pyc"]],
+      "unresolved": []
+    },
+    {
+      "command": "cp .env.example .env",
+      "targets": [["write", ".env"]],
+      "unresolved": []
+    },
+    {
+      "command": "cp src/app.py src/app_backup.py",
+      "targets": [["write", "src/app_backup.py"]],
+      "unresolved": []
+    },
+    {
+      "command": "cp -r templates/ dist/",
+      "targets": [["write", "dist"]],
+      "unresolved": ["RECURSIVE"]
+    },
+    {
+      "command": "mv src/old_name.py src/new_name.py",
+      "targets": [["remove", "src/old_name.py"], ["write", "src/new_name.py"]],
+      "unresolved": []
+    },
+    {
+      "command": "mv notes.md docs",
+      "targets": [["remove", "notes.md"], ["write", "docs/notes.md"]],
+      "unresolved": []
+    },
+    {
+      "command": "rmdir build/empty",
+      "targets": [["remove", "build/empty"]],
+      "unresolved": []
+    },
+    {
+      "command": "make 2>&1 | tee build.log",
+      "targets": [["write", "build.log"]],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "sh -c 'cd src && touch marker'",
+      "targets": [["write", "src/marker"]],
+      "unresolved": []
+    },
+    {
+      "command": "cd src; touch x",
+      "targets": [],
+      "unresolved": ["CWD"]
+    },
+    {
+      "command": "cd src && touch y; cd ..",
+      "targets": [["write", "src/y"]],
+      "unresolved": []
+    },
+    {
+      "command": "ls -la",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "ls src tests 2>&1",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "head -50 src/app.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "sed -n '1,80p' src/app.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "grep -rn \"TODO\" src",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "rg -n \"def main\" src",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "wc -l src/*.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "find . -name '*.py' | head",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "tail -n 20 build.log",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "diff -u a.txt b.txt",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "jq . package.json",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "which python3",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "echo $PATH | tr : '\\n'",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "find . -name \"*.pyc\" -delete",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "cd src && ls; wc -c *.py 2>&1 | tail -30",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "cat src/app.py",
+      "targets": [],
+      "unresolved": []
+    },
+    {
+      "command": "pwd",
+      "targets": [],
+      "unresolved": []
+    },
+    {
+      "command": "echo $PATH",
+      "targets": [],
+      "unresolved": []
+    },
+    {
+      "command": "test -f package.json && echo yes",
+      "targets": [],
+      "unresolved": []
+    },
+    {
+      "command": "gh pr view --json title,body",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "gh pr checks 583 --repo owner/repo",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "gh auth status",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "curl -s http://127.0.0.1:4173/ | head -c 80",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "gh api repos/o/r/actions/jobs/1/logs > /tmp/job.log",
+      "targets": [["write", "/tmp/job.log"]],
+      "unresolved": ["PROGRAM"],
+      "inside": false
+    },
+    {
+      "command": "npm run preview > /tmp/preview.log 2>&1 &",
+      "targets": [["write", "/tmp/preview.log"]],
+      "unresolved": ["PROGRAM"],
+      "inside": false
+    },
+    {
+      "command": "mkdir -p /tmp/check && cd /tmp/check && npm init -y >/dev/null",
+      "targets": [["write", "/tmp/check"]],
+      "unresolved": ["PROGRAM"],
+      "inside": false
+    },
+    {
+      "command": "cat > /tmp/probe.py <<'EOF'\nprint(1)\nEOF\npython3 /tmp/probe.py",
+      "targets": [["write", "/tmp/probe.py"]],
+      "unresolved": ["PROGRAM"],
+      "inside": false
+    },
+    {
+      "command": "echo done > ~/notes.txt",
+      "targets": [["write", "~/notes.txt"]],
+      "unresolved": [],
+      "inside": false
+    },
+    {
+      "command": "rm -rf ~/.cache/owlbear-test",
+      "targets": [["remove", "~/.cache/owlbear-test"]],
+      "unresolved": [],
+      "inside": false
+    },
+    {
+      "command": "for f in src/*.py; do echo $f; done",
+      "targets": [],
+      "unresolved": ["SYNTAX"]
+    },
+    {
+      "command": "test \"$(cat greet.txt)\" = hello",
+      "targets": [],
+      "unresolved": ["SYNTAX"]
+    },
+    {
+      "command": "export PATH=$(pwd)/bin:$PATH",
+      "targets": [],
+      "unresolved": ["SYNTAX"]
+    },
+    {
+      "command": "make build",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "./scripts/setup.sh",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "ln -s ../shared shared",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "chmod +x scripts/run.sh",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "sed -i '' 's/a/b/' src/app.py",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "bash scripts/check.sh",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "xargs -n1 echo < list.txt",
+      "targets": [],
+      "unresolved": ["PROGRAM"]
+    },
+    {
+      "command": "mkdir -m 755 out",
+      "targets": [],
+      "unresolved": ["FORM"]
+    },
+    {
+      "command": "export TMPDIR=$PWD/.tmp && mkdir -p $TMPDIR",
+      "targets": [],
+      "unresolved": ["ENV"]
+    },
+    {
+      "command": "bash -lc 'uv run pytest -q'",
+      "targets": [],
+      "unresolved": ["STARTUP"]
+    }
+  ]
+}

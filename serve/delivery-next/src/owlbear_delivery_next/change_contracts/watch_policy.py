@@ -1,24 +1,32 @@
-"""The watcher's report-only policy (W1a; design §3.2, TD-46, TD-50, TD-365): what one tool call may write outside.
+"""The watcher's report-only policy (W1a, W1b-1; design §3.2, TD-46, TD-50, TD-365): what one tool call may write.
 
 A call yields *identified targets* and an *unresolved effect*, each on its own. Identified targets are the paths the
 runtime says a call writes: a file tool's path, a write request's path and the before and after paths of its file
-edits. Read tools and read requests yield nothing. A shell call's effects are not classified yet, so every one is
-unresolved unless the runtime marks each of its parsed commands read-only and it redirects no output into a file;
-that evidence clears only the shell effect, never a write path. No verdict is a rule's yet: an identified target
-outside is "outside write (not judged yet)". Reasoning text is never judged (TD-55).
+edits; and a shell call's effects as ``watch_effects`` identifies them in each of its permission requests' command
+text from the request's resolved working directory, else in its start's command from the session's folder (the
+fallback, marked on the outcome), where an earlier call's change of the shell's directory or of HOME and TMPDIR
+leaves what depends on it unresolved. Read tools and read requests yield nothing. What the shell effects leave open is
+unresolved, each reason once; the runtime's read-only evidence clears only the unresolved effect of the commands it
+covers, never an identified target, and a write redirection the runtime reports but the watcher does not see stays
+unresolved. No verdict is a rule's yet: an identified target outside is "outside write (not judged yet)". Reasoning
+text is never judged (TD-55).
 
 Where a target lies, first match wins: the session's own folder, then this Change's own state (Delivery's, TD-46),
 are not reported; another Change's worktree or state and the project's main checkout with its Git folder are, even
 under an exempt root; then temporary folders, tool caches and Delivery's own state are not (TD-46); anything else is.
-Paths are canonical: ``~`` and ``$TMPDIR`` expanded, relative ones taken from the session's folder, symlinks resolved.
+Paths are canonical: ``~`` and ``$TMPDIR`` expanded, relative ones taken from the session's folder, symlinks resolved;
+a shell effect's path as its operation opens it (a removal keeps its last component).
 """
 
 from __future__ import annotations
 
 import os
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from owlbear_delivery_next.change_contracts import watch_effects
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -26,7 +34,9 @@ if TYPE_CHECKING:
 WRITERS = frozenset({"create", "edit", "write", "write_file", "str_replace_editor", "apply_patch", "multi_edit"})
 SHELLS = frozenset({"bash", "powershell", "shell", "write_bash"})
 OUTSIDE = "outside write (not judged yet)"
-SHELL = "shell effects not classified yet"
+SHELL = "shell effects not classified yet"  # a shell call without command text, or another shell's
+REDIRECT = "a redirection the watcher does not see"
+UNREAD = frozenset({"powershell", "write_bash"})  # not bash text: what they run is not read
 NO_PATH = "file edit without a path"
 CACHES = ("TMPDIR", "XDG_CACHE_HOME", "UV_CACHE_DIR", "PIP_CACHE_DIR", "npm_config_cache", "PLAYWRIGHT_BROWSERS_PATH")
 _TMP = ("$TMPDIR", "${TMPDIR}")
@@ -40,6 +50,12 @@ class Asked:
     paths: tuple[str, ...] = ()  # a write request's paths, its file edits' before and after paths among them
     read_only: bool = False  # a shell request whose every parsed command the runtime marks read-only
     redirect: bool = False  # a shell request that redirects output into a file
+    full_command_text: str = ""  # a shell request's command as given
+    command_segments: tuple[tuple[str, str], ...] = ()  # the runtime's segments: each one's text and identifier
+    commands: tuple[tuple[str, bool], ...] = ()  # the runtime's commands: identifier and whether read-only
+    possible_paths: tuple[str, ...] = ()
+    resolved_paths: tuple[tuple[str, str], ...] = ()
+    resolved_working_directory: str = ""  # "" when the runtime names none
 
 
 @dataclass(frozen=True)
@@ -50,6 +66,8 @@ class Call:
     arguments: Any = None
     redirect: bool = False  # the start event's shell info says it redirects output into a file
     asked: tuple[Asked, ...] = ()
+    moved: bool = False  # an earlier call of its shell may have changed the shell's directory
+    changed: frozenset[str] = frozenset()  # the watched variables an earlier call of its shell may have changed
 
 
 @dataclass(frozen=True)
@@ -57,7 +75,10 @@ class Outcome:
     """One call's effects outside: identified targets and an unresolved effect, either or both; none is inside."""
 
     targets: tuple[str, ...] = ()
-    unresolved: str = ""
+    unresolved: str = ""  # its reasons, each once, joined by "; "
+    assumed_cwd: bool = False  # a shell text was read from the session's folder: the runtime named no directory
+    moves: bool = False  # it may change its shell's directory for later calls
+    changes: frozenset[str] = frozenset()  # the watched variables it may change for later calls
 
     @property
     def inside(self) -> bool:
@@ -99,11 +120,11 @@ def exempt(home: Path, env: Mapping[str, str]) -> tuple[Path, ...]:
 def judge(call: Call, own: Path, places: Places) -> Outcome:
     """One call's effects outside *own*, the session's canonical folder, by *places* (resolved)."""
     written = list(_written(call))
-    seen = (canonical(p, own, places) for p in written)
-    targets = tuple(dict.fromkeys(str(p) for p in seen if reported(p, own, places)))
-    if _shell(call) and not _read_only(call):
-        return Outcome(targets, SHELL)
-    return Outcome(targets, NO_PATH if call.tool in WRITERS and not written else "")
+    seen = [canonical(p, own, places) for p in written]
+    shell = _shell_effects(call, own, places) if _shell(call) else _Shelled()
+    targets = tuple(dict.fromkeys(str(p) for p in [*seen, *shell.paths] if reported(p, own, places)))
+    reasons = "; ".join(dict.fromkeys(shell.reasons)) or (NO_PATH if call.tool in WRITERS and not written else "")
+    return Outcome(targets, reasons, shell.assumed, shell.moves, frozenset(shell.changes))
 
 
 def reported(path: Path, own: Path, places: Places) -> bool:
@@ -141,7 +162,62 @@ def _shell(call: Call) -> bool:
     return call.tool in SHELLS or any(a.kind == "shell" for a in call.asked)
 
 
-def _read_only(call: Call) -> bool:
-    """Positive evidence only: every shell request is read-only without a redirection, and the start says none."""
-    shells = [a for a in call.asked if a.kind == "shell"]
-    return bool(shells) and not call.redirect and all(a.read_only and not a.redirect for a in shells)
+@dataclass
+class _Shelled:
+    """A shell call's effects over all its texts."""
+
+    paths: list[Path] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+    assumed: bool = False
+    moves: bool = False
+    changes: set[str] = field(default_factory=set)
+
+
+def _shell_effects(call: Call, own: Path, places: Places) -> _Shelled:
+    """Each shell request's text from its resolved directory, else the start's command from *own* (assumed).
+
+    From *own*, an earlier call that may have moved the shell leaves relative targets unresolved; an earlier change
+    of HOME or TMPDIR leaves their expansions unresolved wherever the text runs.
+    """
+    if call.tool in UNREAD:  # what it runs is not read; written to a shell, it may change anything there
+        moves = call.tool == "write_bash"
+        return _Shelled(reasons=[SHELL], moves=moves, changes=set(watch_effects.WATCHED) if moves else set())
+    args = call.arguments if isinstance(call.arguments, dict) else {}
+    command = args.get("command") if isinstance(args.get("command"), str) else ""
+    shell = _Shelled()
+    for asked in [a for a in call.asked if a.kind == "shell"] or [Asked("shell")]:
+        text, folder = asked.full_command_text or command, asked.resolved_working_directory
+        if not text:
+            shell.reasons.append(SHELL)
+            continue
+        shell.assumed = shell.assumed or not folder
+        cwd = canonical(folder, own, places) if folder else own
+        start = watch_effects.Shell(cwd, places.home, places.tmp, call.moved and not folder, call.changed)
+        found = watch_effects.effects(text, start, evidence(asked))
+        shell.paths += [t.path for t in found.targets]
+        shell.reasons += found.unresolved
+        shell.moves, shell.changes = shell.moves or found.moves, shell.changes | found.changes
+        if (asked.redirect or call.redirect) and not found.redirects and watch_effects.SYNTAX not in found.unresolved:
+            shell.reasons.append(REDIRECT)
+    return shell
+
+
+def evidence(asked: Asked) -> watch_effects.Evidence:
+    """A shell request's read-only evidence, each mark bound to its segment's text where the runtime names one.
+
+    An identifier marked both ways is not read-only; one marked not read-only is never covered by a shorter one.
+    """
+    marks: dict[str, bool] = {}
+    for identifier, read_only in asked.commands:
+        marks[identifier] = marks.get(identifier, True) and read_only
+    bound = [(text, marks[identifier]) for text, identifier in asked.command_segments if identifier in marks]
+    segments = tuple((w, read_only) for text, read_only in bound if (w := _words(text)))
+    named = tuple((w, read_only) for identifier, read_only in marks.items() if (w := _words(identifier)))
+    return watch_effects.Evidence(asked.read_only and all(marks.values()), segments, named)
+
+
+def _words(text: str) -> tuple[str, ...]:
+    try:
+        return tuple(shlex.split(text))
+    except ValueError:
+        return ()

@@ -309,8 +309,34 @@ SDK first, since window steps stay paused; the window feed comes with their reop
    W1a: only the write paths the runtime names (file tools, write requests, file edits), judged by root: the own
    worktree, then this Change's state, are inside; other Changes' worktrees and state and the main checkout are
    reported even under an exempt root; then the TD-46 roots are inside. Every shell call is reported as unresolved
-   unless the runtime proves each of its commands read-only without a redirection. W1b next: shell effect
-   classification, rule verdicts and the rule-verdict switch.
+   unless the runtime proves each of its commands read-only without a redirection.
+   W1b-1 (2026-10-24), still report-only and unjudged: shell effects are identified by the watcher's own lexer
+   (quote-aware operators and redirections, heredoc bodies skipped; substitutions, subshells, groups, compound
+   commands, `eval` and `source` leave the call unresolved), from the permission request's resolved working
+   directory, else the session's folder; a `cd LITERAL` moves it, logically as `cd -L` does, only through `&&`.
+   `$HOME`, `$TMPDIR` and `~` expand by the environment of their moment: any assignment, `export`, `unset`,
+   `declare` and kin, `read`, `printf -v` or `env` change of them leaves later expansions unresolved, and a nested
+   shell that may read startup input (`BASH_ENV`/`ENV`, login or interactive options, zsh, fish, stdin) is
+   unresolved. Heredoc delimiters are never expanded. Identified: write redirections, `cat > FILE <<EOF`, `touch`,
+   `mkdir`, `rm`, `rmdir`, `unlink`, `cp`, `mv` and `tee` in their plain forms, with symlinks resolved by operation
+   (a removal keeps its last component; a `cp` or `mv` onto a symlink and a recursive copy stay unresolved). Every
+   other program, option or form is unresolved with its reason unless the runtime marks that command read-only,
+   bound to its segment's text, a non-read-only mark winning; such evidence never removes an identified target.
+   What the watcher cannot name it never calls clean: a setter's non-literal name, a prefix assignment before a
+   builtin, a command it cannot name, `eval`/`source`/`.` and text it cannot read count as changing the directory
+   and every watched variable; read-only evidence clears only the unresolved write effect of a top-level command
+   the lexer fully read, never a nested script, unread text ("shell syntax not followed") or a heredoc's command
+   substitution.
+   The runtime's shell is treated as possibly persistent: after a call that may have moved a shell (per `shellId`,
+   or the whole session for a call naming none) or changed its HOME or TMPDIR, later calls read from the session's
+   folder have their relative targets, or those expansions, unresolved; calls are ordered by their start times,
+   equal times count as before, and a change that arrives late judges the session's calls again.
+   Accepted limits: "unresolved" means the watcher cannot tell, not proof of an outside write, and the shell-state
+   taint over-approximates on purpose (builtin prefix assignments, unnamed commands, unread syntax, ambiguous
+   timestamps). Each shell's directory is assumed to start at the session's folder; a shell that drifted before
+   the watcher saw it is not covered. A corpus of commands agents run holds the
+   expectations and an unresolved budget. W1b-2 next: Git, rule verdicts, transfers and the
+   rule-verdict switch.
 4. Stop latch through `sdk_teardown`, late-stop override, persistent watcher-stop count, the second-stop question
    to the owner with the approved-path record (§3.3; applying amendments to the brief waits for item 16).
 5. Model judge for the rest, with the chosen model: stop if dangerous or inappropriate for the task, else

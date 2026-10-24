@@ -18,6 +18,7 @@ from copilot.generated.session_events import PermissionRequestWrite, SessionEven
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_contracts.watch_effects import PROGRAM
 from owlbear_delivery_next.change_contracts.watch_policy import Places
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system import local_home
@@ -28,7 +29,7 @@ from owlbear_delivery_next.state_store import project_home, watch_reports
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import sessions, watched
 
-SHELL_UNRESOLVED = "unresolved (shell effects not classified yet)"
+SHELL_UNRESOLVED = f"unresolved ({PROGRAM})"  # make: W1b-1 does not follow it
 OUTSIDE = "outside write (not judged yet)"
 
 
@@ -140,7 +141,7 @@ def test_repeated_enrichment_reclassifies_the_one_row_and_read_only_evidence_cov
             write("c2", outside), start("c2"))  # fmt: skip
     found = rows(place)
     assert (found["c1"]["targets"], found["c1"]["unresolved"], found["c1"]["verdict"]) == ([outside], "", OUTSIDE)
-    assert (found["c2"]["targets"], found["c2"]["unresolved"]) == ([outside], "shell effects not classified yet")
+    assert (found["c2"]["targets"], found["c2"]["unresolved"]) == ([outside], PROGRAM)
     assert watch_reports.counts(place.store.db, "c1") == {"outside": 2, "unresolved": 1}
 
 
@@ -320,3 +321,161 @@ def test_a_call_reported_before_its_launcher_was_announced_gets_its_subagent_wit
 def test_a_shell_call_seen_only_in_its_permission_request_shows_its_whole_command(place) -> None:
     stepped(place, shell("p3", read_only=False))
     assert rows(place)["p3"]["command"] == "ran make p3"
+
+
+def ran(cid: str, command: str, *, second: int = 0, shell_id: str | None = None) -> SessionEvent:
+    args = {"command": command, "description": "x"} | ({"shellId": shell_id} if shell_id else {})
+    data = {"toolCallId": cid, "toolName": "bash", "arguments": args,
+            "shellToolInfo": {"hasWriteFileRedirection": ">" in command, "possiblePaths": []}}  # fmt: skip
+    return event("tool.execution_start", data, second=second)
+
+
+def asking(
+    cid: str, text: str, *, cwd: str | None = None, read_only: tuple[str, ...] = (), second: int = 0
+) -> SessionEvent:
+    segments = [{"identifier": " ".join(s.split()[:2]), "fullCommandText": s} for s in text.split(" && ")]
+    commands = [{"identifier": s["identifier"], "readOnly": s["identifier"] in read_only} for s in segments]
+    request = {"kind": "shell", "toolCallId": cid, "canOfferSessionApproval": False, "fullCommandText": text,
+               "commands": commands, "commandSegments": segments, "hasWriteFileRedirection": ">" in text,
+               "intention": "work", "possiblePaths": ["out.txt"], "possibleUrls": [],
+               "resolvedPaths": {"out.txt": "/abs/out.txt"}}  # fmt: skip
+    request |= {"resolvedWorkingDirectory": cwd} if cwd else {}
+    return event("permission.requested", {"requestId": f"r-{cid}", "permissionRequest": request}, second=second)
+
+
+def test_a_shell_request_keeps_the_runtimes_command_text_segments_paths_and_working_directory() -> None:
+    request = asking("c1", "cd sub && git status --short", cwd="/w", read_only=("git status",)).data.permission_request
+    found = watch_feed.asked(request)
+    assert (found.kind, found.full_command_text, found.resolved_working_directory) == (
+        "shell", "cd sub && git status --short", "/w",
+    )  # fmt: skip
+    assert found.command_segments == (("cd sub", "cd sub"), ("git status --short", "git status"))
+    assert found.commands == (("cd sub", False), ("git status", True))
+    assert (found.read_only, found.redirect) == (False, False)
+    assert (found.possible_paths, found.resolved_paths) == (("out.txt",), (("out.txt", "/abs/out.txt"),))
+    write_request = write("c2", "/x.py").data.permission_request
+    assert watch_feed.asked(write_request).full_command_text == ""
+
+
+def test_a_shell_call_is_read_from_its_requests_working_directory_whichever_comes_first(place) -> None:
+    there = str(place.elsewhere / "out.txt")
+    stepped(
+        place,
+        ran("s1", "touch out.txt", second=1),  # start only: from the session's folder, inside
+        ran("s2", "touch ../../elsewhere/out.txt", second=2),  # start only, relative and outside
+        asking("p1", "touch out.txt", cwd=str(place.elsewhere), second=3),  # permission only
+        ran("b1", "touch out.txt", second=4), asking("b1", "touch out.txt", cwd=str(place.elsewhere), second=5),
+        asking("b2", "touch out.txt", cwd=str(place.elsewhere), second=6), ran("b2", "touch out.txt", second=7),
+        ran("b3", "touch out.txt", second=8), asking("b3", "touch out.txt", cwd=str(place.own), second=9),
+        asking("b4", "echo x > out.txt", second=10), ran("b4", "echo x > out.txt", second=11),  # no directory named
+    )  # fmt: skip
+    found = rows(place)
+    assert sorted(found) == ["b1", "b2", "p1", "s2"]
+    assert {c: (r["targets"], r["verdict"], r["source"]) for c, r in found.items()} == {
+        "s2": ([there], OUTSIDE, "start"), "p1": ([there], OUTSIDE, "permission"),
+        "b1": ([there], OUTSIDE, "enriched"), "b2": ([there], OUTSIDE, "enriched"),
+    }  # fmt: skip
+    assert found["p1"]["command"] == "ran touch out.txt"
+
+
+def test_a_shell_calls_read_only_commands_clear_only_their_own_unresolved_effect(place) -> None:
+    stepped(
+        place,
+        ran("r1", "git status --short"), asking("r1", "git status --short", read_only=("git status",)),
+        ran("r2", "git status && git push"), asking("r2", "git status && git push", read_only=("git status",)),
+        asking("r3", "git status > ../../elsewhere/s.txt", read_only=("git status",)),
+    )  # fmt: skip
+    found = rows(place)
+    assert sorted(found) == ["r2", "r3"]
+    assert (found["r2"]["targets"], found["r2"]["verdict"]) == ([], SHELL_UNRESOLVED)
+    assert (found["r3"]["targets"], found["r3"]["verdict"]) == ([str(place.elsewhere / "s.txt")], OUTSIDE)
+
+
+def test_a_call_after_one_that_may_have_moved_its_shell_has_its_relative_targets_unresolved(place) -> None:
+    drift = "unresolved (an earlier command changed the shell's directory)"
+    elsewhere = place.elsewhere
+    stepped(
+        place,
+        ran("b0", "touch early", second=1),  # before any cd: from the session's folder
+        ran("m1", f"cd {elsewhere}", second=2), ran("m2", "touch note", second=3),
+        ran("m3", f"touch {elsewhere}/abs.txt", second=4),  # absolute: still identified
+        asking("m4", "touch named", cwd=str(place.own), second=5),  # the runtime names its directory
+        asking("m1", f"cd {elsewhere}", second=7),  # judged again: its change counts once
+    )  # fmt: skip
+    found = rows(place)
+    assert sorted(found) == ["m2", "m3"]
+    assert (found["m2"]["targets"], found["m2"]["verdict"]) == ([], drift)
+    assert (found["m3"]["targets"], found["m3"]["unresolved"]) == ([str(elsewhere / "abs.txt")], "")
+
+
+def test_a_cd_chain_or_an_environment_change_reaches_later_calls_of_its_shell_only(place) -> None:
+    stepped(
+        place,
+        ran("c1", "cd sub && make", second=1), ran("c2", "touch a", second=2),
+        ran("s1", f"cd {place.elsewhere}", shell_id="one", second=3), ran("s2", "touch b", shell_id="two", second=4),
+        ran("s3", "touch c", shell_id="one", second=5),
+        ran("e1", "export HOME=/elsewhere", shell_id="env", second=6), ran("e2", "touch ~/d", shell_id="env", second=7),
+    )  # fmt: skip
+    found = rows(place)
+    assert sorted(found) == ["c1", "c2", "e2", "s3"]  # shell "two" never moved
+    assert found["c2"]["unresolved"] == "an earlier command changed the shell's directory"
+    assert found["s3"]["unresolved"] == "an earlier command changed the shell's directory"
+    assert found["e2"]["unresolved"] == "an earlier command changed the shell's environment"
+
+
+DRIFT, ENVIRONMENT = (
+    "an earlier command changed the shell's directory",
+    "an earlier command changed the shell's environment",
+)
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        'V=TMPDIR; printf -v "$V" /outside',
+        'V=TMPDIR; export "$V=/outside"',
+        'V=TMPDIR; unset "$V"',
+        "TMPDIR=/outside :",
+        'eval "TMPDIR=/outside"',
+        'CMD=export; "$CMD" TMPDIR=/outside',
+        "for v in TMPDIR; do export $v=/outside; done",
+    ],
+)
+def test_a_later_call_of_the_same_shell_sees_what_an_unnamed_or_builtin_change_did(place, first) -> None:
+    stepped(place, ran("f1", first, second=1), ran("f2", 'touch "$TMPDIR/out"', second=2))
+    assert ENVIRONMENT in rows(place)["f2"]["unresolved"]
+
+
+@pytest.mark.parametrize(
+    "first", ["HOME=/etc cd", 'eval "cd /etc"', 'CMD=cd; "$CMD" /etc', "'cd' /etc; if :; then :; fi"]
+)
+def test_a_later_call_of_the_same_shell_sees_a_move_it_cannot_name(place, first) -> None:
+    marked = {"identifier": "eval", "readOnly": True}
+    request = {"kind": "shell", "toolCallId": "g1", "canOfferSessionApproval": False, "fullCommandText": first,
+               "commands": [marked], "hasWriteFileRedirection": False, "intention": "x", "possiblePaths": [],
+               "possibleUrls": []}  # fmt: skip
+    eval_ro = event("permission.requested", {"requestId": "r-g1", "permissionRequest": request}, second=1)
+    stepped(place, ran("g1", first, second=1), eval_ro, ran("g2", "touch note", second=2))
+    assert rows(place)["g2"]["unresolved"] == DRIFT
+
+
+def test_read_only_evidence_for_a_top_level_command_does_not_clear_its_nested_twin(place) -> None:
+    text = "git diff && sh -c 'git diff --output=/outside/log'"
+    stepped(place, ran("n1", text), asking("n1", text, read_only=("git diff",)))
+    assert rows(place)["n1"]["verdict"] == SHELL_UNRESOLVED
+
+
+def test_a_call_delivered_before_an_earlier_cd_is_judged_again_by_start_time(place) -> None:
+    elsewhere = place.elsewhere
+    events = [
+        ran("o2", "touch note", second=5), ran("o1", f"cd {elsewhere}", second=2),  # delivered later, ran before
+        ran("p2", "touch later", second=8, shell_id="p"),
+        asking("p1", f"cd {elsewhere}", second=9),  # seen only as a request: not before p2 yet
+        ran("q1", "touch same", second=20), ran("q2", f"cd {elsewhere}", second=20),  # equal times: cannot tell
+    ]  # fmt: skip
+    st = stepped(place, *events, close=False)
+    assert st.feed.calls[("s1", "p2")].reported is False  # judged inside so far
+    st.on_event(ran("p1", f"cd {elsewhere}", second=7, shell_id="p"))  # its start arrives: before p2 after all
+    st.feed.close()
+    found = rows(place)
+    assert (found["o2"]["unresolved"], found["q1"]["unresolved"], found["p2"]["unresolved"]) == (DRIFT,) * 3
