@@ -29,17 +29,17 @@ PROBE = {
 }
 
 
-def installed(tag: str) -> Path:
-    """An installed version whose interpreter finds its own probe ``owlbear_memory_mcp`` before the real one."""
+def installed(tag: str, *, probe: bool = True) -> Path:
+    """An installed version on Delivery's packages; with *probe*, its own ``owlbear_memory_mcp`` comes first."""
     venv = local_home.root() / local_home.VERSIONS / tag / ".venv"
     (venv / "bin").mkdir(parents=True)
     base = Path(sys.base_prefix) / "bin" / Path(sys.executable).name
     (venv / "pyvenv.cfg").write_text(f"home = {base.parent}\ninclude-system-site-packages = false\n")
     (venv / "bin" / "python").symlink_to(base.resolve())
-    probe = venv / SITE / "owlbear_memory_mcp"
-    probe.mkdir(parents=True)
-    for name, text in PROBE.items():
-        (probe / name).write_text(text)
+    shadow = venv / SITE / "owlbear_memory_mcp"
+    (shadow if probe else shadow.parent).mkdir(parents=True)
+    for name, text in PROBE.items() if probe else ():
+        (shadow / name).write_text(text)
     dev = sysconfig.get_paths()["purelib"]  # Delivery itself, with its editable packages after the probe
     (venv / SITE / "zz_dev.pth").write_text(f"import site; site.addsitedir({dev!r})\n")
     return venv.parent
@@ -124,26 +124,50 @@ def test_a_server_this_install_lacks_says_so_and_one_that_fails_to_import_raises
         mcp_launch.main(["browser"])
 
 
-@pytest.mark.timeout(60)
-def test_the_real_memory_server_answers_over_stdio_with_protocol_only_output(tmp_path):
-    (tmp_path / ".owlbear").mkdir()  # a workspace: the server reads its folder from the client's working folder
-    asked = [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18",
-         "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-    ]  # fmt: skip
-    server = subprocess.Popen(
-        [sys.executable, "-m", "owlbear_delivery_next", "serve", "memory"], cwd=tmp_path, text=True,
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )  # fmt: skip
+ASKED = [
+    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18",
+     "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
+    {"jsonrpc": "2.0", "method": "notifications/initialized"},
+    {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+]  # fmt: skip
+
+
+def answered(argv: list[str], workspace: Path, held: Path | None = None) -> None:
+    """The memory server *argv* starts in *workspace* initializes and lists its tools, and writes nothing else.
+
+    With *held*, the version folder it holds a lease on while it runs.
+    """
+    (workspace / ".owlbear").mkdir(exist_ok=True)  # the server reads its folder from the client's working folder
+    server = subprocess.Popen(  # noqa: S603 - an interpreter of this test's making
+        argv, cwd=workspace, text=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     try:
-        server.stdin.write("".join(json.dumps(m) + "\n" for m in asked))
+        server.stdin.write("".join(json.dumps(m) + "\n" for m in ASKED))
         server.stdin.flush()
         frames = [json.loads(server.stdout.readline()) for _ in range(2)]  # each line a frame: nothing else on stdout
+        assert held is None or leases.held(held) == [server.pid]
         server.stdin.close()  # the client ends it, after its answers
         rest, err = server.communicate(timeout=20)
     finally:
         server.kill()
     assert (server.returncode, [f.get("id") for f in frames], rest) == (0, [1, 2], ""), err
     assert "save_memory" in [t["name"] for t in frames[1]["result"]["tools"]]
+
+
+@pytest.mark.timeout(60)
+def test_the_real_memory_server_answers_over_stdio_with_protocol_only_output(tmp_path):
+    answered([sys.executable, "-m", "owlbear_delivery_next", "serve", "memory"], tmp_path)
+
+
+@pytest.mark.timeout(60)
+def test_the_workspace_starts_each_server_exactly_as_configured_from_the_installed_version(tmp_path):
+    """``.mcp.json`` (agent host, Copilot CLI) names the launcher through ``$HOME``, which only a shell expands."""
+    configured = json.loads((Path(__file__).parents[3] / ".mcp.json").read_text())["mcpServers"]
+    version = installed("v1.0", probe=False)
+    alias(version)
+    started = 'exec "$HOME/.owlbear/runtime/.venv/bin/python" -m owlbear_delivery_next serve '
+    assert {n: configured[f"owlbear-{n}"]["args"] for n in mcp_launch.SERVERS} == {
+        n: ["-c", started + n] for n in mcp_launch.SERVERS
+    }
+    memory = configured["owlbear-memory"]
+    answered([memory["command"], *memory["args"]], tmp_path, held=version)

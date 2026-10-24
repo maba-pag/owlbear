@@ -185,7 +185,6 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
     seed_hooks = {path.name for path in (_REPO_ROOT / "seed/.owlbear/hooks").glob("*.py")}
     assert installed_hooks == seed_hooks
     mcp = json.loads((target_dir / ".vscode/mcp.json").read_text(encoding="utf-8"))
-    owlbear_rel_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
     assert set(mcp["servers"]) == {
         "owlbear-knowledge",
         "owlbear-memory",
@@ -201,9 +200,9 @@ def test_init_creates_project_surfaces_without_runtime_selection_artifacts(
         "owlbear-memory",
         "owlbear-browser",
     ):
-        server = mcp["servers"][server_name]
-        assert server["command"] == "uv"
-        assert server["args"][:2] == ["--project", owlbear_rel_path]
+        server = mcp["servers"][server_name]  # pinned to the installed version, as the chat server is
+        assert server["command"] == "${userHome}/.owlbear/runtime/.venv/bin/python"
+        assert server["args"] == ["-m", "owlbear_delivery_next", "serve", server_name.removeprefix("owlbear-")]
     assert not (target_dir / ".gitignore").exists()
     assert not (target_dir / ".owlbear/.gitignore").exists()
     installed_text = "\n".join(
