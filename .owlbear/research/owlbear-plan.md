@@ -2,7 +2,7 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `8e3c45f839` after #628 and this pull request, decisions to TD-469, item 5's
+> **Date:** 2026-10-24, status at `main` `f1f18fabad` after #630 and this pull request, decisions to TD-469, item 5's
 > decisions of 2026-10-22 and the owner's of 2026-10-23
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
@@ -218,8 +218,11 @@ found 26 supported defects at `ebf7bbbeb`, grouped into 21 repair packages under
 [#606](https://github.com/maba-pag/owlbear/issues/606). Their issues hold current repair
 and verification status; #605 was not part of that baseline. The decision-page scope
 repair (#607) binds displayed decisions, confirmations and mutations to the same
-captured scope and rejects superseded responses. The other packages remain open
-until their own merged-code acceptance evidence is verified.
+captured scope and rejects superseded responses. Cleanup preservation (#610) keeps
+unsupported nested repositories and entries in their workspace instead of omitting
+them from a verified archive; supported links and file modes are preserved without
+following symlink parents. Other packages remain open until their own merged-code
+acceptance evidence is verified.
 
 Change creation (#609) allocates handles, slugs and new records across processes in
 one transaction. Maintenance test-review setup reserves its identity before Git
