@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import itertools
+import json
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
@@ -113,7 +115,10 @@ def _quiet(path: Path, *args: str, missing: bool = False) -> str | None:
 def _sides(path: Path, since: str | None) -> tuple[str, str] | None:
     """Both sides of the unfinished update, else of the latest merge commit since *since* (or of HEAD)."""
     if theirs := _quiet(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD", missing=True):
-        return "HEAD", theirs
+        if not (ours := _quiet(path, "rev-parse", "--verify", "HEAD")):
+            msg = "Git did not identify the unfinished integration's start head"
+            raise ValueError(msg)
+        return ours, theirs
     merge = _quiet(
         path, "rev-list", "--merges", "--max-count=1", *([f"{since}..HEAD"] if since else ["--no-walk", "HEAD"])
     )
@@ -128,7 +133,10 @@ def _sides(path: Path, since: str | None) -> tuple[str, str] | None:
 
 def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]:
     """Paths the Builder resolved in the update's merge; while it cannot finish, paths both sides changed."""
-    sides = _sides(path, since)
+    return _collision_paths(path, _sides(path, since), resolved=resolved)
+
+
+def _collision_paths(path: Path, sides: tuple[str, str] | None, *, resolved: bool) -> list[str]:
     if not sides:
         return []
     if resolved:
@@ -148,8 +156,14 @@ def collided(path: Path, since: str | None, *, resolved: bool) -> list[str]:
     return sorted(ours & theirs)
 
 
-def collision(
-    c: Change, paths: Iterable[str], near: Iterable[Neighbour], said: str = "", patterns: Iterable[str] = ()
+def collision(  # noqa: PLR0913 - collision context, path policy and observed merge proof
+    c: Change,
+    paths: Iterable[str],
+    near: Iterable[Neighbour],
+    said: str = "",
+    patterns: Iterable[str] = (),
+    *,
+    merge: tuple[str, str] | None = None,
 ) -> StepResult | None:
     """Ask which behaviour to keep when an update collided on paths of another Change's scope; once per collision."""
     patterns = list(patterns)
@@ -158,13 +172,15 @@ def collision(
         for n in near
     ]
     hits = [(n, ps) for n, ps in hits if ps]
-    # Task numbers restart on replanning; their brief and replan generation survive restart.
+    material = [merge, c.brief.outcome, sorted((n.handle, n.outcome, ps) for n, ps in hits)]
+    binding = hashlib.sha256(json.dumps(material, ensure_ascii=True, separators=(",", ":")).encode()).hexdigest()
+    # Task numbers restart on replanning; the adopted plan version advances even on an owner's replan.
     subject = (
-        [f"brief-{c.brief.version}", f"replan-{c.budgets.replans}", c.step.task]
-        if c.step.kind == StepKind.BUILD and c.step.task
+        [f"brief-{c.brief.version}", f"plan-{c.plan.version}", c.step.task]
+        if c.step.kind == StepKind.BUILD and c.step.task and c.plan
         else []
     )
-    cause = cause_key(ErrorKind.CONFLICT, c.step.kind, ["collision", *subject, *(n.handle for n, _ in hits)])
+    cause = cause_key(ErrorKind.CONFLICT, c.step.kind, ["collision", binding, *subject, *(n.handle for n, _ in hits)])
     if not hits or any(q.cause == cause and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
         return None
     others = ", ".join(n.handle for n, _ in hits)
@@ -220,8 +236,9 @@ def integrated(store: Store, c: Change, path: Path, session: tuple[str | None, s
     said = "" if resolved else result.reason or (result.question.text if result.question else "")
     near = neighbours(store, c.slug, datetime.now(UTC))
     try:
-        paths = collided(path, start, resolved=resolved)
+        sides = _sides(path, start)
+        paths = _collision_paths(path, sides, resolved=resolved)
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         return _unverified(f"Integration collisions could not be checked: {exc}"[:300])
-    hit = collision(c, paths, near, said, generated(path))
+    hit = collision(c, paths, near, said, generated(path), merge=sides)
     return hit or result

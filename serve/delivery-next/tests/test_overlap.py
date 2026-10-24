@@ -17,11 +17,13 @@ from owlbear_delivery_next.change_contracts.models import (
     Stop,
     Task,
 )
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.status import Activity, card
 from owlbear_delivery_next.state_store.store import Store
-from owlbear_delivery_next.workflow_steps import overlap
+from owlbear_delivery_next.workflow_steps import overlap, plan_round
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -62,6 +64,23 @@ def shared_store(tmp_path) -> Store:
     with store.lock("c3") as lock:
         store.write(lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=plan("src/app.ts")))
     return store
+
+
+def replace_plan(c, store, path, monkeypatch):
+    """Adopt a real planner result without launching its SDK challenge."""
+    monkeypatch.setattr(plan_round.plan_rounds, "revised", lambda *_: "accepted")
+    with store.lock(c.slug) as lock:
+        result = plan_round.planned(
+            store, lock, c, path, None, StepResult(exit=Exit.DONE, plan=plan("src")), Profile(), {}
+        )
+        c = loop.apply(c, result, NOW)
+        store.write(lock, c)
+    c.plan.tasks[0].done = True
+    c.plan.tasks.append(Task(id="t2", title="new integration", scope=["src"], origin="integration"))
+    c.step = Step(kind=K.BUILD, task="t2")
+    with store.lock(c.slug) as lock:
+        store.write(lock, c)
+    return store.read(c.slug)
 
 
 @pytest.fixture
@@ -224,7 +243,7 @@ def test_a_new_integration_task_does_not_reuse_an_earlier_collision_answer():
     assert asked.cause != first.cause
 
 
-def test_replanning_with_reused_task_numbers_requires_fresh_collision_consent(tmp_path):
+def test_replanning_with_reused_task_numbers_requires_fresh_collision_consent(tmp_path, monkeypatch):
     c = building()
     near = [overlap.Neighbour("c3", ["src"], "cache pages", merged=False)]
     first = overlap.collision(c, ["src/app.ts"], near)
@@ -233,20 +252,79 @@ def test_replanning_with_reused_task_numbers_requires_fresh_collision_consent(tm
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
     c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="conflict:build:replan", reason="replan"), NOW)
     assert c.budgets.replans == 1
-    c = loop.apply(c, StepResult(exit=Exit.DONE, plan=plan("src")), NOW)
-    c.plan.tasks[0].done = True
-    c.plan.tasks.append(Task(id="t2", title="new integration", scope=["src"], origin="integration"))
-    c.step = Step(kind=K.BUILD, task="t2")
     store = Store(tmp_path / "store")
-    with store.lock(c.slug) as lock:
-        store.write(lock, c)
-    c = store.read(c.slug)
+    c = replace_plan(c, store, tmp_path, monkeypatch)
 
     asked = overlap.collision(c, ["src/app.ts"], near)
 
     assert asked is not None
     assert asked.cause != first.cause
     assert c.questions[0].answer.option == "keep"
+
+
+def test_owner_final_review_replan_with_unchanged_retry_budget_requires_new_consent(tmp_path, monkeypatch):
+    c = building()
+    near = [overlap.Neighbour("c3", ["src"], "cache pages", merged=False)]
+    first = overlap.collision(c, ["src/app.ts"], near)
+    c = loop.apply(c, first, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    before = c.brief.version, c.budgets.replans
+    final = RoundLoop(subject=FINAL, policy=RoundPolicy())
+    round_flow.replan(c, final, "Owner selected Plan again from the brief", NOW)
+    assert c.step.kind == K.PLAN
+    assert (c.brief.version, c.budgets.replans) == before
+    c = replace_plan(c, Store(tmp_path / "store"), tmp_path, monkeypatch)
+
+    asked = overlap.collision(c, ["src/app.ts"], near)
+
+    assert asked is not None
+    assert asked.cause != first.cause
+    assert c.plan.version == 2
+
+
+def test_new_target_collision_in_the_same_task_needs_fresh_consent(conflicted, tmp_path):
+    repo, start = conflicted
+    store, c = shared_store(tmp_path), building()
+    worker_ask = StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="resolve the update"))
+    first = overlap.integrated(store, c, repo, (start, "ask"), worker_ask)
+    c = loop.apply(c, first, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    with store.lock(c.slug) as lock:
+        store.write(lock, c)
+    c = store.read(c.slug)
+    (repo / "src/app.ts").write_text("mine")
+    (repo / "uv.lock").write_text("mine")
+    git(repo, "commit", "-qam", "resolve the first update")
+    done = StepResult(exit=Exit.DONE)
+    assert overlap.integrated(store, c, repo, (start, "result"), done) is done
+    git(repo, "switch", "-q", "main")
+    (repo / "src/app.ts").write_text("a newer target behaviour")
+    git(repo, "commit", "-qam", "advance target again")
+    git(repo, "switch", "-q", "change")
+    git(repo, "merge", "-q", "main", check=False)
+
+    asked = overlap.integrated(store, c, repo, (start, "ask"), worker_ask)
+
+    assert asked is not worker_ask
+    assert asked.exit == Exit.ASK
+    assert asked.cause != first.cause
+
+
+def test_changed_neighbour_behaviour_cannot_reuse_consent_for_its_old_outcome():
+    c = building()
+    near = [overlap.Neighbour("c3", ["src"], "cache pages", merged=False)]
+    first = overlap.collision(c, ["src/app.ts"], near)
+    c = loop.apply(c, first, NOW)
+    question = loop.open_question(c)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    changed = [overlap.Neighbour("c3", ["src"], "never cache private pages", merged=False)]
+
+    asked = overlap.collision(c, ["src/app.ts"], changed)
+
+    assert asked is not None
+    assert asked.cause != first.cause
 
 
 @pytest.mark.parametrize("choice", ["keep", "adopt"])
