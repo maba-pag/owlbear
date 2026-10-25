@@ -276,7 +276,7 @@ Unframed legacy ellipsis-plus-wording records are indistinguishable from quoted
 reasons and block before a picker or baseline is built. Original approved-answer
 replay may add framing without rewriting accepted IDs or canonical statements;
 otherwise confirmed replacement resolves them. Origin correction validates first.
-Repair (uncommitted, R10 review): promote, withdraw and origin correction on an
+Repair (R10 review): promote, withdraw and origin correction on an
 unreadable rule return a 409 that names it and writes nothing; a saved pick of
 such a rule is refused before its baseline is pinned; pinned baselines store the
 whole wording; an unusable inherited frame yields no new binding, and a blank
