@@ -59,7 +59,7 @@ class Lease(Record):
     def identities(cls, value: object) -> object:
         """A damaged or fabricated PID never becomes evidence that a session is gone."""
         if not isinstance(value, dict):
-            raise ValueError("maintenance process identities must be a mapping")  # noqa: TRY003, EM101
+            raise ValueError("maintenance process identities must be a mapping")  # noqa: TRY003, TRY004, EM101 - pydantic validation
         for pid, born in value.items():
             if isinstance(pid, bool) or not str(pid).isdigit() or int(str(pid)) <= 0:
                 raise ValueError("maintenance PIDs must be positive integers")  # noqa: TRY003, EM101
@@ -102,6 +102,7 @@ class Maintenance:
 
     @property
     def path(self) -> Path:
+        """This machine's ledger file."""
         return local_home.root() / FILE
 
     @contextlib.contextmanager
@@ -164,7 +165,7 @@ class Maintenance:
             self._save(ledger)
         return lease.id
 
-    def adopt(
+    def adopt(  # noqa: PLR0913 - one import record's fields, all needed to write its lease
         self, source: str, project: str, kind: Kind, pids: processes.Pids, *, interrupted: bool, workspace: str = ""
     ) -> None:
         """Import pre-ledger ownership once; no legacy record can prove complete process coverage."""
@@ -290,7 +291,7 @@ class Maintenance:
         except BaseException as primary:
             try:
                 self.failed(ident, primary)
-            except BaseException as cleanup:
+            except BaseException as cleanup:  # noqa: BLE001 - recorded for any exit, then re-raised
                 primary.add_note(f"maintenance ownership also failed to persist ({type(cleanup).__name__})")
             raise
         self.finished(ident, done)
@@ -390,7 +391,7 @@ class Maintenance:
                 ]
             }
 
-    def recover(self, ident: str, rebooted: bool) -> dict[str, list[dict[str, object]]]:
+    def recover(self, ident: str, *, rebooted: bool) -> dict[str, list[dict[str, object]]]:
         """Explicit generation-bound reboot recovery releases a reservation, never a workspace or its history."""
         if rebooted is not True:
             raise ValueError("confirm the computer rebooted since this session")  # noqa: TRY003, EM101

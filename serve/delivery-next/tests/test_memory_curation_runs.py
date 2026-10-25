@@ -2,7 +2,7 @@
 
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -379,7 +379,9 @@ def test_an_older_hosts_unknown_curation_run_holds_one_slot_at_restart_and_its_s
     older_unknown_run(first, datetime.now(UTC))
     slots = Slots(lambda: 1, closed=True)
     calls: list[str] = []
-    restarted = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda cfg: calls.append(cfg.session_id) or pytest.fail("it ran"))
+    restarted = curation.Curation(
+        slots, shared=lambda: DataRepo(root), run=lambda cfg: calls.append(cfg.session_id) or pytest.fail("it ran")
+    )
     assert slots.counts(curation.SLOT)[2] == 1
     restarted.start("shop")
     drained(restarted)
@@ -401,16 +403,27 @@ def test_a_recovered_older_unknown_curation_run_stays_released_across_repeated_r
         assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (False, 1)
 
 
+def unkeyed_2bf_row(job: curation.Curation, started: datetime) -> None:
+    """The 2bf producer's row: failed unknown, its window open from its start, no FolderRun.key."""
+    reason = f"ended error: {curation.UNKNOWN}; synthetic unconfirmed runtime"
+    job._save(  # noqa: SLF001
+        "shop",
+        curation.FolderRun(state="failed", started_at=started, ended_at=started + timedelta(seconds=3), reason=reason),
+    )
+
+
 def test_a_2bf_unkeyed_unknown_curation_run_is_correlated_with_its_held_generation_without_a_second_lease(root) -> None:
-    """The 2bf producer owned the uncertain run in the common ledger but wrote no FolderRun.key."""
+    """The 2bf producer began its lease inside the run's own window and wrote no FolderRun.key."""
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    slot = "curate:shop:2bf0000000000000"
-    lease = first.maintenance.begin(curation.SLOT, slot, "curation", "")
+    t0 = datetime(2026, 10, 25, 0, 0, 10, tzinfo=UTC)
+    unkeyed_2bf_row(first, t0)
+    lease = first.maintenance.begin(
+        curation.SLOT, "curate:shop:2bf0000000000000", "curation", "", now=t0 + timedelta(seconds=1)
+    )
     first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
-    older_unknown_run(first, datetime.now(UTC))
     slots = Slots(lambda: 1, closed=True)
     restarted = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran"))
-    assert restarted.load().folders["shop"].key == slot
+    assert restarted.load().folders["shop"].key == "curate:shop:2bf0000000000000"
     restarted.start("shop")
     drained(restarted)
     sessions = restarted.maintenance.read()["sessions"]
@@ -419,9 +432,12 @@ def test_a_2bf_unkeyed_unknown_curation_run_is_correlated_with_its_held_generati
 
 def test_a_2bf_unkeyed_recovered_curation_generation_stays_recovered_across_restarts(root) -> None:
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    lease = first.maintenance.begin(curation.SLOT, "curate:shop:2bf0000000000001", "curation", "")
+    t0 = datetime(2026, 10, 25, 0, 0, 10, tzinfo=UTC)
+    unkeyed_2bf_row(first, t0)
+    lease = first.maintenance.begin(
+        curation.SLOT, "curate:shop:2bf0000000000001", "curation", "", now=t0 + timedelta(seconds=1)
+    )
     first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
-    older_unknown_run(first, datetime.now(UTC))
     booted = first.maintenance.boot
     first.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
     first.maintenance.recover(lease, rebooted=True)
@@ -429,6 +445,36 @@ def test_a_2bf_unkeyed_recovered_curation_generation_stays_recovered_across_rest
         again = curation.Curation(Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root))
         sessions = again.maintenance.read()["sessions"]
         assert (len(sessions), sessions[0]["state"], again.maintenance.pending("curation")) == (1, "recovered", False)
+
+
+@pytest.mark.parametrize("unrelated", ["recovered", "held"])
+def test_an_unrelated_earlier_curation_generation_never_covers_a_later_unkeyed_2bf_row(root, unrelated) -> None:
+    """Same folder and slot prefix; the earlier lease began before this row, so it is its own generation."""
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    early = datetime(2026, 10, 25, 0, 0, 0, tzinfo=UTC)
+    old = first.maintenance.begin(curation.SLOT, "curate:shop:2bf00000000000aa", "curation", "", now=early)
+    first.maintenance.failed(old, RuntimeError("synthetic unconfirmed runtime"))
+    if unrelated == "recovered":
+        booted = first.maintenance.boot
+        first.maintenance.boot = lambda: booted() + 1
+        first.maintenance.recover(old, rebooted=True)
+    later = datetime(2026, 10, 25, 0, 0, 20, tzinfo=UTC)
+    unkeyed_2bf_row(first, later)  # the row's start and window lie after the earlier lease began
+    slots = Slots(lambda: 1, closed=True)
+    calls: list[str] = []
+    restarted = curation.Curation(
+        slots, shared=lambda: DataRepo(root), run=lambda cfg: calls.append(cfg.session_id) or pytest.fail("it ran")
+    )
+    sessions = {s["id"]: s for s in restarted.maintenance.read()["sessions"]}
+    stamped = restarted.load().folders["shop"].key
+    assert (sorted(s["state"] for s in sessions.values()), stamped != old, sessions[old]["state"]) == (
+        ["held", unrelated] if unrelated == "recovered" else ["held", "held"],
+        True,
+        unrelated,
+    )
+    restarted.start("shop")
+    drained(restarted)
+    assert calls == []
 
 
 def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:

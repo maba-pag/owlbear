@@ -517,13 +517,17 @@ def read_only(root: Path) -> dict[str, Any] | None:
         kept = json.load(f)
     if not isinstance(kept, dict):
         msg = f"{FILE} is not a run"
-        raise ValueError(msg)
+        raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
     return kept
 
 
 def legacy_uncertain(kept: dict[str, Any]) -> bool:
-    """A failed record an older host wrote when its updater or replay judge may still be running; it has no workspace."""
-    return kept.get("state") == "failed" and "workspace" not in kept and "may still be running" in str(kept.get("reason", ""))
+    """A failed record an older host wrote while its updater or replay judge may still run; it has no workspace."""
+    return (
+        kept.get("state") == "failed"
+        and "workspace" not in kept
+        and "may still be running" in str(kept.get("reason", ""))
+    )
 
 
 def last(store: Store) -> dict[str, Any] | None:

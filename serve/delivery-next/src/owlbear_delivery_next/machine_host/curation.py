@@ -115,16 +115,15 @@ class Curation:
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
         for name, r in runs.folders.items():
-            if legacy_uncertain(r):  # the run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again
+            # The run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again.
+            if legacy_uncertain(r):
                 source = f"{self.path()}#{name}:{r.started_at}"
                 lease = self.maintenance.adopt_uncertain(
                     source,
                     SLOT,
                     "curation",
                     workspace="",
-                    covers=lambda s, p=f"curate:{name}:": (
-                        s.project == SLOT and s.kind == "curation" and s.slot.startswith(p)
-                    ),
+                    covers=_same_run(name, r),
                 )
                 runs.folders[name] = r.model_copy(update={"key": lease.slot})
         for name, r in runs.folders.items():
@@ -328,7 +327,13 @@ class Curation:
         if done.ending != "result" or report is None or unknown:
             why = " ".join((done.detail or "no report was submitted").split())[:300]
             why = f"{UNKNOWN}; {why}" if unknown else why
-            return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}", key=key if unknown else "")
+            return FolderRun(
+                state="failed",
+                started_at=started,
+                ended_at=ended,
+                reason=f"ended {done.ending}: {why}",
+                key=key if unknown else "",
+            )
         with shared.locked():
             notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed
         after = {e.id: e.revision for e in _pending(store)}
@@ -352,6 +357,24 @@ def _pending(store: Path) -> list[Any]:
 def legacy_uncertain(run: FolderRun) -> bool:
     """A failed run whose termination an older host left unknown, and which the ledger has never recorded."""
     return run.state == "failed" and UNKNOWN in run.reason and not run.key
+
+
+def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool]:
+    """Whether a lease is the very generation this row records.
+
+    It must be this folder's slot and begin inside the row's own window. The producer takes the row's start while it
+    waits for a slot and begins the lease later, inside the run; a lease from an earlier or later run begins outside
+    that window, whatever its state.
+    """
+
+    def covers(lease: maintenance.Lease) -> bool:
+        if lease.project != SLOT or lease.kind != "curation" or not lease.slot.startswith(f"curate:{folder}:"):
+            return False
+        if run.started_at is None or run.ended_at is None:
+            return False
+        return run.started_at <= lease.started_at <= run.ended_at
+
+    return covers
 
 
 def _unset(settings: Settings) -> str:

@@ -314,8 +314,10 @@ class _LoopbackToApp:
 
     def open(self, request, timeout):  # noqa: ARG002 - urllib's opener signature
         out = self.client.post(urllib.parse.urlsplit(request.full_url).path)
-        if out.status_code >= 400:  # noqa: PLR2004 - HTTP status
-            raise urllib.error.HTTPError(request.full_url, out.status_code, out.reason_phrase, out.headers, io.BytesIO(out.content))
+        if out.status_code >= 400:
+            raise urllib.error.HTTPError(
+                request.full_url, out.status_code, out.reason_phrase, out.headers, io.BytesIO(out.content)
+            )
         return io.BytesIO(out.content)
 
 
@@ -330,7 +332,8 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     machine.slots.total = lambda: 2
     machine.load_all()
     assert (machine.projects[bad.id].state, machine.projects[good.id].state) == ("failed", "loaded")
-    assert machine.slots.counts(bad.id)[2] == 1 and machine.slots.counts(good.id)[1] == 2  # one slot still free
+    assert machine.slots.counts(bad.id)[2] == 1  # one slot is held
+    assert machine.slots.counts(good.id)[1] == 2  # one slot still free
 
     refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
     assert refused.status_code == 409
@@ -340,15 +343,19 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: good.id)
     record = HostFound(url="http://127.0.0.1:9/", token="t", pid=1, started_at=datetime.now(UTC), project=good.id)  # noqa: S106
     monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
-    monkeypatch.setattr(replay_client, "_LOCAL", _LoopbackToApp(TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH)))
+    loopback = _LoopbackToApp(TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH))
+    monkeypatch.setattr(replay_client, "_LOCAL", loopback)
     assert cli.main(["--repo", str(good.path), "design-pack", "--replay"]) == 1
     assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
 
     assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
-    assert updater.is_dir() and (folder / pack_job.FILE).is_file()  # the workspace and record stay
+    assert updater.is_dir()  # the workspace stays
+    assert (folder / pack_job.FILE).is_file()  # and the record stays
 
 
-def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_by_the_ledger(tmp_path, http, machine, monkeypatch):
+def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_by_the_ledger(
+    tmp_path, http, machine, monkeypatch
+):
     """Control: with the failed project's pack finished, the same replay passes the guard and reaches its own checks."""
     monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
     bad, folder = legacy_pack_folder(tmp_path, "bad")
@@ -373,14 +380,16 @@ def older_failed_pack(folder: Path, reason: str, *, run: str = "legacy-run") -> 
     (folder / pack_job.FILE).write_text(json.dumps(record), encoding="utf-8")
 
 
-REPLAY_UNCERTAIN = "replay: ReplayError: the replay judge replay-0123abcd may still be running; stop it before replaying again"
+REPLAY_UNCERTAIN = (
+    "replay: ReplayError: the replay judge replay-0123abcd may still be running; stop it before replaying again"
+)
 REFUSED = "an earlier design pack session is unproven; recover it on the Maintenance page first"
 
 
 def test_a_manual_replay_of_another_project_refuses_an_unloaded_projects_older_failed_uncertain_pack_with_a_free_slot(
     tmp_path, http, machine, monkeypatch
 ):
-    """An older host's failed replay record, its updater directory gone, holds its project's slot before any SDK."""
+    """An older failed replay record, updater directory gone, holds its project's slot before any SDK."""
     monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
     bad, folder = legacy_pack_folder(tmp_path, "bad")
     good = registry.register(clone(tmp_path / "good"))
@@ -391,15 +400,19 @@ def test_a_manual_replay_of_another_project_refuses_an_unloaded_projects_older_f
 
     refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
-    assert machine.slots.counts(bad.id)[2] == 1 and machine.slots.counts(good.id)[2] == 0
+    assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
+    assert machine.slots.counts(good.id)[2] == 0
     assert (folder / pack_job.FILE).is_file()
 
 
-def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuses_its_own_replay(tmp_path, http, machine, monkeypatch):
+def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuses_its_own_replay(
+    tmp_path, http, machine, monkeypatch
+):
     """The loaded path: the same older record is adopted through the project's job before a replay can start."""
     monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
     good = registry.register(clone(tmp_path / "good"))
-    older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)  # the store folder, as the project opens it
+    # the store folder, as the project opens it
+    older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
     machine.slots.total = lambda: 2
     machine.load_all()
     assert (machine.projects[good.id].state, machine.slots.counts(good.id)[2]) == ("loaded", 1)
@@ -421,7 +434,8 @@ def test_an_empty_legacy_import_receipt_never_suppresses_repair_of_an_older_fail
         older_failed_pack(project_home.located(Path(good.path)), REPLAY_UNCERTAIN)
     else:
         older_failed_pack(folder, REPLAY_UNCERTAIN)
-    machine.maintenance._save(maintenance.Ledger(imported=[f"{project.id}:legacy"]))  # noqa: SLF001 - an older import receipt
+    # an older import receipt
+    machine.maintenance._save(maintenance.Ledger(imported=[f"{project.id}:legacy"]))  # noqa: SLF001
     machine.slots.total = lambda: 2
     machine.load_all()
     refused = http.post(f"/p/{good.id}/api/next/design-pack/replay")
@@ -454,8 +468,11 @@ def test_a_modern_failed_uncertain_pack_with_its_workspace_recorded_is_not_adopt
     (root / pack_job.FILE).write_text(json.dumps(record), encoding="utf-8")
     machine.slots.total = lambda: 2
     machine.load_all()
-    assert (machine.projects[good.id].state, machine.slots.counts(good.id)[2], machine.maintenance.read()["sessions"]) == (
-        "loaded", 0, [])
+    assert (
+        machine.projects[good.id].state,
+        machine.slots.counts(good.id)[2],
+        machine.maintenance.read()["sessions"],
+    ) == ("loaded", 0, [])
 
 
 def test_removal_is_refused_while_a_step_runs_and_then_stops_the_project_before_forgetting_it(tmp_path, http, machine):

@@ -35,19 +35,19 @@ def test_empty_identity_exception_retains_its_slot_across_restart_and_requires_a
     assert restarted.slots.take("other", "c1", 1, 1) == 0
     assert restarted.retained(str(tmp_path))
     with pytest.raises(ValueError, match="reboot"):
-        restarted.recover(ident, True)
+        restarted.recover(ident, rebooted=True)
 
     rebooted = manager(Slots(lambda: 1, closed=True), boot=20.0)
     rebooted.slots.open()
     with pytest.raises(ValueError, match="confirm"):
-        rebooted.recover(ident, False)
-    result = rebooted.recover(ident, True)
+        rebooted.recover(ident, rebooted=False)
+    result = rebooted.recover(ident, rebooted=True)
     assert result["sessions"][0]["state"] == "recovered"
     assert rebooted.slots.counts("p") == (0, 1, 0)
     assert rebooted.retained(str(tmp_path))
     assert tmp_path.exists()
     with pytest.raises(LookupError):
-        rebooted.recover(ident, True)
+        rebooted.recover(ident, rebooted=True)
 
 
 def test_unknown_termination_never_releases_merely_because_known_pids_are_gone(tmp_path):
@@ -92,7 +92,7 @@ def test_restoring_maintenance_does_not_prune_ordinary_runner_reservations(tmp_p
 
 
 @pytest.mark.parametrize("fails", [False, True])
-def test_admitted_sdk_entry_is_durable_and_unknown_work_keeps_its_workspace(tmp_path, fails):
+def test_admitted_sdk_entry_is_durable_and_unknown_work_keeps_its_workspace(fails):
     owner = manager(Slots(lambda: 1))
     events = []
     with owner.workspace("synthetic-maintenance-") as root:

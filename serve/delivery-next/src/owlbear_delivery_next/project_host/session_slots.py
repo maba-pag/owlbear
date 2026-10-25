@@ -171,7 +171,7 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     """
     try:
         root = project_home.current(repo)
-    except (OSError, subprocess.CalledProcessError, StoreError):
+    except OSError, subprocess.CalledProcessError, StoreError:
         maintenance.adopt(f"{key}:unlocated", key, "pack", {}, interrupted=True)  # its folder cannot be told
         return
     if root is None:
@@ -179,7 +179,7 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     legacy = root / pack_run.UPDATER
     try:
         kept = pack_job.read_only(root)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         maintenance.adopt(f"{key}:unreadable", key, "pack", {}, interrupted=True, workspace=str(legacy))
         return
     if kept is None:

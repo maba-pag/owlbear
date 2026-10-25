@@ -267,7 +267,7 @@ class Fakes:
         self.at_golden()
         return self.wrong if folder is None else self.wrong_after
 
-    def replay(self, _store: Store, candidate, _run=None, *, keep=None) -> calibration.Replay:  # the managed runner is unused here
+    def replay(self, _store: Store, candidate, _run=None, *, keep=None) -> calibration.Replay:  # noqa: ARG002 - unused here
         self.calls.append("replay")
         self.replayed = candidate
         skill = (candidate.skills / "owlbear-design-review" / "SKILL.md").read_text()
@@ -403,7 +403,8 @@ def test_a_passing_update_runs_every_stage_then_merges_one_commit_through_a_pull
     assert results(state) == dict.fromkeys(NAMES, "passed")
     here = design_pack.platform_name()
     assert fakes.calls == ["releases", "sync", f"engine {here}", "golden", "update", "golden", "replay", "challenger"]
-    assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]  # the package's, then the candidate's
+    # The package's folder comes first, then the candidate's.
+    assert fakes.folders == [None, store.root / pack_job.RUNS / state["run"] / "golden"]
     replayed = fakes.replayed  # the replay judges with the candidate pack, not the active one
     assert (replayed.pins["pack"], replayed.installed.bundle) == ("impeccable-4.6.0.1", "bundle skill-v4.6.0")
     assert replayed.manifest == shown(checkout, "design_pack.json")  # the pack then activated
