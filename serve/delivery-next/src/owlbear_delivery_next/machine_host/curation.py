@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged  # noqa: TC001 - a field's type
 from owlbear_delivery_next.change_contracts.models import Record, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.local_system import data_repo, local_home, maintenance, processes
+from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -104,7 +104,6 @@ class Curation:
         self.slots, self.shared, self.run, self.fenced = slots, shared, run, fenced
         self.lock = threading.RLock()
         self.queue, self.again, self.worker = list[str](), set[str](), None
-        self.held = ""  # the slot a run whose processes may still run keeps
         runs = self.load()
         self.maintenance = ownership or maintenance.Maintenance(slots)
         self.maintenance.adopt(
@@ -165,21 +164,15 @@ class Curation:
             self._write(runs)
 
     def lingering(self) -> bool:
-        """Whether a run's processes may still run; once they are seen gone, their slot is given back."""
+        """Whether a run's processes may still run; the ledger alone decides, PIDs left after a recovery are history."""
         with self.lock:
             if self.maintenance.pending("curation"):
                 return True
-            if not self.left:
-                return False
-            if not processes.verdict(self.left, processes.alive).confirmed:
-                return True
-            self.left = {}
-            if self.held:
-                self.slots.give(SLOT, self.held)
-                self.held = ""
-            runs = self.load()
-            runs.left = {}
-            self._write(runs)
+            if self.left:
+                self.left = {}
+                runs = self.load()
+                runs.left = {}
+                self._write(runs)
             return False
 
     def working(self) -> list[str]:
@@ -272,7 +265,7 @@ class Curation:
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return
-        turn, key = threading.Event(), f"curate:{folder}"
+        turn, key = threading.Event(), f"curate:{folder}:{uuid.uuid4().hex}"  # one generation per admission
         while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
             if why := self.fenced():  # an update or a stop came while it waited: it never starts
                 self.slots.cancel(SLOT, key)
@@ -311,7 +304,7 @@ class Curation:
         t = done.termination
         with self.lock:
             watched = dict.fromkeys((*t.survivors, *t.unknown)) | done.pids if t is not None and not t.confirmed else {}
-            self.left, self.held = watched, key if self.maintenance.held(SLOT, key) else ""
+            self.left = watched
             runs = self.load()
             runs.left = dict(self.left)
             self._write(runs)

@@ -1,5 +1,6 @@
 """Item 5 slice 4: automatic memory curation runs one curator session per memory folder of the shared repository."""
 
+import threading
 import time
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged, MemoryCurationResult
+from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
@@ -186,7 +188,7 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
     root, monkeypatch
 ) -> None:
     alive = [True]
-    monkeypatch.setattr(curation.processes, "alive", lambda _pid, _created: alive[0])
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
     slots = Slots(lambda: 2)
 
     def run(cfg) -> Run:
@@ -217,7 +219,7 @@ def test_a_linked_memory_folder_is_never_curated(root) -> None:
 def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_their_slot(root, monkeypatch) -> None:
     """Copilot on #587: a host that stops mid-run leaves the session's processes known, their slot taken."""
     alive = [True]
-    monkeypatch.setattr(curation.processes, "alive", lambda _pid, _created: alive[0])
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
     on_file = []
 
     def run(cfg) -> Run:
@@ -270,3 +272,92 @@ def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_i
     finished(job)
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
     assert (shop["state"], shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", "an update runs", 0)
+
+
+def test_a_sweep_paused_before_it_gives_a_slot_back_never_costs_a_successor_its_reservation(root, monkeypatch) -> None:
+    """Review on 552d02b: the sweep releases the ledger, then gives; a successor admitted meanwhile keeps the slot."""
+    alive = [True]
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
+    slots, calls = Slots(lambda: 1), []
+    entered, finish, reached, release = threading.Event(), threading.Event(), threading.Event(), threading.Event()
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        if len(calls) == 1:
+            return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                       runtime_pid=4242, pids={4242: 1.0},
+                       termination=Termination(confirmed=False, survivors=(4242,)))  # fmt: skip
+        entered.set()
+        finish.wait(5)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    drained(job)
+    alive[0] = False
+    give, paused = slots.give, [True]
+
+    def gate(project: str, key: str) -> None:
+        if paused[0]:
+            paused[0] = False
+            reached.set()
+            release.wait(5)
+        give(project, key)
+
+    monkeypatch.setattr(slots, "give", gate)
+    sweeper = threading.Thread(target=job.maintenance.sweep)
+    sweeper.start()
+    try:
+        assert reached.wait(5)
+        job.start("shop")
+        assert not entered.wait(0.2)  # the old reservation still holds the only slot
+        release.set()
+        sweeper.join(5)
+        assert entered.wait(5)
+        assert (slots.counts(curation.SLOT)[2], slots.take("another-project", "c1", 1, 1)) == (1, 0)
+    finally:
+        release.set()
+        finish.set()
+        sweeper.join(5)
+    finished(job)
+    assert {f["folder"]: f["state"] for f in job.read()["folders"]}["shop"] == "done"
+
+
+def test_an_explicit_reboot_recovery_is_the_gate_and_reused_pids_never_block_a_new_admission(root, monkeypatch) -> None:
+    """Review on 552d02b: after the owner confirms a reboot, PIDs kept as history must not block forever."""
+    alive, boot, calls = [True], [1.0], []
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
+    slots = Slots(lambda: 1)
+    ledger = maintenance.Maintenance(slots, boot=lambda: boot[0], observe=lambda _pid, _created: alive[0])
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        if len(calls) == 1:
+            cfg.journal.event({"event": "pids", "pids": {"4242": None}})  # a reused PID now alive, identity unknown
+            return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
+                       termination=Termination(confirmed=False, survivors=(4242,)))  # fmt: skip
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run, ownership=ledger)
+    job.start("shop")
+    drained(job)
+    assert job.working() == [curation.LINGERING]
+    (session,) = ledger.read()["sessions"]
+
+    boot[0] = 2.0  # the owner confirmed a reboot since the failed session
+    ledger.recover(session["id"], rebooted=True)
+    assert job.working() == []
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root), run=run, ownership=ledger)
+    assert restarted.working() == []
+
+    job.start("shop")
+    finished(job)
+    assert {f["folder"]: f["state"] for f in job.read()["folders"]}["shop"] == "done"
+    with pytest.raises(LookupError):
+        ledger.finished(session["id"], Run(session["id"], ending="result", termination=Termination(confirmed=True)))
+    recovered = next(s for s in ledger.read()["sessions"] if s["id"] == session["id"])
+    assert (recovered["state"], Path(session["workspace"]).is_dir(), ledger.retained(session["workspace"])) == (
+        "recovered", True, True,
+    )  # fmt: skip
