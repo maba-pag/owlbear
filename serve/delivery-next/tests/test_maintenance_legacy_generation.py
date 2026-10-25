@@ -1,6 +1,7 @@
 """A pre-ledger pack run is held once per its proven identity; a restart after recovery never holds it again."""
 
 import json
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import project, registry
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.pack_runs import pack_job, pack_run
+from owlbear_delivery_next.pack_runs import pack_job, pack_run, pack_state
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import Store
@@ -231,6 +232,44 @@ def test_a_same_bytes_atomic_replacement_of_an_untouched_legacy_run_is_a_new_run
 
 
 @pytest.mark.parametrize("loaded", [False, True])
+def test_an_in_place_rewrite_with_its_mtime_restored_is_a_new_run_while_an_untouched_read_is_stable(
+    tmp_path, machines, shared_repo, loaded
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_pack(folder, {})
+    first = machines()
+    first.load_all()
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    first.stop_all()
+    folder = live_folder(entry, folder, loaded=loaded)
+    record = folder / pack_job.FILE
+
+    version = pack_state.observed(folder)[1]
+    assert pack_state.observed(folder)[1] == version, "an untouched record read changed its version"
+    untouched = machines()
+    untouched.load_all()
+    assert held(untouched, entry.id) == [], "an untouched recovered legacy run was held again"
+    untouched.stop_all()
+
+    before = record.stat()
+    with record.open("r+b") as f:
+        data = f.read()
+        f.seek(0)
+        f.write(data)
+    os.utime(record, ns=(before.st_atime_ns, before.st_mtime_ns))
+    after = record.stat()
+    assert after.st_ino == before.st_ino
+    assert after.st_size == before.st_size
+    assert after.st_mtime_ns == before.st_mtime_ns, "the test did not restore the mtime"
+    assert after.st_ctime_ns != before.st_ctime_ns, "the in-place write did not move the ctime"
+
+    replaced = machines()
+    replaced.load_all()
+    assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"]
+
+
+@pytest.mark.parametrize("loaded", [False, True])
 def test_an_unreadable_legacy_run_record_is_held_conservatively_and_is_never_borrowed_from_a_recovered_one(
     tmp_path, machines, shared_repo, loaded
 ):
@@ -247,3 +286,50 @@ def test_an_unreadable_legacy_run_record_is_held_conservatively_and_is_never_bor
     unreadable = machines()
     unreadable.load_all()
     assert [s["state"] for s in sessions_of(unreadable, entry.id)] == ["recovered", "held"]
+
+
+class NoFstat:
+    """The real os module, except that a descriptor's metadata cannot be read."""
+
+    def __init__(self, real) -> None:
+        self._real = real
+
+    def fstat(self, _fd):
+        """Refuse the descriptor's metadata."""
+        msg = "fstat unavailable"
+        raise OSError(msg)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_a_legacy_run_whose_metadata_cannot_be_read_is_held_again_after_a_real_replacement_once_recovered(
+    tmp_path, machines, shared_repo, monkeypatch, loaded
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_pack(folder, {})
+    monkeypatch.setattr(pack_state, "os", NoFstat(os))
+    first = machines()
+    first.load_all()
+    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    monkeypatch.setattr(pack_state, "os", os)
+    first.stop_all()
+    folder = live_folder(entry, folder, loaded=loaded)
+
+    record = folder / pack_job.FILE
+    atomic_write(record, record.read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(pack_state, "os", NoFstat(os))
+    replaced = machines()
+    replaced.load_all()
+    assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"]
+    replaced.stop_all()
+
+    again = machines()
+    again.load_all()
+    assert [s["state"] for s in sessions_of(again, entry.id)] == ["recovered", "held"], (
+        "a reconstruction with an active hold duplicated it"
+    )

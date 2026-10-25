@@ -40,8 +40,8 @@ from owlbear_delivery_next.pack_runs.pack_state import (
     last,
     legacy_uncertain,  # noqa: F401 - retain the existing pack_job ownership-reader API
     observed,  # noqa: F401 - the unloaded ownership reader session_slots shares with Job
-    read_fd,
     read_only,  # noqa: F401 - retain the existing pack_job ownership-reader API
+    read_version,
     running_for,
 )
 from owlbear_delivery_next.pack_runs.pack_state import (
@@ -159,20 +159,8 @@ class Job:
 
     def _read(self) -> dict[str, Any]:
         """The last run, and its file version from the same descriptor: "absent", "" when unreadable."""
-        try:
-            fd = os.open(self.path, os.O_RDONLY)
-        except FileNotFoundError:
-            self.version = "absent"
-            return _blank()
-        except OSError:
-            self.version = ""
-            return _blank()
-        try:
-            kept, self.version = read_fd(fd)
-        except OSError, ValueError:
-            self.version = ""
-            return _blank()
-        return _blank() | kept if {"state", "stages", "log"} <= kept.keys() else _blank()
+        state, self.version = read_version(self.path)
+        return state
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

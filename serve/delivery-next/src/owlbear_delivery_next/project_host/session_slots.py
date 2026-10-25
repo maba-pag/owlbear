@@ -179,7 +179,7 @@ def interrupted(job: Job, key: str) -> None:
         source = f"{key}:run:{run['run']}:{run['started_at']}"  # the same run adopted once, wherever its folder lies
         maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
     elif job.version == "":
-        maintenance.adopt(f"{key}:unreadable", key, "pack", {}, interrupted=True, workspace=str(legacy))
+        maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
         _adopt_legacy(maintenance, key, legacy, job.state, job.version)
 
@@ -229,7 +229,7 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     try:
         got = pack_job.observed(root)
     except OSError, ValueError:
-        maintenance.adopt(f"{key}:unreadable", key, "pack", {}, interrupted=True, workspace=str(legacy))
+        maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
         return
     if got is None:
         if legacy.is_dir():

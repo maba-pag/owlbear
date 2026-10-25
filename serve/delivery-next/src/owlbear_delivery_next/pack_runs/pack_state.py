@@ -67,7 +67,23 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     if not isinstance(kept, dict):
         msg = f"{FILE} is not a run"
         raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
-    return kept, f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}"
+    # ctime, unlike mtime, moves on every change to the inode, so a restored mtime cannot hide an in-place write
+    return kept, f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}:{st.st_ctime_ns}"
+
+
+def read_version(path: Path) -> tuple[dict[str, Any], str]:
+    """The last run at *path* as a Job reads it, and its version: "absent" when there is no file, "" when unreadable."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except FileNotFoundError:
+        return blank(), "absent"
+    except OSError:
+        return blank(), ""
+    try:
+        kept, version = read_fd(fd)
+    except OSError, ValueError:
+        return blank(), ""
+    return (blank() | kept if {"state", "stages", "log"} <= kept.keys() else blank()), version
 
 
 def observed(root: Path) -> tuple[dict[str, Any], str] | None:
