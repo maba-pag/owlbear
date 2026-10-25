@@ -9,11 +9,15 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_delivery_next.change_contracts import check_hint
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import ItemRef
+
+    Pairs = Sequence[tuple[str, str]]  # the profile's (package, check) pairs
 
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\d{1,5}(/\S*)?")
@@ -62,9 +66,6 @@ class BuildResult(Args):
     """``submit_result`` for the build step."""
 
     summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
-    changed_paths: list[str] = _f(
-        200, "Repository-relative paths your commit changes", ["packages/app/src/greet.ts"], least=0
-    )
     checks: list[CheckRun] = _f(
         20, "Every task check you ran on your final commit", [{"command": "npm test", "exit_code": 0}], least=0
     )
@@ -266,14 +267,17 @@ def within(path: str, scope: Sequence[str]) -> bool:
     return not scope or any(parts[: len(s := PurePosixPath(p).parts)] == s for p in scope)
 
 
-def check_plan(plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = ()) -> list[str]:
-    """Return field errors for task checks outside the profile and scopes outside the repository or the brief."""
+def check_plan(
+    plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = (), packages: Pairs = ()
+) -> list[str]:
+    """Return field errors for task checks outside the profile (*packages* word the hint) and scopes outside."""
     errors = [f"changes: uncommitted files ({_few(tree.dirty)}); planning changes nothing"] if tree.dirty else []
     listed = ", ".join(f'"{c}"' for c in checks) or "none - ask the owner which command checks this package"
     brief = ", ".join(scope)
     for i, task in enumerate(plan.tasks):
         errors += [
-            f'tasks[{i}].checks: "{c}" is not a check of the project profile - use one of {listed}'
+            f'tasks[{i}].checks: "{c}" is not a check of the project profile - '
+            + (check_hint.alone(c, packages) or f"use one of {listed}")
             for c in task.checks
             if c not in checks
         ]
@@ -411,11 +415,6 @@ def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item
         )
     if tree.dirty:
         errors.append(f"changes: uncommitted files ({_few(tree.dirty)}); commit them, then submit again")
-    if tree.head != tree.base:
-        if missing := sorted(set(tree.changed) - set(result.changed_paths)):
-            errors.append(f"changed_paths: missing {_few(missing)} - list every path your commit changes")
-        if extra := sorted(set(result.changed_paths) - set(tree.changed)):
-            errors.append(f"changed_paths: {_few(extra)} not changed by the commits since the base - remove them")
     errors.extend(
         f"checks[{i}].exit_code: {c.exit_code} - fix the failure, commit, run it again, then submit"
         for i, c in enumerate(result.checks)
@@ -486,6 +485,7 @@ def check_result(  # noqa: PLR0913, PLR0917 - the result, its worktree and four 
     item: ItemRef | None = None,
     *,
     visual: bool = False,
+    packages: Pairs = (),
 ) -> list[str]:
     """Return the field errors of one ``submit_result`` against the worktree the runner observed and the brief scope."""
     match args:
@@ -496,5 +496,5 @@ def check_result(  # noqa: PLR0913, PLR0917 - the result, its worktree and four 
         case CheckRecipe():
             return check_recipe(args, tree, root)
         case PlanResult():
-            return check_plan(args, tree, checks, scope)
+            return check_plan(args, tree, checks, scope, packages)
     return []

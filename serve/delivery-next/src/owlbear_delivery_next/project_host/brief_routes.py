@@ -153,7 +153,7 @@ def router(
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
         wake()
-        out = {"requested": True, "change": body.change, "version": body.version, "paused": held()}
+        out = {"requested": True, "change": body.change, "slug": slug, "version": body.version, "paused": held()}
         return out | brief_rounds.status(c)
 
     return routes

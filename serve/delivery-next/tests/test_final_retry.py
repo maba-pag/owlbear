@@ -436,9 +436,7 @@ def test_a_kept_check_runs_from_each_package_of_its_task():
     for _ in range(2):  # a second retry places the checks as the first did
         rebuilds.rotated(twice, RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]), [], root)
         assert a.checks == ["npm test", "cd packages/b && npm test", "uv run pytest"]
-    ran = tools.BuildResult(
-        summary="b", changed_paths=[], checks=[{"command": "cd packages/b && npm test", "exit_code": 0}]
-    )
+    ran = tools.BuildResult(summary="b", checks=[{"command": "cd packages/b && npm test", "exit_code": 0}])
     tree = tools.Worktree(head="b", base="a")
     missing = [e for e in tools.check_build(ran, tree, ["npm test", "cd packages/b && npm test"]) if "missing" in e]
     assert missing == [
@@ -450,7 +448,7 @@ def test_a_kept_check_runs_from_each_package_of_its_task():
     t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["npm test"])
     assert rebuilds._placed(profile, [t5]) == ["npm test"]  # noqa: SLF001 - packages/a holds nothing of packages/ab
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
-    ran = tools.BuildResult(summary="b", changed_paths=[], checks=[{"command": k, "exit_code": 0} for k in both])
+    ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []
 
 

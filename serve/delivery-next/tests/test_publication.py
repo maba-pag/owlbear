@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import evidence, failures, tool_schema, tools
+from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem, RestartItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
@@ -21,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     ItemRef,
     MergeConsent,
     Names,
+    Option,
     PersonCheck,
     Plan,
     Question,
@@ -34,11 +36,12 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import budgets, loop, round_flow, worktree
+from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import gh_queue, merge_offer
+from owlbear_delivery_next.github import provider as provider_contract
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     Check,
@@ -49,6 +52,7 @@ from owlbear_delivery_next.github.provider import (
     FailureCode,
     GroupRun,
     MergeMethod,
+    MergeRequest,
     MergeResult,
     MergeStatus,
     ProviderError,
@@ -64,8 +68,10 @@ from owlbear_delivery_next.github.provider import (
     merge_request_body,
 )
 from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as scheduler
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
@@ -197,6 +203,160 @@ def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
     plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])])
     names = Names(branch="owlbear/c1", target="main", worktree=worktree, pr=7)
     return Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=kind), names=names, **fields)
+
+
+class RetiringGh(FakeGh):
+    """A real local branch; the optional argument models the old unsafe transport for baseline proof only."""
+
+    def __init__(self, current, remote):
+        super().__init__(current)
+        self.remote, self.deleted = remote, []
+        self.commit_checks = (Check(name="test", status="completed", conclusion="success"),)
+
+    def delete_branch(self, _repository, branch, expected_head=None):
+        ref = f"refs/heads/{branch}"
+        current = git(self.remote, "for-each-ref", "--format=%(objectname)", ref)
+        if expected_head is None:
+            git(self.remote, "update-ref", "-d", ref)
+            self.deleted.append(branch)
+            return None
+        if not current:
+            return provider_contract.BranchDelete(provider_contract.BranchState.GONE)
+        if current != expected_head:
+            return provider_contract.BranchDelete(provider_contract.BranchState.MOVED, current)
+        git(self.remote, "update-ref", "-d", ref, expected_head)
+        self.deleted.append(branch)
+        return provider_contract.BranchDelete(provider_contract.BranchState.DELETED)
+
+
+@pytest.mark.parametrize("move_again", [False, True])
+@pytest.mark.parametrize("mode", [None, "abandon"])
+def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(
+    clone,
+    tmp_path,
+    move_again,
+    mode,
+):
+    remote = tmp_path / "origin.git"
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
+    moved = git(clone, "rev-parse", "HEAD")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    c.step.mode = mode
+    cx.store.write(cx.lock, c)
+
+    c, result = cleanup.run(cx, c)
+
+    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == moved
+    assert result.exit == Exit.ASK
+    assert gh.deleted == []
+    c = loop.apply(c, result, NOW)
+    cx.store.write(cx.lock, c)
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    cx = ctx(tmp_path, gh, p, repo=clone)
+    c = cx.store.read("c1")
+    question = loop.open_question(c)
+    assert "keep" in {option.id for option in question.options}
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
+    assert c.step.mode == mode
+    if move_again:
+        git(clone, "commit", "-q", "--allow-empty", "-m", "still newer work")
+        moved = git(clone, "rev-parse", "HEAD")
+        git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    _, finished = cleanup.run(cx, c)
+    assert finished.exit == (Exit.ASK if move_again else Exit.DONE)
+    if move_again:
+        assert finished.question.cause != question.cause
+    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == moved
+    assert gh.deleted == []
+
+
+def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(clone, tmp_path):
+    remote = tmp_path / "origin.git"
+    git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    cx.store.write(cx.lock, c)
+    c, result = cleanup.run(cx, c)
+    c = loop.apply(c, result, NOW)
+    question = loop.open_question(c)
+    c, ready = loop.schedule(c, [IntentItem(at=NOW, intent="resume")], NOW)
+    assert ready is None  # Resume cannot waive a still-unanswered cleanup question.
+
+    c, ready = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="pause")], NOW)
+
+    assert ready is None
+    cx.store.write(cx.lock, c)
+    fresh = ctx(tmp_path, gh, p, repo=clone)
+    c = fresh.store.read("c1")
+    git(remote, "update-ref", "-d", "refs/heads/owlbear/c1")
+    assert loop.next_step(c, NOW + timedelta(seconds=1)) is None
+    c, ready = loop.schedule(c, [IntentItem(at=NOW, intent="resume")], NOW + timedelta(seconds=2))
+    assert ready is not None
+    _, result = cleanup.run(fresh, c)
+    assert result.exit is Exit.DONE
+
+
+@pytest.mark.parametrize("surface", ["list", "detail"])
+def test_a_paused_cleanup_decision_is_hidden_in_the_changes_api_until_resume(tmp_path, surface):
+    store = Store(tmp_path)
+    c = change(StepKind.CLEANUP)
+    q = Question(
+        step=StepKind.CLEANUP,
+        text="Keep the moved remote branch?",
+        cause="state:cleanup:branch-moved",
+        options=[
+            Option(id="keep", label="Keep", next="retry"),
+            Option(id="pause", label="Pause", next="pause"),
+        ],
+    )
+    c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=q), NOW)
+    store.write(Lock("c1"), c)
+    client = TestClient(api.create_app(store, "tok", scheduler.Host(store, tmp_path)), base_url="http://127.0.0.1",
+                        headers={"authorization": "Bearer tok"})  # fmt: skip
+    path = "/api/next/changes" if surface == "list" else "/api/next/changes/c1"
+
+    def read():
+        response = client.get(path)
+        assert response.status_code == 200
+        return response.json()[0] if surface == "list" else response.json()
+
+    assert read()["question"]
+    c, ready = loop.schedule(c, [AnswerItem(at=NOW, question=loop.open_question(c).id, option="pause")], NOW)
+    assert ready is None
+    store.write(Lock("c1"), c)
+    shown = read()
+    assert not shown.get("question")
+    if surface == "detail":
+        assert shown["paused"] is True
+    else:
+        assert "paused by you" in shown["line"]
+    assert c.intent.paused_at is not None
+    assert loop.next_step(store.read("c1"), NOW) is None
+    resumed = client.post("/api/next/changes/c1/intent", json={"intent": "resume"})
+    assert resumed.status_code == 200
+    c, _ = store.fold(Lock("c1"), "c1", NOW + timedelta(seconds=1))
+    assert c.intent.paused_at is None
+    assert loop.next_step(c, NOW + timedelta(seconds=1)) is not None
+
+
+def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path):
+    remote = tmp_path / "origin.git"
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
+    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+
+    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
+    cx.store.write(cx.lock, c)
+    _, result = cleanup.run(cx, c)
+
+    assert result.exit == Exit.DONE
+    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == ""
 
 
 # Consent voiding on head change
@@ -767,7 +927,7 @@ def test_a_builder_response_survives_the_session_replacing_the_change_and_is_rep
     c, opened = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
     tid = opened.fix_task.id
     cx.store.write(cx.lock, loop.apply(c, opened, NOW))
-    built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Done."})
+    built = tools.BuildResult(summary="s", checks=[], response={"how": "fixed", "text": "Done."})
 
     async def build(cfg):
         getattr(cfg.journal, callback)()  # rebinds the runner's ``change`` to a copy mid-session
@@ -1336,7 +1496,7 @@ def target_checks(gh, *checks):
 
 def test_a_failing_check_on_the_merged_target_drafts_one_fix_change_and_cleanup_completes(worktree_with_work, tmp_path):
     clone, wt = worktree_with_work
-    gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B))
+    gh = FakeGh(pr(head=A, state="closed", merged=True, merge_commit_sha=B, head_branch="owlbear/c2"))
     target_checks(gh, ("test", "completed", "failure"))
     cx = ctx(tmp_path, gh, repo=clone)
     c = change(StepKind.CLEANUP, worktree=str(wt))
@@ -1717,6 +1877,140 @@ def test_a_target_premise_from_a_session_whose_processes_remain_is_never_acted_o
     assert (after.outcome.exit, [t.id for t in after.plan.tasks]) == (Exit.STOP, ["t1"])
 
 
+@pytest.fixture
+def integration_collision_setup(tmp_path, clone):
+    (clone / "src").mkdir()
+    (clone / "src/app.py").write_text("mine\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "mine")
+    mine = git(clone, "rev-parse", "HEAD")
+    git(clone, "switch", "-q", "main")
+    (clone / "src").mkdir(exist_ok=True)
+    (clone / "src/app.py").write_text("theirs\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "theirs")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
+    git(clone, "switch", "-q", "owlbear/c1")
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    neighbour = Plan(tasks=[Task(id="t1", title="one", scope=["src/app.py"])])
+    with store.lock("c3") as other_lock:
+        store.write(other_lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=neighbour))
+    c = change(StepKind.MERGE, worktree=str(clone))
+    c.plan.tasks[0].done = True
+    c = loop.apply(c, engine.integrate(c, StepKind.MERGE, "origin/main"), NOW)
+    tid = c.step.task
+    assert (c.step.kind, tid, c.plan.tasks[-1].origin) == (StepKind.BUILD, "t2", "integration")
+    store.write(lock, c)
+    return clone, mine, store, lock, tid
+
+
+@pytest.mark.parametrize("lose_base", [False, True], ids=["base-present", "base-missing"])
+def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_then_continues(
+    tmp_path, integration_collision_setup, monkeypatch, lose_base
+):
+    clone, mine, store, lock, tid = integration_collision_setup
+    built = tools.BuildResult(summary="s", checks=[], response={"how": "fixed", "text": "Merged."})
+    runs = []
+
+    async def build(cfg):
+        if not runs:
+            with pytest.raises(subprocess.CalledProcessError):
+                git(clone, "merge", "-q", "--no-edit", "origin/main")
+            (clone / "src/app.py").write_text("both\n")
+            git(clone, "add", "src/app.py")
+            git(clone, "commit", "-q", "-m", "merge origin/main")
+        runs.append(cfg.session_id)
+        head = git(clone, "rev-parse", "HEAD")
+        return Run(cfg.session_id, "result", built, head=head, termination=processes.Termination(confirmed=True))
+
+    real, died = runner.overlap.integrated, []
+
+    def dies_once(*args):
+        if not died:
+            died.append(True)
+            raise Interrupted
+        return real(*args)
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", build)
+    monkeypatch.setattr(runner.overlap, "integrated", dies_once)
+    with pytest.raises(Interrupted):
+        runner._agent(store, lock, store.read("c1"), clone)  # noqa: SLF001
+    paused = store.read("c1")
+    base = next(t.base for t in paused.plan.tasks if t.id == tid)
+    assert (paused.step.kind, base, paused.questions) == (StepKind.BUILD, mine, [])
+    if lose_base:
+        paused.plan.tasks[-1].base = None
+        store.write(lock, paused)
+    restarted = Store(tmp_path / "store")
+    runner._agent(restarted, Lock("c1"), restarted.read("c1"), clone)  # noqa: SLF001
+    asked = restarted.read("c1")
+    if lose_base:
+        assert asked.outcome.exit == Exit.STOP
+        assert "start head" in asked.stop.reason
+        assert len(runs) == 1
+        return
+    q = loop.open_question(asked)
+    assert (len(asked.questions), q.step) == (1, StepKind.BUILD)
+    assert [(o.id, o.next) for o in q.options] == [
+        ("keep", StepKind.BUILD),
+        ("adopt", StepKind.BUILD),
+        ("pause", "pause"),
+    ]
+    assert "collided with c3 on src/app.py" in q.text
+    answered, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
+    assert (step.kind, step.task) == (StepKind.BUILD, tid)
+    restarted.write(Lock("c1"), answered)
+    runner._agent(restarted, Lock("c1"), restarted.read("c1"), clone)  # noqa: SLF001
+    after = restarted.read("c1")
+    assert (len(after.questions), after.step.kind) == (1, StepKind.REVIEW)
+    assert [t.id for t in after.plan.tasks] == ["t1", "t2"]
+
+
+@pytest.mark.parametrize("option", ["retry", "accept"])
+@pytest.mark.parametrize("evidence", ["spans", "built_by"])
+def test_owner_usage_continuation_cannot_replace_a_missing_integration_base(
+    integration_collision_setup, monkeypatch, option, evidence
+):
+    clone, mine, store, lock, tid = integration_collision_setup
+    with pytest.raises(subprocess.CalledProcessError):
+        git(clone, "merge", "-q", "--no-edit", "origin/main")
+    (clone / "src/app.py").write_text("both\n")
+    git(clone, "add", "src/app.py")
+    git(clone, "commit", "-q", "-m", "integration completed before continuation")
+    head = git(clone, "rev-parse", "HEAD")
+    c = store.read("c1")
+    task = c.plan.tasks[-1]
+    task.base = None
+    if evidence == "spans":
+        task.spans = [f"{mine}..{head}"]
+    else:
+        task.built_by = "prior-integration"
+    c.step.session, c.step.started_at = "prior-integration", NOW
+    held_run = Run("prior-integration", "result", usage_unread="metrics unavailable", head=head)
+    c = loop.apply(c, session_result.usage_gate(held_run, StepKind.BUILD, accept=True), NOW)
+    q = loop.open_question(c)
+    c, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option=option)], NOW)
+    assert (step.kind, step.task, step.session, step.started_at) == (StepKind.BUILD, tid, None, None)
+    store.write(lock, c)
+    calls = []
+
+    async def forbidden(_cfg):
+        calls.append(True)
+        pytest.fail("A continuation with missing integration provenance must not start an SDK session")
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_: clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", forbidden)
+
+    runner._agent(store, lock, store.read("c1"), clone)  # noqa: SLF001
+
+    stopped = store.read("c1")
+    assert stopped.outcome.exit == Exit.STOP
+    assert "start head" in stopped.stop.reason
+    assert stopped.plan.tasks[-1].base is None
+    assert calls == []
+
+
 def commit(cwd, name):
     (cwd / name).write_text(f"{name}\n")
     git(cwd, "add", name)
@@ -1970,7 +2264,7 @@ def test_a_removal_before_any_attempt_is_not_handled(tmp_path, clone):
 
 
 def test_a_merge_by_the_queue_ends_the_step(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
+    gh = QueueGh(pr(head=A, merged=True, state="closed", merge_commit_sha=B))
     gh.state = QueueState(merged=True, open=False, head_sha=A, added=ADDED, removed=removal("merged"))
     c, result = queue_step(tmp_path, gh, queued_change(clone))
     assert (result.exit, c.queue) == (Exit.DONE, None)
@@ -2066,7 +2360,7 @@ def test_an_attempt_without_a_trace_keeps_the_pause_waiting_until_the_owner_answ
 
 
 def test_a_merged_pr_keeps_a_restart_waiting_until_the_fold_sees_the_merge(tmp_path, monkeypatch):
-    gh = QueueGh(pr(head=A))
+    gh = QueueGh(pr(head=A, merged=True, state="closed", merge_commit_sha=B))
     gh.state = QueueState(merged=True, open=False, head_sha=A, removed=removal("merged"))
     c = change(loops={"final": RoundLoop(subject="final", policy=RoundPolicy())})
     store = fold_store(tmp_path, monkeypatch, gh, c)
@@ -2209,6 +2503,313 @@ def test_the_profile_keeps_only_the_merge_methods_the_pull_request_rule_allows(c
     )
     found = profile.detect(clone, gh, None)
     assert (profile.value(found, profile.METHODS), profile.value(found, profile.METHOD)) == ("merge", "merge")
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"repository": "o/other"},
+        {"number": 8},
+        {"head_branch": "owlbear/another"},
+        {"base_branch": "release/other"},
+    ],
+)
+def test_terminal_pr_identity_mismatch_is_not_observed_as_delivery(changed):
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, **changed))
+    assert engine.pr_state(gh, "o/r", change()) == ("misdelivered", False)
+
+
+@pytest.mark.parametrize("paused", [False, True])
+def test_observing_a_wrong_target_merge_asks_the_owner_without_scheduling_cleanup(paused):
+    c = change()
+    if paused:
+        c.intent.paused_at = NOW
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    state, moved = engine.pr_state(gh, "o/r", c)
+    held, ready = loop.schedule(c, [], NOW, state, moved=moved)
+    assert ready is None
+    q = loop.open_question(held)
+    assert q is not None
+    assert {o.id for o in q.options} == {"abandon", "pause"}
+    assert "main" in q.text
+    assert "not" in q.text
+
+
+def test_paused_build_discrepancy_restores_its_owner_gate_after_restart_and_resume_without_a_pr_read(tmp_path):
+    store = Store(tmp_path)
+    c, _ = loop.schedule(change(StepKind.BUILD), [], NOW, "misdelivered")
+    q = loop.open_question(c)
+    store.write(Lock("c1"), c)
+    store.put_inbox("c1", AnswerItem(at=NOW, question=q.id, option="pause"))
+    with store.lock("c1") as lock:
+        paused, ready = store.fold(lock, "c1", NOW, None)
+    assert ready is None
+    assert paused.intent.paused_at is not None
+    assert paused.outcome is None
+
+    store = Store(tmp_path)
+    later = NOW + timedelta(hours=1)
+    store.put_inbox("c1", IntentItem(at=later, intent="resume"))
+    with store.lock("c1") as lock:
+        resumed, ready = store.fold(lock, "c1", later, None)
+    assert ready is None
+    restored = loop.open_question(resumed)
+    assert restored is not None
+    assert {o.id for o in restored.options} == {"abandon", "pause"}
+    assert restored.id != q.id
+    assert resumed.questions[0].answer.option == "pause"
+    again, ready = loop.schedule(resumed, [], later, None)
+    assert ready is None
+    assert loop.open_question(again).id == restored.id
+
+
+def test_paused_delivery_discrepancy_owns_accounting_even_without_a_current_ask():
+    c, _ = loop.schedule(change(StepKind.BUILD), [], NOW, "misdelivered")
+    q = loop.open_question(c)
+    paused, _ = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="pause")], NOW, None)
+    assert paused.outcome is None
+    cause = failures.cause_key(ErrorKind.LIVENESS, StepKind.BUILD, "runner-gone")
+    retry = loop.StepResult(exit=Exit.RETRY, cause=cause, reason="runner disappeared")
+    after = delivery_target.accounted(paused, retry, NOW)
+    assert after.outcome is None
+    assert after.stop == paused.stop
+    assert after.budgets.causes[cause].count == 1
+
+
+def test_a_direct_merge_read_of_wrong_target_does_not_acknowledge_fulfillment(tmp_path):
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    _, result = merge.run(ctx(tmp_path, gh), change())
+    assert result.exit is Exit.ASK
+    assert gh.merges == []
+    assert {o.id for o in result.question.options} == {"abandon", "pause"}
+
+
+def test_correct_external_delivery_uses_the_stored_nonmain_target_and_allows_owner_head_updates(tmp_path):
+    c = change()
+    c.names.target = "release"
+    gh = FakeGh(pr(head=B, merged=True, state="closed", merge_commit_sha=B, base_branch="release", repository="O/R"))
+    gh.read_rules = lambda *_a: pytest.fail("a known terminal delivery does not need another rule observation")
+    assert engine.pr_state(gh, "o/r", c) == ("merged", False)
+    _, result = merge.run(ctx(tmp_path, gh), c)
+    assert result.exit is Exit.DONE
+    assert c.names.target == "release"
+
+
+def test_a_pr_retargeted_and_merged_before_the_locked_read_is_not_accepted(tmp_path, clone):
+    opened = pr(head=A)
+    ended = pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other")
+    gh = FakeGh(opened)
+    reads = iter((opened, ended))
+    gh.read_pull_request = lambda *_a: next(reads)
+    p = prof(**{profile.ASK: ProfileEntry(state="known", value="no")})
+    _, result = merge.run(ctx(tmp_path, gh, p, repo=clone), change(worktree=str(clone)))
+    assert result.exit is Exit.ASK
+    assert gh.merges == []
+
+
+@pytest.mark.parametrize("mode", [None, "abandon"])
+def test_wrong_target_cleanup_cannot_record_a_successful_delivery(clone, tmp_path, mode):
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    target_checks(gh, ("test", "completed", "success"))
+    cx, c = ctx(tmp_path, gh, repo=clone), change(StepKind.CLEANUP)
+    c.step.mode = mode
+    cx.store.write(cx.lock, c)
+    _, result = cleanup.run(cx, c)
+    if mode is None:
+        assert result.exit is Exit.ASK
+        assert not (cx.store.root / "history.jsonl").exists()
+    else:
+        assert result.exit is Exit.DONE
+        history = [json.loads(line) for line in (cx.store.root / "history.jsonl").read_text().splitlines()]
+        assert history[-1]["merged"] is False
+
+
+@pytest.mark.parametrize("scenario", ["build", "consent", "queued"])
+@pytest.mark.parametrize("paused", [False, True])
+@pytest.mark.parametrize("wrong", [False, True])
+def test_host_terminal_observation_preserves_delivery_and_curation_boundaries(
+    tmp_path,
+    monkeypatch,
+    scenario,
+    paused,
+    wrong,
+):
+    c = change(StepKind.BUILD if scenario == "build" else StepKind.MERGE)
+    if scenario == "consent":
+        c = loop.apply(
+            c,
+            loop.StepResult(
+                exit=Exit.ASK,
+                question=Question(
+                    step=StepKind.MERGE,
+                    text="Merge?",
+                    cause=loop.CONSENT,
+                    options=[Option(id="merge", label="Merge", next=StepKind.MERGE)],
+                ),
+            ),
+            NOW,
+        )
+    if scenario == "queued":
+        c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    if paused:
+        c.intent.paused_at = NOW
+    store = Store(tmp_path)
+    store.write(Lock("c1"), c)
+    provider = QueueGh if scenario == "queued" else FakeGh
+    gh = provider(pr(head=A, merged=True, state="closed", merge_commit_sha=A,
+                     base_branch="release/other" if wrong else "main"))  # fmt: skip
+    if scenario == "queued":
+        gh.state = gh.state.model_copy(update={"merged": True})
+    store.write_profile(prof())
+    host = scheduler.Host(store, tmp_path)
+    host.observe_pr = lambda slug: engine.pr_state(gh, "o/r", store.read(slug))
+    curated = []
+    host.merged = lambda: curated.append("merged")
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    with store.lock("c1") as lock:
+        folded = host._folded(lock, "c1", None, NOW, paused=paused)  # noqa: SLF001 - scheduler observation seam
+        store.write(lock, folded)
+    restored = Store(tmp_path).read("c1")
+    if wrong:
+        assert loop.next_step(restored, NOW) is None
+        assert loop.open_question(restored) is not None
+        assert restored.finished_at is None
+        assert curated == []
+        if scenario == "queued":
+            assert restored.queue == c.queue
+    else:
+        assert restored.step.kind is StepKind.CLEANUP
+        assert curated == ["merged"]
+
+
+@pytest.mark.parametrize("merged", [False, True])
+def test_a_queue_readback_keeps_its_claim_without_valid_terminal_delivery(tmp_path, merged):
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    before = c.queue.model_copy(deep=True)
+    observed = pr(head=A, merged=merged, state="closed" if merged else "open",
+                  base_branch="release/other" if merged else "main")  # fmt: skip
+    result = queue._merged(ctx(tmp_path, FakeGh(observed)), c, pr(head=A, merged=True))  # noqa: SLF001
+    assert result.exit is (Exit.ASK if merged else Exit.PENDING)
+    assert c.queue == before
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [{"repository": "o/other"}, {"number": 8}, {"head_branch": "owlbear/other"}, {"base_branch": "release/other"}],
+)
+def test_a_stale_nonterminal_queue_readback_does_not_create_a_permanent_delivery_discrepancy(tmp_path, changed):
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    before = c.queue.model_copy(deep=True)
+    stale = pr(head=A, merged=False, state="open", **changed)
+
+    waiting = queue._merged(ctx(tmp_path, FakeGh(stale)), c, pr(head=A, merged=True))  # noqa: SLF001
+
+    assert waiting.exit is Exit.PENDING
+    assert c.stop is None
+    assert c.queue == before
+    pending = loop.apply(c, waiting, NOW)
+    terminal = pr(head=A, merged=True, state="closed", merge_commit_sha=A)
+    landed = queue._merged(ctx(tmp_path, FakeGh(terminal)), pending, terminal)  # noqa: SLF001
+    assert landed.exit is Exit.DONE
+    after = loop.apply(pending, landed, NOW)
+    assert after.step.kind is StepKind.CLEANUP
+    assert after.stop is None
+    assert after.queue is None
+
+
+@pytest.mark.parametrize("machine_paused", [False, True])
+def test_lost_build_runner_is_charged_without_displacing_the_terminal_owner_gate(tmp_path, machine_paused):
+    store = Store(tmp_path)
+    store.write(Lock("c1"), change(StepKind.BUILD))
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    host = scheduler.Host(store, tmp_path)
+    host.observe_pr = lambda slug: engine.pr_state(gh, "o/r", store.read(slug))
+    lost = scheduler.RunnerRecord(pid=4242, created=1.0, started_at=NOW - timedelta(seconds=1), sessions=1)
+    with store.lock("c1") as lock:
+        after = host._folded(lock, "c1", lost, NOW, paused=machine_paused)  # noqa: SLF001
+        store.write(lock, after)
+        again = host._folded(lock, "c1", lost, NOW + timedelta(hours=1), paused=machine_paused)  # noqa: SLF001
+    q = loop.open_question(after)
+    assert q is not None
+    assert {o.id for o in q.options} == {"abandon", "pause"}
+    assert loop.next_step(after, NOW + timedelta(hours=1)) is None
+    assert loop.open_question(again).id == q.id
+    cause = failures.cause_key(ErrorKind.LIVENESS, StepKind.BUILD, "runner-gone")
+    assert after.budgets.causes[cause].count == 1
+    assert again.budgets.causes[cause].count == 1
+
+
+def test_owner_abandonment_of_a_queued_misdelivery_crosses_the_actual_queue_barrier(tmp_path, monkeypatch):
+    store = Store(tmp_path)
+    store.write_profile(prof())
+    c = change()
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    c, _ = loop.schedule(c, [], NOW, "misdelivered")
+    q = loop.open_question(c)
+    store.write(Lock("c1"), c)
+    gh = QueueGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    gh.state = gh.state.model_copy(update={"merged": True})
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    store.put_inbox("c1", AnswerItem(at=NOW, question=q.id, option="abandon"))
+
+    after, ready = store.fold(Lock("c1"), "c1", NOW, "misdelivered", leave=queue.barrier(store, tmp_path))
+
+    assert ready is not None
+    assert after.step.kind is StepKind.CLEANUP
+    assert after.step.mode == "abandon"
+    assert after.queue is None
+    assert store.read("c1").questions[-1].answer.option == "abandon"
+
+
+def test_uncertain_merge_readback_cannot_credit_a_different_terminal_target(tmp_path):
+    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
+    cx, c = ctx(tmp_path, gh), change()
+    request = MergeRequest(repository="o/r", number=7, expected_head_sha=A, method=MergeMethod.MERGE)
+    result = merge._readback(cx, c, request, MergeResult(status=MergeStatus.UNKNOWN))  # noqa: SLF001
+    assert result.exit is Exit.ASK
+    assert cx.events("c1", "merged") == []
+
+
+def test_abandoning_misdelivery_preserves_target_unmerged_work_and_records_no_credit(
+    tmp_path,
+    shared_repo,
+    worktree_with_work,
+    monkeypatch,
+):
+    clone, wt = worktree_with_work
+    head = git(wt, "rev-parse", "HEAD")
+    gh = FakeGh(pr(head=head, merged=True, state="closed", merge_commit_sha=head,
+                   base_branch="release/other", head_branch="owlbear/c2"))  # fmt: skip
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
+    c = change(StepKind.CLEANUP, worktree=str(wt))
+    c.names.branch, c.step.mode, c.brief.approved_at = "owlbear/c2", "abandon", NOW
+    c.decisions_baseline = DecisionBaseline(
+        commit=A,
+        at=NOW,
+        revisions={"rule": A},
+        said={"rule": Said(title="A rule", statement="Do this")},
+    )
+    store.write(Lock("c1"), c)
+    cx = engine.Ctx(store, Lock("c1"), clone, prof(), gh, NOW)
+    fixed = []
+    monkeypatch.setattr(cleanup.decision_fixes, "verified", lambda *_a: fixed.append(_a[-2:]))
+
+    after, result = cleanup.run(cx, c)
+
+    assert result.exit is Exit.DONE
+    assert not wt.exists()
+    assert any(path.endswith(".bundle") for path in result.preserved)
+    assert after.pullback is None
+    assert fixed == [(None, "")]
+    records = list((shared_repo[0] / "shop-site" / "changes").glob("*.json"))
+    assert len(records) == 1
+    record = json.loads(records[0].read_text())
+    assert record["outcome"] == "abandoned"
+    assert record["pr"] is None
+    assert record["observed_pr"]["target"] == "release/other"
+    assert record["observed_pr"]["merge_commit"] == head
 
 
 def test_the_queue_read_takes_the_group_commit_and_the_latest_events():

@@ -21,6 +21,8 @@ from owlbear_delivery_next.change_contracts.round_records import RoundFinding, R
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.design_packs import calibration, design_pack, pack_git, pack_update
 from owlbear_delivery_next.github.provider import (
+    BranchDelete,
+    BranchState,
     Check,
     FailureCode,
     MergeMethod,
@@ -130,9 +132,16 @@ class FakeGitHub:
         p["merged"], p["state"] = True, "closed"
         return MergeResult(status=MergeStatus.MERGED, sha=p["sha"])
 
-    def delete_branch(self, _repository: str, branch: str) -> None:
+    def delete_branch(self, _repository: str, branch: str, expected_head: str) -> BranchDelete:
         self.calls.append("delete")
-        git(self.remote, "update-ref", "-d", f"refs/heads/{branch}")
+        ref = f"refs/heads/{branch}"
+        current = git(self.remote, "for-each-ref", "--format=%(objectname)", ref)
+        if not current:
+            return BranchDelete(BranchState.GONE)
+        if current != expected_head:
+            return BranchDelete(BranchState.MOVED, current)
+        git(self.remote, "update-ref", "-d", ref, expected_head)
+        return BranchDelete(BranchState.DELETED)
 
     def _merge(self, _branch: str, *, into: str, source: str, at: str = "") -> str:
         work = self.remote.parent / "merge-work"
@@ -1212,7 +1221,7 @@ def test_a_merge_that_landed_before_the_retry_is_read_back_and_nothing_is_pushed
     fakes.github.refusal = None
     fakes.github.request_merge(MergeRequest(repository="maba-pag/owlbear", number=1, expected_head_sha=pr.head_sha,
                                             method=MergeMethod.MERGE))  # fmt: skip
-    fakes.github.delete_branch("maba-pag/owlbear", pr.head_branch)  # GitHub deletes it after the merge
+    fakes.github.delete_branch("maba-pag/owlbear", pr.head_branch, pr.head_sha)  # GitHub deletes it after the merge
     (checkout / "skills" / "NOTICE.md").write_text("the merged version, deployed meanwhile\n")  # never re-checked
 
     state = answered(job, "retry")
@@ -1220,6 +1229,84 @@ def test_a_merge_that_landed_before_the_retry_is_read_back_and_nothing_is_pushed
     assert state["state"] == "passed", state["reason"]
     assert state["published"]["merged"] == fakes.github.prs[1]["sha"]
     assert git(checkout.parents[1], "ls-remote", "origin", f"refs/heads/{pr.head_branch}") == ""  # not pushed again
+
+
+def test_the_final_merge_readback_after_a_lost_last_round_answer_carries_the_merged_head(
+    tmp_path,
+    checkout,
+    clone,
+    monkeypatch,
+):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    original, calls = fakes.github.request_merge, []
+
+    def uncertain(request):
+        calls.append(request)
+        if len(calls) == pack_publish.ROUNDS:
+            original(request)
+        return MergeResult(status=MergeStatus.UNKNOWN)
+
+    monkeypatch.setattr(fakes.github, "request_merge", uncertain)
+    state = run(job)
+    assert state["state"] == "passed", state["reason"]
+    assert len(calls) == pack_publish.ROUNDS
+    assert state["published"]["merged"] == fakes.github.prs[1]["sha"]
+    branch = state["published"]["branch"]
+    assert git(fakes.github.remote, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}") == ""
+    assert "delete" in fakes.github.calls
+
+
+@pytest.mark.parametrize("read_back", [False, True])
+@pytest.mark.parametrize("retirement", ["advanced", "error"])
+def test_pack_retirement_retains_other_work_and_durably_reports_incomplete_cleanup(  # noqa: PLR0913, PLR0917
+    tmp_path, checkout, clone, monkeypatch, read_back, retirement
+):
+    fakes = Fakes(clone)
+    store = Store(tmp_path / "store")
+    job = pack_job.Job(store, fakes.live(checkout))
+    original = fakes.github.delete_branch
+    observed = []
+
+    def retire(repository, branch, expected_head):
+        assert fakes.github.prs[1]["merged"]
+        assert expected_head == fakes.github.prs[1]["head"]
+        observed.append(expected_head)
+        if retirement == "error":
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "delete_branch", "connection lost", retry_safe=False)
+        remote = fakes.github.remote
+        tree = git(remote, "rev-parse", f"{expected_head}^{{tree}}")
+        new_head = git(remote, "commit-tree", tree, "-p", expected_head, "-m", "new unmerged work")
+        git(remote, "update-ref", f"refs/heads/{branch}", new_head, expected_head)
+        return original(repository, branch, expected_head)
+
+    monkeypatch.setattr(fakes.github, "delete_branch", retire)
+    if read_back:
+        fakes.github.checks = ["failure"]
+        assert run(job)["state"] == "waiting"
+        pr = fakes.github.read_pull_request("maba-pag/owlbear", 1)
+        fakes.github.request_merge(
+            MergeRequest(
+                repository=pr.repository,
+                number=pr.number,
+                expected_head_sha=pr.head_sha,
+                method=MergeMethod.MERGE,
+            )
+        )
+        state = answered(job, "retry")
+    else:
+        state = run(job)
+
+    assert state["state"] == "passed", state["reason"]
+    assert len(observed) == 1
+    head = git(fakes.github.remote, "rev-parse", f"refs/heads/{state['published']['branch']}")
+    if retirement == "advanced":
+        assert head != observed[0]
+        assert any(f"it now points to {head}" in line for line in state["log"])
+    else:
+        assert head == observed[0]
+        assert any("could not confirm retirement" in line and "connection lost" in line for line in state["log"])
+    assert json.loads((store.root / pack_job.FILE).read_text())["log"] == state["log"]
 
 
 def test_gh_that_cannot_push_stops_the_run_before_any_download(tmp_path, checkout, clone):

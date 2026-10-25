@@ -2,8 +2,8 @@
 
 > **Owning task:** owner request 2026-10-19: one document that grounds any session in what is built, what comes
 > next and where the code differs from the decisions
-> **Date:** 2026-10-24, status at `main` `f1f18fabad` after #630 and this pull request, decisions to TD-469, item 5's
-> decisions of 2026-10-22 and the owner's of 2026-10-23
+> **Date:** 2026-10-24, status at `main` `cf9f9981f` after #636 and this pull request, decisions to TD-469, item 5's
+> decisions of 2026-10-22 and the owner's of 2026-10-23 and 2026-10-24
 > **Question:** Where does OwlBear stand, in what order does the remaining work come, and where does the code
 > differ from the decisions in force?
 
@@ -25,7 +25,8 @@ registered: `owlbear-sandbox` and `owlbear-sandbox-protected`. OwlBear itself is
 both), through pull requests to `main` with the required `CI` check, strictly up to date, merged as merge commits.
 
 **Runtime.** `~/.owlbear/runtime` is an alias to the active version under `~/.owlbear/versions/`; OwlBear updates
-itself to each new tag when idle, or at once with `owlbear update` or Run updates now (TD-415, items 3 and 4).
+itself to each new tag when idle, or at once with `owlbear update` or Run updates now (TD-415, items 3 and 4). This
+laptop updates only when the owner runs it (its own `update_when_idle` off, D-01M5Q5GKHX7BJTXPEW2MHGS9E0).
 
 **Versions.** The release workflow tags labelled merges (`release:minor`, `release:major`) once their push `CI`
 passes; the switch `RELEASE_TAGS` is on since 2026-10-19 14:39Z. Tags from `v0.1` exist; v1.0 is the merge of the
@@ -81,8 +82,9 @@ names, not positions: the table lists the items in their order.
 | 14 | Decision system: decisions as their own system for OwlBear's work and every project, in `owlbear-data`, scoped Change, project and Global; Decisions page with read-backs; impact of a change of mind | TD-419, TD-418, TD-424..TD-430 | [decision system](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-system-build.md) | Built: slices 1 to 4 and 5a (#538 to #542: file contract and validator, Change decisions archived, store with receipts and index, step context with the runner's gate, Decisions tab with owner actions and chat tools), 6 (#543: generated `.owlbear/decisions.md`, its hash checked on pull requests and against owlbear-data by `decisions-view.yml`, TD-436) and 5b part 1 (the read-back queue on the Decisions tab, at most three at a checkpoint, `queue_read_back`, and OwlBear's own decisions as a fixed scope, TD-427, TD-435) and 5b part 2 (an impact report per project for a replaced or withdrawn decision, the owner's "forbids existing behaviour" or "wording only" mark, scheduling fixes as grouped backlog entries and accepting a project's existing code, each the owner's click, TD-428). Next: the owner reviewed the migration preview on 2026-10-21 (TD-439 to TD-446), then had decision management rethought end to end and decided it the same day (TD-448 to TD-455): decisions record his confirmed intent only, a lead chat saves at confirmation, workers get the Change's whole picked set while challengers check all, today's rules come over as inherited. A picker on Sol medium picks each Change's rules at shaping and answers lookups; every worker gets the whole picked set (TD-456 to TD-459, from a model test on 13 past pull requests). Next: the six slices of [decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md), the migration being the last; slices 1, 2 and 3 are built (slice 3: a brief's project decisions published in force by its approval, which a failed save refuses; a failed push shown on the Change and sent by the next save; never demoted at its end), and of slice 4 the picker (a brief version's decisions picked before its first challenge, checked and pinned at approval) and the runtime switch (every role of a step gets the pinned picked set plus the Change's own, whole and without a size limit; challengers get the complete list beside it; decisions new since the pick go to the picker in one batch at the next step boundary, a failed pick waiting and retrying; path, role and step selectors removed, TD-460) and the lookup (`lookup_decisions` for a step's own worker, its spend on the Change, and for lead chats through the project host or the machine host's OwlBear mount: the picker over the complete list, a failed lookup reported as failed, TD-456, TD-459) with the agents' boundary in their files (TD-451); slice 4 is complete. Slice 5 is built: the relayer of an answer to a worker's question (a lead chat's `answer_question` or the Changes page) classes it as event, clarification or brief change; a clarification carries the statement the owner confirmed when it was read back, a Sol check on the picker's role compares it with the approved brief, and within it the statement becomes a decision of the Change, in force from that step; a brief change, or a clarification the check finds changing the brief, is never delivered and stops the work with the owner's choice to answer within the brief or stop the Change, until item 16 designs amendments (TD-461). Slice 6 is built: the converter applied `.owlbear/migration/decisions-overlay.json` (130 lines reworded to stand alone after two Sol checks, TD-462; 22 Global by TD-442) and its `REPORT.md` shows each original beside its rewording; the owner reviewed it on 2026-10-22: he checked only the four Sol left uncertain (TD-464), which were split or retired (TD-467 to TD-469); lines of mixed origin carry decided (TD-465); the 28 orphan rows were cited, spent or restored (TD-40), and the quality-service line split by TD-442. The past-work test on the final preview missed nothing new, and the record switched to owlbear-data (TD-466): 22 Global and 324 OwlBear decisions are authoritative there, and the record, converter and overlay are in Git history. Item 14 is complete |
 | 5 | After v1.0: project agents and skills off in steps (TD-274's gap); the memory work: curator modes and threshold (95%), moving an entry back, the saver's pre-set, sorting existing project memories once; from the closed memory issues: a test for two writes in the same microsecond (#238), dispute history in the memory tools' answers (#244), the memory handbook's revision parameter (#249) | TD-317, TD-329; TD-292, TD-293, TD-318, TD-400; the session's four of 2026-10-22 (threshold measure, triggers, move back, sort) | [memory work](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-work-build.md) | Done (#581 to #588): the saver's recommended scope; Make global records its origin and Move back returns it; steps without discovered or bundled agents and skills; the curator's threshold (global, 95%, Settings page), its tools across folders, `make_global` and its automatic and interactive modes; Delivery's `owlbear-curator` role with Curate now, after-merge and idle runs and a machine setting per trigger, "Curate after merge" and "Curate when idle", each off, on or on even while paused (the owner, 2026-10-23). The one-off sort ran on 2026-10-23 on v1.34: 11 promoted, 6 pruned, 1 made global; the owner settled the 6 it left (3 promoted, one of them split in two; 3 pruned). The three residuals from #238, #244 and #249 are built. R13 (#619, uncommitted candidate): a queued automatic run takes its trigger and re-reads pause and the machine switch at its slot grant; Curate now bypasses only those switches, never a fence, and takes over a waiting automatic run without a second run; the curator's subagents setting reaches its session and an unset one never starts |
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Building: TD-267 is built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); Built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held. Window steps stay paused until item 9 needs them (`autonomous`) |
-| 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Building: layered settings merged (#604); machine settings with a Global layer next, moved there once (the owner, 2026-10-23); it goes before item 9's SDK feed |
-| 9 | Watcher: the draft revised, the owner's questions (Q1–Q3) and TD-27's benchmark, then the build (SDK first) and its proof | TD-224, TD-316, TD-365, TD-378, TD-47 | [watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | Started: the draft is revised and the owner's three questions answered (2026-10-23); the watcher's settings exist (gpt-6-luna medium, on/off per layer); item 18 comes first, then the SDK feed (§3.5) |
+| 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop |
+| 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (this pull request); item 9 next |
+| 9 | Watcher: an improvement watcher. Tool and contract fixes plus pre-flight lessons first, then a live coach, then a curator, measured in phases | TD-224, TD-316, TD-47, the owner's choice of 2026-10-25 | [improvement watcher](watcher-coach-design.md) | Redesigned 2026-10-25. Built: W1a (#640), the SDK feed, agent identity and the Watcher list, which the coach reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. Next: phase 1b, pre-flight lessons |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
@@ -114,7 +116,7 @@ flowchart LR
   I5["5 Memory work"] -.-> I8["8 Window-step gate"]
   I8 -.-> I9["9 Watcher"]
   B27["TD-27 benchmark"] --> I9
-  I18["18 Settings without code defaults"] -.-> I9
+  I19["19 Pinned OwlBear"] -.-> I9
   I9 --> I16["16 Amendment design"]
   I16 --> I10
   I9 --> I10
@@ -204,6 +206,18 @@ three questions and proposes the rest as `autonomous` drafts; heads-ups were ans
 "rethinker" agent on a stronger model, not the watcher.
 The owner's input of 2026-10-21, Claude Code's "You should know" observer, is its §3.4b.
 
+**Redesign of 2026-10-25.** The owner's goal for the watcher is improving agents, skills and tools, not catching
+outside writes; malicious calls are out of scope for now. He chose [the improvement watcher](watcher-coach-design.md):
+- first, tool and contract fixes plus pre-flight lessons;
+- then a live coach that looks when progress stalls. It reads a small intent card that indexes the evidence, and
+  gives advisory notes with one small experiment, never a stop;
+- then a curator that turns confirmed outcomes into lessons and improvement proposals.
+
+Each phase is measured. Still to settle with him, one at a time:
+- the rethinker decision, which the coach's independent big-picture check would take over;
+- the switches' rule-verdict and stop parts;
+- TD-365's outside-write outcomes.
+
 ## 4. Where the Code Differs From the Decisions
 
 Audit of every in-force line of the record against `main` `23bd7c1ab` on 2026-10-19 (eight read-only reviews,
@@ -224,14 +238,98 @@ them from a verified archive; supported links and file modes are preserved witho
 following symlink parents. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
+Remote-branch retirement (#612) uses an atomic expected-head ref update, never
+name-only deletion. Advanced or recreated heads stay intact; Change cleanup asks
+to keep that head and finish or pause, and pack updates log retained or uncertain
+cleanup without losing a proven merge. Lost acknowledgements are read back before
+any guarded retry.
+The cleanup decision's Pause holds across restart until Resume; Keep preserves
+abandonment mode. An ordinary pause still permits cleanup.
+The Changes page keeps Resume available until the Change actually finishes,
+including a cleanup whose displayed stage is already Done or Abandoned.
+
+Nonterminal queue readbacks wait without creating a permanent delivery discrepancy.
+The GitHub provider validates the base repository in each read/create response
+instead of relabelling an unchecked response with the requested repository.
+Terminal PR delivery (#614) is checked against the Change's repository, PR number,
+own branch and stored integration target, not a default branch convention. A
+persisted discrepancy holds across unavailable PR reads, including Pause then
+Resume; person-only checks cannot settle or relaunch past it. A different
+delivery asks the owner to pause or abandon without fulfillment; its
+work is preserved against the intended target, fixes and curation get no success
+credit, and the observed other PR is recorded separately from delivery evidence.
+Lost-runner accounting cannot replace that terminal owner disposition with a retry.
+
+SDK cleanup (#611) owns the client across startup, usage and proof, and completes
+its bounded teardown before propagating the original error or cancellation.
+Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
+stays unconfirmed, so a known orphan cannot authorize a successor.
+
+Shared-settings publication (#622) distinguishes a missing path from failed Git
+tracking or staged-diff probes and stops before acknowledging a failed commit.
+Pending-status failures are reported instead of reading as fully published;
+unchanged saves still retry prior commits without consuming unrelated staging.
+
+Profile provenance (#615) binds confirmed intent to the complete observation,
+including its state and value, rather than an evidence label. Push permission,
+hooks and install facts remain in each clone's local overlay; repeated reads
+cannot borrow another clone's capabilities. Legacy facts are observed once,
+publication failures keep local progress without file/index undo, and new Changes
+use the current target while existing Changes retain their stored target.
+Confirmation retains the raw workflow digest without nesting its evidence label,
+so owner-selected CI checks still govern the same workflows. A returned publication
+failure notice leaves detection incomplete and retryable, just like a raised failure.
+Profile pairs use their writer lock; detection preserves newer local edits and
+clears per key, retains unchanged fresh capabilities, and retries before acknowledging
+a raced snapshot. Explicit install commands for undetected packages bind to the same
+absence observation on confirmation and refresh.
+Readers take the same pair lock, with an internal unlocked reader for the guarded
+save, so neither shared nor unshared reads combine halves across saves. A missing
+private profile remains a read-only absence; lock failures are reported.
+
+Brief approval (#617) rejects blank required decision wording and refuses the
+whole approval if any current ID-bearing project rule cannot be built or saved.
+It never publishes a valid subset or acknowledges project rules without shared
+storage; genuinely legacy ID-less records retain their compatibility path.
+Malformed, never-published historical rows do not block a corrected version;
+their stored history stays intact and published predecessors still retire.
+
+Read-back consent (#626) keeps normalized settled-reason identities in the
+portable decision file across later reasons and host reloads, without changing
+the rule revision. Ignoring or leaving a reason pending is not consent.
+Origin-only correction preserves the same rule's history; new rules start fresh.
+
 Change creation (#609) allocates handles, slugs and new records across processes in
 one transaction. Maintenance test-review setup reserves its identity before Git
 work, retains it after failed setup, and publishes only into its own reservation.
 
+Installed pack-update preflight (#621) captures origin's main commit before
+fetching that exact object, without a normal-clone tracking ref or shared
+FETCH_HEAD. Detached installed versions on main stay valid; dirty, off-main,
+wrong-identity and failed-fetch sources still refuse without checkout changes.
+
+Maintenance errors (#625) keep mutation refusals separate from read failures.
+Successful refreshes do not acknowledge failed actions; only dismissal or a
+relevant successful action does, with curation refusals retained per folder.
+Failed reads keep the last good data with an explicit error and retry; an initial
+missing clone-host curation route remains capability absence. Superseded refreshes
+cannot overwrite a newer result.
+
+Integration collision consent (#620) runs on the supported integration BUILD task.
+Its durable task base survives restart and owner choices resume that task. Every
+new planner result advances the plan generation; consent binds to that task, the
+actual merge sides, paths and behaviours, never a pause answer. Termination stops
+retain their recovery action. Every relevant merge since the durable base is
+checked, so a later clean update cannot hide an earlier collision; a resolved
+subset retains the consent given to its pending merge. Durable task progress
+keeps a missing base stopped even after owner continuation clears Step markers.
+Missing bases or failed Git probes stop
+instead of passing; conflict paths retain whitespace without Git quoting losses.
+
 | Line | Decision | Code today | Action | Item |
 | --- | --- | --- | --- | --- |
 | C-03 | TD-27's benchmark, then the watcher's model | Not run | build | 9 |
-| C-04 | The watcher reads, judges and stops every runtime; it is on the real-use list | Not built | build | 9 |
+| C-04 | The watcher reads, judges and stops every runtime; it is on the real-use list | SDK steps' calls observed and reported, judged by no rule or model, never stopped (W1a); the window feed not built | build | 9 |
 | C-04 | Window steps reopen only after the gate | Gate built and proven; window steps stay paused | keep: reopened when item 9 needs them | 9 |
 | C-04 | A missing tool reruns once in a runtime that has it | No other runtime while window steps are paused | keep | 9 |
 | C-11 | Shaping captures the target pages; approval waits for them (TD-38) | "Before" is taken at the check | build | visual baseline |
@@ -283,7 +381,7 @@ since item 6; the others are in this folder.
 | [Decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | Item 14: TD-448..TD-462 | Built (#556 to #565); the migration reviewed by the owner (TD-464..TD-469) and the switch done (#570, #571, TD-466) |
 | [Memory work](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-work-build.md) | Item 5 | Built (#581 to #588) |
 | [New project from zero](new-project-build.md) | Item 15 | Designed; not built, not placed |
-| [Watcher design](delivery-next-watcher-design.md), [options](delivery-next-watcher-options.md) | The watcher | Draft for the owner's session; to revise (§3.5), with the owner's "You should know" input (§3.4b there) |
+| [Improvement watcher](watcher-coach-design.md) | The watcher, chosen 2026-10-25 | The design to build, in phases; the [earlier draft](delivery-next-watcher-design.md) and its [options](delivery-next-watcher-options.md) are history |
 | [Transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Built (item 7) |
 | [Cutover](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Built (item 7), as TD-199 and TD-203 changed it |
 | [Quality service](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | TD-89's service | Research; not built |

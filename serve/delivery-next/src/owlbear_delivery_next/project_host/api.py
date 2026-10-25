@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import evidence
+from owlbear_delivery_next.change_contracts import chat_contract, evidence
 from owlbear_delivery_next.change_contracts.inbox import (
     CheckResult,
     ConsentItem,
@@ -35,6 +35,7 @@ from owlbear_delivery_next.project_host import (
     answers,
     backlog_routes,
     brief_routes,
+    chat_routes,
     config_routes,
     decision_routes,
     memory_routes,
@@ -49,6 +50,7 @@ from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store import watch_reports
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
@@ -167,11 +169,21 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out["spend"] = c.spend.model_dump()
     out["tool_use"] = c.tool_use.model_dump()
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
+    out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
         where = "chat" if loop.ordinary(q) else "changes-page"
         out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "options": options, "answer_in": where}
     return out
+
+
+def watcher(store: Store, slug: str) -> dict[str, Any]:
+    """The Change's watcher list: its newest reports, their counts and the master switch (None when unreadable)."""
+    try:
+        on = store.settings().watcher
+    except StoreError:
+        on = None
+    return {"on": on, "reports": watch_reports.reports(store.db, slug)} | watch_reports.counts(store.db, slug)
 
 
 def new_chat(
@@ -213,6 +225,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     async def local_only(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if request.headers.get("host", "").rsplit(":", 1)[0] not in LOCAL_HOSTS:  # DNS rebinding
             return JSONResponse({"detail": "host not allowed"}, status_code=403)
+        if not chat_contract.served(sent := request.headers.get(chat_contract.HEADER)):  # before any route runs
+            return JSONResponse(chat_contract.refusal(sent or ""), status_code=409)
         return await call_next(request)
 
     def auth(request: Request) -> None:
@@ -318,7 +332,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         o, prof = c.outcome, store.read_profile() or Profile()
         events = store.events(slug)
         merge = offer(c, events)
-        q = next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and not merge), None)
+        q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
         shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | {"ordinary": loop.ordinary(q)}
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
@@ -359,6 +373,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "asks_merge": profile.value(prof, profile.ASK) == "yes",
                 "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
                 "paused": c.intent.paused_at is not None,
+                "finished": c.finished_at is not None,
                 "merge": merge,
                 "consent": c.consent.model_dump(mode="json") if c.consent else None,
                 "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
@@ -376,6 +391,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
                 "restartable": not round_flow.restartable(c),
                 "activity": events[-20:],
+                "watcher": watcher(store, slug),
             }
         )
 
@@ -444,6 +460,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
+    router.include_router(chat_routes.router(read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))

@@ -67,7 +67,8 @@ rationale as the Markdown body. Writes are atomic (temporary file, fsync, rename
 | `state` | `draft`, `in_force`, `replaced`, `withdrawn`, `spent`; nothing is deleted |
 | `links` | `{type, target}`; types `replaces`, `refines`, `exception_to`, `depends_on`, `related_to`, `promoted_from` |
 | `conflict`, `read_back` | A flag the owner resolves; `none`, `pending` or the ISO date the owner last confirmed the statement |
-| `read_back_why`, `read_back_kind` | Only while `read_back` is `pending`, then both required: why it is asked again and how urgent (`safety`, `blocked`, `uncertain`, `improvement`); written only when set, so older files keep their revision |
+| `read_back_why`, `read_back_kind` | Required while `read_back` is `pending`: why it is asked again and how urgent (`safety`, `blocked`, `uncertain`, `improvement`); retained after confirmation as the latest answered reason; omitted while empty, so older files keep their revision |
+| `read_back_settled` | Prior confirmed reason identities, normalized for case and whitespace, in confirmation order without duplicates. A later reason cannot erase earlier consent. Omitted while empty and excluded from `rule_revision`. Origin-only correction preserves it without confirming a pending reason; a replacement or promotion starts a new rule's history. |
 | `created_at` | Time-zone-aware timestamp |
 
 `revision` is not stored: it is the sha256 of the canonical JSON of every other field, so any content change

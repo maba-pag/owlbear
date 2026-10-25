@@ -62,6 +62,7 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
     """The planner's accepted plan: recorded with its revision's marks, then challenged, unless the loop ends."""
     if result.exit != Exit.DONE or result.plan is None:
         return result
+    result.plan = result.plan.model_copy(update={"version": (change.plan.version if change.plan else 0) + 1})
     change.plan = result.plan
     overlap.record(change, result, others, path)  # the plan kept now, whatever its challenge ends with
     rejected = {r.finding: r.reason for r in payload.rejected} if isinstance(payload, tools.PlanResult) else {}

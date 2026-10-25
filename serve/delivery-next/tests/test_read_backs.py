@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,7 +19,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store import decision_actions, decision_origin, decision_store
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decisions_gate
 
@@ -90,7 +91,7 @@ def queue(c: TestClient, **query) -> list[dict[str, Any]]:
 def chat(store, monkeypatch) -> chat_client.Chat:
     http = client(store, CHAT)
     tools = chat_client.Chat.__new__(chat_client.Chat)
-    tools.store = store
+    tools.repo, tools.home = Path(), store.root
 
     def call(method: str, path: str, body: object = None) -> tuple[int, Any]:
         r = http.request(method, f"/api/next{path}", json=body)
@@ -215,6 +216,146 @@ def test_the_reason_answered_yesterday_is_not_queued_again_today_and_a_new_one_i
     held = now(shared, rule.id)
     assert (held.read_back, held.read_back_why, held.read_back_kind) == ("pending", "The vendor was bought.",
                                                                        "uncertain")  # fmt: skip
+
+
+def confirmed_reason(owner, shared, ident, why):
+    """Queue and confirm through the real owner API."""
+    current = now(shared, ident)
+    queued = owner.post(
+        f"/api/next/decisions/{ident}/queue-read-back",
+        json={"revision": current.revision, "why": why, "kind": "uncertain"},
+    )
+    assert queued.json()["saved"] is True
+    current = now(shared, ident)
+    confirmed = owner.post(
+        f"/api/next/decisions/{ident}/read-back", json={"revision": current.revision, "confirmed": True}
+    )
+    assert confirmed.json()["saved"] is True
+    return now(shared, ident)
+
+
+def test_a_then_b_confirmation_remembers_a_after_real_shared_clone_and_host_reload(
+    owner, shared, shared_repo, tmp_path
+):
+    rule = make()
+    put(shared, rule)
+    first = confirmed_reason(owner, shared, rule.id, "The vendor changed its terms.")
+    confirmed_reason(owner, shared, rule.id, "A second team now uses notes.")
+    other_path = tmp_path / "other-data"
+    copied = shared.git("clone", "-q", str(shared_repo[1]), str(other_path))
+    assert copied.returncode == 0, copied.stderr
+    other = DataRepo(other_path)
+    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
+        assert other.git("config", key, value).returncode == 0
+    other_owner = client(Store(tmp_path / "other-host", other, PROJECT))
+    before = now(other, rule.id)
+
+    repeated = other_owner.post(
+        f"/api/next/decisions/{rule.id}/queue-read-back",
+        json={"revision": before.revision, "why": "  the VENDOR  changed its TERMS. ", "kind": "safety"},
+    )
+
+    assert repeated.status_code == 409
+    assert now(other, rule.id) == before
+    stale = other_owner.post(
+        f"/api/next/decisions/{rule.id}/queue-read-back",
+        json={"revision": first.revision, "why": "A new regulation now covers notes.", "kind": "safety"},
+    )
+    assert stale.json()["saved"] is False
+    assert now(other, rule.id) == before
+    fresh = other_owner.post(
+        f"/api/next/decisions/{rule.id}/queue-read-back",
+        json={"revision": before.revision, "why": "A new regulation now covers notes.", "kind": "safety"},
+    )
+    assert fresh.json()["saved"] is True
+    current = now(other, rule.id)
+    assert current.read_back_settled == ("the vendor changed its terms.", "a second team now uses notes.")
+    assert current.rule_revision == rule.rule_revision
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_origin_only_correction_preserves_prior_consent_without_confirming_pending_reason(owner, shared, pending):
+    rule = make(origin=Origin.DECIDED, read_back=TODAY)
+    put(shared, rule)
+    confirmed_reason(owner, shared, rule.id, "The vendor changed its terms.")
+    current = now(shared, rule.id)
+    queued = owner.post(
+        f"/api/next/decisions/{rule.id}/queue-read-back",
+        json={"revision": current.revision, "why": "A second team now uses notes.", "kind": "blocked"},
+    )
+    assert queued.json()["saved"] is True
+    current = now(shared, rule.id)
+    if not pending:
+        current = confirmed_reason(owner, shared, rule.id, "A third team now uses notes.")
+    receipts = decision_origin.correct_origin(
+        shared,
+        PROJECT,
+        current.id,
+        current.revision,
+        origin=Origin.APPROVED,
+        reason="It came with an approved proposal, not an owner choice.",
+        confirmed=True,
+        by="owner",
+    )
+    successor = now(shared, receipts[0].id)
+    assert successor.id != rule.id
+    assert successor.read_back == current.read_back
+    repeated = owner.post(
+        f"/api/next/decisions/{successor.id}/queue-read-back",
+        json={"revision": successor.revision, "why": "THE VENDOR changed its terms.", "kind": "safety"},
+    )
+    assert repeated.status_code == 409
+    assert now(shared, successor.id) == successor
+
+
+def test_unconfirmed_and_ignored_reasons_do_not_become_settled_consent(owner, shared):
+    rule = make()
+    put(shared, rule)
+    first = owner.post(
+        f"/api/next/decisions/{rule.id}/queue-read-back",
+        json={"revision": rule.revision, "why": "The vendor changed its terms.", "kind": "uncertain"},
+    )
+    assert first.json()["saved"] is True
+    waiting_rule = now(shared, rule.id)
+    ignored = owner.post(f"/api/next/decisions/{rule.id}/ignore-read-back", json={"revision": waiting_rule.revision})
+    assert ignored.status_code == 200
+    confirmed_reason(owner, shared, rule.id, "A second team now uses notes.")
+    current = now(shared, rule.id)
+    again = owner.post(
+        f"/api/next/decisions/{rule.id}/queue-read-back",
+        json={"revision": current.revision, "why": "The vendor changed its terms.", "kind": "safety"},
+    )
+    assert again.json()["saved"] is True
+
+
+@pytest.mark.parametrize("mutation", ["replace", "promote"])
+def test_a_changed_rule_does_not_inherit_settled_reasons(owner, shared, mutation):
+    rule = make()
+    put(shared, rule)
+    confirmed_reason(owner, shared, rule.id, "The vendor changed its terms.")
+    current = confirmed_reason(owner, shared, rule.id, "A second team now uses notes.")
+    if mutation == "replace":
+        receipts = decision_actions.replace(
+            shared,
+            PROJECT,
+            current.id,
+            current.revision,
+            title="Notes live in PostgreSQL",
+            statement="Notes live in one PostgreSQL table.",
+            rationale="",
+            reason="The owner changed the storage rule.",
+            redecided=True,
+        )
+    else:
+        receipts = decision_actions.promote(
+            shared, PROJECT, current.id, current.revision, reason="The rule now applies across projects."
+        )
+    new = now(shared, receipts[0].id)
+    queued = owner.post(
+        f"/api/next/decisions/{new.id}/queue-read-back",
+        json={"revision": new.revision, "why": "The vendor changed its terms.", "kind": "uncertain"},
+    )
+    assert queued.json()["saved"] is True
 
 
 def test_ignore_for_now_writes_nothing_keeps_the_rule_in_force_and_moves_it_last(owner, shared, store):

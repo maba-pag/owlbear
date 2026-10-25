@@ -46,13 +46,14 @@ from owlbear_delivery_next.change_flow import (
     budgets,
     curation_flow,
     decision_baseline,
+    delivery_target,
     disputes,
     picks,
     plan_rounds,
     rebuilds,
     round_flow,
 )
-from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved
+from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Change
 
-type PrState = Literal["open", "merged", "closed"]
+type PrState = Literal["open", "merged", "closed", "misdelivered"]
 type Seen = tuple[PrState | None, bool]  # the PR's end state; whether a consent wait saw a comment or a new head
 
 _FIVE = frozenset(Exit) - {Exit.PENDING}
@@ -131,9 +132,9 @@ def consent_moved(c: Change, offered: str | None, head: str, opened: Iterable[st
 
 
 def open_question(c: Change) -> Question | None:
-    """The question the Change waits on, if any."""
+    """The unanswered question the Change waits on, if any; a paused decision's hold is not a new question."""
     o = c.outcome
-    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question), None)
+    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and q.answer is None), None)
 
 
 def ordinary(q: Question) -> bool:
@@ -151,9 +152,9 @@ DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "re
 
 
 def owner_gated(c: Change) -> bool:
-    """An open question only the owner settles by choosing an option; the step's environment waits for it."""
+    """An owner-only gate, including a persisted delivery discrepancy; its environment cannot settle or relaunch."""
     q = open_question(c)
-    return bool(q and q.options and {o.next for o in q.options} & DECISIONS)
+    return delivery_target.held(c) or bool(q and q.options and {o.next for o in q.options} & DECISIONS)
 
 
 def brief_ready(c: Change) -> bool:
@@ -187,7 +188,8 @@ def schedule(  # noqa: PLR0913 - the PR observation and the profile's consent se
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
     c = fold(change, items, now)
-    if not c.finished_at and c.step.kind != StepKind.CLEANUP:
+    routed = delivery_target.route(c, pr_state, now)
+    if not routed and not c.finished_at and c.step.kind != StepKind.CLEANUP:
         if not asking and waiting_consent(c) and (q := open_question(c)) is not None:
             q.answer = Answer(option=OBSOLETE, text="ask before merge is off", at=now)
             c.outcome = None  # the merge gate runs again without asking
@@ -267,7 +269,7 @@ def _intent(c: Change, item: IntentItem) -> None:
         case "pause":
             c.intent.paused_at, c.intent.pause_reason = item.at, item.text
         case "resume":
-            c.intent.paused_at, c.intent.pause_reason = None, ""
+            resume(c)
         case "abandon":
             c.intent.abandoned_at = item.at
         case "change":
@@ -303,7 +305,7 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> None:
     if _refused(q, target, item.text):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return
-    if gate:
+    if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
     if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
         ask(c, answer_kinds.question(c, q), now)

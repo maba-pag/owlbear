@@ -110,7 +110,7 @@ def build(store: Store, clone: Path, monkeypatch, *keys: str) -> sdk_adapter.Ses
     async def run(cfg):
         seen.append(cfg)
         rejected = [{"finding": k, "reason": f"{k} is wrong"} for k in keys]
-        payload = tools.BuildResult(summary="Rejected.", changed_paths=[], checks=[], rejected=rejected)
+        payload = tools.BuildResult(summary="Rejected.", checks=[], rejected=rejected)
         return Run(cfg.session_id, "result", payload, head=git(clone, "rev-parse", "HEAD"), termination=DONE)
 
     monkeypatch.setattr(runner.sdk_adapter, "run", run)
@@ -350,7 +350,7 @@ def test_the_owners_note_guides_the_fix_and_authorises_its_round():
 def test_a_finding_the_owner_decided_is_never_rejected(tmp_path, offered, keys, error):
     g = gate(tmp_path, K.BUILD, tools.Worktree(head="a", base="a"), tools.SUBMIT, rejectable=offered, settled=("F1",))
     rejected = [{"finding": k, "reason": "r"} for k in keys]
-    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "changed_paths": [], "checks": [], "rejected": rejected})
+    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "checks": [], "rejected": rejected})
     assert (ok, error in text, "or reject" in text) == (False, True, False)
 
 
@@ -359,7 +359,7 @@ def test_a_conversation_reply_never_skips_a_finding_the_owner_decided(tmp_path):
     tree = tools.Worktree(head="a", base="a")
     g = gate(tmp_path, K.BUILD, tree, tools.SUBMIT, rejectable=("F2",), settled=("F1",), item=item)
     reply = {"how": "answered", "text": "It already greets in German."}
-    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "changed_paths": [], "checks": [], "response": reply})
+    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "checks": [], "response": reply})
     assert (ok, "changes: no commit - fix and commit F2, F1" in text) == (False, True)
 
 

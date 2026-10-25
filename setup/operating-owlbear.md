@@ -118,11 +118,22 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   pages 2 minutes ahead. **Settings → This machine** chooses major versions only, and whether it
   updates when idle or while paused.
 - **Run updates now** on a paused page, or `owlbear update`, updates at once.
-- After an update, the pages say once which version OwlBear now runs. A chat whose Delivery server
-  is older answers `OwlBear updated: …`: start a new Copilot-runtime chat, or focus that chat and use
-  **MCP: List Servers** → `owlbear-delivery` → **Stop Server**, then **Start Server**. Neither the
-  agent host nor the window needs restarting; a window reload does not restart that runtime's tool
-  servers.
+- After an update, the pages say once which version OwlBear now runs. Open chats keep their
+  Delivery tools: a chat's `owlbear-delivery` server reads and writes nothing itself, and asks the
+  host in a chat contract that later versions keep serving. With Delivery stopped, its tools say so
+  and read nothing. A chat whose server the host no longer serves answers `OwlBear does not serve
+  this chat's …`, and one started before OwlBear had the chat contract answers `OwlBear updated: …`
+  once more: start a new Copilot-runtime chat, or focus that chat and use **MCP: List Servers** →
+  `owlbear-delivery` → **Stop Server**, then **Start Server**. Neither the agent host nor the window
+  needs restarting; a window reload does not restart that runtime's tool servers. A chat whose
+  server is newer than the running host says so: let the update finish, or run `owlbear restart`.
+- OwlBear's memory, knowledge and browser servers run from the installed version too
+  (`python -m owlbear_delivery_next serve memory`, through `~/.owlbear/runtime`): each keeps the
+  version it started with until its chat ends or you stop and start it, and no update removes that
+  version while it runs. Chats started before and after an update can thus use two versions of a
+  server over the same memory and knowledge stores, so a version that changes how they store data
+  must read and write what the versions still running write, with tests that an older server's
+  writes survive.
 
 The agent workspace follows these updates: setup writes its paths through `~/.owlbear/runtime`, so
 they stay valid. Rerun setup from the project root after an update to refresh copied files:

@@ -11,7 +11,6 @@ stops it asks the owner (``Held``): try again after fixing it, or discard.
 
 from __future__ import annotations
 
-import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.design_packs import pack_git
 from owlbear_delivery_next.github.provider import (
+    BranchState,
     MergeMethod,
     MergeRequest,
     MergeStatus,
@@ -71,7 +71,7 @@ def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
     gh = live.github(src.root)
     if pub.number and (pr := gh.read_pull_request(pub.repository, pub.number)).merged:  # a lost answer, read back first
-        return _done(job, gh, pub, pr.merge_commit_sha or "")
+        return _done(job, gh, pub, pr.merge_commit_sha or "", pr.head_sha)
     if not pub.commit:
         at = job.store.root / WORKTREE
         pub.commit = _held(job, "commit", lambda: pack_git.commit(src, files, f"{title}\n\n{body}", at, live.git),
@@ -81,15 +81,20 @@ def publish(job: Job, pub: Publication, files: dict[str, str | None], title: str
     pr = _held(job, "pull-request", lambda: _opened(job, gh, pub, title, body), lambda p: p.url)
     pub.number, pub.url = pr.number, pr.url
     job.published(pub)
-    merged = _held(job, "merge", lambda: _merged(job, gh, pub), lambda sha: f"merged as {sha[:12]}")
-    return _done(job, gh, pub, merged)
+    merged, head = _held(job, "merge", lambda: _merged(job, gh, pub), lambda landed: f"merged as {landed[0][:12]}")
+    return _done(job, gh, pub, merged, head)
 
 
-def _done(job: Job, gh: Provider, pub: Publication, merged: str) -> str:
+def _done(job: Job, gh: Provider, pub: Publication, merged: str, head: str) -> str:
     pub.merged = merged
     job.published(pub)
-    with contextlib.suppress(ProviderError):
-        gh.delete_branch(pub.repository, pub.branch)
+    try:
+        retired = gh.delete_branch(pub.repository, pub.branch, head)
+    except ProviderError as exc:
+        job.log(f"could not confirm retirement of {pub.branch} at {head[:12]}: {exc}; inspect the remote branch")
+    else:
+        if retired.state is BranchState.MOVED:
+            job.log(f"kept {pub.branch}: it now points to {retired.head}, not its merged head {head}")
     return merged
 
 
@@ -149,8 +154,8 @@ def _opened(job: Job, gh: Provider, pub: Publication, title: str, body: str) -> 
     return pr
 
 
-def _merged(job: Job, gh: Provider, pub: Publication) -> str:
-    """Wait for the required checks at the current head, bring the branch up to date, merge; the merge commit."""
+def _merged(job: Job, gh: Provider, pub: Publication) -> tuple[str, str]:
+    """Check the current head, update and merge; return the merge commit and the merged head."""
     rules = gh.read_rules(pub.repository, pack_git.BASE)
     if rules.state != "known":
         msg = f"the rules of {pack_git.BASE} could not be read ({rules.evidence}); fix access and try again"
@@ -158,7 +163,7 @@ def _merged(job: Job, gh: Provider, pub: Publication) -> str:
     for _ in range(ROUNDS):
         pr = gh.read_pull_request(pub.repository, pub.number)
         if pr.merged:
-            return pr.merge_commit_sha or ""
+            return pr.merge_commit_sha or "", pr.head_sha
         if pr.state == "closed":
             msg = f"the pull request {pr.url} was closed; reopen it and try again, or discard"
             raise Held(msg)
@@ -172,14 +177,14 @@ def _merged(job: Job, gh: Provider, pub: Publication) -> str:
                                method=MergeMethod.MERGE)  # fmt: skip
         done = gh.request_merge(request)
         if done.status == MergeStatus.MERGED and done.sha:
-            return done.sha
+            return done.sha, pr.head_sha
         if done.status == MergeStatus.REFUSED and done.refusal not in {Refusal.HEAD_CHANGED, Refusal.NOT_MERGEABLE}:
             msg = f"GitHub refused the merge of {pr.url}: {done.refusal} {done.message or ''}".strip()
             raise Held(msg)
         job.log(f"the merge of {pr.url} did not land ({done.status}); reading it back")  # a lost answer is read first
     pr = gh.read_pull_request(pub.repository, pub.number)
     if pr.merged:
-        return pr.merge_commit_sha or ""
+        return pr.merge_commit_sha or "", pr.head_sha
     msg = f"{pr.url} could not be merged after {ROUNDS} rounds of bringing it up to date; try again or discard"
     raise Held(msg)
 

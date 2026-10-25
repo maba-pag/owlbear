@@ -59,6 +59,29 @@ def test_a_file_without_the_reason_loads_and_keeps_its_revision(make):
     assert parse(text).revision == plain.revision
 
 
+def test_empty_settled_history_is_omitted_from_legacy_canonical_content_and_files(make):
+    plain = make()
+    assert "read_back_settled" not in plain.content()
+    assert "read_back_settled" not in serialize(plain)
+    assert parse(serialize(plain)).revision == plain.revision
+
+
+def test_settled_history_round_trips_as_metadata_without_changing_the_rule(make):
+    plain = make()
+    history = plain.model_copy(update={"read_back_settled": ("first reason", "second reason")})
+    assert history.revision != plain.revision
+    assert history.rule_revision == plain.rule_revision
+    assert history.content()["read_back_settled"] == ["first reason", "second reason"]
+    assert parse(serialize(history)) == history
+
+
+def test_settled_history_requires_a_readback_and_nonblank_keys(make):
+    with pytest.raises(ValidationError):
+        make(read_back="none", read_back_settled=("first reason",))
+    with pytest.raises(ValidationError):
+        make(read_back_settled=("   ",))
+
+
 def test_the_queue_orders_by_kind_then_oldest_and_puts_ignored_ones_last(make):
     later = AT + timedelta(days=1)
     old_gap = waiting(make, "improvement", created_at=AT)

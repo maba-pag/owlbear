@@ -19,6 +19,7 @@ from owlbear_decisions import DecisionError, LinkType, Scope, State, check_write
 from owlbear_decisions.models import STATEMENT_LIMIT, Decision
 from owlbear_decisions.snapshot import read_repo
 from owlbear_decisions.validate import Entry, Layer, check
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_store
 
 if TYPE_CHECKING:
@@ -62,20 +63,22 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
     return [decision_path(decision, layer) for decision, layer, _ in planned], []
 
 
-def lasting(project: str, c: Change, stem: str) -> list[Decision]:
+def lasting(project: str, c: Change, stem: str, *, root: Path | None = None) -> list[Decision]:
     """The approved brief's project decisions as its approval puts them in force, retired ones by a later version.
 
-    Built from the approvals alone, so a retry or a restart builds the same files. One without an id (a Change older
-    than TD-419) or that is not a valid decision is left to the archive, which reports it.
+    Current invalid ID-bearing rules refuse the whole approval. Old malformed rows omitted by the earlier software
+    do not prevent correction, but published predecessors still retire from their authoritative files.
     """
+    c, legacy = _history(root, project, c, stem)
     ids = {d.id for d, _ in _approved(c) if d.id}
     found = []
     for fields in _brief(project, c, stem, APPROVED):
         if fields["scope"] is Scope.PROJECT and fields["id"] in ids:
             try:
-                found.append(Decision.model_validate(fields))
-            except ValidationError:
-                continue
+                found.append(_as_decision(fields, legacy))
+            except ValidationError as exc:
+                msg = f"decision {fields['id']} of {c.slug} cannot be published: {' '.join(str(exc).split())}"[:240]
+                raise DecisionError(msg) from exc
     return found
 
 
@@ -84,11 +87,15 @@ def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tu
     planned: list[Placed] = []
     problems: list[str] = []
     published = {p.id for p in c.decisions_published if p.saved}
-    for fields in [*_brief(project, c, stem, outcome), *_changed(project, c, stem, outcome)]:
+    try:
+        source, legacy = _history(root, project, c, stem)
+    except (decision_store.DecisionsUnavailable, DecisionError, ValidationError, OSError) as exc:
+        return [], [f"decision history of {c.slug}: {' '.join(str(exc).split())}"[:240]]
+    for fields in [*_brief(project, source, stem, outcome), *_changed(project, c, stem, outcome)]:
         if fields["scope"] is Scope.PROJECT and fields["id"] in published:
             continue
         try:
-            decision = Decision.model_validate(fields)
+            decision = _as_decision(fields, legacy)
             layer = root / project / CHANGES / stem if decision.scope is Scope.CHANGE else root / project
             path = decision_path(decision, layer)
             current = read(path) if path.exists() or path.is_symlink() else None
@@ -98,6 +105,69 @@ def _planned(root: Path, project: str, c: Change, stem: str, outcome: str) -> tu
         except (DecisionError, ValidationError, OSError) as exc:
             problems.append(f"decision {fields['id']} of {c.slug}: {' '.join(str(exc).split())}"[:240])
     return planned, problems
+
+
+def _as_decision(fields: dict[str, Any], legacy: dict[str, Decision]) -> Decision:
+    if current := legacy.get(fields["id"]):
+        return current.model_copy(update={"state": fields["state"]})
+    return Decision.model_validate(fields)
+
+
+def _invalid_history(project: str, c: Change, stem: str) -> list[dict[str, Any]]:
+    current = c.brief.approved[-1] if c.brief.approved else c.brief
+    current_ids = {d.id for d in current.decisions}
+    known = {d.id for d, _ in _approved(c) if d.id}
+    invalid = []
+    for fields in _brief(project, c, stem, APPROVED):
+        if fields["scope"] is not Scope.PROJECT or fields["id"] not in known - current_ids:
+            continue
+        try:
+            Decision.model_validate(fields)
+        except ValidationError:
+            invalid.append(fields)
+    return invalid
+
+
+def _history(root: Path | None, project: str, c: Change, stem: str) -> tuple[Change, dict[str, Decision]]:
+    invalid = _invalid_history(project, c, stem)
+    if not invalid or root is None or not project:
+        return c, {}
+    seen = decision_store.file_snapshot(DataRepo(root), project)
+    saved = {p.id for p in c.decisions_published if p.saved}
+    parents = {d.id: d.replaces for d, _ in _approved(c)}
+    omitted: dict[str, str | None] = {}
+    legacy: dict[str, Decision] = {}
+    for fields in invalid:
+        ident = fields["id"]
+        matches = [e.decision for e in seen.entries if e.decision.id == ident]
+        if len(matches) > 1:
+            msg = f"historical decision {ident} has ambiguous authoritative files"
+            raise decision_store.DecisionsUnavailable(msg, decision_store.READ)
+        if matches:
+            current = matches[0]
+            if (current.id, current.scope, current.project) != (ident, Scope.PROJECT, project):
+                msg = f"historical decision {ident} does not match its authoritative file"
+                raise DecisionError(msg)
+            legacy[ident] = current
+        elif ident not in saved:
+            omitted[ident] = parents[ident]
+    return _without(c, omitted) if omitted else c, legacy
+
+
+def _without(c: Change, omitted: dict[str, str | None]) -> Change:
+    """Project authority without never-published historical rows; the stored approval history stays intact."""
+    source = c.model_copy(deep=True)
+    for brief in [source.brief, *source.brief.approved]:
+        brief.decisions = [d for d in brief.decisions if d.id not in omitted]
+        for decision in brief.decisions:
+            seen: set[str] = set()
+            while decision.replaces is not None and decision.replaces in omitted:
+                if decision.replaces in seen:
+                    msg = "the omitted historical decisions have a replacement cycle"
+                    raise DecisionError(msg)
+                seen.add(decision.replaces)
+                decision.replaces = omitted[decision.replaces]
+    return source
 
 
 def _graph(root: Path, project: str, c: Change, planned: list[Placed]) -> list[str]:

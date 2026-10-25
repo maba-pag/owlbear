@@ -35,6 +35,7 @@ function card([c, label, variant]) {
     bits.push(`${spentText(c.credits.change, c.credits.unknown || 0)}${now}`);
   }
   if (c.quiet) bits.push("quiet");
+  if (c.watcher?.outside) bits.push(`${c.watcher.outside} outside write${c.watcher.outside === 1 ? "" : "s"} observed`);
   return html`<li class=${current ? "card current" : "card"}>
     <div class="top"><a href=${here({ change: c.key })} class="open" data-key=${c.key}
       aria-current=${current ? "true" : nothing} @click=${open}>${c.slug}</a>

@@ -181,7 +181,9 @@ function settingsSections() {
       <p-heading size="lg"><h2 id="watcher-title">Watcher</h2></p-heading>
       <p-text>The watcher judges what an agent step does outside its work folder and what it sends out: it stops the
         step when an action is dangerous or inappropriate for the task, and reports the rest. Its model, effort and
-        context are the watcher row under Agents. It is not built yet; the switch applies once it is.</p-text>
+        context are the watcher row under Agents. So far it only reports: it lists on each Change's page what SDK
+        steps may write outside their folder, judging and stopping nothing. This is its only switch so far; rule
+        verdicts, stops and the model each come with their own.</p-text>
       ${table("Watcher: it applies to the next step", ["Setting", "Value"], "watcher",
         [row(text("The watcher"), watcherSwitch())])}
     </section>

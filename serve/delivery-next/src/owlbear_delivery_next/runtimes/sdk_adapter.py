@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.permissions import decide, identitie
 from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
-from owlbear_delivery_next.runtimes import sdk_teardown, step_decisions, step_input, subagents
+from owlbear_delivery_next.runtimes import sdk_teardown, step_decisions, step_input, subagents, watch_feed
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -45,7 +45,6 @@ DEADLINES = {StepKind.PLAN: 1800.0, StepKind.BUILD: 2400.0, StepKind.REVIEW: 120
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "preparer"}
 POLL = 5.0
 START = 60.0  # runtime start, session create or resume
-NOW_LIMIT = 80  # characters of the now line's summary
 NOW_EVERY = 1.0  # seconds between now-line writes
 
 
@@ -77,15 +76,6 @@ class Journal:
     now: Callable[[dict[str, Any]], None] = lambda _e: None  # the latest tool call, overwritten; not activity
 
 
-def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
-    """One short, redacted line for a tool call: ``ran <command>`` or ``<tool> <target>``."""
-    args = arguments if isinstance(arguments, dict) else {}
-    target = next((args[k] for k in ("path", "file_path", "pattern", "query", "url") if args.get(k)), "")
-    text = f"ran {args['command']}" if args.get("command") else f"{tool} {target}"
-    text = " ".join(redact(str(text)).split())
-    return text if len(text) <= NOW_LIMIT else text[: NOW_LIMIT - 1] + "…"
-
-
 @dataclass(frozen=True)
 class Session:
     """Everything one step session needs; tools are bound here, never by agent-supplied identity (T2)."""
@@ -98,6 +88,7 @@ class Session:
     policy: Policy
     observe: Callable[[], tools.Worktree]
     checks: tuple[str, ...]
+    packages: tuple[tuple[str, str], ...] = ()  # the profile's (package, check) pairs a plan's error hint names
     submit: tools.Spec = tools.SUBMIT
     scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to
     item: ItemRef | None = None  # the conversation item a build task answers, if any
@@ -128,6 +119,7 @@ class Session:
     reveal: str = ""  # what the first look's reply releases, such as the detector's findings
     helpers: tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...] = ()  # Delivery tools that answer, not end
     preparing: Preparing | None = None  # check preparation: the declared options a recipe is validated against
+    watch: watch_feed.Watching | None = None  # a Change-owned session's watcher; None when the master switch is off
 
 
 def sent(events: Iterable[Any], message: str) -> bool:
@@ -139,6 +131,7 @@ def sent(events: Iterable[Any], message: str) -> bool:
 class _Step:
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
+        self.client: CopilotClient | None = None
         self.turn = self.idle = False
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
         self.session: CopilotSession | None = None  # kept as soon as it opens, even if the first send fails
@@ -151,6 +144,7 @@ class _Step:
         self.checked = False  # the preload was checked at the first turn
         self.skills = cfg.skills or preload.directory()  # the folder its skills load from
         self.watch = subagents.Watch(allowed=cfg.subagents)
+        self.feed: watch_feed.Feed | None = None  # its watcher, for the run only
 
     @property
     def done(self) -> bool:
@@ -165,8 +159,10 @@ class _Step:
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
         self.gate.finish(ending, payload, detail)
 
-    def on_event(self, ev: Any) -> None:  # noqa: ANN401 - an SDK session event; one branch per event family
+    def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per family
         kind = getattr(ev.type, "value", str(ev.type))
+        if self.feed is not None:
+            self.feed.seen(kind, ev)
         if kind == "assistant.turn_start":
             self.turn = True
             self.preload_checked()
@@ -251,7 +247,7 @@ class _Step:
         self.shown = t
         at = datetime.now(UTC).isoformat(timespec="seconds")
         with contextlib.suppress(OSError):  # the now line is a hint; a failed write never ends the step
-            self.cfg.journal.now({"tool": tool, "summary": summary(tool, arguments), "at": at})
+            self.cfg.journal.now({"tool": tool, "summary": watch_feed.summary(tool, arguments), "at": at})
 
     def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
         req = view(request)
@@ -334,7 +330,7 @@ class _Step:
             "skill_directories": preload.folders(
                 role_of(self.cfg), ui=self.cfg.ui, job=self.cfg.job, folder=self.skills
             ),
-            "mcp_servers": _memory(self.cfg.memory),
+            "mcp_servers": {preload.MEMORY: {"type": "local", **m}} if (m := preload.memory(self.cfg.memory)) else {},
             "enable_file_hooks": False,  # a project's agent hooks never run in a step (TD-142)
             "enable_config_discovery": False,  # nor its or the user's agents and skills (TD-167, TD-274)
             "included_builtin_skills": [],  # nor the runtime's bundled skills: only the role's own (TD-134)
@@ -430,12 +426,6 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
     return session
 
 
-def _memory(store: Path | None) -> dict[str, Any]:
-    """The owlbear-memory server for the project's memory folder; none without one, so the agent goes on without."""
-    server = preload.memory(store)
-    return {} if server is None else {preload.MEMORY: {"type": "local", **server}}
-
-
 def _refused(cfg: Session) -> str:
     """Why the step cannot start: it names no model (TD-32), or Delivery's skills for its role are missing."""
     if not cfg.model:
@@ -446,31 +436,36 @@ def _refused(cfg: Session) -> str:
 
 
 async def run(cfg: Session) -> Run:
-    """Open or resume the session, send the message, wait for the result boundary, then tear down within bounds."""
+    """Open or resume the session, send the message, await its result, tear down within bounds, then the watcher."""
     st = _Step(cfg, asyncio.get_running_loop())
+    st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
+    return await watch_feed.around(st.feed, _run(st))
+
+
+async def _run(st: _Step) -> Run:
+    cfg = st.cfg
     if refused := _refused(cfg):
         st.finish("error", detail=refused)
         st.run.termination = Termination(confirmed=True)
         return st.run
-    client, session = None, None
-    try:
-        async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
-            client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
-            await _call(client.start(), "runtime start", START)
-            st.runtime(client)
-            session = await _open(client, st)
-            if session is not None:
-                await st.wait(session)
-    except TimeoutError as exc:
-        st.finish("deadline", detail=str(exc) or "step deadline")
-    except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
-        st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
-    session = st.session
-    st.run.usage = await usage_read(session, cfg.model) if session else {}
-    limit_reached(st.run, cfg.credit_limit)
-    st.run.subagents = st.watch.report()
-    await _proven(st, session)
-    st.run.termination = await sdk_teardown.teardown(client, session, st) if client else Termination(confirmed=True)
+    async with sdk_teardown.managed(st):
+        try:
+            async with asyncio.timeout((cfg.limit or DEADLINES.get(cfg.kind, 2400.0)) + START + CALL):
+                client = st.client = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path()))
+                await _call(client.start(), "runtime start", START)
+                st.runtime(client)
+                session = await _open(client, st)
+                if session is not None:
+                    await st.wait(session)
+        except TimeoutError as exc:
+            st.finish("deadline", detail=str(exc) or "step deadline")
+        except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
+            st.finish("error", detail=f"{type(exc).__name__}: {exc}"[:300])
+        session = st.session
+        st.run.usage = await usage_read(session, cfg.model) if session else {}
+        limit_reached(st.run, cfg.credit_limit)
+        st.run.subagents = st.watch.report()
+        await _proven(st, session)
     return st.run
 
 

@@ -6,12 +6,13 @@ import { decisionForm, visualSection, beforeSection } from "./visual.mjs";
 import { spendLines, toolLines, activityLog, planList, roundsInfo, stepper } from "./progress.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { choose } from "./list.mjs";
+import { watcherSection } from "./watcher.mjs";
 
 function detailHead(d) {
   const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
     Changes</p-button-pure>`;
   let intent = nothing;
-  if (!/^(Done|Abandoned) /.test(d.line)) {  // a finished Change has nothing left to pause
+  if (!d.finished) {
     const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
       ? "Resumed: Delivery goes on once no question, check or stop holds the Change."
       : "Pause requested: the running step finishes first, then nothing new starts until you resume.";
@@ -73,6 +74,7 @@ export function detailView(d) {
     ${d.rounds ? roundsInfo(d.rounds, d) : nothing}
     ${!approvingNow && (d.brief.outcome || d.criteria.length) ? briefInfo(d) : nothing}
     ${d.pullback && !behind ? pullbackNote(d.pullback, d) : nothing}
+    ${watcherSection(d.watcher)}
     ${info("Recent activity", activityLog(d.activity))}
     ${spendLines(d.spend)}
     ${toolLines(d.tool_use)}`;
