@@ -165,7 +165,10 @@ matrices and workflow cadence are the evidence boundary for this policy.
 ### Assessment boundary
 
 When Builder performs the sample, it submits one complete batch at the end of
-the substantive task attempt while the recalled entry IDs are still available:
+the substantive task attempt while the entry IDs are still available. The
+entries to assess are the lessons supplied in the step's first message (each
+quoted lesson line names its `id` and `revision`) and every entry a later
+`recall_memory` returned:
 
 - The assessment boundary is the end of substantive work, not proof of a
   successful Delivery completion.
@@ -174,10 +177,14 @@ the substantive task attempt while the recalled entry IDs are still available:
 - A `retry`, `return`, or `block` after substantive work is also an eligible
   partial/failed observation. Classify each recalled entry by what actually
   happened, not by the Delivery transition.
-- A pre-execution `dispatch_failure`, an attempt with no recall, or a recall
-  response containing no entries has no assessment obligation.
+- A pre-execution `dispatch_failure`, an attempt that was given no lessons and
+  made no recall, or a recall response containing no entries has no assessment
+  obligation. A first message that says there are no eligible lessons, that
+  they did not fit, or that memory could not be read gives no lessons, so it
+  creates no obligation.
 
-Include every entry returned by that recall in the batch. This is a best-effort
+Include every lesson supplied in the first message and every entry returned by
+a recall in the batch. This is a best-effort
 sample and its absence must not alter a transition, trigger a recovery route,
 or block publication. The current buckets remain the measurement vocabulary:
 `outstanding`, `unremarkable`, `didnt_use`, and `factually_wrong`.
