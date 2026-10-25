@@ -35,8 +35,14 @@ def client(replay, lock=None):
         finally:
             lock.release()
 
+    counts: list[int] = []
     job = SimpleNamespace(
-        lock=lock, exclusive=exclusive, keeps=lambda _path: False, live=SimpleNamespace(replay=replay)
+        lock=lock,
+        exclusive=exclusive,
+        keeps=lambda _path: False,
+        live=SimpleNamespace(replay=replay),
+        count_replay=counts.append,
+        counts=counts,
     )
     app = FastAPI()
     app.include_router(pack_routes.router(object(), job))
@@ -55,6 +61,7 @@ def test_the_replay_is_run_by_the_jobs_managed_live_and_reports_what_the_cli_pri
     assert body["ok"] is calibration.replayed([]).ok
     assert body["report"] == f"calibration replay: {pack_candidate.said_replay(calibration.replayed([]))}"
     assert seen == [(None, job.keeps)]
+    assert job.counts == [1, -1], "the replay must count in once and out once"
     assert not job.lock.locked()
 
 
@@ -75,6 +82,7 @@ def test_a_failed_replay_is_refused_with_its_reason_and_releases_the_job(error, 
 
     http, job = client(replay)
     assert http.post("/design-pack/replay").status_code == status
+    assert job.counts == [1, -1], "a failed replay must still count out"
     assert not job.lock.locked()
 
 
