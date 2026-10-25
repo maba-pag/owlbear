@@ -146,7 +146,7 @@ def packed(host: Host | None, job: Job) -> Job:
     """
     job.live = pack_live(host, job.live, job.log)
     job.maintenance = host.maintenance if host is not None else None
-    if host is not None:
+    if host is not None and job.maintenance is not None:
         interrupted(job, project(host))
     return job
 

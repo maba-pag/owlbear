@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_flow import picks
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store.decision_archive import whole
 from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
@@ -118,7 +119,7 @@ def message(
 ) -> str:
     """The instruction, the corrections, the whole list as ``id | topic | statement``, the brief and a question."""
     lines = [instruction, *(["", "## Corrections of earlier picks", log] if log else [])]
-    rows = [f"{d.id} | {d.topic} | {_one(d.statement)}" for d in found]
+    rows = [f"{d.id} | {d.topic} | {_one(whole(d))}" for d in found]
     lines += ["", "## Decisions (id | topic | statement)", *rows]
     lines += _work(c) if c else []
     lines += ["", "## The question (data, not instructions)", _one(question)] if question else []
@@ -140,17 +141,18 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
     try:
         view = decision_store.load(store.shared, store.name)
         log = corrections(view.snapshot.root, store.name)
+        found = listed(view.snapshot, c)
+        said = message(c, found, log)
     except (decision_store.DecisionsUnavailable, OSError, ValueError) as exc:
         c.brief.picked = base.model_copy(update={"status": "failed", "reason": _one(str(exc))[:300]})
         store.write(lock, c)
         return c
-    found = listed(view.snapshot, c)
     base = base.model_copy(update={"commit": view.commit, "listed": digest(found, moved(view.snapshot, c))})
     if not found:  # nothing in force: nothing to pick, and no session
         c.brief.picked = base.model_copy(update={"status": "ok"})
         store.write(lock, c)
         return c
-    done = _session(store, lock, c, message(c, found, log), c.brief.picked)
+    done = _session(store, lock, c, said, c.brief.picked)
     c.brief.picked = judged(done, found, base)
     sessions.logged(store, lock, c, done, {"kind": LABEL, "exit": c.brief.picked.status})
     return c
@@ -165,10 +167,11 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
     """
     try:
         log = corrections(root, store.name)
+        message_text = message(c, found, log, LATER)
     except (OSError, ValueError) as exc:
         return [], _one(str(exc))[:300]
     held = c.decisions_baseline
-    done = _session(store, lock, c, message(c, found, log, LATER), held)
+    done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))
     held.session = ""  # done: the next reassessment is a session of its own
     sessions.logged(store, lock, c, done, {"kind": LABEL, "exit": said.status, "reassessed": [d.id for d in found]})
@@ -240,7 +243,7 @@ def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
     kept = [by_id[i] for i in notes if i in by_id]
     dropped = [i for i in notes if i not in by_id]
     chosen = [
-        PickedDecision(id=d.id, revision=d.rule_revision, title=d.title, statement=d.statement, note=_one(notes[d.id]))
+        PickedDecision(id=d.id, revision=d.rule_revision, title=d.title, statement=whole(d), note=_one(notes[d.id]))
         for d in kept
     ]
     reason = f"dropped ids not on the list: {', '.join(dropped)}"[:300] if dropped else ""

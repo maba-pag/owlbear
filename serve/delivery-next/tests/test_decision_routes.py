@@ -37,6 +37,7 @@ class Host:
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     repo = None  # the impact report says it does not know the clone
+    maintenance = None  # no running maintenance: owns no pack sessions
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -242,7 +243,7 @@ def test_a_withdrawal_and_a_promotion_record_why_in_the_rationale_never_in_the_c
     wide = now(shared, act(owner, source, "promote", reason="Every project wants it.").json()["receipts"][0]["id"])
 
     assert now(shared, rule.id).rationale == "Small data.\n\nWhy it was withdrawn: No notes any more."
-    assert wide.rationale == "Why it changed: Every project wants it."
+    assert wide.rationale.endswith("\n\nWhy it changed: Every project wants it.")
     said = git(shared.root, "log", "--format=%B")
     assert ("No notes any more" in said, "Every project wants it" in said) == (False, False)
 

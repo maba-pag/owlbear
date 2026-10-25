@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import uuid
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -43,7 +44,10 @@ STATE = "curation.json"
 SLOT = "memory"  # curation's own share of the machine's slots
 ALL = "all"
 type Trigger = Literal["merge", "idle"]  # each has its own machine setting (the owner, 2026-10-23)
+type Asked = Literal["manual"] | Trigger  # "Curate now" bypasses the automatic switches and pause, never a fence
 NO_SHARED = "no shared repository is set up, so there is no memory to curate"
+PAUSED = "the machine is paused, and this automatic trigger does not curate while paused; it waits for a later trigger"
+OFF = "this automatic trigger is off in the machine settings; it waits until it is turned on"
 LEFT = "the last curation's processes may still run; stop them before curating again"
 LINGERING = "memory curation: its last session's processes may still run"
 INTERRUPTED = "interrupted: OwlBear stopped while it ran or waited"
@@ -93,18 +97,27 @@ def _run(cfg: sdk_adapter.Session) -> Run:
 class Curation:
     """The machine's automatic curation: a queue of folders, one session at a time."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917 - the machine's seams: the slots, its fence, pause, stop barrier and runner
         self,
         slots: Slots,
         shared: Callable[[], data_repo.DataRepo | None] = data_repo.locate,
         run: Callable[[sdk_adapter.Session], Run] = _run,
         fenced: Callable[[], str] = str,
+        paused: Callable[[], bool] = lambda: False,
+        admission: Callable[[], AbstractContextManager[object]] = nullcontext,
         ownership: maintenance.Maintenance | None = None,
     ) -> None:
-        """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone."""
-        self.slots, self.shared, self.run, self.fenced = slots, shared, run, fenced
+        """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone.
+
+        *admission* is the machine's stop barrier: a run is admitted or refused under it, so a stop when idle sees
+        every admitted run. It is taken before ``lock``, never after.
+        """
+        self.slots, self.shared, self.run, self.fenced, self.paused = slots, shared, run, fenced, paused
+        self.admission = admission
         self.lock = threading.RLock()
-        self.queue, self.again, self.worker = list[str](), set[str](), None
+        self.queue, self.worker, self.running = list[str](), None, ""
+        self.asked: dict[str, Asked] = {}  # each queued folder's trigger, read again at its grant
+        self.again: dict[str, Trigger] = {}  # a running folder's follow-up, when an automatic trigger asks for one
         runs = self.load()
         self.maintenance = ownership or maintenance.Maintenance(slots)
         self.maintenance.adopt(
@@ -202,32 +215,46 @@ class Curation:
         seen = self.load().folders.get(folder, FolderRun()).seen
         return any(seen.get(e.id) != e.revision for e in _pending(shared.root / folder / "memory"))
 
-    def allowed(self, trigger: Trigger, *, paused: bool) -> bool:
+    def allowed(self, trigger: Trigger) -> bool:
         """Whether a merge or idle time may start a run now: its machine setting on, and while paused set so."""
         try:
             settings = machine_settings.current()
         except registry.RegistryError:
             return False
         said = settings.curate_after_merge if trigger == "merge" else settings.curate_when_idle  # unset: no run
-        return said == "paused" or (said == "on" and not paused)
+        return said == "paused" or (said == "on" and not self.paused())
 
-    def nudge(self, wanted: list[str] | None, trigger: Trigger, *, paused: bool) -> list[str]:
+    def _refusal(self, trigger: Trigger) -> str:
+        """Why an automatic *trigger* was refused: PAUSED only when its own switch is on and the machine is paused."""
+        try:
+            settings = machine_settings.current()
+        except registry.RegistryError:
+            return OFF
+        said = settings.curate_after_merge if trigger == "merge" else settings.curate_when_idle
+        return PAUSED if said == "on" and self.paused() else OFF
+
+    def nudge(self, wanted: list[str] | None, trigger: Trigger) -> list[str]:
         """Start each of *wanted* (every folder for None) that is due, when *trigger* may start runs now.
 
-        A folder already running gets one more run after it, if it is still due then.
+        A folder waiting for its slot already runs once with its own trigger, so it gets no second run. A folder
+        already running gets one more run after it, if it is still due then.
         """
         shared = self.shared()
-        if shared is None or not self.allowed(trigger, paused=paused):
+        if shared is None or not self.allowed(trigger):
             return []
         known = folders(shared.root)
         candidates = [f for f in (known if wanted is None else wanted) if f in known]
         with self.lock:
-            self.again |= {f for f in candidates if self.queue[:1] == [f]}
+            self.again |= {f: trigger for f in candidates if f == self.running}
             free = [f for f in candidates if f not in self.queue]
-        return [f for one in free if self.due(one) for f in self.start(one)]
+        return [f for one in free if self.due(one) for f in self.start(one, trigger)]
 
-    def start(self, folder: str) -> list[str]:
-        """Queue *folder*, or every folder for ``all``; a folder already waiting keeps its place."""
+    def start(self, folder: str, asked: Asked = "manual") -> list[str]:
+        """Queue *folder*, or every folder for ``all``; a folder already waiting keeps its place.
+
+        A manual request for a folder waiting (not running) for its slot takes that place over: it runs once, with
+        the manual trigger, and no second run is queued.
+        """
         shared = self.shared()
         if shared is None:
             raise ValueError(NO_SHARED)
@@ -237,9 +264,14 @@ class Curation:
             msg = f"the shared repository has no memory folder {folder}"
             raise ValueError(msg)
         with self.lock:
+            if asked == "manual":
+                for f in wanted:
+                    if f in self.queue and f != self.running:
+                        self.asked[f] = "manual"
             added = [f for f in wanted if f not in self.queue]
             for f in added:  # shown waiting before the worker can end its run
                 self._save(f, self.load().folders.get(f, FolderRun()).model_copy(update={"state": "waiting"}))
+                self.asked[f] = asked
             self.queue.extend(added)
             if self.worker is None:  # a worker clears this under the lock as it ends, so none is ever missed
                 self.worker = threading.Thread(target=self._work, name="memory-curation", daemon=True)
@@ -254,48 +286,71 @@ class Curation:
                     return
                 folder = self.queue[0]
             started = datetime.now(UTC)
+            refused = False
             try:
-                self._one(folder, started)
+                refused = self._one(folder, started)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 why = f"{type(exc).__name__}: {exc}"[:300]
                 self._save(
                     folder, FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
                 )
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
-                again = folder in self.again and self.due(folder)
-                self.again.discard(folder)
+                trigger = self.again.pop(folder, None)
+                # a Curate now that landed after this automatic request was refused is not lost: it runs once
+                manual = refused and self.asked.get(folder) == "manual"
+                again = trigger is not None and self.due(folder)
+                self.running = ""
                 self.queue.remove(folder)
-                if again:
+                self.asked.pop(folder, None)
+                if manual or again:
                     self._save(
                         folder, self.load().folders.get(folder, FolderRun()).model_copy(update={"state": "waiting"})
                     )
                     self.queue.append(folder)
+                    self.asked[folder] = "manual" if manual else trigger
 
-    def _one(self, folder: str, started: datetime) -> None:
+    def _one(self, folder: str, started: datetime) -> bool:
+        """Run one folder's curation; True when an automatic request was refused its admission."""
         shared = self.shared()
         why = NO_SHARED if shared is None else LEFT if self.lingering() else self.fenced()
         why = why or _unset(lookup.machine(shared))  # checked again on the snapshot it starts with
         if shared is None or why:
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-            return
+            return False
         turn, key = threading.Event(), f"curate:{folder}:{uuid.uuid4().hex}"  # one generation per admission
-        while not self.slots.take(SLOT, key, 1, 1, wake=turn.set):
+        while True:
+            turn.clear()  # cleared before the take, so a wake during it is never lost
+            if self.slots.take(SLOT, key, 1, 1, wake=turn.set):
+                break
             if why := self.fenced():  # an update or a stop came while it waited: it never starts
                 self.slots.cancel(SLOT, key)
                 self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-                return
+                return False
             turn.wait(5)
-            turn.clear()
-        if why := self.fenced():
+        with self.admission():  # the stop barrier: a stop when idle sees this run admitted, or it is refused here
+            why = self.fenced()
+            with self.lock:  # the automatic switches are read at the grant, not when the request was made
+                asked = self.asked.get(folder, "manual")
+                admitted = not why and (asked == "manual" or self.allowed(asked))
+                self.running = folder if admitted else ""
+        if why:
             self.slots.give(SLOT, key)
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
-            return
+            return False
+        if not admitted:  # the folder stays due, so a later allowed trigger runs it
+            self.slots.give(SLOT, key)
+            prior = self.load().folders.get(folder, FolderRun())  # keeps what the last finished run left pending
+            why = self._refusal(asked)
+            update = {"state": "failed", "started_at": started, "ended_at": started, "reason": why}
+            self._save(folder, prior.model_copy(update=update))
+            return True
         try:
             self._save(folder, FolderRun(state="running", started_at=started))
             self._save(folder, self._session(shared, folder, started, key))
         finally:
             if not self.maintenance.held(SLOT, key):
                 self.slots.give(SLOT, key)
+        return False
 
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
@@ -311,6 +366,7 @@ class Curation:
                 message=said, fresh=said, resume=False, policy=Policy(at, write=False),
                 observe=lambda: tools.Worktree("", ""), checks=(), submit=memory_curation_tools.SUBMIT,
                 model=role.model, effort=role.effort, context=role.context, limit=roles.limit(settings, LABEL),
+                subagents=roles.subagents(settings, LABEL),
                 role=tools.CURATOR, job=LABEL, journal=sdk_adapter.Journal(event=self._pids), memory=store,
             )  # fmt: skip
             done = self.maintenance.run(cfg, self.run, project=SLOT, slot=key, kind="curation")
@@ -380,8 +436,10 @@ def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool
 def _unset(settings: Settings) -> str:
     """Why a run cannot start for unset settings: the curator's role or its threshold; empty when both are set."""
     try:
-        settings.agent(roles.SESSIONS[LABEL])
+        agent = settings.agent(roles.SESSIONS[LABEL])
         settings.need("curator_threshold")
     except SettingsUnset as exc:
         return str(exc)
+    if agent.subagents is None:  # set per role: a run never guesses whether its subagents may start
+        return f"agents.{roles.SESSIONS[LABEL]}.subagents is unset"
     return ""

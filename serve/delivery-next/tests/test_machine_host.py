@@ -808,6 +808,88 @@ def test_the_maintenance_button_curates_a_memory_folder_now_also_while_paused(ht
     assert http.get("/api/next/curation").json()["folders"][0]["summary"] == "nothing pending"
 
 
+HELD_SLOT = "0123456789abcdef"
+
+
+def _curation_runs(machine, shared_repo, monkeypatch, gate=None) -> list:
+    """Machine curation with a synthetic run that records each start; *gate* holds it open until set."""
+    from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult  # noqa: PLC0415
+    from owlbear_delivery_next.local_system.processes import Termination  # noqa: PLC0415
+    from owlbear_delivery_next.runtimes.session_result import Run  # noqa: PLC0415
+
+    (shared_repo[0] / "shop" / "memory").mkdir(parents=True)
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    machine.slots.open()
+    ran = []
+
+    def run(cfg) -> Run:
+        ran.append(cfg.session_id)
+        if gate is not None:
+            gate.wait(5)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    machine.curation.run = run
+    return ran
+
+
+def _curation_finished(machine) -> None:
+    for _ in range(200):
+        if not machine.curation.working():
+            return
+        time.sleep(0.02)
+    pytest.fail("the curation did not finish")
+
+
+def test_a_curate_now_queued_behind_a_step_never_starts_once_a_stop_when_idle_is_asked(
+    machine, shared_repo, monkeypatch
+):
+    ran = _curation_runs(machine, shared_repo, monkeypatch)
+    assert machine.slots.take(HELD_SLOT, "a-change", 1, 1) == 1  # a step holds the only slot
+    machine.curation.start("shop")  # queued behind it
+    machine.pause_stop()
+    machine.slots.give(HELD_SLOT, "a-change")
+    _curation_finished(machine)
+    shop = {f["folder"]: f for f in machine.curation.read()["folders"]}["shop"]
+    assert (ran, shop["state"], machine.idle_stop()) == ([], "failed", True)
+
+
+def test_a_stop_when_idle_landing_right_after_a_curation_grant_stops_it_before_its_run(
+    machine, shared_repo, monkeypatch
+):
+    ran = _curation_runs(machine, shared_repo, monkeypatch)
+    assert machine.slots.take(HELD_SLOT, "a-change", 1, 1) == 1
+    grant = machine.slots.take
+
+    def take_then_stop(project, key, want, limit, wake=None):  # the stop lands between the grant and the run
+        got = grant(project, key, want, limit, wake=wake)
+        if got and key.startswith("curate:"):
+            machine.pause_stop()
+        return got
+
+    monkeypatch.setattr(machine.slots, "take", take_then_stop)
+    machine.curation.start("shop")
+    machine.slots.give(HELD_SLOT, "a-change")
+    _curation_finished(machine)
+    assert (ran, machine.idle_stop()) == ([], True)
+
+
+def test_a_curation_admitted_before_a_stop_when_idle_stays_pinned_and_finishes(machine, shared_repo, monkeypatch):
+    gate = threading.Event()
+    ran = _curation_runs(machine, shared_repo, monkeypatch, gate)
+    machine.curation.start("shop")
+    for _ in range(200):
+        if ran:
+            break
+        time.sleep(0.02)
+    machine.pause_stop()
+    waited = machine.idle_stop()  # the admitted run is counted: the stop waits for it
+    gate.set()
+    _curation_finished(machine)
+    shop = {f["folder"]: f for f in machine.curation.read()["folders"]}["shop"]
+    assert (len(ran), waited, shop["state"], machine.idle_stop()) == (1, False, "done", True)
+
+
 @pytest.mark.parametrize(("old", "both"), [(False, "on"), (True, "paused"), ("false", "on"), ("true", "paused")])
 def test_format_4s_one_curation_switch_becomes_a_setting_per_trigger(old, both) -> None:
     raw = {"channel": "minor", "update_when_idle": True, "update_while_paused": True, "curate_while_paused": old,
