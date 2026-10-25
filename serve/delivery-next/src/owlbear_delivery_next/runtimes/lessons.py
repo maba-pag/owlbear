@@ -6,8 +6,11 @@ creates gets them once, ahead of its first message: a fresh SDK session or its r
 a repair's fallback included; a resumed SDK session gets nothing. Delivering them is the role's startup recall; when
 the read fails or nothing fits, the message says so and the agent recalls with its own tool. A role without the
 recall tool, or a step without memory, gets nothing. The step's activity logs the selection when it is made, with
-every eligible lesson left out and why, and what the conversation was shown once its first message reached it.
-A read that skipped unreadable entries is incomplete: the agent recalls itself, as after a failed read.
+every eligible lesson left out and why, then what the conversation was given. An SDK session's is
+``lessons-shown``, confirmed: its first message was sent and acknowledged. A window chat's is ``lessons-sent``,
+unconfirmed: Delivery dispatched the turn's start but the host does not acknowledge it, so window exposure stays
+unconfirmed until window steps reopen, and measurement counts only ``lessons-shown``. A read that skipped
+unreadable entries is incomplete: the agent recalls itself, as after a failed read.
 """
 
 from __future__ import annotations
@@ -75,12 +78,15 @@ def opening(role: str, memory: Path | None, message: str, log: Callable[..., Non
     return f"{text}\n\n{message}", exposure
 
 
-def shown(exposure: Exposure | None, session: str, log: Callable[..., None]) -> None:
-    """Log what the conversation *session* was shown, after its first message was sent or its window turn started."""
+def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, confirmed: bool = True) -> None:
+    """Log what the conversation *session* was given: ``lessons-shown`` once its first message was acknowledged.
+
+    Unconfirmed, ``lessons-sent``: the message was dispatched without an acknowledgement, as a window turn's start.
+    """
     if exposure is not None:
         log(
-            event="lessons-shown", session=session, role=exposure.role, selection=selection.VERSION,
-            status=exposure.status, lessons=list(exposure.lessons),
+            event="lessons-shown" if confirmed else "lessons-sent", session=session, role=exposure.role,
+            selection=selection.VERSION, status=exposure.status, lessons=list(exposure.lessons),
         )  # fmt: skip
 
 

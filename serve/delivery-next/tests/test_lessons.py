@@ -312,11 +312,11 @@ def opened(client: Client, st: sdk_adapter._Step) -> list[dict]:
     return [{k: v for k, v in e.items() if k != "at"} for e in st.events if e.get("event", "").startswith("lessons")]
 
 
-def exposed(session: str, *ids: str, role: str = "builder") -> dict:
-    """A ``lessons-shown`` event: what the conversation *session* was shown once its first message reached it."""
+def exposed(session: str, *ids: str, role: str = "builder", event: str = "lessons-shown") -> dict:
+    """What the conversation *session* was given: ``lessons-shown`` confirmed, ``lessons-sent`` only dispatched."""
     refs = [{"id": i, "revision": entry(int(i[-5:])).revision} for i in ids]
     made = {"session": session, "role": role, "selection": selection.VERSION, "status": "shown", "lessons": refs}
-    return {"event": "lessons-shown"} | made
+    return {"event": event} | made
 
 
 def test_a_fresh_sdk_session_starts_with_its_lessons_once(memory: Path) -> None:
@@ -459,7 +459,8 @@ def test_a_window_step_starts_its_chat_with_the_lessons(tmp_path: Path, clone: P
     assert "## Task t1: one" in window.prompts[0]
     ref = [{"id": entry(1).id, "revision": entry(1).revision}]
     logged = [{k: v for k, v in e.items() if k != "at"} for e in exposures(store)]
-    assert logged == [selected(status="shown", lessons=ref), exposed(window.sessions[0], entry(1).id)]
+    sent = exposed(window.sessions[0], entry(1).id, event="lessons-sent")  # the host never acknowledges the start
+    assert logged == [selected(status="shown", lessons=ref), sent]
 
 
 @pytest.mark.parametrize("failure", ["starts", "reachable"])
@@ -487,5 +488,5 @@ def test_a_window_repair_falls_back_to_a_fresh_chat_that_gets_the_lessons(
     assert len(window.prompts) == 1
     assert window.prompts[0].startswith(lessons.HEADING)
     assert window.prompts[0].endswith(repairs.EARLIER.format("Added b."))
-    assert [e["event"] for e in exposures(store)] == ["lessons-selected", "lessons-shown"]
+    assert [e["event"] for e in exposures(store)] == ["lessons-selected", "lessons-sent"]
     assert exposures(store)[1]["session"] == fell[0]["fresh"]

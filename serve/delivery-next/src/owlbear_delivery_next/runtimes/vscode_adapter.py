@@ -338,7 +338,7 @@ def run(cfg: Session, inbox: Path, env: Env | None = None) -> Run:
     out = driver.step(inbox)
     started = driver.control.started.is_set()
     if started:
-        lessons.shown(driver.exposure, cfg.session_id, driver.log)  # the window turn started with its prompt
+        lessons.shown(driver.exposure, cfg.session_id, driver.log, confirmed=False)  # dispatched, not acknowledged
         cfg.journal.delivered()
         _recorded(driver, out, inbox, env.record(cfg.worktree, since, wf.agent_name(driver.role)))
     result.usage = _usage(out, cfg.model)
