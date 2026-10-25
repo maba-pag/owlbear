@@ -27,8 +27,9 @@ READ_ONLY = "Read files and run any read-only command; nothing you run may write
 CD = "; one that starts with `cd` runs from the repository root, as written"  # a kept task's check (TD-246)
 FINISH = """\
 1. Implement the task in the worktree, run every check, then `git add` and `git commit` your work.
-2. Call `submit_result` once with the summary, changed_paths and checks; Delivery reads your commit from the
-   worktree HEAD and lints the files you changed with the project's linters. If it is rejected, fix what each
+2. Read your final diff and make sure it holds only this task's work.
+3. Call `submit_result` once with the summary and checks; Delivery reads your commit from the worktree HEAD,
+   records the files it changes and lints them with the project's linters. If it is rejected, fix what each
    error names, commit, and call it again.
 
 - If a decision belongs to the owner, call `ask_question` instead of guessing, then stop.
@@ -351,6 +352,19 @@ def _packages(profile: Profile) -> list[str]:
     return [f"- `{p}`: install `{inst.get(p, 'none')}`, check `{chk.get(p, 'none')}`" for p in sorted({*inst, *chk})]
 
 
+def _alone(profile: Profile) -> str:
+    """How a task names its checks: the profile's commands as listed, never with a `cd` in front."""
+    inside = ((p, c) for p, c in wt.checks(profile) if p.strip("/") not in {"", "."})
+    rule = (
+        "A task's `checks` are these check commands exactly as listed. The Builder runs each from its package's "
+        "directory, so a check never starts with `cd`"
+    )
+    if (found := next(inside, None)) is None:  # no package check to show: an example would name one not listed
+        return f"{rule}."
+    package, command = found
+    return f"{rule}: write `{command}`, not `cd {package} && {command}`."
+
+
 def _others(others: Mapping[str, Sequence[str]]) -> list[str]:
     if not others:
         return []
@@ -369,6 +383,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         "",
         "## Packages (project profile)",
         *(_packages(profile) or ["- none known: ask the owner which commands install and check the code"]),
+        _alone(profile),
         *_others(others),
     ]
     if change.checks:
@@ -451,6 +466,7 @@ class Parts(NamedTuple):
     checks: tuple[str, ...]
     submit: tools.Spec
     task: Task | None
+    packages: tuple[tuple[str, str], ...] = ()  # the profile's (package, check) pairs, for the plan step
 
 
 def session(
@@ -464,9 +480,9 @@ def session(
     s, tasks = change.step, change.plan.tasks if change.plan else []
     task = next((t for t in tasks if t.id == s.task), None)
     if s.kind == StepKind.PLAN:
-        checks = tuple(dict.fromkeys(c for _, c in wt.checks(profile)))
-        message = plan(change, profile, path, others)
-        return Parts(message, write=False, checks=checks, submit=tools.PLAN, task=None)
+        pairs, message = tuple(wt.checks(profile)), plan(change, profile, path, others)
+        checks = tuple(dict.fromkeys(c for _, c in pairs))
+        return Parts(message, write=False, checks=checks, submit=tools.PLAN, task=None, packages=pairs)
     if s.kind == StepKind.REVIEW:
         message = review(change, task, path, wt.observe(path, change.names.target, task.base if task else None))
         return Parts(message, write=False, checks=(), submit=tools.REVIEW, task=task)
