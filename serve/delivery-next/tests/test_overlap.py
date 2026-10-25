@@ -69,12 +69,14 @@ def shared_store(tmp_path, scope="src/app.ts") -> Store:
 def replace_plan(c, store, path, monkeypatch):
     """Adopt a real planner result without launching its SDK challenge."""
     monkeypatch.setattr(plan_round.plan_rounds, "revised", lambda *_: "accepted")
+    events: list[dict[str, object]] = []  # the challenge's step events, logged once its settlement is written
     with store.lock(c.slug) as lock:
         result = plan_round.planned(
-            store, lock, c, path, None, StepResult(exit=Exit.DONE, plan=plan("src")), Profile(), {}
+            store, lock, c, path, None, StepResult(exit=Exit.DONE, plan=plan("src")), Profile(), {}, events
         )
         c = loop.apply(c, result, NOW)
         store.write(lock, c)
+    assert events == []  # accepted unchallenged: no paid challenge ran
     c.plan.tasks[0].done = True
     c.plan.tasks.append(Task(id="t2", title="new integration", scope=["src"], origin="integration"))
     c.step = Step(kind=K.BUILD, task="t2")
