@@ -439,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
     if (pending := held.uncounted(store, change)) is not None:  # a held session counts before anything else runs
-        _counted_hold(store, lock, change, pending)
+        _counted_hold(store, lock, pending)
         return
     if step is not None:
         try:
@@ -503,22 +503,40 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
 
 
 def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
-    """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56)."""
+    """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56).
+
+    The hold is written before anything is counted, so a failed write never loses the run: the step asks the owner
+    without accept, and the usage is counted now. Once held, counting happens in one write, and a restart counts it
+    from the hold alone.
+    """
     kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
     head = held.head(exc.worktree) if exc.worktree else None
     head = head if head and exc.run.head in {None, head} else None  # the result's own commit is still HEAD
-    gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=bool(head)), datetime.now(UTC))
-    store.write(lock, gated)
-    if head:  # after its question exists: a hold no question offers is never taken
-        gated.counted_holds = [*gated.counted_holds, held.keep(store, lock, gated, exc.run, head)]
     label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
+    if head:
+        gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=True), datetime.now(UTC))
+        try:
+            pending = held.hold(store, lock, gated, exc.run, head, label)
+        except OSError:  # nothing could be held: the owner decides without accept, and the usage is counted now
+            pass
+        else:
+            _counted_hold(store, lock, pending)
+            return
+    gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=False), datetime.now(UTC))
+    store.write(lock, gated)
     sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)
 
 
-def _counted_hold(store: Store, lock: Lock, change: Change, pending: held.Held) -> None:
-    """A held session whose accounting write failed counts now, once, and only then does the step wait (RUN-04)."""
+def _counted_hold(store: Store, lock: Lock, pending: held.Held) -> None:
+    """A held session counts once, with the gate question it was asked on, and only then does the step wait (RUN-04).
+
+    An older hold keeps no Change of its own, so the stored one is the base it counts on.
+    """
+    change = pending.change or store.read(lock.slug)
     change.counted_holds = [*change.counted_holds, held.gen(pending)]
-    sessions.logged(store, lock, change, held.accounted(pending.run), {"kind": pending.kind, "exit": Exit.ASK})
+    sessions.logged(
+        store, lock, change, held.accounted(pending.run), {"kind": pending.kind, "exit": Exit.ASK} | pending.label
+    )
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

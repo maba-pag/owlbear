@@ -18,7 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.failures import UNREAD, VISUAL_MODEL
-from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.models import Change, StepKind
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -26,12 +26,13 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.workflow_steps import decision
 
 if TYPE_CHECKING:
-    from owlbear_delivery_next.change_contracts.models import Change, Option, Question
+    from owlbear_delivery_next.change_contracts.models import Option, Question
     from owlbear_delivery_next.change_contracts.visual_records import VisualRound
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 ACCEPT = "accept"  # the gate question's option that processes the held result
 HEAD_SECONDS = 3  # the page polls through this check; a slower Git offers no accept rather than stalling it
+UNRECORDED = "the usage of a session held by an older build was not recorded; it is unknown, not zero"
 # Fields a result model no longer has, dropped from a result held before the change; a new call stays strict.
 # A build's changed_paths had to equal the paths Delivery read at its head, so they stand in for its own record.
 OBSOLETE = {"BuildResult": ("changed_paths",)}
@@ -56,10 +57,15 @@ class HeldRun(BaseModel):
     model_check: Literal["verified", "mismatch", "unknown"] = "unknown"
     subagents: list[dict[str, Any]] = []
     tool_calls: dict[str, dict[str, int]] = {}
+    counted: bool = False  # the usage and tool calls above were kept with the hold; an older build kept none
 
 
 class Held(BaseModel):
-    """What the held result depends on, the gate question that offers it, and the result itself."""
+    """What the held result depends on, the gate question that offers it, and the result itself.
+
+    The hold is the first durable record of a session whose usage stayed unread: it keeps the Change the gate
+    question was asked on, the step label, and the run with its accounting, so counting it needs no session (RUN-04).
+    """
 
     question: str
     kind: str
@@ -69,6 +75,8 @@ class Held(BaseModel):
     head: str
     at: datetime
     run: HeldRun
+    label: dict[str, Any] = {}  # whose session it was when not the step's own (TD-376)
+    change: Change | None = None  # None in a hold an older build kept; its Change is then the stored one
 
 
 def _path(store: Store, slug: str) -> Path:
@@ -94,6 +102,7 @@ def _dump(run: Run) -> HeldRun:
         model_check=run.model_check,
         subagents=run.subagents,
         tool_calls=run.tool_calls,
+        counted=True,
     )
 
 
@@ -137,18 +146,23 @@ def _current(payload: dict[str, Any] | None) -> tuple[object, list[str]]:
     return kept, [str(x) for x in paths] if isinstance(paths, list) else []
 
 
-def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> str:
-    """Hold an agent step's unread result for the gate question just asked, with what it depends on.
+def hold(  # noqa: PLR0913, PLR0917 - the store, its lock, the step's change and run, the head and the step label
+    store: Store, lock: Lock, change: Change, run: Run, head: str, label: dict[str, Any]
+) -> Held:
+    """Hold an agent step's unread result for the gate question just asked, before anything is counted (RUN-04).
 
-    A held build's session ends at *head*: its span closes there, as a recorded session's does (TD-210).
-    Returns the hold's identity, which the Change counts once its usage is logged.
+    A held build's session ends at *head*: its span closes there, as a recorded session's does (TD-210). The Change
+    written here is a copy: the stored Change gets the span and the count with the hold's accounting.
+
+    Raises:
+        OSError: The held file could not be written, so nothing was held.
     """
     lock.check(change.slug)
-    s, asked = change.step, change.outcome.question if change.outcome else None
-    task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
+    snap = change.model_copy(deep=True)
+    s, asked = snap.step, snap.outcome.question if snap.outcome else None
+    task = next((t for t in snap.plan.tasks if t.id == s.task), None) if snap.plan else None
     if s.kind == StepKind.BUILD and task and task.spans and task.spans[-1].endswith(".."):
         task.spans[-1] += head
-        store.write(lock, change)
     held = Held(
         question=asked or "",
         kind=s.kind,
@@ -158,9 +172,11 @@ def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> str:
         head=head,
         at=datetime.now(UTC),
         run=_dump(run),
+        label=label,
+        change=snap,
     )
     atomic_write(_path(store, change.slug), held.model_dump_json())
-    return gen(held)
+    return held
 
 
 def _accepted(change: Change, question: str) -> bool:
@@ -265,9 +281,15 @@ def uncounted(store: Store, change: Change) -> Held | None:
 
 
 def accounted(data: HeldRun) -> Run:
-    """The held run with the usage and tool calls its gate had not yet counted, so counting it happens exactly once."""
+    """The held run with the usage and tool calls its gate kept, so counting it happens exactly once.
+
+    A hold an older build kept has no usage record: its usage is unknown and counts as unread, never as zero.
+    """
+    run = _load(data)
+    if not data.counted:
+        return replace(run, usage={"error": "held-unrecorded"}, usage_unread=UNRECORDED)
     return replace(
-        _load(data),
+        run,
         usage=dict(data.usage),
         usage_unread=data.usage_unread,
         model_check=data.model_check,

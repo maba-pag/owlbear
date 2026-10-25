@@ -359,9 +359,20 @@ def test_an_accepted_hold_is_not_applied_or_charged_again_when_its_cleanup_fails
     assert store.read("c1").outcome.exit == Exit.DONE
 
 
-@pytest.fixture
-def held_review(tmp_path, clone) -> Store:
-    """A Review step whose result came back with its usage unread and one finding: held, nothing counted yet."""
+REVIEW_USAGE = [
+    pytest.param(
+        {"credits": 2.5, "models": {"m": {"credits": 2.5, "tokens": 100}}},
+        "the model could not be read",
+        2.5,
+        [],
+        id="known-usage",
+    ),
+    pytest.param({"error": "RuntimeError"}, UNREAD, 0.0, ["s1"], id="unread-usage"),
+]
+
+
+def review_store(tmp_path, clone, usage: dict, reason: str) -> tuple[Store, Run]:
+    """A Review step whose result came back with one finding and its usage stayed as given: nothing applied yet."""
     store = Store(tmp_path / "store")
     git(clone, "branch", "main")  # the review's target: the base the worker's commits sit on
     names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
@@ -372,89 +383,153 @@ def held_review(tmp_path, clone) -> Store:
     finding = tools.Finding(place="b.txt", problem="p", fix="f", tasks=["t1"])
     payload = tools.ReviewResult(verdict="fix", findings=[finding])
     run = Run("s1", "result", payload, head=git(clone, "rev-parse", "HEAD"), termination=Termination(confirmed=True))
-    run.usage, run.usage_unread = {"error": "RuntimeError"}, UNREAD
+    run.usage, run.usage_unread = usage, reason
+    run.tool_calls = {"bash": {"calls": 3}}
+    return store, run
+
+
+def review_loop(store: Store) -> tuple[int, int]:
+    recorded = store.read("c1")
+    found = moves.loop_of(recorded, recorded.plan.tasks[0])
+    assert found is not None
+    return found.round, len(found.findings)
+
+
+STAGES = ["hold-write", "accounting-write", "final-write", "log", "unlink"]
+RAISES = {"final-write", "log", "unlink"}  # the stages whose failing write ends the accepting step
+
+
+@pytest.mark.parametrize("stage", STAGES)
+@pytest.mark.parametrize(("usage", "reason", "spent", "unread"), REVIEW_USAGE)
+def test_a_held_review_counts_once_and_applies_once_whichever_write_fails(  # noqa: C901, PLR0913, PLR0915, PLR0917
+    tmp_path, clone, monkeypatch, stage, usage, reason, spent, unread
+):
+    store, run = review_store(tmp_path, clone, usage, reason)
     exc = sessions.UsageUnreadError(run)
     exc.worktree = clone
-    runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
-    return store
+    exc.label = "plan-judge"
+    held_file = store.root / "changes" / "c1" / "held.json"
+    armed = [stage]  # the one write this case fails; it fires once, and the restart runs clean
+    real_atomic, real_write, real_log, real_unlink = held.atomic_write, Store.write, Store.log, Path.unlink
 
+    def atomic(path, text):
+        if armed and stage == "hold-write" and path == held_file:
+            armed.clear()
+            msg = "hold-write refused"
+            raise OSError(msg)
+        return real_atomic(path, text)
 
-def test_a_failed_final_write_of_an_accepted_review_counts_its_round_and_finding_once(held_review, clone, monkeypatch):
-    store = held_review
-    c = answer(store, store.read("c1"), "accept")
-    real_write = Store.write
-
-    def refuse_receipt(self, lock, change):
-        if change.accepted_holds:  # only the receipted final write fails; earlier writes are the step's own
-            msg = "final write refused"
+    def write(self, lock, change):
+        counting = bool(change.counted_holds) and not change.accepted_holds
+        if armed and ((stage == "accounting-write" and counting) or (stage == "final-write" and change.accepted_holds)):
+            armed.clear()
+            msg = f"{stage} refused"
             raise OSError(msg)
         return real_write(self, lock, change)
 
-    monkeypatch.setattr(Store, "write", refuse_receipt)
-    with pytest.raises(OSError, match="final write refused"):
-        runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    monkeypatch.setattr(Store, "write", real_write)
+    def log(self, lock, slug, event):
+        if armed and stage == "log" and event.get("event") == "held-accepted":
+            armed.clear()
+            msg = "log refused"
+            raise OSError(msg)
+        return real_log(self, lock, slug, event)
+
+    def unlink(self, *args, **kwargs):
+        if armed and stage == "unlink" and self == held_file:
+            armed.clear()
+            msg = "unlink refused"
+            raise OSError(msg)
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(held, "atomic_write", atomic)
+    monkeypatch.setattr(Store, "write", write)
+    monkeypatch.setattr(Store, "log", log)
+    monkeypatch.setattr(Path, "unlink", unlink)
     monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a held review starts no session"))
 
-    restarted = store.read("c1")
-    runner._step(store, Lock("c1"), restarted, restarted.step, clone)  # noqa: SLF001
+    if stage == "accounting-write":
+        with pytest.raises(OSError, match="accounting-write refused"):
+            runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
+    else:
+        runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
 
-    recorded = store.read("c1")
-    loop_ = moves.loop_of(recorded, recorded.plan.tasks[0])
-    assert loop_ is not None
-    assert (loop_.round, len(loop_.findings)) == (1, 1)
+    restarted = store.read("c1")
+    runner._step(store, Lock("c1"), restarted, loop.next_step(restarted, NOW), clone)  # noqa: SLF001
+    counted = store.read("c1")
+    assert (counted.spend.credits, counted.spend.unread) == (spent, unread)
+    assert counted.tool_use.tools["bash"].calls == 3
+    assert review_loop(store) == (0, 0)  # nothing is applied before the owner accepts
+    assert "plan-judge" in [e.get("label") for e in store.events("c1") if e.get("event") == "step"]
+
+    if stage == "hold-write":  # nothing was held, so the owner can only ask for a new session
+        assert [o.id for o in loop.open_question(counted).options] == ["retry"]
+        assert not held_file.exists()
+        return
+
+    accepted = answer(store, counted, "accept")
+    step = loop.next_step(accepted, NOW)
+    if stage in RAISES:
+        with pytest.raises(OSError, match=f"{stage} refused"):
+            runner._step(store, Lock("c1"), accepted, step, clone)  # noqa: SLF001
+        restarted = store.read("c1")
+        if stage == "final-write":  # the receipt was never written: the result is applied now, once
+            runner._step(store, Lock("c1"), restarted, loop.next_step(restarted, NOW), clone)  # noqa: SLF001
+        else:  # the receipt is written: cleanup alone remains, and nothing is applied again
+            monkeypatch.setattr(runner.loop, "apply", lambda *_a: pytest.fail("a recorded hold is never applied again"))
+            runner._step(store, Lock("c1"), restarted, restarted.step, clone)  # noqa: SLF001
+    else:
+        runner._step(store, Lock("c1"), accepted, step, clone)  # noqa: SLF001
+
+    final = store.read("c1")
+    assert (final.spend.credits, final.spend.unread) == (spent, unread)
+    assert final.tool_use.tools["bash"].calls == 3
+    assert review_loop(store) == (1, 1)
+    assert [e["session"] for e in store.events("c1") if e.get("event") == "held-accepted"] == ["s1"]
+    assert not held_file.exists()
 
 
 @pytest.mark.parametrize(
-    "case",
-    [
-        ({"credits": 2.5, "models": {"m": {"credits": 2.5, "tokens": 100}}}, "the model could not be read", 2.5, False),
-        ({"error": "RuntimeError"}, UNREAD, 0.0, True),
-    ],
+    ("usage", "reason"),
+    [p.values[:2] for p in REVIEW_USAGE],
     ids=["known-usage", "unread-usage"],
 )
-def test_a_held_results_accounting_survives_a_failed_log_write_and_counts_once_after_restart(
-    tmp_path, clone, monkeypatch, case
+def test_a_hold_an_older_build_kept_is_unread_once_and_never_zero_or_recharged(
+    tmp_path, clone, monkeypatch, usage, reason
 ):
-    usage, reason, spent, unread_marked = case
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-    head = commit(clone, "b.txt")
-
-    async def unread_result(cfg):
-        result = built(cfg, head, unread=False)
-        result.usage, result.usage_unread = usage, reason
-        result.tool_calls = {"bash": {"calls": 3}}
-        return result
-
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread_result)
+    store, run = review_store(tmp_path, clone, usage, reason)
+    exc = sessions.UsageUnreadError(run)
+    exc.worktree = clone
+    held_file = store.root / "changes" / "c1" / "held.json"
     real_write = Store.write
 
-    def refuse_accounting(self, lock, c):
-        if c.spend.credits or c.spend.unread or c.tool_use.tools:  # the write that counts the session fails once
-            msg = "log write refused"
+    def refuse_counting(self, lock, change):  # the older build's gate and hold were written, its count never was
+        if change.counted_holds:
+            msg = "counting refused"
             raise OSError(msg)
-        return real_write(self, lock, c)
+        return real_write(self, lock, change)
 
-    monkeypatch.setattr(Store, "write", refuse_accounting)
-    with pytest.raises(OSError, match="log write refused"):
-        runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+    monkeypatch.setattr(Store, "write", refuse_counting)
+    with pytest.raises(OSError, match="counting refused"):
+        runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
     monkeypatch.setattr(Store, "write", real_write)
-    assert (store.root / "changes" / "c1" / "held.json").exists()
+    real = held.Held.model_validate_json(held_file.read_text())
+    store.write(Lock("c1"), real.change)
+    data = json.loads(held_file.read_text())
+    data.pop("change")
+    data.pop("label")
+    data["run"].pop("counted")
+    held_file.write_text(json.dumps(data))
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a legacy hold starts no session"))
 
-    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a counted hold starts no session"))
-    restarted = store.read("c1")
-    runner._step(store, Lock("c1"), restarted, restarted.step, clone)  # noqa: SLF001
+    for _ in range(2):  # a restart counts it once; a second one changes nothing
+        restarted = store.read("c1")
+        runner._step(store, Lock("c1"), restarted, loop.next_step(restarted, NOW), clone)  # noqa: SLF001
     counted = store.read("c1")
-    sessions_logged = [e["session"] for e in store.events("c1") if e.get("event") == "step"]
-    assert (counted.spend.credits, counted.spend.unread) == (spent, sessions_logged if unread_marked else [])
-    assert counted.tool_use.tools["bash"].calls == 3
+    assert (counted.spend.credits, counted.spend.unread) == (0.0, ["s1"])  # unknown, never zero
+    assert "bash" not in counted.tool_use.tools
+    assert review_loop(store) == (0, 0)
 
     accepted = answer(store, counted, "accept")
-    runner._step(store, Lock("c1"), accepted, accepted.step, clone)  # noqa: SLF001
-    final = store.read("c1")
-    assert (final.spend.credits, final.tool_use.tools["bash"].calls) == (spent, 3)
-    assert final.step.kind == K.REVIEW
+    runner._step(store, Lock("c1"), accepted, loop.next_step(accepted, NOW), clone)  # noqa: SLF001
+    assert review_loop(store) == (1, 1)
+    assert (store.read("c1").spend.credits, store.read("c1").spend.unread) == (0.0, ["s1"])
