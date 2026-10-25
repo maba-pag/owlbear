@@ -33,7 +33,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import amendments
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
-from owlbear_delivery_next.workflow_steps import disposable, held, pending_child, plan_round
+from owlbear_delivery_next.workflow_steps import disposable, held, pending_child, plan_round, sessions
 
 K = StepKind
 DONE = Termination(confirmed=True)
@@ -462,7 +462,7 @@ def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_and_its_retry_reru
     assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 2, 1)  # the retry reran the child alone
     assert (c.spend.credits, c.spend.unread) == (pytest.approx(2.5 + 3.5), paid.children[:1])
     assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)  # each attempt once
-    assert (c.counted_children, c.pending_child) == (paid.children[1:], None)
+    assert (c.counted_children, c.pending_child) == (paid.children, None)  # each child's receipt once
     if parent == "plan":
         assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
     else:
@@ -645,6 +645,64 @@ def test_a_confirmed_child_whose_read_only_cleanup_fails_is_kept_before_it_and_n
     else:
         (a,) = c.amendments
         assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[-1])
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_an_unread_child_whose_cleanup_fails_keeps_its_own_gate_and_count_until_the_owner_retries(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    store = held_and_accepted(tmp_path, change_repo, paid, parent)
+    paid.verdicts.append(passing(parent))
+    paid.unread_children = 1
+    real_unlink, armed = Path.unlink, [True]
+
+    def unlink(self, *args, **kwargs):
+        if armed and self.name == disposable.LIVE:
+            armed.clear()
+            msg = "cleanup refused"
+            raise OSError(msg)
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pytest.raises(OSError, match="cleanup refused") as failed:  # the cleanup's own failure, as it is
+        restart(tmp_path, change_repo)
+    assert isinstance(failed.value.__context__, sessions.UsageUnreadError)
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    (store.root / "changes" / "c1" / disposable.LIVE).unlink()  # its process ended: only the stale marker is cleared
+
+    for _ in range(2):  # the child's own gate waits for the owner: nothing runs, nothing counts again
+        c = restart(tmp_path, change_repo).read("c1")
+        q = loop.open_question(c)
+        assert q is not None
+        assert [o.id for o in q.options] == ["retry"]  # its own gate, never the parent's accept
+        assert len(paid.children) == 1
+        assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children, 2.5)
+        assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
+        assert [e["label"] for e in Store(tmp_path / "store").events("c1") if e.get("label") == LABELS[parent]] == [
+            LABELS[parent]
+        ]
+    if parent == "amend":
+        assert c.pending_child is not None  # the same candidate waits, its proposer's route kept
+        assert (c.pending_child.parent, c.pending_child.run, [a.verdict for a in c.amendments]) == (
+            c.amendments[0].id,
+            None,
+            [""],
+        )
+    else:
+        assert (c.plan.version, c.loops[PLAN].round, c.step.mode) == (1, 0, "challenge")
+
+    store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="retry"))
+    c = restart(tmp_path, change_repo).read("c1")  # the owner's retry runs the child alone
+    assert (len(paid.parents), len(paid.children)) == (1, 2)
+    assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children[:1], 2.5 + 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[1])
         assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
 
 

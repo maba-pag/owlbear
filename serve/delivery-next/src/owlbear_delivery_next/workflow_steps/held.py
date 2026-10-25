@@ -397,6 +397,8 @@ def gate_unread(store: Store, lock: Lock, exc: sessions.UsageUnreadError) -> Non
     record, so the run is never lost and never paid for again; the gate and its count then come from that one Change.
     """
     kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
+    if exc.run.session_id in kept.counted_children:  # a paid child's own gate and count are durable already
+        return
     here = head(exc.worktree) if exc.worktree else None
     here = here if here and exc.run.head in {None, here} else None  # the result's own commit is still HEAD
     label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)

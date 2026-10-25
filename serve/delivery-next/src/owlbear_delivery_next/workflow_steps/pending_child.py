@@ -61,8 +61,8 @@ def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], sta
 
     *parent* is the child's label and what it judges. *start* runs the session and passes its runs to the keeper it is
     given once their read-only checks pass, before its own cleanup can fail; a run no keeper saw is kept on return. A
-    run that is not confirmed gone, or whose usage is unread, is not kept: the session's own gates decide it, as
-    without a pending record.
+    run that is not confirmed gone is not kept: its stop decides. A confirmed one whose usage is unread is never kept
+    or judged: its own retry-only gate and its accounting are written there, before that cleanup (`_unread`).
     """
     pending = change.pending_child
     if pending is not None and pending.run is not None:
@@ -79,11 +79,26 @@ def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], sta
                 kept.run = held.dump_run(run)
                 change.pending_child = kept
                 _kept(store, lock, change, kept)
+            elif sessions.unread(run):
+                _unread(store, lock, change, run, label)
 
     verdict, run = start(keep)
     if all(r is not run for r in seen):
         keep([run])
     return verdict, run
+
+
+def _unread(store: Store, lock: Lock, change: Change, run: Run, label: str) -> None:
+    """A confirmed child whose usage is unread: its own retry-only gate and accounting, durable in one write (TD-54).
+
+    It is the gate the runner would install once the session's error reaches it, written before the cleanup after
+    the session can fail; its receipt stops that gate counting it again. The owner's retry runs a new child only.
+    """
+    gated = loop.apply(change, session_result.usage_gate(run, change.step.kind, accept=False), datetime.now(UTC))
+    gated.counted_children = [*gated.counted_children, run.session_id]
+    step = sessions.account(gated, run, {"kind": change.step.kind, "exit": Exit.ASK, "label": label})
+    store.write(lock, gated)
+    sessions.announce(store, lock, gated.slug, step)
 
 
 def _reloaded(data: HeldRun) -> Run:
