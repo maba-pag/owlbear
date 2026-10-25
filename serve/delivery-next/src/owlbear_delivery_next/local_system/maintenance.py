@@ -235,6 +235,18 @@ class Maintenance:
         with self._locked() as ledger:
             return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
 
+    def recording(self, project: str, kind: Kind, pids: dict[int, float | None], hint: str) -> str:
+        """The slot of the lease that records every one of *pids*: *hint* when it is one, else the newest.
+
+        Empty when none does. A lease that records other processes never matches, so a stale hint or import mark
+        cannot name it.
+        """
+        with self._locked() as ledger:
+            found = [s for s in ledger.sessions if s.project == project and s.kind == kind and recorded(s, pids)]
+        if not found:
+            return ""
+        return next((s.slot for s in found if s.slot == hint), max(found, key=lambda s: s.started_at).slot)
+
     def adopt_uncertain(  # noqa: PLR0913 - one import's identity, all needed to decide its generation
         self,
         source: str,

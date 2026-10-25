@@ -128,9 +128,11 @@ class Curation:
             runs.left,
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
-        if runs.left and not runs.left_key:
-            # The import's lease is bound by its own write, so a restart before lingering() still recognises it.
-            runs.left_key = imported or self.maintenance.imported_slot(str(self.path()))
+        if runs.left:
+            # The key names the lease that records these exact PIDs, proved again at every restart before the pending
+            # gate, so a stale key or an import mark for another snapshot never binds.
+            hint = imported or self.maintenance.imported_slot(str(self.path()))
+            runs.left_key = self.maintenance.recording(SLOT, "curation", runs.left, runs.left_key or hint)
         if runs.left and not self.maintenance.pending("curation"):
             # An import already recorded (even an empty one) must not let these PIDs be cleared as history. A settled
             # run's own lease covers them again after a recovery, so an unchanged snapshot never gets a fresh hold.

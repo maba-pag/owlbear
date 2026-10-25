@@ -335,6 +335,53 @@ def test_a_known_birth_after_a_recovered_legacy_import_is_held_and_its_start_run
     assert calls == []
 
 
+def test_a_newer_snapshot_binds_its_own_lease_after_a_failed_key_write(root, monkeypatch) -> None:
+    """Review: a stale import mark never names another snapshot's lease; B's own durable lease is bound at restart."""
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
+    legacy_left_file({4242: None})
+    recovered_by_reboot(curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root)))  # A: 4242, recovered
+    legacy_left_file({4343: None})  # a historical producer's newer snapshot, written without a key
+    real_write = curation.Curation._write  # noqa: SLF001 - the runs record's own writer, wrapped to fail once
+    failed: list[bool] = []
+
+    def fail_once(self, runs) -> None:
+        if not failed:
+            failed.append(True)
+            msg = "disk full"
+            raise OSError(msg)  # B's lease is already durable; the runs record is not
+        real_write(self, runs)
+
+    monkeypatch.setattr(curation.Curation, "_write", fail_once)
+    with pytest.raises(OSError, match="disk full"):
+        curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    monkeypatch.setattr(curation.Curation, "_write", real_write)
+    restarted = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    [held] = [s for s in json.loads(restarted.maintenance.path.read_text())["sessions"] if s["state"] == "held"]
+    assert (restarted.left_key, restarted.maintenance.pending("curation")) == (held["slot"], True)
+    booted = restarted.maintenance.boot
+    restarted.maintenance.boot = lambda: booted() + 1  # the owner rebooted and recovers B
+    restarted.maintenance.recover(held["id"], rebooted=True)
+    slots = Slots(lambda: 1, closed=True)
+    after = curation.Curation(slots, shared=lambda: DataRepo(root))  # before lingering() clears the unchanged snapshot
+    assert (after.maintenance.pending("curation"), len(after.maintenance.read()["sessions"]), after.left_key) == (
+        False, 2, held["slot"],
+    )  # fmt: skip
+    assert (slots.counts(curation.SLOT)[2], after.left) == (0, {4343: None})
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {5555: 2.0}})  # noqa: SLF001 - a genuinely newer process
+    calls: list[str] = []
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]))
+
+    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    assert (later.maintenance.pending("curation"), len(later.maintenance.read()["sessions"])) == (True, 3)
+    later.start("shop")
+    drained(later)
+    assert calls == []
+
+
 def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(root) -> None:
     slots = Slots(lambda: 1)
 
