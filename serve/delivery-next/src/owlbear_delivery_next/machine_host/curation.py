@@ -14,6 +14,7 @@ import asyncio
 import tempfile
 import threading
 import uuid
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -96,16 +97,22 @@ def _run(cfg: sdk_adapter.Session) -> Run:
 class Curation:
     """The machine's automatic curation: a queue of folders, one session at a time."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917 - the machine's seams: the slots, its fence, pause, stop barrier and runner
         self,
         slots: Slots,
         shared: Callable[[], data_repo.DataRepo | None] = data_repo.locate,
         run: Callable[[sdk_adapter.Session], Run] = _run,
         fenced: Callable[[], str] = str,
         paused: Callable[[], bool] = lambda: False,
+        admission: Callable[[], AbstractContextManager[object]] = nullcontext,
     ) -> None:
-        """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone."""
+        """Runs a restart interrupted end as failed; their processes, if any, still count until they are gone.
+
+        *admission* is the machine's stop barrier: a run is admitted or refused under it, so a stop when idle sees
+        every admitted run. It is taken before ``lock``, never after.
+        """
         self.slots, self.shared, self.run, self.fenced, self.paused = slots, shared, run, fenced, paused
+        self.admission = admission
         self.lock = threading.RLock()
         self.queue, self.worker, self.running = list[str](), None, ""
         self.asked: dict[str, Asked] = {}  # each queued folder's trigger, read again at its grant
@@ -304,14 +311,16 @@ class Curation:
                 self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
                 return False
             turn.wait(5)
-        if why := self.fenced():
+        with self.admission():  # the stop barrier: a stop when idle sees this run admitted, or it is refused here
+            why = self.fenced()
+            with self.lock:  # the automatic switches are read at the grant, not when the request was made
+                asked = self.asked.get(folder, "manual")
+                admitted = not why and (asked == "manual" or self.allowed(asked))
+                self.running = folder if admitted else ""
+        if why:
             self.slots.give(SLOT, key)
             self._save(folder, FolderRun(state="failed", started_at=started, ended_at=started, reason=why))
             return False
-        with self.lock:  # the automatic switches are read at the grant, not when the request was made
-            asked = self.asked.get(folder, "manual")
-            admitted = asked == "manual" or self.allowed(asked)
-            self.running = folder if admitted else ""
         if not admitted:  # the folder stays due, so a later allowed trigger runs it
             self.slots.give(SLOT, key)
             prior = self.load().folders.get(folder, FolderRun())  # keeps what the last finished run left pending

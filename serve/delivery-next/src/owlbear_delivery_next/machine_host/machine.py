@@ -83,9 +83,18 @@ class Machine:
         self.auto = Auto(self)
         self.curation = Curation(
             self.slots,
-            fenced=lambda: self.updating or ("stopping" if self.stopping.is_set() else ""),
+            fenced=self._curation_fence,
             paused=lambda: self.paused,
+            admission=lambda: self.lock,  # the stop barrier pause_stop and idle_stop already use
         )
+
+    def _curation_fence(self) -> str:
+        """Why no memory curation starts now: an update's fence, a stop, or a stop when idle, which starts nothing."""
+        if self.updating:
+            return self.updating
+        if self.stopping.is_set():
+            return "stopping"
+        return "OwlBear stops once nothing runs: no memory curation starts" if self.ending else ""
 
     def _sessions(self) -> int:
         """The machine's sessions at once, read at each grant; the last one read while machine.json is unreadable."""
