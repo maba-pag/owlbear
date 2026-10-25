@@ -1,12 +1,14 @@
 """TD-56: an agent step's result whose usage stayed unread is held; the owner may accept it while the step, brief
 version and commit it depends on still match, else only run the step again."""
 
+import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
@@ -67,7 +69,7 @@ def commit(work: Path, name: str) -> str:
 
 
 def built(cfg, head: str, *, unread: bool) -> Run:
-    payload = tools.BuildResult(summary="Added b.", changed_paths=["b.txt"], checks=[])
+    payload = tools.BuildResult(summary="Added b.", checks=[])
     run = Run(cfg.session_id, "result", payload, head=head, termination=Termination(confirmed=True))
     run.usage, run.usage_unread = ({"error": "RuntimeError"}, UNREAD) if unread else ({"models": {}}, "")
     return run
@@ -159,6 +161,24 @@ def test_a_declined_or_stale_hold_runs_the_step_again(gated, clone, monkeypatch,
     assert len(calls) == 1
     assert events == ([] if change_ == "retry" else ["held-stale"])
     assert not (store.root / "changes" / "c1" / "held.json").exists()
+
+
+def test_a_build_held_before_changed_paths_left_the_schema_is_still_accepted(gated, clone, monkeypatch):
+    store, c = gated
+    c = answer(store, c, "accept")
+    path = store.root / "changes" / "c1" / "held.json"
+    hold = json.loads(path.read_text())
+    del hold["run"]["changed"]  # written by the earlier release: the agent's own paths, none of Delivery's
+    hold["run"]["payload"]["args"]["changed_paths"] = ["b.txt"]
+    path.write_text(json.dumps(hold))
+    with pytest.raises(ValidationError, match="changed_paths"):  # a new call stays strict
+        tools.BuildResult.model_validate(hold["run"]["payload"]["args"])
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("an accepted hold starts no session"))
+    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    done = store.read("c1")
+    assert (done.step.kind, done.outcome.exit) == (K.REVIEW, Exit.DONE)
+    assert done.plan.tasks[0].earlier == "Added b. Changed: b.txt"
+    assert [e["event"] for e in store.events("c1") if e.get("event", "").startswith("held-")] == ["held-accepted"]
 
 
 def test_a_damaged_hold_is_never_processed(gated):

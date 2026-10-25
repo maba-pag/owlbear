@@ -96,6 +96,7 @@ class Session:
     policy: Policy
     observe: Callable[[], tools.Worktree]
     checks: tuple[str, ...]
+    packages: tuple[tuple[str, str], ...] = ()  # the profile's (package, check) pairs a plan's error hint names
     submit: tools.Spec = tools.SUBMIT
     scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to
     item: ItemRef | None = None  # the conversation item a build task answers, if any

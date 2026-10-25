@@ -71,7 +71,7 @@ async def fake(cfg):
     if mode == "primary":
         raise PrimaryError("synthetic primary")
     return Run(
-        cfg.session_id, "result", payload=tools.BuildResult(summary="kept", changed_paths=[], checks=[]),
+        cfg.session_id, "result", payload=tools.BuildResult(summary="kept", checks=[]),
         usage={"input_tokens": 7}, pids={4242: 1.0}, termination=Termination(confirmed=True),
         model_check="verified",
     )

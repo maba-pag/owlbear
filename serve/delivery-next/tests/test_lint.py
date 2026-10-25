@@ -52,8 +52,8 @@ def gate(work: Path, since: str, log: list[dict]) -> Gate:
     return Gate(cfg, Run("s1"), lambda **e: log.append(e), lambda: None)
 
 
-def submit(g: Gate, *paths: str) -> tuple[str, bool]:
-    return g.call(tools.SUBMIT, {"summary": "Work.", "changed_paths": list(paths), "checks": []})
+def submit(g: Gate) -> tuple[str, bool]:
+    return g.call(tools.SUBMIT, {"summary": "Work.", "checks": []})
 
 
 def tool(folder: Path, name: str, script: str) -> Path:
@@ -76,7 +76,7 @@ def test_a_lint_error_in_a_changed_file_refuses_the_submit_until_it_is_fixed(cha
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "import sys\nx=1\n"})
     g = gate(change_repo, since, log)
-    text, ok = submit(g, "new.py")
+    text, ok = submit(g)
     assert not ok
     assert "- lint: ruff check found problems in new.py - fix them, commit, then submit again:\n" in text
     assert "F401" in text
@@ -84,7 +84,7 @@ def test_a_lint_error_in_a_changed_file_refuses_the_submit_until_it_is_fixed(cha
     assert "`os`" not in text  # old.py is not the task's change
     assert "- lint: ruff format found problems in new.py" in text
     commit(change_repo, {"new.py": "x = 1\n"})
-    assert submit(g, "new.py") == (ACCEPTED, True)
+    assert submit(g) == (ACCEPTED, True)
     events = [e for e in log if e["event"] == "lint"]
     assert [e["passed"] for e in events] == [False, True]
     assert events[1]["ran"] == [
@@ -99,9 +99,9 @@ def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_th
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "import sys\n"})
     g = gate(change_repo, since, log)
-    assert [submit(g, "new.py")[1] for _ in range(lint.REFUSALS)] == [False] * lint.REFUSALS
+    assert [submit(g)[1] for _ in range(lint.REFUSALS)] == [False] * lint.REFUSALS
     assert g.run.invalid == 0  # the invalid-submit limit is not spent on lint
-    assert submit(g, "new.py") == (ACCEPTED, True)
+    assert submit(g) == (ACCEPTED, True)
     assert [e["event"] for e in log if e["event"].startswith("lint-")] == ["lint-unresolved"]
 
 
@@ -109,7 +109,7 @@ def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_th
 def test_python_without_a_ruff_configuration_is_not_linted(change_repo: Path) -> None:
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "import sys\nx=1\n"})
-    assert submit(gate(change_repo, since, log), "new.py")[1]
+    assert submit(gate(change_repo, since, log))[1]
     assert [e for e in log if e["event"] == "lint"] == [
         {"event": "lint", "ran": [], "skipped": ["ruff: no configuration for new.py"], "passed": True}
     ]
@@ -131,11 +131,11 @@ def test_a_broken_linter_is_reported_once_then_skipped(change_repo: Path, tmp_pa
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "x = 1\n"})
     g = gate(change_repo, since, log)
-    text, ok = submit(g, "new.py")
+    text, ok = submit(g)
     assert not ok
     assert "- lint: ruff check could not run (exited 2) on new.py" in text
     assert "ruff: panicked" in text
-    assert submit(g, "new.py") == (ACCEPTED, True)
+    assert submit(g) == (ACCEPTED, True)
     skipped = [e for e in log if e["event"] == "lint-skipped"]
     assert skipped == [
         {"event": "lint-skipped", "tool": "ruff check", "reason": "exited 2"},
@@ -150,7 +150,7 @@ def test_node_linters_run_from_their_configuration_on_its_files(change_repo: Pat
     commit(change_repo, {"web/biome.json": "{}", "eslint.config.js": "export default [];\n", ".gitignore": "node_*\n"})
     since, log = head(change_repo), []
     commit(change_repo, {"web/src/a.ts": "let a = 1\n", "tool.js": "x\n"})
-    text, ok = submit(gate(change_repo, since, log), "tool.js", "web/src/a.ts")
+    text, ok = submit(gate(change_repo, since, log))
     assert not ok
     assert "- lint: biome found problems in web/src/a.ts - fix them, commit, then submit again:\n" in text
     assert "biome check --colors=off --no-errors-on-unmatched src/a.ts" in text
@@ -168,7 +168,7 @@ def test_biome_lints_changed_json_and_css_and_eslint_only_scripts(change_repo: P
     commit(change_repo, {"web/biome.json": "{}", "eslint.config.js": "export default [];\n", ".gitignore": "node_*\n"})
     since, log = head(change_repo), []
     commit(change_repo, {"web/app.css": "a {}\n", "web/data.json": "{}\n", "web/a.ts": "x\n", "web/n.md": "x\n"})
-    assert submit(gate(change_repo, since, log), "web/a.ts", "web/app.css", "web/data.json", "web/n.md")[1]
+    assert submit(gate(change_repo, since, log))[1]
     ran = next(e for e in log if e["event"] == "lint")["ran"]
     assert ran == [
         {"tool": "biome", "files": ["web/a.ts", "web/app.css", "web/data.json"], "state": "passed"},
@@ -290,7 +290,7 @@ def test_an_ending_during_lint_is_not_held_up_and_the_result_is_not_accepted(cha
     g = gate(change_repo, since, log)
     linting, release, answer = threading.Event(), threading.Event(), []
     g.lint.check = lambda *_: linting.set() or (release.wait(10) and [])
-    builder = threading.Thread(target=lambda: answer.append(submit(g, "new.py")))
+    builder = threading.Thread(target=lambda: answer.append(submit(g)))
     builder.start()
     try:
         assert linting.wait(5)

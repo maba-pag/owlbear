@@ -15,7 +15,7 @@ from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown
 from owlbear_delivery_next.runtimes.step_budget import Budget
 
 STEP = sdk_adapter._Step  # noqa: SLF001 - the real step and result gate are under test
-PAYLOAD = tools.BuildResult(summary="No edit was needed", changed_paths=[], checks=[])
+PAYLOAD = tools.BuildResult(summary="No edit was needed", checks=[])
 
 
 class Clock:
@@ -230,8 +230,22 @@ def test_recording_a_tool_cannot_waive_the_result_cutoff(tmp_path, clock, monkey
         assert step.run.ending == "deadline"
         assert step.run.payload is None
         assert step.run.head is None
+        assert step.run.changed == []
         assert step.run.tool_calls[cfg.submit.name]["late"] == 1
         assert step.run.tool_calls[cfg.submit.name]["calls"] == 1
+
+    asyncio.run(scenario())
+
+
+def test_model_revocation_clears_the_new_changed_path_evidence_as_well_as_the_result(tmp_path):
+    async def scenario():
+        step = STEP(configured(tmp_path), asyncio.get_running_loop())
+        step.run.head, step.run.changed, step.run.payload = "a" * 40, ["app.py"], PAYLOAD
+        step.gate.wrong_model("synthetic model mismatch")
+        assert step.run.head is None
+        assert step.run.changed == []
+        assert step.run.payload is None
+        assert step.run.model_check == "mismatch"
 
     asyncio.run(scenario())
 
