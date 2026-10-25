@@ -240,7 +240,29 @@ repair (#607) binds displayed decisions, confirmations and mutations to the same
 captured scope and rejects superseded responses. Cleanup preservation (#610) keeps
 unsupported nested repositories and entries in their workspace instead of omitting
 them from a verified archive; supported links and file modes are preserved without
-following symlink parents. Other packages remain open until their own merged-code
+following symlink parents. The owner-continuation candidate (#618, R12) sends a
+replacement check session the owner's pending answer before its delivery is recorded,
+and keeps an accepted held result until its final write is durable, so a restart
+applies it once without a paid rerun. An accepted review's round and findings are
+buffered until that final write. A held result is written to its hold file first, with its full run, usage, tool
+accounting and step label; it is counted once through a receipt written with the spend, and a restart with an
+uncounted hold counts it before any step runs. When the hold file cannot be written, the Change keeps the same held
+record (format 8), so the owner's accept and the count survive without a paid rerun; if the Change write fails too,
+the error is reported and nothing is counted. A hold written before this receipt existed is marked unread once,
+never zero-filled or recharged. An accepted fallback is cleared from the Change once its result is durable, so it
+cannot suppress a later step; a failed clear is retried by the next run without a session or a second count. A
+declined or stale hold is retired durably, its fallback with it, before anything runs in its place, so a HEAD that
+returns never revives it; a later hold is never removed with it. A count that failed after its hold was written goes
+on the latest folded Change: the owner's pause, abandon or new brief stays, and the hold's gate comes back only while
+its step and brief still fit. Held runs and pending child runs with unknown fields are refused, never rewritten. An
+accepted parent that starts a paid child (the plan challenge, an amendment challenge) first writes its checkpoint
+with the hold's receipt; the child's validated run is kept on the Change as soon as it returns (in a capture file the
+next run adopts when that write fails) and counts once, in
+the write that settles its verdict, so a failed settlement resumes from it without a second session. A child whose
+step the owner has left counts once without routing it; a paused one waits for its step. A wrong-model or failed
+challenger judges nothing and reruns alone, as does an unread one the owner retries. The
+branch carries main's #653 lesson delivery and exposure logging, which runs after the replacement check's send and
+before its delivery is recorded. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
 Remote-branch retirement (#612) uses an atomic expected-head ref update, never

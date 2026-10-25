@@ -20,7 +20,7 @@ from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
-from owlbear_delivery_next.workflow_steps import overlap, sessions
+from owlbear_delivery_next.workflow_steps import held_writes, overlap, pending_child, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -50,7 +50,7 @@ def scopes(store: Store, slug: str) -> dict[str, list[str]]:
 
 
 def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and what its challenge reads
-    store: Store,
+    store: Store | held_writes.Deferred,
     lock: Lock,
     change: Change,
     path: Path,
@@ -58,6 +58,7 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
     result: Result,
     profile: Profile,
     others: Mapping[str, Sequence[str]],
+    events: list[dict[str, object]],
 ) -> Result:
     """The planner's accepted plan: recorded with its revision's marks, then challenged, unless the loop ends."""
     if result.exit != Exit.DONE or result.plan is None:
@@ -69,8 +70,8 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
     then = plan_rounds.revised(change, rejected)
     if then in {"challenge", "recheck"}:
         change.step.mode = RECHECK if then == "recheck" else plan_rounds.CHALLENGE
-        store.write(lock, change)  # a restart challenges this plan instead of planning again
-        return challenge(store, lock, change, path, profile, others)
+        store = held_writes.checkpoint(store, lock, change)  # a restart challenges this plan instead of planning again
+        return challenge(store, lock, change, path, profile, others, events)
     if then == "ask":
         q = plan_rounds.last(change.loops[PLAN])
         return loop.StepResult(exit=Exit.ASK, reason=q.text, cause=q.cause, question=q)
@@ -78,9 +79,18 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
 
 
 def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
-    store: Store, lock: Lock, change: Change, path: Path, profile: Profile, others: Mapping[str, Sequence[str]]
+    store: Store,
+    lock: Lock,
+    change: Change,
+    path: Path,
+    profile: Profile,
+    others: Mapping[str, Sequence[str]],
+    events: list[dict[str, object]],
 ) -> Result:
-    """One round on the Change's plan; a failed session counts none and its retry challenges the same plan."""
+    """One round on the Change's plan; a failed session counts none and its retry challenges the same plan.
+
+    The challenge's step event joins *events*; its caller logs it once the Change it settles is written.
+    """
     lp = plan_rounds.loop(change, rounds.pinned(change, PLAN, store.settings(), "planner"), datetime.now(UTC))
     keys, cap = tuple(f.id for f in plan_rounds.pending(lp)), 0 if change.step.mode == RECHECK else None
     plan = change.plan
@@ -101,7 +111,12 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             memory=sessions.memory(store),
         )
 
-    verdict, run = sessions.review_run(store, lock, change, path, made, LABEL)
+    def start(keep: sessions.Keep) -> pending_child.Judged:
+        return sessions.review_run(store, lock, change, path, made, LABEL, keep=keep)
+
+    verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
+    if (step := pending_child.booked(change, run, {"exit": verdict.exit})) is not None:
+        events.append(step)  # counted here; the caller's one write commits it with the verdict and its round
     return judged(change, verdict, run.payload)
 
 
@@ -135,6 +150,7 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     modes = {plan_rounds.CHALLENGE, RECHECK, plan_rounds.RECONSIDER, plan_rounds.SETTLED}
     if s.kind != StepKind.PLAN or s.mode not in modes:
         return False
+    events: list[dict[str, object]] = []
     if s.mode == plan_rounds.SETTLED:
         result = loop.StepResult(exit=Exit.DONE, plan=change.plan, reason="the owner settled each disputed finding")
     else:
@@ -144,12 +160,13 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         if s.mode == plan_rounds.RECONSIDER:
             return _reconsider(store, lock, change, path)
         others = scopes(store, change.slug)
-        result = challenge(store, lock, change, path, profile, others)
+        result = challenge(store, lock, change, path, profile, others, events)
         overlap.record(change, result, others, path)
     end = datetime.now(UTC)
     event = {"event": "step", "at": end.isoformat(timespec="seconds"), "kind": StepKind.PLAN, "exit": result.exit}
-    store.log(lock, change.slug, event | {"reason": result.reason, "mode": s.mode})
     store.write(lock, loop.apply(change, result, end))
+    for step in [*events, event | {"reason": result.reason, "mode": s.mode}]:  # logged once their settlement is durable
+        sessions.announce(store, lock, change.slug, step)
     return True
 
 

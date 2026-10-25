@@ -1,5 +1,8 @@
 """The planner's challenge rounds (TD-190, TD-208): findings by ID, rejections judged, the owner, the end."""
 
+import errno
+import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -461,3 +464,41 @@ def test_many_plan_rounds_never_reach_the_old_plan_gate():
         r = StepResult(exit=Exit.RETRY, plan=c.plan, reason="plan challenge: x", challenged=True, ungated=True)
         c = loop.apply(c, r, NOW)
     assert (c.step.kind, c.outcome.exit, c.questions) == (K.PLAN, Exit.RETRY, [])
+
+
+def test_a_known_usage_challenge_whose_settlement_write_fails_is_charged_once_across_a_fresh_reload(
+    store, change_repo, mp, tmp_path, monkeypatch
+):
+    """The paid challenge's verdict, spend and round are one settlement: a fault there must not re-run the child."""
+    real_run = mp.run
+
+    async def billed(cfg):
+        done = await real_run(cfg)
+        paid = 1.0 if cfg.submit is tools.PLAN else 3.5
+        return replace(done, usage={"credits": paid})
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", billed)
+    real_write = Store.write
+    armed = {"on": True}
+
+    def faulty(self, lock, change):
+        if armed["on"] and change.slug == "c1" and change.step.mode is None and change.spend.credits >= 4.5:
+            armed["on"] = False  # the settlement write: the verdict, the spend and the round together
+            raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+        return real_write(self, lock, change)
+
+    monkeypatch.setattr(Store, "write", faulty)
+    mp.plans += [plan(1)]
+    mp.reviews += [review(upheld={})]  # a pass: the challenge's one round
+    with pytest.raises(OSError, match="No space left"):
+        step(store, change_repo)
+
+    assert [e for e in store.events("c1") if e.get("kind") == "plan-challenge"] == []  # logged only once durable
+    monkeypatch.setattr(Store, "write", real_write)
+    fresh = Store(tmp_path / "store")
+    step(fresh, change_repo)
+    c = fresh.read("c1")
+    assert mp.kinds().count("challenge") == 1  # the paid challenge ran once, never again after the fault
+    assert c.spend.credits == pytest.approx(4.5)  # planner 1.0 + challenge 3.5, once each
+    assert [e["kind"] for e in fresh.events("c1") if e.get("kind") == "plan-challenge"] == ["plan-challenge"]
+    assert (c.step.mode, c.outcome.exit) == (None, Exit.DONE)

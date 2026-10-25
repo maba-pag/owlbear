@@ -131,10 +131,10 @@ def test_a_role_needs_only_the_fields_its_work_reads():
     assert set(config.used("builder")) == set(config.Effective.model_fields) - {"runtime", "visible", "categories"}
 
 
-def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch):
+def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch, tmp_path):
     asked: list[SettingsUnset] = []
     c = change(StepKind.BUILD)
-    store = SimpleNamespace(settings=lambda: None)
+    store = SimpleNamespace(root=tmp_path, read=lambda _slug: c, settings=lambda: None)
     monkeypatch.setattr(decision_publication, "resume", lambda *_a: c)
     monkeypatch.setattr(runner.clarification, "checked", lambda _s, _l, c: c)
     monkeypatch.setattr(unset_settings, "asked", lambda _s, _l, exc: asked.append(exc))
@@ -248,7 +248,13 @@ def test_an_unset_watcher_switch_asks_before_a_step_records_anything(monkeypatch
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(runner, "git_common_dir", lambda _repo: tmp_path / ".git")
     monkeypatch.setattr(runner.review, "started", lambda *a: recorded.append(a))
-    store = SimpleNamespace(read_profile=lambda: None, settings=lambda: no_switch, write=lambda *a: recorded.append(a))
+    store = SimpleNamespace(
+        root=tmp_path,
+        read=lambda _slug: c,
+        read_profile=lambda: None,
+        settings=lambda: no_switch,
+        write=lambda *a: recorded.append(a),
+    )
     c = change(StepKind.BUILD)
     with pytest.raises(SettingsUnset, match="watcher"):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
