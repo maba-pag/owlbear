@@ -72,8 +72,12 @@ function ownControl(key) {
       machineEdit(key, v === "" ? null : list ? (v === "none" ? [] : v.split(",").map((f) => f.trim()).filter(Boolean))
         : /^\d+$/.test(v) ? Number(v) : v);
     };
-    const typedText = state.machineText?.[key];  // as typed until a save, even where it equals the saved list
-    const shown = typedText ?? (value === null || value === undefined ? "" : list ? said(key, value) : String(value));
+    const typedText = state.machineText?.[key];  // as typed, shown only while its items are the field's own now
+    const items = (t) => JSON.stringify(t.split(",").map((f) => f.trim()).filter(Boolean));
+    const same = (t) => items(t) === JSON.stringify(value ?? []);
+    const fresh = value === null || value === undefined ? "" : list ? said(key, value) : String(value);
+    const shown = typedText !== undefined && (typedText.trim() === "none" ? Array.isArray(value) && !value.length
+      : typedText.trim() === "" ? value === null : same(typedText)) ? typedText : fresh;
     control = html`<p-input-text id=${`machine-${key}`} label=${MACHINE_LABELS[key]}
       inputmode=${list ? nothing : "numeric"} placeholder=${below} .value=${live(shown)}
       ?disabled=${common.disabled} @input=${count} @change=${count}></p-input-text>`;

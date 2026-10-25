@@ -349,6 +349,11 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     chats.fill("/w,/p")  # the saved list again, written differently: no edit
     save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
     expect(save).to_be_disabled()
+    other = registry.load().settings  # another page enrols other folders: the refresh shows them, not old text
+    registry.configure(other.model_copy(update={"enrolled_chats": ["/x"]}), registry.revision(other))
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+    expect(chats).to_have_value("/x")
+    expect(save).to_be_disabled()
 
 
 def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:

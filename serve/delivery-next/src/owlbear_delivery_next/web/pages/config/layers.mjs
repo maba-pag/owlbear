@@ -24,9 +24,15 @@ function saved(layer, key) {
   return Array.isArray(value) ? value.join(", ") || "none" : String(value);
 }
 
+// A list's text as typed, shown only while its items are what the field holds now: an edit's, else the saved
+// ones; display only, never an edit itself (so a reload or a conflict never turns old text into one).
+const typing = { project: {}, machine: {}, global: {} };
+
 // The edited layer's value of *key*: the draft as typed, else the saved value.
 export function own(key) {
-  return key in drafts[state.layer] ? drafts[state.layer][key] : saved(state.layer, key);
+  const value = key in drafts[state.layer] ? drafts[state.layer][key] : saved(state.layer, key);
+  const text = typing[state.layer][key];
+  return text !== undefined && canonical(key, text) === canonical(key, value) ? text : value;
 }
 
 export function inherited() {
@@ -38,8 +44,8 @@ export function inherited() {
 export function edit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
-  // a list keeps its text as typed (a comma, a space), counted as an edit only when its items differ (dirty)
-  if (!LISTS.includes(key) && canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
+  if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
+  if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
   show();
 }
