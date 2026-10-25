@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, RoleModel
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer, resolve
 from owlbear_delivery_next.state_store import profile_share
@@ -214,7 +214,9 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, f
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
     assert roles.chosen(store.settings(), StepKind.PLAN) == carried.MODELS["planner"]
     prof = store.read_profile()
-    assert (prof.format, prof.version, prof.runtime, prof.entries["rules"].evidence) == (2, 3, "vscode", "HTTP 403")
+    assert (prof.format, prof.version, prof.runtime, prof.entries["rules"].evidence) == (
+        PROFILE_FORMAT, 3, "vscode", "HTTP 403"
+    )  # fmt: skip
     assert "roles" not in prof.model_dump()
     saved = (root / "config.json").read_text()
     Store.open(repo).read_profile()
