@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import Scope, State
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
+from owlbear_delivery_next.change_contracts.decision_wording import problem
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, StepKind, Stop
 from owlbear_delivery_next.change_flow import loop, picks
@@ -28,6 +29,7 @@ from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.runtimes import step_decisions
 from owlbear_delivery_next.state_store import decision_store, read_backs
+from owlbear_delivery_next.state_store.decision_archive import whole
 from owlbear_delivery_next.workflow_steps import before, check, engine, pick, prepare, sessions
 
 if TYPE_CHECKING:
@@ -98,7 +100,7 @@ def _picked(c: Change) -> set[str] | None:
 
 
 def _said(d: Decision) -> Said:
-    return Said(title=d.title, statement=d.statement)
+    return Said(title=d.title, statement=whole(d))
 
 
 def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline:
@@ -165,7 +167,7 @@ def differences(seen: Snapshot, pinned_at: DecisionBaseline, now: DecisionBaseli
         elif old is None:
             lines.append(f"- new: {key} {title}: {_quoted(now.said[key].statement)}")
         else:
-            lines.append(f"- changed: {key} {title}: was {was}; now {_quoted(entry.decision.statement)}")
+            lines.append(f"- changed: {key} {title}: was {was}; now {_quoted(whole(entry.decision))}")
     return lines
 
 
@@ -287,7 +289,7 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
         return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc)[:600], stop=exc.stop(now)))
-    return _judged(view, c, now, store, lock)
+    return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
 
 
 def _refresh(store: Store) -> str:
@@ -296,6 +298,37 @@ def _refresh(store: Store) -> str:
         return decision_store.refresh(store.shared)
     except decision_store.DecisionsUnavailable as exc:
         return f"not refreshed: {exc}"
+
+
+def _faulty_wording(view: DataView, c: Change) -> list[str]:
+    return [why for d in in_force(view.snapshot, c) if (why := problem(d))]
+
+
+def _wording_faults(view: DataView, c: Change, now: datetime) -> Gate | None:
+    """Unrecoverable full wording blocks before baseline construction or any paid reassessment."""
+    if faults := _faulty_wording(view, c):
+        stopped = _stopped(ErrorKind.STATE, "; ".join(faults), FAULTY, "The full decision wording is resolved", now)
+        return Gate(c, stopped)
+    return None
+
+
+def unworded(view: DataView | None, c: Change) -> str:
+    """Why an approval may not pin *c*'s decisions yet: an in-force full wording cannot be read; "" otherwise."""
+    if view is None or not (faults := _faulty_wording(view, c)):
+        return ""
+    return f"the full decision wording is unresolved: {'; '.join(faults)}"[:600]
+
+
+def wording_stop(store: Store, c: Change, now: datetime) -> StepResult | None:
+    """The stop a challenger must not start under: an in-force full wording that cannot be read (TD-452)."""
+    if store.shared is None:
+        return None
+    try:
+        view = decision_store.load(store.shared, store.name)
+    except decision_store.DecisionsUnavailable:
+        return None  # the shaping sections report the unreadable decisions themselves
+    gate = _wording_faults(view, c, now)
+    return gate.result if gate else None
 
 
 def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock | None) -> Gate:

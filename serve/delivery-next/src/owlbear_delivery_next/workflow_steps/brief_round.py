@@ -73,6 +73,9 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             brief_rounds.idle(change, datetime.now(UTC))
             store.write(lock, change)
             return
+    if (stop := decisions_gate.wording_stop(store, change, now)) is not None:  # no challenger on unreadable wording
+        store.write(lock, loop.apply(change, stop, now))
+        return
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     change.names.worktree, change.step.started_at = str(path), now
     store.write(lock, change)

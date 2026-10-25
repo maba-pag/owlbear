@@ -167,5 +167,5 @@ def _pinned(baseline: DecisionBaseline | None, saved: list[Decision]) -> Decisio
             pin.said.pop(d.id, None)
             continue
         pin.revisions[d.id] = d.rule_revision
-        pin.said[d.id] = Said(title=d.title, statement=d.statement)
+        pin.said[d.id] = Said(title=d.title, statement=decision_archive.whole(d))
     return pin

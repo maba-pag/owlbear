@@ -242,7 +242,7 @@ def test_a_withdrawal_and_a_promotion_record_why_in_the_rationale_never_in_the_c
     wide = now(shared, act(owner, source, "promote", reason="Every project wants it.").json()["receipts"][0]["id"])
 
     assert now(shared, rule.id).rationale == "Small data.\n\nWhy it was withdrawn: No notes any more."
-    assert wide.rationale == "Why it changed: Every project wants it."
+    assert wide.rationale.endswith("\n\nWhy it changed: Every project wants it.")
     said = git(shared.root, "log", "--format=%B")
     assert ("No notes any more" in said, "Every project wants it" in said) == (False, False)
 

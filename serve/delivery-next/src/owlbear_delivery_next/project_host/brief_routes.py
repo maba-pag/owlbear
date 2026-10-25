@@ -67,7 +67,8 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
         return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"
-    if why := pick.unapproved(store, c, view):  # TD-459: approval pins the pick, never picks
+    # TD-459: approval pins the pick, never picks; wording is checked before the baseline reads it
+    if why := pick.unapproved(store, c, view) or decisions_gate.unworded(view, c):
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
         return (
