@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from owlbear_decisions import Decision as Rule
-from owlbear_decisions import Origin, Scope, State, new_id
+from owlbear_decisions import Link, LinkType, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change
 from owlbear_delivery_next.change_contracts.models import Decision as ChangeDecision
 from owlbear_delivery_next.github.provider import PullRequest
@@ -338,3 +338,41 @@ def test_an_interrupted_committed_batch_is_not_pushed_by_a_new_writer_and_the_ow
     done = decision_recovery.finish(shared, pending.generation)
     assert done.done
     assert decision_batch.pending(shared) is None
+
+
+def test_a_flag_batch_that_lands_nothing_but_looks_sent_halts_the_next_round_before_any_remote_work(
+    shared_repo, tmp_path, monkeypatch
+) -> None:
+    root, remote = shared_repo
+    shared = DataRepo(root)
+    old = make(state=State.REPLACED)
+    save(shared, old, expected_revision=None, message="decisions: old")
+    first = make(links=(Link(type=LinkType.REPLACES, target=old.id),))
+    save(shared, first, expected_revision=None, message="decisions: first")
+    real_publish = decision_sync.publish
+
+    def sent_but_nothing_lands(shared_, paths, message, until, head):
+        if message.startswith("decisions: conflict on"):
+            return decision_sync.Sent()  # success-looking, with no commit and HEAD unmoved
+        return real_publish(shared_, paths, message, until, head)
+
+    monkeypatch.setattr(decision_sync, "publish", sent_but_nothing_lands)
+    rival = make(links=(Link(type=LinkType.REPLACES, target=old.id),))
+    save(shared, rival, expected_revision=None, message="decisions: rival")
+    monkeypatch.setattr(decision_sync, "publish", real_publish)
+    pending = decision_batch.pending(shared)
+    assert pending is not None
+    head, files = git(root, "rev-parse", "HEAD"), tree_bytes(root)
+    advance_remote(tmp_path, remote, "elsewhere.txt")
+    remote_head = git(remote, "rev-parse", "main")
+    commands = recorded_git(monkeypatch)
+
+    with pytest.raises(DecisionsUnavailable):
+        save(shared, make(), expected_revision=None, message="decisions: later")
+
+    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
+    assert (git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")) == (head, remote_head)
+    assert tree_bytes(root) == files
+    assert decision_batch.pending(shared) == pending
+    monkeypatch.undo()
+    assert decision_recovery.finish(shared, pending.generation).generation == pending.generation

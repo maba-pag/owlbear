@@ -404,6 +404,7 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
     """
     project = next((d.project for d in decisions if d.project), "")
     for _ in range(ROUNDS):
+        _interrupted(shared)  # before any remote work of this round, as every new writer
         head, behind = decision_sync.prepare(shared, until)
         if not head:  # the flags are not written: the competitors stay unflagged and none is active
             said.append(behind)
@@ -414,22 +415,20 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
             return _view(shared, project)
         entries = [e for _, e in sorted(competing.items())]
         files = [(e.path, serialize(e.decision.model_copy(update={"conflict": True})).encode("utf-8")) for e in entries]
-        halt: list[bool] = []
 
-        def flag(head: str, entries: list[Entry] = entries, halt: list[bool] = halt) -> decision_transaction.Step:
+        def flag(head: str, entries: list[Entry] = entries) -> decision_transaction.Step:
             flagged = [path for e in entries if (path := _flag(e))]
             if not flagged:
                 return decision_transaction.Step("", refused=True)
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until, head)
             unknown = sent.ambiguous or sent.stale
-            halt.append(sent.uncommitted or unknown)
             return decision_transaction.Step(sent.notice, unknown=unknown, refused=sent.uncommitted)
 
         notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag, head)
         said.append(notice)
-        if halt and halt[0]:
-            return None  # the flag batch is interrupted: authority cannot be read until the owner settles it
+        if decision_batch.pending(shared) is not None:  # the journal decides: a flag batch left pending halts the loop
+            return None  # authority cannot be read until the owner settles it
     return _view(shared, project)
 
 
