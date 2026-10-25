@@ -84,7 +84,7 @@ names, not positions: the table lists the items in their order.
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Building: TD-267 is built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); Built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held. Window steps stay paused until item 9 needs them (`autonomous`) |
 | 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop |
 | 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (this pull request); item 9 next |
-| 9 | Watcher: an improvement watcher. Tool and contract fixes plus pre-flight lessons first, then a live coach, then a curator, measured in phases | TD-224, TD-316, TD-47, the owner's choice of 2026-10-25 | [improvement watcher](watcher-coach-design.md) | Redesigned 2026-10-25. Built: W1a (#640), the SDK feed, agent identity and the Watcher list, which the coach reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. Phase 1b built: pre-flight lessons in every new step conversation. Next: phase 2, the coach in shadow on a labelled replay set |
+| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then Retro (after-task hindsight analysis), then the Spotter in shadow at Delivery hand-offs, live only after a steered-versus-silent test | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. Next: Retro with its chatlogs kept and the Improvement page, then the Spotter in shadow |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
@@ -195,7 +195,7 @@ final preview passed the past-work test, and the record switched to `owlbear-dat
 converter are Git history. Item 5's three
 residuals from closed issues are built (#548); the rest of item 5 needs a design.
 
-### 3.5 Items 8 and 9: gate, then watcher
+### 3.5 Items 8 and 9: gate, then Improvement
 
 The gate has a [build design](window-step-gate-build.md) in five slices, from the probes of 2026-10-23; the owner stated
 that its criteria were agent proposals he accepted without intent of his own and declined to decide it, so its choices
@@ -207,16 +207,18 @@ three questions and proposes the rest as `autonomous` drafts; heads-ups were ans
 The owner's input of 2026-10-21, Claude Code's "You should know" observer, is its §3.4b.
 
 **Redesign of 2026-10-25.** The owner's goal for the watcher is improving agents, skills and tools, not catching
-outside writes; malicious calls are out of scope for now. He chose [the improvement watcher](watcher-coach-design.md):
-- first, tool and contract fixes plus pre-flight lessons;
-- then a live coach that looks when progress stalls. It reads a small intent card that indexes the evidence, and
-  gives advisory notes with one small experiment, never a stop;
-- then a curator that turns confirmed outcomes into lessons and improvement proposals.
+outside writes; malicious calls are out of scope for now. He first chose a live coach that looks when progress
+stalls. A pilot on real moments, then a hindsight review of 83 of them (what happened afterwards, from the full logs),
+found that the only candidates for a note sat at hand-offs or right after a fresh instruction, never mid-flow; that
+no log shows what steering costs; and that even those candidates are not proven worth an interruption. He then chose [Improvement](improvement-design.md), with new names:
+- first, tool and contract fixes and the **Primer** (lessons at session start), both built;
+- **Retro**, an after-task analysis of whole tasks with hindsight, run by the machine host, that grades the Spotter
+  and proposes lessons and fixes, on an **Improvement** page;
+- the **Spotter**, synchronous at Delivery hand-offs, recording its notes in shadow; live only after a
+  steered-versus-silent test on real tasks shows a gain.
 
-Each phase is measured. Still to settle with him, one at a time:
-- the rethinker decision, which the coach's independent big-picture check would take over;
-- the switches' rule-verdict and stop parts;
-- TD-365's outside-write outcomes.
+Still to settle with him, one at a time: the rethinker decision, the switches' rule-verdict and stop parts, and
+TD-365's outside-write outcomes, none of which fit this design.
 
 ## 4. Where the Code Differs From the Decisions
 
@@ -406,7 +408,7 @@ since item 6; the others are in this folder.
 | [Decisions as confirmed intent](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/decision-intent-build.md) | Item 14: TD-448..TD-462 | Built (#556 to #565); the migration reviewed by the owner (TD-464..TD-469) and the switch done (#570, #571, TD-466) |
 | [Memory work](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/memory-work-build.md) | Item 5 | Built (#581 to #588) |
 | [New project from zero](new-project-build.md) | Item 15 | Designed; not built, not placed |
-| [Improvement watcher](watcher-coach-design.md) | The watcher, chosen 2026-10-25 | The design to build, in phases; the [earlier draft](delivery-next-watcher-design.md) and its [options](delivery-next-watcher-options.md) are history |
+| [Improvement](improvement-design.md) | Improvement (formerly the watcher), chosen 2026-10-25 | The design to build, in phases; the [earlier draft](delivery-next-watcher-design.md) and its [options](delivery-next-watcher-options.md) are history |
 | [Transfer ledger](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-transfer-ledger.md) | What the old engine leaves; the deletion batches | Built (item 7) |
 | [Cutover](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/delivery-next-cutover.md) | D5: coexistence, E1, deletion list, docs list | Built (item 7), as TD-199 and TD-203 changed it |
 | [Quality service](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/repo-quality-service.md) | TD-89's service | Research; not built |
