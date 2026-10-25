@@ -13,6 +13,7 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.settings.prefs_import import plan
+from owlbear_delivery_next.state_store import profile_share
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,16 +54,33 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> None:
         raise StoreError(msg)
 
 
+def republish(store: Store) -> None:
+    """Publish a completion that a refused publication left local: the current config first, then the marker."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
+
+    if not profile_share.unpublished(store):
+        return
+    notice = store.update_config(lambda cur: cur, "legacy preferences carried") if store.config_path.exists() else ""
+    notice = notice or store.retry_prefs_import()
+    if notice:
+        msg = f"the legacy import completion was not published: {notice}"
+        raise StoreError(msg)
+
+
 def run(store: Store) -> None:
     """Carry the owner's confirmed legacy preferences into the project layer once; raises on an unpublished step.
 
     A claim is acquired only when the marker reads ``""`` and the durable claim then carries this run's basis. Any other
-    pending claim, including one a concurrent run made, resumes only from its own durable basis.
+    pending claim, including one a concurrent run made, resumes only from its own durable basis. A completed import
+    whose publication was refused is published again here.
     """
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
 
     prof = store.read_profile()
-    if prof is None or prof.prefs_import == "done":
+    if prof is None:
+        return
+    if prof.prefs_import == "done":
+        republish(store)
         return
     if prof.prefs_import == "":
         _, notice, claimed = store.mark_prefs_import("", "pending", _digest(store.config_path))

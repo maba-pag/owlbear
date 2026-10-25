@@ -32,6 +32,7 @@ PROFILE = "profile.json"
 LOCAL = "profile.local.json"
 DETECTED = "profile.detected"  # a new marker forces the old unbound observations to be checked once
 ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into the settings
+UNPUBLISHED = "prefs-import.unpublished"  # the legacy import is done here but its completion was not published yet
 
 
 def path(store: Store) -> Path:
@@ -64,8 +65,43 @@ def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str,
         try:
             notice = _publish(store, store.shared, marked, f"settings: {store.name}: legacy preference import {to}")
         except DataRepoError as exc:
+            if to == "done":
+                _unpublished(store, failed=True)
             raise SharedError(str(exc)) from exc
+        if to == "done":
+            _unpublished(store, failed=bool(notice))
         return to, notice, True
+
+
+def unpublished(store: Store) -> bool:
+    """Whether a completed legacy import is marked done here but its publication was refused, so it still needs one."""
+    return (store.root / UNPUBLISHED).exists()
+
+
+def _unpublished(store: Store, *, failed: bool) -> None:
+    flag = store.root / UNPUBLISHED
+    if failed:
+        store.root.mkdir(parents=True, exist_ok=True)
+        flag.touch()
+    else:
+        flag.unlink(missing_ok=True)
+
+
+def retry(store: Store) -> str:
+    """Publish the current completed marker again after a refusal; the publication notice when it is still refused."""
+    if not unpublished(store):
+        return ""
+    with _writer(store):
+        prof = _read_unlocked(store)
+        if prof is None or prof.prefs_import != "done":
+            _unpublished(store, failed=False)
+            return ""
+        try:
+            notice = _publish(store, store.shared, prof, f"settings: {store.name}: legacy preference import done")
+        except DataRepoError as exc:
+            notice = str(exc)
+        _unpublished(store, failed=bool(notice))
+        return notice
 
 
 @contextlib.contextmanager

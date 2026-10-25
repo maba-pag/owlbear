@@ -1,7 +1,8 @@
-"""The one-time carry of legacy profile preferences into the project layer (R15, FND-01).
+"""The one-time carry of stored legacy profile preferences into the project layer (R15, FND-01).
 
-Only values the owner confirmed in the profile are carried; detected defaults never are. A project field the owner
-already set wins, and a field nothing sets is filled once. Nothing is carried into Global.
+Every usable value the profile holds is carried, whatever its evidence: a confirmed value, a default, or an allowed
+choice. A project field the owner already set wins, and a field nothing sets is filled once. Nothing is carried into
+Global.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ if TYPE_CHECKING:
 
 
 def _owned(entry: ProfileEntry | None) -> str | None:
-    """The owner's value for a legacy entry, or None when it is absent, detected, or not a confirmed usable value."""
-    if entry is None or entry.state != "known" or not profile.is_confirmed(entry) or not entry.value:
+    """The stored legacy value for an entry, or None when it is absent or has no usable value."""
+    if entry is None or entry.state != "known" or not entry.value:
         return None
     return entry.value
 

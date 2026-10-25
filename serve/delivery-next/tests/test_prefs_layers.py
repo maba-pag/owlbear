@@ -54,11 +54,11 @@ def test_project_over_machine_over_global_per_preference():
     assert "prefs.ci_poll_seconds" not in out.missing
 
 
-def test_legacy_import_takes_only_owner_confirmed_values():
+def test_legacy_import_takes_every_usable_stored_value_whatever_its_evidence():
     prof = _legacy(merge_method="squash", ci_poll_seconds="45")
     prof.entries[profile.DELETE] = ProfileEntry(state="known", value="no", evidence="default")
     got = legacy_values(prof)
-    assert got == Prefs(merge_method=MergeMethod.SQUASH, ci_poll_seconds=45)
+    assert got == Prefs(merge_method=MergeMethod.SQUASH, ci_poll_seconds=45, delete_remote_branch=False)
 
 
 def test_legacy_import_rejects_unusable_values():

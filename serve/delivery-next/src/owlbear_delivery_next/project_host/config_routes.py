@@ -25,6 +25,7 @@ from owlbear_delivery_next.project_host import memory_routes
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.catalogue import CATALOGUE
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
+from owlbear_delivery_next.state_store import prefs_import
 from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
 
 if TYPE_CHECKING:
@@ -224,11 +225,12 @@ def _layers(stores: list[Store]) -> list[Layer]:
 
 
 def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's projects for its layer
-    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host
+    store: Store, path: Path, model: type[T], body: Save, what: str, host: Host, *, reviewed: bool = False
 ) -> str:
     """Validate the edited layer, write it if its file is still at ``body.rev``, publish it; return the notice.
 
-    This machine's layer is written in place and never published (TD-336).
+    This machine's layer is written in place and never published (TD-336). A reviewed legacy import latches
+    ``prefs_imported`` in the same write, and the latch is never lowered by a page that still holds the old value.
     """
     try:
         new = model.model_validate(body.layer)
@@ -238,10 +240,10 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
     except StoreError as exc:
         raise HTTPException(409, str(exc)) from exc
 
-    def change(_current: T) -> T:
+    def change(current: T) -> T:
         if _rev(path) != body.rev:
             raise HTTPException(409, "the settings changed since this page loaded them")
-        return new
+        return new.model_copy(update={"prefs_imported": current.prefs_imported or reviewed})
 
     try:
         if isinstance(new, MachineLayer):
@@ -302,14 +304,19 @@ PREFS_REVIEW = (
 )
 
 
-def _settle_prefs_import(store: Store) -> None:
-    """Mark a pending legacy import reviewed through Settings; a publication notice is a failure."""
+def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
+    """Mark a pending legacy import reviewed through Settings, then publish a completion that failed earlier."""
     prof = store.read_profile()
-    if prof is None or prof.prefs_import != "pending":
+    if prof is None:
         return
-    _, notice, _ = store.mark_prefs_import("pending", "done")
-    if notice:
-        raise HTTPException(503, f"the legacy preference import was not completed: {notice}")
+    if reviewed and prof.prefs_import == "pending":
+        _, notice, _ = store.mark_prefs_import("pending", "done")
+        if notice:
+            raise HTTPException(503, f"the legacy preference import was not completed: {notice}")
+    try:
+        prefs_import.republish(store)
+    except StoreError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 
 def router(store: Store, host: Host) -> APIRouter:
@@ -327,9 +334,9 @@ def router(store: Store, host: Host) -> APIRouter:
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
         what = f"{store.name or 'the project'}: from the settings page"
-        notice = _save(store, store.config_path, Layer, body, what, host)
-        if body.prefs_reviewed and not notice:  # a publication notice leaves the import pending for a retry
-            _settle_prefs_import(store)
+        notice = _save(store, store.config_path, Layer, body, what, host, reviewed=body.prefs_reviewed)
+        if not notice:  # a publication notice leaves the import pending for a retry
+            _settle_prefs_import(store, reviewed=body.prefs_reviewed)
         return _state(store, notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
 
     @routes.put("/config/global")

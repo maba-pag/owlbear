@@ -247,11 +247,11 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
     monkeypatch.setattr(model_choices.Offered, "__call__", slow)
     real = config_routes._save  # noqa: SLF001 - the save the route runs
 
-    def save(*args: Any) -> str:
+    def save(*args: Any, **kwargs: Any) -> str:
         arrive.set()  # the models answer while this save runs
         time.sleep(1.0)
         saved.set()
-        return real(*args)
+        return real(*args, **kwargs)
 
     monkeypatch.setattr(config_routes, "_save", save)
     sock = socket.socket()

@@ -331,6 +331,7 @@ class Store:
             raise SharedError(str(exc)) from exc
 
     mark_prefs_import = profile_share.mark  # a method: profile_share.mark takes the store first
+    retry_prefs_import = profile_share.retry
 
     def write(self, lock: Lock, change: Change) -> None:
         """Write one Change, keeping the previous record as ``prev``."""
@@ -450,7 +451,7 @@ class Store:
             except ValidationError:  # taken all the same, and kept in the activity for the record
                 events.append({"event": "inbox-rejected", "at": now.isoformat(timespec="seconds"), "item": text[:2000]})
         asked = loop.open_question(change) if loop.waiting_consent(change) else None
-        asking = settings_config.pref(self.settings(), "ask_before_merge")
+        asking = self.settings().prefs.ask_before_merge is not False  # unset asks; only an explicit no turns it off
         change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
         if leave is not None:
             kept = leave(before, change)
