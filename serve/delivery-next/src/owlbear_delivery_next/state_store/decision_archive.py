@@ -207,7 +207,7 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
     at = c.brief.approved_at
     if at is None:
         return []
-    source = f"Change {c.slug}, brief v{brief.version} approved {at.isoformat(timespec='seconds')}"
+    source = f"{decision_wording.CHANGE}{c.slug}, brief v{brief.version} approved {at.isoformat(timespec='seconds')}"
     final = {d.id for d in brief.decisions}
     approved = _approved(c)
     lasting = {d.id for d, _ in approved if d.id and d.scope == "project"}
@@ -254,7 +254,7 @@ def _changed(project: str, c: Change, stem: str, outcome: str) -> list[dict[str,
             "topic": title,
             "origin": d.origin,
             "actor": "owner" if d.origin == "decided" else "delivery",
-            "source": f"Change {c.slug}, {d.at.isoformat(timespec='seconds')}",
+            "source": f"{decision_wording.CHANGE}{c.slug}, {d.at.isoformat(timespec='seconds')}",
             "created_at": d.at,
         }
         found.append(fields)

@@ -279,9 +279,9 @@ def promote(shared: DataRepo | None, project: str, decision_id: str, revision: s
         raise Refused(msg, 422)
     wider = _new(
         source, title=source.title, statement=source.statement,
-        rationale=_because(decision_wording.framed(source), CHANGED, why),
+        rationale=_because(decision_wording.framed(source, promoting=True), CHANGED, why),
         scope=scope, project=source.project if scope is Scope.PROJECT else "", change="", origin=Origin.DECIDED,
-        actor=OWNER, source=f"{PAGE}: promoted", read_back=_today(), state=State.IN_FORCE,
+        actor=OWNER, source=decision_wording.PROMOTED, read_back=_today(), state=State.IN_FORCE,
         links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),),
     )  # fmt: skip
     return _retire(shared, wider, source, f"decisions: promote {source.id} to {scope} as {wider.id}")

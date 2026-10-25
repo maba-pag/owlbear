@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_decisions import Origin, ReadBackKind, Scope, State
 from owlbear_decisions.models import ID_PATTERN
+from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.project_host import impact_routes
 from owlbear_delivery_next.state_store import (
     decision_actions,
@@ -251,6 +252,8 @@ def _receipts(work: Callable[[], list[Receipt]]) -> dict[str, Any]:
         raise HTTPException(exc.status, str(exc)) from exc
     except decision_store.DecisionsUnavailable as exc:
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
+    except decision_wording.WordingError as exc:
+        raise HTTPException(409, f"{exc}; nothing was saved: confirm its full wording") from exc
     return {"receipts": [asdict(r) for r in done], "saved": bool(done) and all(r.saved for r in done)}
 
 

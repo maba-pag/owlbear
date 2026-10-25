@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 WHOLE = "Whole wording: "
 FRAME = "OwlBear archived wording v1: "
+CHANGE = "Change "  # the source of a rule archived from a Change; the producer sets it, never the reason text
+PROMOTED = "the Decisions page: promoted"  # the source of a rule widened from another; set by promote, never a reason
 
 
 class WordingError(DecisionError, ValueError):
@@ -23,14 +25,19 @@ def _error(decision: Decision, detail: str) -> WordingError:
     return WordingError(f"{decision.id}: {detail}")
 
 
+def _managed(decision: Decision) -> bool:
+    """Only the producer's source makes a rationale binding: a reason typed by anyone else is plain text."""
+    return decision.source.startswith(CHANGE) or decision.source == PROMOTED
+
+
 def short(text: str) -> str:
     """The immutable canonical statement retained when an approved answer is longer than the core limit."""
     return text[: STATEMENT_LIMIT - 1].rstrip() + "\u2026" if len(text) > STATEMENT_LIMIT else text
 
 
-def rationale(text: str, note: str) -> str:
+def rationale(text: str, note: str, *, force: bool = False) -> str:
     """Frame both cut answers and literal terminal ellipses so neither can be mistaken for legacy metadata."""
-    if len(text) <= STATEMENT_LIMIT and not text.endswith("\u2026"):
+    if not force and len(text) <= STATEMENT_LIMIT and not text.endswith("\u2026"):
         return note
     payload = json.dumps({"statement": short(text), "whole": text}, ensure_ascii=False)
     return f"{FRAME}{payload}\n\n{note}"
@@ -38,6 +45,8 @@ def rationale(text: str, note: str) -> str:
 
 def whole(decision: Decision) -> str:
     """Return canonical wording or a provable expansion; never infer a delimiter inside binding paragraphs."""
+    if not _managed(decision):
+        return decision.statement
     first = decision.rationale.split("\n", 1)[0]
     if first.startswith(FRAME):
         try:
@@ -52,27 +61,29 @@ def whole(decision: Decision) -> str:
         return text
     if first.startswith("OwlBear archived wording "):
         raise _error(decision, "unsupported archived wording frame")
-    if not decision.statement.endswith("\u2026"):
-        return decision.statement
-    if not (decision.source.startswith("Change ") or decision.rationale.startswith("From Change ")):
-        return decision.statement
-    if WHOLE not in decision.rationale:
+    if not decision.statement.endswith("\u2026") or WHOLE not in decision.rationale:
         return decision.statement
     raise _error(decision, "ambiguous legacy archived wording; replace the rule with confirmed full intent")
 
 
 def explanation(decision: Decision) -> str:
-    """A new rule may inherit the rationale, never the retired rule's framed binding."""
-    if decision.rationale.startswith(FRAME):
-        whole(decision)
+    """A new rule may inherit the note, never the retired rule's binding; unusable binding is dropped unvalidated."""
+    if not _managed(decision):
+        return decision.rationale
+    first = decision.rationale.split("\n", 1)[0]
+    if first.startswith(FRAME):
         return decision.rationale.partition("\n\n")[2]
-    if decision.source.startswith("Change ") or decision.rationale.startswith("From Change "):
+    if first.startswith("OwlBear archived wording "):
+        return ""
+    if decision.statement.endswith("\u2026"):
         return decision.rationale.partition(WHOLE)[0].rstrip()
     return decision.rationale
 
 
-def framed(decision: Decision) -> str:
-    """Preserve framed authority before appending notes; refuse legacy text whose binding is ambiguous."""
+def framed(decision: Decision, *, promoting: bool = False) -> str:
+    """Preserve framed authority before appending notes; a promotion freezes a plain answer's binding first."""
+    if promoting and not _managed(decision):
+        return rationale(decision.statement, decision.rationale, force=True)
     text = whole(decision)
     return rationale(text, explanation(decision)) if text != decision.statement else decision.rationale
 

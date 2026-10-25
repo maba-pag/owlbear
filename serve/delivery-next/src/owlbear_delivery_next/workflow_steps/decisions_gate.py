@@ -300,12 +300,35 @@ def _refresh(store: Store) -> str:
         return f"not refreshed: {exc}"
 
 
+def _faulty_wording(view: DataView, c: Change) -> list[str]:
+    return [why for d in in_force(view.snapshot, c) if (why := problem(d))]
+
+
 def _wording_faults(view: DataView, c: Change, now: datetime) -> Gate | None:
     """Unrecoverable full wording blocks before baseline construction or any paid reassessment."""
-    if faults := [why for d in in_force(view.snapshot, c) if (why := problem(d))]:
+    if faults := _faulty_wording(view, c):
         stopped = _stopped(ErrorKind.STATE, "; ".join(faults), FAULTY, "The full decision wording is resolved", now)
         return Gate(c, stopped)
     return None
+
+
+def unworded(view: DataView | None, c: Change) -> str:
+    """Why an approval may not pin *c*'s decisions yet: an in-force full wording cannot be read; "" otherwise."""
+    if view is None or not (faults := _faulty_wording(view, c)):
+        return ""
+    return f"the full decision wording is unresolved: {'; '.join(faults)}"[:600]
+
+
+def wording_stop(store: Store, c: Change, now: datetime) -> StepResult | None:
+    """The stop a challenger must not start under: an in-force full wording that cannot be read (TD-452)."""
+    if store.shared is None:
+        return None
+    try:
+        view = decision_store.load(store.shared, store.name)
+    except decision_store.DecisionsUnavailable:
+        return None  # the shaping sections report the unreadable decisions themselves
+    gate = _wording_faults(view, c, now)
+    return gate.result if gate else None
 
 
 def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock | None) -> Gate:
