@@ -927,7 +927,7 @@ def test_a_builder_response_survives_the_session_replacing_the_change_and_is_rep
     c, opened = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
     tid = opened.fix_task.id
     cx.store.write(cx.lock, loop.apply(c, opened, NOW))
-    built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Done."})
+    built = tools.BuildResult(summary="s", checks=[], response={"how": "fixed", "text": "Done."})
 
     async def build(cfg):
         getattr(cfg.journal, callback)()  # rebinds the runner's ``change`` to a copy mid-session
@@ -1909,7 +1909,7 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
     tmp_path, integration_collision_setup, monkeypatch, lose_base
 ):
     clone, mine, store, lock, tid = integration_collision_setup
-    built = tools.BuildResult(summary="s", changed_paths=[], checks=[], response={"how": "fixed", "text": "Merged."})
+    built = tools.BuildResult(summary="s", checks=[], response={"how": "fixed", "text": "Merged."})
     runs = []
 
     async def build(cfg):

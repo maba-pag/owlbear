@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 
 ACCEPT = "accept"  # the gate question's option that processes the held result
 HEAD_SECONDS = 3  # the page polls through this check; a slower Git offers no accept rather than stalling it
+# Fields a result model no longer has, dropped from a result held before the change; a new call stays strict.
+# A build's changed_paths had to equal the paths Delivery read at its head, so they stand in for its own record.
+OBSOLETE = {"BuildResult": ("changed_paths",)}
 
 
 class HeldRun(BaseModel):
@@ -40,6 +43,7 @@ class HeldRun(BaseModel):
     ending: str
     detail: str = ""
     head: str | None = None
+    changed: list[str] = []  # the paths the commits change at head, as Delivery read them; empty in older holds
     payload: dict[str, Any] | None = None  # {"model": a result model's name, "args": its fields}
     denials: list[str] = []
     denied: dict[str, str] = {}
@@ -72,6 +76,7 @@ def _dump(run: Run) -> HeldRun:
         ending=run.ending,
         detail=run.detail,
         head=run.head,
+        changed=run.changed,
         payload={"model": type(p).__name__, "args": p.model_dump(mode="json")} if p else None,
         denials=run.denials,
         denied=run.denied,
@@ -92,12 +97,14 @@ def _load(data: HeldRun) -> Run:
     if p and not (isinstance(model, type) and issubclass(model, tools.Args)):
         msg = f"held payload {p.get('model')!r} is not a result model"
         raise ValueError(msg)
+    args, old = _current(p)
     return Run(
         data.session_id,
         ending=data.ending,  # type: ignore[arg-type] - checked by the ending dispatch, which refuses unknown ones
-        payload=model.model_validate(p.get("args")) if p and model else None,
+        payload=model.model_validate(args) if p and model else None,
         detail=data.detail,
         head=data.head,
+        changed=list(data.changed) or old,
         denials=list(data.denials),
         denied=dict(data.denied),
         runtime=data.runtime,
@@ -106,6 +113,17 @@ def _load(data: HeldRun) -> Run:
         quota=data.quota,
         quota_reset=data.quota_reset,
     )
+
+
+def _current(payload: dict[str, Any] | None) -> tuple[object, list[str]]:
+    """A held payload's fields without those its model no longer has, and an older build's changed_paths."""
+    args = payload.get("args") if payload else None
+    if not isinstance(args, dict):
+        return args, []
+    gone = OBSOLETE.get(str(payload.get("model")), ()) if payload else ()
+    paths = args.get("changed_paths") if "changed_paths" in gone else None
+    kept = {k: v for k, v in args.items() if k not in gone}
+    return kept, [str(x) for x in paths] if isinstance(paths, list) else []
 
 
 def keep(store: Store, lock: Lock, change: Change, run: Run, head: str) -> None:

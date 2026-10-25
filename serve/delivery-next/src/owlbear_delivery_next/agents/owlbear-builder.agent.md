@@ -77,8 +77,9 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 End the step with exactly one call:
 
 - `submit_result`, with the fields your message's Finish section names:
-  - for a build: commit with `git add` and `git commit` first; Delivery reads the commit from the
-    worktree HEAD;
+  - for a build: commit with `git add` and `git commit` first, then read your final diff and make
+    sure it holds only the task's work; Delivery reads the commit from the worktree HEAD and records
+    the files it changes;
   - for a pull-request comment: `response` with `fixed` after a commit, or `answered` (or
     `no-action` where offered) without one;
   - for review findings you judge wrong, where the task offers it: `rejected`, each by its key

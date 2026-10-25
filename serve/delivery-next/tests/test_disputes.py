@@ -71,7 +71,7 @@ def gate(tmp_path: Path, kind: StepKind, tree: tools.Worktree, **bounds: tuple[s
 
 def rejecting(*keys: str) -> dict:
     rejected = [{"finding": k, "reason": "a.txt:1 already says Hallo"} for k in keys]
-    return {"summary": "Rejected.", "changed_paths": [], "checks": [], "rejected": rejected}
+    return {"summary": "Rejected.", "checks": [], "rejected": rejected}
 
 
 def test_both_results_offer_their_dispute_fields_to_every_runtime():
