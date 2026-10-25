@@ -265,6 +265,31 @@ its bounded teardown before propagating the original error or cancellation.
 Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
 stays unconfirmed, so a known orphan cannot authorize a successor.
 
+Decision lookup (#616) fails closed for any unresolved in-scope authority, even
+beside valid rules: worker and lead-chat replies name the unresolved rules and
+reasons without a governing answer or picker run. The full binding wording kept
+by a shortened archived statement reaches shaping and boundary picks, lookup
+replies, pinned baselines and step input through one shared representation.
+Long answers and literal terminal ellipses use a versioned escaped frame that
+keeps binding text separate from reasons, literal headings and later action notes.
+Unframed legacy ellipsis-plus-wording records are indistinguishable from quoted
+reasons and block before a picker or baseline is built. Original approved-answer
+replay may add framing without rewriting accepted IDs or canonical statements;
+otherwise confirmed replacement resolves them. Origin correction validates first.
+Repair (R10 review): promote, withdraw and origin correction on an
+unreadable rule return a 409 that names it and writes nothing; a saved pick of
+such a rule is refused before its baseline is pinned; pinned baselines store the
+whole wording; an unusable inherited frame yields no new binding, and a blank
+replacement reason stays a 422 until the owner decides whether a damaged frame
+may be replaced without a fresh reason. Wording provenance follows the
+producer-set source, not rationale text: a supplied frame in a proposal or
+replacement reason stays a note, promotion of an ordinary answer is framed with
+its whole statement, and an archived replacement with a literal ellipsis is
+read as canonical. A readable legacy managed archive whose statement ends in a
+literal ellipsis is framed before any note is appended, even when its whole
+wording equals the canonical statement, so promotion and origin correction keep
+one unambiguous rule.
+
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.
 Pending-status failures are reported instead of reading as fully published;
