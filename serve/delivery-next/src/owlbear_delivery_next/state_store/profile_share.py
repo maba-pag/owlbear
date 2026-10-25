@@ -129,14 +129,17 @@ def settle_config(store: Store, notice: str, *, owner: bool = False) -> str:
 
     The caller holds the shared lock and has just attempted the config's publication; *notice* is its refusal, if any.
     A refused change is recorded by its digest, and only the publication of the same bytes clears it, unless an *owner*
-    save (its revision validated under the lock) published: that supersedes any earlier pending digest. The record is a
-    file of its own, so recording a refused change never publishes the profile's unpublished completion.
+    save (its revision validated under the lock) published: that supersedes any earlier pending digest. An automatic
+    refusal never replaces a different pending digest. The record is a file of its own, so recording a refused change
+    never publishes the profile's unpublished completion.
     """
     if not store.shared:
         return notice
     digest = config_digest(store.config_path)
     pending = _shared_pending(store)
     if notice:
+        if pending and pending != digest and not owner:
+            return notice  # an automatic refusal never replaces another clone's or an owner's pending intent
         want = digest
     elif pending == digest or owner:
         want = ""
@@ -172,7 +175,7 @@ def publish_layer(store: Store, path: Path, message: str, until: float, *, owner
     except DataRepoError as exc:
         if path != store.config_path:
             raise
-        raise SharedError(settle_config(store, str(exc))) from exc
+        raise SharedError(settle_config(store, str(exc), owner=owner)) from exc
     return settle_config(store, notice, owner=owner) if path == store.config_path else notice
 
 
