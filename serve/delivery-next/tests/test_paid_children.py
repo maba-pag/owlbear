@@ -1,0 +1,456 @@
+"""RUN-04: a paid child session started after an accepted held parent (a plan challenge, TD-190; an amendment
+challenge, TD-179) runs once and counts once, whichever write fails, and the owner's later controls win.
+
+Each case runs the runner's own step entry against a temporary store and Git repository, with a fake SDK: the held
+parent's session ran once at its gate, the owner accepts it through the inbox, one write, log or cleanup fails, and
+fresh stores fold and restart the step until the next step's session starts.
+"""
+
+import json
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+
+from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Criterion,
+    Exit,
+    Names,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.round_records import PLAN, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import amendments
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
+from owlbear_delivery_next.workflow_steps import held, plan_round
+
+K = StepKind
+DONE = Termination(confirmed=True)
+FEW = RoundPolicy(max_rounds=3, max_findings=5, last_round_at=0, ask_owner_at=1)
+UNREAD = "the usage at the step's end could not be read (RuntimeError)"
+PARENT = {  # the held parent's usage, counted at its gate: (usage, why unread, credits, unread sessions)
+    "known": ({"credits": 2.5, "models": {"m": {"credits": 2.5, "tokens": 100}}}, "the model could not be read", 2.5),
+    "unread": ({"error": "RuntimeError"}, UNREAD, 0.0),
+}
+CHILD = {"credits": 3.5, "models": {"c": {"credits": 3.5, "tokens": 40}}}
+LABELS = {"plan": plan_round.LABEL, "amend": amendments.LABEL}
+
+
+class NextSessionError(Exception):
+    """The step after the settled one started its session: the fake worker boundary."""
+
+
+def git(cwd: Path, *args: str) -> str:
+    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    return done.stdout.strip()
+
+
+class Paid:
+    """The fake SDK: the held parent's one session, then each paid child; any later session is the next step's."""
+
+    def __init__(self, monkeypatch, repo: Path, parent: str, usage: str) -> None:
+        self.repo, self.parent, self.usage = repo, parent, usage
+        self.parents: list[str] = []
+        self.children: list[str] = []
+        self.next: list[str] = []
+        self.verdicts: list[tools.Args] = []
+        self.unread_child = False
+        monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
+        monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)  # the Change's worktree is the test repo
+
+    async def run(self, cfg):
+        if cfg.job in LABELS.values():
+            self.children.append(cfg.session_id)
+            run = Run(cfg.session_id, "result", self.verdicts.pop(0), termination=DONE)
+            run.usage, run.tool_calls, run.model_check = dict(CHILD), {"grep": {"calls": 2}}, "verified"
+            if self.unread_child:
+                run.usage, run.usage_unread = {"error": "RuntimeError"}, UNREAD
+            return run
+        if self.parents:
+            self.next.append(cfg.session_id)
+            raise NextSessionError
+        self.parents.append(cfg.session_id)
+        usage, reason, _ = PARENT[self.usage]
+        if self.parent == "plan":
+            run = Run(cfg.session_id, "result", tools.PlanResult(tasks=[task(1)]), termination=DONE)
+        else:
+            payload, _ = tool_schema.parse(tools.WrongPremise, premise())
+            run = Run(cfg.session_id, "premise", payload, head=git(self.repo, "rev-parse", "HEAD"), termination=DONE)
+        run.usage, run.usage_unread, run.tool_calls = dict(usage), reason, {"bash": {"calls": 3}}
+        return run
+
+
+def task(n: int) -> dict:
+    return {"title": f"step {n}", "goal": "AC-1", "scope": ["src"], "checks": ["true"]}
+
+
+def premise() -> dict:
+    items = [{"criterion": "AC-1", "text": "greet() trims spaces, not tabs", "why": "tabs are not names"}]
+    return {"stage": "brief", "reason": "AC-1 is over-specific", "evidence": ["a.txt:1"], "amendment": items}
+
+
+def made(parent: str, repo: Path) -> Change:
+    names = Names(branch="owlbear/c1", target="main", worktree=str(repo))
+    if parent == "plan":
+        c = Change(slug="c1", brief=Brief(version=1, approved_version=1, challenged=1), step=Step(kind=K.PLAN))
+        c.names = names
+        c.loops[PLAN] = RoundLoop(subject=PLAN, policy=FEW)
+        return c
+    criteria = [Criterion(id="AC-1", text="greet() trims the name"), Criterion(id="AC-2", text="Says Hallo", version=2)]
+    brief = Brief(version=3, approved_version=3, challenged=3, criteria=criteria, specified=["AC-2"])
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["a.txt"])])
+    return Change(slug="c1", brief=brief, plan=plan, names=names, step=Step(kind=K.BUILD, task="t1"))
+
+
+def restart(tmp_path: Path, repo: Path) -> Store:
+    """A new runner process: a fresh store, the inbox folded under the lock, the step run."""
+    store = Store(tmp_path / "store")
+    with store.lock("c1") as lock:
+        change, step = store.fold(lock, "c1", datetime.now(UTC))
+        runner._step(store, lock, change, step, repo)  # noqa: SLF001
+    return store
+
+
+def held_and_accepted(tmp_path: Path, repo: Path, paid: Paid, parent: str) -> Store:
+    """The parent's session returned with its usage unread: held, counted at its gate, then accepted in the inbox."""
+    store = Store(tmp_path / "store")
+    store.write(Lock("c1"), made(parent, repo))
+    verdict = tools.ReviewResult(verdict="pass") if parent == "plan" else tools.VisualReviewResult(verdict="pass")
+    paid.verdicts = [verdict]
+    restart(tmp_path, repo)
+    gated = store.read("c1")
+    q = loop.open_question(gated)
+    assert q is not None
+    assert [o.id for o in q.options] == ["accept", "retry"]
+    assert (len(paid.parents), paid.children) == (1, [])
+    store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="accept"))
+    return store
+
+
+def to_next_session(tmp_path: Path, repo: Path, limit: int = 4) -> Store:
+    """Restart until the step after the settled one starts its session; cleanup may take a pass of its own."""
+    for _ in range(limit):
+        try:
+            restart(tmp_path, repo)
+        except NextSessionError:
+            return Store(tmp_path / "store")
+    pytest.fail("the step after the settled one never started")
+
+
+def child_steps(store: Store, label: str) -> list[dict]:
+    return [e for e in store.events("c1") if e.get("event") == "step" and e.get("kind") == label]
+
+
+def assert_settled_once(store: Store, parent: str, usage: str, paid: Paid) -> Change:
+    """The parent applied once, its child run and counted once, each count and record exactly once."""
+    c = store.read("c1")
+    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 1, 1)
+    assert c.pending_child is None
+    assert c.spend.credits == pytest.approx(PARENT[usage][2] + CHILD["credits"])
+    assert c.spend.unread == (paid.parents if usage == "unread" else [])
+    assert c.spend.models["c"].tokens == 40
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
+    assert len(c.accepted_holds) == len(c.counted_holds) == 1
+    assert not (store.root / "changes" / "c1" / "held.json").exists()
+    assert c.held_fallback is None
+    accepted = [e["session"] for e in store.events("c1") if e.get("event") == "held-accepted"]
+    assert accepted == paid.parents
+    assert len([e for e in store.events("c1") if e.get("event") == "step" and e.get("held")]) == 1
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
+        assert [t.title for t in c.plan.tasks] == ["step 1"]
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[0])
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)  # the proposer's own route
+    return c
+
+
+FAULTS = ["checkpoint-write", "settlement-write", "settlement-log", "hold-unlink", "accepted-log", "fallback-clear"]
+
+
+@pytest.mark.parametrize("fault", FAULTS)
+@pytest.mark.parametrize("usage", ["known", "unread"])
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_an_accepted_parent_and_its_paid_child_run_and_count_once_whichever_write_fails(  # noqa: C901, PLR0913, PLR0915, PLR0917
+    tmp_path, change_repo, monkeypatch, parent, usage, fault
+):
+    paid = Paid(monkeypatch, change_repo, parent, usage)
+    label, held_file = LABELS[parent], tmp_path / "store" / "changes" / "c1" / "held.json"
+    real_write, real_log, real_unlink, real_atomic = Store.write, Store.log, Path.unlink, held.atomic_write
+    armed = [fault]
+
+    def fire(stage: str) -> None:
+        if armed == [stage]:
+            armed.clear()
+            msg = f"{stage} refused"
+            raise OSError(msg)
+
+    def write(self, lock, change):
+        stored = self.read(change.slug)
+        if change.accepted_holds and not stored.accepted_holds:
+            fire("checkpoint-write")
+        if stored.pending_child and stored.pending_child.run and change.pending_child is None:
+            fire("settlement-write")
+        if stored.held_fallback and change.held_fallback is None and change.accepted_holds:
+            fire("fallback-clear")
+        return real_write(self, lock, change)
+
+    def log(self, lock, slug, event):
+        if event.get("event") == "step" and event.get("kind") == label:
+            fire("settlement-log")
+        if event.get("event") == "held-accepted":
+            fire("accepted-log")
+        return real_log(self, lock, slug, event)
+
+    def unlink(self, *args, **kwargs):
+        if self == held_file:
+            fire("hold-unlink")
+        return real_unlink(self, *args, **kwargs)
+
+    def no_file(path, text):  # the hold lives in the Change's fallback, which the checkpoint's cleanup clears
+        if path == held_file:
+            msg = "held file refused"
+            raise OSError(msg)
+        return real_atomic(path, text)
+
+    if fault == "fallback-clear":
+        monkeypatch.setattr(held, "atomic_write", no_file)
+    held_and_accepted(tmp_path, change_repo, paid, parent)
+    monkeypatch.setattr(Store, "write", write)
+    monkeypatch.setattr(Store, "log", log)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pytest.raises(OSError, match=f"{fault} refused"):
+        restart(tmp_path, change_repo)
+    assert not armed
+
+    after = Store(tmp_path / "store").read("c1")
+    if fault == "checkpoint-write":  # nothing durable: the hold is processed again, its child never ran
+        assert (after.accepted_holds, after.pending_child, paid.children) == ([], None, [])
+    elif fault == "settlement-write":  # the child's validated run is durable, its spend not yet counted
+        assert after.pending_child is not None
+        assert after.pending_child.run is not None
+        assert after.pending_child.run.session_id == paid.children[0]
+        assert after.pending_child.run.usage == CHILD
+        assert after.spend.credits == pytest.approx(PARENT[usage][2])
+    else:
+        assert len(after.accepted_holds) == 1  # the receipt is durable: the parent is never processed again
+    if fault != "checkpoint-write":
+        assert child_steps(Store(tmp_path / "store"), label) == []  # logged only once its settlement is durable
+
+    store = to_next_session(tmp_path, change_repo)
+    assert_settled_once(store, parent, usage, paid)
+    assert len(child_steps(store, label)) == (0 if fault == "settlement-log" else 1)
+
+
+def settlement_fails(tmp_path, change_repo, monkeypatch, parent) -> Paid:
+    """An accepted parent whose child returned and was kept, while the write settling it failed."""
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    held_and_accepted(tmp_path, change_repo, paid, parent)
+    fail_settlement(tmp_path, change_repo, monkeypatch)
+    return paid
+
+
+def fail_settlement(tmp_path, change_repo, monkeypatch) -> None:
+    """One restart whose write settling the kept child fails; the writes after it succeed."""
+    real_write = Store.write
+    armed = [True]
+
+    def write(self, lock, change):
+        stored = self.read(change.slug).pending_child
+        if armed and stored and stored.run and change.pending_child is None:
+            armed.clear()
+            msg = "settlement refused"
+            raise OSError(msg)
+        return real_write(self, lock, change)
+
+    monkeypatch.setattr(Store, "write", write)
+    with pytest.raises(OSError, match="settlement refused"):
+        restart(tmp_path, change_repo)
+    monkeypatch.setattr(Store, "write", real_write)
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_a_pause_queued_after_a_failed_settlement_waits_and_the_resume_settles_from_the_kept_run(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid = settlement_fails(tmp_path, change_repo, monkeypatch, parent)
+    store = Store(tmp_path / "store")
+    store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent="pause", text="hold on"))
+    paused = restart(tmp_path, change_repo).read("c1")
+    assert paused.intent.paused_at is not None
+    assert paused.intent.pause_reason == "hold on"
+    assert paused.pending_child is not None  # it waits with its step; nothing is paid or lost
+    assert (len(paid.children), paused.spend.credits) == (1, pytest.approx(2.5))
+
+    store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent="resume"))
+    done = to_next_session(tmp_path, change_repo)
+    assert done.read("c1").intent.paused_at is None
+    assert_settled_once(done, parent, "known", paid)
+    assert len(child_steps(done, LABELS[parent])) == 1
+
+
+@pytest.mark.parametrize("intent", ["abandon", "change"])
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_an_abandon_or_new_brief_after_a_failed_settlement_counts_the_child_once_and_routes_nothing(
+    tmp_path, change_repo, monkeypatch, parent, intent
+):
+    paid = settlement_fails(tmp_path, change_repo, monkeypatch, parent)
+    store = Store(tmp_path / "store")
+    before = store.read("c1")
+    store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent=intent, text="a different greeting"))
+    engine = []
+    monkeypatch.setattr(runner, "_engine", lambda *a: engine.append(a[2].step.kind))  # the next step's own work
+    for _ in range(2):  # a second restart changes nothing
+        c = restart(tmp_path, change_repo).read("c1")
+    assert c.pending_child is None
+    assert (len(paid.children), c.spend.credits) == (1, pytest.approx(2.5 + 3.5))
+    assert c.tool_use.tools["grep"].calls == 2
+    assert [e["exit"] for e in child_steps(store, LABELS[parent])] == ["retired"]
+    if intent == "abandon":
+        assert (c.intent.abandoned_at is not None, c.step.kind) == (True, K.CLEANUP)
+    else:
+        assert (c.intent.words, c.step.kind) == ("a different greeting", K.SHAPE)
+    if parent == "plan":
+        assert c.loops[PLAN].round == before.loops[PLAN].round  # the plan it challenged is gone: no round counted
+    else:
+        assert [a.verdict for a in c.amendments] == ["equivalent"]  # the candidate keeps its verdict
+    assert c.questions == before.questions
+    assert engine
+    assert set(engine) <= {K.CLEANUP, K.SHAPE}
+
+
+def ask_store(tmp_path, change_repo, monkeypatch) -> tuple[Paid, Store]:
+    """Round 1 sends the plan back; round 2's planner rejects F1, held and accepted; its challenger upholds F1."""
+    paid = Paid(monkeypatch, change_repo, "plan", "known")
+    store = Store(tmp_path / "store")
+    store.write(Lock("c1"), made("plan", change_repo))
+    first = tools.ReviewResult(verdict="fix", findings=[{"place": "t1", "problem": "AC-1 untested", "fix": "add"}])
+    upheld = tools.ReviewResult(verdict="pass", rechecked=[{"finding": "F1", "upheld": True, "reason": "see t1"}])
+    paid.verdicts = [first, upheld]
+    rejected = [{"finding": "F1", "reason": "covered"}]
+    plans = [tools.PlanResult(tasks=[task(1)]), tools.PlanResult(tasks=[task(1)], rejected=rejected)]
+
+    async def planner(cfg):
+        if cfg.job in LABELS.values():
+            return await Paid.run(paid, cfg)
+        if len(paid.parents) == len(plans):
+            paid.next.append(cfg.session_id)
+            raise NextSessionError
+        paid.parents.append(cfg.session_id)
+        run = Run(cfg.session_id, "result", plans[len(paid.parents) - 1], termination=DONE)
+        if len(paid.parents) == 2:  # the second planner's usage stays unread: held
+            run.usage, run.usage_unread = dict(PARENT["known"][0]), PARENT["known"][1]
+        return run
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", planner)
+    restart(tmp_path, change_repo)  # round 1: the plan goes back with F1
+    assert store.read("c1").outcome.exit == Exit.RETRY
+    restart(tmp_path, change_repo)  # round 2's planner: held at its gate
+    q = loop.open_question(store.read("c1"))
+    store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="accept"))
+    return paid, store
+
+
+@pytest.mark.parametrize("then", ["pause", "abandon", "answer"])
+def test_an_upheld_rejection_asks_once_with_a_stable_question_whatever_the_owner_does_next(
+    tmp_path, change_repo, monkeypatch, then
+):
+    paid, store = ask_store(tmp_path, change_repo, monkeypatch)
+    fail_settlement(tmp_path, change_repo, monkeypatch)
+    restart(tmp_path, change_repo)
+    asked = store.read("c1")
+    q = loop.open_question(asked)
+    assert q is not None
+    assert [o.id for o in q.options] == ["fix", "reconsider", "drop"]
+    ids = [x.id for x in asked.questions]
+    restart(tmp_path, change_repo)  # waiting on the owner: nothing runs, nothing is asked again
+    assert [x.id for x in store.read("c1").questions] == ids
+    assert (len(paid.parents), len(paid.children)) == (2, 2)
+
+    if then == "answer":
+        store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="fix"))
+        to_next_session(tmp_path, change_repo)  # the planner's next round: the owner's progress
+        assert len(paid.next) == 1
+    else:
+        monkeypatch.setattr(runner, "_engine", lambda *_a: None)
+        store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent=then))
+        restart(tmp_path, change_repo)
+        assert paid.next == []
+    c = store.read("c1")
+    assert [x.id for x in c.questions] == ids
+    assert c.pending_child is None
+    assert (c.loops[PLAN].round, len(paid.children)) == (2, 2)
+    assert c.spend.credits == pytest.approx(2.5 + 2 * 3.5)
+    assert c.tool_use.tools["grep"].calls == 4
+    assert len(child_steps(store, plan_round.LABEL)) == 2
+    if then == "pause":
+        assert c.intent.paused_at is not None
+        assert loop.open_question(c).id == q.id
+    if then == "abandon":
+        assert c.intent.abandoned_at is not None
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_never_the_parents_accept(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    store = held_and_accepted(tmp_path, change_repo, paid, parent)
+    paid.unread_child = True
+    restart(tmp_path, change_repo)
+    c = store.read("c1")
+    q = loop.open_question(c)
+    assert q is not None
+    assert [o.id for o in q.options] == ["retry"]  # the owner's accept of the parent never waives the child's check
+    assert (c.step.kind, len(c.accepted_holds), len(paid.children)) == (K.PLAN if parent == "plan" else K.BUILD, 1, 1)
+    assert c.spend.unread == paid.children  # the child's own usage is unknown, never zero
+    assert c.spend.credits == pytest.approx(2.5)
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round) == (1, 0)  # the plan stays checkpointed, unjudged
+    else:
+        assert [a.verdict for a in c.amendments] == [""]
+
+
+def stored(store: Store) -> str:
+    with store.db.read() as db:
+        return db.execute("SELECT record FROM changes WHERE slug = 'c1'").fetchone()[0]
+
+
+@pytest.mark.parametrize("where", ["held_fallback", "pending_child"])
+def test_a_run_record_with_an_unknown_field_is_refused_on_restart_and_never_rewritten(
+    tmp_path, change_repo, monkeypatch, where
+):
+    if where == "pending_child":
+        paid = settlement_fails(tmp_path, change_repo, monkeypatch, "plan")
+    else:  # the hold's file cannot be written, so the Change keeps it
+
+        def no_file(path, _text):
+            msg = f"{path.name} refused"
+            raise OSError(msg)
+
+        monkeypatch.setattr(held, "atomic_write", no_file)
+        paid = Paid(monkeypatch, change_repo, "plan", "known")
+        held_and_accepted(tmp_path, change_repo, paid, "plan")
+    store = Store(tmp_path / "store")
+    data = json.loads(stored(store))
+    assert data[where]["run"]["session_id"]
+    data[where]["run"]["surprise"] = True
+    raw = json.dumps(data)
+    with store.db.write() as db:
+        db.execute("UPDATE changes SET record = ? WHERE slug = 'c1'", (raw,))
+    with pytest.raises(StoreError, match="unknown field"):
+        restart(tmp_path, change_repo)
+    assert stored(Store(tmp_path / "store")) == raw  # kept byte for byte: nothing read it lossily or rewrote it
+    assert len(paid.children) == (1 if where == "pending_child" else 0)

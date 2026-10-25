@@ -133,6 +133,30 @@ def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, f
 
     A held run's usage and tool calls were added when its gate logged it.
     """
+    step = account(change, done, fields)
+    store.write(lock, change)
+    announce(store, lock, change.slug, step)
+
+
+def announce(store: Store, lock: Lock, slug: str, step: dict[str, object]) -> None:
+    """Log a step event and print it; called only once the Change that step settled is durable."""
+    store.log(lock, slug, step)
+    out(json.dumps(step, default=str))
+
+
+def announce_all(store: Store, lock: Lock, slug: str, steps: list[dict[str, object]]) -> None:
+    """Announce the step events a settled result left behind, in order."""
+    for step in steps:
+        announce(store, lock, slug, step)
+
+
+def deferrable(done: session_result.Run) -> bool:
+    """A run confirmed gone with its usage read: a child may keep it to count it with its settlement (pending_child)."""
+    return bool(done.termination and done.termination.confirmed) and not unread(done)
+
+
+def account(change: Change, done: session_result.Run, fields: dict[str, object]) -> dict[str, object]:
+    """Add one session's usage and tool calls to the Change in memory and return its step event; nothing is written."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": done.session_id}
     step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage, "model": done.model_check}
     step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
@@ -141,9 +165,7 @@ def logged(store: Store, lock: Lock, change: Change, done: session_result.Run, f
     if done.usage.get("error") != "held":
         change.spend = change.spend.plus(done.usage, done.session_id)
         change.tool_use = change.tool_use.plus(done.tool_calls)
-    store.write(lock, change)
-    store.log(lock, change.slug, step)
-    out(json.dumps(step, default=str))
+    return step
 
 
 def reviewer(  # noqa: PLR0913, PLR0917 - the session is made in the read-only worktree of the source
@@ -163,13 +185,17 @@ def review_run(  # noqa: PLR0913, PLR0917 - the visual review has its own result
     *,
     submit: tools.Spec = tools.REVIEW,
     settings: Settings | None = None,
+    defer: bool = False,
 ) -> tuple[Result, session_result.Run]:
-    """The reviewer session's verdict and its run, whose payload is the submitted review; *settings* a snapshot."""
+    """The reviewer session's verdict and its run, whose payload is the submitted review; *settings* a snapshot.
+
+    *defer* leaves a deferrable run's accounting to its caller, which settles it with its Change (see pending_child).
+    """
 
     def one(at: Path) -> list[tuple[str, sdk_adapter.Session]]:
         return [(label, dataclasses.replace(made(at), submit=submit))]
 
-    return judges(store, lock, change, source, one, settings)[0]
+    return judges(store, lock, change, source, one, settings, defer=defer)[0]
 
 
 def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
@@ -181,6 +207,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     settings: Settings | None = None,
     *,
     hold: bool = False,
+    defer: bool = False,
 ) -> list[tuple[Result, session_result.Run]]:
     """Fresh read-only judges in the read-only worktree of *source*: together on the SDK, in turn in the window.
 
@@ -222,7 +249,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     judged = []
     for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock
         verdict = session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
-        if not unread(done):
+        if not unread(done) and not (defer and deferrable(done)):
             logged(store, lock, change, done, {"kind": label, "exit": verdict.exit})
         judged.append((verdict, done))
     left = any(not (r.termination and r.termination.confirmed) for r in runs)

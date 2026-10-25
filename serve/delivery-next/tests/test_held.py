@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
@@ -23,8 +23,8 @@ from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config
-from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import held, sessions
+from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
+from owlbear_delivery_next.workflow_steps import held, held_writes, sessions
 
 NOW = datetime(2026, 10, 13, 5, tzinfo=UTC)
 UNREAD = "the usage at the step's end could not be read (RuntimeError)"
@@ -613,3 +613,217 @@ def test_a_hold_an_older_build_kept_is_unread_once_and_never_zero_or_recharged(
     runner._step(store, Lock("c1"), accepted, loop.next_step(accepted, NOW), clone)  # noqa: SLF001
     assert review_loop(store) == (1, 1)
     assert (store.read("c1").spend.credits, store.read("c1").spend.unread) == (0.0, ["s1"])
+
+
+def held_without_file(tmp_path, clone, monkeypatch) -> tuple[Store, Change]:
+    """A held build whose hold file cannot be written: the Change keeps the hold in `held_fallback`."""
+    store = Store(tmp_path / "store")
+    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
+    store.write(Lock("c1"), change)
+
+    async def unread(cfg):
+        return built(cfg, commit(clone, "b.txt"), unread=True)
+
+    def disk_full(*_args, **_kwargs):
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(held, "atomic_write", disk_full)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+    return store, store.read("c1")
+
+
+class BoundaryReachedError(Exception):
+    """The next session started: the fake worker boundary was reached."""
+
+
+@pytest.mark.parametrize("discard", ["retry", "head"])
+def test_a_discarded_hold_retires_its_fallback_so_its_head_is_not_offered_again_after_a_return(
+    tmp_path, clone, monkeypatch, discard
+):
+    store, c = held_without_file(tmp_path, clone, monkeypatch)
+    assert c.held_fallback is not None
+    question = loop.open_question(c)
+    head = c.held_fallback.head
+    c = answer(store, c, "retry" if discard == "retry" else "accept")
+    if discard == "head":
+        commit(clone, "c.txt")  # HEAD moves on: the accepted hold is stale
+    starts = []
+
+    async def boundary(cfg):
+        starts.append(cfg.session_id)
+        assert store.read("c1").held_fallback is None  # retired durably before anything runs in its place
+        raise BoundaryReachedError
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", boundary)
+    with pytest.raises(BoundaryReachedError):
+        runner._step(store, Lock("c1"), c, loop.next_step(c, NOW), clone)  # noqa: SLF001
+    assert len(starts) == 1
+    git(clone, "reset", "-q", "--hard", "HEAD~1")
+    git(clone, "reset", "-q", "--hard", head)  # HEAD returns to the commit the declined output came from
+    fresh = Store(tmp_path / "store")
+    assert fresh.read("c1").held_fallback is None
+    assert [o.id for o in held.offered(fresh, fresh.read("c1"), question)] == ["retry"]
+    assert held.take(fresh, Lock("c1"), fresh.read("c1")) is None
+
+
+def test_a_stale_hold_retires_its_fallback_durably_and_keeps_a_later_one(tmp_path, clone, monkeypatch):
+    store, c = held_without_file(tmp_path, clone, monkeypatch)
+    c = answer(store, c, "accept")
+    stale = c.held_fallback
+    later = stale.model_copy(update={"at": stale.at.replace(year=stale.at.year + 1)})
+    c.brief.version += 1
+    assert held.take(store, Lock("c1"), c) is None
+    assert (c.held_fallback, store.read("c1").held_fallback) == (None, None)
+    assert [e["event"] for e in store.events("c1") if e.get("event") == "held-stale"] == ["held-stale"]
+
+    kept = store.read("c1")
+    kept.held_fallback = later  # a later hold of the same session: retiring the stale one never removes it
+    store.write(Lock("c1"), kept)
+    held.drop(store, Lock("c1"), "c1", held.gen(stale))
+    assert store.read("c1").held_fallback == later
+
+
+def test_a_failed_count_write_keeps_the_owners_pause_when_the_hold_is_counted_later(tmp_path, clone, monkeypatch):
+    store = Store(tmp_path / "store")
+    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
+    store.write(Lock("c1"), change)
+
+    async def unread(cfg):
+        return built(cfg, commit(clone, "b.txt"), unread=True)
+
+    real_write = Store.write
+
+    def count_fails(self, lock, c):
+        if c.counted_holds:
+            msg = "disk full"
+            raise OSError(msg)
+        return real_write(self, lock, c)
+
+    monkeypatch.setattr(Store, "write", count_fails)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    with pytest.raises(OSError, match="disk full"):
+        runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+
+    monkeypatch.setattr(Store, "write", real_write)
+    store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
+    paused, _ = store.fold(Lock("c1"), "c1", NOW)
+    assert paused.intent.paused_at is not None
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a held session is counted, not run"))
+    runner._step(store, Lock("c1"), paused, paused.step, clone)  # noqa: SLF001
+    recovered = store.read("c1")
+    assert recovered.intent.paused_at == paused.intent.paused_at
+    assert len(recovered.counted_holds) == 1
+    assert recovered.outcome is not None
+    assert [q.id for q in recovered.questions] == [recovered.outcome.question]
+
+
+@pytest.mark.parametrize("intent", ["pause", "abandon", "change"])
+def test_an_owner_intent_queued_during_a_failed_count_survives_the_real_fold_and_the_recovery(
+    tmp_path, clone, monkeypatch, intent
+):
+    store = Store(tmp_path / "store")
+    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
+    store.write(Lock("c1"), change)
+
+    async def unread(cfg):
+        return built(cfg, commit(clone, "b.txt"), unread=True)
+
+    real_write = Store.write
+
+    def count_fails(self, lock, c):
+        if c.counted_holds:
+            msg = "disk full"
+            raise OSError(msg)
+        return real_write(self, lock, c)
+
+    monkeypatch.setattr(Store, "write", count_fails)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    with pytest.raises(OSError, match="disk full"):
+        runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+
+    monkeypatch.setattr(Store, "write", real_write)
+    hold = held.read(store, "c1")
+    assert hold is not None
+    assert hold.change is not None
+    store.put_inbox("c1", IntentItem(at=NOW, intent=intent, text="owner says stop"))
+    owned, _ = Store(tmp_path / "store").fold(Lock("c1"), "c1", NOW)
+    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a held session is counted, not run"))
+    for _ in range(2):  # a second restart counts nothing again
+        fresh = Store(tmp_path / "store")
+        runner._step(fresh, Lock("c1"), fresh.read("c1"), loop.next_step(fresh.read("c1"), NOW), clone)  # noqa: SLF001
+    recovered = store.read("c1")
+    assert recovered.intent == owned.intent
+    assert (recovered.counted_holds, recovered.spend.unread) == ([held.gen(hold)], [hold.run.session_id])
+    gate = loop.open_question(recovered)
+    if intent == "pause":  # the step is still the hold's: its gate goes back, with the hold's question id and span
+        assert gate is not None
+        assert (gate.id, [o.id for o in gate.options]) == (hold.question, ["accept", "retry"])
+        assert recovered.plan.tasks[0].spans == hold.change.plan.tasks[0].spans
+        assert recovered.step.kind == K.BUILD
+        assert [o.id for o in held.offered(store, recovered, gate)] == ["accept", "retry"]
+    else:  # the owner moved the Change on: only the count is recorded, never the old gate or step
+        assert all(q.id != hold.question for q in recovered.questions)
+        assert recovered.step.kind == (K.CLEANUP if intent == "abandon" else K.SHAPE)
+
+
+def test_a_held_file_with_an_unknown_nested_run_field_is_refused_and_never_rewritten(gated):
+    store, c = gated
+    path = held._path(store, "c1")  # noqa: SLF001
+    data = json.loads(path.read_text())
+    data["run"]["surprise"] = True
+    text = json.dumps(data)
+    path.write_text(text)
+    with pytest.raises(StoreError, match="refusing"):
+        held.uncounted(store, c)
+    with pytest.raises(StoreError, match="refusing"):
+        held.hold(store, Lock("c1"), c, Run("s2", ending="result"), "f" * 40, {})
+    assert path.read_text() == text
+
+
+def test_a_change_fallback_with_an_unknown_nested_run_field_is_refused_when_read_back(tmp_path, clone, monkeypatch):
+    git(clone, "branch", "main")
+    store = Store(tmp_path / "store")
+    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
+    store.write(Lock("c1"), change)
+
+    async def unread(cfg):
+        return built(cfg, commit(clone, "b.txt"), unread=True)
+
+    def disk_full(*_args, **_kwargs):
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(held, "atomic_write", disk_full)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+    data = json.loads(store.read("c1").model_dump_json())
+    assert data["held_fallback"]["run"]
+    data["held_fallback"]["run"]["surprise"] = True
+    with pytest.raises(ValidationError, match="surprise"):
+        Change.model_validate_json(json.dumps(data))
+
+
+def test_an_accepted_hold_is_checkpointed_with_its_receipt_before_a_paid_session_writes(gated):
+    store, _ = gated
+    lock = Lock("c1")
+    steps = sum(1 for e in store.events("c1") if e.get("event") == "step")
+    deferred = held_writes.Deferred(store, "c1")
+    parent = store.read("c1")
+    deferred.write(lock, parent)
+    deferred.log(lock, "c1", {"event": "step", "kind": "plan"})
+    assert sum(1 for e in store.events("c1") if e.get("event") == "step") == steps  # its log waits for the receipt
+    assert deferred.checkpoint(lock, parent) is store
+    assert deferred.checkpointed
+    assert not held._path(store, "c1").exists()  # noqa: SLF001
+    assert store.read("c1").accepted_holds
+    assert sum(1 for e in store.events("c1") if e.get("event") == "step") == steps + 1

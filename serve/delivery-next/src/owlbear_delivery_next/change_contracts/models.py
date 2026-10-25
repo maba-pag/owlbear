@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
     Pick,
     Published,
 )
-from owlbear_delivery_next.change_contracts.held_records import HeldRecord
+from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
@@ -463,6 +463,7 @@ class Change(Record):
     accepted_holds: list[str] = Field(default_factory=list)  # held results recorded with this Change's result (RUN-04)
     counted_holds: list[str] = Field(default_factory=list)  # held results whose usage and tool calls the Change counts
     held_fallback: HeldRecord | None = None  # a held result the held file could not keep, with its gate (RUN-04)
+    pending_child: PendingChild | None = None  # a paid challenge of a durable parent step, until it settles (RUN-04)
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
     queue: QueueClaim | None = None  # TD-226: Delivery's open enqueue attempt

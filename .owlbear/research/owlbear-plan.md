@@ -245,7 +245,15 @@ uncounted hold counts it before any step runs. When the hold file cannot be writ
 record (format 8), so the owner's accept and the count survive without a paid rerun; if the Change write fails too,
 the error is reported and nothing is counted. A hold written before this receipt existed is marked unread once,
 never zero-filled or recharged. An accepted fallback is cleared from the Change once its result is durable, so it
-cannot suppress a later step; a failed clear is retried by the next run without a session or a second count. The
+cannot suppress a later step; a failed clear is retried by the next run without a session or a second count. A
+declined or stale hold is retired durably, its fallback with it, before anything runs in its place, so a HEAD that
+returns never revives it; a later hold is never removed with it. A count that failed after its hold was written goes
+on the latest folded Change: the owner's pause, abandon or new brief stays, and the hold's gate comes back only while
+its step and brief still fit. Held runs and pending child runs with unknown fields are refused, never rewritten. An
+accepted parent that starts a paid child (the plan challenge, an amendment challenge) first writes its checkpoint
+with the hold's receipt; the child's validated run is kept on the Change as soon as it returns and counts once, in
+the write that settles its verdict, so a failed settlement resumes from it without a second session. A child whose
+step the owner has left counts once without routing it; a paused one waits for its step. The
 branch carries main's #653 lesson delivery and exposure logging, which runs after the replacement check's send and
 before its delivery is recorded. Other packages remain open until their own merged-code
 acceptance evidence is verified.

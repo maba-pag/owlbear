@@ -50,10 +50,12 @@ from owlbear_delivery_next.workflow_steps import (
     engine,
     follow,
     held,
+    held_writes,
     judges,
     lookup,
     merge,
     overlap,
+    pending_child,
     plan_round,
     prepare,
     publish,
@@ -97,7 +99,7 @@ _out = sessions.out
 _kept = held.kept_session
 
 
-def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: PLR0915 - session lifecycle
+def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: C901, PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
     if held.settled(store, lock, change):  # its result is recorded already: only the hold's cleanup remains (RUN-04)
         return
@@ -179,28 +181,33 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
-    post = held.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt (RUN-04)
+    post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
-    result = amend.challenge(post, lock, change, path, run, result=result, settings=settings)  # TD-179: judged only
+    proposal = amend.proposed(change, run, result)  # TD-179: judged once this step's own result is durable
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
+    change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     sessions.logged(
         post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
     )
+    events: list[dict[str, object]] = []
     if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
-        result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others)
+        result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
         overlap.record(change, result, others, path)
         end = datetime.now(UTC)
     result = overlap.integrated(post, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
-    change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     if ctx is not None:
         result = prepare.chosen(post, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    held.write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
+    if proposal is not None:  # its challenger's stop, else this result, is written with the verdict and its spend
+        amend.challenge(post, lock, change, path, proposal, route=result, settings=settings)
+        return
+    held_writes.write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
+    sessions.announce_all(store, lock, slug, events)  # logged once the result that counts their round is durable
 
 
 def _helpers(
@@ -402,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
+    change = pending_child.retired(store, lock, change)  # a child whose step the owner's controls left counts once
     if (pending := held.uncounted(store, change)) is not None:  # a held session counts before anything else runs
         held.counted_hold(store, lock, pending)
         return
@@ -445,11 +453,10 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind == StepKind.TESTS:  # a test review's reviewers (TD-373)
             curation.run(store, lock, change, repo)
-        elif step.kind in AGENT:
-            agent = _reused(store, lock, change) or prepare.refused(store, lock, change)
-            agent = (
-                agent or review.completed(store, lock, change, repo) or plan_round.continued(store, lock, change, repo)
-            )
+        elif step.kind in AGENT:  # a step whose amendment challenge did not settle goes on from it (TD-179)
+            agent = amend.resumed(store, lock, change, repo) or _reused(store, lock, change)
+            agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
+            agent = agent or plan_round.continued(store, lock, change, repo)
             agent or _agent(store, lock, change, repo)
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
             brief_round.run(store, lock, change, repo)

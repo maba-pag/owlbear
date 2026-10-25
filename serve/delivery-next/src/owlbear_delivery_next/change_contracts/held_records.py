@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict
 class HeldRun(BaseModel):
     """The parts of a session's run its processing reads, with the accounting its gate would have counted (RUN-04)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     session_id: str
     ending: str
     detail: str = ""
@@ -26,6 +28,20 @@ class HeldRun(BaseModel):
     subagents: list[dict[str, Any]] = []
     tool_calls: dict[str, dict[str, int]] = {}
     counted: bool = False  # the usage and tool calls above were kept with the hold; an older build kept none
+
+
+class PendingChild(BaseModel):
+    """A paid child session of a durable parent step, until its verdict, spend and receipt commit together (RUN-04).
+
+    Its usage is the child's own, never the owner-hold marker: the pending child settles once with its Change.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str  # the session's step label: plan-challenge or amendment-challenge
+    parent: str  # what the child judges: the plan version, or the candidate amendment's id
+    route: dict[str, Any] | None = None  # the proposing step's own result, which stands unless the challenger stops
+    run: HeldRun | None = None  # the child's validated run, kept as soon as it returns
 
 
 class HeldRecord(BaseModel):

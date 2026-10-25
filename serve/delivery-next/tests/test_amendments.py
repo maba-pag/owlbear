@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import amendments, sdk_adapter
+from owlbear_delivery_next.runtimes import amendments, sdk_adapter, session_result
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config, roles
@@ -106,7 +106,9 @@ def proposing(store: Store, clone: Path, monkeypatch, args: dict, during=lambda:
 
     judged = []
 
-    def review_run(_store, _lock, _change, source, made, label, *, submit, settings):
+    def review_run(*args, submit, settings, **kwargs):
+        _store, _lock, _change, source, made, label = args
+        assert kwargs["defer"] is True  # the challenge settles only once its write is durable
         judged.append((label, submit, made(source).message, settings))
         verdict = tools.VisualReviewResult(
             verdict="fix", findings=[{"place": "AC-1", "problem": "tabs could now pass", "fix": "keep trimming tabs"}]
@@ -173,10 +175,11 @@ def test_a_lost_challenge_leaves_the_exact_candidate_unjudged(tmp_path):
 
     run = Run("c1-build", "premise", payload, termination=DONE)
     back = loop.StepResult(exit=Exit.BACK, back_to=K.PLAN)
+    made = amend.proposed(c, run, back)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(amend.sessions, "review_run", lost)
         with pytest.raises(TimeoutError):
-            amend.challenge(store, Lock("c1"), c, tmp_path, run, result=back)
+            amend.challenge(store, Lock("c1"), c, tmp_path, made, route=back)
     (a,) = store.read("c1").amendments
     assert ([i.criterion for i in a.items], a.verdict) == (["AC-1"], "")  # the owner's AC-2 is never a candidate
 
@@ -197,13 +200,17 @@ def test_no_challenge_starts_or_counts_without_confirmed_processes(tmp_path, mon
     back = loop.StepResult(exit=Exit.BACK, back_to=K.PLAN)
     monkeypatch.setattr(amend.sessions, "review_run", lambda *_a, **_kw: pytest.fail("the proposer may still run"))
     gone = Run("p", "premise", payload, termination=Termination(confirmed=False))
-    assert amend.challenge(store, Lock("c1"), c, tmp_path, gone, result=back) is back
+    assert amend.proposed(c, gone, back) is None
     assert c.amendments == []
 
-    stop = loop.StepResult(exit=Exit.STOP, reason="the challenger may still run")
     verdict = tools.VisualReviewResult(verdict="pass")
     left = Run("j", "result", verdict, termination=Termination(confirmed=False))
+    stop = session_result.to_result(left, K.REVIEW, NOW, K.BUILD)
     monkeypatch.setattr(amend.sessions, "review_run", lambda *_a, **_kw: (stop, left))
     done = Run("p", "premise", payload, termination=DONE)
-    assert amend.challenge(store, Lock("c1"), c, tmp_path, done, result=back) is stop
-    assert [a.verdict for a in store.read("c1").amendments] == [""]  # never "equivalent" from a run left going
+    made = amend.proposed(c, done, back)
+    assert made is not None
+    amend.challenge(store, Lock("c1"), c, tmp_path, made, route=back)
+    stopped = store.read("c1")
+    assert (stopped.outcome.exit, stopped.step.kind, stopped.pending_child) == (Exit.STOP, K.BUILD, None)
+    assert [a.verdict for a in stopped.amendments] == [""]  # never "equivalent" from a run left going
