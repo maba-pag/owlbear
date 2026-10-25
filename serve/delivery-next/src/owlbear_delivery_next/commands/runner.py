@@ -74,7 +74,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
-READ_ONLY = frozenset({StepKind.PLAN, StepKind.REVIEW})  # their sessions run in the Change's read-only worktree
 TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
 
 
@@ -174,7 +173,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config
-    run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
+    run = accepted or asked.settled(partial(held.kept_session, store, lock, change, path, made))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
@@ -200,23 +199,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = prepare.chosen(post, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    _write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
-
-
-def _write_result(  # noqa: PLR0913, PLR0917 - the receipt needs the store, lock, change, hold and deferred writes
-    store: Store,
-    lock: Lock,
-    change: Change,
-    accepted: session_result.Run | None,
-    final: Change,
-    post: Store | held.Deferred,
-) -> None:
-    """Write a step's result with an accepted hold's receipt, then remove the hold once that write is durable."""
-    store.write(lock, held.receipted(store, final, accepted))
-    if isinstance(post, held.Deferred):  # the logs its writes deferred follow the receipted result
-        post.flush()
-    if accepted:  # a failed write, or a failed cleanup, leaves the hold: the receipt stops it running again
-        held.consume(store, lock, change.slug)
+    held.write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
 
 
 def _helpers(
@@ -225,26 +208,6 @@ def _helpers(
     """The tools that answer within the turn: the builder's design detector on a UI Change (slice 7), the lookup."""
     ui = change.step.kind == StepKind.BUILD and change.brief.ui
     return (*(((design_tools.SCAN, partial(design.builder_scan, at)),) if ui else ()), asked.helper())
-
-
-def _kept(
-    store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]
-) -> session_result.Run:
-    """The step's own session, a read-only one in the Change's read-only worktree.
-
-    An unread one names the Change worktree, whose HEAD is the commit judged, so the gate can hold its result (TD-56).
-    """
-
-    def own(cfgs: list[sdk_adapter.Session]) -> list[session_result.Run]:
-        try:
-            return [sessions.run(store, cfgs[0])]
-        except UsageUnreadError as exc:
-            exc.worktree = path
-            raise
-
-    if change.step.kind in READ_ONLY:
-        return sessions.isolated(store, lock, change, path, lambda at: [config(at)], own)[0]
-    return own([config(path)])[0]
 
 
 def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:
@@ -439,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
     if (pending := held.uncounted(store, change)) is not None:  # a held session counts before anything else runs
-        _counted_hold(store, lock, pending)
+        held.counted_hold(store, lock, pending)
         return
     if step is not None:
         try:
@@ -492,7 +455,7 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         else:
             _engine(store, lock, change, repo)
     except UsageUnreadError as exc:
-        _gate_unread(store, lock, exc)
+        held.gate_unread(store, lock, exc)
     except sessions.SessionGrantError as exc:
         now = datetime.now(UTC)
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
@@ -500,37 +463,6 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), datetime.now(UTC)))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
-
-
-def _gate_unread(store: Store, lock: Lock, exc: UsageUnreadError) -> None:
-    """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56).
-
-    The hold is written before anything is counted. When the held file cannot be written, the Change keeps the same
-    record, so the run is never lost and never paid for again; the gate and its count then come from that one Change.
-    """
-    kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
-    head = held.head(exc.worktree) if exc.worktree else None
-    head = head if head and exc.run.head in {None, head} else None  # the result's own commit is still HEAD
-    label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
-    if head:
-        gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=True), datetime.now(UTC))
-        _counted_hold(store, lock, held.hold(store, lock, gated, exc.run, head, label))
-        return
-    gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=False), datetime.now(UTC))
-    store.write(lock, gated)
-    sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)
-
-
-def _counted_hold(store: Store, lock: Lock, pending: held.Held) -> None:
-    """A held session counts once, with the gate question it was asked on, and only then does the step wait (RUN-04).
-
-    An older hold keeps no Change of its own, so the stored one is the base it counts on.
-    """
-    change = pending.change or store.read(lock.slug)
-    change.counted_holds = [*change.counted_holds, held.gen(pending)]
-    sessions.logged(
-        store, lock, change, held.accounted(pending.run), {"kind": pending.kind, "exit": Exit.ASK} | pending.label
-    )
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:

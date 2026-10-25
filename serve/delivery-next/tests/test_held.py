@@ -277,7 +277,7 @@ def test_an_unread_judge_is_logged_with_its_label_so_its_subagents_count_for_its
     with pytest.raises(sessions.UsageUnreadError) as caught:
         sessions.review_run(store, Lock("c1"), change, clone, lambda _at: cfg, "brief-challenge")
     assert caught.value.label == "brief-challenge"
-    runner._gate_unread(store, Lock("c1"), caught.value)  # noqa: SLF001
+    held.gate_unread(store, Lock("c1"), caught.value)
     (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
     assert (step["kind"], step["label"], step["subagents"]) == ("shape", "brief-challenge", ran)
     assert [(u["role"], u["runs"]) for u in pack_routes.subagent_use(store)] == [("challenger", 1)]
@@ -501,9 +501,9 @@ def test_a_held_review_counts_once_and_applies_once_whichever_write_fails(  # no
 
     if stage == "accounting-write":
         with pytest.raises(OSError, match="accounting-write refused"):
-            runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
+            held.gate_unread(store, Lock("c1"), exc)
     else:
-        runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
+        held.gate_unread(store, Lock("c1"), exc)
 
     restarted = store.read("c1")
     runner._step(store, Lock("c1"), restarted, loop.next_step(restarted, NOW), clone)  # noqa: SLF001
@@ -561,7 +561,7 @@ def test_a_held_review_whose_file_and_change_writes_both_fail_is_reported_and_le
     monkeypatch.setattr(held, "atomic_write", refuse)
     monkeypatch.setattr(Store, "write", write)
     with pytest.raises(OSError, match="change refused"):
-        runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
+        held.gate_unread(store, Lock("c1"), exc)
     recorded = store.read("c1")
     assert (recorded.spend.credits, recorded.counted_holds, recorded.held_fallback) == (0, [], None)
     assert review_loop(store) == (0, 0)
@@ -590,7 +590,7 @@ def test_a_hold_an_older_build_kept_is_unread_once_and_never_zero_or_recharged(
 
     monkeypatch.setattr(Store, "write", refuse_counting)
     with pytest.raises(OSError, match="counting refused"):
-        runner._gate_unread(store, Lock("c1"), exc)  # noqa: SLF001
+        held.gate_unread(store, Lock("c1"), exc)
     monkeypatch.setattr(Store, "write", real_write)
     real = held.Held.model_validate_json(held_file.read_text())
     store.write(Lock("c1"), real.change)

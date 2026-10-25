@@ -19,16 +19,20 @@ from pydantic import ValidationError
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.failures import UNREAD, VISUAL_MODEL
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, HeldRun
-from owlbear_delivery_next.change_contracts.models import Change, StepKind
-from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.change_contracts.models import Change, Exit, StepKind
+from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.workflow_steps import decision
+from owlbear_delivery_next.workflow_steps import decision, sessions
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.change_contracts.models import Option, Question
     from owlbear_delivery_next.change_contracts.visual_records import VisualRound
+    from owlbear_delivery_next.runtimes import sdk_adapter
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 ACCEPT = "accept"  # the gate question's option that processes the held result
@@ -37,6 +41,7 @@ UNRECORDED = "the usage of a session held by an older build was not recorded; it
 # Fields a result model no longer has, dropped from a result held before the change; a new call stays strict.
 # A build's changed_paths had to equal the paths Delivery read at its head, so they stand in for its own record.
 OBSOLETE = {"BuildResult": ("changed_paths",)}
+READ_ONLY = frozenset({StepKind.PLAN, StepKind.REVIEW})  # their sessions run in the Change's read-only worktree
 
 
 class Held(HeldRecord):
@@ -353,3 +358,70 @@ def settled(store: Store, lock: Lock, change: Change) -> bool:
         return False
     consume(store, lock, change.slug)
     return True
+
+
+def kept_session(
+    store: Store, lock: Lock, change: Change, path: Path, config: Callable[[Path], sdk_adapter.Session]
+) -> Run:
+    """The step's own session, a read-only one in the Change's read-only worktree.
+
+    An unread one names the Change worktree, whose HEAD is the commit judged, so the gate can hold its result (TD-56).
+    """
+
+    def own(cfgs: list[sdk_adapter.Session]) -> list[Run]:
+        try:
+            return [sessions.run(store, cfgs[0])]
+        except sessions.UsageUnreadError as exc:
+            exc.worktree = path
+            raise
+
+    if change.step.kind in READ_ONLY:
+        return sessions.isolated(store, lock, change, path, lambda at: [config(at)], own)[0]
+    return own([config(path)])[0]
+
+
+def write_result(  # noqa: PLR0913, PLR0917 - the receipt needs the store, lock, change, hold and deferred writes
+    store: Store,
+    lock: Lock,
+    change: Change,
+    accepted: Run | None,
+    final: Change,
+    post: Store | Deferred,
+) -> None:
+    """Write a step's result with an accepted hold's receipt, then remove the hold once that write is durable."""
+    store.write(lock, receipted(store, final, accepted))
+    if isinstance(post, Deferred):  # the logs its writes deferred follow the receipted result
+        post.flush()
+    if accepted:  # a failed write, or a failed cleanup, leaves the hold: the receipt stops it running again
+        consume(store, lock, change.slug)
+
+
+def gate_unread(store: Store, lock: Lock, exc: sessions.UsageUnreadError) -> None:
+    """TD-54: the owner decides; an agent step's own result is held so it can be accepted instead (TD-56).
+
+    The hold is written before anything is counted. When the held file cannot be written, the Change keeps the same
+    record, so the run is never lost and never paid for again; the gate and its count then come from that one Change.
+    """
+    kept = store.read(lock.slug)  # what the step wrote before and during the session; nothing after it
+    here = head(exc.worktree) if exc.worktree else None
+    here = here if here and exc.run.head in {None, here} else None  # the result's own commit is still HEAD
+    label = {"label": exc.label} if exc.label else {}  # whose session it was, when not the step's own (TD-376)
+    if here:
+        gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=True), datetime.now(UTC))
+        counted_hold(store, lock, hold(store, lock, gated, exc.run, here, label))
+        return
+    gated = loop.apply(kept, session_result.usage_gate(exc.run, kept.step.kind, accept=False), datetime.now(UTC))
+    store.write(lock, gated)
+    sessions.logged(store, lock, gated, exc.run, {"kind": kept.step.kind, "exit": Exit.ASK} | label)
+
+
+def counted_hold(store: Store, lock: Lock, pending: Held) -> None:
+    """A held session counts once, with the gate question it was asked on, and only then does the step wait (RUN-04).
+
+    An older hold keeps no Change of its own, so the stored one is the base it counts on.
+    """
+    change = pending.change or store.read(lock.slug)
+    change.counted_holds = [*change.counted_holds, gen(pending)]
+    sessions.logged(
+        store, lock, change, accounted(pending.run), {"kind": pending.kind, "exit": Exit.ASK} | pending.label
+    )
