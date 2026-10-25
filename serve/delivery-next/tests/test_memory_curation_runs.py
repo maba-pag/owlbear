@@ -2,6 +2,7 @@
 
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -361,3 +362,53 @@ def test_an_explicit_reboot_recovery_is_the_gate_and_reused_pids_never_block_a_n
     assert (recovered["state"], Path(session["workspace"]).is_dir(), ledger.retained(session["workspace"])) == (
         "recovered", True, True,
     )  # fmt: skip
+
+
+def older_unknown_run(job: curation.Curation, started: datetime) -> None:
+    """The record an older host left: failed with its termination unknown, no PID map and no ledger key."""
+    reason = f"ended error: {curation.UNKNOWN}; synthetic unconfirmed runtime"
+    job._save("shop", curation.FolderRun(state="failed", started_at=started, ended_at=started, reason=reason))  # noqa: SLF001
+
+
+@pytest.mark.parametrize("ledger", ["empty", "imported"])
+def test_an_older_hosts_unknown_curation_run_holds_one_slot_at_restart_and_its_start_never_runs(root, ledger) -> None:
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    first.maintenance.path.unlink()  # a pre-ledger installation
+    if ledger == "imported":  # the old source was imported already, by an earlier adoption of the same file
+        first.maintenance._save(maintenance.Ledger(imported=[str(first.path())]))  # noqa: SLF001
+    older_unknown_run(first, datetime.now(UTC))
+    slots = Slots(lambda: 1, closed=True)
+    calls: list[str] = []
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda cfg: calls.append(cfg.session_id) or pytest.fail("it ran"))
+    assert slots.counts(curation.SLOT)[2] == 1
+    restarted.start("shop")
+    drained(restarted)
+    shop = {f["folder"]: f for f in restarted.read()["folders"]}["shop"]
+    assert (calls, shop["reason"], slots.counts(curation.SLOT)[2]) == ([], curation.LEFT, 1)
+
+
+def test_a_recovered_older_unknown_curation_run_stays_released_across_repeated_restarts(root) -> None:
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    first.maintenance.path.unlink()
+    older_unknown_run(first, datetime.now(UTC))
+    adopted = curation.Curation(Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root))
+    [session] = adopted.maintenance.read()["sessions"]
+    booted = adopted.maintenance.boot
+    adopted.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
+    adopted.maintenance.recover(session["id"], rebooted=True)
+    for _ in range(2):
+        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+        assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (False, 1)
+
+
+def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
+                   termination=Termination(confirmed=False))  # fmt: skip
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    drained(job)
+    slots = Slots(lambda: 1, closed=True)
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (slots.counts(curation.SLOT)[2], len(restarted.maintenance.read()["sessions"])) == (1, 1)

@@ -160,7 +160,7 @@ def interrupted(job: Job, key: str) -> None:
         run = job.interrupted
         source = f"{key}:run:{run['run']}:{run['started_at']}"  # the same run adopted once, wherever its folder lies
         maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
-    elif "workspace" not in job.state and legacy.is_dir():
+    elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
         maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
 
 
@@ -189,7 +189,7 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
         run, started = str(kept.get("run") or ""), str(kept.get("started_at") or "")
         workspace = str(kept.get("workspace") or legacy)
         maintenance.adopt(f"{key}:run:{run}:{started}", key, "pack", {}, interrupted=True, workspace=workspace)
-    elif "workspace" not in kept and legacy.is_dir():
+    elif "workspace" not in kept and (legacy.is_dir() or pack_job.legacy_uncertain(kept)):
         maintenance.adopt(f"{key}:legacy", key, "pack", {}, interrupted=True, workspace=str(legacy))
 
 

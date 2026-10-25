@@ -58,6 +58,7 @@ class FolderRun(Record):
     ended_at: datetime | None = None
     summary: str = ""
     reason: str = ""
+    key: str = ""  # the ledger's source for an uncertain run; empty when an older host ended it before the ledger
     entries: list[Judged] = Field(default_factory=list)
     skipped: dict[str, str] = Field(default_factory=dict)  # entry id: its revision when the curator skipped it
     seen: dict[str, str] = Field(default_factory=dict)  # every entry still pending after the run: id to revision
@@ -113,6 +114,11 @@ class Curation:
             runs.left,
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
+        for name, r in runs.folders.items():
+            if legacy_uncertain(r):  # adopted once: its key keeps a recovered run from being imported again
+                source = f"{self.path()}#{name}:{r.started_at}"
+                self.maintenance.adopt(source, SLOT, "curation", {}, interrupted=True)
+                runs.folders[name] = r.model_copy(update={"key": source})
         for name, r in runs.folders.items():
             if r.state in {"waiting", "running"}:
                 runs.folders[name] = r.model_copy(update={"state": "failed", "reason": INTERRUPTED})
@@ -314,7 +320,7 @@ class Curation:
         if done.ending != "result" or report is None or unknown:
             why = " ".join((done.detail or "no report was submitted").split())[:300]
             why = f"{UNKNOWN}; {why}" if unknown else why
-            return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}")
+            return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended {done.ending}: {why}", key=key if unknown else "")
         with shared.locked():
             notice = shared.publish([], f"memory {folder}: curation")  # push what the curator committed
         after = {e.id: e.revision for e in _pending(store)}
@@ -333,6 +339,11 @@ def _pending(store: Path) -> list[Any]:
     if not store.is_dir():
         return []
     return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]
+
+
+def legacy_uncertain(run: FolderRun) -> bool:
+    """A failed run whose termination an older host left unknown, and which the ledger has never recorded."""
+    return run.state == "failed" and UNKNOWN in run.reason and not run.key
 
 
 def _unset(settings: Settings) -> str:

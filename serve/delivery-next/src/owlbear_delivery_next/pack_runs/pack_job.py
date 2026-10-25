@@ -521,6 +521,11 @@ def read_only(root: Path) -> dict[str, Any] | None:
     return kept
 
 
+def legacy_uncertain(kept: dict[str, Any]) -> bool:
+    """A failed record an older host wrote when its updater or replay judge may still be running; it has no workspace."""
+    return kept.get("state") == "failed" and "workspace" not in kept and "may still be running" in str(kept.get("reason", ""))
+
+
 def last(store: Store) -> dict[str, Any] | None:
     """The last run's state, ending and times, for the Maintenance page; None when it never ran."""
     try:
