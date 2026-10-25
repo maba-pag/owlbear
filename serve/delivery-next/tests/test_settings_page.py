@@ -80,6 +80,19 @@ def settings_page(store: Store, pds: Any) -> Iterator[Any]:
         server.should_exit = True
 
 
+def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> None:
+    """Copilot, #662: a saved list written differently is no edit; extending it by keyboard keeps the comma."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    looks.fill("hand-off,sample")
+    expect(page.locator("#pending")).to_contain_text("No unsaved edits.")  # the global edit stays apart
+    looks.press_sequentially(",")
+    expect(looks).to_have_value("hand-off,sample,")
+    looks.press_sequentially(" plan")
+    expect(page.locator("#pending")).to_contain_text("spot looks: hand-off, sample → hand-off,sample, plan")
+    looks.fill("hand-off, sample")
+
+
 @pytest.mark.browser
 def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_save(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -148,13 +161,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        looks.fill("hand-off,sample")  # the saved list written differently: no edit
-        expect(page.locator("#pending")).to_contain_text("No unsaved edits.")  # the global edit stays apart
-        looks.press_sequentially(",")  # extending a saved list by keyboard: the comma stays while typing
-        expect(looks).to_have_value("hand-off,sample,")
-        looks.press_sequentially(" plan")
-        expect(page.locator("#pending")).to_contain_text("spot looks: hand-off, sample → hand-off,sample, plan")
-        looks.fill("hand-off, sample")
+        a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks)
         pds.pick(page, "Layer", "global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
         expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults
