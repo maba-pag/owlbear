@@ -9,7 +9,10 @@ counts it again before granting anything. A design pack update takes one slot fo
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import hashlib
+import json
 import subprocess
 import threading
 import uuid
@@ -127,6 +130,17 @@ def admit(host: Host, note: Callable[[str], None]) -> str:
     return key
 
 
+def _still_admitted(host: Host) -> None:
+    """Refuse a session whose slot was granted while a stop began: nothing enters the SDK once the stop has begun.
+
+    Checked under the launch lock, so a stop either finds the session already counted or refuses it here.
+    """
+    with host.launching:
+        if host.closed() or host.draining():
+            msg = "OwlBear stops; the design pack's session did not start"
+            raise design_pack.PackError(msg)
+
+
 def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
     said, turn = False, threading.Event()
     while not host.slots.take(project(host), key, 1, limit(host), turn.set):
@@ -171,16 +185,22 @@ def interrupted(job: Job, key: str) -> None:
         )
 
 
+OBSERVED = ("state", "stage", "run", "started_at", "ended_at", "reason", "workspace")
+
+
 def _generation(record: dict[str, object]) -> tuple[str, datetime | None]:
-    """A legacy run's proven identity and start time; empty when either is missing or unreadable."""
+    """A legacy run's identity: its proven run and start time, else a fingerprint of the fields it says.
+
+    A record without a proven run or start gets the fingerprint of its observed fields, read the same way from the
+    loaded job's merged state and from the raw record, so an unchanged record matches the lease already held for it
+    and a later different one does not.
+    """
     run, started = str(record.get("run") or ""), str(record.get("started_at") or "")
-    if not run or not started:
-        return "", None
-    try:
-        when = datetime.fromisoformat(started)
-    except ValueError:
-        return "", None
-    return f"{run}:{started}", when
+    if run and started:
+        with contextlib.suppress(ValueError):
+            return f"{run}:{started}", datetime.fromisoformat(started)
+    body = json.dumps({k: str(record.get(k) or "") for k in OBSERVED}, sort_keys=True)
+    return "observed:" + hashlib.sha256(body.encode()).hexdigest(), None
 
 
 def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
@@ -225,9 +245,13 @@ def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Liv
             if host is None or host.maintenance is None:
                 msg = "the machine's maintenance ownership is not bound; the design pack's sessions cannot start"
                 raise design_pack.PackError(msg)
-            return maintained.run_owned(
-                host.maintenance, cfg, work, project=project(host), slot=admit(host, note), kind="pack"
-            )
+            slot = admit(host, note)
+            try:
+                _still_admitted(host)
+            except BaseException:
+                release(host, slot)  # refused after its grant: the slot goes back before any SDK entry
+                raise
+            return maintained.run_owned(host.maintenance, cfg, work, project=project(host), slot=slot, kind="pack")
 
         return run
 
