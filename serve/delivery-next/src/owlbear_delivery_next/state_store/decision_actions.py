@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Literal
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Scope, State, new_id
 from owlbear_decisions.validate import layers, project_folders, read_layers
+from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, Receipt
 
@@ -71,7 +72,7 @@ def _reason(reason: str, action: str) -> str:
 def _because(rationale: str, label: str, reason: str) -> str:
     """*rationale* with the reason for this change after it, once."""
     line = label + reason
-    return rationale if line in rationale else "\n\n".join(filter(None, (rationale.strip(), line)))
+    return rationale if line in rationale.split("\n\n") else "\n\n".join(filter(None, (rationale.strip(), line)))
 
 
 def _marked(rationale: str, effect: Effect) -> str:
@@ -203,8 +204,8 @@ def replace(  # noqa: PLR0913 - the owner's successor and the revision he read
     kept = tuple(link for link in old.links if link.type not in LINEAGE)  # exception_to, refines, depends on, related
     new = _new(
         old, title=title.strip() or old.title, topic=topic.strip() or old.topic, statement=statement,
-        rationale=_marked(_because(rationale or old.rationale, CHANGED, why), effect), scope=old.scope,
-        project=old.project,
+        rationale=_marked(_because(rationale or decision_wording.explanation(old), CHANGED, why), effect),
+        scope=old.scope, project=old.project,
         change=old.change, origin=Origin.DECIDED, actor=by, source=PAGE if by == OWNER else by, read_back=_today(),
         state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id), *kept),
     )  # fmt: skip
@@ -223,7 +224,8 @@ def withdraw(  # noqa: PLR0913 - the owner's reason and the revision he read
     if old.state is not State.DRAFT:
         _in_force(old, "withdrawn")
         authorise(old, owner=True, redecided=redecided)
-    update = {"state": State.WITHDRAWN, "conflict": False, "rationale": _because(old.rationale, GONE, why)}
+    update = {"state": State.WITHDRAWN, "conflict": False,
+              "rationale": _because(decision_wording.framed(old), GONE, why)}  # fmt: skip
     said = f"decisions: withdraw {old.id}"
     return [decision_store.save(shared, old.model_copy(update=update), expected_revision=old.revision, message=said)]
 
@@ -249,7 +251,7 @@ def activate(  # noqa: PLR0913 - the owner's reason and the revision he read
                                  "inherited": False}  # fmt: skip
     if olds:
         why = _reason(reason, "activating a draft that replaces one")
-        update["rationale"] = _marked(_because(draft.rationale, CHANGED, why), effect)
+        update["rationale"] = _marked(_because(decision_wording.framed(draft), CHANGED, why), effect)
     found = every(shared) if olds else {}
     confirmed = draft.origin is Origin.DECIDED  # confirmed in the chat that proposed it
     for old in olds:
@@ -276,7 +278,8 @@ def promote(shared: DataRepo | None, project: str, decision_id: str, revision: s
         msg = f"{source.id} is Global already: nothing is wider"
         raise Refused(msg, 422)
     wider = _new(
-        source, title=source.title, statement=source.statement, rationale=_because(source.rationale, CHANGED, why),
+        source, title=source.title, statement=source.statement,
+        rationale=_because(decision_wording.framed(source), CHANGED, why),
         scope=scope, project=source.project if scope is Scope.PROJECT else "", change="", origin=Origin.DECIDED,
         actor=OWNER, source=f"{PAGE}: promoted", read_back=_today(), state=State.IN_FORCE,
         links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),),

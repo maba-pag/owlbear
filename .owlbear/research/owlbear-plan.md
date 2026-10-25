@@ -244,6 +244,12 @@ beside valid rules: worker and lead-chat replies name the unresolved rules and
 reasons without a governing answer or picker run. The full binding wording kept
 by a shortened archived statement reaches shaping and boundary picks, lookup
 replies, pinned baselines and step input through one shared representation.
+Long answers and literal terminal ellipses use a versioned escaped frame that
+keeps binding text separate from reasons, literal headings and later action notes.
+Unframed legacy ellipsis-plus-wording records are indistinguishable from quoted
+reasons and block before a picker or baseline is built. Original approved-answer
+replay may add framing without rewriting accepted IDs or canonical statements;
+otherwise confirmed replacement resolves them. Origin correction validates first.
 
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.

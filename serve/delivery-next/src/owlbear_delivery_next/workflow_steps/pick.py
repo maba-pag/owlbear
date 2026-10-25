@@ -141,17 +141,18 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
     try:
         view = decision_store.load(store.shared, store.name)
         log = corrections(view.snapshot.root, store.name)
+        found = listed(view.snapshot, c)
+        said = message(c, found, log)
     except (decision_store.DecisionsUnavailable, OSError, ValueError) as exc:
         c.brief.picked = base.model_copy(update={"status": "failed", "reason": _one(str(exc))[:300]})
         store.write(lock, c)
         return c
-    found = listed(view.snapshot, c)
     base = base.model_copy(update={"commit": view.commit, "listed": digest(found, moved(view.snapshot, c))})
     if not found:  # nothing in force: nothing to pick, and no session
         c.brief.picked = base.model_copy(update={"status": "ok"})
         store.write(lock, c)
         return c
-    done = _session(store, lock, c, message(c, found, log), c.brief.picked)
+    done = _session(store, lock, c, said, c.brief.picked)
     c.brief.picked = judged(done, found, base)
     sessions.logged(store, lock, c, done, {"kind": LABEL, "exit": c.brief.picked.status})
     return c
@@ -166,10 +167,11 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
     """
     try:
         log = corrections(root, store.name)
+        message_text = message(c, found, log, LATER)
     except (OSError, ValueError) as exc:
         return [], _one(str(exc))[:300]
     held = c.decisions_baseline
-    done = _session(store, lock, c, message(c, found, log, LATER), held)
+    done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))
     held.session = ""  # done: the next reassessment is a session of its own
     sessions.logged(store, lock, c, done, {"kind": LABEL, "exit": said.status, "reassessed": [d.id for d in found]})

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import Scope, State
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
+from owlbear_delivery_next.change_contracts.decision_wording import problem
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, StepKind, Stop
 from owlbear_delivery_next.change_flow import loop, picks
@@ -288,7 +289,7 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
         return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc)[:600], stop=exc.stop(now)))
-    return _judged(view, c, now, store, lock)
+    return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
 
 
 def _refresh(store: Store) -> str:
@@ -297,6 +298,14 @@ def _refresh(store: Store) -> str:
         return decision_store.refresh(store.shared)
     except decision_store.DecisionsUnavailable as exc:
         return f"not refreshed: {exc}"
+
+
+def _wording_faults(view: DataView, c: Change, now: datetime) -> Gate | None:
+    """Unrecoverable full wording blocks before baseline construction or any paid reassessment."""
+    if faults := [why for d in in_force(view.snapshot, c) if (why := problem(d))]:
+        stopped = _stopped(ErrorKind.STATE, "; ".join(faults), FAULTY, "The full decision wording is resolved", now)
+        return Gate(c, stopped)
+    return None
 
 
 def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock | None) -> Gate:

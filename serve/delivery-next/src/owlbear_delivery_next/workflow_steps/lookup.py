@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_decisions import Decision, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
+from owlbear_delivery_next.change_contracts.decision_wording import problem
 from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.settings import roles
@@ -187,10 +188,12 @@ def _unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None:
     """An unresolved scoped rule fails the whole lookup, even beside otherwise valid authority."""
     held = []
     for d in found:
-        if seen.active(d.id):
-            continue
         reasons = ["flagged conflict"] if d.conflict else []
         reasons += [f"{f.rule}: {f.message}" for f in seen.findings_for(d.id)]
+        if why := problem(d):
+            reasons.append(why)
+        if seen.active(d.id) and not reasons:
+            continue
         held.append(
             {
                 "id": d.id,
