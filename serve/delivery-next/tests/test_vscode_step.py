@@ -949,7 +949,7 @@ def test_endpoint_is_none_without_a_running_editor_host(tmp_path: Path) -> None:
 
 
 HEAD, BASE = "a" * 40, "b" * 40
-GOOD = {"summary": "Added greet().", "changed_paths": ["src/greet.ts"], "checks": []}
+GOOD = {"summary": "Added greet().", "checks": []}
 USAGE = {"type": "chat/usage", "usage": {"model": MODEL, "inputTokens": 100, "outputTokens": 20}}
 
 

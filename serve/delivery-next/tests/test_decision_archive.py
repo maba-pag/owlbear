@@ -425,10 +425,10 @@ def test_a_raw_archive_is_refused_while_a_batch_is_interrupted(store) -> None:
     generation = decision_batch.begin(
         store.shared,
         "shop-site",
-        decision_store._head(store.shared),
+        decision_store._head(store.shared),  # noqa: SLF001
         "decisions: left",
         [],
-        [],  # noqa: SLF001
+        [],
     )
 
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):

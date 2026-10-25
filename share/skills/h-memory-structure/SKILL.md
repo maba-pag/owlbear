@@ -63,7 +63,7 @@ MCP memory is canonical.
 | Standard post-task reflection | Write MCP via `save_memory` |
 | MCP tool unavailable or errors | Proceed without memory write; do not use `/memories/` fallback |
 | Curation pass | Read MCP pending entries and promote durable insights into MCP |
-| Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) |
+| Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`); a Delivery step gets them in its first message instead |
 
 The always-loaded `owlbear-system.instructions.md` Memory Governance section triggers post-work
 reflection.

@@ -64,6 +64,7 @@ class Run:
     first: tools.Args | None = None  # a judge's first look, before its final result (design judge, slice 5)
     detail: str = ""
     head: str | None = None
+    changed: list[str] = field(default_factory=list)  # the paths the commits change at ``head``, as Delivery read them
     runtime_pid: int | None = None
     pids: dict[int, float | None] = field(default_factory=dict)
     usage: dict[str, Any] = field(default_factory=dict)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from owlbear_memory import selection
 from owlbear_memory.engine import MemoryEngine, check_slot_efficiency, compute_score, repair_duplicate_ids
 from owlbear_memory.errors import (
     ConcurrencyError,
@@ -45,6 +46,7 @@ __all__ = [
     "check_slot_efficiency",
     "compute_score",
     "repair_duplicate_ids",
+    "selection",
     "validate_scope_agents",
     "writer_lock",
 ]

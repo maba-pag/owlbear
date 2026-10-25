@@ -16,10 +16,12 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from owlbear_decisions import DecisionError, LinkType, Scope, State, check_write, decision_path, new_id, read
-from owlbear_decisions.models import STATEMENT_LIMIT, Decision
+from owlbear_decisions.models import Decision
 from owlbear_decisions.snapshot import read_repo
 from owlbear_decisions.storage import serialize
 from owlbear_decisions.validate import Entry, Layer, check
+from owlbear_delivery_next.change_contracts import decision_wording
+from owlbear_delivery_next.change_contracts.decision_wording import WHOLE, whole  # noqa: F401 - existing consumer API
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_store, decision_transaction
 
@@ -32,7 +34,6 @@ if TYPE_CHECKING:
 
 CHANGES = "changes"
 TITLE = 120
-WHOLE = "Whole wording: "  # a cut statement's whole text in the rationale
 APPROVED = "approved"  # the brief's approval publishes its project decisions (TD-453)
 _STATES = {  # (lasting, the Change's work stays) -> state
     (False, True): State.SPENT,
@@ -237,7 +238,7 @@ def _brief(project: str, c: Change, stem: str, outcome: str) -> list[dict[str, A
     at = c.brief.approved_at
     if at is None:
         return []
-    source = f"Change {c.slug}, brief v{brief.version} approved {at.isoformat(timespec='seconds')}"
+    source = f"{decision_wording.CHANGE}{c.slug}, brief v{brief.version} approved {at.isoformat(timespec='seconds')}"
     final = {d.id for d in brief.decisions}
     approved = _approved(c)
     lasting = {d.id for d, _ in approved if d.id and d.scope == "project"}
@@ -284,7 +285,7 @@ def _changed(project: str, c: Change, stem: str, outcome: str) -> list[dict[str,
             "topic": title,
             "origin": d.origin,
             "actor": "owner" if d.origin == "decided" else "delivery",
-            "source": f"Change {c.slug}, {d.at.isoformat(timespec='seconds')}",
+            "source": f"{decision_wording.CHANGE}{c.slug}, {d.at.isoformat(timespec='seconds')}",
             "created_at": d.at,
         }
         found.append(fields)
@@ -303,9 +304,7 @@ def _said(text: str, origin: str, at: datetime, note: str) -> dict[str, Any]:
     are never stored (TD-449).
     """
     text = text.strip()
-    long = len(text) > STATEMENT_LIMIT
-    statement = text[: STATEMENT_LIMIT - 1].rstrip() + "\u2026" if long else text
-    return {"statement": statement, "rationale": f"{note}\n\n{WHOLE}{text}" if long else note,
+    return {"statement": decision_wording.short(text), "rationale": decision_wording.rationale(text, note),
             "read_back": at.date().isoformat() if origin == "decided" else "none"}  # fmt: skip
 
 

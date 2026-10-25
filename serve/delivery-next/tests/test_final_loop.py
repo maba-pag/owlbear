@@ -99,7 +99,7 @@ def built(store: Store, clone: Path, monkeypatch, write: str, *reject: str) -> N
         (clone / "a.txt").write_text(write)
         git(clone, "commit", "-qam", f"build {write.strip()}")
         rejected = [{"finding": k, "reason": f"{k} is wrong"} for k in reject]
-        payload = tools.BuildResult(summary="Built.", changed_paths=["a.txt"], checks=[], rejected=rejected)
+        payload = tools.BuildResult(summary="Built.", checks=[], rejected=rejected)
         return Run(cfg.session_id, "result", payload, head=git(clone, "rev-parse", "HEAD"), termination=DONE)
 
     monkeypatch.setattr(runner, "_kept", kept)
