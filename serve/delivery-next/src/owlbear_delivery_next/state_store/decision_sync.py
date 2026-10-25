@@ -3,7 +3,7 @@
 Every function runs under the data repository's lock. Before a write the checkout catches up with its remote, so an
 expected revision is checked against the remote's file. A rejected push is rebased only when the remote changed no
 decision file this checkout changed too; when the remote changed a file just committed, the expected revision was
-stale: that commit is taken back and the save reported stale.
+stale: the commit stays in Git unpublished and the save is reported stale. Nothing here undoes Git history or the index.
 """
 
 from __future__ import annotations
@@ -23,11 +23,15 @@ UPSTREAM = "@{upstream}"
 
 @dataclass(frozen=True)
 class Sent:
-    """What became of one commit and push; `stale` when the remote had changed a committed file first."""
+    """What became of one commit and push; `stale` when the remote had changed a committed file first.
+
+    A stale commit stays in Git, its index and worktree as they are, unpublished; the batch stays interrupted.
+    """
 
     stale: bool = False
     notice: str = ""
     uncommitted: bool = False  # the commit failed and `HEAD` did not move: nothing of the batch is in Git
+    ambiguous: bool = False  # the outcome cannot be proven from here: the batch stays interrupted until owner recovery
 
 
 def _decision_file(rel: str) -> bool:
@@ -84,16 +88,33 @@ def catch_up(shared: DataRepo, until: float) -> str:
 
 
 def publish(shared: DataRepo, paths: list[Path], message: str, until: float) -> Sent:
-    """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here."""
+    """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here.
+
+    A failed commit is known only when HEAD did not move; when it moved, the commit is accepted only if it is provably
+    this call's own and holds the files as they are, so a lost commit is never guessed from a moved head.
+    """
     before = _rev(shared, "HEAD", until)
-    if failed := shared.commit(paths, message, until):
-        return Sent(notice=failed, uncommitted=bool(before) and _rev(shared, "HEAD", until) == before)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
+    failed = shared.commit(paths, message, until)
+    if failed and _rev(shared, "HEAD", until) == before:
+        return Sent(notice=failed, uncommitted=True)
     made = _ours(shared, before, rels, until)
+    if failed and not (made and _in_head(shared, paths, until)):
+        return Sent(notice=failed, ambiguous=True)
     pushed = shared.git("push", "-q", until=until)
     if pushed.returncode == 0:
         return Sent()
-    return _rejected(shared, rels, (before, made), pushed.stderr, until)
+    return _rejected(shared, rels, pushed.stderr, until, own=bool(made))
+
+
+def _in_head(shared: DataRepo, paths: list[Path], until: float) -> bool:
+    """Whether HEAD holds each of *paths* exactly as the worktree does, a file missing from both included."""
+    for path in paths:
+        said = shared.git("show", f"HEAD:{path.relative_to(shared.root).as_posix()}", until=until)
+        held = None if said.returncode else said.stdout.encode("utf-8")
+        if held != (path.read_bytes() if path.exists() else None):
+            return False
+    return True
 
 
 def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str:
@@ -110,41 +131,33 @@ def _ours(shared: DataRepo, before: str, rels: set[str], until: float) -> str:
     return after if not said.returncode and changed and changed <= rels else ""
 
 
-def _rejected(shared: DataRepo, rels: set[str], commits: tuple[str, str], why: str, until: float) -> Sent:
+def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: bool) -> Sent:
     where = f"saved and committed in {shared.root}"
     if shared.git("fetch", "-q", until=until).returncode or (sides := _diverged(shared, until)) is None:
         return Sent(notice=f"{where}, but the push failed: {why.strip()[:200]}")
     ours, theirs = sides
     if stale := theirs & rels:
-        return _take_back(shared, commits, stale, rels, until)
+        ids = ", ".join(sorted(Path(r).stem for r in stale))
+        notice = (
+            f"another checkout changed {ids} first, so this save is stale: its commit stays in Git unpublished, "
+            "and nothing in Git or the index is undone; the batch stays interrupted for the owner to finish or abandon"
+        )
+        if not own:
+            notice += "; HEAD moved past this save's commit, which is not provably its own: fix by hand"
+        return Sent(stale=True, notice=notice)
     if both := ours & theirs:
         listed = ", ".join(sorted(both))
         return Sent(notice=f"{where}, but not published: {listed} changed here and on the remote; the owner decides")
     if failed := shared.rebase(until):
-        return Sent(notice=f"{where}, but it could not be rebased on the remote: {failed}; push it by hand")
+        left = shared.rebasing(until)
+        return Sent(
+            notice=f"{where}, but it could not be rebased on the remote: {failed}; push it by hand",
+            ambiguous=left,
+        )
     sent = shared.git("push", "-q", until=until)
     if sent.returncode:
         return Sent(notice=f"{where}, but the push failed: {sent.stderr.strip()[:200]}")
     return Sent()
-
-
-def _take_back(shared: DataRepo, commits: tuple[str, str], stale: set[str], rels: set[str], until: float) -> Sent:
-    """Undo the verified commit this call made (only that one, every file of it), then rebase: a revision was stale."""
-    before, made = commits
-    ids = ", ".join(sorted(Path(r).stem for r in stale))
-    notice = f"another checkout changed {ids} first, so this save was taken back; reload it and save again"
-    if not made and _rev(shared, "HEAD", until) != before:
-        return Sent(stale=True, notice=f"another checkout changed {ids} first; this save's commit is not provably "
-                    "its own, so it stays unpublished: fix by hand")  # fmt: skip
-    if made:  # the branch moves back only if it still points at our commit; our files return to their parent's
-        moved = shared.git("update-ref", "-m", "owlbear: take back a stale decision save", "HEAD", before, made,
-                           until=until)  # fmt: skip
-        if moved.returncode:
-            return Sent(stale=True, notice=f"{notice}; its commit {made[:9]} stays: {moved.stderr.strip()[:200]}")
-        shared.git("restore", f"--source={before}", "--staged", "--worktree", "--", *sorted(rels), until=until)
-    if failed := rebase(shared, until):
-        notice += f"; not rebased on the remote: {failed}"
-    return Sent(stale=True, notice=notice)
 
 
 def revision_at(shared: DataRepo, ref: str, rel: str, until: float) -> str:

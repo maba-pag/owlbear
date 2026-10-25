@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionError, LinkType, Scope, check_write, decision_path, read, snapshot, write
 from owlbear_decisions.snapshot import CONFLICT
-from owlbear_decisions.storage import kind
+from owlbear_decisions.storage import kind, serialize
 from owlbear_decisions.validate import collect, layers, project_folders
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
-from owlbear_delivery_next.state_store import decision_sync
+from owlbear_delivery_next.state_store import decision_batch, decision_sync, decision_transaction
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ SET_UP = "Set the shared data repository: `owlbear-next data PATH`"
 SET_UP_PROJECT = "Set up the project so the shared data repository holds its folder: `owlbear-next setup`"
 REPAIR = "Repair the shared data repository's checkout so Git can read it"
 READ = "Make the decision folders and files in the shared data repository readable and valid"
+RECOVER = "Finish or abandon the interrupted decision batch by its generation (owner's explicit choice)"
 ROUNDS = 3  # flag-and-publish rounds before a conflict is reported unresolved
 SUCCEEDS = (LinkType.REPLACES, LinkType.PROMOTED_FROM)  # the links that make a successor (TD-426)
 
@@ -139,14 +140,56 @@ def _usable(seen: Snapshot, project: str) -> Snapshot:
     return seen
 
 
+def _interrupted(shared: DataRepo) -> None:
+    """Refuse every read and write while a batch is in flight: its files are not yet a settled rule set."""
+    _head(shared)  # the journal lives in the checkout's Git folder, so the checkout is read first
+    try:
+        batch = decision_batch.pending(shared)
+    except decision_batch.JournalError as exc:
+        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+    if batch is not None:
+        ids = ", ".join(batch.ids)
+        msg = f"the interrupted decision batch {batch.generation} ({ids}) must be finished or abandoned"
+        raise DecisionsUnavailable(msg[:600], RECOVER)
+
+
+def _open(shared: DataRepo | None) -> DataRepo:
+    root = _checkout(shared)
+    _interrupted(root)
+    return root
+
+
+checkout = _checkout  # the owner's recovery reads the checkout while a batch is in flight
+head = _head
+files = _files
+usable = _usable
+
+
+def _stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
+    try:
+        return decision_batch.stamp(shared)
+    except decision_batch.JournalError as exc:
+        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+
+
+def _paired(shared: DataRepo, project: str) -> DataView:
+    """HEAD and the snapshot read as one: a batch that began or completed while they were read is refused."""
+    first = _stamp(shared)
+    commit = _head(shared)
+    seen = _files(shared, project)
+    if _head(shared) != commit or _stamp(shared) != first:
+        msg = "the decisions changed while they were read, so they are not a settled rule set; read them again"
+        raise DecisionsUnavailable(msg, READ)
+    return DataView(seen, commit)
+
+
 def file_snapshot(shared: DataRepo | None, project: str) -> Snapshot:
     """A readable file-only view, with the same checkout, project and unreadable-file checks as `load`."""
-    return _usable(_files(_checkout(shared), project), project)
+    return _usable(_paired(_open(shared), project).snapshot, project)
 
 
 def _view(shared: DataRepo, project: str) -> DataView:
-    commit = _head(shared)
-    return DataView(_files(shared, project), commit)
+    return _paired(shared, project)
 
 
 def load(shared: DataRepo | None, project: str) -> DataView:
@@ -155,7 +198,7 @@ def load(shared: DataRepo | None, project: str) -> DataView:
     A file in those layers that is not a usable decision raises `DecisionsUnavailable`: the rules it holds are
     unknown, so nothing may run as if it were absent. Findings stay in the snapshot for the caller to judge.
     """
-    view = _view(_checkout(shared), project)
+    view = _view(_open(shared), project)
     _usable(view.snapshot, project)
     return view
 
@@ -165,6 +208,7 @@ def refresh(shared: DataRepo | None) -> str:
     shared = _checkout(shared)
     try:
         with shared.locked():
+            _interrupted(shared)
             status = shared.git("status", "--porcelain", "--untracked-files=no")
             if status.returncode:
                 msg = f"Git cannot read the shared data repository {shared.root}: {status.stderr.strip()[:200]}"
@@ -206,6 +250,7 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
     shared = _checkout(shared)
     try:
         with shared.locked():
+            _interrupted(shared)
             return _save_all(shared, [(d, _layer(shared.root, d), expected) for d, expected in items], message)
     except DataRepoError as exc:
         raise DecisionsUnavailable(str(exc)) from exc
@@ -220,22 +265,46 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     behind = f"not checked against the remote: {behind}" if behind else ""
     decisions, paths = [d for d, _, _ in items], [decision_path(d, folder) for d, folder, _ in items]
     before = {path: _content(path) for path in paths}
-    if refused := _refusals(items) or write_batch(items):
+    if refused := _refusals(items):
+        return _refused(shared, decisions, refused, behind)
+    generation = _begin(shared, items, before, message)
+    try:
+        refused = write_batch(items)
+    except OSError:
+        if _as_before(before):  # the failed write put every file back: nothing of the batch is in flight
+            decision_batch.complete(shared, generation)
+        raise
+    if refused:
+        decision_batch.complete(shared, generation)
         return _refused(shared, decisions, refused, behind)
     sent = decision_sync.publish(shared, paths, message, until)
-    if sent.uncommitted:  # files no commit holds would be read as rules by every Change here: put back
-        _unstage(shared, before, until)
-        notice = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
+    if sent.uncommitted or sent.ambiguous or sent.stale:
+        if sent.uncommitted and _refusal_settles(shared, before, until):  # the files are put back: nothing is in flight
+            decision_batch.complete(shared, generation)
+            notice = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
+        else:  # the batch stays interrupted: only the owner's finish or abandon settles it
+            notice = f"{sent.notice} (interrupted batch {generation}: finish or abandon it in Decisions)"
         return [Receipt(d.id, saved=False, commit=_head(shared), notice=notice[:300]) for d in decisions]
-    if sent.stale:
-        return [Receipt(d.id, saved=False, commit=_head(shared), notice=sent.notice[:300]) for d in decisions]
+    decision_batch.complete(shared, generation)
     held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
     view = _reconcile(shared, decisions, said, until)
+    if view is None:  # saved and published; only the conflict flags are interrupted
+        return [Receipt(d.id, saved=True, commit=_head(shared), notice=_join(*said)[:300]) for d in decisions]
     return [
         replace(_receipt(shared, view, d, _join(*said, behind), until), batch=revision == d.revision)
         for d, revision in zip(decisions, held, strict=True)
     ]
+
+
+def _begin(shared: DataRepo, items: list[Placed], before: dict[Path, bytes | None], message: str) -> str:
+    """Journal the batch, with each file's bytes before and after, before its first file is written."""
+    files = []
+    for decision, folder, _ in items:
+        path = decision_path(decision, folder)
+        files.append((path.relative_to(shared.root).as_posix(), before[path], serialize(decision).encode("utf-8")))
+    project = next((d.project for d, _, _ in items if d.project), "")
+    return decision_batch.begin(shared, project, _head(shared), message, [d.id for d, _, _ in items], files)
 
 
 def _refusals(items: list[Placed]) -> dict[str, str]:
@@ -272,6 +341,10 @@ def _content(path: Path) -> bytes | None:
         return None
 
 
+def _as_before(before: dict[Path, bytes | None]) -> bool:
+    return all(_content(path) == text for path, text in before.items())
+
+
 def _put_back(path: Path, text: bytes | None) -> None:
     if text is None:
         path.unlink(missing_ok=True)
@@ -279,12 +352,18 @@ def _put_back(path: Path, text: bytes | None) -> None:
         path.write_bytes(text)
 
 
-def _unstage(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> None:
-    """Put the batch's files back as they were and their index entries back to `HEAD`'s."""
+def _refusal_settles(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> bool:
+    """Put a refused batch's files back, if the index holds none of them: Git and the index are never reset here.
+
+    The index is compared with `HEAD` only; any staged difference (ours or the owner's) keeps the batch interrupted.
+    """
+    for path in before:
+        rel = path.relative_to(shared.root).as_posix()
+        if shared.git("diff", "--cached", "--quiet", "--", rel, until=until).returncode:
+            return False
     for path, text in before.items():
         _put_back(path, text)
-    rels = [p.relative_to(shared.root).as_posix() for p in before]
-    shared.git("reset", "-q", "--", *rels, until=until)
+    return True
 
 
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
@@ -296,11 +375,12 @@ def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str
     ]
 
 
-def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView:
+def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView | None:
     """Flag competing successors and publish the flags, reloading until none is left unflagged (ROUNDS at most).
 
-    A flag publication the remote overtook is taken back, and the next round reloads and flags again; a refused flag
-    commit puts the flags back, leaving the competitors unflagged and none of them active.
+    The flags are one journaled batch of their own. A flag publication the remote overtook is taken back, and the next
+    round reloads and flags again; a refused flag commit puts the flags back, leaving the competitors unflagged and
+    none of them active; an unknown one leaves the batch interrupted, and the loop stops.
     """
     project = next((d.project for d in decisions if d.project), "")
     for _ in range(ROUNDS):
@@ -308,15 +388,23 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
         competing = {e.decision.id: e for d in decisions for e in _competitors(found, d)}
         if not competing:
             return _view(shared, project)
-        before = {e.path: _content(e.path) for e in competing.values()}
-        if flagged := [path for _, entry in sorted(competing.items()) if (path := _flag(entry))]:
+        entries = [e for _, e in sorted(competing.items())]
+        files = [(e.path, serialize(e.decision.model_copy(update={"conflict": True})).encode("utf-8")) for e in entries]
+        halt: list[bool] = []
+
+        def flag(entries: list[Entry] = entries, halt: list[bool] = halt) -> tuple[str, bool]:
+            flagged = [path for e in entries if (path := _flag(e))]
+            if not flagged:
+                return "", False
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until)
-            if sent.uncommitted:
-                _unstage(shared, {p: before[p] for p in flagged}, until)
-                said.append(f"the conflict flags on {ids} were not committed and are put back: {sent.notice}")
-                break
-            said.append("" if sent.stale else sent.notice)
+            halt.append(sent.uncommitted or sent.ambiguous or sent.stale)
+            return sent.notice, sent.ambiguous or sent.stale
+
+        notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag)
+        said.append(notice)
+        if halt and halt[0]:
+            return None  # the flag batch is interrupted: authority cannot be read until the owner settles it
     return _view(shared, project)
 
 

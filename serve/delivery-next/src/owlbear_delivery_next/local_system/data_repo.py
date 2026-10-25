@@ -264,18 +264,25 @@ class DataRepo:
         return self._settle(pulled, "git pull failed", until)
 
     def rebase(self, until: float | None = None) -> str:
-        """Rebase on the upstream as last fetched, without fetching; a failed rebase is undone. Why it failed."""
+        """Rebase on the upstream as last fetched, without fetching. A failed rebase is never aborted. Why it failed."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
         return self._settle(done, "git rebase failed", until)
 
+    def rebasing(self, until: float | None = None) -> bool:
+        """Whether Git has a rebase in progress in this checkout, whoever started it; never aborted here."""
+        until = time.monotonic() + SAVE_SECONDS if until is None else until
+        admin = Path(_git(self.root, "rev-parse", "--absolute-git-dir", until=until).stdout.strip() or self.root)
+        return any((admin / d).exists() for d in ("rebase-merge", "rebase-apply"))
+
     def _settle(self, done: subprocess.CompletedProcess[str], failed: str, until: float) -> str:
+        """Report a failed rebase and leave it exactly as Git stopped it: no abort, no index or worktree change."""
         if done.returncode == 0:
             return ""
-        admin = Path(_git(self.root, "rev-parse", "--absolute-git-dir", until=until).stdout.strip() or self.root)
-        if any((admin / d).exists() for d in ("rebase-merge", "rebase-apply")):
-            _git(self.root, "rebase", "--abort", until=until + PENDING_SECONDS)
-        return done.stderr.strip()[:200] or failed
+        why = done.stderr.strip()[:200] or failed
+        if self.rebasing(until):
+            return f"{why}; a rebase is in progress in {self.root} and was left as it is for the owner to resolve"
+        return why
 
     def pending(self) -> str:
         """What in the shared checkout is not yet committed or pushed, as a notice; nothing when all is published."""

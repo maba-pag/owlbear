@@ -8,11 +8,13 @@ Its decisions become decision files in the same commit (TD-419, `decision_archiv
 from __future__ import annotations
 
 import json
+import time
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system.data_repo import DataRepoError
+from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.state_store import decision_archive
+from owlbear_delivery_next.state_store import decision_archive, decision_sync, decision_transaction
+from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -65,12 +67,23 @@ def save(
         }
     stem = f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}"
     path = store.shared.root / store.name / decision_archive.CHANGES / f"{stem}.json"
+    text = json.dumps(record, indent=1) + "\n"
+    message = f"changes: {store.name}: {c.slug} {outcome}"
     try:
         with store.shared.locked():
             path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write(path, json.dumps(record, indent=1) + "\n")
-            files, left = decision_archive.archive(store.shared.root, store.name, c, stem, outcome)
-            said = store.shared.publish([path, *files], f"changes: {store.name}: {c.slug} {outcome}")
-    except (DataRepoError, OSError) as exc:
+            planned, problems = decision_archive.plan(store.shared.root, store.name, c, stem, outcome)
+            writes = [] if problems else decision_archive.batch_files(planned)
+
+            def publish() -> tuple[str, bool]:
+                atomic_write(path, text)
+                files, left = decision_archive.write_plan(planned, problems, c.slug)
+                sent = decision_sync.publish(store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS)
+                return "; ".join(filter(None, [sent.notice, *left])), sent.stale or sent.ambiguous
+
+            notice = decision_transaction.transaction(
+                store.shared, store.name, message, [(path, text.encode("utf-8")), *writes], publish
+            )
+    except (DataRepoError, OSError, DecisionsUnavailable) as exc:
         return f"the record of {c.slug} was not saved: {exc}"[:300]
-    return "; ".join(filter(None, [said, *left]))[:1000]
+    return notice[:1000]

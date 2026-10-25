@@ -1,0 +1,214 @@
+"""The journal of a decision batch in flight: written before its first file, cleared once published or put back.
+
+A save of several decision files writes them, commits them as one commit and reads them back. Before the first file,
+the journal records the project, Git's head, the decision ids and each file's bytes before and after the batch, under
+a fresh generation. A journal that stays after a crash is an interrupted batch: `decision_store` then refuses every
+read and write of the decisions until the owner finishes or abandons it by that generation (`decision_recovery`).
+Completing a batch records its generation in a list that is never pruned, so a copy of an old journal cannot be
+replayed (ABA).
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import json
+import os
+import uuid
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from tempfile import mkstemp
+from typing import TYPE_CHECKING
+
+from owlbear_delivery_next.local_system.storage_io import open_lock
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
+    from owlbear_delivery_next.local_system.data_repo import DataRepo
+
+JOURNAL = "owlbear-decision-batch.json"
+COMPLETED = "owlbear-decision-batches-completed.json"
+LOCK = "owlbear-decision-batch.lock"
+
+
+class JournalError(ValueError):
+    """The journal or its list of completed batches cannot be read, so whether a batch is in flight is unknown."""
+
+
+@dataclass(frozen=True)
+class Batch:
+    """One batch in flight: its files by path relative to the checkout, with their bytes before and after."""
+
+    generation: str
+    project: str
+    head: str
+    message: str
+    ids: tuple[str, ...]
+    files: tuple[tuple[str, bytes | None, bytes], ...]
+
+
+def _admin(shared: DataRepo) -> Path:
+    found = shared.git("rev-parse", "--absolute-git-dir")
+    if found.returncode:
+        msg = f"the git folder of {shared.root} cannot be found: {found.stderr.strip()[:200]}"
+        raise JournalError(msg)
+    return Path(found.stdout.strip())
+
+
+@contextmanager
+def _locked(shared: DataRepo) -> Iterator[None]:
+    """Hold the batch lock while the journal and the completed list are read or changed together.
+
+    Every transition and every stamp capture takes it, so a reader never pairs a journal and a list from different
+    moments: the pair it reads is one that existed.
+    """
+    dir_fd = os.open(_admin(shared), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        lock_fd = open_lock(dir_fd, blocking=True, name=LOCK)
+        try:
+            yield
+        finally:
+            os.close(lock_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def journal_path(shared: DataRepo) -> Path:
+    """The journal's place in the Git admin folder, where Git never tracks it."""
+    return _admin(shared) / JOURNAL
+
+
+def replace_file(path: Path, data: bytes | None) -> None:
+    """Make *path* hold *data* atomically, or no file at all when *data* is None."""
+    if data is None:
+        path.unlink(missing_ok=True)
+        return
+    descriptor, temporary = mkstemp(dir=path.parent, prefix=".", suffix=".tmp")
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        Path(temporary).replace(path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def _encode(batch: Batch) -> bytes:
+    def text(data: bytes | None) -> str | None:
+        return None if data is None else base64.b64encode(data).decode("ascii")
+
+    files = [{"path": rel, "before": text(before), "after": text(after)} for rel, before, after in batch.files]
+    record = {
+        "generation": batch.generation,
+        "project": batch.project,
+        "head": batch.head,
+        "message": batch.message,
+        "ids": list(batch.ids),
+        "files": files,
+    }
+    return json.dumps(record, indent=1).encode("utf-8")
+
+
+def _decode(raw: bytes) -> Batch:
+    def data(value: str | None) -> bytes | None:
+        return None if value is None else base64.b64decode(value, validate=True)
+
+    try:
+        record = json.loads(raw)
+        files = tuple((f["path"], data(f["before"]), data(f["after"])) for f in record["files"])
+        return Batch(
+            str(record["generation"]),
+            str(record["project"]),
+            str(record["head"]),
+            str(record["message"]),
+            tuple(str(i) for i in record["ids"]),
+            files,
+        )
+    except (KeyError, TypeError, ValueError, binascii.Error) as exc:
+        msg = f"the interrupted-batch journal cannot be read: {exc}"
+        raise JournalError(msg) from exc
+
+
+def _generations(raw: bytes | None) -> set[str]:
+    if raw is None:
+        return set()
+    try:
+        listed = json.loads(raw)
+    except ValueError as exc:
+        msg = f"the list of completed decision batches cannot be read: {exc}"
+        raise JournalError(msg) from exc
+    if not isinstance(listed, list) or not all(isinstance(g, str) for g in listed):
+        msg = "the list of completed decision batches is not a list of generations"
+        raise JournalError(msg)
+    return set(listed)
+
+
+def _read(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        msg = f"the interrupted-batch journal cannot be read: {exc}"
+        raise JournalError(msg) from exc
+
+
+def pending(shared: DataRepo) -> Batch | None:
+    """The batch in flight, if any; a journal whose generation completed is a stale copy and is ignored."""
+    admin = _admin(shared)
+    with _locked(shared):
+        raw = _read(admin / JOURNAL)
+        listed = _read(admin / COMPLETED)
+    if raw is None:
+        return None
+    batch = _decode(raw)
+    return None if batch.generation in _generations(listed) else batch
+
+
+def begin(  # noqa: PLR0913, PLR0917 - a batch is its project, head, message, decisions and files together
+    shared: DataRepo,
+    project: str,
+    head: str,
+    message: str,
+    ids: Sequence[str],
+    files: Sequence[tuple[str, bytes | None, bytes]],
+) -> str:
+    """Record a batch in flight before any of its files is written; return its new generation."""
+    generation = uuid.uuid4().hex
+    batch = Batch(generation, project, head, message, tuple(ids), tuple(files))
+    with _locked(shared):
+        replace_file(_admin(shared) / JOURNAL, _encode(batch))
+    return generation
+
+
+def stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
+    """The journal and the completed list as they are now; a batch in flight is refused, so a read never starts in one.
+
+    Both bytes are read before the batch check: a batch that begins after the journal was read is seen at the next
+    stamp, and one that completed meanwhile changes the list, which is never pruned, so its ABA cannot match.
+    """
+    admin = _admin(shared)
+    with _locked(shared):
+        journal = _read(admin / JOURNAL)
+        listed = _read(admin / COMPLETED)
+    if journal is not None and _decode(journal).generation not in _generations(listed):
+        msg = f"the interrupted decision batch {_decode(journal).generation} is in flight"
+        raise JournalError(msg)
+    return journal, listed
+
+
+def complete(shared: DataRepo, generation: str) -> None:
+    """Record *generation* as completed for good, then clear the journal if it is still this batch's."""
+    admin = _admin(shared)
+    with _locked(shared):
+        listed = _generations(_read(admin / COMPLETED)) | {generation}
+        replace_file(admin / COMPLETED, json.dumps(sorted(listed), indent=1).encode("utf-8"))
+        try:
+            if _decode((admin / JOURNAL).read_bytes()).generation == generation:
+                (admin / JOURNAL).unlink()
+        except FileNotFoundError:
+            pass

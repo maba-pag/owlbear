@@ -17,7 +17,15 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.state_store import briefs, change_record, decision_archive
+from owlbear_delivery_next.state_store import (
+    briefs,
+    change_record,
+    decision_archive,
+    decision_batch,
+    decision_recovery,
+    decision_store,
+    decision_sync,
+)
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.state_store.store import Store as LocalStore
 
@@ -139,27 +147,34 @@ def test_each_ending_gives_its_states(store, shared_repo, ending) -> None:
     assert validate_repo(root) == []
 
 
-def test_a_rerun_after_a_crash_before_publishing_publishes_the_same_files_once(store, shared_repo, monkeypatch) -> None:
+def test_a_crash_before_publishing_stays_interrupted_until_the_owner_finishes_it_once(
+    store, shared_repo, monkeypatch
+) -> None:
     root, remote = shared_repo
     c = finished()
 
-    def crash(*_a: object, **_k: object) -> str:
+    real_publish = decision_sync.publish
+
+    def crash(*_a: object, **_k: object):
         msg = "power cut"
         raise OSError(msg)
 
-    publish = DataRepo.publish
-    monkeypatch.setattr(DataRepo, "publish", crash)
+    monkeypatch.setattr(decision_sync, "publish", crash)
     assert "power cut" in change_record.save(store, c, MERGED, AT)
     written = {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")}
     assert len(written) == 3
     assert git(root, "status", "--porcelain")  # written, never committed
-    monkeypatch.setattr(DataRepo, "publish", publish)
+    monkeypatch.setattr(decision_sync, "publish", real_publish)
 
-    assert change_record.save(store, c, MERGED, AT) == ""
+    # an unknown publication is not retried
+    assert "interrupted decision batch" in change_record.save(store, c, MERGED, AT)
+    assert {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")} == written
+    batch = decision_batch.pending(store.shared)
+    assert decision_recovery.finish(store.shared, batch.generation).done
     assert {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")} == written
     assert git(root, "status", "--porcelain") == ""
     count = git(remote, "rev-list", "--count", "main")
-    assert change_record.save(store, c, MERGED, AT) == ""  # a third run changes nothing at all
+    assert change_record.save(store, c, MERGED, AT) == ""  # a further run changes nothing at all
     assert (git(remote, "rev-list", "--count", "main"), len(archived(root))) == (count, 3)
 
 
@@ -367,3 +382,97 @@ def test_a_write_failing_midway_puts_every_file_back_and_the_record_still_publis
     assert list(root.rglob("decisions/*.md")) == []
     assert json.loads((root / "shop-site" / "changes" / f"{STEM}.json").read_text())["outcome"] == "merged"
     assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_publish_lost_after_the_record_and_archive_are_written_is_never_partial_authority(
+    store, shared_repo, monkeypatch
+) -> None:
+    root, _ = shared_repo
+
+    def lost(*_a: object, **_k: object) -> str:
+        msg = "power cut"
+        raise OSError(msg)
+
+    monkeypatch.setattr(decision_sync, "publish", lost)
+    assert "power cut" in change_record.save(store, finished(), MERGED, AT)
+
+    assert len(archived(root)) == 3  # the files are on disk, unpublished
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
+
+
+def test_a_known_refusal_puts_the_record_and_its_decisions_back(store, shared_repo, monkeypatch) -> None:
+    root, _ = shared_repo
+    monkeypatch.setattr(
+        decision_sync,
+        "publish",
+        lambda *_a, **_k: decision_sync.Sent(notice="saved, but not committed: refused", uncommitted=True),
+    )
+
+    notice = change_record.save(store, finished(), MERGED, AT)
+
+    assert "refused" in notice
+    assert archived(root) == {}
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
+    assert decision_batch.pending(store.shared) is None
+    assert decision_store.load(store.shared, "shop-site").snapshot is not None
+    assert git(root, "status", "--porcelain") == ""
+
+
+def test_a_raw_archive_is_refused_while_a_batch_is_interrupted(store) -> None:
+    root = store.shared.root
+    generation = decision_batch.begin(
+        store.shared,
+        "shop-site",
+        decision_store._head(store.shared),
+        "decisions: left",
+        [],
+        [],  # noqa: SLF001
+    )
+
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
+    assert archived(root) == {}
+    assert decision_batch.pending(store.shared).generation == generation
+
+
+def test_a_crash_after_the_first_archived_file_leaves_readers_blocked(store, monkeypatch) -> None:
+    root = store.shared.root
+    real_write = decision_store.write
+    calls: list[int] = []
+
+    def first_then_crash(*args, **kwargs):
+        calls.append(1)
+        if len(calls) > 1:
+            msg = "power cut after the first file"
+            raise RuntimeError(msg)
+        real_write(*args, **kwargs)
+
+    monkeypatch.setattr(decision_store, "write", first_then_crash)
+    with pytest.raises(RuntimeError, match="power cut"):
+        decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
+
+    assert len(archived(root)) == 1  # the prefix reached disk
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
+
+
+def test_an_archive_is_published_while_its_batch_is_still_pending(store, monkeypatch) -> None:
+    root = store.shared.root
+    pending_at_publish: list[bool] = []
+
+    def lost_publish(self, _paths, _message):
+        pending_at_publish.append(decision_batch.pending(self) is not None)
+        msg = "publish lost after the files were written"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(DataRepo, "publish", lost_publish)
+    with pytest.raises(RuntimeError, match="publish lost"):
+        decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
+
+    assert pending_at_publish == [True]
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
