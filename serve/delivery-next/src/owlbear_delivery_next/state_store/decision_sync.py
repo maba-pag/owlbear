@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 UPSTREAM = "@{upstream}"
+PREPARE_TRIES = 2  # a remote that moves once more between catch-up and proof is caught up with once more
 
 
 @dataclass(frozen=True)
@@ -113,19 +114,45 @@ def catch_up(shared: DataRepo, until: float) -> str:
     return rebase(shared, until)
 
 
+def _ahead(shared: DataRepo, until: float) -> bool:
+    """Whether the remote branch holds commits the checkout lacks; a checkout with no remote branch is not behind."""
+    behind = shared.git("rev-list", "--count", f"HEAD..{UPSTREAM}", until=until)
+    return not behind.returncode and behind.stdout.strip() != "0"
+
+
+def behind_unproved(shared: DataRepo, head: str, until: float) -> bool:
+    """Whether *head* is not on the remote and the remote is ahead, so only a rebase could put a batch on it."""
+    return not proved(shared, head, until) and _ahead(shared, until)
+
+
+def prepare(shared: DataRepo, until: float) -> tuple[str, str]:
+    """Catch up, then prove HEAD on the remote, before any batch is journalled; every writer runs this first.
+
+    Returns the head to journal and a notice about the catch-up. The head is "" when HEAD is not known, or when the
+    remote moved on again before HEAD could be proved; nothing may be written then. When the remote is unreachable
+    and not known to be ahead, the head is returned unproved: its commit then stays unpublished, as before.
+    """
+    notice = ""
+    for _ in range(PREPARE_TRIES):
+        notice = catch_up(shared, until)
+        if (head := _rev(shared, "HEAD", until)) is None:
+            return "", "HEAD is not known, so nothing was written"
+        if not behind_unproved(shared, head, until):
+            return head, (f"not checked against the remote: {notice}" if notice else "")
+    return "", "the remote moved on again before HEAD was proved, so nothing was written; save again"
+
+
 def publish(shared: DataRepo, paths: list[Path], message: str, until: float, head: str) -> Sent:
     """Commit *paths* alone and push; a rejected push never rebases over a remote change of a decision file here.
 
-    *head* is the journalled head of the batch. Before the commit it is put on the remote if it can be, and a rebase
-    refuses to run unless it is on the remote, so a rebase never rewrites a commit the batch's proof depends on. An
-    unproved head still commits; only the rebase is refused. A failed commit is known only when HEAD did not move; when
-    it moved, the commit is accepted only if it is provably this call's own and holds the files as they are, so a lost
-    commit is never guessed from a moved head.
+    *head* is the batch's journalled head, proved on the remote by `prepare` before anything was written. A rebase
+    refuses to run unless it is on the remote, so a rebase never rewrites a commit the batch's proof depends on. A
+    failed commit is known only when HEAD did not move; when it moved, the commit is accepted only if it is provably
+    this call's own and holds the files as they are, so a lost commit is never guessed from a moved head.
     """
     before = _rev(shared, "HEAD", until)
     if before is None:  # nothing is committed unless HEAD is read
         return Sent(notice="HEAD is not known, so nothing was committed", ambiguous=True)
-    proved(shared, head, until)
     rels = {p.relative_to(shared.root).as_posix() for p in paths}
     failed = shared.commit(paths, message, until)
     now = _rev(shared, "HEAD", until)

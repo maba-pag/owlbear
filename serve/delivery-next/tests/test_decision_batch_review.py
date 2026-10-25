@@ -62,7 +62,8 @@ def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupt
         target.write_text("{}", encoding="utf-8")
         return decision_transaction.Step("")  # success-looking, no landing proof, no refusal
 
-    notice = decision_transaction.transaction(shared, "shop-site", "changes: silent", [(target, b"{}")], silent)
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    notice = decision_transaction.transaction(shared, "shop-site", "changes: silent", [(target, b"{}")], silent, head)
 
     assert notice.startswith("interrupted batch"), notice
     assert decision_batch.pending(shared) is not None
@@ -77,7 +78,8 @@ def test_a_known_refusal_with_unmoved_head_puts_the_files_back_and_completes(pic
     def refused(_head: str) -> decision_transaction.Step:
         return decision_transaction.Step("the commit was refused", refused=True)
 
-    notice = decision_transaction.transaction(shared, "shop-site", "changes: refused", [(target, b"{}")], refused)
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    notice = decision_transaction.transaction(shared, "shop-site", "changes: refused", [(target, b"{}")], refused, head)
 
     assert notice == "the commit was refused"
     assert decision_batch.pending(shared) is None

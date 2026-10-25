@@ -97,16 +97,13 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
             batch = _current(root, generation)
             if _committed(root, batch):
                 _written(root, batch)
-                if not decision_sync.proved(root, batch.head, time.monotonic() + SAVE_SECONDS):
-                    notice = (
-                        f"committed in Git, but {batch.head[:12]} is not on the remote, so batch {generation} stays "
-                        "interrupted; the owner resolves it"
-                    )
-                    return Recovery(generation=generation, done=False, notice=notice)
                 decision_batch.complete(root, generation)
-                notice = "already committed in Git and on the remote: its marker is completed; no rebase is run here"
+                notice = "committed locally; no push/rebase retried: its marker is completed"
                 return Recovery(generation=generation, done=True, notice=notice)
             _at_head(root, batch)
+            if decision_sync.behind_unproved(root, batch.head, time.monotonic() + SAVE_SECONDS):
+                msg = f"the remote moved past {batch.head[:12]}, so batch {generation} is not republished here"
+                raise DecisionsUnavailable(msg, RECOVER)
             _preflight(root, batch)
             for rel, _, after in batch.files:
                 storage_io.make_dirs((root.root / rel).parent)
@@ -118,6 +115,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
             if sent.uncommitted or sent.stale or sent.ambiguous or not landed:
                 why = sent.notice[:300] or "Git does not hold the batch as written"
                 return Recovery(generation=generation, done=False, notice=f"not published, so it stays: {why}")
+            _written(root, batch)
             decision_batch.complete(root, generation)
             return Recovery(generation=generation, done=True, notice="finished: the batch is published as one commit")
     except (DataRepoError, OSError) as exc:

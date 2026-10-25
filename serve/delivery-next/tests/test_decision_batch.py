@@ -142,7 +142,7 @@ def test_finish_after_publication_only_completes_the_marker(picking):
 
     done = decision_recovery.finish(picking.shared, pending.generation)
     assert done.done
-    assert "already committed in Git" in done.notice  # the exact after-images were proved before the marker completed
+    assert "committed locally; no push/rebase retried" in done.notice  # the exact after-images were proved first
     assert decision_batch.pending(picking.shared) is None
     assert _statements(picking.shared) == {"Notes live in Postgres."}
 
@@ -420,8 +420,9 @@ def test_an_owner_edit_after_a_publish_that_then_raises_stays_interrupted(pickin
         msg = "crash after publish"
         raise RuntimeError(msg)
 
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
     with shared.locked(), pytest.raises(RuntimeError, match="crash after publish"):
-        decision_transaction.transaction(shared, PROJECT, "decisions: owner edit", [(path, published)], step)
+        decision_transaction.transaction(shared, PROJECT, "decisions: owner edit", [(path, published)], step, head)
 
     pending = decision_batch.pending(shared)
     assert pending is not None

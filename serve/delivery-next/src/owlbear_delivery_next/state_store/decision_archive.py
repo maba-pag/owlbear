@@ -77,10 +77,14 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
     """
     shared = DataRepo(root)
     with shared.locked():
+        head, behind = decision_sync.prepare(shared, time.monotonic() + SAVE_SECONDS)
+        if not head:
+            return [], [behind]
         planned, problems = plan(root, project, c, stem, outcome)
         files = batch_files(planned) if not problems else []
         if not files:
-            return write_plan(planned, problems, c.slug)
+            written, left = write_plan(planned, problems, c.slug)
+            return written, [n for n in (*left, behind) if n]
         done: dict[str, tuple[list[Path], list[str]]] = {}
 
         def step(head: str) -> decision_transaction.Step:
@@ -93,9 +97,9 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
                 sent.notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted
             )
 
-        notice = decision_transaction.transaction(shared, project, f"archive {c.slug}", files, step)
+        notice = decision_transaction.transaction(shared, project, f"archive {c.slug}", files, step, head)
     written, left = done["result"]
-    return written, [*left, notice] if notice else left
+    return written, [n for n in (*left, notice, behind) if n]
 
 
 def lasting(project: str, c: Change, stem: str, *, root: Path | None = None) -> list[Decision]:

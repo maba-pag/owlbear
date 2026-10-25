@@ -145,31 +145,22 @@ def test_a_foreign_head_with_the_same_tree_is_refused_and_nothing_changes(shared
     assert git(remote, "rev-parse", "main") == published
 
 
-def test_a_remote_history_without_the_batch_head_is_refused_and_the_journal_is_kept(
-    shared_repo, tmp_path, lost_ack
-) -> None:
+def test_a_dirty_checkout_behind_a_remote_that_moved_on_is_refused_before_the_journal(shared_repo, tmp_path) -> None:
     root, remote = shared_repo
-    owner = owner_commit(root, "owner words\n")
-    shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    assert pending.head == owner
-
+    owner_commit(root, "owner words\n")
+    (root / OWNER).write_text("owner edit not committed\n")
     other = checkout(tmp_path / "rewriter", remote)
-    git(other.root, "reset", "-q", "--hard", f"{owner}~1")  # the remote's history is rewritten without the head
     (other.root / "rewritten.txt").write_text("rewritten\n")
     git(other.root, "add", "rewritten.txt")
     git(other.root, "commit", "-q", "-m", "rewritten")
-    git(other.root, "push", "-q", "--force", "origin", "HEAD:main")
-    rewritten = git(remote, "rev-parse", "main")
-    before, head = tree_bytes(root), git(root, "rev-parse", "HEAD")
+    git(other.root, "push", "-q", "origin", "HEAD:main")
+    before, head, published = tree_bytes(root), git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")
 
-    lost_ack[0] = False
-    done = decision_recovery.finish(shared, pending.generation)
+    shared = DataRepo(root)
+    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
 
-    assert done.done is False
-    assert decision_batch.pending(shared).generation == pending.generation
+    assert not receipt.saved
+    assert decision_batch.pending(shared) is None
     assert tree_bytes(root) == before
     assert git(root, "rev-parse", "HEAD") == head
-    assert git(remote, "rev-parse", "main") == rewritten
+    assert git(remote, "rev-parse", "main") == published

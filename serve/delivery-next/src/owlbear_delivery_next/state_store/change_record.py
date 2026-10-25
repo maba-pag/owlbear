@@ -72,6 +72,9 @@ def save(
     message = f"changes: {store.name}: {c.slug} {outcome}"
     try:
         with store.shared.locked():
+            head, behind = decision_sync.prepare(store.shared, time.monotonic() + SAVE_SECONDS)
+            if not head:
+                return f"the record of {c.slug} was not saved: {behind}"[:300]
             storage_io.make_dirs(path.parent)
             planned, problems = decision_archive.plan(store.shared.root, store.name, c, stem, outcome)
             writes = [] if problems else decision_archive.batch_files(planned)
@@ -90,8 +93,8 @@ def save(
                 return decision_transaction.Step(notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted)
 
             notice = decision_transaction.transaction(
-                store.shared, store.name, message, [(path, text.encode("utf-8")), *writes], publish
+                store.shared, store.name, message, [(path, text.encode("utf-8")), *writes], publish, head
             )
     except (DataRepoError, OSError, DecisionsUnavailable) as exc:
         return f"the record of {c.slug} was not saved: {exc}"[:300]
-    return notice[:1000]
+    return "; ".join(filter(None, [behind, notice]))[:1000]

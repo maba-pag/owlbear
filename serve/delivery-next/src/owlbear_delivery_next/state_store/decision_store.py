@@ -262,19 +262,24 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
 
 def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Receipt]:
     until = time.monotonic() + SAVE_SECONDS
-    behind = decision_sync.catch_up(shared, until)
-    behind = f"not checked against the remote: {behind}" if behind else ""
+    head, behind = decision_sync.prepare(shared, until)
+    if not head:  # nothing is journalled or written until HEAD is proved on the remote
+        return [Receipt(d.id, saved=False, commit="", notice=behind[:300]) for d, _, _ in items]
+    return _journal(shared, items, message, head, behind)
+
+
+def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, behind: str) -> list[Receipt]:
+    until = time.monotonic() + SAVE_SECONDS
     decisions, paths = [d for d, _, _ in items], [decision_path(d, folder) for d, folder, _ in items]
     before = {path: _content(path) for path in paths}
     images = {path: (before[path], serialize(d).encode("utf-8")) for d, path in zip(decisions, paths, strict=True)}
     if refused := _refusals(items):
         return _refused(shared, decisions, refused, behind)
-    head = _head(shared)
     generation, rows = _begin(shared, items, before, message, head)
     try:
         refused = write_batch(items)
     except OSError:
-        if _as_before(before):  # the failed write put every file back: nothing of the batch is in flight
+        if decision_batch.restored(before):  # the failed write put every file back: nothing of the batch is in flight
             decision_batch.complete(shared, generation)
         raise
     if refused:
@@ -358,10 +363,6 @@ def _content(path: Path) -> bytes | None:
         return None
 
 
-def _as_before(before: dict[Path, bytes | None]) -> bool:
-    return decision_batch.restored(before)
-
-
 def _put_back(path: Path, text: bytes | None) -> None:
     if _content(path) != text:
         decision_batch.replace_file(path, text)
@@ -389,9 +390,8 @@ def _refusal_settles(shared: DataRepo, images: dict[Path, tuple[bytes | None, by
 
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
     others = f"not saved: {', '.join(sorted(refused))} was refused, and these saves go together or not at all"
-    commit = _head(shared)
     return [
-        Receipt(d.id, saved=False, commit=commit, notice=_join(refused.get(d.id, others), behind)[:300])
+        Receipt(d.id, saved=False, commit=_head(shared), notice=_join(refused.get(d.id, others), behind)[:300])
         for d in decisions
     ]
 
@@ -399,12 +399,15 @@ def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str
 def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], until: float) -> DataView | None:
     """Flag competing successors and publish the flags, reloading until none is left unflagged (ROUNDS at most).
 
-    The flags are one journaled batch of their own. A flag publication the remote overtook is taken back, and the next
-    round reloads and flags again; a refused flag commit puts the flags back, leaving the competitors unflagged and
-    none of them active; an unknown one leaves the batch interrupted, and the loop stops.
+    The flags are one journaled batch: a refused flag commit puts them back, and an unknown one stops the loop as
+    interrupted. Nothing is flagged unless `decision_sync.prepare` proved HEAD on the remote first.
     """
     project = next((d.project for d in decisions if d.project), "")
     for _ in range(ROUNDS):
+        head, behind = decision_sync.prepare(shared, until)
+        if not head:  # the flags are not written: the competitors stay unflagged and none is active
+            said.append(behind)
+            return None
         found = whole(shared)
         competing = {e.decision.id: e for d in decisions for e in _competitors(found, d)}
         if not competing:
@@ -423,7 +426,7 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
             halt.append(sent.uncommitted or unknown)
             return decision_transaction.Step(sent.notice, unknown=unknown, refused=sent.uncommitted)
 
-        notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag)
+        notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag, head)
         said.append(notice)
         if halt and halt[0]:
             return None  # the flag batch is interrupted: authority cannot be read until the owner settles it

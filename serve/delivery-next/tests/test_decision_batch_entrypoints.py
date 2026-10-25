@@ -162,9 +162,10 @@ def test_an_empty_initial_head_probe_is_ambiguous_and_commits_nothing(picking, m
     receipt = decision_store.save(shared, new, expected_revision=None, message="decisions: empty head")
 
     assert not receipt.published
+    assert not receipt.saved
     assert real_git(shared, "rev-parse", "HEAD").stdout == head_before
-    assert decision_batch.pending(shared) is not None
-    assert (shared.root / f"{PROJECT}/decisions/{new.id}.md").exists()
+    assert decision_batch.pending(shared) is None
+    assert not (shared.root / f"{PROJECT}/decisions/{new.id}.md").exists()
 
 
 def test_finish_creates_a_missing_decisions_folder_after_the_whole_batch_is_checked(picking, monkeypatch):
