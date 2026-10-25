@@ -94,6 +94,7 @@ ENGINE: dict[StepKind, engine.Step] = {
     StepKind.CLEANUP: cleanup.run,
 }
 _out = sessions.out
+_kept = held.kept_session
 
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: PLR0915 - session lifecycle
@@ -173,7 +174,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config
-    run = accepted or asked.settled(partial(held.kept_session, store, lock, change, path, made))
+    run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
