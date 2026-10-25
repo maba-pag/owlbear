@@ -5,7 +5,7 @@
 > **Question:** How do agents get better from their own work: fewer common mistakes, wrong tool arguments,
 > rabbit holes and local optimums that miss the real intent, without being steered off course?
 > **Status:** the owner's choices of 2026-10-25, after a pilot, a hindsight review of 83 real moments and Sol's
-> challenges (§3). They replace the live coach of this design's first version and the per-call outside-write watcher
+> challenges (§3); built complete, for Delivery steps and chats, before item 10 (the owner's choice, same day). They replace the live coach of this design's first version and the per-call outside-write watcher
 > of [the earlier draft](delivery-next-watcher-design.md). Catching malicious calls is out of scope for now. Built so
 > far: W1a's feed (#640), phase 1a (#652) and the Primer (#653).
 
@@ -15,10 +15,10 @@
 | --- | --- |
 | **Improvement** | The group, and its page |
 | **Primer** | The lessons every new agent session gets before it starts (§2) |
-| **Spotter** | The live agent at an agent's hand-offs; it records notes in shadow until a live test shows a gain (§4) |
+| **Spotter** | The live agent beside a working agent; in learning mode it records what it would do, live it steers (§4) |
 | **Spotter cases** | The Spotter's graded example cases: its prompt examples and its regression test (§4) |
 | **Retro** | The after-task analysis: reads whole tasks with hindsight, grades the Spotter, proposes lessons and fixes (§5) |
-| **Retro chatlogs** | The kept logs of finished agent conversations (chats and Delivery steps) that Retro reads (§5) |
+| **Retro chatlogs** | The kept logs of finished agent conversations (Delivery steps, enrolled chats) that Retro reads (§5) |
 
 "Watcher" was the working name; the role and setting called `watcher` are renamed when the Spotter is built.
 
@@ -99,58 +99,120 @@ So the line is: a note only when the problem is visible now, silence would cost 
 constraint or decision, the agent will not fix it itself before that lands, and one short note fixes it without
 widening the agent's scope. Otherwise silence, and the moment feeds Retro's lessons and fixes.
 
-## 4. Spotter: live, in shadow first
+## 4. Spotter
 
-- **Where:** Delivery steps first. Delivery is the SDK client of every step and receives each event as it happens;
-  chats need a hook at the agent's stop first.
-- **When:** only at a **hand-off**: the step's `submit_result` (or the end of a turn that reports to the requester).
-  Never mid-flow, never on a clock.
-- **What it sees:** the intent (task, criteria, scope, the requester's latest messages and answers), the agent's
-  stated plan, the hand-off itself, the recent actions with their evidence, and the work still open.
-- **What it judges:** does the hand-off match the request? An unfinished requested item, an acceptance gap its own
-  evidence shows, work handed back that it could do, a conclusion its evidence does not support or a standing
-  decision forbids (the decision-conflict check on the picker role, TD-456/TD-459). Honest partial reports, blockers
-  and decision requests are never pushed to continue.
-- **What it does now:** records its note, sends nothing. Each recorded note is graded later by Retro.
-- **Going live:** only after its grade is high, and then through a steered-versus-silent test on real tasks that
-  compares whole-task outcomes, credits and time, including how the agent reacts to the note.
-- **Spotter cases:** real hand-off moments with Retro's verdict (speak or stay silent, and why): a few as the
-  Spotter's prompt examples, the rest as its regression test (a protected core, recent challenges, a holdout).
-  Replace-better, never a growing pile.
+### Modes and settings
+All settings have no code default; an unset one is an error on the Settings page (Global, with a machine override):
+- **mode:** off, **learning** (records what it would do; the start) or live (acts);
+- **steer share:** in live mode, the share of whole Changes and chats whose notes are sent; the rest record only
+  (the test below);
+- **intervention cap:** at most this many steering notes per step or chat turn;
+- **verbose:** a bounded rationale with its evidence per look, scoped to the machine, a project or a Change, with an
+  expiry. Retro may switch it on within a credit cap and for a named reason, shown on the page; never live mode;
+- **looks:** which looks are on, and the sample rate;
+- **budgets:** credits per day for the Spotter and for Retro; beyond it, a look or run is skipped and recorded;
+- **enrolled chats:** the workspaces or chats the Spotter and Retro may read. Unset reads none. Spotter, Retro and
+  curation sessions are excluded by provenance. The check comes before any read, copy or model call.
 
-Dropped from the first version: the mid-flow coach and its signals, intent checkpoints, `consult_coach`, and the
-switches' "rule verdicts" and "stop/retry/steer" parts. The rethinker (D-01M5MFATRF5RFMJY9C8284FDV5) is not part of
-this design.
+Roles: `spotter` (the `watcher` role renamed, with a settings migration), `retro`, `retro-review`.
 
-## 5. Retro: after the task, with hindsight
+### Looks
+A look is one tool-less session on the spotter role over a **card** (the intent with the requester's latest messages
+and answers, the applicable decisions from the picker's conflict check, the agent's plan, the moment itself, the
+recent actions with their evidence, the open work; each with an event cutoff). It returns a **record**: kind,
+sampling probability, verdict (silent, note, interrupt), the note, the evidence references and a short rationale.
+Records are kept on this machine in a daily store (`~/.owlbear/spotter/records-<date>.jsonl`), each with its session,
+its Change and step or its chat and turn, and its look, so Retro can join them after a restart.
+Active Spotter cases are its prompt examples.
+- **Hand-off:** Delivery's `submit_result`; in a chat, a turn that ends with a reply to the requester.
+- **Plan:** the agent's first reply after a requester message.
+- **State change:** W1a's outside writes, publishing, deleting, settings.
+- **Sample:** any completed action with the configured probability.
 
-- **Runs:** as a machine-host job, like memory curation: after a Change ends (merged or abandoned), when idle over
-  the chats finished since its last run, or by a button on the Improvement page. One run at a time, on its own
-  session slot and budget.
-- **Reads:** Retro chatlogs: the Copilot runtime's full event log of each finished conversation (every tool result,
-  message and compaction summary; compaction only shrinks the model's context, not the log) plus the large outputs
-  the agent saw only as saved files. Delivery keeps the chatlogs of the steps Retro and the Spotter cases refer to;
-  older ones may go. Encrypted reasoning stays unreadable; only its summaries are kept.
-- **Judges:** whole tasks, including what happened after a requester's correction: what went wrong, what it really
-  cost, whether the agent recovered, and whether a note at a hand-off would have been worth its risk. A requester's
-  correction is a signal to look, not a cost by itself; moments are also drawn at random, and evaluation keeps
-  sessions apart.
-- **Produces:**
-  - grades for the Spotter's recorded notes, and Spotter cases;
-  - lesson candidates for the Primer, through memory curation and its approval rules;
-  - tool and contract fixes as backlog entries;
-  - on the Improvement page: its findings, the Spotter's grade, the Spotter cases, and its proposals, capped, with
-    options.
+Sampled and state-change looks stay record-only until Retro shows their class is worth it. The line from §3 holds in
+every mode: correct is not enough; the value must clearly exceed the risk of pulling the agent off course.
 
-## 6. Rollout and measurement
+### Where
+- **Delivery steps:** from the SDK adapter's event stream (W1a's feed).
+- **Chats:** a follower in the machine host tails each enrolled chat's `events.jsonl`.
 
-1. Tool and contract fixes, and the Primer: built. Measure recurring error signatures across runs.
-2. Retro, with its chatlogs kept, and the Improvement page.
-3. The Spotter in shadow at Delivery hand-offs, graded by Retro.
-4. A steered-versus-silent test, only once the grade is high.
-5. Chats: the Spotter's hand-off hook, once Delivery shows a gain.
+### Live delivery
+- **Delivery hand-off:** an accepted `submit_result` is final (the SDK skips another model round), so the Spotter
+  judges the submission before acceptance. When it steers, the tool answers with a non-success note that does not
+  count as an invalid submission; the next submission is validated again.
+- **Other Delivery notes:** sent into the session with an explicit `enqueue`, never taken to have stopped an action.
+- **Chats:** a `Stop` hook (shipped in the seed and wired by the install, inert unless live) asks the machine host for the note tied to
+  that chat's turn, waits a bounded time, takes it only once, drops expired notes and honours `stop_hook_active`.
 
-## 7. Built work
+### The steered-versus-silent test
+A test starts only once Retro's grades of the learning-mode records are high enough for the looks it would steer
+(a threshold set before it starts). Live mode is then promoted only by a test randomised per whole Change (all its steps) and whole chat, the assignment kept
+across restarts. The primary outcome is declared in advance: the task completed without material rework or a broken
+constraint; credits, time and owner effort beside it. Model, prompt and case versions are frozen during a test;
+outcomes are graded blind to the arm where possible; delivery failures are recorded; the promotion threshold is set
+before it starts.
+
+### Spotter cases
+A frozen card plus the right call and why. Stages: candidate, test case, active example; versioned, with rollback; a
+fixed holdout, never an example and used to choose between versions at most once per release of the cases. A change
+of active examples runs the regression and is refused if it gets worse. Seeded from the pilot's moments with Retro's
+hindsight verdicts. Raw cards stay on this machine; only reviewed, minimised and sanitised cases go to owlbear-data
+(`owlbear/improvement/spotter-cases/`), with local provenance references.
+
+## 5. Retro
+
+- **Runs** as a machine-host job like memory curation: one run at a time, its own session slot, pause and the stop
+  barrier, restored after an interruption, part of the machine's busy and leftover checks. Triggers: a Change's end
+  (after its cleanup), idle (finished enrolled chats), the page's button.
+- **Retro chatlogs:** a durable Change-to-session manifest written when a step session is chosen and when it ends, on
+  every ending path; at a step's end its `events.jsonl` is gzipped to `~/.owlbear/retro/chatlogs/`, with the files
+  the runtime saved large outputs to if still present (missing ones are recorded). A chat counts as finished after a
+  day without events; its log is copied when Retro takes it. Logs no finding, case or pending proposal refers to go
+  after 30 days. Encrypted reasoning stays unreadable; only its summaries are kept.
+- **Units:** a finished Change (every step from the manifest, its reviews and its end) or a finished chat, read in
+  segments, each with the chat's later course. Missing evidence makes a finding "unknown", never a proposal.
+- **Judges** with hindsight what went wrong, what it really cost and whether the agent recovered (a requester's
+  correction is a signal to look, not a cost by itself), and **grades** each Spotter record of the unit: worth it,
+  correct but not worth it, wrong, or missed (from sampled silences only).
+- **Proposes**, each kind with its own evidence bar (a reproducible, costly tool defect once; lessons and prompt
+  rules repeated evidence from independent tasks plus counterexamples):
+  - a Spotter case;
+  - a lesson for the Primer;
+  - a change to an agent, a skill or a prompt;
+  - a change to Delivery's logic or a tool contract.
+- Judgement is saved first; each finding has a stable id visible where it is published, and a retry reconciles by id
+  before creating anything.
+
+## 6. Proposals and the owner
+
+Each proposal is challenged by `retro-review` (Sol): is the evidence real, is the direction right, what could it
+break. Survivors, capped per week, reach the owner on the **Improvement page**, which also shows the Spotter (mode,
+verbose, budget used, recent records with grades), Retro (runs, state, a button) and the Spotter cases (stages,
+versions).
+- A proposal states its direction in one line, why (evidence, cost seen), what would change and the review's verdict.
+- The owner decides **direction, not details**: accept, reject, redirect (free text, read back) or later.
+- Accepted: a Spotter case moves a stage (with the regression); a lesson becomes a pending memory in its folder; a
+  project's agent, skill or Delivery change becomes a backlog entry (source `retro`); OwlBear's own becomes an issue
+  in its repository for a chat to build. Nothing is edited silently, and a Change's brief bounds what it may change.
+- Every publication outside this machine (cases, proposal evidence, backlog entries, issues, memories) is reviewed,
+  minimised and sanitised; raw cards, chatlogs and records stay on this machine.
+
+## 7. Build order
+
+Each slice is a pull request, with Sol on its plan and its code:
+1. this design;
+2. settings and roles;
+3. Retro chatlogs;
+4. the card builder;
+5. Spotter records and cases;
+6. the Spotter's looks in learning mode, for Delivery and chats;
+7. Retro;
+8. the Improvement page;
+9. live delivery and the test machinery.
+
+Then item 10.
+
+## 8. Built work
 
 - W1a (#640): its feed, identity and writer are reused by the Spotter.
 - #647 (shell parsing) is closed.
