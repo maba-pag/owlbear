@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts import failures, tool_schema, tools
+from owlbear_delivery_next.change_contracts.held_records import PendingChild
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -793,6 +794,68 @@ def test_an_unread_child_whose_gate_write_fails_is_gated_from_its_capture_and_ne
     else:
         (a,) = c.amendments
         assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[1])
+
+
+def unread_captured(tmp_path, change_repo, monkeypatch, parent) -> tuple[Paid, Store]:
+    """An unread child whose own gate write failed once: its evidence is only in its capture file."""
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    store = held_and_accepted(tmp_path, change_repo, paid, parent)
+    paid.unread_children = 1
+    real_write, armed = Store.write, [True]
+
+    def write(self, lock, change):
+        if armed and set(change.counted_children) - set(self.read(change.slug).counted_children):
+            armed.clear()
+            msg = "gate refused"
+            raise OSError(msg)
+        return real_write(self, lock, change)
+
+    monkeypatch.setattr(Store, "write", write)
+    with pytest.raises(OSError, match="gate refused"):
+        restart(tmp_path, change_repo)
+    monkeypatch.setattr(Store, "write", real_write)
+    assert len(captures(store)) == 1
+    return paid, store
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_an_old_unread_capture_only_counts_under_a_later_child_and_never_gates_it(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid, store = unread_captured(tmp_path, change_repo, monkeypatch, parent)
+    c = store.read("c1")
+    c.outcome = None
+    if parent == "plan":  # a later checkpoint: plan v2 in its challenge, its own child returned and kept
+        c.plan = c.plan.model_copy(update={"version": 2})
+        c.step.mode = "challenge"
+        later = Run("c1-plan-challenge-v2", "result", tools.ReviewResult(verdict="pass"), termination=DONE)
+        later.usage, later.tool_calls, later.model_check = dict(CHILD), {"grep": {"calls": 2}}, "verified"
+        c.pending_child = PendingChild(label=plan_round.LABEL, parent="2", run=held.dump_run(later))
+    else:  # another candidate awaits its own challenge
+        (a1,) = c.amendments
+        c.amendments.append(a1.model_copy(update={"id": "A2"}))
+        c.pending_child = c.pending_child.model_copy(update={"parent": "A2"})
+        paid.verdicts.append(passing(parent))
+    store.write(Lock("c1"), c)
+
+    c = restart(tmp_path, change_repo).read("c1")
+    old = paid.children[0]
+    assert captures(store) == []
+    unread = [q for q in c.questions if (q.cause or "").endswith(f":{failures.UNREAD}") and q.answer is None]
+    assert unread == []  # no gate for the old child; the parent's own was answered at its acceptance
+    assert (c.spend.unread, c.counted_children[0]) == ([old], old)  # counted once
+    assert (c.pending_child, c.tool_use.tools["grep"].calls) == (None, 4)
+    assert c.spend.credits == pytest.approx(2.5 + 3.5)
+    if parent == "plan":  # the later child settles from its kept run: no session, its round counted
+        assert (len(paid.children), c.counted_children) == (1, [old, "c1-plan-challenge-v2"])
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (2, 1, K.BUILD)
+    else:  # the awaited candidate is judged by its own challenger; the old one stays unjudged
+        assert (len(paid.children), c.counted_children) == (2, paid.children)
+        assert [(a.id, a.verdict) for a in c.amendments] == [(c.amendments[0].id, ""), ("A2", "equivalent")]
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
+    with pytest.raises(NextSessionError):  # the next step goes on: no gate, nothing of the old child again
+        restart(tmp_path, change_repo)
+    assert store.read("c1").counted_children == c.counted_children  # nothing counts twice
 
 
 def stored(store: Store) -> str:

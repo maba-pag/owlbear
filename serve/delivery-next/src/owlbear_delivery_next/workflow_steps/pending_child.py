@@ -176,8 +176,7 @@ def recovered(store: Store, lock: Lock, change: Change) -> Change:
             path.unlink(missing_ok=True)
             continue
         if sessions.unread(held.accounted(run)):
-            probe = change.model_copy(update={"pending_child": pending or captured.model_copy(update={"run": None})})
-            change = _unread(store, lock, change, captured, gate=fits(probe))
+            change = _unread(store, lock, change, captured, gate=_gates(change, captured))
             path.unlink(missing_ok=True)
             continue
         if _awaits(pending, captured):
@@ -185,6 +184,19 @@ def recovered(store: Store, lock: Lock, change: Change) -> Change:
             store.write(lock, change)
             path.unlink(missing_ok=True)
     return change
+
+
+def _gates(change: Change, captured: PendingChild) -> bool:
+    """Whether an unread child's capture may still gate the Change: the step it answers is the Change's own.
+
+    Only its own target counts. The Change's record of another child, or of a returned attempt, is never borrowed:
+    over such a later generation the capture only counts.
+    """
+    pending = change.pending_child
+    if not _awaits(pending, captured):
+        return False
+    own = pending or captured.model_copy(update={"run": None})
+    return fits(change.model_copy(update={"pending_child": own}))
 
 
 def _awaits(pending: PendingChild | None, captured: PendingChild) -> bool:
