@@ -20,9 +20,11 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import (
     DesignFailures,  # noqa: TC001 - pydantic resolves it at runtime
 )
+from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - pydantic resolves it at runtime
 
-CONFIG_FORMAT = 11  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
-# 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part
+CONFIG_FORMAT = 12  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+# 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
+# 12 the five unset-by-default preferences and their one-time import marker
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 RUNTIMES: tuple[str, ...] = ("sdk", "window")
@@ -78,12 +80,29 @@ class FinalReview(Record):
     ask_owner_at: int | None = None
 
 
+class Prefs(Record):
+    """The five merge, cleanup and polling preferences (R15); each layer may set any, none has a code default."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    merge_method: MergeMethod | None = Field(default=None, strict=False)  # the API sends the enum's value as text
+    delete_remote_branch: bool | None = None
+    ci_poll_seconds: int | None = None
+    ci_start_window_seconds: int | None = None
+    ask_before_merge: bool | None = None
+
+
+PREF_KEYS: tuple[str, ...] = tuple(Prefs.model_fields)
+
+
 class Layer(Record):
     """A project's overrides; also the base of the global layer."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
     format: int = CONFIG_FORMAT
+    prefs: Prefs | None = None  # R15: layered per field, project over machine over global; never a code default
+    prefs_imported: bool = False  # R15: the legacy import filled this project layer; a retry never fills again
     agents: dict[Role, Agent] = Field(default_factory=dict)
     runtimes: dict[RuntimeName, bool] = Field(default_factory=dict)  # a runtime switched off or on
     widths: list[int] | None = None
@@ -229,6 +248,7 @@ class Settings(Record):
     pr_marker: bool | None = None
     sessions: int | None = None
     watcher: bool | None = None
+    prefs: Prefs = Field(default_factory=Prefs)  # R15: each field None where no layer sets it
     curator_threshold: int | None = None
     sources: dict[str, Source]
     missing: list[str] = Field(default_factory=list)
@@ -254,6 +274,12 @@ class Settings(Record):
 
 
 BASE: GlobalLayer | None = None  # a layer under Global; empty in production (no code defaults), tests set one
+
+
+def pref(settings: Settings, key: str) -> Any:  # noqa: ANN401 - each key has its own type; callers know which
+    """One preference's value; ``SettingsUnset`` while no layer sets it (R15: no code default fills it in)."""
+    settings.need(f"prefs.{key}")
+    return getattr(settings.prefs, key)
 
 
 def _pick(key: str, sources: dict[str, Source], *values: tuple[Source, object]) -> object:
@@ -305,11 +331,17 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         )
         for name in RoundPolicy.model_fields
     }
+    prefs = {
+        key: _pick(f"prefs.{key}", sources, *((s, getattr(layer.prefs or Prefs(), key)) for s, layer in layers))
+        for key in PREF_KEYS
+    }
     missing = [f"agents.{r}.{n}" for r, v in roles.items() for n in used(r) if v[n] is None]
     missing += [k for k, v in general.items() if v is None and k != "visible"]
+    missing += [f"prefs.{k}" for k, v in prefs.items() if v is None]
     missing += [f"final_review.{n}" for n, v in final.items() if v is None]
     return Settings(
         **general,
+        prefs=Prefs.model_validate(prefs),
         agents=agents,
         roles=roles,
         runtimes=runtimes,

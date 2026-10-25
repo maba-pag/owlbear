@@ -41,7 +41,7 @@ from owlbear_delivery_next.pack_runs import pack_replay
 from owlbear_delivery_next.project_host import answers, host
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
-from owlbear_delivery_next.state_store import backlog_migrate
+from owlbear_delivery_next.state_store import backlog_migrate, prefs_import
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -211,6 +211,7 @@ def show_profile(
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     prof = prof.model_copy(update={"runtime": runtime or prof.runtime})
     store.write_profile(prof)
+    prefs_import.run(store)
     notice = (
         store.update_config(lambda cur: _overridden(cur, overrides), "role overrides from the CLI") if overrides else ""
     )
@@ -249,7 +250,11 @@ def report(store: Store, a: argparse.Namespace) -> int:
         sys.stderr.write(f"Runtime not switched: {PAUSED_NOTE}.\n")
         return 1
     else:
-        sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
+        try:
+            sys.stdout.write(show_profile(store, a.repo.resolve(), a.confirm, a.role, a.runtime) + "\n")
+        except ValueError as exc:  # a moved preference is refused before anything is recorded
+            sys.stderr.write(f"Not recorded: {exc}.\n")
+            return 1
     return 0
 
 

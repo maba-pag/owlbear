@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings.config import pref
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, engine
 from owlbear_delivery_next.workflow_steps import conversation as conv
@@ -129,7 +130,7 @@ def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState, step: StepKind
     """P10: a declared or required check that never starts is pending, then the owner's action; never passed."""
     names = ", ".join(state.missing)
     cause = MISSING + names
-    window = timedelta(seconds=int(profile.value(ctx.profile, profile.WINDOW, "300")))
+    window = timedelta(seconds=pref(ctx.store.settings(), "ci_start_window_seconds"))
     since = c.missing.since if c.missing and c.missing.head == pr.head_sha else ctx.now
     if ctx.now - since < window:
         return c, engine.pending(Waiting.CHECK_START, f"waiting for {names} to start", ctx.poll())

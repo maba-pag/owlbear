@@ -329,7 +329,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     @router.get("/changes/{slug}")
     def detail(slug: str) -> dict[str, Any]:
         c = read(slug)
-        o, prof = c.outcome, store.read_profile() or Profile()
+        o = c.outcome
         events = store.events(slug)
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
@@ -370,8 +370,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "checks": checks,
                 "pr": c.names.pr,
                 "target": c.names.target,
-                "asks_merge": profile.value(prof, profile.ASK) == "yes",
-                "deletes_branch": profile.value(prof, profile.DELETE) == "yes",
+                "asks_merge": store.settings().prefs.ask_before_merge,  # None while unset: the page asks the owner
+                "deletes_branch": store.settings().prefs.delete_remote_branch,
                 "paused": c.intent.paused_at is not None,
                 "finished": c.finished_at is not None,
                 "merge": merge,

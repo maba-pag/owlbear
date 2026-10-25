@@ -6,6 +6,11 @@ import { named } from "./sections.mjs";
 
 function saved(layer, key) {
   const loaded = state.loaded;
+  if (key.startsWith("prefs.")) {
+    const v = loaded[layer]?.prefs?.[key.slice(6)];
+    if (v === null || v === undefined) return "";
+    return typeof v === "boolean" ? (v ? "on" : "off") : String(v);
+  }
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
   if (["design_failures", "sessions", "curator_threshold"].includes(key)) return String(loaded[layer]?.[key] ?? "");
   if (key === "pr_labels" || key === "pr_marker" || key === "watcher") {
@@ -32,10 +37,20 @@ export function inherited() {
 // A *literal* value is typed text, where "inherit" is just a word (a label may be named so).
 export function edit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
+  // even a no-op clear is a review
+if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = true;
   const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
   if (value.trim() === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
   show();
+}
+
+// The value a preference's text sends: blank clears it; the server checks the rest (no bounds are guessed here).
+function prefValue(field, value) {
+  if (value === "") return null;
+  if (field === "delete_remote_branch" || field === "ask_before_merge") return value === "on";
+  if (field.startsWith("ci_")) return /^\d+$/.test(value) ? Number(value) : value;
+  return value;
 }
 
 // The edited layer's drafts that differ from what is saved, trimmed as they will be sent.
@@ -50,6 +65,12 @@ function changes(layer) {
     `${key.replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${said(value.trim())}`);
 }
 
+// Confirms a pending legacy import's Merge and cleanup preferences as reviewed, with no edit: the saved values stand.
+export function reviewPrefs() {
+  state.prefsReview = true;
+  return save();
+}
+
 export function pendingLine() {
   const others = Object.keys(drafts).filter((l) => l !== state.layer && dirty(l).length);
   const mine = changes(state.layer), parts = mine.length ? [`Unsaved: ${mine.join("; ")}.`] : ["No unsaved edits."];
@@ -61,6 +82,12 @@ function edited(layer) {
   const next = structuredClone(state.loaded[layer]);
   for (const [key, raw] of dirty(layer)) {
     const value = raw.trim();
+    if (key.startsWith("prefs.")) {  // R15: a blank value clears the layer's own preference, so the field inherits
+      const field = key.slice(6);
+      const mine = { ...(next.prefs ?? {}), [field]: prefValue(field, value) };
+      next.prefs = Object.values(mine).some((v) => v !== null) ? mine : null;
+      continue;
+    }
     if (key === "widths") {
       next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
       continue;
@@ -148,7 +175,9 @@ export async function save() {
   show();
   try {
     state.loaded = await call(`/config/${layer}`,
-      { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer) }, timeout: WRITE });
+      { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
+        prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
+    if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     const whose = { global: "the global", machine: "this machine's" }[layer]

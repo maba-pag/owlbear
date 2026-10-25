@@ -22,6 +22,7 @@ from owlbear_delivery_next.git.remote_git import RemoteGitError, run_remote_git
 from owlbear_delivery_next.github.provider import BranchState, classify_checks
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings.config import pref
 from owlbear_delivery_next.state_store import briefs, change_record, decision_fixes, project_home
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.database import StoreError
@@ -320,7 +321,7 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
     if state.running or state.missing:
         if c.missing is None or c.missing.head != sha:
             c.missing = Episode(head=sha, since=ctx.now)
-        window = timedelta(seconds=int(profile.value(ctx.profile, profile.WINDOW, "300")))
+        window = timedelta(seconds=pref(ctx.store.settings(), "ci_start_window_seconds"))
         elapsed = ctx.now - c.missing.since
         if state.running or elapsed < window:
             if state.running:
@@ -335,7 +336,7 @@ def target_check(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, S
 
 
 def _retire_branch(ctx: Ctx, c: Change, pr: PullRequest | None) -> StepResult | None:
-    if not pr or not pr.merged or profile.value(ctx.profile, profile.DELETE) != "yes":
+    if not pr or not pr.merged or not pref(ctx.store.settings(), "delete_remote_branch"):
         return None
     branch = c.names.branch
     retired = ctx.gh.delete_branch(ctx.repository, branch, pr.head_sha)

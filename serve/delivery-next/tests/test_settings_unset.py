@@ -112,7 +112,8 @@ def test_todays_built_in_values_are_carried_into_global_once_keeping_what_it_set
 def test_a_carried_global_resolves_every_setting(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)  # no Global file yet: today's values in full
-    assert resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing == []
+    prefs = tuple(f"prefs.{key}" for key in config.Prefs.model_fields)  # owner-set, never carried (no code defaults)
+    assert resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing == list(prefs)
 
 
 @pytest.mark.usefixtures("no_base")
@@ -253,3 +254,23 @@ def test_an_unset_watcher_switch_asks_before_a_step_records_anything(monkeypatch
     with pytest.raises(SettingsUnset, match="watcher"):
         runner._agent(store, SimpleNamespace(slug="c1"), c, tmp_path)  # noqa: SLF001
     assert (recorded, c.plan.tasks[0].spans) == ([], [])  # no open span left behind
+
+
+PREF_KEYS = ("merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds", "ask_before_merge")
+
+
+@pytest.mark.parametrize("key", PREF_KEYS)
+def test_an_unset_preference_refuses_the_step_and_asks_the_owner_never_a_code_default(key, monkeypatch):
+    monkeypatch.setattr(config, "BASE", None)  # the test-only base layer would fill it in
+    empty = resolve(None, Layer())
+    assert f"prefs.{key}" in empty.missing
+    with pytest.raises(SettingsUnset) as refused:
+        config.pref(empty, key)
+    assert refused.value.keys == [f"prefs.{key}"]
+
+    asked = change(StepKind.REVIEW)
+    written: list[Change] = []
+    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c))
+    unset_settings.asked(store, SimpleNamespace(slug="c1"), refused.value)
+    (question,) = written[-1].questions
+    assert f"prefs.{key}" in question.text

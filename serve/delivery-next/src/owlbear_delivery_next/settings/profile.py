@@ -17,7 +17,6 @@ import yaml
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
-from owlbear_delivery_next.github.provider import MergeMethod
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -32,12 +31,11 @@ STRICT, RESOLUTION = "github:strict-checks", "github:conversation-resolution"
 WORKFLOWS, DECLARED = "ci:workflows", "ci:declared"
 METHOD, DELETE, HOOKS = "merge:method", "cleanup:delete-remote-branch", "git:pre-push-hook"
 POLL, WINDOW, ASK = "poll:ci-seconds", "ci:start-window-seconds", "merge:ask-before"
-SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # owner settings; kept across re-detection
+SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # R15: legacy owner settings, import-only
 CONFIRMED = "owner confirmed"
 OBSERVED = "; observed: "
 DIGEST = "; workflows "  # declared-CI evidence ends with the digest of the workflow files it was read from
 FLOWS = ".github/workflows"
-_PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
 CI_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
 HEAD_EVENTS = frozenset({"pull_request", "pull_request_target"})  # their checks report on the PR head
 NODE_LOCKS = (("package-lock.json", "npm", "npm ci"), ("pnpm-lock.yaml", "pnpm", "pnpm install --frozen-lockfile"))
@@ -287,12 +285,9 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         **package_entries(repo),
         **rule_entries(rules),
     }
-    for key, default in SETTINGS.items():
-        old = prev.entries.get(key)
-        entries[key] = old or _entry("known", default, "default")
-    if not entries[METHOD].value or entries[METHOD].value not in allowed:
-        chosen = next((m for m in _PREFERRED if m in allowed), "")
-        entries[METHOD] = _entry("known" if chosen else "unsupported", chosen, f"allowed: {methods or 'none'}")
+    for key in SETTINGS:  # legacy owner settings stay verbatim; only the one-time import reads them (R15)
+        if key in prev.entries:
+            entries[key] = prev.entries[key]
     for key, old in prev.entries.items():
         if key in SETTINGS:
             continue
@@ -312,6 +307,9 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
 
 def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
     """Record the owner's value independently of the complete raw observation it is confirmed against."""
+    if key in SETTINGS:
+        msg = f"{key} is a project preference: set it on the Settings page"
+        raise ValueError(msg)
     old = profile.entries.get(key) or _absent(key)
     if is_confirmed(old) and not old.observed and _detected(key):
         msg = f"{key}: a legacy confirmation has no observation to bind; detect the profile first"

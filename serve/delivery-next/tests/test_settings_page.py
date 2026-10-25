@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import socket
+import subprocess
 import threading
 import time
 from datetime import UTC, datetime
@@ -15,6 +16,8 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
@@ -310,3 +313,122 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
     assert store.read_config().sessions == 3
     watcher = store.settings().agent("watcher")  # the watcher needs only its model, effort and context
     assert (watcher.model, watcher.effort, watcher.context) == ("tiny", "medium", "default")
+
+
+@pytest.mark.browser
+def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(store, pds) -> None:
+    """R15: the five optional preferences save into the shown layer, survive a reload, and clear to inherit."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        pds.pick(page, "Merge method", "squash")
+        page.get_by_label("CI poll interval (seconds)").fill("45")
+        pds.pick(page, "Ask before merging", "on")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        page.reload()
+        page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+        expect(page.get_by_label("CI poll interval (seconds)")).to_have_value("45")
+        pds.pick(page, "Merge method", "inherit")  # the inherit choice clears the layer's own value
+        page.get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+    prefs = store.read_config().prefs
+    assert prefs.merge_method is None
+    assert (prefs.ci_poll_seconds, prefs.ask_before_merge) == (45, True)
+
+
+def _refuse_config_once(monkeypatch, config_path: Path) -> None:
+    """The remote refuses the first publication of the project settings file; later ones are real."""
+    real, refused = data_repo.DataRepo.publish, []
+
+    def refuse(self, path, message, until=None):
+        if path == config_path and not refused:
+            refused.append(message)
+            return "remote refused"
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(data_repo.DataRepo, "publish", refuse)
+
+
+@pytest.fixture
+def pending_shared(tmp_path: Path, monkeypatch, shared_repo) -> Store:
+    """A shared project whose legacy preference import is pending: its review is what Settings must complete."""
+    monkeypatch.setattr(model_choices.Offered, "__call__", lambda _self: MODELS)
+    root, _remote = shared_repo
+    s = Store(tmp_path / "store", data_repo.DataRepo(root), "shop-site")
+    s.global_path = tmp_path / "global" / "config.json"
+    s.write_profile(Profile())
+    s.mark_prefs_import("", "pending", "absent")
+    return s
+
+
+def _fresh(tmp_path: Path, remote: Path) -> Store:
+    second = tmp_path / "fresh"
+    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    return Store(tmp_path / "fresh-store", data_repo.DataRepo(second), "shop-site")
+
+
+@pytest.mark.browser
+def test_a_refused_save_of_an_edited_preference_keeps_the_review_until_the_retry_publishes(
+    pending_shared, tmp_path, monkeypatch, shared_repo, pds
+) -> None:
+    """A failed publication notice keeps the owner's review intent, so the plain retry settles the import."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _refuse_config_once(monkeypatch, pending_shared.config_path)
+    with settings_page(pending_shared, pds) as page:
+        pds.pick(page, "Merge method", "squash")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_be_visible()
+        assert pending_shared.read_profile().prefs_import == "pending"
+        page.locator("#save").click()  # the retry carries no new edit
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+    assert pending_shared.read_profile().prefs_import == "done"
+    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs.merge_method == "squash"
+
+
+@pytest.mark.browser
+def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_retry_publishes(
+    pending_shared, tmp_path, monkeypatch, shared_repo, pds
+) -> None:
+    """Clearing a preference that is already empty is still a review, and the retry must not drop it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _refuse_config_once(monkeypatch, pending_shared.config_path)
+    with settings_page(pending_shared, pds) as page:
+        pds.pick(page, "Merge method", "inherit")  # already inherited: no draft, only the review
+        page.get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_be_visible()
+        assert pending_shared.read_profile().prefs_import == "pending"
+        page.locator("#save").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+    assert pending_shared.read_profile().prefs_import == "done"
+    assert _fresh(tmp_path, shared_repo[1]).read_profile().prefs_import == "done"
+
+
+@pytest.mark.browser
+def test_a_pending_import_is_settled_by_the_explicit_review_action_without_inventing_a_value(
+    pending_shared, tmp_path, monkeypatch, shared_repo, pds
+) -> None:
+    """With no edit, the review button settles a pending import; a refused publication keeps it until a retry."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _refuse_config_once(monkeypatch, pending_shared.config_path)
+    with settings_page(pending_shared, pds) as page:
+        review = page.get_by_role("button", name="Confirm merge preferences reviewed")
+        expect(review).to_be_visible()
+        review.click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_be_visible()
+        assert pending_shared.read_profile().prefs_import == "pending"
+        review.click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(review).to_have_count(0)
+    assert pending_shared.read_profile().prefs_import == "done"
+    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs is None

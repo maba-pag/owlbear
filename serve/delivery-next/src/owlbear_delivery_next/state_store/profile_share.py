@@ -46,6 +46,28 @@ def write(store: Store, prof: Profile) -> str:
         return _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
 
 
+def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:
+    """Move the legacy import marker from *expect* to *to* on the latest profile.
+
+    Returns (state after, publication notice, applied): *applied* is False when the marker was not at *expect*, so
+    another run made the move and this one changed nothing. A pending claim records its config *basis*; leaving
+    pending clears it.
+    """
+    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
+
+    with _writer(store):
+        prof = _read_unlocked(store)
+        if prof is None or prof.prefs_import != expect:
+            return (prof.prefs_import if prof else "", "", False)
+        marked = prof.model_copy(update={"prefs_import": to, "prefs_basis": basis if to == "pending" else ""})
+        _keep_local(store, marked)
+        try:
+            notice = _publish(store, store.shared, marked, f"settings: {store.name}: legacy preference import {to}")
+        except DataRepoError as exc:
+            raise SharedError(str(exc)) from exc
+        return to, notice, True
+
+
 @contextlib.contextmanager
 def _writer(store: Store, *, create: bool = True) -> Iterator[None]:
     if store.shared:

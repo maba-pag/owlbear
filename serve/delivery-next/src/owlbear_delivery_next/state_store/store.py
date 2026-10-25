@@ -17,12 +17,12 @@ from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import InboxItem
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
-from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.settings import migrations, profile
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings, resolve
+from owlbear_delivery_next.settings import config as settings_config
+from owlbear_delivery_next.settings import migrations
+from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer, Layer, MachineLayer, Settings
 from owlbear_delivery_next.state_store import profile_share, project_home
 from owlbear_delivery_next.state_store.database import (
     STORE_FORMAT,
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Step
+    from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.change_flow.loop import PrState
     from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.settings.migrations import Migrations
@@ -251,10 +252,10 @@ class Store:
         return self.save(self.config_path, Layer, change, f"{self.name or 'the project'}: {what}")
 
     def settings(self) -> Settings:
-        """The resolved settings: the project layer over this machine's over the global one over the defaults."""
+        """The resolved settings: the project layer over this machine's over the global one; no code defaults (R15)."""
         glob = read_layer(self.global_path, GlobalLayer) if self.global_path else None
         try:
-            return resolve(glob, self.read_config(), read_layer(self.machine_path, MachineLayer))
+            return settings_config.resolve(glob, self.read_config(), read_layer(self.machine_path, MachineLayer))
         except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
             msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
             raise StoreError(msg) from exc
@@ -328,6 +329,8 @@ class Store:
             return profile_share.write(self, profile)
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
+
+    mark_prefs_import = profile_share.mark  # a method: profile_share.mark takes the store first
 
     def write(self, lock: Lock, change: Change) -> None:
         """Write one Change, keeping the previous record as ``prev``."""
@@ -447,7 +450,7 @@ class Store:
             except ValidationError:  # taken all the same, and kept in the activity for the record
                 events.append({"event": "inbox-rejected", "at": now.isoformat(timespec="seconds"), "item": text[:2000]})
         asked = loop.open_question(change) if loop.waiting_consent(change) else None
-        asking = profile.value(self.read_profile() or Profile(), profile.ASK) == "yes"
+        asking = settings_config.pref(self.settings(), "ask_before_merge")
         change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
         if leave is not None:
             kept = leave(before, change)

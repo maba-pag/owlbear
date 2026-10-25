@@ -61,6 +61,11 @@ APPLIED = [
     "agents.picker.minutes",
     "pr_labels",
     "pr_marker",
+    "prefs.merge_method",
+    "prefs.delete_remote_branch",
+    "prefs.ci_poll_seconds",
+    "prefs.ci_start_window_seconds",
+    "prefs.ask_before_merge",
     *(f"agents.{role}.subagents" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
     "agents.preparer.subagents",
     "agents.updater.subagents",  # TD-376; the shaper's chat runs in VS Code, not as a step
@@ -70,10 +75,14 @@ STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host'
 
 
 class Save(BaseModel):
-    """One layer as the page edited it, and the revision of the layer it started from."""
+    """One layer as the page edited it, and the revision of the layer it started from.
+
+    ``prefs_reviewed`` is set only when the owner edited or cleared a Merge and cleanup preference on the page.
+    """
 
     rev: str
     layer: dict[str, Any]
+    prefs_reviewed: bool = False
 
 
 class Folder(BaseModel):
@@ -108,6 +117,9 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
             f"The challenge-round values of the global layer and this machine do not fit together on their own "
             f"({alone[0]}); a project without its own values stops until you fix them there"
         )
+    prof = store.read_profile()
+    if not notice and prof is not None and prof.prefs_import == "pending":
+        notice = PREFS_REVIEW
     return {
         "project": project.model_dump(mode="json"),
         "project_rev": hashlib.sha256(project_raw).hexdigest(),
@@ -118,6 +130,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "global_location": global_path is not None,
         "folder": store.name or None,
         "notice": notice or (store.shared.pending() if store.shared else ""),
+        "prefs_pending": prof is not None and prof.prefs_import == "pending",
         "settings": settings.page(),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only; None where unset
             "project": below.page(),
@@ -283,6 +296,22 @@ def _rename(store: Store, host: Host, name: str) -> str:
     return notice
 
 
+PREFS_REVIEW = (
+    "the legacy preference import is pending: edit or clear the Merge and cleanup preferences below to review and "
+    "finish it"
+)
+
+
+def _settle_prefs_import(store: Store) -> None:
+    """Mark a pending legacy import reviewed through Settings; a publication notice is a failure."""
+    prof = store.read_profile()
+    if prof is None or prof.prefs_import != "pending":
+        return
+    _, notice, _ = store.mark_prefs_import("pending", "done")
+    if notice:
+        raise HTTPException(503, f"the legacy preference import was not completed: {notice}")
+
+
 def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
     routes, offered = APIRouter(), model_choices.Offered()
@@ -298,7 +327,10 @@ def router(store: Store, host: Host) -> APIRouter:
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
         what = f"{store.name or 'the project'}: from the settings page"
-        return _state(store, _save(store, store.config_path, Layer, body, what, host))
+        notice = _save(store, store.config_path, Layer, body, what, host)
+        if body.prefs_reviewed and not notice:  # a publication notice leaves the import pending for a retry
+            _settle_prefs_import(store)
+        return _state(store, notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
 
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:

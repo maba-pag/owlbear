@@ -74,7 +74,7 @@ from owlbear_delivery_next.project_host import host as scheduler
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store.store import Lock, SharedError, Store
 from owlbear_delivery_next.workflow_steps import (
     check,
@@ -190,7 +190,10 @@ def prof(**extra):
     return profile.confirm(p, profile.RULES, "none", NOW)
 
 
-ASKING = {profile.ASK: ProfileEntry(state="known", value="yes")}
+def set_prefs(monkeypatch, **values):
+    """Override owner preferences on the test layer; the profile no longer carries them."""
+    base = config.BASE
+    monkeypatch.setattr(config, "BASE", base.model_copy(update={"prefs": base.prefs.model_copy(update=values)}))
 
 
 def ctx(tmp_path, gh, p=None, repo=None):
@@ -234,6 +237,7 @@ class RetiringGh(FakeGh):
 def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(
     clone,
     tmp_path,
+    monkeypatch,
     move_again,
     mode,
 ):
@@ -243,7 +247,8 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
     moved = git(clone, "rev-parse", "HEAD")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    set_prefs(monkeypatch, delete_remote_branch=True)
+    p = prof()
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
     c.step.mode = mode
     cx.store.write(cx.lock, c)
@@ -274,12 +279,15 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
     assert gh.deleted == []
 
 
-def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(clone, tmp_path):
+def test_a_retirement_pause_holds_cleanup_across_restart_and_remote_disappearance_until_resume(
+    clone, tmp_path, monkeypatch
+):
     remote = tmp_path / "origin.git"
     git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    set_prefs(monkeypatch, delete_remote_branch=True)
+    p = prof()
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
     cx.store.write(cx.lock, c)
     c, result = cleanup.run(cx, c)
@@ -345,11 +353,12 @@ def test_a_paused_cleanup_decision_is_hidden_in_the_changes_api_until_resume(tmp
     assert loop.next_step(c, NOW + timedelta(seconds=1)) is not None
 
 
-def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path):
+def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path, monkeypatch):
     remote = tmp_path / "origin.git"
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    p = prof(**{profile.DELETE: ProfileEntry(state="known", value="yes")})
+    set_prefs(monkeypatch, delete_remote_branch=True)
+    p = prof()
 
     cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
     cx.store.write(cx.lock, c)
@@ -368,11 +377,12 @@ def test_consent_holds_only_for_the_exact_head():
     assert merge_offer.consent(A, B) == "void"
 
 
-def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone):
+def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone, monkeypatch):
     gh = FakeGh(pr(head=A))
     c = change(worktree=str(clone))
     c.consent = MergeConsent(head=B, at=NOW)  # given while B waited for it
-    cx = ctx(tmp_path, gh, prof(**ASKING))
+    set_prefs(monkeypatch, ask_before_merge=True)
+    cx = ctx(tmp_path, gh, prof())
     _, result = merge.run(cx, c)
     offer = cx.events("c1", "merge-offer")[-1]
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
@@ -391,11 +401,12 @@ def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_neve
     assert gh.merges == []
 
 
-def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_locally(tmp_path, clone):
+def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_locally(tmp_path, clone, monkeypatch):
     gh = FakeGh(pr(head="f" * 40))  # an owner commit on the PR branch, never fetched into the worktree (live G2)
     final = Review(commit=A, inputs=Inputs(), verdict="pass", tree=git(clone, "rev-parse", "HEAD^{tree}"))
     c = loop.fold(change(worktree=str(clone), reviews=[final]), [ConsentItem(at=NOW, head=A)], NOW)
-    _, result = merge.run(ctx(tmp_path, gh, prof(**ASKING)), c)
+    set_prefs(monkeypatch, ask_before_merge=True)
+    _, result = merge.run(ctx(tmp_path, gh, prof()), c)
     cause = failures.cause_key(ErrorKind.GATE, StepKind.MERGE, "review")
     assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
     assert gh.merges == []
@@ -1409,12 +1420,13 @@ def merged(gh, sha=B):
     gh.after = gh.pr.model_copy(update={"state": "closed", "merged": True, "merge_commit_sha": sha})
 
 
-def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, clone):
+def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, clone, monkeypatch):
     gh = FakeGh(pr(head=A))
     merged(gh)
     _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
-    assert (result.exit, len(gh.merges), profile.value(prof(), profile.ASK, "no")) == (Exit.DONE, 1, "no")
-    asked = ctx(tmp_path, FakeGh(pr(head=A)), prof(**ASKING))
+    assert (result.exit, len(gh.merges)) == (Exit.DONE, 1)
+    set_prefs(monkeypatch, ask_before_merge=True)
+    asked = ctx(tmp_path, FakeGh(pr(head=A)), prof())
     _, result = merge.run(asked, change(worktree=str(clone)))
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
 
@@ -2502,7 +2514,7 @@ def test_the_profile_keeps_only_the_merge_methods_the_pull_request_rule_allows(c
         state="known", evidence="rules pull_request", allowed_methods=(MergeMethod.MERGE,)
     )
     found = profile.detect(clone, gh, None)
-    assert (profile.value(found, profile.METHODS), profile.value(found, profile.METHOD)) == ("merge", "merge")
+    assert (profile.value(found, profile.METHODS), profile.value(found, profile.METHOD)) == ("merge", "")
 
 
 @pytest.mark.parametrize(

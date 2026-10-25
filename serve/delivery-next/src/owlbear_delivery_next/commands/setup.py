@@ -14,6 +14,7 @@ from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system import data_repo, git_files, local_home, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.state_store import prefs_import
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 if TYPE_CHECKING:
@@ -49,9 +50,14 @@ def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]:
     """Ask for unknown entries and record the owner's confirmation; ``--yes`` never confirms an unknown entry."""
     now = datetime.now(UTC)
     for key, e in sorted(prof.entries.items()):
-        if e.state == "unknown" and not yes and (value := ask(f"{key} is unknown ({e.evidence}). Value you confirm: ")):
+        if (
+            e.state == "unknown"
+            and key not in profile.SETTINGS
+            and not yes
+            and (value := ask(f"{key} is unknown ({e.evidence}). Value you confirm: "))
+        ):
             prof = profile.confirm(prof, key, value, now)
-    unknown = [k for k, e in prof.entries.items() if e.state == "unknown"]
+    unknown = [k for k, e in prof.entries.items() if e.state == "unknown" and k not in profile.SETTINGS]
     if not (yes or ask("Confirm this profile? [y/N] ").lower().startswith("y")):
         return prof.model_copy(update={"confirmed_at": None}), unknown
     by = ProfileEntry(state="known", value="--yes" if yes else "prompt", evidence=f"owner confirmed {now:%Y-%m-%d}")
@@ -241,6 +247,7 @@ def run(
         say("Profile not confirmed; nothing was saved. Run setup again to confirm it.")
         return 1
     store.write_profile(prof)
+    prefs_import.run(store)
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
     given, local_ask = local_files == "yes", ask if local_files == "ask" else lambda _q: ""
     write_project_files(repo, python, local_ask, say, given=given)
