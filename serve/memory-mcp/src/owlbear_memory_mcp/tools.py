@@ -23,6 +23,7 @@ from owlbear_memory import (
     NotFoundError,
     TransitionError,
     Where,
+    selection,
     storage,
     validate_scope_agents,
     writer_lock,
@@ -485,17 +486,8 @@ async def recall_memory(
         MemoryState.CURATED: 1,
         MemoryState.CONTESTED: 1,
     }
-    entries = [
-        entry for entry in readable if entry.state in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}
-    ]
-    if recognized:
-        entries = [
-            entry
-            for entry in entries
-            if entry.scope_agents and (agent in entry.scope_agents or "*" in entry.scope_agents)
-        ]
-    else:
-        entries = [entry for entry in entries if "*" in entry.scope_agents]
+    caller = agent if recognized and isinstance(agent, str) else None  # unrecognised: only memories for every agent
+    entries = [entry for entry in readable if selection.eligible(entry, caller)]
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
 

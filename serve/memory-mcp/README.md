@@ -1,6 +1,6 @@
 # owlbear-memory-mcp — Memory MCP Server
 
-MCP server for agent institutional memory. Pipeline and ideation agents record learnings after tasks; a dedicated curator agent reviews, scopes, and promotes entries; the human operator approves. Approved entries surface during agent pre-flight via `recall_memory`.
+MCP server for agent institutional memory. Pipeline and ideation agents record learnings after tasks; a dedicated curator agent reviews, scopes, and promotes entries; the human operator approves. Approved, curated and contested entries surface during agent pre-flight via `recall_memory`; Delivery's step sessions get them in their first message instead, chosen by the memory package's shared policy (`owlbear_memory.selection`), and recall when that message says they could not be read or did not fit, or for more.
 
 Storage is file-based: each entry is a markdown file with YAML frontmatter in the memory store that
 [Configuration](#configuration) describes. The MCPServer app name and VS Code registration key are both `owlbear-memory`.
