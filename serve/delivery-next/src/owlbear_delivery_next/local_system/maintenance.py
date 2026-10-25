@@ -209,6 +209,7 @@ class Maintenance:
                     reason="legacy maintenance stopped without complete termination proof",
                 )
                 ledger.sessions.append(lease)
+                ledger.imported.append(f"{source}:slot:{slot}")  # the lease and its slot are written together
                 self.slots.restore_one(lease.project, lease.slot, 1)
             ledger.imported.append(source)
             self._save(ledger)
@@ -227,6 +228,12 @@ class Maintenance:
             if mark not in ledger.imported:
                 ledger.imported.append(mark)
                 self._save(ledger)
+
+    def imported_slot(self, source: str) -> str:
+        """The slot of the lease that *source*'s import created, so a restart still finds it; empty when none."""
+        prefix = f"{source}:slot:"
+        with self._locked() as ledger:
+            return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
 
     def adopt_uncertain(  # noqa: PLR0913 - one import's identity, all needed to decide its generation
         self,
@@ -421,3 +428,22 @@ class Maintenance:
             self._save(ledger)
         self.slots.give(lease.project, lease.slot)
         return self.read()
+
+
+def recorded(lease: Lease, pids: dict[int, float | None]) -> bool:
+    """Whether a lease recorded every one of these PIDs.
+
+    A birth unknown on either side matches, except that a settled lease covers an unknown birth only up to its end.
+    """
+    settled = lease.state not in HELD
+    ended = lease.ended_at.timestamp() if lease.ended_at else None
+    return bool(pids) and all(
+        pid in lease.pids and _same_process(lease.pids[pid], born, settled=settled, ended=ended)
+        for pid, born in pids.items()
+    )
+
+
+def _same_process(recorded: float | None, born: float | None, *, settled: bool, ended: float | None) -> bool:
+    if recorded is None and born is not None and settled:
+        return ended is not None and born <= ended
+    return recorded is None or born is None or born == recorded

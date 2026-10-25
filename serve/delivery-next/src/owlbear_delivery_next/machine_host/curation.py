@@ -128,13 +128,16 @@ class Curation:
             runs.left,
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
+        if runs.left and not runs.left_key:
+            # The import's lease is bound by its own write, so a restart before lingering() still recognises it.
+            runs.left_key = imported or self.maintenance.imported_slot(str(self.path()))
         if runs.left and not self.maintenance.pending("curation"):
             # An import already recorded (even an empty one) must not let these PIDs be cleared as history. A settled
             # run's own lease covers them again after a recovery, so an unchanged snapshot never gets a fresh hold.
             lease = self.maintenance.adopt_uncertain(
                 f"{self.path()}#left", SLOT, "curation", workspace="", covers=_left_covers(runs), pids=runs.left,
             )  # fmt: skip
-            if _observed(lease, runs.left):
+            if maintenance.recorded(lease, runs.left):
                 runs.left_key = lease.slot
         for name, r in runs.folders.items():
             # The run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again.
@@ -429,25 +432,6 @@ def legacy_uncertain(run: FolderRun) -> bool:
     return run.state == "failed" and UNKNOWN in run.reason and not run.key
 
 
-def _observed(lease: maintenance.Lease, left: dict[int, float | None]) -> bool:
-    """Whether a lease recorded every one of these PIDs.
-
-    A birth unknown on either side matches, except that a settled lease covers an unknown birth only up to its end.
-    """
-    settled = lease.state not in maintenance.HELD
-    ended = lease.ended_at.timestamp() if lease.ended_at else None
-    return bool(left) and all(
-        pid in lease.pids and _same_process(lease.pids[pid], born, settled=settled, ended=ended)
-        for pid, born in left.items()
-    )
-
-
-def _same_process(recorded: float | None, born: float | None, *, settled: bool, ended: float | None) -> bool:
-    if recorded is None and born is not None and settled:
-        return ended is not None and born <= ended
-    return recorded is None or born is None or born == recorded
-
-
 def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
     """Whether a lease already accounts for the PIDs on file: an active uncertain hold, or the run that recorded them.
 
@@ -460,7 +444,7 @@ def _left_covers(runs: Runs) -> Callable[[maintenance.Lease], bool]:
             return False
         if lease.state in maintenance.HELD and lease.workspace == "" and lease.generation == "":
             return True
-        return bool(runs.left_key) and lease.slot == runs.left_key and _observed(lease, runs.left)
+        return bool(runs.left_key) and lease.slot == runs.left_key and maintenance.recorded(lease, runs.left)
 
     return covers
 

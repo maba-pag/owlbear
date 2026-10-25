@@ -11,7 +11,7 @@ from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged, MemoryCurationResult
-from owlbear_delivery_next.local_system import maintenance, processes
+from owlbear_delivery_next.local_system import local_home, maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
@@ -285,6 +285,54 @@ def test_a_keyless_running_row_after_an_earlier_empty_import_gets_conservative_o
     restarted_again = curation.Curation(slots, shared=lambda: DataRepo(root))
     assert slots.counts(curation.SLOT)[2] == 1, "a restart duplicated the keyless row's hold"
     assert restarted_again.read()["folders"]
+
+
+def legacy_left_file(pids: dict[int, float | None], key: str = "") -> None:
+    """An older host's ownership record: PIDs its run left, before any host has imported them."""
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(curation.Runs(left=pids, left_key=key).model_dump_json())
+
+
+@pytest.mark.parametrize("lose_key", [False, True])
+def test_a_legacy_pid_import_stays_bound_to_its_lease_across_a_restart_before_lingering(
+    root, monkeypatch, lose_key
+) -> None:
+    """Review: an import's held lease is bound at import, so a restart before lingering() never holds the PIDs again."""
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
+    legacy_left_file({4242: None})
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))  # imports the PIDs as a held lease
+    if lose_key:  # the record lost its association: the import mark alone must still bind it
+        path = local_home.root() / curation.STATE
+        runs = curation.Runs.model_validate_json(path.read_text())
+        runs.left_key = ""
+        path.write_text(runs.model_dump_json())
+    recovered_by_reboot(first)  # the owner rebooted
+    slots = Slots(lambda: 1, closed=True)
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root))  # before lingering() clears the snapshot
+    sessions = restarted.maintenance.read()["sessions"]
+    assert (restarted.maintenance.pending("curation"), len(sessions), sessions[0]["state"], restarted.left) == (
+        False, 1, "recovered", {4242: None},
+    )  # fmt: skip
+
+
+def test_a_known_birth_after_a_recovered_legacy_import_is_held_and_its_start_runs_nothing(root, monkeypatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
+    legacy_left_file({4242: None})
+    recovered_by_reboot(curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root)))
+    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001 - born after the import ended
+
+    def run(cfg) -> Run:
+        calls.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]))
+
+    rebuilt = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
+    rebuilt.start("shop")
+    drained(rebuilt)
+    assert calls == []
 
 
 def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(root) -> None:
