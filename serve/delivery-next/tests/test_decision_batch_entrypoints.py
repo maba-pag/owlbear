@@ -174,6 +174,7 @@ def test_finish_creates_a_missing_decisions_folder_after_the_whole_batch_is_chec
     assert not (shared.root / "new-site" / "decisions").exists()
 
     with monkeypatch.context() as m:
+
         def refuse(*_args, **_kwargs):
             msg = "interrupted before the folder was created"
             raise RuntimeError(msg)
@@ -232,9 +233,7 @@ def test_a_refused_put_back_unlink_is_fsynced_in_its_parent_before_the_refusal_r
 
     monkeypatch.setattr(decision_batch, "fsync_dir", snapshot_then_fsync)
     monkeypatch.setattr(decision_store, "write", first_lands_second_refuses)
-    receipts = decision_store.save_all(
-        shared, [(project, None), (global_new, None)], message="decisions: refused"
-    )
+    receipts = decision_store.save_all(shared, [(project, None), (global_new, None)], message="decisions: refused")
 
     assert not any(r.saved for r in receipts)
     assert decision_batch.pending(shared) is None

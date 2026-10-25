@@ -135,6 +135,7 @@ def _rivals_flagged(by_id: dict[str, Entry], findings: list[Finding], ids: tuple
     Every decision of the batch and every rival the findings name must be flagged `conflict`, and each finding touched
     must be a two-successors finding; an unflagged rival of any of them refuses the batch.
     """
+
     def flagged(decision_id: str) -> bool:
         entry = by_id.get(decision_id)
         return entry is not None and entry.decision.conflict
