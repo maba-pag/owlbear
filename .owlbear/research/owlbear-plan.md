@@ -235,7 +235,10 @@ repair (#607) binds displayed decisions, confirmations and mutations to the same
 captured scope and rejects superseded responses. Cleanup preservation (#610) keeps
 unsupported nested repositories and entries in their workspace instead of omitting
 them from a verified archive; supported links and file modes are preserved without
-following symlink parents. Other packages remain open until their own merged-code
+following symlink parents. The owner-continuation candidate (#618, R12) sends a
+replacement check session the owner's pending answer before its delivery is recorded,
+and keeps an accepted held result until its final write is durable, so a restart
+applies it once without a paid rerun. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
 Remote-branch retirement (#612) uses an atomic expected-head ref update, never
