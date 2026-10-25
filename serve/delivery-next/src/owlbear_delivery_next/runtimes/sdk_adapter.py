@@ -320,10 +320,7 @@ class _Step:
             self.record(*(k.pid for k in psutil.Process(self.run.runtime_pid or -1).children(recursive=True)))
 
     async def snapshot(self, session: CopilotSession, budget: step_budget.Budget) -> None:
-        with contextlib.suppress(Exception):
-            if (listed := await budget.run(session.rpc.tasks.list, "tasks.list", POLL)) is not None:
-                self.record(*(getattr(t, "pid", None) for t in listed.tasks))
-        self.record_tree()
+        await step_budget.snapshot(self, session, budget, POLL)
 
     def options(self) -> dict[str, Any]:
         role = agent(self.cfg.kind, ui=self.cfg.ui, role=self.cfg.role, judging=self.cfg.judging, job=self.cfg.job)

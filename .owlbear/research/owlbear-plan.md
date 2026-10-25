@@ -274,6 +274,10 @@ SDK session callers bound cancellation of leftover asynchronous requests without
 losing returned usage or payloads. Synchronous tools retain their caller's ownership
 until executor work settles; cancelled waiters neither release running tools nor
 permit queued tools to start later. Unknown shutdown remains unconfirmed.
+Returned snapshot PIDs are recorded inside the owned request even after the
+acceptance cutoff. Teardown list, cancel, disconnect and stop requests also use
+cancellation-independent bounded waits, so one resistant RPC cannot skip later
+cleanup or hide an unresolved session.
 
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.

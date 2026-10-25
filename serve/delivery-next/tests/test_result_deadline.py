@@ -272,6 +272,47 @@ def test_a_request_failure_after_cutoff_is_logged_without_replacing_the_deadline
     asyncio.run(scenario())
 
 
+def test_a_late_snapshot_harvests_detached_child_identity_before_its_result_is_discarded(tmp_path, clock, monkeypatch):
+    async def scenario():
+        events = []
+        cfg = dataclasses.replace(configured(tmp_path), journal=sdk_adapter.Journal(event=events.append))
+        step = STEP(cfg, asyncio.get_running_loop())
+        step.run.runtime_pid, step.run.pids = 4242, {4242: 1.0}
+        reads = []
+
+        async def listing():
+            reads.append("list")
+            if len(reads) == 1:
+                clock.now += 1
+                return SimpleNamespace(tasks=[SimpleNamespace(id="detached", pid=4243, status="running")])
+            return SimpleNamespace(tasks=[])
+
+        class Client:
+            async def stop(self):
+                return None
+
+        async def disconnect():
+            return None
+
+        session = Session(listing)
+        session.disconnect = disconnect
+        monkeypatch.setattr(step, "runtime", lambda _client: None)
+        monkeypatch.setattr(processes, "started", lambda _pid: 2.0)
+        monkeypatch.setattr(processes, "alive", lambda pid, _created: pid == 4243)
+        monkeypatch.setattr(processes, "kill", lambda *_args: pytest.fail("no real signals in a synthetic test"))
+        monkeypatch.setattr(sdk_teardown, "SETTLE", 0)
+        await asyncio.wait_for(step.wait(session), 1)
+        assert step.run.ending == "deadline"
+        assert step.run.pids[4243] == 2.0
+        assert any(e.get("pids", {}).get("4243") == 2.0 for e in events)
+        termination = await sdk_teardown.teardown(Client(), session, step)
+        assert len(reads) == 2
+        assert not termination.confirmed
+        assert termination.survivors == (4243,)
+
+    asyncio.run(scenario())
+
+
 def test_a_queued_request_rechecks_the_deadline_before_dispatch(tmp_path, clock):
     async def scenario():
         loop = asyncio.get_running_loop()

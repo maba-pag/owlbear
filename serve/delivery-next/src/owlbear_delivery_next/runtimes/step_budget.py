@@ -94,3 +94,15 @@ async def wait(st: _Step, session: CopilotSession, seconds: float, clock: Callab
                 st.log(event="reminder")
                 message = reminder(role_of(st.cfg), judging=st.cfg.judging)
                 await budget.run(lambda message=message: session.send(message), "send", tick)
+
+
+async def snapshot(st: _Step, session: CopilotSession, budget: Budget, tick: float) -> None:
+    """Harvest every returned process identity inside its owned request, even when the result budget expires."""
+
+    async def listing() -> None:
+        listed = await session.rpc.tasks.list()
+        st.record(*(getattr(task, "pid", None) for task in listed.tasks))
+
+    with contextlib.suppress(Exception):  # request failures are explicitly logged by the budget's task owner
+        await budget.run(listing, "tasks.list", tick)
+    st.record_tree()
