@@ -80,7 +80,8 @@ def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, 
 
     HEAD descends from *head* and holds each file's after image, and each worktree file is exactly that after image.
     One HEAD commit is read for all of it and checked again at the end, so a commit moving mid-proof cannot pass. An
-    active or unknown rebase is never published. Finish and every completion path use this same check.
+    active or unknown rebase is never published. The terminal rebase probe runs before the final HEAD read, so a HEAD
+    move during that probe is caught too. Finish and every completion path use this same check.
     """
     if not operation_idle(shared):
         return False
@@ -89,7 +90,7 @@ def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, 
         return False
     if not all(in_head(shared, rel, after, commit) and worktree_holds(shared, rel, after) for rel, _, after in rows):
         return False
-    return head_commit(shared) == commit and operation_idle(shared)
+    return operation_idle(shared) and head_commit(shared) == commit
 
 
 def operation_idle(shared: DataRepo) -> bool:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -18,7 +19,7 @@ from owlbear_decisions import Link, LinkType, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change
 from owlbear_delivery_next.change_contracts.models import Decision as ChangeDecision
 from owlbear_delivery_next.github.provider import PullRequest
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     change_record,
     decision_archive,
@@ -219,30 +220,149 @@ def test_a_committed_generation_completes_offline_without_fetch_push_or_rebase(
     assert (root / OWNER).read_text() == "owner words\n"
 
 
-def test_a_rebase_started_after_ancestry_keeps_the_committed_batch_pending(shared_repo, lost_ack, monkeypatch) -> None:
+def _rebase_state_fault(scoped, root: Path, state: str, seen: dict[str, str]) -> None:
+    """Change the rebase state after ancestry, only inside the Store and Finish proofs, never the publisher's own."""
+    armed, unknown = [False], [False]
+    real_landed = decision_transaction.landed
+    real_in_head = decision_transaction.in_head
+    real_rebasing = DataRepo.rebasing
+
+    def landed_from_store_or_finish(shared, head, rows):
+        caller = sys._getframe(1).f_globals.get("__name__", "")  # noqa: SLF001
+        armed[0] = caller.endswith(("decision_store", "decision_recovery"))
+        try:
+            return real_landed(shared, head, rows)
+        finally:
+            armed[0] = unknown[0] = False
+
+    def in_head_then_change(shared, rel, after, commit):
+        found = real_in_head(shared, rel, after, commit)
+        if armed[0]:
+            seen["commit"] = commit
+            if state == "active":
+                (root / ".git" / "rebase-merge").mkdir()  # a real paused rebase, started during the blob proof
+            unknown[0] = state == "unknown"
+        return found
+
+    def rebasing_probe(self, until=None):
+        if unknown[0]:
+            msg = "cannot tell whether a rebase is in progress: injected after ancestry"
+            raise DataRepoError(msg)
+        return real_rebasing(self, until)
+
+    scoped.setattr(decision_transaction, "landed", landed_from_store_or_finish)
+    scoped.setattr(decision_transaction, "in_head", in_head_then_change)
+    scoped.setattr(DataRepo, "rebasing", rebasing_probe)
+
+
+@pytest.mark.parametrize("path", ["store", "finish"])
+@pytest.mark.parametrize("state", ["healthy", "active", "unknown"])
+def test_a_rebase_state_change_after_ancestry_never_completes_a_committed_batch(
+    shared_repo, lost_ack, monkeypatch, path, state
+) -> None:
     root, _remote = shared_repo
     owner_commit(root, "owner words\n")
     shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    head = git(root, "rev-parse", "HEAD")
-    lost_ack[0] = False
+    if path == "finish":
+        save(shared, make(), expected_revision=None, message="decisions: notes")  # committed, but the ack was lost
+        pending = decision_batch.pending(shared)
+        assert pending is not None
+    lost_ack[0] = False  # the publish succeeds, so Store reaches its own landed proof
+    seen: dict[str, str] = {}
+    receipt = done = None
+    refused = False
+    with monkeypatch.context() as scoped:
+        if state != "healthy":
+            _rebase_state_fault(scoped, root, state, seen)
+        if path == "store":
+            receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+        else:
+            try:
+                done = decision_recovery.finish(shared, pending.generation)
+            except DecisionsUnavailable as failure:
+                refused = "not proved now" in str(failure)
 
-    real_in_head = decision_transaction.in_head
-
-    def rebase_starts_after_ancestry(*args, **kwargs):
-        found = real_in_head(*args, **kwargs)
-        (root / ".git" / "rebase-merge").mkdir()  # a real paused rebase, started during the blob proof
-        return found
-
-    monkeypatch.setattr(decision_transaction, "in_head", rebase_starts_after_ancestry)
-    with pytest.raises(DecisionsUnavailable, match="not proved now"):
-        decision_recovery.finish(shared, pending.generation)
-
-    assert git(root, "rev-parse", "HEAD") == head
-    assert decision_batch.pending(shared) is not None
     assert (root / OWNER).read_text() == "owner words\n"
+    if state == "healthy":
+        assert decision_batch.pending(shared) is None
+        if path == "store":
+            assert receipt.saved
+        else:
+            assert done.done
+        return
+    assert "commit" in seen  # the rebase state changed after ancestry, so the fault really ran
+    assert git(root, "rev-parse", "HEAD") == seen["commit"]
+    assert decision_batch.pending(shared) is not None
+    if path == "store":
+        assert receipt.saved is False
+    else:
+        assert refused
+        assert done is None
+
+
+def _terminal_head_switch(scoped, seen: dict[str, str]) -> None:
+    """Move HEAD to an unrelated parentless commit with the same tree, during the proof's terminal rebase probe only."""
+    armed, probes = [False], [0]
+    real_landed = decision_transaction.landed
+    real_rebasing = DataRepo.rebasing
+
+    def landed_from_store_or_finish(shared, head, rows):
+        caller = sys._getframe(1).f_globals.get("__name__", "")  # noqa: SLF001
+        armed[0] = caller.endswith(("decision_store", "decision_recovery"))
+        probes[0] = 0
+        try:
+            return real_landed(shared, head, rows)
+        finally:
+            armed[0] = False
+
+    def rebasing_then_switch(self, until=None):
+        state = real_rebasing(self, until)
+        if armed[0]:
+            probes[0] += 1
+            if probes[0] == 2:  # the terminal probe: the blob and worktree proof is already done
+                tree = self.git("rev-parse", "HEAD^{tree}").stdout.strip()
+                stray = self.git("commit-tree", tree, "-m", "unrelated").stdout.strip()
+                self.git("update-ref", "HEAD", stray)
+                seen["switched"] = stray
+        return state
+
+    scoped.setattr(decision_transaction, "landed", landed_from_store_or_finish)
+    scoped.setattr(DataRepo, "rebasing", rebasing_then_switch)
+
+
+@pytest.mark.parametrize("path", ["store", "finish"])
+def test_a_same_tree_head_switch_during_the_terminal_probe_never_completes(
+    shared_repo, lost_ack, monkeypatch, path
+) -> None:
+    root, _remote = shared_repo
+    owner_commit(root, "owner words\n")
+    shared = DataRepo(root)
+    if path == "finish":
+        save(shared, make(), expected_revision=None, message="decisions: notes")
+        pending = decision_batch.pending(shared)
+        assert pending is not None
+    lost_ack[0] = False
+    seen: dict[str, str] = {}
+    receipt = None
+    refusal = ""
+    with monkeypatch.context() as scoped:
+        _terminal_head_switch(scoped, seen)
+        if path == "store":
+            receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+        else:
+            try:
+                decision_recovery.finish(shared, pending.generation)
+            except DecisionsUnavailable as failure:
+                refusal = str(failure)
+
+    assert "switched" in seen  # the switch really ran, during the terminal probe
+    assert git(root, "rev-parse", "HEAD") == seen["switched"]
+    assert (root / OWNER).read_text() == "owner words\n"
+    assert decision_batch.pending(shared) is not None
+    if path == "store":
+        assert receipt.saved is False
+    else:
+        assert "not proved now" in refusal
 
 
 def test_an_owner_edit_during_a_retained_recovery_publish_cannot_complete(shared_repo, lost_before_commit, monkeypatch):
