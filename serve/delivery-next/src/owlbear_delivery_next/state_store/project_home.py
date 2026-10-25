@@ -2,29 +2,36 @@
 
 The clone keeps only ``<git common dir>/owlbear-delivery/``, holding the project's id (``clone-id``) and a format
 marker every older runtime refuses, so a moved or renamed clone keeps its project and a re-clone gets a new one.
-A store still in the clone moves to its folder once, on first open; a move cut short resumes on the next.
+A store still in the clone moves to its folder once, on first open, by ``project_move``; a move cut short resumes
+on the next open only when its record proves it. Before any move, every lock file in the clone is taken exclusively
+without waiting; a held one refuses the move, so a running writer cannot update the old path while it moves.
 """
 
 from __future__ import annotations
 
-import errno
+import contextlib
+import fcntl
 import json
 import os
 import secrets
-import shutil
+import stat
 from pathlib import Path
 
-from owlbear_delivery_next.local_system import codebase, local_home
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, FormatTooNewError, StoreError
+from owlbear_delivery_next.local_system.storage_io import open_lock
+from owlbear_delivery_next.state_store import fd_tree, project_move
+from owlbear_delivery_next.state_store.database import (
+    MARKER,
+    MIGRATE,
+    STORE_FORMAT,
+    FormatTooNewError,
+    StoreError,
+)
 
 STORE_DIR = "owlbear-delivery"
 PROJECTS = "projects"
 MACHINE = "machine.json"  # the registry (``machine_host.registry``); read here only to tell a project from leftovers
-CLONE_ID = "clone-id"
-MOVE_LOCK = "move.lock"
-KEPT = frozenset({CLONE_ID, MARKER, MOVE_LOCK})  # what stays in the clone
 
 
 def clone_dir(cwd: Path) -> Path:
@@ -34,33 +41,55 @@ def clone_dir(cwd: Path) -> Path:
 
 def clone_id(folder: Path) -> str | None:
     """The id written into the clone's folder, or None when there is none."""
-    try:
-        return (folder / CLONE_ID).read_text().strip() or None
-    except FileNotFoundError:
+    fd = project_move.pin(folder)
+    if fd is None:
         return None
-    except (OSError, ValueError) as exc:
-        msg = f"{folder / CLONE_ID} is unreadable"
+    try:
+        return _clone_id_at(folder, fd)
+    finally:
+        os.close(fd)
+
+
+def _clone_id_at(folder: Path, folder_fd: int) -> str | None:
+    try:
+        text = fd_tree.read_at(folder_fd, project_move.CLONE_ID)
+    except OSError as exc:
+        msg = f"{folder / project_move.CLONE_ID} is unreadable"
         raise StoreError(msg) from exc
+    return (text or "").strip() or None
+
+
+def _pin(folder: Path) -> int:
+    fd = project_move.pin(folder)
+    if fd is None:
+        msg = f"{folder} is missing: nothing was moved"
+        raise StoreError(msg)
+    return fd
+
+
+def _ensure_at(folder: Path, folder_fd: int) -> str:
+    """The clone's id: reused when present, else created once, whole, by a hard link; never rewritten."""
+    if found := _clone_id_at(folder, folder_fd):
+        return found
+    new = secrets.token_hex(8)
+    draft = f".tmp-{project_move.CLONE_ID}-{new}"  # the ``.tmp-`` prefix keeps a crash's draft out of the leftovers
+    fd_tree.write_at(folder_fd, draft, new + "\n")
+    with contextlib.suppress(FileExistsError):  # another opener's id came first; the draft is kept, never unlinked
+        fd_tree.link_at(folder_fd, draft, project_move.CLONE_ID)  # appears with its content, or not at all
+    if found := _clone_id_at(folder, folder_fd):
+        return found
+    msg = f"{folder / project_move.CLONE_ID} is empty: remove it, then start again"
+    raise StoreError(msg)
 
 
 def ensure_id(folder: Path) -> str:
-    """The clone's id: reused when present, else created once, whole, by a hard link; never rewritten."""
+    """The clone's id, created once when missing; see ``_ensure_at``."""
     folder.mkdir(mode=0o700, exist_ok=True)
-    if found := clone_id(folder):
-        return found
-    new = secrets.token_hex(8)
-    draft = folder / f".tmp-{CLONE_ID}-{new}"
-    atomic_write(draft, new + "\n")
+    fd = _pin(folder)
     try:
-        os.link(draft, folder / CLONE_ID)  # appears with its content, or not at all
-    except FileExistsError:
-        pass  # another opener's id came first
+        return _ensure_at(folder, fd)
     finally:
-        draft.unlink()
-    if found := clone_id(folder):
-        return found
-    msg = f"{folder / CLONE_ID} is empty: remove it, then start again"
-    raise StoreError(msg)
+        os.close(fd)
 
 
 def home(pid: str) -> Path:
@@ -93,58 +122,92 @@ def registered(pid: str) -> bool | None:
     return any(isinstance(p, dict) and p.get("id") == pid for p in projects)
 
 
-def _left(folder: Path) -> list[Path]:
-    """What of a store still lies in the clone's folder."""
-    if not folder.is_dir():
-        return []
-    return sorted(p for p in folder.iterdir() if p.name not in KEPT and not p.name.startswith(".tmp-"))
-
-
 def current(cwd: Path) -> Path | None:
-    """The project's store as it lies now, without moving or creating anything; None for a clone with none."""
+    """The project's store as it lies now, without moving or creating anything; None for a clone with none.
+
+    A switched store is named only while the target still is the copy the switch recorded.
+    """
     folder = clone_dir(cwd)
-    if _left(folder):
-        return folder  # not moved yet: an older host may run on it
+    rec = project_move.record(folder)
+    if project_move.left(folder) and not (rec and rec["phase"] == project_move.SWITCHED):
+        return folder  # not moved yet, or its copy is not yet the authority: an older host may run on it
     pid = clone_id(folder)
-    return home(pid) if pid else None
+    if not pid:
+        return None
+    target = home(pid)
+    if rec and rec["phase"] == project_move.SWITCHED:
+        project_move.named_switched(target, rec)
+    return target
 
 
-def _sync(path: Path) -> None:
-    """Flush *path* to disk: a file, or a folder with everything in it."""
-    paths = [path] if not path.is_dir() else [path, *path.rglob("*")]
-    for p in paths:
-        if p.is_symlink():
-            continue
-        fd = os.open(p, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+def _is_lock(name: str) -> bool:
+    return name == "lock" or name.endswith(".lock") or name == MIGRATE
 
 
-def _move(path: Path, to: Path) -> None:
-    """Move *path* to *to*: a rename on one volume; across volumes a flushed copy first, then the source goes."""
+def _fence(folder_fd: int) -> list[int]:
+    """Hold every lock file in the clone exclusively, without waiting; a busy one refuses the move.
+
+    A live host, a change's writer, a profile writer or a database operation (``migrate.lock`` shared) each hold
+    their lock, so none can write to the old path while it moves. The walk is by descriptor and never follows a
+    link; the descriptors stay open through the move.
+    """
+    held: list[int] = []
     try:
-        path.rename(to)
+        _hold(folder_fd, "", held)
+    except BaseException:
+        for fd in held:
+            os.close(fd)
+        raise
+    return held
+
+
+def _hold(dfd: int, rel: str, held: list[int]) -> None:
+    names = set(os.listdir(dfd))
+    if not rel:
+        names.add(MIGRATE)  # always fenced: created when missing, as the database's shared lock needs it
+    for name in sorted(names):
+        if name == project_move.MOVE_LOCK:
+            continue
+        if _is_lock(name):
+            _lock_at(dfd, name, rel + name, held)
+            continue
+        st = fd_tree.stat_at(dfd, name)
+        if st is not None and stat.S_ISDIR(st.st_mode):
+            sub = fd_tree.open_dir(dfd, name)
+            try:
+                _hold(sub, f"{rel}{name}/", held)
+            finally:
+                os.close(sub)
+
+
+def _lock_at(dfd: int, name: str, path: str, held: list[int]) -> None:
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CREAT, 0o600, dir_fd=dfd)
     except OSError as exc:
-        if exc.errno != errno.EXDEV:
-            raise
-        part = to.with_name(f"{to.name}.partial")
-        if part.is_dir():
-            shutil.rmtree(part)
-        part.unlink(missing_ok=True)
-        if path.is_dir():
-            shutil.copytree(path, part, symlinks=True)
-        else:
-            shutil.copy2(path, part)
-        _sync(part)
-        part.rename(to)
-        _sync(to.parent)
-        if path.is_dir():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
-    _sync(to.parent)
+        msg = f"{path} cannot be locked ({exc.strerror}): nothing was moved"
+        raise StoreError(msg) from exc
+    held.append(fd)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        msg = f"{path} is held by a running process: nothing was moved"
+        raise StoreError(msg) from exc
+
+
+def _has_locks(folder_fd: int) -> bool:
+    return any(_is_lock(n) and n != project_move.MOVE_LOCK for n in os.listdir(folder_fd))
+
+
+def _publish_markers(folder_fd: int, pfd: int, target: Path, previous: int, *, moved: bool) -> None:
+    project_move.make_dir(pfd, target.name)
+    tfd = fd_tree.open_dir(pfd, target.name)
+    try:
+        if fd_tree.stat_at(tfd, MARKER) is None:
+            fd_tree.write_at(tfd, MARKER, f"{previous or STORE_FORMAT}\n")  # keeps the format it was written in
+    finally:
+        os.close(tfd)
+    # a moved clone keeps the fence: its retained source must not be opened again as a store by an older runtime
+    fd_tree.write_at(folder_fd, MARKER, f"{project_move.FENCE if moved else STORE_FORMAT}\n")
 
 
 def located(cwd: Path) -> Path:
@@ -152,39 +215,122 @@ def located(cwd: Path) -> Path:
 
     Raises:
         FormatTooNewError: A newer runtime marked the clone's folder.
+        StoreError: The clone's store must move and no offline proof exists, or a lock is held.
     """
-    folder = clone_dir(cwd)
-    pid = ensure_id(folder)
+    return _open(cwd, None)
+
+
+def migrated(cwd: Path, proof: project_move.OfflineProof) -> Path:
+    """Prepared-and-finished move entry: the store moves to its folder under *proof*, which only ``finish`` issues."""
+    return _open(cwd, proof)
+
+
+def _marker_at(folder_fd: int) -> int:
     try:
-        found = int((folder / MARKER).read_text()) if (folder / MARKER).exists() else 0
+        text = fd_tree.read_at(folder_fd, MARKER)
+        return 0 if text is None else int(text)
     except (OSError, ValueError) as exc:
         msg = "store format marker is unreadable"
         raise StoreError(msg) from exc
+
+
+def _refuse_links(folder: Path, folder_fd: int, names: list[str]) -> None:
+    for name in names:
+        st = fd_tree.stat_at(folder_fd, name)
+        if st is not None and stat.S_ISLNK(st.st_mode):
+            msg = f"{folder / name} holds a link: refusing to move it; nothing was moved"
+            raise StoreError(msg)
+
+
+def _prior(text: str | None) -> int:
+    """A format the store held before its offline move; the fence itself is never a prior format."""
+    value = int(text) if text and text.strip() else 0
+    if value >= int(project_move.FENCE):
+        msg = "the preparation recorded the fence as the prior format: refusing the offline move"
+        raise StoreError(msg)
+    return value
+
+
+def _format_at(folder_fd: int, proof: project_move.OfflineProof | None) -> int:
+    """The store's format for this open: the prior format a proof names, else the clone's own marker, unfenced."""
+    if proof is not None:
+        return _prior(proof.previous)
+    found = _marker_at(folder_fd)
     if found > STORE_FORMAT:
         msg = f"store format {found} is newer than {STORE_FORMAT}"
         raise FormatTooNewError(msg)
-    target = home(pid)
-    dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+    return found
+
+
+def _previous_at(folder_fd: int) -> int:
+    """The prior format the preparation recorded for a switched move; 0 when no preparation exists."""
     try:
-        lock = open_lock(dir_fd, blocking=True, name=MOVE_LOCK)
-    finally:
-        os.close(dir_fd)
+        text = fd_tree.read_at(folder_fd, project_move.PREPARED)
+        found = json.loads(text) if text else {}
+        marker = found.get("marker") if isinstance(found, dict) else None
+    except (OSError, ValueError) as exc:
+        msg = f"{project_move.PREPARED} is unreadable: refusing to admit the moved store"
+        raise StoreError(msg) from exc
+    return _prior(marker)
+
+
+def _open(cwd: Path, proof: project_move.OfflineProof | None) -> Path:
+    folder = clone_dir(cwd)
+    folder.mkdir(mode=0o700, exist_ok=True)
+    folder_fd = _pin(folder)
     try:
-        target.mkdir(mode=0o700, parents=True, exist_ok=True)
-        for path in _left(folder):
-            if path.name.endswith(".lock") and path.is_file():
-                path.unlink()  # a lock holds no state; an older process may have made it again
-            elif (target / path.name).exists():
-                msg = (
-                    f"{path} and {target / path.name} both exist: an older OwlBear process may still use the clone; "
-                    f"stop it (a chat's server: {codebase.STOP}), move one of them away, then start it again"
-                )
-                raise StoreError(msg)
-            else:
-                _move(path, target / path.name)
-        if (folder / MARKER).exists() and not (target / MARKER).exists():
-            shutil.copy2(folder / MARKER, target / MARKER)
-        atomic_write(folder / MARKER, f"{STORE_FORMAT}\n")  # an older runtime refuses the clone's folder
+        pid = _ensure_at(folder, folder_fd)
+        target = home(pid)
+        lock = open_lock(folder_fd, blocking=True, name=project_move.MOVE_LOCK)
+        try:
+            rec = project_move.record_at(folder, folder_fd)
+            fd_tree.refuse_quarantined(folder_fd, folder)  # before anything is recorded, fenced or moved
+            if rec is not None and rec["phase"] == project_move.SWITCHED:
+                _open_switched(folder_fd, target, rec, _previous_at(folder_fd))  # the fence is ours: check it first
+                return target
+            found = _format_at(folder_fd, proof)
+            left = project_move.left_at(folder_fd)
+            _refuse_links(folder, folder_fd, left)
+            pending = bool(left) or rec is not None
+            if pending:
+                project_move.require_proof(
+                    folder, folder_fd, target, proof
+                )  # refused before anything is fenced or moved
+            held = _fence(folder_fd) if pending or _has_locks(folder_fd) else []  # nothing to fence otherwise
+            try:
+                pfd = project_move.pin_parent(target)
+                try:
+                    if pending:
+                        project_move.relocate(folder, folder_fd, target, pfd, rec, proof)
+                finally:
+                    os.close(pfd)
+                pfd = project_move.pin_parent(target)  # re-pinned: the path may have been swapped during the move
+                try:
+                    if pending:
+                        project_move.check_switched(target, pfd, project_move.record_at(folder, folder_fd))
+                    _publish_markers(folder_fd, pfd, target, found, moved=pending or proof is not None)
+                finally:
+                    os.close(pfd)
+            finally:
+                for fd in held:
+                    os.close(fd)
+        finally:
+            os.close(lock)
     finally:
-        os.close(lock)
+        os.close(folder_fd)
     return target
+
+
+def _open_switched(folder_fd: int, target: Path, rec: dict, previous: int) -> None:
+    """Admit the switched target by identity, keeping the source fenced; the source is never read or moved again."""
+    held = _fence(folder_fd)  # the old path stays locked for as long as this process runs
+    try:
+        pfd = project_move.pin_parent(target)
+        try:
+            project_move.check_switched(target, pfd, rec)
+            _publish_markers(folder_fd, pfd, target, previous, moved=True)
+        finally:
+            os.close(pfd)
+    finally:
+        for fd in held:
+            os.close(fd)

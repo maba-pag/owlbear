@@ -19,6 +19,8 @@ PROJECT = {
     "show": "Print a Change's step, exit and open question",
     "data": "Show or set the shared settings repository",
     "home": "Show OwlBear's folder on this machine",
+    "prepare": "Before a reboot: bind a clone's store id and fence the offline move",
+    "finish": "After a reboot: prove the preparation and move the clone's store",
     "design-pack": "Show, install or update the pinned design pack",
     "backlog": "The improvement backlog",
 }

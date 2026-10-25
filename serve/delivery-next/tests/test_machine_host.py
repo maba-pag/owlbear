@@ -414,7 +414,7 @@ def test_a_project_whose_lock_cannot_be_taken_fails_alone(tmp_path, http, machin
     lock.symlink_to(tmp_path / "elsewhere")
     machine.load_all()
     shown = {p["name"]: p for p in http.get("/api/next/projects").json()["projects"]}
-    assert (shown["bad"]["state"], "host lock cannot be taken" in shown["bad"]["reason"]) == ("failed", True)
+    assert (shown["bad"]["state"], "host.lock cannot be locked" in shown["bad"]["reason"]) == ("failed", True)
     assert shown["good"]["state"] == "loaded"
 
 
