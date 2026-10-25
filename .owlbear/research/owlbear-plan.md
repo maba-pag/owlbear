@@ -251,9 +251,11 @@ returns never revives it; a later hold is never removed with it. A count that fa
 on the latest folded Change: the owner's pause, abandon or new brief stays, and the hold's gate comes back only while
 its step and brief still fit. Held runs and pending child runs with unknown fields are refused, never rewritten. An
 accepted parent that starts a paid child (the plan challenge, an amendment challenge) first writes its checkpoint
-with the hold's receipt; the child's validated run is kept on the Change as soon as it returns and counts once, in
+with the hold's receipt; the child's validated run is kept on the Change as soon as it returns (in a capture file the
+next run adopts when that write fails) and counts once, in
 the write that settles its verdict, so a failed settlement resumes from it without a second session. A child whose
-step the owner has left counts once without routing it; a paused one waits for its step. The
+step the owner has left counts once without routing it; a paused one waits for its step. A wrong-model or failed
+challenger judges nothing and reruns alone, as does an unread one the owner retries. The
 branch carries main's #653 lesson delivery and exposure logging, which runs after the replacement check's send and
 before its delivery is recorded. Other packages remain open until their own merged-code
 acceptance evidence is verified.
