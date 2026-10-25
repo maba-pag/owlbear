@@ -15,8 +15,8 @@ from owlbear_delivery_next.machine_host import curation, registry
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
-from owlbear_delivery_next.state_store import settings_carry
-from owlbear_delivery_next.state_store.store import read_layer
+from owlbear_delivery_next.state_store import settings_carry, store
+from owlbear_delivery_next.state_store.store import update_layer
 
 
 def pending(folder: Path, title: str):
@@ -290,14 +290,28 @@ def configure_machine(**chosen) -> None:
 
 
 def curator(root: Path, **changes) -> None:
-    """Change the curator role in Global, where a role's model, effort, minutes and subagents are set."""
+    """Change the curator role in Global, where a role's model, effort, minutes and subagents are set.
+
+    Written by the same locked, atomic writer as production, so a reader never sees a half-written Global file.
+    """
     shared = DataRepo(root)
     if not shared.global_path.exists():
         settings_carry.carry(shared)
-    glob = read_layer(shared.global_path, GlobalLayer)
-    agent = glob.agents.get("curator", config.Agent()).model_copy(update=changes)
-    updated = glob.model_copy(update={"agents": glob.agents | {"curator": agent}})
-    shared.global_path.write_text(updated.model_dump_json())
+
+    def change(glob: GlobalLayer) -> GlobalLayer:
+        agent = glob.agents.get("curator", config.Agent()).model_copy(update=changes)
+        return glob.model_copy(update={"agents": glob.agents | {"curator": agent}})
+
+    update_layer(shared.global_path, GlobalLayer, change)
+
+
+def test_the_curator_helper_writes_global_only_through_the_atomic_layer_writer(root, monkeypatch) -> None:
+    settings_carry.carry(DataRepo(root))
+    written = []
+    real = store.atomic_write
+    monkeypatch.setattr(store, "atomic_write", lambda path, text: (written.append(path), real(path, text)))
+    curator(root, model="model-z")
+    assert written == [DataRepo(root).global_path]
 
 
 def test_a_queued_automatic_request_starts_only_if_its_trigger_still_allows_it_at_its_slot(root) -> None:
