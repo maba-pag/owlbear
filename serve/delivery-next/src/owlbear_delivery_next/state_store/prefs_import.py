@@ -9,7 +9,6 @@ failure, like a raised error.
 
 from __future__ import annotations
 
-import hashlib
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
@@ -17,25 +16,15 @@ from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.settings.config import Layer
     from owlbear_delivery_next.state_store.store import Store
 
-ABSENT = "absent"
+ABSENT = profile_share.ABSENT
 REVIEW = (
     "the legacy preference import is incomplete: the project settings changed or were removed after it was claimed; "
     "review the Merge and cleanup preferences on the Settings page"
 )
-
-
-def _digest(path: Path) -> str:
-    """The digest of the config file's bytes, or ``absent``."""
-    try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-    except FileNotFoundError:
-        return ABSENT
 
 
 def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> None:
@@ -45,7 +34,7 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> None:
     def change(cur: Layer) -> Layer:
         if cur.prefs_imported:
             return cur  # landed earlier (a crash before done): republish only
-        if (resumed and basis in ("", ABSENT)) or _digest(store.config_path) != basis:
+        if (resumed and basis in ("", ABSENT)) or profile_share.config_digest(store.config_path) != basis:
             raise StoreError(REVIEW)  # raised before any write: a deleted or changed config is not recreated
         return plan(cur, prof)
 
@@ -63,7 +52,8 @@ def _publish_config(store: Store) -> str:
         return ""
     try:
         with store.shared.locked():
-            return store.shared.publish(store.config_path, f"settings: {store.name}: project layer removed")
+            notice = store.shared.publish(store.config_path, f"settings: {store.name}: project layer removed")
+            return profile_share.settle_config(store, notice)
     except DataRepoError as exc:
         return str(exc)
 
@@ -96,7 +86,7 @@ def run(store: Store) -> None:
         republish(store)
         return
     if prof.prefs_import == "":
-        _, notice, claimed = store.mark_prefs_import("", "pending", _digest(store.config_path))
+        _, notice, claimed = store.mark_prefs_import("", "pending", profile_share.config_digest(store.config_path))
         if notice:
             msg = f"the legacy import claim was not published: {notice}"
             raise StoreError(msg)

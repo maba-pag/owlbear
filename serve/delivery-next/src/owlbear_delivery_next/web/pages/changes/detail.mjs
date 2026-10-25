@@ -59,6 +59,8 @@ export function detailView(d) {
   return html`${detailHead(d)}
     ${row(html`<p-tag variant=${variant} compact="true">${label}</p-tag>`, text(d.line))}
     ${refusedTop}
+    ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,
+      "Delivery assumes nothing from them; Pause and the other controls still work.") : nothing}
     ${label === "Stopped" ? notice("error", "Stopped", `${d.line.replace(/^.*?stopped: /, "")}.`,
       d.action ? `What to do: ${d.action}.` : "") : nothing}
     ${behind ? pullbackNote(d.pullback, d) : nothing}

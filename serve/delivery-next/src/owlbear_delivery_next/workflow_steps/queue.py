@@ -236,7 +236,7 @@ def _untraced(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult:
         if claim.quiet >= QUIET:
             text = f"GitHub shows no trace of PR #{pr.number} in the merge queue after Delivery added it"
             return engine.ask(M, f"{text}: enqueue it again or pause", UNSEEN, [AGAIN, PAUSE])
-    return engine.pending(Waiting.GITHUB, f"waiting for GitHub to show PR #{pr.number} queued", ctx.poll())
+    return engine.pending(Waiting.GITHUB, f"waiting for GitHub to show PR #{pr.number} queued", _wake(ctx))
 
 
 def _locked(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple[Change, StepResult]:

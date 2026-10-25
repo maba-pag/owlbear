@@ -213,3 +213,35 @@ def test_an_owner_change_during_the_merge_leaves_the_submitted_method_and_comple
     assert [r.method for r in gh.requests] == [MergeMethod.SQUASH]  # the method sent, not the mutable preference
     assert result.exit == Exit.DONE, result.reason
     assert "squash" in result.reason
+
+
+def run_and_keep(store: Store, gh: FakeGitHub, tmp: Path):
+    """One queue pass whose changed claim is saved, as the step loop saves it."""
+    with store.lock("c1") as lock:
+        ctx = ctx_for(store, gh, tmp)
+        ctx.lock = lock
+        c, result = queue.run(ctx, store.read("c1"), gh.current, None, gate)
+        store.write(lock, c)
+        return result
+
+
+def test_an_owned_untraced_attempt_with_the_poll_unset_waits_then_withdraws_before_asking(store, tmp_path):
+    set_prefs(store, merge_method="squash", ci_poll_seconds=45)
+    change(store, tmp_path)
+    gh = FakeGitHub()
+    assert run_and_keep(store, gh, tmp_path).exit == Exit.PENDING  # Delivery enqueues, the claim is saved
+    assert gh.enqueued == [HEAD]
+
+    gh.entry = None  # GitHub shows no trace of the attempt yet
+    set_prefs(store, merge_method="squash")  # the poll interval is now unset
+    waiting = run_and_keep(store, gh, tmp_path)
+    assert waiting.question is None
+    assert waiting.exit == Exit.PENDING
+    assert gh.dequeues == 0
+    assert gh.enqueued == [HEAD]  # no question, no second send, nothing withdrawn
+
+    gh.entry = QueueEntry(state="QUEUED", position=1, enqueued_at=NOW)  # the attempt appears later
+    with pytest.raises(SettingsUnset, match="ci_poll_seconds"):
+        run_queue(store, gh, tmp_path)
+    assert gh.dequeues == 1
+    assert gh.entry is None  # confirmed withdrawal came before the settings question

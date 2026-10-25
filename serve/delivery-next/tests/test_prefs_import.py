@@ -446,7 +446,7 @@ def test_a_refused_config_publication_is_published_on_retry_so_a_fresh_clone_get
 
 def test_a_losing_importer_whose_digest_predates_a_delete_and_recreate_resumes_only_from_the_winning_claim(monkeypatch):
     store = FakeStore(layer=Layer())
-    real, interleaved = prefs_import._digest, []  # noqa: SLF001 - the race needs the real digest in between
+    real, interleaved = prefs_import.profile_share.config_digest, []  # the race needs the real digest in between
 
     def digest_then_a_rival_claims(path):
         seen = real(path)
@@ -457,7 +457,7 @@ def test_a_losing_importer_whose_digest_predates_a_delete_and_recreate_resumes_o
             store.layer = Layer()  # the owner recreates a blank config
         return seen
 
-    monkeypatch.setattr(prefs_import, "_digest", digest_then_a_rival_claims)
+    monkeypatch.setattr(prefs_import.profile_share, "config_digest", digest_then_a_rival_claims)
     with pytest.raises(StoreError, match="is incomplete"):
         prefs_import.run(store)
     assert interleaved
@@ -468,7 +468,7 @@ def test_a_losing_importer_whose_digest_predates_a_delete_and_recreate_resumes_o
 
 def test_two_importers_on_an_absent_config_the_loser_leaves_it_pending_and_never_creates_it(monkeypatch):
     store = FakeStore(exists=False)
-    real, interleaved = prefs_import._digest, []  # noqa: SLF001 - the race needs the real digest in between
+    real, interleaved = prefs_import.profile_share.config_digest, []  # the race needs the real digest in between
 
     def digest_then_the_winner_claims_and_crashes(path):
         seen = real(path)
@@ -477,7 +477,7 @@ def test_two_importers_on_an_absent_config_the_loser_leaves_it_pending_and_never
             store.mark_prefs_import("", "pending", prefs_import.ABSENT)  # the winner claims, then crashes before fill
         return seen
 
-    monkeypatch.setattr(prefs_import, "_digest", digest_then_the_winner_claims_and_crashes)
+    monkeypatch.setattr(prefs_import.profile_share, "config_digest", digest_then_the_winner_claims_and_crashes)
     with pytest.raises(StoreError, match="is incomplete"):
         prefs_import.run(store)
     assert interleaved == [prefs_import.ABSENT]

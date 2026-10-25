@@ -234,7 +234,8 @@ class Store:
             until = time.monotonic() + data_repo.SAVE_SECONDS  # the lock wait and every git command share it
             with self.shared.locked():
                 update_layer(path, model, change)
-                return self.shared.publish(path, f"settings: {what}", until)
+                notice = self.shared.publish(path, f"settings: {what}", until)
+                return profile_share.settle_config(self, notice) if path == self.config_path else notice
         except data_repo.DataRepoError as exc:
             raise SharedError(str(exc)) from exc
 

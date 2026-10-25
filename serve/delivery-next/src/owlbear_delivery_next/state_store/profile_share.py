@@ -9,6 +9,7 @@ clone's overlay; another clone's shared copy of those facts never counts.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 from typing import TYPE_CHECKING
@@ -35,6 +36,9 @@ LOCAL = "profile.local.json"
 DETECTED = "profile.detected"  # a new marker forces the old unbound observations to be checked once
 ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into the settings
 UNPUBLISHED = "prefs-import.unpublished"  # the legacy import is done here but its completion was not published yet
+ABSENT = "absent"
+CONFIG_PENDING = "config.pending"  # the digest of a project config change that has not reached the shared repository
+CONFIG_WAITING = "the project settings change is not published yet; the legacy preference import completes after it"
 
 
 def path(store: Store) -> Path:
@@ -53,28 +57,97 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False) -> s
         if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
             prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
         _keep_local(store, prof)
-        if prof.prefs_import == "done" and (notice := publish_config_unlocked(store)):
-            _stage(store, prof)  # the new shared facts wait here for the retry; done is not exposed before the config
+        return _publish_locked(store, prof, f"settings: {store.name}: project profile")
+
+
+def _publish_locked(store: Store, prof: Profile, message: str) -> str:
+    """Publish a profile under the shared lock; DONE goes out only after the config's edit or removal.
+
+    A refused config publication keeps the new facts staged and the completion pending here; a raised refusal of the
+    profile is recorded the same way before it propagates.
+    """
+    done = prof.prefs_import == "done"
+    if done:
+        notice = publish_config_unlocked(store)
+        if notice or _shared_pending(store):
+            _stage(store, prof)
             _unpublished(store, failed=True)
-            return notice
-        notice = _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
-        if prof.prefs_import == "done":
-            _unpublished(store, failed=bool(notice))
-        return notice
+            return notice or CONFIG_WAITING
+    try:
+        notice = _publish(store, store.shared, prof, message)
+    except DataRepoError:
+        if done:
+            _unpublished(store, failed=True)
+        raise
+    if done:
+        _unpublished(store, failed=bool(notice))
+    return notice
+
+
+def _pending_file(store: Store) -> Path:
+    return store.shared.root / store.name / CONFIG_PENDING
+
+
+def _shared_pending(store: Store) -> str:
+    """The digest of a project config change that has not reached the shared repository, by any clone; else ``""``."""
+    if not store.shared:
+        return ""
+    try:
+        return _pending_file(store).read_text().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def config_digest(config: Path) -> str:
+    """The digest of the project config's bytes, or ``absent``."""
+    try:
+        return hashlib.sha256(config.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        return ABSENT
 
 
 def publish_config_unlocked(store: Store) -> str:
     """Publish the project config as it is now: an edit, or its removal; the caller holds the shared lock.
 
-    Every completed import publishes it first, whichever clone writes the marker: the shared repository's state decides,
-    not one clone's flag, so a DONE never reaches the shared profile ahead of the config it depends on.
+    Every completed import publishes it first, whichever clone writes the marker. A DONE never reaches the shared
+    profile while another clone's config change is unpublished: the shared pending record decides, not one clone's flag.
     """
     if not store.shared:
         return ""
     try:
-        return store.shared.publish(store.config_path, f"settings: {store.name}: project layer")
+        notice = store.shared.publish(store.config_path, f"settings: {store.name}: project layer")
     except DataRepoError as exc:
-        return str(exc)
+        notice = str(exc)
+    return settle_config(store, notice)
+
+
+def settle_config(store: Store, notice: str) -> str:
+    """Record in the shared repository whether this clone's project config change reached it.
+
+    The caller holds the shared lock and has just attempted the config's publication; *notice* is its refusal, if any.
+    A refused change is recorded by its digest, and only the publication of the same bytes clears it. The record is a
+    file of its own, so recording a refused change never publishes the profile's unpublished completion.
+    """
+    if not store.shared:
+        return notice
+    digest = config_digest(store.config_path)
+    pending = _shared_pending(store)
+    if notice:
+        want = digest
+    elif pending == digest:
+        want = ""
+    else:
+        return notice
+    if want == pending:
+        return notice
+    target = _pending_file(store)
+    if want:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(target, want)
+    else:
+        target.unlink(missing_ok=True)
+    extra = store.shared.publish(target, f"settings: {store.name}: project config {'pending' if want else 'published'}")
+    return notice or extra
 
 
 def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:
@@ -92,18 +165,10 @@ def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str,
             return (prof.prefs_import if prof else "", "", False)
         marked = prof.model_copy(update={"prefs_import": to, "prefs_basis": basis if to == "pending" else ""})
         _keep_local(store, marked)
-        if to == "done" and (notice := publish_config_unlocked(store)):
-            _stage(store, marked)  # done waits locally until the config's edit or removal is published
-            _unpublished(store, failed=True)
-            return to, notice, True
         try:
-            notice = _publish(store, store.shared, marked, f"settings: {store.name}: legacy preference import {to}")
+            notice = _publish_locked(store, marked, f"settings: {store.name}: legacy preference import {to}")
         except DataRepoError as exc:
-            if to == "done":
-                _unpublished(store, failed=True)
             raise SharedError(str(exc)) from exc
-        if to == "done":
-            _unpublished(store, failed=bool(notice))
         return to, notice, True
 
 
@@ -130,15 +195,10 @@ def retry(store: Store) -> str:
         if prof is None or prof.prefs_import != "done":
             _unpublished(store, failed=False)
             return ""
-        if notice := publish_config_unlocked(store):
-            _unpublished(store, failed=True)
-            return notice
         try:
-            notice = _publish(store, store.shared, prof, f"settings: {store.name}: legacy preference import done")
+            return _publish_locked(store, prof, f"settings: {store.name}: legacy preference import done")
         except DataRepoError as exc:
-            notice = str(exc)
-        _unpublished(store, failed=bool(notice))
-        return notice
+            return str(exc)
 
 
 @contextlib.contextmanager
@@ -305,7 +365,7 @@ def adopt(store: Store) -> None:
         own = _read(local)
         own = own.model_copy(update={"entries": {**own.entries, **_local(store)}})
         _keep_local(store, own)
-        _publish(store, store.shared, own, f"settings: {store.name}: project profile moved from its clone")
+        _publish_locked(store, own, f"settings: {store.name}: project profile moved from its clone")
         local.replace(local.with_name(f"{PROFILE}.moved"))
 
 
@@ -349,7 +409,7 @@ def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None:
         _keep_local(store, kept)
         if current is None or _shared_part(current) != _shared_part(old):
             return None
-        notice = _publish(store, store.shared, kept, f"settings: {store.name}: project profile detected in a clone")
+        notice = _publish_locked(store, kept, f"settings: {store.name}: project profile detected in a clone")
         if notice:
             raise DataRepoError(notice)
     return None if now != before else kept
