@@ -10,7 +10,6 @@ a lead chat's has no Change. A step runs one lookup at a time and a host one lea
 
 from __future__ import annotations
 
-import asyncio
 import json
 import tempfile
 import threading
@@ -23,7 +22,7 @@ from owlbear_decisions import Decision, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.local_system import local_home, processes
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.state_store import decision_store
@@ -192,7 +191,7 @@ def _ran(settings: Settings, prefix: str, said: str, journal: sdk_adapter.Journa
     limit = min(roles.limit(settings, pick.LABEL), pick_tools.LIMIT)
     with tempfile.TemporaryDirectory(prefix="owlbear-lookup-") as folder:
         session = f"{prefix}-{LABEL}-{uuid.uuid4().hex[:8]}"
-        return asyncio.run(sdk_adapter.run(pick.config(settings, Path(folder), session, said, journal, limit)))
+        return loop_owner.run(sdk_adapter.run(pick.config(settings, Path(folder), session, said, journal, limit)))
 
 
 def _one(text: str) -> str:

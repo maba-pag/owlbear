@@ -22,7 +22,15 @@ from owlbear_delivery_next.change_contracts.permissions import decide, identitie
 from owlbear_delivery_next.local_system import preload, processes
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.local_system.processes import Termination, verdict
-from owlbear_delivery_next.runtimes import sdk_teardown, step_budget, step_decisions, step_input, subagents, watch_feed
+from owlbear_delivery_next.runtimes import (
+    sdk_teardown,
+    step_budget,
+    step_decisions,
+    step_input,
+    subagents,
+    tool_workers,
+    watch_feed,
+)
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
@@ -145,6 +153,7 @@ class _Step:
         self.watch = subagents.Watch(allowed=cfg.subagents)
         self.feed: watch_feed.Feed | None = None  # its watcher, for the run only
         self.requests: set[asyncio.Task[None]] = set()
+        self.workers = tool_workers.Workers()
 
     @property
     def done(self) -> bool:
@@ -269,10 +278,10 @@ class _Step:
         return ToolResult(text_result_for_llm=text, result_type=kind)
 
     async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # off the loop: deadlines hold
-        return ToolResult(text_result_for_llm=(await asyncio.to_thread(self.gate.call, spec, inv.arguments))[0])
+        return ToolResult(text_result_for_llm=(await self.workers.call(lambda: self.gate.call(spec, inv.arguments)))[0])
 
     async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
-        return await asyncio.to_thread(self._handle, spec, inv)
+        return await self.workers.call(lambda: self._handle(spec, inv))
 
     def tools(self) -> list[Tool]:
         helped = {spec for spec, _ in self.cfg.helpers}  # these answer, and the turn goes on; so does a first look

@@ -12,6 +12,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown
+from owlbear_delivery_next.runtimes.step_budget import Budget
 
 STEP = sdk_adapter._Step  # noqa: SLF001 - the real step and result gate are under test
 PAYLOAD = tools.BuildResult(summary="No edit was needed", changed_paths=[], checks=[])
@@ -267,6 +268,23 @@ def test_a_request_failure_after_cutoff_is_logged_without_replacing_the_deadline
         await asyncio.wait_for(step.wait(Session(listing)), 1)
         assert step.run.ending == "deadline"
         assert {"event": "request-failed", "operation": "tasks.list", "error": "RuntimeError"} in events
+
+    asyncio.run(scenario())
+
+
+def test_a_queued_request_rechecks_the_deadline_before_dispatch(tmp_path, clock):
+    async def scenario():
+        loop = asyncio.get_running_loop()
+        budget = Budget(0.05, clock.monotonic, STEP(configured(tmp_path), loop))
+        calls = []
+
+        async def operation():
+            calls.append("sent")
+            return "late"
+
+        loop.call_soon(setattr, clock, "now", clock.now + 1)
+        assert await budget.run(operation, "send", 0.001) is None
+        assert calls == []
 
     asyncio.run(scenario())
 

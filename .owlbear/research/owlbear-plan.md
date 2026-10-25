@@ -246,6 +246,10 @@ and synchronous recording, and bound active snapshot/reminder RPCs by the remain
 without waiting for cancellation cooperation. Outstanding request tasks stay owned
 through teardown; pending requests cannot produce confirmed termination. The budget
 still starts at wait entry, without changing startup or cumulative-resume policy.
+SDK session callers bound cancellation of leftover asynchronous requests without
+losing returned usage or payloads. Synchronous tools retain their caller's ownership
+until executor work settles; cancelled waiters neither release running tools nor
+permit queued tools to start later. Unknown shutdown remains unconfirmed.
 
 Shared-settings publication (#622) distinguishes a missing path from failed Git
 tracking or staged-diff probes and stops before acknowledging a failed commit.

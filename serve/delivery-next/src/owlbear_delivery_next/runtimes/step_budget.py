@@ -38,6 +38,8 @@ class Budget:
         out: list[T] = []
 
         async def request() -> None:
+            if self.expired():
+                return
             out.append(await operation())
 
         def ended(task: asyncio.Task[None]) -> None:

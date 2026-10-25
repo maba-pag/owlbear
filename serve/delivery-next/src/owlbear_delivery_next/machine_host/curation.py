@@ -10,7 +10,6 @@ paused" on (the owner, 2026-10-22). An entry a run left pending starts no other 
 
 from __future__ import annotations
 
-import asyncio
 import tempfile
 import threading
 import uuid
@@ -28,7 +27,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import machine_settings, registry
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import Settings, SettingsUnset
 from owlbear_delivery_next.workflow_steps import lookup
@@ -87,7 +86,7 @@ def folders(root: Path) -> list[str]:
 
 
 def _run(cfg: sdk_adapter.Session) -> Run:
-    return asyncio.run(sdk_adapter.run(cfg))
+    return loop_owner.run(sdk_adapter.run(cfg))
 
 
 class Curation:

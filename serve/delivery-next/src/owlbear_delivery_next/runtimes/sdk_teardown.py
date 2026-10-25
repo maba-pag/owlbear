@@ -106,6 +106,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
     elif processes.alive(rt, st.run.pids.get(rt)) is not False:
         await force(st, "runtime still present after stop", problems)
     pending = await _requests(st, problems)
+    await _workers(st, problems)
     observed = await settle(dict(st.run.pids), problems)
     return replace(observed, confirmed=False) if pending else observed
 
@@ -120,6 +121,14 @@ async def _requests(st: _Step, problems: list[str]) -> bool:
     if pending:
         problems.append(f"{len(pending)} runtime request task(s) still pending")
     return bool(pending)
+
+
+async def _workers(st: _Step, problems: list[str]) -> None:
+    end = time.monotonic() + STOP_CALL
+    while st.workers.count() and (left := end - time.monotonic()) > 0:  # noqa: ASYNC110 - no more executor work
+        await asyncio.sleep(min(0.05, left))
+    if remaining := st.workers.count():
+        problems.append(f"{remaining} synchronous tool worker(s) still running")
 
 
 async def _wait[T](task: asyncio.Future[T]) -> bool:

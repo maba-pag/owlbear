@@ -10,7 +10,6 @@ empty, and the project memory it reads is today's.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import re
 import tempfile
@@ -24,7 +23,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.design_packs import calibration, design_pack
 from owlbear_delivery_next.local_system import git_files
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import judges, sessions
 
@@ -63,7 +62,7 @@ def replay(
         raise design_pack.PackError(msg)
     pack = _pack(candidate)
     role, memory = roles.chosen(store.settings(), "design-review"), sessions.memory(store)
-    run = run or (lambda cfg: asyncio.run(sdk_adapter.run(cfg)))
+    run = run or (lambda cfg: loop_owner.run(sdk_adapter.run(cfg)))
     root, pairs, left_out = calibration.folder(store.shared, store.name).resolve(), [], 0
     if not root.is_relative_to(store.shared.root.resolve()):
         msg = f"the calibration folder leads outside the shared repository, to {root}"

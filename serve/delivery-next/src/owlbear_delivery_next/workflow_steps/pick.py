@@ -9,7 +9,6 @@ while the list is the one it read. At a later step boundary only the decisions n
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import hashlib
 import tempfile
@@ -24,7 +23,7 @@ from owlbear_delivery_next.change_contracts.decision_records import Pick, Picked
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import picks
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.workflow_steps import sessions
@@ -197,7 +196,7 @@ def _session(store: Store, lock: Lock, c: Change, said: str, p: Pick | DecisionB
         cfg = config(settings, Path(folder), p.session, said, journal)
         if resume:
             cfg = dataclasses.replace(cfg, resume=True, previous=sessions.previous(store, c.slug, p.session))
-        return asyncio.run(sdk_adapter.run(cfg))
+        return loop_owner.run(sdk_adapter.run(cfg))
 
 
 def config(  # noqa: PLR0913, PLR0917 - one picker session's place, id, message, journal and time
