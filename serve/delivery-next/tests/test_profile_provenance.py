@@ -443,3 +443,82 @@ def test_a_confirmed_absent_install_survives_detection_and_reaches_the_worktree(
     chosen = profile.confirm(profile.detect(repo, GitHub(), None), "install:vendor", "make deps", NOW)
     again = profile.detect(repo, GitHub(), chosen)
     assert worktree.installs(again, ["vendor/lib.py"]) == [("vendor", "make deps")]
+
+
+def _thread_call(work, errors):
+    try:
+        work()
+    except Exception as exc:  # noqa: BLE001 - thread failures must fail the owning test
+        errors.append(exc)
+
+
+@pytest.mark.usefixtures("shared")
+@pytest.mark.parametrize("shared_mode", [False, True])
+def test_a_profile_read_uses_one_snapshot_while_a_save_is_between_its_two_halves(tmp_path, monkeypatch, shared_mode):
+    store = Store.open(clone(tmp_path, "shop")) if shared_mode else Store(tmp_path / "private")
+    store.write_profile(_pair("old", "no"))
+    publish, locked, read = profile_share._publish, DataRepo.locked, profile_share._read  # noqa: SLF001
+    between, release, reading = threading.Event(), threading.Event(), threading.Event()
+    held, errors, results = threading.local(), [], []
+    open_lock = profile_share.open_lock
+
+    @contextlib.contextmanager
+    def tracked(self, wait=None):
+        with locked(self, wait):
+            held.active = True
+            try:
+                yield
+            finally:
+                held.active = False
+
+    def publishing(*args):
+        if threading.current_thread().name == "profile-writer":
+            between.set()
+            assert release.wait(10)
+        return publish(*args)
+
+    def opening(*args, **kwargs):
+        fd = open_lock(*args, **kwargs)
+        held.active = True
+        return fd
+
+    def loading(source):
+        if threading.current_thread().name == "profile-reader":
+            assert getattr(held, "active", False), "both profile halves must be read under their writer lock"
+        return read(source)
+
+    def reading_profile():
+        reading.set()
+        results.append(store.read_profile())
+
+    monkeypatch.setattr(DataRepo, "locked", tracked)
+    monkeypatch.setattr(profile_share, "open_lock", opening)
+    monkeypatch.setattr(profile_share, "_publish", publishing)
+    monkeypatch.setattr(profile_share, "_read", loading)
+    writer = threading.Thread(
+        target=_thread_call,
+        args=(lambda: store.write_profile(_pair("new", "yes")), errors),
+        name="profile-writer",
+    )
+    reader = threading.Thread(target=_thread_call, args=(reading_profile, errors), name="profile-reader")
+    writer.start()
+    try:
+        assert between.wait(10)
+        reader.start()
+        assert reading.wait(10)
+    finally:
+        release.set()
+        writer.join(10)
+        if reader.ident is not None:
+            reader.join(10)
+    assert not writer.is_alive()
+    assert not reader.is_alive()
+    assert not errors
+    assert len(results) == 1
+    assert (profile.value(results[0], profile.DEFAULT), profile.value(results[0], profile.PUSH)) == ("new", "yes")
+
+
+def test_reading_a_missing_unshared_profile_creates_no_private_store(tmp_path):
+    root = tmp_path / "not-created"
+    assert Store(root).read_profile() is None
+    assert not root.exists()

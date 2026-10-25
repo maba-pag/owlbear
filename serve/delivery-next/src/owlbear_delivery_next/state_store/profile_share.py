@@ -47,12 +47,13 @@ def write(store: Store, prof: Profile) -> str:
 
 
 @contextlib.contextmanager
-def _writer(store: Store) -> Iterator[None]:
+def _writer(store: Store, *, create: bool = True) -> Iterator[None]:
     if store.shared:
         with store.shared.locked():
             yield
         return
-    store.root.mkdir(parents=True, exist_ok=True)
+    if create:
+        store.root.mkdir(parents=True, exist_ok=True)
     directory = os.open(store.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         fd = open_lock(directory, blocking=True, name=".profile.lock")
@@ -65,18 +66,38 @@ def _writer(store: Store) -> Iterator[None]:
 
 
 def read(store: Store) -> Profile | None:
-    """Read through the format gate and overlay this clone's facts; absence alone returns None."""
+    """Read both profile halves under their writer lock; absence alone returns None."""
     from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
 
+    if not _present(path(store)):
+        return None
+    try:
+        with _writer(store, create=False):
+            return _read_unlocked(store)
+    except FileNotFoundError:
+        return None
+    except (DataRepoError, OSError, ValueError) as exc:
+        msg = f"the profile could not be read: {exc}"
+        raise StoreError(msg) from exc
+
+
+def _read_unlocked(store: Store) -> Profile | None:
+    """The coherent reader for a caller already holding the profile's writer lock."""
     source = path(store)
+    return merged(store, _read(source)) if _present(source) else None
+
+
+def _present(source: Path) -> bool:
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
     try:
         source.stat()
     except FileNotFoundError:
-        return None
+        return False
     except OSError as exc:
         msg = f"the profile is unreadable: {source}"
         raise StoreError(msg) from exc
-    return merged(store, _read(source))
+    return True
 
 
 def merged(store: Store, prof: Profile) -> Profile:
@@ -183,7 +204,7 @@ def checked(store: Store, repo: Path) -> Profile | None:
 def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None:
     """Keep concurrent local intent; publish fresh shared facts only against the snapshot they observed."""
     with _writer(store):
-        current = store.read_profile()
+        current = _read_unlocked(store)
         before, now = _local_part(old), _local_part(current) if current is not None else _local(store)
         found = _local_part(new)
         local: dict[str, ProfileEntry] = {}
