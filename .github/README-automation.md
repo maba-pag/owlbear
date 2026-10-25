@@ -15,10 +15,11 @@ repository and its checks rather than an installed project directly.
 | `scripts/` | Small checks used by workflows |
 | `skills/` | Development-only specialist guidance, including session review and hook authoring |
 | `copilot-instructions.md` | The development checkout's workspace identity and repository map |
-| `renovate.json` | Repository configuration for dependency update automation |
 
 ## What belongs elsewhere
 
+- Tool configuration, Renovate's [`renovate.json`](../renovate.json) and CodeRabbit's included, lives at the
+  repository root.
 - Portable agents, skills, instructions, and prompts live in [`share/`](../share/README.md).
 - Consumer-project Copilot and VS Code templates live under `seed/` and are applied by
   [`setup/init.py`](../setup/init.py).
@@ -110,7 +111,7 @@ workflow token a tag on a commit whose workflow files differ from every branch t
 
 ## Dependency updates
 
-[Renovate](renovate.json) is the only updater (TD-382, TD-408): routine updates arrive grouped per ecosystem on
+[Renovate](../renovate.json) is the only updater (TD-382, TD-408): routine updates arrive grouped per ecosystem on
 Friday, majors on Sunday after 72 hours. Ruff, Biome and every pre-commit hook share one weekly **lint toolchain**
 pull request with a three-day minimum age, and their majors share one on Sunday, so the Ruff pin, its hook and the
 installed Ruff that [`check_ruff_toolchain.py`](scripts/check_ruff_toolchain.py) compares move together (TD-409).

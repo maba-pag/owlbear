@@ -98,7 +98,7 @@ jobs:
                 workspace_lock_tooling=true
                 ;;
               .github/workflows/*|\
-              .github/renovate.json|\
+              renovate.json|\
               .github/scripts/check_ruff_toolchain.py|\
               biome.json|\
               package.json|\
@@ -147,7 +147,7 @@ jobs:
 
       - name: Validate Renovate policy JSON
         if: steps.reuse.outputs.cache-hit != 'true' && steps.scope.outputs.renovate == 'true'
-        run: python3 -m json.tool .github/renovate.json >/dev/null
+        run: python3 -m json.tool renovate.json >/dev/null
 
       - name: Setup Node.js
         if: >-
