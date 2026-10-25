@@ -9,21 +9,17 @@ counts it again before granting anything. A design pack update takes one slot fo
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
-import hashlib
-import json
 import subprocess
 import threading
 import uuid
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.design_packs import design_pack
 from owlbear_delivery_next.local_system.slots import PACK
-from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run
+from owlbear_delivery_next.pack_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.runtimes import maintained
 from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import StoreError
@@ -31,6 +27,7 @@ from owlbear_delivery_next.workflow_steps import check, pick
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
@@ -176,15 +173,29 @@ def interrupted(job: Job, key: str) -> None:
         run = job.interrupted
         if run["workspace"] and maintenance.owns(run["workspace"]):
             return  # the ledger already holds this run's own lease; importing it again would hold it twice
-        source = f"{key}:run:{run['run']}:{run['started_at']}"  # the same run adopted once, wherever its folder lies
-        maintenance.adopt(source, key, "pack", {}, interrupted=True, workspace=run["workspace"] or str(legacy))
+        _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"])
+        if not run["workspace"] and job.version not in {"", "absent"}:  # the rewrite this host made keeps its identity
+            maintenance.receipt(key, pack_state.digest(job.version), run["generation"])
     elif job.version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
     elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
         _adopt_legacy(maintenance, key, legacy, job.state, job.version)
 
 
-OBSERVED = ("state", "stage", "run", "started_at", "ended_at", "reason", "workspace")
+def _identity(
+    maintenance: Maintenance, key: str, record: dict[str, object], version: str
+) -> tuple[str, datetime | None]:
+    """A legacy record's generation: the one an older host's rewrite of this file version was given, else its own."""
+    if version not in {"", "absent"} and (got := maintenance.receipted(key, pack_state.digest(version))):
+        return got, None
+    return pack_state.generation(record, version)
+
+
+def _hold(maintenance: Maintenance, key: str, workspace: str, generation: str, started: datetime | None = None) -> None:
+    """Hold one run's uncertain work once per generation; a recovered generation is not held again."""
+    maintenance.adopt_uncertain(
+        f"{key}:{workspace}:{generation}", key, "pack", workspace=workspace, generation=generation, started=started
+    )
 
 
 def _adopt_legacy(maintenance: Maintenance, key: str, legacy: Path, record: dict[str, object], version: str) -> None:
@@ -192,25 +203,10 @@ def _adopt_legacy(maintenance: Maintenance, key: str, legacy: Path, record: dict
     if version == "absent":
         maintenance.adopt_uncertain(f"{key}:legacy", key, "pack", workspace=str(legacy))
         return
-    generation, started = _generation(record, version)
+    generation, started = _identity(maintenance, key, record, version)
     maintenance.adopt_uncertain(
         f"{key}:legacy", key, "pack", workspace=str(legacy), generation=generation, started=started
     )
-
-
-def _generation(record: dict[str, object], version: str) -> tuple[str, datetime | None]:
-    """A legacy run's identity: its proven run and start time, else a fingerprint of its fields and its file.
-
-    The fingerprint binds the observed fields and the file's identity and version, read from the one descriptor the
-    record came from. A same-bytes replacement is then a different file, and an untouched file keeps its identity.
-    """
-    run, started = str(record.get("run") or ""), str(record.get("started_at") or "")
-    if run and started:
-        with contextlib.suppress(ValueError):
-            return f"{run}:{started}", datetime.fromisoformat(started)
-    fields = {k: str(record.get(k) or "") for k in OBSERVED}
-    body = json.dumps({"fields": fields, "file": version}, sort_keys=True)
-    return "observed:" + hashlib.sha256(body.encode()).hexdigest(), None
 
 
 def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
@@ -221,7 +217,7 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     try:
         root = project_home.current(repo)
     except OSError, subprocess.CalledProcessError, StoreError:
-        maintenance.adopt(f"{key}:unlocated", key, "pack", {}, interrupted=True)  # its folder cannot be told
+        maintenance.adopt_uncertain(f"{key}:unlocated", key, "pack", workspace=str(repo))  # its folder cannot be told
         return
     if root is None:
         return
@@ -237,11 +233,10 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
         return
     kept, version = got
     if kept.get("state") == "running":
-        run, started = str(kept.get("run") or ""), str(kept.get("started_at") or "")
-        workspace = str(kept.get("workspace") or legacy)
-        if kept.get("workspace") and maintenance.owns(workspace):
+        if kept.get("workspace") and maintenance.owns(str(kept["workspace"])):
             return  # a modern run the ledger already owns; the same record is not a second hold
-        maintenance.adopt(f"{key}:run:{run}:{started}", key, "pack", {}, interrupted=True, workspace=workspace)
+        generation, started = _identity(maintenance, key, kept, version)
+        _hold(maintenance, key, str(kept.get("workspace") or legacy), generation, started)
     elif "workspace" not in kept and (legacy.is_dir() or pack_job.legacy_uncertain(kept)):
         _adopt_legacy(maintenance, key, legacy, kept, version)
 

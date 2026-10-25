@@ -1,7 +1,9 @@
 """A pre-ledger pack run is held once per its proven identity; a restart after recovery never holds it again."""
 
+import fcntl
 import json
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -333,3 +335,235 @@ def test_a_legacy_run_whose_metadata_cannot_be_read_is_held_again_after_a_real_r
     assert [s["state"] for s in sessions_of(again, entry.id)] == ["recovered", "held"], (
         "a reconstruction with an active hold duplicated it"
     )
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_an_incomplete_running_record_replaced_after_recovery_gets_a_new_hold_and_is_not_resurrected_untouched(
+    tmp_path, machines, shared_repo, loaded
+):
+    shared, _remote = shared_repo
+    bad, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_pack(folder, {"state": "running"})
+    first = machines()
+    first.load_all()
+    assert len(held(first, bad.id)) == 1, sessions_of(first, bad.id)
+    reboot_then_recover(first, held(first, bad.id)[0]["id"])
+
+    untouched = machines()
+    untouched.load_all()
+    assert held(untouched, bad.id) == [], "an untouched recovered record was held again"
+
+    write_pack(folder, {"state": "running"})  # a real replacement of the same incomplete record
+    replaced = machines()
+    replaced.load_all()
+    assert len(held(replaced, bad.id)) == 1, "a replaced incomplete run reused the recovered hold"
+
+
+def test_a_running_legacy_record_rewritten_by_its_own_constructor_keeps_one_generation_across_restarts(
+    tmp_path, machines, shared_repo
+):
+    shared, _remote = shared_repo
+    good, folder = open_project(tmp_path, shared, "good")
+    write_pack(folder, {"state": "running"})
+    first = machines()
+    first.load_all()
+    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
+    reboot_then_recover(first, held(first, good.id)[0]["id"])
+
+    restarted = machines()
+    restarted.load_all()
+    assert len(sessions_of(restarted, good.id)) == 1, "the constructor's rewrite duplicated the reservation"
+
+    write_pack(folder, {"state": "running"})  # a later historical replacement is a different run
+    later = machines()
+    later.load_all()
+    assert len(held(later, good.id)) == 1, "a later replacement of the rewritten record was not held"
+
+
+def test_a_project_whose_host_lock_another_host_holds_leaves_that_hosts_record_bytes_unchanged(
+    tmp_path, machines, shared_repo
+):
+    shared, _remote = shared_repo
+    good, folder = open_project(tmp_path, shared, "good")
+    write_pack(folder, {"state": "running", "run": "other-run", "started_at": STARTED, "workspace": ""})
+    record = folder / pack_job.FILE
+    before = record.read_bytes()
+    fd = os.open(project_home.located(Path(good.path)) / "host.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        machines().load_all()
+        # The store moves the record to the project home before the lock; the move must keep its bytes.
+        moved = project_home.located(Path(good.path)) / pack_job.FILE
+        assert moved.read_bytes() == before, "a host that did not own the project rewrote its running record"
+    finally:
+        os.close(fd)
+
+
+def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_its_own_hold(
+    tmp_path, machines, shared_repo, monkeypatch
+):
+    shared, _remote = shared_repo
+    good, folder = open_project(tmp_path, shared, "good")
+    write_pack(folder, {"state": "running"})
+    original = (folder / pack_job.FILE).read_text(encoding="utf-8")
+    record = live_folder(good, folder, loaded=True) / pack_job.FILE  # the loaded store moves it before the constructor
+    real_write, seams = pack_job.atomic_write, []
+
+    def replace_after_own_rewrite(path, text):
+        own = real_write(path, text)
+        if path == record and not seams and '"failed"' in text:
+            seams.append(path)
+            real_write(path, original)  # a foreign writer puts back the same bytes as a new file
+        return own
+
+    monkeypatch.setattr(pack_job, "atomic_write", replace_after_own_rewrite)
+    first = machines()
+    first.load_all()
+    assert seams, "the constructor's own rewrite never ran"
+    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
+    reboot_then_recover(first, held(first, good.id)[0]["id"])
+    first.stop_all()
+    monkeypatch.setattr(pack_job, "atomic_write", real_write)
+
+    restarted = machines()
+    restarted.load_all()
+    assert [s["state"] for s in sessions_of(restarted, good.id)] == ["recovered", "held"], (
+        "a foreign replacement after the constructor's own rewrite was bound to the old run"
+    )
+    restarted.stop_all()
+
+    again = machines()
+    again.load_all()
+    assert [s["state"] for s in sessions_of(again, good.id)] == ["recovered", "held"], (
+        "the constructor's own rewrite duplicated the foreign reservation on restart"
+    )
+
+
+def test_an_unlocated_hold_once_recovered_gets_fresh_uncertain_ownership_when_location_fails_again(
+    tmp_path, machines, monkeypatch
+):
+    bad, _folder = store_too_new(tmp_path, "bad")
+    locate, unlocatable = project_home.current, [True]
+
+    def current(repo):
+        if unlocatable[0]:
+            msg = "the project folder cannot be located"
+            raise OSError(msg)
+        return locate(repo)
+
+    monkeypatch.setattr(project_home, "current", current)
+    first = machines()
+    first.load_all()
+    assert len(held(first, bad.id)) == 1, sessions_of(first, bad.id)
+    reboot_then_recover(first, held(first, bad.id)[0]["id"])
+    first.stop_all()
+
+    later = machines()
+    later.load_all()
+    assert [s["state"] for s in sessions_of(later, bad.id)] == ["recovered", "held"], (
+        "a later location failure reused the recovered unlocated hold"
+    )
+    later.stop_all()
+
+    again = machines()
+    again.load_all()
+    assert [s["state"] for s in sessions_of(again, bad.id)] == ["recovered", "held"], (
+        "reconstruction with an active unlocated hold duplicated it"
+    )
+
+
+ENDED, LATER = "2026-10-25T01:00:00+00:00", "2026-10-25T02:00:00+00:00"
+
+
+def historical_finish(ended: str, reason: str = pack_state.HOST_STOPPED) -> str:
+    """The record an older host's _finish left: no run identity and no workspace key, the directory may be gone."""
+    body = {
+        "state": "failed",
+        "stage": "",
+        "stages": [],
+        "log": [],
+        "started_at": STARTED,
+        "ended_at": ended,
+        "reason": reason,
+        "questions": [],
+        "context": None,
+    }
+    return json.dumps(body, indent=1) + "\n"
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_a_host_stopped_record_without_its_directory_is_held_once_and_a_later_rewrite_is_held_again(
+    tmp_path, machines, shared_repo, loaded
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    (folder / pack_job.FILE).write_text(historical_finish(ENDED), encoding="utf-8")
+    first = machines()
+    first.load_all()
+    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    first.stop_all()
+    folder = live_folder(entry, folder, loaded=loaded)
+
+    untouched = machines()
+    untouched.load_all()
+    assert held(untouched, entry.id) == [], "a recovered host-stopped record was held again"
+    untouched.stop_all()
+
+    atomic_write(folder / pack_job.FILE, historical_finish(LATER))
+    replaced = machines()
+    replaced.load_all()
+    assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"], (
+        "a historical host-stopped rewrite after recovery was not held"
+    )
+
+
+def test_a_historical_finish_landing_after_the_constructors_own_rewrite_gets_its_own_hold(
+    tmp_path, machines, shared_repo, monkeypatch
+):
+    shared, _remote = shared_repo
+    good, folder = open_project(tmp_path, shared, "good")
+    write_pack(folder, {"state": "running"})
+    record = live_folder(good, folder, loaded=True) / pack_job.FILE  # the loaded store moves it before the constructor
+    real_write, seams = pack_job.atomic_write, []
+
+    def historical_finish_after_own_rewrite(path, text):
+        own = real_write(path, text)
+        if path == record and not seams and '"failed"' in text:
+            seams.append(path)
+            shutil.rmtree(path.parent / pack_run.UPDATER, ignore_errors=True)  # the old _finish removed the workspace
+            real_write(path, historical_finish(LATER))
+        return own
+
+    monkeypatch.setattr(pack_job, "atomic_write", historical_finish_after_own_rewrite)
+    first = machines()
+    first.load_all()
+    assert seams, "the constructor's own rewrite never ran"
+    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
+    reboot_then_recover(first, held(first, good.id)[0]["id"])
+    first.stop_all()
+    monkeypatch.setattr(pack_job, "atomic_write", real_write)
+
+    restarted = machines()
+    restarted.load_all()
+    assert [s["state"] for s in sessions_of(restarted, good.id)] == ["recovered", "held"], (
+        "a historical finish after the constructor's own rewrite was not held"
+    )
+    restarted.stop_all()
+
+    again = machines()
+    again.load_all()
+    assert [s["state"] for s in sessions_of(again, good.id)] == ["recovered", "held"], (
+        "reconstruction with the foreign historical hold active duplicated it"
+    )
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_an_ordinary_definitive_failure_without_a_workspace_is_not_held(tmp_path, machines, shared_repo, loaded):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    reason = "the candidate could not be downloaded"
+    (folder / pack_job.FILE).write_text(historical_finish(ENDED, reason=reason), encoding="utf-8")
+    m = machines()
+    m.load_all()
+    assert sessions_of(m, entry.id) == [], "a definitive failure was held as uncertain"

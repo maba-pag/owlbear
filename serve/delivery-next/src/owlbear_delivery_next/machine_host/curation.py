@@ -120,16 +120,22 @@ class Curation:
         self.again: dict[str, Trigger] = {}  # a running folder's follow-up, when an automatic trigger asks for one
         runs = self.load()
         self.maintenance = ownership or maintenance.Maintenance(slots)
-        self.maintenance.adopt(
+        imported = self.maintenance.adopt(
             str(self.path()),
             SLOT,
             "curation",
             runs.left,
             interrupted=any(r.state == "running" for r in runs.folders.values()),
         )
+        if runs.left and not self.maintenance.pending("curation"):
+            # An import already recorded (even an empty one) must not let these PIDs be cleared as history.
+            self.maintenance.adopt_uncertain(f"{self.path()}#left", SLOT, "curation", workspace="")
         for name, r in runs.folders.items():
             # The run's ledger lease, or its one-time import; its key keeps a recovered run from being imported again.
-            if legacy_uncertain(r):
+            # A running row is taken before it is rewritten below, so the rewrite never erases what an older host held.
+            if r.state == "running" and not r.key and imported:
+                runs.folders[name] = r.model_copy(update={"key": imported})
+            elif legacy_uncertain(r) or (r.state == "running" and not r.key):
                 source = f"{self.path()}#{name}:{r.started_at}"
                 lease = self.maintenance.adopt_uncertain(
                     source,
@@ -424,11 +430,15 @@ def _same_run(folder: str, run: FolderRun) -> Callable[[maintenance.Lease], bool
     """
 
     def covers(lease: maintenance.Lease) -> bool:
-        if lease.project != SLOT or lease.kind != "curation" or not lease.slot.startswith(f"curate:{folder}:"):
+        if lease.project != SLOT or lease.kind != "curation":
             return False
-        if run.started_at is None or run.ended_at is None:
+        if not (lease.slot.startswith(f"curate:{folder}:") or lease.workspace == ""):
+            return False  # a run's own lease, or the one the file's legacy import holds for its running rows
+        if run.started_at is None or (run.ended_at is None and run.state != "running"):
             return False
-        return run.started_at <= lease.started_at <= run.ended_at
+        if run.ended_at is not None and lease.started_at > run.ended_at:
+            return False
+        return lease.started_at >= run.started_at
 
     return covers
 

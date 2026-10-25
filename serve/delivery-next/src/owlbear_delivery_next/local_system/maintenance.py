@@ -182,17 +182,22 @@ class Maintenance:
 
     def adopt(  # noqa: PLR0913 - one import record's fields, all needed to write its lease
         self, source: str, project: str, kind: Kind, pids: processes.Pids, *, interrupted: bool, workspace: str = ""
-    ) -> None:
-        """Import pre-ledger ownership once; no legacy record can prove complete process coverage."""
+    ) -> str:
+        """Import pre-ledger ownership once; no legacy record can prove complete process coverage.
+
+        Returns the slot of the lease it created, or empty when it created none.
+        """
         with self._locked() as ledger:
             if source in ledger.imported:
-                return
+                return ""
+            slot = ""
             if pids or interrupted:
                 ident = uuid.uuid4().hex
+                slot = f"pack:legacy-{ident}"
                 lease = Lease(
                     id=ident,
                     project=project,
-                    slot=f"pack:legacy-{ident}",
+                    slot=slot,
                     kind=kind,
                     workspace=workspace,
                     started_at=datetime.now(UTC),
@@ -207,6 +212,21 @@ class Maintenance:
                 self.slots.restore_one(lease.project, lease.slot, 1)
             ledger.imported.append(source)
             self._save(ledger)
+            return slot
+
+    def receipted(self, key: str, digest: str) -> str:
+        """The generation an older host gave the record version *digest*, when it rewrote that record; else empty."""
+        prefix = f"{key}:receipt:{digest}:"
+        with self._locked() as ledger:
+            return next((s[len(prefix) :] for s in ledger.imported if s.startswith(prefix)), "")
+
+    def receipt(self, key: str, digest: str, generation: str) -> None:
+        """Record that record version *digest* is the rewrite of run *generation*, so a restart keeps it."""
+        mark = f"{key}:receipt:{digest}:{generation}"
+        with self._locked() as ledger:
+            if mark not in ledger.imported:
+                ledger.imported.append(mark)
+                self._save(ledger)
 
     def adopt_uncertain(  # noqa: PLR0913 - one import's identity, all needed to decide its generation
         self,

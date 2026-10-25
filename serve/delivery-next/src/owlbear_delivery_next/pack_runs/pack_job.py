@@ -32,6 +32,7 @@ from owlbear_delivery_next.pack_runs import pack_candidate, pack_gates, pack_pub
 from owlbear_delivery_next.pack_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.pack_runs.pack_state import (
     FILE,
+    HOST_STOPPED,
     LOG,
     MACHINE_LOCK,
     OPEN,
@@ -43,12 +44,16 @@ from owlbear_delivery_next.pack_runs.pack_state import (
     read_only,  # noqa: F401 - retain the existing pack_job ownership-reader API
     read_version,
     running_for,
+    version_of,
 )
 from owlbear_delivery_next.pack_runs.pack_state import (
     blank as _blank,
 )
 from owlbear_delivery_next.pack_runs.pack_state import (
     describe as _pack,
+)
+from owlbear_delivery_next.pack_runs.pack_state import (
+    interrupted as _interrupted,
 )
 from owlbear_delivery_next.pack_runs.pack_state import (
     now as _now,
@@ -134,13 +139,9 @@ class Job:
             reason = "the host stopped while the update was being published"
             self._hold(pack_run.Context.model_validate(self.state["context"]), reason)
         elif self.state["state"] == "running":
-            self.interrupted = {
-                "run": self.state.get("run") or "", "started_at": self.state.get("started_at") or "",
-                "workspace": self.state.get("workspace") or "",
-            }  # fmt: skip
+            self.interrupted = _interrupted(self.state, self.version)  # its identity before this rewrite
             # keeps the workspace: nothing is bound to say whether an uncertain session still uses it
-            reason = "the host stopped during this run; check the package checkout before running again"
-            self._finish("failed", reason, keep=True)
+            self._finish("failed", HOST_STOPPED, keep=True)  # records the rewrite's own identity as self.version
 
     @property
     def path(self) -> Path:
@@ -164,7 +165,7 @@ class Job:
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write(self.path, json.dumps(self.state, indent=1) + "\n")
+        self.version = version_of(atomic_write(self.path, json.dumps(self.state, indent=1) + "\n"))
 
     def read(self) -> dict[str, Any]:
         """The current or last run, as the page shows it: without the run's context."""

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
+import hashlib
 import json
 import os
 from datetime import UTC, datetime
@@ -67,8 +69,12 @@ def read_fd(fd: int) -> tuple[dict[str, Any], str]:
     if not isinstance(kept, dict):
         msg = f"{FILE} is not a run"
         raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
-    # ctime, unlike mtime, moves on every change to the inode, so a restored mtime cannot hide an in-place write
-    return kept, f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}:{st.st_ctime_ns}"
+    return kept, version_of(st)
+
+
+def version_of(st: os.stat_result) -> str:
+    """A file's identity and metadata as one string; ctime, unlike mtime, moves on every change to the inode."""
+    return f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}:{st.st_ctime_ns}"
 
 
 def read_version(path: Path) -> tuple[dict[str, Any], str]:
@@ -104,13 +110,53 @@ def read_only(root: Path) -> dict[str, Any] | None:
     return None if got is None else got[0]
 
 
+HOST_STOPPED = "the host stopped during this run; check the package checkout before running again"
+
+
 def legacy_uncertain(kept: dict[str, Any]) -> bool:
-    """A failed record an older host wrote while its updater or replay judge may still run; it has no workspace."""
+    """A failed record an older host wrote while its updater or replay judge may still run; it has no workspace.
+
+    The host that stopped a run it found running wrote HOST_STOPPED instead, whether or not its directory survived.
+    """
+    reason = str(kept.get("reason", ""))
     return (
         kept.get("state") == "failed"
         and "workspace" not in kept
-        and "may still be running" in str(kept.get("reason", ""))
+        and ("may still be running" in reason or reason == HOST_STOPPED)
     )
+
+
+OBSERVED = ("state", "stage", "run", "started_at", "ended_at", "reason", "workspace")
+
+
+def generation(record: dict[str, Any], version: str) -> tuple[str, datetime | None]:
+    """A legacy run's identity: its proven run and start time, else a fingerprint of its fields and its file.
+
+    The fingerprint binds the observed fields and the file's identity and version, read from the one descriptor the
+    record came from. A same-bytes replacement is then a different file, and an untouched file keeps its identity.
+    """
+    run, started = str(record.get("run") or ""), str(record.get("started_at") or "")
+    if run and started:
+        with contextlib.suppress(ValueError):
+            return f"{run}:{started}", datetime.fromisoformat(started)
+    fields = {k: str(record.get(k) or "") for k in OBSERVED}
+    body = json.dumps({"fields": fields, "file": version}, sort_keys=True)
+    return "observed:" + hashlib.sha256(body.encode()).hexdigest(), None
+
+
+def digest(version: str) -> str:
+    """A file version as a stable key for a rewrite's receipt."""
+    return hashlib.sha256(version.encode()).hexdigest()
+
+
+def interrupted(record: dict[str, Any], version: str) -> dict[str, str]:
+    """A run an older host left running, as its record names it, with its generation taken before it is rewritten."""
+    return {
+        "run": str(record.get("run") or ""),
+        "started_at": str(record.get("started_at") or ""),
+        "workspace": str(record.get("workspace") or ""),
+        "generation": generation(record, version)[0],
+    }
 
 
 def last(store: Store) -> dict[str, Any] | None:

@@ -253,6 +253,39 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
     assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
 
 
+def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
+    """Review F1: an import already recorded must not let a later host's PIDs be cleared as history."""
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))  # records the file's empty import
+    runs = first.load()
+    runs.left = {4242: None}
+    first._write(runs)  # noqa: SLF001 - a later host's PIDs, written after that import
+    slots = Slots(lambda: 1, closed=True)
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert (restarted.working(), slots.counts(curation.SLOT)[2], restarted.left) == (
+        [curation.LINGERING],
+        1,
+        {4242: None},
+    )
+
+
+def test_a_keyless_running_row_after_an_earlier_empty_import_gets_conservative_ownership_before_it_is_failed(
+    root, monkeypatch
+) -> None:
+    """Review F1: a running row with no lease key must be held before the constructor rewrites it."""
+    monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
+    first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    first.load()  # records the file's empty import
+    first._save("shop", curation.FolderRun(state="running"))  # noqa: SLF001 - a host stopped mid-run, keyless
+    slots = Slots(lambda: 1, closed=True)
+    restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
+    shop = {f["folder"]: f for f in restarted.read()["folders"]}["shop"]
+    assert (shop["state"], slots.counts(curation.SLOT)[2]) == ("failed", 1)
+    restarted_again = curation.Curation(slots, shared=lambda: DataRepo(root))
+    assert slots.counts(curation.SLOT)[2] == 1, "a restart duplicated the keyless row's hold"
+    assert restarted_again.read()["folders"]
+
+
 def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(root) -> None:
     slots = Slots(lambda: 1)
 

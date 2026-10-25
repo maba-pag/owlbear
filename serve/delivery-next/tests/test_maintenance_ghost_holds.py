@@ -32,7 +32,7 @@ def test_an_interrupted_modern_run_the_ledger_owns_is_not_held_twice(tmp_path):
     workspace = tmp_path / "runs" / "r1"
     owner = owner_with_lease(workspace)
     before = len(owner.read()["sessions"])
-    run = {"run": "r1", "started_at": STARTED, "workspace": str(workspace)}
+    run = {"run": "r1", "started_at": STARTED, "workspace": str(workspace), "generation": "r1"}
     session_slots.interrupted(job_for(owner, tmp_path, interrupted=run), "p")
     assert len(owner.read()["sessions"]) == before
 
@@ -40,7 +40,7 @@ def test_an_interrupted_modern_run_the_ledger_owns_is_not_held_twice(tmp_path):
 def test_an_interrupted_modern_run_in_an_unowned_workspace_is_still_held(tmp_path):
     owner = owner_with_lease(tmp_path / "runs" / "r1")
     before = len(owner.read()["sessions"])
-    run = {"run": "r2", "started_at": STARTED, "workspace": str(tmp_path / "runs" / "r2")}
+    run = {"run": "r2", "started_at": STARTED, "workspace": str(tmp_path / "runs" / "r2"), "generation": "r2"}
     session_slots.interrupted(job_for(owner, tmp_path, interrupted=run), "p")
     assert len(owner.read()["sessions"]) == before + 1
 

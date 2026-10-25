@@ -21,7 +21,6 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import machine_settings, registry
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project
-from owlbear_delivery_next.pack_runs import pack_job
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import RunnerRecord
 from owlbear_delivery_next.state_store import project_home, settings_carry
@@ -153,12 +152,8 @@ class Machine:
             p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
         if p.state == "failed":
             self.slots.restore(entry.id, recorded(Path(entry.path)))  # its runners may live on without a host
-            if p.store is not None:  # a pack run its host never reached is still uncertain work (TD-242)
-                job = pack_job.Job(p.store)
-                job.maintenance = self.maintenance
-                session_slots.interrupted(job, entry.id)
-            else:  # its store did not open, but its pack record may still say a run is uncertain (TD-242)
-                session_slots.unloaded(self.maintenance, entry.id, Path(entry.path))
+            # read from its folder, never through a Job: the store may belong to another host that still runs (TD-242)
+            session_slots.unloaded(self.maintenance, entry.id, Path(entry.path))
         self.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
         return p
 
