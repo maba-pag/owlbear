@@ -47,7 +47,22 @@ def write(store: Store, prof: Profile) -> str:
         if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
             prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
         _keep_local(store, prof)
-        return _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
+        if prof.prefs_import == "done" and unpublished(store) and (notice := publish_config_unlocked(store)):
+            return notice  # the owner's config lands before done is exposed; the flag stays for the retry
+        notice = _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
+        if not notice and prof.prefs_import == "done":
+            _unpublished(store, failed=False)
+        return notice
+
+
+def publish_config_unlocked(store: Store) -> str:
+    """Publish the project config as it is now: an edit, or its removal; the caller holds the shared lock."""
+    if not store.shared:
+        return ""
+    try:
+        return store.shared.publish(store.config_path, f"settings: {store.name}: project layer")
+    except DataRepoError as exc:
+        return str(exc)
 
 
 def mark(store: Store, expect: str, to: str, basis: str = "") -> tuple[str, str, bool]:

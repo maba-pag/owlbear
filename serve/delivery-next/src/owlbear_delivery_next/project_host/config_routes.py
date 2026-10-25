@@ -25,7 +25,7 @@ from owlbear_delivery_next.project_host import memory_routes
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.runtimes.catalogue import CATALOGUE
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
-from owlbear_delivery_next.state_store import prefs_import
+from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
 
 if TYPE_CHECKING:
@@ -304,6 +304,26 @@ PREFS_REVIEW = (
 )
 
 
+def _retry_only(store: Store, body: Save) -> bool:
+    """A Settings save with no edit and no review while a refused completion waits, and the owner's config is absent."""
+    if store.config_path.exists() or body.prefs_reviewed or not profile_share.unpublished(store):
+        return False
+    try:
+        return Layer.model_validate(body.layer) == Layer()
+    except ValidationError:
+        return False
+
+
+def _project_notice(store: Store, host: Host, body: Save) -> str:
+    """Save the project layer from Settings; a retry with no edit only publishes the owner's removal."""
+    if not _retry_only(store, body):
+        what = f"{store.name or 'the project'}: from the settings page"
+        return _save(store, store.config_path, Layer, body, what, host, reviewed=body.prefs_reviewed)
+    if _rev(store.config_path) != body.rev:
+        raise HTTPException(409, "the settings changed since this page loaded them")
+    return ""
+
+
 def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
     """Mark a pending legacy import reviewed through Settings, then publish a completion that failed earlier."""
     prof = store.read_profile()
@@ -333,8 +353,7 @@ def router(store: Store, host: Host) -> APIRouter:
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
-        what = f"{store.name or 'the project'}: from the settings page"
-        notice = _save(store, store.config_path, Layer, body, what, host, reviewed=body.prefs_reviewed)
+        notice = _project_notice(store, host, body)
         if not notice:  # a publication notice leaves the import pending for a retry
             _settle_prefs_import(store, reviewed=body.prefs_reviewed)
         return _state(store, notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
