@@ -22,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     StepKind,
     Waiting,
 )
+from owlbear_delivery_next.change_flow import delivery_target
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.github.provider import SUCCESS, EnqueueStatus, ProviderError
 from owlbear_delivery_next.settings import profile
@@ -63,8 +64,9 @@ def _owner_cleared(c: Change, now: datetime) -> None:
 
 
 def _merged(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult:
-    c.queue = None
     done = ctx.gh.read_pull_request(ctx.repository, pr.number)
+    if held := engine.landed(ctx, c, done):
+        return held
     sha = done.merge_commit_sha or ""
     ctx.log(c.slug, "merged", pr=pr.number, head=pr.head_sha, sha=sha, method="queue")
     return StepResult(exit=Exit.DONE, reason=f"merged PR #{pr.number} through the merge queue as {sha[:7]}")
@@ -256,6 +258,18 @@ def _resolved(before: Change, after: Change) -> bool:
     return any(q.id in open_ids and q.answer is not None and q.answer.option in chosen for q in after.questions)
 
 
+def _terminal_leave(before: Change, after: Change, pr: PullRequest, repository: str) -> Change | None:
+    """A queue merge releases its local claim only after validating the intended or explicitly abandoned outcome."""
+    if not pr.merged:
+        return None
+    if delivery_target.mismatch(before, pr, repository):
+        if after.intent.abandoned_at and after.step.kind == StepKind.CLEANUP and after.step.mode == "abandon":
+            after.queue = None
+            return after
+        return after if delivery_target.held(after) else None
+    return after if after.step.kind == StepKind.CLEANUP and after.step.mode != "abandon" else None
+
+
 def barrier(store: Store, repo: Path) -> Leave:
     """The pre-fold step both fold callers use: a queued PR is taken out before an action leaves the merge step.
 
@@ -273,7 +287,7 @@ def barrier(store: Store, repo: Path) -> Leave:
         try:
             q = gh.read_queue(repository, before.names.pr)
             if q.merged:  # the action waits until the fold itself observes the merge and ends the Change
-                return after if after.step.kind == StepKind.CLEANUP and after.step.mode != "abandon" else None
+                return _terminal_leave(before, after, gh.read_pull_request(repository, before.names.pr), repository)
             if q.entry is None:
                 if before.queue is not None and _relevant(before, q) is None and not _resolved(before, after):
                     return None  # an attempt without a trace may still appear in the queue

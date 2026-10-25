@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, Option, StepKind, Stop, Waiting
-from owlbear_delivery_next.change_flow import budgets, worktree
+from owlbear_delivery_next.change_flow import budgets, delivery_target, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError, run_remote_git
 from owlbear_delivery_next.github.provider import BranchState, classify_checks
@@ -365,32 +365,43 @@ def _retire_branch(ctx: Ctx, c: Change, pr: PullRequest | None) -> StepResult | 
     )
 
 
+def _delivery(ctx: Ctx, c: Change, pr: PullRequest | None) -> tuple[Change, PullRequest | None, StepResult | None]:
+    if pr is not None and pr.merged and c.step.mode != "abandon" and (held := engine.landed(ctx, c, pr)):
+        return c, None, held
+    proof = pr if delivery_target.delivered(c, pr, ctx.repository) else None
+    if pr and pr.merged and proof is None:
+        ctx.log(c.slug, "delivery-mismatch", repository=pr.repository, pr=pr.number, target=pr.base_branch,
+                branch=pr.head_branch, sha=pr.merge_commit_sha, disposition="abandoned")  # fmt: skip
+    c, held = target_check(ctx, c, proof)
+    return c, proof, held
+
+
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     """Check the merged result, close an abandoned PR, preserve what the worktree alone holds, remove it, pull back."""
     pr = ctx.gh.read_pull_request(ctx.repository, c.names.pr) if c.names.pr else None
-    c, held = target_check(ctx, c, pr)
+    c, proof, held = _delivery(ctx, c, pr)
     if held is not None:
         return c, held
-    if retired := _retire_branch(ctx, c, pr):
+    if retired := _retire_branch(ctx, c, proof):
         return c, retired
     if c.step.mode == "abandon" and pr and pr.state == "open":
         ctx.gh.close_pull_request(ctx.repository, pr.number)
     path, saved, kept = Path(c.names.worktree), [], False
     if c.names.worktree and (path / ".git").exists():
-        saved, kept, stopped = _workspace(ctx, c, path, pr)
+        saved, kept, stopped = _workspace(ctx, c, path, proof)
         if stopped is not None:
             return c, stopped
     if not kept and (why := disposable.remove(ctx.repo, ctx.store, c.slug)):
         ctx.log(c.slug, "read-only-kept", why=why)
-    line = {"slug": c.slug, "at": ctx.now.isoformat(), "pr": c.names.pr, "merged": bool(pr and pr.merged)}
-    line |= {"merge": pr.merge_commit_sha if pr else None, "preserved": [str(s) for s in saved]}
+    line = {"slug": c.slug, "at": ctx.now.isoformat(), "pr": c.names.pr, "merged": proof is not None}
+    line |= {"merge": proof.merge_commit_sha if proof else None, "preserved": [str(s) for s in saved]}
     line |= {"kept": str(path)} if kept else {}
     with (ctx.store.root / "history.jsonl").open("a", encoding="utf-8") as out:
         out.write(json.dumps(line) + "\n")
-    if notice := change_record.save(ctx.store, c, pr, ctx.now):
+    if notice := change_record.save(ctx.store, c, proof, ctx.now, observed=pr if pr is not proof else None):
         ctx.log(c.slug, "change-record", notice=notice)
-    fixes(ctx, c, pr)
-    if pr and pr.merged and c.step.mode != "abandon":
+    fixes(ctx, c, proof)
+    if proof and c.step.mode != "abandon":
         c.pullback = pullback.run(ctx.repo, c.names.target, ctx.now)
         ctx.log(c.slug, "pullback", **c.pullback.model_dump(mode="json", exclude={"at"}))
     reason = f"worktree removed; {len(saved)} preservation file(s)"
