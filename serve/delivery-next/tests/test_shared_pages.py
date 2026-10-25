@@ -326,7 +326,29 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: Da
     )
     assert registry.load().settings == expected  # the other page's change stays; only the edits land on it
     a_read_begun_during_a_save_never_undoes_it(page, pds)
+    improvement_s_machine_settings_are_typed_and_saved(page, pds)
     every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared)
+
+
+def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
+    """Improvement (design §4): budgets as numbers, Retro's triggers as choices, enrolled chats as folders or none."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page.get_by_label("Retro: credits a day", exact=True).fill("7")
+    pds.pick(page, "Retro after a Change ends (the Improvement button always runs)", "off")
+    chats = page.get_by_role("textbox", name="Enrolled chats: workspace folders")
+    chats.press_sequentially("/w, /p")  # keystrokes: a comma and a space are kept
+    expect(chats).to_have_value("/w, /p")
+    page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
+    with page.expect_response(lambda r: r.request.method == "PUT"):  # the status says Saved from before already
+        pds.modal(page).get_by_role("button", name="Save machine settings").click()
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+    mine = registry.load().settings
+    folders = ["/w", "/p"]
+    assert (mine.retro_budget, mine.retro_after_change, mine.enrolled_chats) == (7, "off", folders)
+    chats.fill("/w,/p")  # the saved list again, written differently: no edit
+    save = page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings")
+    expect(save).to_be_disabled()
 
 
 def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
@@ -515,14 +537,14 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page.goto(f"{base}/config?project={DOCS}#token=t")
             region = page.get_by_role("region", name="This machine")
             expect(page.locator("#machine-pending")).to_contain_text("offline")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(6)
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(12)
             expect(page.locator("#unset")).to_contain_text("machine.channel")
             expect(page.locator("#unset")).to_contain_text("machine.sessions")
             pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
             region.get_by_role("button", name="Save machine settings").click()
             pds.modal(page).get_by_role("button", name="Save machine settings").click()
             expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
-            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(5)
+            expect(region.get_by_text("unset: set it here or for every machine")).to_have_count(11)
             browser.close()
     finally:
         server.should_exit = True

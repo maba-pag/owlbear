@@ -136,8 +136,12 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(labels).to_have_value("inherit")
         labels.fill("release:minor, owlbear")
         pds.pick(page, "The line Opened by OwlBear Delivery", "off")
-        expect(page.locator("#watcher")).to_contain_text("inherit (on)")  # on in Global (owner, 2026-10-23)
-        pds.pick(page, "The watcher", "off")
+        expect(page.locator("#spotter")).to_contain_text("inherit (learning)")  # the watcher's switch, migrated
+        pds.pick(page, "Mode", "off")
+        looks = page.get_by_label("Looks", exact=True)
+        expect(looks).to_have_attribute("placeholder", "inherit (hand-off)")
+        looks.fill("hand-off, sample")
+        page.get_by_label("Sampled actions", exact=True).fill("5")
         at_once = page.get_by_label("Agent sessions at once in one project")  # TD-336
         expect(at_once).to_have_attribute("placeholder", "inherit (2)")
         at_once.fill("3")
@@ -158,7 +162,12 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         4, "back", None
     )  # fmt: skip
     assert (project.pr_labels, project.pr_marker, project.sessions) == (["release:minor", "owlbear"], False, 3)
-    assert project.watcher is False
+    assert (project.spotter.mode, project.spotter.looks, project.spotter.sample_rate) == (
+        "off",
+        ["hand-off", "sample"],
+        5,
+    )
+    assert project.spotter.steer_share is None  # the rest still inherit
     assert not store.global_path.exists()
 
 
@@ -297,16 +306,17 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_have_attribute("placeholder", "inherit (unset)")
         at_once.fill("3")
-        pds.pick(page, "Model for watcher", "tiny")  # one tier and no efforts: both still fillable
+        pds.pick(page, "Model for spotter", "tiny")  # one tier and no efforts: both still fillable
         expect(page.locator("#agents")).to_contain_text("no layer sets a context tier")
         page.locator("#agents").get_by_role("button", name="Use the default tier").click()
-        pds.pick(page, "Effort for watcher", "medium")
+        pds.pick(page, "Effort for spotter", "medium")
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")  # its effort unset: listed, never blocking the save
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(page.locator("#unset")).not_to_contain_text("sessions,")
-        expect(page.locator("#unset")).not_to_contain_text("agents.watcher.")
+        expect(page.locator("#unset")).not_to_contain_text("agents.spotter.")
+        expect(page.locator("#unset")).to_contain_text("spotter.mode")  # its settings start unset too
     assert store.read_config().sessions == 3
-    watcher = store.settings().agent("watcher")  # the watcher needs only its model, effort and context
-    assert (watcher.model, watcher.effort, watcher.context) == ("tiny", "medium", "default")
+    spotter = store.settings().agent("spotter")  # a look needs only its model, effort and context
+    assert (spotter.model, spotter.effort, spotter.context) == ("tiny", "medium", "default")

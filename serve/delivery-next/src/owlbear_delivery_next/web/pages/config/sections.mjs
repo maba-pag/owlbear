@@ -4,7 +4,7 @@ import { here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, ROUNDS, LOOPS, state, drafts, show, notify, shown } from "./state.mjs";
 import {
   cell, row, table, button, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, watcherSwitch,
+  curatorThreshold, spotterCell,
   contextCell, ratesCell, editable, inactive,
 } from "./cells.mjs";
 import { pendingLine, save, rename } from "./layers.mjs";
@@ -156,7 +156,7 @@ function settingsSections() {
       <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and
         runs again. The shaper's chat has no limit.</p-text>
       ${table("Session time limits: they apply to the next session", ["Agent", "Minutes per session"], "limits",
-        roles.filter((role) => !["shaper", "watcher"].includes(role)).map((role) => row(text(role),
+        roles.filter((role) => !["shaper", "spotter"].includes(role)).map((role) => row(text(role),
           numberCell(role, "minutes", "Minutes per session"))))}
       <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
     </section>
@@ -177,15 +177,22 @@ function settingsSections() {
         [row(text("Curator's confidence threshold (%)"), curatorThreshold())])}
       <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
     </section>
-    <section class="panel" aria-labelledby="watcher-title">
-      <p-heading size="lg"><h2 id="watcher-title">Watcher</h2></p-heading>
-      <p-text>The watcher judges what an agent step does outside its work folder and what it sends out: it stops the
-        step when an action is dangerous or inappropriate for the task, and reports the rest. Its model, effort and
-        context are the watcher row under Agents. So far it only reports: it lists on each Change's page what SDK
-        steps may write outside their folder, judging and stopping nothing. This is its only switch so far; rule
-        verdicts, stops and the model each come with their own.</p-text>
-      ${table("Watcher: it applies to the next step", ["Setting", "Value"], "watcher",
-        [row(text("The watcher"), watcherSwitch())])}
+    <section class="panel" aria-labelledby="spotter-title">
+      <p-heading size="lg"><h2 id="spotter-title">Spotter</h2></p-heading>
+      <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
+        actions. In learning mode it only records what it would do, and Retro grades those records; live mode
+        steers, and comes only after a steered-versus-silent test. Its model, effort and context are the spotter row
+        under Agents; the budgets and enrolled chats are machine settings. So far only the mode is used: off stops
+        the list of outside writes on each Change's page.</p-text>
+      ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", [
+        row(text("Mode"), spotterCell("mode", "Mode")),
+        row(text("Steered share in live mode (%)"), spotterCell("steer_share", "Steered share")),
+        row(text("Steering notes at most, per step or chat turn"), spotterCell("intervention_cap", "Notes at most")),
+        row(text("Verbose"), spotterCell("verbose", "Verbose")),
+        row(text("Verbose until (YYYY-MM-DD; empty: no end)"), spotterCell("verbose_until", "Verbose until")),
+        row(text("Looks (hand-off, plan, state-change, sample)"), spotterCell("looks", "Looks")),
+        row(text("Sampled actions (%)"), spotterCell("sample_rate", "Sampled actions")),
+      ])}
     </section>
     <section class="panel" aria-labelledby="subagents-title">
       <p-heading size="lg"><h2 id="subagents-title">Subagents</h2></p-heading>
@@ -193,7 +200,7 @@ function settingsSections() {
         questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows their
         use per agent.</p-text>
       ${table("Subagents: they apply to the next session", ["Agent", "Built-in subagents"], "subagents",
-        roles.filter((role) => !["shaper", "watcher"].includes(role)).map((role) =>
+        roles.filter((role) => !["shaper", "spotter"].includes(role)).map((role) =>
           row(text(role), subagentsCell(role))))}
     </section>
     <section class="panel" aria-labelledby="general-title">

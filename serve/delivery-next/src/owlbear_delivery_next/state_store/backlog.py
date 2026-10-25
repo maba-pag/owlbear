@@ -38,7 +38,7 @@ LINKS = backlog_issues.LONGEST // 10  # more than an issue body holds: each link
 PROBE = "9" * 9  # the longest id, for the room a new entry's link takes before GitHub numbers it
 READ_SECONDS = 10.0  # how long a listing is reused
 RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later; until then the write's answer counts
-type Source = Literal["owner", "watcher", "assistant", "review", "run"]
+type Source = Literal["owner", "watcher", "spotter", "retro", "assistant", "review", "run"]  # "watcher": older entries
 type Kind = Literal["untriaged", "defect", "improvement", "idea", "question"]
 type Status = Literal["inbox", "open", "in-change", "done", "dropped"]
 type Folder = Annotated[str, Field(min_length=1, max_length=100)]  # a project's folder in the shared repository
