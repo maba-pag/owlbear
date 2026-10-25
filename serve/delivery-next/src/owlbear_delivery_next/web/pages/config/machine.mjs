@@ -25,7 +25,8 @@ const MACHINE_LABELS = {
 };
 const CHOICES = { channel: CHANNELS, update_when_idle: SWITCH, update_while_paused: SWITCH,
   curate_after_merge: CURATE, curate_when_idle: CURATE, retro_after_change: CURATE, retro_when_idle: CURATE };
-const TYPED = ["sessions", "spotter_budget", "retro_budget", "retro_verbose_cap", "enrolled_chats"];  // typed, not chosen
+// Typed, not chosen.
+const TYPED = ["sessions", "spotter_budget", "retro_budget", "retro_verbose_cap", "enrolled_chats"];
 
 // A machine setting's value in words; "unset" where none is set.
 function said(key, v) {
