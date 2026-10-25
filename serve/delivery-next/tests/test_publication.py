@@ -2852,3 +2852,132 @@ def test_the_queue_read_takes_the_group_commit_and_the_latest_events():
     assert gh_queue._state(pull | {"timelineItems": {"nodes": nodes[:2]}}).removed_last is True  # noqa: SLF001
     building = pull | {"mergeQueueEntry": queued | {"headCommit": None, "state": "QUEUED"}}
     assert gh_queue._state(building).entry.group_sha is None  # noqa: SLF001 - no group is built yet
+
+
+# Owner-control RED (item 2): an unset merge method withdraws the queued PR before the owner is asked.
+
+
+def merge_method_unset(_cx, _c, _pull, _rules):
+    raise config.SettingsUnset(["merge_method"])
+
+
+def queued_unset_case(tmp_path):
+    gh = QueueGh(pr(head=A))
+    gh.state = QueueState(merged=False, open=True, head_sha=A, entry=entry(), added=ADDED)
+    c = change(worktree=str(tmp_path))
+    c.queue = QueueClaim(head=A, at=NOW, queued_at=NOW, settled=True)
+    cx = ctx(tmp_path, gh, qprof())
+    cx.store.root.mkdir(exist_ok=True)
+    return gh, c, cx
+
+
+def test_an_unset_merge_method_withdraws_the_queued_pr_before_the_owner_is_asked(tmp_path):
+    gh, c, cx = queued_unset_case(tmp_path)
+    with pytest.raises(config.SettingsUnset):
+        queue.run(cx, c, pr(head=A), QUEUED, merge_method_unset)
+    assert (gh.dequeued, gh.state.entry) == ([7], None)
+
+
+def test_an_unknown_withdrawal_keeps_the_barrier_and_asks_nothing(tmp_path):
+    gh, c, cx = queued_unset_case(tmp_path)
+    gh.dequeue_fails = True
+    c, result = queue.run(cx, c, pr(head=A), QUEUED, merge_method_unset)
+    assert (result.exit, result.waiting, c.queue is not None, gh.state.entry is not None) == (
+        Exit.PENDING,
+        Waiting.GITHUB,
+        True,
+        True,
+    )
+
+
+@pytest.fixture
+def both_prefs_unset(tmp_path, monkeypatch):
+    """A real Store with a queued merge, no settings layer, and the synthetic queue provider through the runner."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(config, "BASE", None)
+    for args in (
+        ["init", "-q"],
+        ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
+    ):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+    store = Store.open(tmp_path)
+    remote = tmp_path / "remote.git"
+    for args in (
+        ["init", "-q", "--bare", str(remote)],
+        ["remote", "add", "origin", str(remote)],
+        ["push", "-q", "origin", "HEAD:refs/heads/main"],
+    ):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+    head = git(tmp_path, "rev-parse", "HEAD")
+    gh = QueueGh(pr(head=head))
+    gh.state = QueueState(merged=False, open=True, head_sha=head, entry=entry(), added=ADDED)
+    monkeypatch.setattr(runner.profile, "provider", lambda *_a: gh)
+    monkeypatch.setattr(runner, "_agent", lambda *_a, **_k: pytest.fail("paid work must not start"))
+    store.write_profile(qprof())
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        plan=Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])]),
+        step=Step(kind=StepKind.MERGE),
+        names=Names(target="main", worktree=str(tmp_path), pr=7),
+        reviews=[Review(commit=head, tree=worktree.tree(tmp_path, head), inputs=Inputs(), verdict="pass")],
+        queue=QueueClaim(head=head, at=NOW, queued_at=NOW, settled=True),
+    )
+    with store.lock("c1") as lock:
+        store.write(lock, c)
+    return store, gh
+
+
+def run_merge_step(store, capsys):
+    with store.lock("c1") as lock:
+        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+    return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+
+
+@pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
+def test_an_uncertain_withdrawal_with_both_prefs_unset_stays_pending_and_asks_nothing(
+    both_prefs_unset, capsys, uncertainty
+):
+    store, gh = both_prefs_unset
+    if uncertainty == "provider_error":
+        gh.dequeue_fails = True
+    else:
+        gh.dequeue = lambda pull: gh.dequeued.append(pull.number)  # the call returns, GitHub still shows the entry
+    event = run_merge_step(store, capsys)
+    assert (event["exit"], store.read("c1").queue is not None, gh.state.entry is not None) == (
+        "pending",
+        True,
+        True,
+    ), event["reason"]
+    assert store.read("c1").stop is None
+
+
+@pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
+def test_a_later_confirmed_removal_then_asks_the_owner_for_the_unset_setting(both_prefs_unset, capsys, uncertainty):
+    store, gh = both_prefs_unset
+    if uncertainty == "provider_error":
+        gh.dequeue_fails = True
+    else:
+        gh.dequeue = lambda pull: gh.dequeued.append(pull.number)
+    run_merge_step(store, capsys)
+    gh.__dict__.pop("dequeue", None)  # the next pass reaches GitHub normally and reads back the removal
+    gh.dequeue_fails = False
+    with store.lock("c1") as lock:
+        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+    after = store.read("c1")
+    assert (after.queue, gh.state.entry) == (None, None)
+    assert len(after.questions) == 1
+    assert "merge_method" in after.questions[0].text
+    assert after.questions[0].answer is None
+
+
+def test_a_dequeue_not_read_back_as_removed_keeps_the_barrier_and_asks_nothing(tmp_path):
+    gh, c, cx = queued_unset_case(tmp_path)
+    gh.dequeue = lambda pull: gh.dequeued.append(pull.number)  # the call returns, GitHub still shows the entry
+    c, result = queue.run(cx, c, pr(head=A), QUEUED, merge_method_unset)
+    assert (result.exit, result.waiting, c.queue is not None, gh.state.entry is not None) == (
+        Exit.PENDING,
+        Waiting.GITHUB,
+        True,
+        True,
+    )

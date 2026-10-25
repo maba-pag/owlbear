@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from owlbear_delivery_next.change_contracts.inbox import InboxItem
+from owlbear_delivery_next.change_contracts.inbox import InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -444,14 +444,14 @@ class Store:
         before = change
         with self.db.read() as db:
             rows = db.execute("SELECT id, item FROM inbox WHERE slug = ? ORDER BY name, id", (slug,)).fetchall()
-        items, events = [], []
-        for _, text in rows:
-            try:
-                items.append(_INBOX.validate_json(text))
-            except ValidationError:  # taken all the same, and kept in the activity for the record
-                events.append({"event": "inbox-rejected", "at": now.isoformat(timespec="seconds"), "item": text[:2000]})
+        items, rejected = parse_rows(rows)  # rejected items are taken all the same, and kept in the activity
+        at = now.isoformat(timespec="seconds")
+        events = [{"event": "inbox-rejected", "at": at, "item": text[:2000]} for text in rejected]
         asked = loop.open_question(change) if loop.waiting_consent(change) else None
-        asking = self.settings().prefs.ask_before_merge is not False  # unset asks; only an explicit no turns it off
+        try:
+            asking = self.settings().prefs.ask_before_merge is not False  # unset asks; only an explicit no turns it off
+        except StoreError:  # unreadable or invalid settings: the owner's controls still fold; the runner reports it
+            asking = True
         change, step = loop.schedule(change, items, now, pr_state, moved=moved, asking=asking)
         if leave is not None:
             kept = leave(before, change)

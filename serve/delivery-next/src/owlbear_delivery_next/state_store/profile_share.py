@@ -48,7 +48,8 @@ def write(store: Store, prof: Profile) -> str:
             prof = prof.model_copy(update={"prefs_import": current.prefs_import, "prefs_basis": current.prefs_basis})
         _keep_local(store, prof)
         if prof.prefs_import == "done" and unpublished(store) and (notice := publish_config_unlocked(store)):
-            return notice  # the owner's config lands before done is exposed; the flag stays for the retry
+            _stage(store, prof)  # the new shared facts wait here for the retry; done is not exposed before the config
+            return notice
         notice = _publish(store, store.shared, prof, f"settings: {store.name}: project profile")
         if not notice and prof.prefs_import == "done":
             _unpublished(store, failed=False)
@@ -229,10 +230,15 @@ def _local(store: Store) -> dict[str, ProfileEntry]:
     return local.entries
 
 
-def _publish(store: Store, shared: DataRepo | None, prof: Profile, message: str) -> str:
+def _stage(store: Store, prof: Profile) -> Path:
     target = path(store)
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(target, _shared_part(prof).model_dump_json(indent=1))
+    return target
+
+
+def _publish(store: Store, shared: DataRepo | None, prof: Profile, message: str) -> str:
+    target = _stage(store, prof)
     return shared.publish(target, message) if shared else ""
 
 

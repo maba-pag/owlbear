@@ -2,7 +2,7 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { api, token } from "/assets/ui.mjs";
 import { DIALOG, REVERT, show, parts, draft, notify, send } from "./state.mjs";
 import { disclosure, button, field, tick, hd, text, list, row, panel } from "./widgets.mjs";
-import { merging, finale } from "./forms.mjs";
+import { merging, finale, mergeSetting } from "./forms.mjs";
 
 const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
 const SEVERITY = { P0: ["Blocks the task", "error"], P1: ["Serious", "error"], P2: ["Annoying", "warning"],
@@ -114,14 +114,14 @@ export function decisionForm(q, r, pictures, d) {
       after: comment ? "Your comment stays a criterion every later round checks until you withdraw it." : "",
       instead: "The round stays open; pass it, or tick other problems.",
     } : {
-      title: checks || d.asks_merge ? `Pass visual round ${r.number}?`
+      title: checks || mergeSetting(d) !== "auto" ? `Pass visual round ${r.number}?`
         : `Pass visual round ${r.number}, the last step before merging?`,
-      yes: checks || d.asks_merge ? "Pass" : "Pass and merge", no: "Keep reviewing",
+      yes: checks || mergeSetting(d) !== "auto" ? "Pass" : "Pass and merge", no: "Keep reviewing",
       now: "No problem of this round goes to the builder." + (comment ? " Your comment is kept as a note only." : ""),
       then: checks ? `Your check${checks > 1 ? "s" : ""} come${checks > 1 ? "" : "s"} next. ${merging(d)}.`
-        : d.asks_merge ? "Delivery asks you before merging." : finale(d),
-      after: checks || d.asks_merge ? "Until the merge, comments on the pull request come back to Delivery as work."
-        : REVERT,
+        : mergeSetting(d) === "auto" ? finale(d) : `${merging(d)}.`,
+      after: checks || mergeSetting(d) !== "auto"
+        ? "Until the merge, comments on the pull request come back to Delivery as work." : REVERT,
       instead: "The round stays open for your decision.",
     });
     if (ok) {

@@ -303,3 +303,49 @@ def test_an_ordinary_profile_save_publishes_the_deleted_config_before_done(share
     assert not fresh.config_path.exists()
     assert fresh.read_config().prefs is None
     assert not profile_share.unpublished(store)
+
+
+def refuse_config_once(monkeypatch, store: Store) -> list[str]:
+    """Refuse the first publication of the project config only; the profile's own publications still land."""
+    real, refused = DataRepo.publish, []
+
+    def publish(self, path, message, until=None):
+        if path == store.config_path and not refused:
+            refused.append(message)
+            return "remote refused"
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", publish)
+    return refused
+
+
+def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(shared_repo, tmp_path, monkeypatch):
+    root, remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    refuse_completion_once(monkeypatch, store)
+    with pytest.raises(StoreError):
+        prefs_import.run(store)
+    store.config_path.unlink()  # the owner deletes the config; its removal is not yet published
+    refused = refuse_config_once(monkeypatch, store)
+
+    late = Profile(
+        version=2, runtime="vscode", entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")}
+    )
+    assert store.write_profile(late)  # the config removal is refused, so the save reports it
+    assert refused
+    assert store.read_profile().entries[profile.WINDOW].value == "30"  # the new shared fact is kept locally
+    (tmp_path / "before").mkdir()
+    _, seen = clone_profile(remote, tmp_path / "before")
+    assert seen.prefs_import == "pending"  # nothing new reached the remote while the removal was refused
+    assert profile.WINDOW not in seen.entries
+
+    retried = Store(tmp_path / "store", DataRepo(root), "shop-site")  # a new Store on the same clone
+    prefs_import.run(retried)  # the retry removes the config, then publishes done with the new facts
+    fresh, got = clone_profile(remote, tmp_path)
+    assert got.prefs_import == "done"
+    assert got.version == 2
+    assert got.runtime == "vscode"
+    assert got.entries[profile.WINDOW].value == "30"
+    assert not fresh.config_path.exists()
+    assert not profile_share.unpublished(retried)

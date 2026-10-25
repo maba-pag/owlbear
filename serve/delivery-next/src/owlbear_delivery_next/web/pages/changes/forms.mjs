@@ -161,12 +161,22 @@ function consequence(o, d) {
   return null;
 }
 
-// How the Change ends once every gate passed: the project's merge setting decides.
-export function merging(d) {
-  return d.asks_merge ? "Delivery asks you before merging" : "Delivery merges by itself once every check passes";
+// The project's merge setting is three-way: true asks before merging, false merges by itself, and null is not set
+// yet. The Settings page shows the same choice as on/off in pages/config/cells.mjs and layers.mjs; this page keeps
+// the unset case apart rather than reading it as false.
+export function mergeSetting(d) {
+  return d.asks_merge === true ? "ask" : d.asks_merge === false ? "auto" : "unset";
 }
 
-// What an automatic merge sets off, told at the owner's last gate before it.
+// How the Change ends once every gate passed: the project's merge setting decides.
+export function merging(d) {
+  const mode = mergeSetting(d);
+  if (mode === "ask") return "Delivery asks you before merging";
+  if (mode === "auto") return "Delivery merges by itself once every check passes";
+  return "Delivery does not merge until the merge setting is chosen on the Settings page";
+}
+
+// What an automatic merge sets off, told at the owner's last gate before it. Only for mergeSetting "auto".
 export function finale(d) {
   const pr = d.pr ? `pull request #${d.pr}` : "the pull request";
   return `Delivery merges ${pr} into ${d.target} by itself once its checks pass, `
@@ -193,7 +203,7 @@ export function criteriaPanel(d) {
 export function checkForm(check, d) {
   const key = `${d.key}:check:${check.id}:${JSON.stringify(check.inputs)}`, mine = draft(key, () => ({}));
   const result = (passed) => ({ check: check.id, passed, note: mine.note ?? "", inputs: check.inputs });
-  const last = !d.asks_merge && d.checks.every((c) => c.id === check.id || c.passed === true);
+  const last = mergeSetting(d) === "auto" && d.checks.every((c) => c.id === check.id || c.passed === true);
   const passed = async () => {
     const body = result(true);
     if (last && !(await ask({

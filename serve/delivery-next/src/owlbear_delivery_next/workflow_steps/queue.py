@@ -26,6 +26,7 @@ from owlbear_delivery_next.change_flow import delivery_target
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.github.provider import SUCCESS, EnqueueStatus, ProviderError
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.workflow_steps import engine
 
 if TYPE_CHECKING:
@@ -112,19 +113,34 @@ def _removed(ctx: Ctx, c: Change, pr: PullRequest, r: QueueEvent) -> StepResult:
     return result
 
 
-def _leave(ctx: Ctx, c: Change, pr: PullRequest, held: StepResult) -> tuple[Change, StepResult]:
-    """A gate that fails while the PR is queued takes it out first, then routes as the gate says."""
+def _wake(ctx: Ctx) -> datetime | None:
+    """When an uncertain withdrawal is looked at again: the poll interval when it is set, else the next pass."""
+    try:
+        return ctx.poll()
+    except SettingsUnset:  # no interval is invented; the removal is still uncertain, so the barrier holds
+        return None
+
+
+def _withdraw(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult | None:
+    """Take the PR out of the queue and read it back; None once GitHub shows it out, else the answer to return."""
     try:
         ctx.gh.dequeue(pr)
         q = ctx.gh.read_queue(ctx.repository, pr.number)
     except ProviderError as exc:
-        return c, engine.pending(Waiting.GITHUB, f"taking PR #{pr.number} out of the merge queue ({exc})", ctx.poll())
+        return engine.pending(Waiting.GITHUB, f"taking PR #{pr.number} out of the merge queue ({exc})", _wake(ctx))
     if q.merged:
-        return c, _merged(ctx, c, pr)
+        return _merged(ctx, c, pr)
     if q.entry is not None:
-        return c, engine.pending(Waiting.GITHUB, f"taking PR #{pr.number} out of the merge queue", ctx.poll())
+        return engine.pending(Waiting.GITHUB, f"taking PR #{pr.number} out of the merge queue", _wake(ctx))
     c.queue = None
     _seen(c, q)
+    return None
+
+
+def _leave(ctx: Ctx, c: Change, pr: PullRequest, held: StepResult) -> tuple[Change, StepResult]:
+    """A gate that fails while the PR is queued takes it out first, then routes as the gate says."""
+    if (result := _withdraw(ctx, c, pr)) is not None:
+        return c, result
     ctx.log(c.slug, "queue-left", pr=pr.number, reason=held.reason)
     return c, held
 
@@ -184,7 +200,14 @@ def _queued(  # noqa: PLR0913, PLR0917 - the merge step's own inputs and this pa
                 c.slug, "queue-rebound", pr=pr.number, old=c.queue.queued_at.isoformat(), new=e.enqueued_at.isoformat()
             )
         c.queue.queued_at = e.enqueued_at
-    c, held = gate(ctx, c, pr, rules)
+    try:
+        c, held = gate(ctx, c, pr, rules)
+    except SettingsUnset:  # the owner is asked next, so GitHub must not merge the PR meanwhile
+        if (result := _withdraw(ctx, c, pr)) is not None:
+            return c, result
+        ctx.log(c.slug, "queue-left", pr=pr.number, reason="merge method unset")
+        ctx.store.write(ctx.lock, c)  # the runner re-reads the Change to ask, so the cleared claim must land first
+        raise
     if held is not None:
         return _leave(ctx, c, pr, held)
     where = f"position {e.position}, {e.state.lower().replace('_', ' ')}" if e else "queued"
