@@ -11,8 +11,12 @@ from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged,
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation
+from owlbear_delivery_next.machine_host import curation, registry
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings.config import GlobalLayer
+from owlbear_delivery_next.state_store import settings_carry, store
+from owlbear_delivery_next.state_store.store import update_layer
 
 
 def pending(folder: Path, title: str):
@@ -113,12 +117,14 @@ def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_as_it
         runs.append(cfg.memory.parent.name)
         return Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True))
 
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    paused = [True]
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run, paused=lambda: paused[0])
     assert (job.due("shop"), job.due("owlbear")) == (True, False)
-    assert job.nudge(None, "idle", paused=True) == []  # paused: "on" holds it
-    assert job.nudge(None, "idle", paused=False) == ["shop"]
+    assert job.nudge(None, "idle") == []  # paused: "on" holds it
+    paused[0] = False
+    assert job.nudge(None, "idle") == ["shop"]
     finished(job)
-    assert (job.due("shop"), job.nudge(["shop"], "merge", paused=False)) == (False, [])  # unchanged: no other run
+    assert (job.due("shop"), job.nudge(["shop"], "merge")) == (False, [])  # unchanged: no other run
 
     MemoryEngine(root / "shop" / "memory").edit(
         left.id, {"content": "Unsure lesson: now with evidence"}, left.updated_at
@@ -126,8 +132,9 @@ def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_as_it
     saved = registry.load()
     chosen = {"curate_after_merge": "paused", "curate_when_idle": "off"}
     registry.configure(saved.settings.model_copy(update=chosen), registry.revision(saved.settings))
-    assert job.nudge(["shop"], "idle", paused=False) == []  # idle curation off
-    assert job.nudge(["shop"], "merge", paused=True) == ["shop"]  # changed, and the merge runs it while paused
+    assert job.nudge(["shop"], "idle") == []  # idle curation off
+    paused[0] = True
+    assert job.nudge(["shop"], "merge") == ["shop"]  # changed, and the merge runs it while paused
     finished(job)
     assert runs == ["shop", "shop"]
 
@@ -141,7 +148,7 @@ def test_an_entry_saved_during_a_run_stays_due_and_a_trigger_meanwhile_runs_the_
         runs.append(cfg.session_id)
         if len(runs) == 1:  # an agent saves while the curator runs, and its Change merges
             pending(root / "shop" / "memory", "Saved meanwhile")
-            assert job.nudge(["shop"], "merge", paused=False) == []
+            assert job.nudge(["shop"], "merge") == []
         report = MemoryCurationResult(summary="judged", entries=[])
         return Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True))
 
@@ -255,3 +262,157 @@ def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_i
     finished(job)
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
     assert (shop["state"], shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", "an update runs", 0)
+
+
+HELD = "0123456789abcdef"
+
+
+def quiet(cfg) -> Run:
+    return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+               termination=Termination(confirmed=True))  # fmt: skip
+
+
+def recording(seen: list) -> callable:
+    def run(cfg) -> Run:
+        seen.append(cfg)
+        return quiet(cfg)
+
+    return run
+
+
+def folder_run(job: curation.Curation, name: str) -> dict:
+    return {f["folder"]: f for f in job.read()["folders"]}[name]
+
+
+def configure_machine(**chosen) -> None:
+    saved = registry.load()
+    registry.configure(saved.settings.model_copy(update=chosen), registry.revision(saved.settings))
+
+
+def curator(root: Path, **changes) -> None:
+    """Change the curator role in Global, where a role's model, effort, minutes and subagents are set.
+
+    Written by the same locked, atomic writer as production, so a reader never sees a half-written Global file.
+    """
+    shared = DataRepo(root)
+    if not shared.global_path.exists():
+        settings_carry.carry(shared)
+
+    def change(glob: GlobalLayer) -> GlobalLayer:
+        agent = glob.agents.get("curator", config.Agent()).model_copy(update=changes)
+        return glob.model_copy(update={"agents": glob.agents | {"curator": agent}})
+
+    update_layer(shared.global_path, GlobalLayer, change)
+
+
+def test_the_curator_helper_writes_global_only_through_the_atomic_layer_writer(root, monkeypatch) -> None:
+    settings_carry.carry(DataRepo(root))
+    written = []
+    real = store.atomic_write
+    monkeypatch.setattr(store, "atomic_write", lambda path, text: (written.append(path), real(path, text)))
+    curator(root, model="model-z")
+    assert written == [DataRepo(root).global_path]
+
+
+def test_a_queued_automatic_request_starts_only_if_its_trigger_still_allows_it_at_its_slot(root) -> None:
+    slots, paused, ran = Slots(lambda: 1), [False], []
+    assert slots.take(HELD, "a-change", 1, 1) == 1  # a project's step holds the only slot
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=recording(ran), paused=lambda: paused[0])
+    pending(root / "shop" / "memory", "Lesson")
+    assert job.nudge(None, "idle") == ["shop"]
+    paused[0] = True  # the owner pauses while the request waits
+    slots.give(HELD, "a-change")
+    finished(job)
+    assert (ran, folder_run(job, "shop")["state"], folder_run(job, "shop")["reason"]) == (
+        [], "failed", curation.PAUSED
+    )  # fmt: skip
+    assert job.due("shop")  # still due: the next allowed trigger runs it
+
+
+def test_curate_now_takes_over_a_waiting_automatic_request_and_runs_only_once(root) -> None:
+    slots, paused, ran = Slots(lambda: 1), [False], []
+    assert slots.take(HELD, "a-change", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=recording(ran), paused=lambda: paused[0])
+    pending(root / "shop" / "memory", "Lesson")
+    assert job.nudge(None, "idle") == ["shop"]
+    paused[0] = True
+    assert job.start("shop") == []  # the waiting request is coalesced: no second run is queued
+    assert job.queue == ["shop"]
+    slots.give(HELD, "a-change")
+    finished(job)
+    assert (len(ran), folder_run(job, "shop")["state"]) == (1, "done")
+
+
+def test_curate_now_landing_after_an_automatic_refusal_but_before_the_worker_retires_it_still_runs(root) -> None:
+    slots, paused, ran = Slots(lambda: 1), [False], []
+    assert slots.take(HELD, "a-change", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=recording(ran), paused=lambda: paused[0])
+    pending(root / "shop" / "memory", "Lesson")
+    assert job.nudge(None, "idle") == ["shop"]
+    paused[0] = True
+    saved, raced = job._save, []  # noqa: SLF001 - the interleaving is gated on the refusal's own save
+
+    def save_then_race(folder: str, run: curation.FolderRun) -> None:
+        saved(folder, run)
+        if run.state == "failed" and run.reason == curation.PAUSED and not raced:
+            raced.append(job.start(folder))  # Curate now lands in the gap before the worker retires the folder
+
+    job._save = save_then_race  # noqa: SLF001
+    slots.give(HELD, "a-change")
+    finished(job)
+    assert (raced, len(ran), folder_run(job, "shop")["state"]) == ([[]], 1, "done")
+
+
+def test_curate_now_bypasses_the_automatic_switch_and_pause_but_never_a_fence(root) -> None:
+    configure_machine(curate_when_idle="off", curate_after_merge="off")
+    ran = []
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=recording(ran),
+                            paused=lambda: True)  # fmt: skip
+    job.start("shop")
+    finished(job)
+    assert (len(ran), folder_run(job, "shop")["state"]) == (1, "done")
+
+    fenced = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=recording(ran),
+                               fenced=lambda: "an update runs")  # fmt: skip
+    fenced.start("owlbear")
+    finished(fenced)
+    assert (len(ran), folder_run(fenced, "owlbear")["reason"]) == (1, "an update runs")
+
+
+@pytest.mark.parametrize(("setting", "may"), [(True, True), (False, False)])
+def test_the_curator_session_starts_subagents_only_as_its_role_setting_allows(root, setting, may) -> None:
+    curator(root, subagents=setting)
+    seen = []
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=recording(seen))
+    job.start("shop")
+    finished(job)
+    assert [cfg.subagents for cfg in seen] == [may]
+
+
+def test_a_curator_whose_subagent_setting_is_unset_never_starts(root, monkeypatch) -> None:
+    settings_carry.carry(DataRepo(root))
+    monkeypatch.setattr(config, "BASE", None)  # no built-in value may fill the unset setting
+    curator(root, subagents=None)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root),
+                            run=lambda _cfg: pytest.fail("it ran"))  # fmt: skip
+    job.start("shop")
+    finished(job)
+    shop = folder_run(job, "shop")
+    assert (shop["state"], "agents.curator.subagents" in shop["reason"]) == ("failed", True)
+
+
+def test_a_waiting_request_takes_the_role_settings_in_force_at_its_grant(root) -> None:
+    slots, seen = Slots(lambda: 1), []
+    curator(root, model="model-a", minutes=1)
+    assert slots.take(HELD, "a-change", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=lambda cfg: _record(cfg, seen))
+    job.start("shop")
+    curator(root, model="model-b", minutes=5)  # changed while the request waits for its slot
+    slots.give(HELD, "a-change")
+    finished(job)
+    assert [model for model, _limit in seen] == ["model-b"]
+
+
+def _record(cfg, seen: list) -> Run:
+    seen.append((cfg.model, cfg.limit))
+    return quiet(cfg)

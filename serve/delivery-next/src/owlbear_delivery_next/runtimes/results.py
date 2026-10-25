@@ -55,6 +55,7 @@ class Gate:
         with self._lock:
             self.done = True
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail[:300]
+            self.run.changed = []
         self.ended()
 
     def wrong_model(self, detail: str) -> None:
@@ -147,7 +148,7 @@ class Gate:
         self, spec: tools.Spec, args: tools.Args | None, errors: list[str], tree: tools.Worktree | None
     ) -> tuple[str, bool]:
         if tree is not None:
-            self.run.head = None if errors else tree.head
+            self.run.head, self.run.changed = (None, []) if errors else (tree.head, list(tree.changed))
         read = list(args.covered_paths) if isinstance(args, tools.ReviewResult) else []  # evidence, not coverage
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
         linted = bool(errors) and all(e.startswith("lint: ") for e in errors)
@@ -188,7 +189,14 @@ class Gate:
         if isinstance(args, curation_tools.TestCurationResult):  # TD-339: committed, clean, only tests
             return curation_tools.check(args, tree), tree
         errors = tools.check_result(
-            args, tree, cfg.checks, cfg.policy.root, cfg.scope, cfg.item, visual=bool(cfg.attachments)
+            args,
+            tree,
+            cfg.checks,
+            cfg.policy.root,
+            cfg.scope,
+            cfg.item,
+            visual=bool(cfg.attachments),
+            packages=cfg.packages,
         )
         found = disputes.check(
             args, tree, cfg.rejectable, cfg.rechecks, settled=cfg.settled, cap=cfg.cap, tasks=cfg.plan_tasks

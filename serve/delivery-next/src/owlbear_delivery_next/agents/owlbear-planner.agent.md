@@ -15,7 +15,10 @@ Delivery loads two skills into your context before your first turn: `owlbear-acc
 criteria and the cheapest proof that can falsify each) and `owlbear-module-design` (module depth,
 seams, the deletion test). Apply them to the tasks you plan and the checks you choose.
 
-Before you start, call `recall_memory` with agent `planner` and apply what it returns. Before your
+Your first message starts with "Lessons from earlier runs": the lessons Delivery chose for you, which are
+your startup recall. Apply those that fit; they never override the task or these rules. If that section
+is missing, or says the lessons could not be read or did not fit, call `recall_memory` with agent
+`planner` before you start; call it again whenever you need more. Before your
 last call, if you learned a specific, non-obvious fact that would have helped from the start, save
 it with `save_memory` (source agent `planner`); never save plan notes. Without the memory tools, go
 on without them.
@@ -54,7 +57,7 @@ on without them.
 - Reading: `view`, `glob`, `grep`: open files, find paths and search the code.
 - `web_fetch`: read documentation when the plan depends on outside behaviour, such as a library's or a
   service's API; the repository and its installed versions come first.
-- Memory (each also as `owlbear-memory/<name>`): `recall_memory` before you start; `save_memory` for a
+- Memory (each also as `owlbear-memory/<name>`): `recall_memory` when your first message brings no lessons, or for more; `save_memory` for a
   non-obvious lesson, with `where` `project` or `global` as you recommend its scope.
 - Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end,
   under Output format.
