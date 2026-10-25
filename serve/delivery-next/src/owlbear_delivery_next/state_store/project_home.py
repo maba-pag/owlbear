@@ -70,24 +70,74 @@ def _pin(folder: Path) -> int:
     return fd
 
 
+def _durable_id(folder: Path, folder_fd: int) -> str | None:
+    """The id on disk, adopted only once its file and folder are synced and the file is still the one read.
+
+    Complete bytes alone prove nothing: a file whose sync failed reads the same, so it is synced again first.
+    """
+    path = folder / project_move.CLONE_ID
+    try:
+        fd = os.open(project_move.CLONE_ID, fd_tree.FILE_FLAGS, dir_fd=folder_fd)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        msg = f"{path} is unreadable"
+        raise StoreError(msg) from exc
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            msg = f"{path} is unreadable"
+            raise StoreError(msg)
+        held = fd_tree.ident(os.fstat(fd))
+        try:
+            text = b"".join(iter(lambda: os.read(fd, 1 << 16), b"")).decode()
+            os.fsync(fd)
+            os.fsync(folder_fd)
+        except (OSError, ValueError) as exc:
+            msg = f"{path} could not be made durable ({exc}): nothing was registered; it is kept"
+            raise StoreError(msg) from exc
+    finally:
+        os.close(fd)
+    now = fd_tree.stat_at(folder_fd, project_move.CLONE_ID)
+    if now is None or fd_tree.ident(now) != held:
+        msg = f"{path} was replaced while its id was made durable: nothing was registered; both are kept"
+        raise StoreError(msg)
+    if text and not text.endswith("\n"):
+        msg = f"{path} is incomplete: its write was cut short; nothing was changed"
+        raise StoreError(msg)
+    return text.strip() or None
+
+
 def _ensure_at(folder: Path, folder_fd: int) -> str:
     """The clone's id: reused when present, else created once, exclusively; never rewritten or replaced."""
-    if found := _clone_id_at(folder, folder_fd):
+    if found := _durable_id(folder, folder_fd):
         return found
     with contextlib.suppress(FileExistsError):  # another opener's id came first; it is read below
         fd_tree.create_at(folder_fd, project_move.CLONE_ID, secrets.token_hex(8) + "\n")
-    if found := _clone_id_at(folder, folder_fd):
+    if found := _durable_id(folder, folder_fd):
         return found
     msg = f"{folder / project_move.CLONE_ID} is empty: remove it, then start again"
     raise StoreError(msg)
 
 
+def _same_folder(folder: Path, folder_fd: int) -> None:
+    """Refuse unless the logical folder still names the pinned one: its id is not this clone's otherwise."""
+    try:
+        now = folder.stat(follow_symlinks=False)
+    except OSError:
+        now = None
+    if now is None or fd_tree.ident(now) != fd_tree.ident(os.fstat(folder_fd)):
+        msg = f"{folder} was replaced while its id was made durable: nothing was registered; both are kept"
+        raise StoreError(msg)
+
+
 def ensure_id(folder: Path) -> str:
-    """The clone's id, created once when missing; see ``_ensure_at``."""
+    """The clone's id, created once when missing; see ``_ensure_at``, and refused if the folder was swapped."""
     folder.mkdir(mode=0o700, exist_ok=True)
     fd = _pin(folder)
     try:
-        return _ensure_at(folder, fd)
+        found = _ensure_at(folder, fd)
+        _same_folder(folder, fd)
+        return found
     finally:
         os.close(fd)
 
