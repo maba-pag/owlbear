@@ -352,27 +352,26 @@ def test_a_flag_batch_that_lands_nothing_but_looks_sent_halts_the_next_round_bef
     real_publish = decision_sync.publish
 
     def sent_but_nothing_lands(shared_, paths, message, until, head):
-        if message.startswith("decisions: conflict on"):
-            return decision_sync.Sent()  # success-looking, with no commit and HEAD unmoved
-        return real_publish(shared_, paths, message, until, head)
+        if not message.startswith("decisions: conflict on"):
+            return real_publish(shared_, paths, message, until, head)
+        advance_remote(tmp_path, remote, "elsewhere.txt")  # the remote moves before the loop's next round
+        log.append("flag-returned")
+        return decision_sync.Sent()  # success-looking, with no commit and HEAD unmoved
 
-    monkeypatch.setattr(decision_sync, "publish", sent_but_nothing_lands)
-    rival = make(links=(Link(type=LinkType.REPLACES, target=old.id),))
-    save(shared, rival, expected_revision=None, message="decisions: rival")
-    monkeypatch.setattr(decision_sync, "publish", real_publish)
+    with monkeypatch.context() as hooks:
+        log = recorded_git(hooks)
+        hooks.setattr(decision_sync, "publish", sent_but_nothing_lands)
+        rival = make(links=(Link(type=LinkType.REPLACES, target=old.id),))
+        save(shared, rival, expected_revision=None, message="decisions: rival")
+
     pending = decision_batch.pending(shared)
     assert pending is not None
-    head, files = git(root, "rev-parse", "HEAD"), tree_bytes(root)
-    advance_remote(tmp_path, remote, "elsewhere.txt")
-    remote_head = git(remote, "rev-parse", "main")
-    commands = recorded_git(monkeypatch)
-
-    with pytest.raises(DecisionsUnavailable):
-        save(shared, make(), expected_revision=None, message="decisions: later")
-
-    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
-    assert (git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")) == (head, remote_head)
-    assert tree_bytes(root) == files
-    assert decision_batch.pending(shared) == pending
-    monkeypatch.undo()
-    assert decision_recovery.finish(shared, pending.generation).generation == pending.generation
+    after = log[log.index("flag-returned") + 1 :]
+    assert not {"fetch", "push", "pull", "rebase", "ls-remote"} & set(after)
+    assert git(root, "rev-parse", "HEAD") == pending.head  # the rival's own commit; the next round moved nothing
+    recovered = decision_recovery.finish(shared, pending.generation)
+    assert recovered.done
+    assert decision_batch.pending(shared) is None
+    for rel_path, _, after_image in pending.files:
+        blob = subprocess.run(["git", "show", f"HEAD:{rel_path}"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
+        assert blob.stdout == after_image
