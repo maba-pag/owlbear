@@ -464,6 +464,7 @@ class Change(Record):
     counted_holds: list[str] = Field(default_factory=list)  # held results whose usage and tool calls the Change counts
     held_fallback: HeldRecord | None = None  # a held result the held file could not keep, with its gate (RUN-04)
     pending_child: PendingChild | None = None  # a paid challenge of a durable parent step, until it settles (RUN-04)
+    counted_children: list[str] = Field(default_factory=list)  # paid child sessions counted with their settlement
     budgets: Budgets = Field(default_factory=Budgets)
     consent: MergeConsent | None = None
     queue: QueueClaim | None = None  # TD-226: Delivery's open enqueue attempt

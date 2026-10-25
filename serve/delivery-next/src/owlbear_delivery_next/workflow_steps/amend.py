@@ -52,7 +52,7 @@ def challenge(  # noqa: PLR0913 - the proposer's writes, its candidate and its o
 
     *settings* is the snapshot the proposer started with, which checked the challenger's (``review.started``).
     """
-    change.pending_child = pending_child.awaited(amendments.LABEL, made, route)
+    change.pending_child = pending_child.awaited(amendments.LABEL, made, route, change.step)
     store = held_writes.checkpoint(post, lock, change)  # a lost challenge leaves the candidate unjudged, its step kept
     _settled(store, lock, change, path, settings)
 
@@ -74,7 +74,9 @@ def resumed(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
 def _settled(store: Store, lock: Lock, change: Change, path: Path, settings: Settings | None) -> None:
     """Judge the candidate, then write its verdict, the challenger's spend and the step's route together, once.
 
-    A challenger whose own processes are not confirmed gone stops the Change instead, its proposal left unjudged.
+    A challenger whose own processes are not confirmed gone stops the Change instead, its proposal left unjudged. One
+    that ran on a wrong model or failed judges nothing: its retry or wait applies to the proposing step, and the same
+    candidate waits for the next challenger, its proposer never rerun.
     """
     pending = change.pending_child
     made = pending_child.candidate(change, pending) if pending is not None else None
@@ -104,7 +106,13 @@ def _settled(store: Store, lock: Lock, change: Change, path: Path, settings: Set
 
     verdict, done = pending_child.child(store, lock, change, (amendments.LABEL, made.id), start)
     step = pending_child.booked(change, done, {"exit": verdict.exit})
-    amendments.judged(made, done)
-    store.write(lock, loop.apply(change, verdict if verdict.exit == Exit.STOP else route, datetime.now(UTC)))
+    final = route
+    if verdict.exit == Exit.STOP:
+        final = verdict
+    elif pending_child.judgeable(verdict):
+        amendments.judged(made, done)
+    elif verdict.exit == Exit.RETRY and verdict.cause:  # a wrong model or failed session judges nothing: it reruns
+        change.pending_child, final = pending.model_copy(update={"run": None}), verdict
+    store.write(lock, loop.apply(change, final, datetime.now(UTC)))
     if step is not None:  # logged once the verdict and its spend are durable
         sessions.announce(store, lock, change.slug, step)

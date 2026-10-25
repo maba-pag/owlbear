@@ -8,7 +8,7 @@ fresh stores fold and restart the step until the next step's session starts.
 
 import json
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -33,7 +33,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import amendments
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
-from owlbear_delivery_next.workflow_steps import held, plan_round
+from owlbear_delivery_next.workflow_steps import held, pending_child, plan_round
 
 K = StepKind
 DONE = Termination(confirmed=True)
@@ -65,7 +65,8 @@ class Paid:
         self.children: list[str] = []
         self.next: list[str] = []
         self.verdicts: list[tools.Args] = []
-        self.unread_child = False
+        self.unread_children = 0  # how many of the next children return with their usage unread
+        self.wrong_children = 0  # how many of the next children ran on a wrong model
         monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
         monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)  # the Change's worktree is the test repo
 
@@ -74,8 +75,12 @@ class Paid:
             self.children.append(cfg.session_id)
             run = Run(cfg.session_id, "result", self.verdicts.pop(0), termination=DONE)
             run.usage, run.tool_calls, run.model_check = dict(CHILD), {"grep": {"calls": 2}}, "verified"
-            if self.unread_child:
+            if self.unread_children:
+                self.unread_children -= 1
                 run.usage, run.usage_unread = {"error": "RuntimeError"}, UNREAD
+            elif self.wrong_children:
+                self.wrong_children -= 1
+                run.model_check, run.detail = "mismatch", "the session ran on another model"
             return run
         if self.parents:
             self.next.append(cfg.session_id)
@@ -113,11 +118,11 @@ def made(parent: str, repo: Path) -> Change:
     return Change(slug="c1", brief=brief, plan=plan, names=names, step=Step(kind=K.BUILD, task="t1"))
 
 
-def restart(tmp_path: Path, repo: Path) -> Store:
+def restart(tmp_path: Path, repo: Path, now: datetime | None = None) -> Store:
     """A new runner process: a fresh store, the inbox folded under the lock, the step run."""
     store = Store(tmp_path / "store")
     with store.lock("c1") as lock:
-        change, step = store.fold(lock, "c1", datetime.now(UTC))
+        change, step = store.fold(lock, "c1", now or datetime.now(UTC))
         runner._step(store, lock, change, step, repo)  # noqa: SLF001
     return store
 
@@ -138,14 +143,18 @@ def held_and_accepted(tmp_path: Path, repo: Path, paid: Paid, parent: str) -> St
     return store
 
 
-def to_next_session(tmp_path: Path, repo: Path, limit: int = 4) -> Store:
+def to_next_session(tmp_path: Path, repo: Path, limit: int = 4, now: datetime | None = None) -> Store:
     """Restart until the step after the settled one starts its session; cleanup may take a pass of its own."""
     for _ in range(limit):
         try:
-            restart(tmp_path, repo)
+            restart(tmp_path, repo, now)
         except NextSessionError:
             return Store(tmp_path / "store")
     pytest.fail("the step after the settled one never started")
+
+
+def captures(store: Store) -> list[Path]:
+    return sorted((store.root / "changes" / "c1").glob(f"{pending_child.CAPTURE}*.json"))
 
 
 def child_steps(store: Store, label: str) -> list[dict]:
@@ -162,6 +171,8 @@ def assert_settled_once(store: Store, parent: str, usage: str, paid: Paid) -> Ch
     assert c.spend.models["c"].tokens == 40
     assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
     assert len(c.accepted_holds) == len(c.counted_holds) == 1
+    assert c.counted_children == paid.children
+    assert captures(store) == []
     assert not (store.root / "changes" / "c1" / "held.json").exists()
     assert c.held_fallback is None
     accepted = [e["session"] for e in store.events("c1") if e.get("event") == "held-accepted"]
@@ -177,7 +188,15 @@ def assert_settled_once(store: Store, parent: str, usage: str, paid: Paid) -> Ch
     return c
 
 
-FAULTS = ["checkpoint-write", "settlement-write", "settlement-log", "hold-unlink", "accepted-log", "fallback-clear"]
+FAULTS = [
+    "checkpoint-write",
+    "capture-write",
+    "settlement-write",
+    "settlement-log",
+    "hold-unlink",
+    "accepted-log",
+    "fallback-clear",
+]
 
 
 @pytest.mark.parametrize("fault", FAULTS)
@@ -201,6 +220,9 @@ def test_an_accepted_parent_and_its_paid_child_run_and_count_once_whichever_writ
         stored = self.read(change.slug)
         if change.accepted_holds and not stored.accepted_holds:
             fire("checkpoint-write")
+        returned = change.pending_child and change.pending_child.run
+        if returned and not (stored.pending_child and stored.pending_child.run):
+            fire("capture-write")  # the first write of the returned child's run
         if stored.pending_child and stored.pending_child.run and change.pending_child is None:
             fire("settlement-write")
         if stored.held_fallback and change.held_fallback is None and change.accepted_holds:
@@ -243,6 +265,13 @@ def test_an_accepted_parent_and_its_paid_child_run_and_count_once_whichever_writ
         assert after.pending_child.run is not None
         assert after.pending_child.run.session_id == paid.children[0]
         assert after.pending_child.run.usage == CHILD
+        assert after.spend.credits == pytest.approx(PARENT[usage][2])
+    elif fault == "capture-write":  # the Change lacks the run; its capture keeps the same run for the next runner
+        assert after.pending_child is None or after.pending_child.run is None
+        (path,) = captures(Store(tmp_path / "store"))
+        kept = json.loads(path.read_text())["run"]
+        assert (kept["session_id"], kept["usage"]) == (paid.children[0], CHILD)
+        assert kept["tool_calls"] == {"grep": {"calls": 2}}
         assert after.spend.credits == pytest.approx(PARENT[usage][2])
     else:
         assert len(after.accepted_holds) == 1  # the receipt is durable: the parent is never processed again
@@ -403,12 +432,13 @@ def test_an_upheld_rejection_asks_once_with_a_stable_question_whatever_the_owner
 
 
 @pytest.mark.parametrize("parent", ["plan", "amend"])
-def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_never_the_parents_accept(
+def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_and_its_retry_reruns_only_the_child(
     tmp_path, change_repo, monkeypatch, parent
 ):
     paid = Paid(monkeypatch, change_repo, parent, "known")
     store = held_and_accepted(tmp_path, change_repo, paid, parent)
-    paid.unread_child = True
+    paid.verdicts.append(paid.verdicts[0])
+    paid.unread_children = 1
     restart(tmp_path, change_repo)
     c = store.read("c1")
     q = loop.open_question(c)
@@ -421,6 +451,89 @@ def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_never_the_parents_
         assert (c.plan.version, c.loops[PLAN].round) == (1, 0)  # the plan stays checkpointed, unjudged
     else:
         assert [a.verdict for a in c.amendments] == [""]
+
+    store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="retry"))
+    done = to_next_session(tmp_path, change_repo)
+    c = done.read("c1")
+    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 2, 1)  # the retry reran the child alone
+    assert (c.spend.credits, c.spend.unread) == (pytest.approx(2.5 + 3.5), paid.children[:1])
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)  # each attempt once
+    assert (c.counted_children, c.pending_child) == (paid.children[1:], None)
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
+    else:
+        (a,) = c.amendments  # the same candidate of the same proposer, judged by the retried child
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[1])
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
+
+
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_a_child_on_a_wrong_model_judges_nothing_and_its_rerun_after_the_wait_does(
+    tmp_path, change_repo, monkeypatch, parent
+):
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    store = held_and_accepted(tmp_path, change_repo, paid, parent)
+    paid.verdicts.append(paid.verdicts[0])
+    paid.wrong_children = 1
+    restart(tmp_path, change_repo)
+    c = store.read("c1")
+    assert (c.outcome.exit, c.outcome.cause.endswith(":wrong-model")) == (Exit.RETRY, True)
+    assert c.outcome.wake_at is not None
+    assert (c.step.kind, c.counted_children) == (K.PLAN if parent == "plan" else K.BUILD, paid.children)
+    assert len(paid.children) == 1
+    assert c.spend.credits == pytest.approx(2.5 + 3.5)  # the wrong model's attempt counts once, as it reported
+    if parent == "plan":
+        assert (c.loops[PLAN].round, c.step.mode) == (0, "challenge")
+    else:
+        assert [a.verdict for a in c.amendments] == [""]  # its payload never judges the candidate
+        assert c.pending_child is not None  # the same candidate waits for the next challenger
+        assert (c.pending_child.parent, c.pending_child.run) == (c.amendments[0].id, None)
+    restart(tmp_path, change_repo)  # within the wait: nothing runs
+    assert len(paid.children) == 1
+
+    later = c.outcome.wake_at + timedelta(seconds=1)
+    done = to_next_session(tmp_path, change_repo, now=later)
+    c = done.read("c1")
+    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 2, 1)
+    assert c.spend.credits == pytest.approx(2.5 + 2 * 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)
+    assert (c.counted_children, c.pending_child) == (paid.children, None)
+    if parent == "plan":
+        assert (c.loops[PLAN].round, c.step.kind) == (1, K.BUILD)
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[1])
+        assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
+
+
+def test_a_child_run_no_storage_keeps_is_printed_and_reported_never_claimed(tmp_path, change_repo, monkeypatch, capsys):
+    paid = Paid(monkeypatch, change_repo, "plan", "known")
+    held_and_accepted(tmp_path, change_repo, paid, "plan")
+    paid.verdicts.append(paid.verdicts[0])
+    real_write = Store.write
+
+    def write(self, lock, change):
+        if change.pending_child and change.pending_child.run:
+            msg = "change refused"
+            raise OSError(msg)
+        return real_write(self, lock, change)
+
+    def no_capture(path, _text):
+        msg = f"{path.name} refused"
+        raise OSError(msg)
+
+    monkeypatch.setattr(Store, "write", write)
+    monkeypatch.setattr(pending_child, "atomic_write", no_capture)
+    with pytest.raises(OSError, match="change refused") as failed:
+        restart(tmp_path, change_repo)
+    assert any("could not be kept" in note for note in failed.value.__notes__)
+    printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if "child-unkept" in line]
+    assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
+    monkeypatch.setattr(Store, "write", real_write)
+    store = to_next_session(tmp_path, change_repo)
+    c = store.read("c1")
+    assert len(paid.children) == 2  # nothing kept the first run, so its challenge ran again, as reported
+    assert (c.counted_children, c.spend.credits) == (paid.children[1:], pytest.approx(2.5 + 3.5))
 
 
 def stored(store: Store) -> str:

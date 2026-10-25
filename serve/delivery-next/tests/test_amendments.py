@@ -113,7 +113,8 @@ def proposing(store: Store, clone: Path, monkeypatch, args: dict, during=lambda:
         verdict = tools.VisualReviewResult(
             verdict="fix", findings=[{"place": "AC-1", "problem": "tabs could now pass", "fix": "keep trimming tabs"}]
         )
-        return loop.StepResult(exit=Exit.RETRY), Run("c1-amend", "result", verdict, termination=DONE)
+        run = Run("c1-amend", "result", verdict, termination=DONE)
+        return session_result.to_result(run, K.REVIEW, NOW, K.BUILD), run  # as the real session maps it
 
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     monkeypatch.setattr(amend.sessions, "review_run", review_run)
