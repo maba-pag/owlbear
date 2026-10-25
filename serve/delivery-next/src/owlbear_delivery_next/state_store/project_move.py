@@ -28,6 +28,9 @@ from owlbear_delivery_next.state_store.fd_tree import (
     entry_ok as _entry_ok,
 )
 from owlbear_delivery_next.state_store.fd_tree import (
+    holds_text_at as _holds_text_at,
+)
+from owlbear_delivery_next.state_store.fd_tree import (
     ident as _ident,
 )
 from owlbear_delivery_next.state_store.fd_tree import (
@@ -138,15 +141,9 @@ def _is_record(found: object) -> bool:
     return id_ok and strings_ok and pending_ok and proof_ok and maps_ok
 
 
-def _write_proof(sfd: int) -> str:
-    """Write this move's random proof into the new staging folder; the record keeps its digest."""
-    fd_tree.create_at(sfd, MOVE_PROOF, f"{secrets.token_hex(16)}\n")
-    return _digest_at(sfd, MOVE_PROOF)
-
-
 def _proof_ok(dfd: int, rec: dict) -> bool:
-    """Whether the folder at *dfd* still holds the proof this move wrote into it."""
-    return rec["proof"] is not None and fd_tree.entry_ok(dfd, MOVE_PROOF, rec["proof"])
+    """Whether *dfd* still holds the regular file with the nonce this move wrote and recorded."""
+    return rec["proof"] is not None and _holds_text_at(dfd, MOVE_PROOF, f"{rec['proof']}\n")
 
 
 def _save(folder: Path, folder_fd: int, rec: dict) -> None:
@@ -353,7 +350,8 @@ def _move(folder: Path, folder_fd: int, target: Path, pfd: int) -> None:
     try:
         rec["stage_id"] = _ident(os.fstat(sfd))
         _save(folder, folder_fd, rec)
-        rec["proof"] = _write_proof(sfd)
+        rec["proof"] = secrets.token_hex(16)
+        fd_tree.create_verified_at(sfd, MOVE_PROOF, f"{rec['proof']}\n")
         _save(folder, folder_fd, rec)
         _copy_each(folder, folder_fd, sfd, rec)
     finally:

@@ -130,6 +130,36 @@ def read_at(dfd: int, name: str) -> str | None:
         os.close(fd)
 
 
+def holds_text_at(dfd: int, name: str, text: str) -> bool:
+    """Whether *name* under *dfd* is a regular file whose bytes are exactly *text*.
+
+    Opened without following links and without blocking, so a FIFO or other special entry answers False at once;
+    the read stops one byte past *text*, so longer content is never read to the end.
+    """
+    want = text.encode()
+    try:
+        fd = os.open(name, FILE_FLAGS | os.O_NONBLOCK, dir_fd=dfd)
+    except OSError:
+        return False
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return False
+        got = b""
+        while len(got) <= len(want) and (chunk := os.read(fd, len(want) + 1 - len(got))):
+            got += chunk
+        return got == want
+    finally:
+        os.close(fd)
+
+
+def create_verified_at(dfd: int, name: str, text: str) -> None:
+    """Create *name* under *dfd* with exactly *text*, then raise unless it still holds *text* when read back."""
+    create_at(dfd, name, text)
+    if not holds_text_at(dfd, name, text):
+        msg = f"{name} was replaced while it was written; what is there was kept"
+        raise StoreError(msg)
+
+
 def names_at(dfd: int) -> list[str]:
     """The entry names of the folder *dfd* pins, listed by descriptor."""
     return sorted(os.listdir(dfd))  # listed by descriptor, not by path
