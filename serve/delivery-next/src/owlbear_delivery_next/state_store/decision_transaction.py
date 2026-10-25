@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS
 from owlbear_delivery_next.state_store import decision_batch
@@ -16,41 +16,53 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 
+class Step(NamedTuple):
+    """What a batch's step reports: its notice, whether its publication is unknown, and whether it is a known refusal.
+
+    `refused` is set only by a producer that proves nothing of the batch reached Git, such as a failed commit with HEAD
+    unmoved. A notice alone never counts as a refusal.
+    """
+
+    notice: str
+    unknown: bool = False
+    refused: bool = False
+
+
 def transaction(
     shared: DataRepo,
     project: str,
     message: str,
     files: Sequence[tuple[Path, bytes]],
-    step: Callable[[], tuple[str, bool]],
+    step: Callable[[], Step],
 ) -> str:
     """Run *step*, which writes and publishes *files*, as one journaled batch; the caller holds the lock.
 
-    *step* returns its notice and whether its publication is unknown. The journal completes once the files landed in
-    HEAD, or when a known refusal left HEAD unmoved and put them back as they were. An unknown publication, a
-    partial commit, or an exception stays interrupted for the owner: it is never completed on a guess. Nothing nests: a
-    batch within it would be a second one.
+    The journal completes once the files landed in HEAD, or when the producer's known refusal left HEAD unmoved and put
+    them back as they were. An unknown publication, a partial commit, a bare notice without that refusal, or an
+    exception stays interrupted for the owner: it is never completed on a guess. Nothing nests: a batch within it would
+    be a second one.
     """
     store._interrupted(shared)  # noqa: SLF001 - same package; store helpers stay private to it
     rows = [(p.relative_to(shared.root).as_posix(), store._content(p), data) for p, data in files]  # noqa: SLF001
     head = store._head(shared)  # noqa: SLF001
     generation = decision_batch.begin(shared, project, head, message, [p.stem for p, _ in files], rows)
     try:
-        notice, unknown = step()
+        outcome = step()
     except BaseException:
         if landed(shared, head, rows):
             decision_batch.complete(shared, generation)
         raise
-    if landed(shared, head, rows) and not unknown:
+    if landed(shared, head, rows) and not outcome.unknown:
         decision_batch.complete(shared, generation)
-        return notice
-    undo = {shared.root / rel: before for rel, before, _ in rows}
+        return outcome.notice
     moved = store._head(shared) != head  # noqa: SLF001
-    deadline = time.monotonic() + SAVE_SECONDS
-    if not unknown and not moved and store._refusal_settles(shared, undo, deadline):  # noqa: SLF001
-        decision_batch.complete(shared, generation)
-        return notice
+    if outcome.refused and not outcome.unknown and not moved:
+        images = {shared.root / rel: (before, after) for rel, before, after in rows}
+        if store._refusal_settles(shared, images, time.monotonic() + SAVE_SECONDS):  # noqa: SLF001
+            decision_batch.complete(shared, generation)
+            return outcome.notice
     text = f"interrupted batch {generation}: finish or abandon it in Decisions"
-    return store._join(notice, text)[:300]  # noqa: SLF001
+    return store._join(outcome.notice, text)[:300]  # noqa: SLF001
 
 
 def landed(shared: DataRepo, head: str, rows: Sequence[tuple[str, bytes | None, bytes]]) -> bool:

@@ -11,6 +11,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.state_store import decision_archive, decision_sync, decision_transaction
@@ -71,15 +72,20 @@ def save(
     message = f"changes: {store.name}: {c.slug} {outcome}"
     try:
         with store.shared.locked():
-            path.parent.mkdir(parents=True, exist_ok=True)
+            storage_io.make_dirs(path.parent)
             planned, problems = decision_archive.plan(store.shared.root, store.name, c, stem, outcome)
             writes = [] if problems else decision_archive.batch_files(planned)
 
-            def publish() -> tuple[str, bool]:
-                atomic_write(path, text)
+            def publish() -> decision_transaction.Step:
                 files, left = decision_archive.write_plan(planned, problems, c.slug)
+                if writes and left:  # a decision refused: the record commits with none of the batch
+                    return decision_transaction.Step(
+                        f"the record of {c.slug} was not saved; " + "; ".join(left), refused=True
+                    )
+                atomic_write(path, text)
                 sent = decision_sync.publish(store.shared, [path, *files], message, time.monotonic() + SAVE_SECONDS)
-                return "; ".join(filter(None, [sent.notice, *left])), sent.stale or sent.ambiguous
+                notice = "; ".join(filter(None, [sent.notice, *left]))
+                return decision_transaction.Step(notice, unknown=sent.stale or sent.ambiguous, refused=sent.uncommitted)
 
             notice = decision_transaction.transaction(
                 store.shared, store.name, message, [(path, text.encode("utf-8")), *writes], publish

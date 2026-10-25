@@ -266,6 +266,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
     behind = f"not checked against the remote: {behind}" if behind else ""
     decisions, paths = [d for d, _, _ in items], [decision_path(d, folder) for d, folder, _ in items]
     before = {path: _content(path) for path in paths}
+    images = {path: (before[path], serialize(d).encode("utf-8")) for d, path in zip(decisions, paths, strict=True)}
     if refused := _refusals(items):
         return _refused(shared, decisions, refused, behind)
     generation, head, rows = _begin(shared, items, before, message)
@@ -280,7 +281,7 @@ def _save_all(shared: DataRepo, items: list[Placed], message: str) -> list[Recei
         return _refused(shared, decisions, refused, behind)
     sent = decision_sync.publish(shared, paths, message, until)
     if sent.uncommitted or sent.ambiguous or sent.stale:
-        if sent.uncommitted and _refusal_settles(shared, before, until):  # the files are put back: nothing is in flight
+        if sent.uncommitted and _refusal_settles(shared, images, until):  # the files are put back: nothing is in flight
             decision_batch.complete(shared, generation)
             notice = f"not saved, the files are put back: {sent.notice.removeprefix('saved, but ')}"
         else:  # the batch stays interrupted: only the owner's finish or abandon settles it
@@ -331,13 +332,20 @@ def _refusals(items: list[Placed]) -> dict[str, str]:
 
 
 def write_batch(items: Sequence[Placed]) -> dict[str, str]:
-    """Write the batch; a refused or failed file puts back every file of the batch as it was and says why."""
+    """Write the batch; a refused or failed file puts back every file of the batch as it was and says why.
+
+    A file the owner changed during the write is never overwritten: that raises, and the batch stays interrupted.
+    """
     before = {decision_path(d, folder): _content(decision_path(d, folder)) for d, folder, _ in items}
+    after = {decision_path(d, folder): serialize(d).encode("utf-8") for d, folder, _ in items}
     for decision, folder, expected in items:
         try:
             storage_io.make_dirs(decision_path(decision, folder).parent)  # ancestors are durable before the write
             write(decision, folder, expected)
         except (DecisionError, OSError) as exc:
+            if not decision_batch.owned({path: (text, after[path]) for path, text in before.items()}):
+                msg = "a file was edited during the write: nothing was put back, the batch stays interrupted"
+                raise DecisionsUnavailable(msg) from exc
             for path, text in before.items():  # the failing file too: a rename may land before its fsync fails
                 _put_back(path, text)
             if isinstance(exc, OSError):
@@ -354,7 +362,7 @@ def _content(path: Path) -> bytes | None:
 
 
 def _as_before(before: dict[Path, bytes | None]) -> bool:
-    return all(_content(path) == text for path, text in before.items())
+    return decision_batch.restored(before)
 
 
 def _put_back(path: Path, text: bytes | None) -> None:
@@ -362,18 +370,24 @@ def _put_back(path: Path, text: bytes | None) -> None:
         decision_batch.replace_file(path, text)
 
 
-def _refusal_settles(shared: DataRepo, before: dict[Path, bytes | None], until: float) -> bool:
-    """Put a refused batch's files back, if the index holds none of them: Git and the index are never reset here.
+def _refusal_settles(shared: DataRepo, images: dict[Path, tuple[bytes | None, bytes]], until: float) -> bool:
+    """Put a refused batch's files back, if the index holds none of them and no owner edit would be overwritten.
 
-    The index is compared with `HEAD` only; any staged difference (ours or the owner's) keeps the batch interrupted.
+    Git and the index are never reset here. The index is compared with `HEAD` only; any staged difference (ours or the
+    owner's) keeps the batch interrupted, and so does any file holding neither its before nor its after image.
     """
-    for path in before:
+    for path in images:
         rel = path.relative_to(shared.root).as_posix()
         if shared.git("diff", "--cached", "--quiet", "--", rel, until=until).returncode:
             return False
-    for path, text in before.items():
-        _put_back(path, text)
-    return True
+    if not decision_batch.owned(images):
+        return False
+    try:
+        for path, (text, _) in images.items():
+            _put_back(path, text)
+    except OSError:
+        return False
+    return decision_batch.restored({path: text for path, (text, _) in images.items()})
 
 
 def _refused(shared: DataRepo, decisions: list[Decision], refused: dict[str, str], behind: str) -> list[Receipt]:
@@ -402,14 +416,15 @@ def _reconcile(shared: DataRepo, decisions: list[Decision], said: list[str], unt
         files = [(e.path, serialize(e.decision.model_copy(update={"conflict": True})).encode("utf-8")) for e in entries]
         halt: list[bool] = []
 
-        def flag(entries: list[Entry] = entries, halt: list[bool] = halt) -> tuple[str, bool]:
+        def flag(entries: list[Entry] = entries, halt: list[bool] = halt) -> decision_transaction.Step:
             flagged = [path for e in entries if (path := _flag(e))]
             if not flagged:
-                return "", False
+                return decision_transaction.Step("", refused=True)
             ids = ", ".join(sorted(p.stem for p in flagged))
             sent = decision_sync.publish(shared, flagged, f"decisions: conflict on {ids}", until)
-            halt.append(sent.uncommitted or sent.ambiguous or sent.stale)
-            return sent.notice, sent.ambiguous or sent.stale
+            unknown = sent.ambiguous or sent.stale
+            halt.append(sent.uncommitted or unknown)
+            return decision_transaction.Step(sent.notice, unknown=unknown, refused=sent.uncommitted)
 
         notice = decision_transaction.transaction(shared, project, "decisions: conflict flags", files, flag)
         said.append(notice)

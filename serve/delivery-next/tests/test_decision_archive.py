@@ -361,7 +361,7 @@ def test_a_project_answer_narrowed_to_the_change_is_withdrawn_and_its_successor_
     assert validate_repo(root) == []
 
 
-def test_a_write_failing_midway_puts_every_file_back_and_the_record_still_publishes(store, shared_repo, monkeypatch):
+def test_a_write_failing_midway_puts_every_file_back_and_the_record_is_refused(store, shared_repo, monkeypatch):
     root, _ = shared_repo
     replaced, real = [], storage._replace
 
@@ -376,11 +376,11 @@ def test_a_write_failing_midway_puts_every_file_back_and_the_record_still_publis
 
     notice = change_record.save(store, finished(), MERGED, AT)
 
-    assert notice.startswith("no decision of notes was archived"), notice
+    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert "disk full" in notice
     assert len(replaced) == 1  # one file was in place before the second failed
     assert list(root.rglob("decisions/*.md")) == []
-    assert json.loads((root / "shop-site" / "changes" / f"{STEM}.json").read_text())["outcome"] == "merged"
+    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()  # F2: no record commit without its archive
     assert git(root, "status", "--porcelain") == ""
 
 

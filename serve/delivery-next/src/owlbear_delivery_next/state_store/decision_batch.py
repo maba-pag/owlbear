@@ -51,10 +51,11 @@ class Batch:
 
 def _admin(shared: DataRepo) -> Path:
     found = shared.git("rev-parse", "--absolute-git-dir")
-    if found.returncode:
-        msg = f"the git folder of {shared.root} cannot be found: {found.stderr.strip()[:200]}"
+    admin = found.stdout.strip()
+    if found.returncode or not Path(admin).is_absolute():  # an empty answer is no folder: never the working directory
+        msg = f"the git folder of {shared.root} cannot be found: {found.stderr.strip()[:200] or 'Git named none'}"
         raise JournalError(msg)
-    return Path(found.stdout.strip())
+    return Path(admin)
 
 
 @contextmanager
@@ -83,6 +84,8 @@ def journal_path(shared: DataRepo) -> Path:
 def replace_file(path: Path, data: bytes | None) -> None:
     """Make *path* hold *data* atomically, or no file at all when *data* is None; the rename or unlink is fsynced."""
     if data is None:
+        if not path.parent.exists():  # no folder means no file to remove, and nothing to make durable
+            return
         path.unlink(missing_ok=True)
         fsync_dir(path.parent)
         return
@@ -97,6 +100,30 @@ def replace_file(path: Path, data: bytes | None) -> None:
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
+
+
+def _held(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def owned(images: dict[Path, tuple[bytes | None, bytes | None]]) -> bool:
+    """Whether every file holds its before or after image; other content is an owner's edit, never overwritten."""
+    return all(_held(path) in (before, after) for path, (before, after) in images.items())
+
+
+def restored(before: dict[Path, bytes | None]) -> bool:
+    """Whether every file holds its before image and the folders holding them are fsynced after the restore."""
+    try:
+        if any(_held(path) != text for path, text in before.items()):
+            return False
+        for folder in {path.parent for path in before if path.parent.exists()}:
+            fsync_dir(folder)
+    except OSError:
+        return False
+    return True
 
 
 def _encode(batch: Batch) -> bytes:

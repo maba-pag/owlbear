@@ -82,13 +82,13 @@ def archive(root: Path, project: str, c: Change, stem: str, outcome: str) -> tup
             return write_plan(planned, problems, c.slug)
         done: dict[str, tuple[list[Path], list[str]]] = {}
 
-        def step() -> tuple[str, bool]:
+        def step() -> decision_transaction.Step:
             written, left = write_plan(planned, problems, c.slug)
             done["result"] = (written, left)
             if not written:
-                return "", False
+                return decision_transaction.Step("", refused=True)
             said = shared.publish(written, f"archive {c.slug}")
-            return said, bool(said)
+            return decision_transaction.Step(said, unknown=bool(said))
 
         notice = decision_transaction.transaction(shared, project, f"archive {c.slug}", files, step)
     written, left = done["result"]
