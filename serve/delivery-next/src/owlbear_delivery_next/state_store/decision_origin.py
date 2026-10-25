@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, State
+from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_actions import (
     EFFECT,
@@ -70,7 +71,7 @@ def correct_origin(  # noqa: PLR0913 - the owner's statement, the new origin and
         msg = (f"{old.id} changed the rule it replaced, and fixes may depend on it: its origin is not corrected; "
                "the owner replaces it himself if he wants")  # fmt: skip
         raise Refused(msg)
-    rationale = _because(old.rationale, CORRECTED, f"{old.origin} to {origin}: {why}")
+    rationale = _because(decision_wording.framed(old), CORRECTED, f"{old.origin} to {origin}: {why}")
     if old.state is State.DRAFT:
         update = {"origin": origin, "rationale": rationale}
         said = f"decisions: correct-origin {old.id} ({by})"
