@@ -706,6 +706,95 @@ def test_an_unread_child_whose_cleanup_fails_keeps_its_own_gate_and_count_until_
         assert (c.step.kind, c.outcome.exit) == (K.PLAN, Exit.BACK)
 
 
+GATE_FAULTS = ["gate-write", "gate-write+cleanup", "both-media"]
+
+
+@pytest.mark.parametrize("fault", GATE_FAULTS)
+@pytest.mark.parametrize("parent", ["plan", "amend"])
+def test_an_unread_child_whose_gate_write_fails_is_gated_from_its_capture_and_never_paid_again(  # noqa: C901, PLR0913, PLR0915, PLR0917
+    tmp_path, change_repo, monkeypatch, capsys, parent, fault
+):
+    paid = Paid(monkeypatch, change_repo, parent, "known")
+    store = held_and_accepted(tmp_path, change_repo, paid, parent)
+    paid.verdicts += [passing(parent), passing(parent)]
+    paid.unread_children = 1
+    real_write, real_unlink = Store.write, Path.unlink
+    armed = {"gate", *(["cleanup"] if "cleanup" in fault else [])}
+
+    def write(self, lock, change):
+        if "gate" in armed and set(change.counted_children) - set(self.read(change.slug).counted_children):
+            armed.discard("gate")  # the one write of the unread child's gate and count
+            msg = "gate refused"
+            raise OSError(msg)
+        return real_write(self, lock, change)
+
+    def unlink(self, *args, **kwargs):
+        if "cleanup" in armed and self.name == disposable.LIVE:
+            armed.discard("cleanup")
+            msg = "cleanup refused"
+            raise OSError(msg)
+        return real_unlink(self, *args, **kwargs)
+
+    def no_capture(path, _text):
+        msg = f"{path.name} refused"
+        raise OSError(msg)
+
+    monkeypatch.setattr(Store, "write", write)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    if fault == "both-media":
+        monkeypatch.setattr(pending_child, "atomic_write", no_capture)
+    with pytest.raises(OSError, match="cleanup refused" if "cleanup" in fault else "gate refused") as failed:
+        restart(tmp_path, change_repo)
+    assert not armed
+    gate_error = failed.value.__context__ if "cleanup" in fault else failed.value
+    assert "gate refused" in str(gate_error)  # the cleanup's own error, with the gate's as its context
+    monkeypatch.setattr(Store, "write", real_write)
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    if (live := store.root / "changes" / "c1" / disposable.LIVE).exists():
+        live.unlink()  # its process ended: only the stale marker is cleared
+    after = Store(tmp_path / "store").read("c1")
+    assert (after.counted_children, after.spend.unread, loop.open_question(after)) == ([], [], None)
+
+    if fault == "both-media":  # nothing kept it: printed, and the error says so; the next run honestly reruns it
+        assert any("could not be kept" in n for n in gate_error.__notes__)
+        printed = [json.loads(x) for x in capsys.readouterr().out.splitlines() if "child-unkept" in x]
+        assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
+        assert captures(store) == []
+        c = restart(tmp_path, change_repo).read("c1")
+        assert len(paid.children) == 2
+        assert paid.children[0] not in c.counted_children
+        return
+
+    (path,) = captures(store)  # the same child's evidence, its usage unread
+    kept = json.loads(path.read_text())["run"]
+    assert (kept["session_id"], kept["usage_unread"]) == (paid.children[0], UNREAD)
+    for _ in range(2):  # its own gate and count come back from the capture; nothing runs until the owner retries
+        c = restart(tmp_path, change_repo).read("c1")
+        q = loop.open_question(c)
+        assert q is not None
+        assert [o.id for o in q.options] == ["retry"]  # its own gate, never the parent's accept
+        assert len(paid.children) == 1
+        assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children, 2.5)
+        assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
+        assert captures(Store(tmp_path / "store")) == []
+    if parent == "amend":
+        assert c.pending_child is not None
+        assert (c.pending_child.run, [a.verdict for a in c.amendments]) == (None, [""])
+    else:
+        assert (c.plan.version, c.loops[PLAN].round, c.step.mode) == (1, 0, "challenge")
+
+    store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="retry"))
+    c = restart(tmp_path, change_repo).read("c1")  # the owner's retry runs the child alone
+    assert (len(paid.parents), len(paid.children)) == (1, 2)
+    assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children[:1], 2.5 + 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)
+    if parent == "plan":
+        assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
+    else:
+        (a,) = c.amendments
+        assert (a.verdict, a.session, a.challenger) == ("equivalent", paid.parents[0], paid.children[1])
+
+
 def stored(store: Store) -> str:
     with store.db.read() as db:
         return db.execute("SELECT record FROM changes WHERE slug = 'c1'").fetchone()[0]

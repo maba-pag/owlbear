@@ -80,7 +80,7 @@ def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], sta
                 change.pending_child = kept
                 _kept(store, lock, change, kept)
             elif sessions.unread(run):
-                _unread(store, lock, change, run, label)
+                _unread(store, lock, change, PendingChild(label=label, parent=judged, run=held.dump_run(run)))
 
     verdict, run = start(keep)
     if all(r is not run for r in seen):
@@ -88,17 +88,32 @@ def child(store: Store, lock: Lock, change: Change, parent: tuple[str, str], sta
     return verdict, run
 
 
-def _unread(store: Store, lock: Lock, change: Change, run: Run, label: str) -> None:
+def _unread(store: Store, lock: Lock, change: Change, evidence: PendingChild, *, gate: bool = True) -> Change:
     """A confirmed child whose usage is unread: its own retry-only gate and accounting, durable in one write (TD-54).
 
     It is the gate the runner would install once the session's error reaches it, written before the cleanup after
     the session can fail; its receipt stops that gate counting it again. The owner's retry runs a new child only.
+    When that write fails, the same evidence is kept in its capture file, and the next run installs this gate from it
+    (`recovered`); a step the owner has left only counts it (*gate* False). Its result is never kept or judged.
+
+    Returns:
+        The Change as written.
     """
-    gated = loop.apply(change, session_result.usage_gate(run, change.step.kind, accept=False), datetime.now(UTC))
+    if evidence.run is None:
+        msg = f"the unread {evidence.label} keeps no run"
+        raise ValueError(msg)
+    run = held.accounted(evidence.run)
+    now = datetime.now(UTC)
+    gated = loop.apply(change, session_result.usage_gate(run, change.step.kind, accept=False), now) if gate else change
     gated.counted_children = [*gated.counted_children, run.session_id]
-    step = sessions.account(gated, run, {"kind": change.step.kind, "exit": Exit.ASK, "label": label})
-    store.write(lock, gated)
+    step = sessions.account(gated, run, {"kind": change.step.kind, "exit": Exit.ASK, "label": evidence.label})
+    try:
+        store.write(lock, gated)
+    except (OSError, StoreError) as exc:
+        _capture_or_report(store, change.slug, evidence, exc)
+        raise
     sessions.announce(store, lock, gated.slug, step)
+    return gated
 
 
 def _reloaded(data: HeldRun) -> Run:
@@ -122,13 +137,17 @@ def _kept(store: Store, lock: Lock, change: Change, pending: PendingChild) -> No
     try:
         store.write(lock, change)
     except (OSError, StoreError) as exc:
-        try:
-            atomic_write(_capture(store, change.slug, pending), pending.model_dump_json())
-        except OSError as lost:
-            unkept = {"event": "child-unkept", "slug": change.slug, "child": pending.model_dump(mode="json")}
-            sessions.out(json.dumps(unkept))
-            exc.add_note(f"the paid child's run could not be kept ({lost}); it is printed above")
+        _capture_or_report(store, change.slug, pending, exc)
         raise
+
+
+def _capture_or_report(store: Store, slug: str, record: PendingChild, exc: Exception) -> None:
+    """Keep a child's record in its capture file after its Change write failed; else print it and say so on *exc*."""
+    try:
+        atomic_write(_capture(store, slug, record), record.model_dump_json())
+    except OSError as lost:
+        sessions.out(json.dumps({"event": "child-unkept", "slug": slug, "child": record.model_dump(mode="json")}))
+        exc.add_note(f"the paid child's run could not be kept ({lost}); it is printed above")
 
 
 def _capture(store: Store, slug: str, pending: PendingChild) -> Path:
@@ -140,7 +159,11 @@ def recovered(store: Store, lock: Lock, change: Change) -> Change:
     """A child run kept only in a capture file joins the folded Change's pending record, once (see `_kept`).
 
     A capture of a child the Change has counted, or keeps already, is removed. One whose Change waits on another
-    child stays until that child settles, so its spend is never lost.
+    child stays until that child settles, so its spend is never lost. An unread child's capture is never a result:
+    its own gate and count are installed from it (`_unread`), the gate only while its step is still the Change's.
+
+    Returns:
+        The Change as it now stands, a new one when a gate was installed.
     """
     for path in sorted((store.root / "changes" / change.slug).glob(f"{CAPTURE}*.json")):
         try:
@@ -150,6 +173,11 @@ def recovered(store: Store, lock: Lock, change: Change) -> Change:
             raise StoreError(msg) from exc
         pending, run = change.pending_child, captured.run
         if run is None or run.session_id in change.counted_children or (pending and pending.run == run):
+            path.unlink(missing_ok=True)
+            continue
+        if sessions.unread(held.accounted(run)):
+            probe = change.model_copy(update={"pending_child": pending or captured.model_copy(update={"run": None})})
+            change = _unread(store, lock, change, captured, gate=fits(probe))
             path.unlink(missing_ok=True)
             continue
         if _awaits(pending, captured):

@@ -409,7 +409,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:
     """Run the folded Change's next step; a session whose usage stayed unread stops it for the owner (TD-54)."""
-    change = pending_child.retired(store, lock, change)  # a child whose step the owner's controls left counts once
+    if (settled := pending_child.retired(store, lock, change)) is not change:  # a captured child's gate: it decides
+        change, step = settled, loop.next_step(settled, datetime.now(UTC))  # a left child counts once (retired)
     if (pending := held.uncounted(store, change)) is not None:  # a held session counts before anything else runs
         held.counted_hold(store, lock, pending)
         return
