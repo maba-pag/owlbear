@@ -55,21 +55,37 @@ def describe(src: pack_git.Source, c: pack_candidate.Candidate) -> str:
     return f"{c.pins['pack']}: upstream {c.tag} at {up['commit'][:12]}, engine {up['engine']}; from {src.base[:12]}"
 
 
+def read_fd(fd: int) -> tuple[dict[str, Any], str]:
+    """The run *fd* holds and that file's version, both from the one open descriptor.
+
+    The version is the file's identity and metadata as opened, so a replacement made after the open is not mixed
+    into what was read. Raises OSError or ValueError when the record cannot be read as a run.
+    """
+    with os.fdopen(fd, encoding="utf-8") as f:
+        st = os.fstat(f.fileno())
+        kept = json.load(f)
+    if not isinstance(kept, dict):
+        msg = f"{FILE} is not a run"
+        raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
+    return kept, f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}"
+
+
+def observed(root: Path) -> tuple[dict[str, Any], str] | None:
+    """The last run as *root* holds it with its file version; None when it has no record. Reads without writing."""
+    try:
+        fd = os.open(root / FILE, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return None
+    return read_fd(fd)
+
+
 def read_only(root: Path) -> dict[str, Any] | None:
     """The last run as *root* holds it, read without following a link or writing; None when it has no record.
 
     Raises OSError or ValueError when the record exists but cannot be read as a run: that is not an empty record.
     """
-    try:
-        fd = os.open(root / FILE, os.O_RDONLY | os.O_NOFOLLOW)
-    except FileNotFoundError:
-        return None
-    with os.fdopen(fd, encoding="utf-8") as f:
-        kept = json.load(f)
-    if not isinstance(kept, dict):
-        msg = f"{FILE} is not a run"
-        raise ValueError(msg)  # noqa: TRY004 - callers treat a damaged record as a ValueError
-    return kept
+    got = observed(root)
+    return None if got is None else got[0]
 
 
 def legacy_uncertain(kept: dict[str, Any]) -> bool:

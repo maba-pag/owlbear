@@ -39,6 +39,8 @@ from owlbear_delivery_next.pack_runs.pack_state import (
     STAGES,
     last,
     legacy_uncertain,  # noqa: F401 - retain the existing pack_job ownership-reader API
+    observed,  # noqa: F401 - the unloaded ownership reader session_slots shares with Job
+    read_fd,
     read_only,  # noqa: F401 - retain the existing pack_job ownership-reader API
     running_for,
 )
@@ -126,6 +128,7 @@ class Job:
         self.maintenance: Maintenance | None = None  # bound by session_slots.packed; without it nothing is removed
         self.interrupted: dict[str, str] | None = None  # a run the last host left running; its SDK stage may still work
         self.replays = 0
+        self.version = ""  # the run file's identity as read; see _read
         self.state = self._read()
         if self.state["state"] == "running" and (self.state.get("context") or {}).get("publication"):
             reason = "the host stopped while the update was being published"
@@ -155,11 +158,21 @@ class Job:
         return self.maintenance is not None and self.maintenance.retained(str(path))
 
     def _read(self) -> dict[str, Any]:
+        """The last run, and its file version from the same descriptor: "absent", "" when unreadable."""
         try:
-            kept = json.loads(self.path.read_text(encoding="utf-8"))
-        except OSError, ValueError:
+            fd = os.open(self.path, os.O_RDONLY)
+        except FileNotFoundError:
+            self.version = "absent"
             return _blank()
-        return _blank() | kept if isinstance(kept, dict) and {"state", "stages", "log"} <= kept.keys() else _blank()
+        except OSError:
+            self.version = ""
+            return _blank()
+        try:
+            kept, self.version = read_fd(fd)
+        except OSError, ValueError:
+            self.version = ""
+            return _blank()
+        return _blank() | kept if {"state", "stages", "log"} <= kept.keys() else _blank()
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

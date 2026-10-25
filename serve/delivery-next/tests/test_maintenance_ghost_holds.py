@@ -18,9 +18,13 @@ def owner_with_lease(workspace):
     return owner
 
 
-def job_for(owner, root, interrupted=None, state=None):
+def job_for(owner, root, interrupted=None, state=None, version="1:2:3:4"):
     return SimpleNamespace(
-        maintenance=owner, store=SimpleNamespace(root=root), interrupted=interrupted, state=state or {}
+        maintenance=owner,
+        store=SimpleNamespace(root=root),
+        interrupted=interrupted,
+        state=state or {},
+        version=version,
     )
 
 

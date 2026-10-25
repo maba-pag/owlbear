@@ -9,10 +9,12 @@ import pytest
 
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import project, registry
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.pack_runs import pack_job, pack_run
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.state_store import project_home
 from owlbear_delivery_next.state_store.store import Store
 
 REPLAY_UNCERTAIN = (
@@ -185,3 +187,63 @@ def test_a_modern_running_run_whose_workspace_the_ledger_owns_adds_no_second_hol
     restarted = machines()
     restarted.load_all()
     assert len(sessions_of(restarted, bad.id)) == 1, "a restart held a modern run the ledger already owned"
+
+
+def project_with_legacy_run(tmp_path: Path, shared, *, loaded: bool):
+    """A project whose legacy record a loaded project reads, or whose folder is read if its store will not open."""
+    if loaded:
+        return open_project(tmp_path, shared, "bad")
+    return store_too_new(tmp_path, "bad")
+
+
+def live_folder(entry, folder: Path, *, loaded: bool) -> Path:
+    """Where the record lives once a loaded store has moved it out of the clone; an unopened clone keeps it."""
+    return project_home.home(entry.id) if loaded else folder
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_a_same_bytes_atomic_replacement_of_an_untouched_legacy_run_is_a_new_run_and_gets_a_new_hold(
+    tmp_path, machines, shared_repo, loaded
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_pack(folder, {})
+    first = machines()
+    first.load_all()
+    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    first.stop_all()
+    folder = live_folder(entry, folder, loaded=loaded)
+
+    untouched = machines()
+    untouched.load_all()
+    assert held(untouched, entry.id) == [], "an untouched recovered legacy run was held again"
+    untouched.stop_all()
+
+    record = folder / pack_job.FILE
+    before = record.stat().st_ino
+    atomic_write(record, record.read_text(encoding="utf-8"))
+    assert record.stat().st_ino != before, "the replacement kept the file's identity, so the test proves nothing"
+
+    replaced = machines()
+    replaced.load_all()
+    assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"]
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_an_unreadable_legacy_run_record_is_held_conservatively_and_is_never_borrowed_from_a_recovered_one(
+    tmp_path, machines, shared_repo, loaded
+):
+    shared, _remote = shared_repo
+    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
+    write_pack(folder, {})
+    first = machines()
+    first.load_all()
+    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    first.stop_all()
+    folder = live_folder(entry, folder, loaded=loaded)
+    (folder / pack_job.FILE).write_text("{not a run", encoding="utf-8")
+
+    unreadable = machines()
+    unreadable.load_all()
+    assert [s["state"] for s in sessions_of(unreadable, entry.id)] == ["recovered", "held"]
