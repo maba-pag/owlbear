@@ -163,6 +163,8 @@ def _readback(ctx: Ctx, c: Change, req: MergeRequest, result: MergeResult) -> St
     pr = ctx.gh.read_pull_request(ctx.repository, number)
     match merge_offer.readback(pr, head):
         case "applied":
+            if held := engine.landed(ctx, c, pr):
+                return held
             sha = pr.merge_commit_sha or result.sha or ""
             method = profile.value(ctx.profile, profile.METHOD)
             ctx.log(c.slug, "merged", pr=number, head=head, sha=sha, method=method)
@@ -199,16 +201,18 @@ def submit(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult:
 
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - each read may end the step
     """Gate the head, then hold the target's merge lock, re-read everything, gate again and merge that head."""
+    number, target = c.names.pr or 0, c.names.target
+    pr = ctx.gh.read_pull_request(ctx.repository, number)
+    if pr.merged:
+        return c, engine.landed(ctx, c, pr) or StepResult(
+            exit=Exit.DONE, reason=f"PR #{pr.number} was merged in GitHub"
+        )
     asked, rules = engine.rules_changed(ctx, c)
     if asked is not None:
         queued = c.queue is not None or rules.queue_required or profile.value(ctx.profile, profile.QUEUE) == "yes"
         if queued:
             return queue.hold(ctx, c, asked)  # a queued PR is taken out before the owner confirms the rules
         return c, asked
-    number, target = c.names.pr or 0, c.names.target
-    pr = ctx.gh.read_pull_request(ctx.repository, number)
-    if pr.merged:
-        return c, StepResult(exit=Exit.DONE, reason=f"PR #{pr.number} was merged in GitHub")
     if rules.queue_required:
         return queue.run(ctx, c, pr, rules, gate)
     c, held = gate(ctx, c, pr, rules)
@@ -221,7 +225,9 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - ea
             )
         pr = ctx.gh.read_pull_request(ctx.repository, number)  # everything is read again under the lock
         if pr.merged:
-            return c, StepResult(exit=Exit.DONE, reason=f"PR #{pr.number} was merged in GitHub")
+            return c, engine.landed(ctx, c, pr) or StepResult(
+                exit=Exit.DONE, reason=f"PR #{pr.number} was merged in GitHub"
+            )
         c, held = gate(ctx, c, pr, rules)
         if held is not None:
             return c, held

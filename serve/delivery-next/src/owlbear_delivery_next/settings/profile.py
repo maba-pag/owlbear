@@ -34,6 +34,7 @@ METHOD, DELETE, HOOKS = "merge:method", "cleanup:delete-remote-branch", "git:pre
 POLL, WINDOW, ASK = "poll:ci-seconds", "ci:start-window-seconds", "merge:ask-before"
 SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # owner settings; kept across re-detection
 CONFIRMED = "owner confirmed"
+OBSERVED = "; observed: "
 DIGEST = "; workflows "  # declared-CI evidence ends with the digest of the workflow files it was read from
 FLOWS = ".github/workflows"
 _PREFERRED = (MergeMethod.SQUASH, MergeMethod.MERGE, MergeMethod.REBASE)
@@ -89,6 +90,45 @@ def package_entries(repo: Path) -> dict[str, ProfileEntry]:
 
 def _entry(state: str, value: str, evidence: str) -> ProfileEntry:
     return ProfileEntry(state=state, value=value, evidence=evidence)  # type: ignore[arg-type]
+
+
+def _absent(key: str) -> ProfileEntry:
+    return _entry("unknown", "", f"{key}: not detected in this clone")
+
+
+def local_key(key: str) -> bool:
+    """Clone-local detected capabilities, never another clone's shared facts."""
+    return key in {PUSH, HOOKS} or key.startswith("install:")
+
+
+def shared_entries(entries: dict[str, ProfileEntry]) -> dict[str, ProfileEntry]:
+    """The project observations and intent, without this clone's own capabilities."""
+    return {key: entry for key, entry in entries.items() if not local_key(key)}
+
+
+def _detected(key: str) -> bool:
+    return key in {HOST, REPO, DEFAULT, METHODS, PUSH, RULES, REQUIRED, QUEUE, STRICT, RESOLUTION,
+                  WORKFLOWS, DECLARED, HOOKS} or key.startswith(("install:", "check:"))  # fmt: skip
+
+
+def fingerprint(entry: ProfileEntry) -> str:
+    """The complete raw observation, independent of the value the owner chose instead."""
+    return hashlib.sha256(json.dumps([entry.state, entry.value, entry.evidence]).encode()).hexdigest()
+
+
+def is_confirmed(entry: ProfileEntry) -> bool:
+    """Whether the entry represents owner intent, including an unbound legacy confirmation."""
+    return bool(entry.observed) or entry.evidence.startswith(CONFIRMED)
+
+
+def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool:
+    """Only a confirmation bound to this exact observation is fresh."""
+    return bool(confirmed.observed) and confirmed.observed == fingerprint(observed)
+
+
+def unbound(prof: Profile) -> bool:
+    """Whether an old detected-fact confirmation must be observed again before use."""
+    return any(_detected(key) and is_confirmed(entry) and not entry.observed for key, entry in prof.entries.items())
 
 
 @dataclass(frozen=True)
@@ -254,17 +294,35 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         chosen = next((m for m in _PREFERRED if m in allowed), "")
         entries[METHOD] = _entry("known" if chosen else "unsupported", chosen, f"allowed: {methods or 'none'}")
     for key, old in prev.entries.items():
+        if key in SETTINGS:
+            continue
         new = entries.get(key)
-        if new is None or (old.evidence.startswith(CONFIRMED) and old.evidence.endswith(f"observed: {new.evidence}")):
-            entries[key] = old
-    changed = entries != prev.entries
+        if new is None:
+            if not _detected(key):
+                entries[key] = old
+                continue
+            new = _absent(key)
+            entries[key] = new
+        if is_confirmed(old) and holds(old, new):
+            stamp = old.evidence.partition(OBSERVED)[0]
+            entries[key] = old.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
+    changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
 
 
 def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
-    """Record the owner's confirmation of one entry; it holds while GitHub's observation stays the same."""
-    old = profile.entries.get(key) or _entry("unknown", "", "not detected")
-    entry = _entry("known", value, f"{CONFIRMED} {now:%Y-%m-%d}; observed: {old.evidence}")
+    """Record the owner's value independently of the complete raw observation it is confirmed against."""
+    old = profile.entries.get(key) or _absent(key)
+    if is_confirmed(old) and not old.observed and _detected(key):
+        msg = f"{key}: a legacy confirmation has no observation to bind; detect the profile first"
+        raise ValueError(msg)
+    label = old.evidence.partition(OBSERVED)[2] if is_confirmed(old) else old.evidence
+    entry = ProfileEntry(
+        state="known",
+        value=value,
+        evidence=f"{CONFIRMED} {now:%Y-%m-%d}{OBSERVED}{label or old.evidence}",
+        observed=old.observed or fingerprint(old),
+    )
     entries = {**profile.entries, key: entry}
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1, "confirmed_at": now})
 
@@ -277,9 +335,9 @@ def reread(profile: Profile, gh: Provider, branch: str) -> tuple[list[str], Rule
         old = profile.entries.get(key)
         if old is None:
             diffs.append(f"{key}: not in the profile, now {new.value or new.state}")
-        elif old.evidence.startswith(CONFIRMED):
-            if not old.evidence.endswith(f"observed: {new.evidence}"):
-                diffs.append(f"{key}: confirmed '{old.value}', GitHub now reports {new.evidence}")
+        elif is_confirmed(old):
+            if not holds(old, new):
+                diffs.append(f"{key}: confirmed '{old.value}', now '{new.value or new.state}' ({new.evidence})")
         elif (old.state, old.value) != (new.state, new.value):
             diffs.append(f"{key}: profile '{old.value or old.state}', now '{new.value or new.state}'")
     return diffs, rules

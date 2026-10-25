@@ -12,7 +12,7 @@ from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 
 HEAD, BASE = "a" * 40, "b" * 40
-GOOD = {"summary": "Added greet().", "changed_paths": ["src/greet.ts"], "checks": []}
+GOOD = {"summary": "Added greet().", "checks": []}
 SUBMIT = tools.SUBMIT.name
 
 

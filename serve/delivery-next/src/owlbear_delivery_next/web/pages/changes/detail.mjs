@@ -12,7 +12,7 @@ function detailHead(d) {
   const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
     Changes</p-button-pure>`;
   let intent = nothing;
-  if (!/^(Done|Abandoned) /.test(d.line)) {  // a finished Change has nothing left to pause
+  if (!d.finished) {
     const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
       ? "Resumed: Delivery goes on once no question, check or stop holds the Change."
       : "Pause requested: the running step finishes first, then nothing new starts until you resume.";
