@@ -84,7 +84,7 @@ names, not positions: the table lists the items in their order.
 | 8 | Window-step gate: windows keep repository hooks and user MCP servers out, subagents detected and counted, judge effects contained | TD-223, TD-145, TD-342 | [gate build](window-step-gate-build.md), [probes](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/window-step-gate-probes.md) | Building: TD-267 is built (`ahp.py` on the `websockets` library, #590). The probes of 2026-10-23 settled each part `autonomous` (the owner declined to decide the gate); Built: hooks and VS Code MCP servers off per step, the host record's allowlist check, subagents in windows under the SDK rule, read-only steps asking and the SDK policy answering; the live proof of 2026-10-23 held. Window steps stay paused until item 9 needs them (`autonomous`) |
 | 18 | Settings without code defaults: every setting comes from Global, the machine or the project; unset is an error on the Settings page and the steps needing it ask; today's values carried into Global once; machine settings get a Global layer | D-01M5MYY55ZX0FPN7VZB021H8MC, D-01M5MZKEPWNASF6X3CNF4FEWZH, D-01M5MZKEPW6WCSM8SZ6DH783EN, D-01M5MZKEPPVMFC9HK795MMG91B | none | Done (#604, #605): layered settings, then machine settings with a Global layer, moved there once on this laptop |
 | 19 | Pinned OwlBear: live chats keep their tools across updates; the chat server a state-free client of the host under a chat contract (first), then the memory, knowledge and browser servers run from the install, pinned and leased; this laptop updates only deliberately | D-01M5Q5GKHX7BJTXPEW2MHGS9E0, D-01M5Q5GKBFGSJRGCPXET234QAH | none | Built: the chat contract (#632, v1.49), the launcher (#636, v1.50) and the memory, knowledge and browser entries of `.mcp.json` and the seed switched to it (this pull request); item 9 next |
-| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then Retro (after-task hindsight analysis), then the Spotter in shadow at Delivery hand-offs, live only after a steered-versus-silent test | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. Next: Retro with its chatlogs kept and the Improvement page, then the Spotter in shadow |
+| 9 | Improvement (formerly the watcher): tool and contract fixes and the Primer first, then Retro (after-task hindsight analysis), then the Spotter (learning mode first, for Delivery steps and enrolled chats), live only after a steered-versus-silent test; built complete before item 10 | TD-224, TD-316, TD-47, the owner's choices of 2026-10-25 | [Improvement](improvement-design.md) | Redesigned 2026-10-25, twice. Built: W1a (#640), the SDK feed and agent identity, which the Spotter reuses. Closed: #647 (a shell-effect parser). Phase 1a built: changed_paths derived, limit errors, check-form hint. The Primer built: lessons in every new step conversation (#653). A pilot and a hindsight review of 83 real moments found the only candidates for a note at hand-offs and fresh instructions, never mid-flow; their value is unproven. Next: the design's nine slices (settings and roles, Retro chatlogs, the card builder, Spotter records and cases, looks in learning mode, Retro, the Improvement page, live delivery), then item 10 |
 | 16 | Amendment design session with the owner (TD-185), end to end, before any amendment code | TD-185, TD-422 | none yet | Not started |
 | 10 | First real project: the per-project GitHub account setting first; memory publication and curation (F17) fixed; two Changes merged in consumer projects; OwlBear builds itself through Delivery | TD-338, TD-402, TD-90, TD-319 | none yet | Waits for item 9 |
 | 17 | Browser and knowledge rebuilt from scratch, from the [ideas of the closed issues](https://github.com/maba-pag/owlbear-data/blob/main/owlbear/research/closed-issue-ideas-2026-10.md); until then the packages stay untouched | TD-434 | none yet | After item 10 |
@@ -214,8 +214,11 @@ no log shows what steering costs; and that even those candidates are not proven 
 - first, tool and contract fixes and the **Primer** (lessons at session start), both built;
 - **Retro**, an after-task analysis of whole tasks with hindsight, run by the machine host, that grades the Spotter
   and proposes lessons and fixes, on an **Improvement** page;
-- the **Spotter**, synchronous at Delivery hand-offs, recording its notes in shadow; live only after a
-  steered-versus-silent test on real tasks shows a gain.
+- the **Spotter**, synchronous beside working agents (Delivery steps and enrolled chats), in learning mode first,
+  recording what it would do; live only after a steered-versus-silent test on real tasks shows a gain.
+
+He then chose to build it complete, chats included, before item 10: the machinery does not depend on real-work data;
+rules, cases and thresholds are content the Spotter follows.
 
 Still to settle with him, one at a time: the rethinker decision, the switches' rule-verdict and stop parts, and
 TD-365's outside-write outcomes, none of which fit this design.
@@ -237,7 +240,29 @@ repair (#607) binds displayed decisions, confirmations and mutations to the same
 captured scope and rejects superseded responses. Cleanup preservation (#610) keeps
 unsupported nested repositories and entries in their workspace instead of omitting
 them from a verified archive; supported links and file modes are preserved without
-following symlink parents. Other packages remain open until their own merged-code
+following symlink parents. The owner-continuation candidate (#618, R12) sends a
+replacement check session the owner's pending answer before its delivery is recorded,
+and keeps an accepted held result until its final write is durable, so a restart
+applies it once without a paid rerun. An accepted review's round and findings are
+buffered until that final write. A held result is written to its hold file first, with its full run, usage, tool
+accounting and step label; it is counted once through a receipt written with the spend, and a restart with an
+uncounted hold counts it before any step runs. When the hold file cannot be written, the Change keeps the same held
+record (format 8), so the owner's accept and the count survive without a paid rerun; if the Change write fails too,
+the error is reported and nothing is counted. A hold written before this receipt existed is marked unread once,
+never zero-filled or recharged. An accepted fallback is cleared from the Change once its result is durable, so it
+cannot suppress a later step; a failed clear is retried by the next run without a session or a second count. A
+declined or stale hold is retired durably, its fallback with it, before anything runs in its place, so a HEAD that
+returns never revives it; a later hold is never removed with it. A count that failed after its hold was written goes
+on the latest folded Change: the owner's pause, abandon or new brief stays, and the hold's gate comes back only while
+its step and brief still fit. Held runs and pending child runs with unknown fields are refused, never rewritten. An
+accepted parent that starts a paid child (the plan challenge, an amendment challenge) first writes its checkpoint
+with the hold's receipt; the child's validated run is kept on the Change as soon as it returns (in a capture file the
+next run adopts when that write fails) and counts once, in
+the write that settles its verdict, so a failed settlement resumes from it without a second session. A child whose
+step the owner has left counts once without routing it; a paused one waits for its step. A wrong-model or failed
+challenger judges nothing and reruns alone, as does an unread one the owner retries. The
+branch carries main's #653 lesson delivery and exposure logging, which runs after the replacement check's send and
+before its delivery is recorded. Other packages remain open until their own merged-code
 acceptance evidence is verified.
 
 Remote-branch retirement (#612) uses an atomic expected-head ref update, never

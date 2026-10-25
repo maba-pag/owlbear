@@ -16,7 +16,20 @@ from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools, tools
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Plan, Question, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.models import (
+    Answer,
+    Change,
+    ErrorKind,
+    Exit,
+    Option,
+    PersonCheck,
+    Plan,
+    Question,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -369,3 +382,26 @@ def test_the_cli_answer_needs_the_class_and_a_clarification_its_confirmed_statem
 
     a = run.asked(run.fold()[0]).answer
     assert (a.kind, a.statement, a.text) == ("clarification", SAID, WORDS)
+
+
+def test_a_replacement_check_session_is_told_the_owners_pending_answer(tmp_path):
+    question = Question(
+        id="q1",
+        step=StepKind.CHECK,
+        text=ASKED,
+        options=[Option(id="en", label="English")],
+        answer=Answer(option="en", at=AT),
+    )
+    check = PersonCheck(id="p1", steps=["open the page"])
+    task = Task(id="p1", title="Check the page")
+    change = Change(
+        slug="greet",
+        questions=[question],
+        checks=[check],
+        plan=Plan(tasks=[task]),
+        step=Step(kind=StepKind.CHECK, task="p1"),
+    )
+
+    parts = step_input.session(change, Profile(), tmp_path, {})
+
+    assert f"- {ASKED}: English" in parts.message
