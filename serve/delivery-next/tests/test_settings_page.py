@@ -148,6 +148,8 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        looks.fill("hand-off,sample")  # the saved list written differently: no edit
+        expect(page.locator("#pending")).to_contain_text("No unsaved edits.")  # the global edit stays apart
         pds.pick(page, "Layer", "global")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
         expect(page.locator("#pr")).to_contain_text("inherit (on)")  # layered since code ships no defaults

@@ -38,14 +38,22 @@ export function inherited() {
 export function edit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   const value = !literal && !NUMBERS.includes(field) && raw === INHERIT ? "" : raw;
-  if (value.trim() === saved(state.layer, key)) delete drafts[state.layer][key];
+  if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
   show();
 }
 
-// The edited layer's drafts that differ from what is saved, trimmed as they will be sent.
+// A list's text as it is saved: items trimmed, empty ones dropped, joined alike; other text trimmed.
+const LISTS = ["spot.looks", "machine.enrolled_chats"];
+function canonical(key, text) {
+  const value = text.trim();
+  if (!LISTS.includes(key) || value === "none") return value;
+  return value.split(",").map((i) => i.trim()).filter(Boolean).join(", ");
+}
+
+// The edited layer's drafts that differ from what is saved, compared as they will be sent.
 function dirty(layer) {
-  return Object.entries(drafts[layer]).filter(([key, value]) => value.trim() !== saved(layer, key));
+  return Object.entries(drafts[layer]).filter(([key, value]) => canonical(key, value) !== saved(layer, key));
 }
 
 // Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits.

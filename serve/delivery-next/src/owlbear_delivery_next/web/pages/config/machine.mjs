@@ -193,7 +193,12 @@ export async function readMachine() {
   const writes = state.machineWrites;
   if (state.machineSaving) return;
   const read = await call("/machine", { machine: true }).catch(() => undefined);
-  if (read !== undefined && !state.machineSaving && writes === state.machineWrites) state.machine = read;
+  if (read !== undefined && !state.machineSaving && writes === state.machineWrites) {
+    state.machine = read;
+    for (const key of Object.keys(state.machineText ?? {})) {  // typed text without an edit shows the fresh value
+      if (!(state.machineDraft && key in state.machineDraft)) delete state.machineText[key];
+    }
+  }
 }
 
 // The machine host's values and every other project's settings, each shared folder once (twin clones share one).

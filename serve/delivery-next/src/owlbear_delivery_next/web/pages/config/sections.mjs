@@ -183,7 +183,7 @@ function settingsSections() {
         actions. In learning mode it only records what it would do, and Retro grades those records; live mode
         steers, and comes only after a steered-versus-silent test. Its model, effort and context are the spotter row
         under Agents; the budgets and enrolled chats are machine settings. So far only the mode is used: off stops
-        the list of outside writes on each Change's page.</p-text>
+        recording new outside writes for each Change's page; the reports already recorded stay.</p-text>
       ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", [
         row(text("Mode"), spotterCell("mode", "Mode")),
         row(text("Steered share in live mode (%)"), spotterCell("steer_share", "Steered share")),
