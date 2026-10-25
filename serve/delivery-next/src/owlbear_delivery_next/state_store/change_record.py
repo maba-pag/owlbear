@@ -24,9 +24,17 @@ if TYPE_CHECKING:
 BRIEF = {"version", "title", "outcome", "scope", "non_goals", "decisions", "criteria", "ui", "visual"}
 
 
-def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
+def save(
+    store: Store,
+    c: Change,
+    pr: PullRequest | None,
+    now: datetime,
+    *,
+    observed: PullRequest | None = None,
+) -> str:
     """Write and publish the record of *c* and its decisions; what the owner should know when that fails, else nothing.
 
+    *pr* is the proven intended delivery. *observed* retains a different terminal PR without delivery credit.
     A Change never approved leaves none: it has no approved brief, and no stable name for a record.
     """
     if not store.shared or c.brief.approved_at is None:
@@ -46,6 +54,15 @@ def save(store: Store, c: Change, pr: PullRequest | None, now: datetime) -> str:
         "spend": c.spend.model_dump(mode="json", exclude={"last"}),
         "tool_use": c.tool_use.model_dump(mode="json"),
     }
+    if observed is not None:
+        record["observed_pr"] = {
+            "repository": observed.repository,
+            "number": observed.number,
+            "url": observed.url,
+            "target": observed.base_branch,
+            "branch": observed.head_branch,
+            "merge_commit": observed.merge_commit_sha,
+        }
     stem = f"{c.brief.approved_at:%Y%m%d-%H%M%S}-{c.slug}"
     path = store.shared.root / store.name / decision_archive.CHANGES / f"{stem}.json"
     try:

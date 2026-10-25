@@ -248,6 +248,18 @@ abandonment mode. An ordinary pause still permits cleanup.
 The Changes page keeps Resume available until the Change actually finishes,
 including a cleanup whose displayed stage is already Done or Abandoned.
 
+Nonterminal queue readbacks wait without creating a permanent delivery discrepancy.
+The GitHub provider validates the base repository in each read/create response
+instead of relabelling an unchecked response with the requested repository.
+Terminal PR delivery (#614) is checked against the Change's repository, PR number,
+own branch and stored integration target, not a default branch convention. A
+persisted discrepancy holds across unavailable PR reads, including Pause then
+Resume; person-only checks cannot settle or relaunch past it. A different
+delivery asks the owner to pause or abandon without fulfillment; its
+work is preserved against the intended target, fixes and curation get no success
+credit, and the observed other PR is recorded separately from delivery evidence.
+Lost-runner accounting cannot replace that terminal owner disposition with a retry.
+
 SDK cleanup (#611) owns the client across startup, usage and proof, and completes
 its bounded teardown before propagating the original error or cancellation.
 Journal failures cannot skip disconnect, stop or force fallback; failed cleanup
