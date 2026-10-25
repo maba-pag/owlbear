@@ -132,8 +132,8 @@ def _validate(root: DataRepo, batch: decision_batch.Batch) -> None:
 def _rivals_flagged(by_id: dict[str, Entry], findings: list[Finding], ids: tuple[str, ...]) -> bool:
     """Whether a flag batch flagged every rival its findings touch, leaving only the expected two-successors findings.
 
-    Every decision of the batch must be flagged `conflict`; each finding touched must be a two-successors finding; and a
-    target may keep one unflagged successor (the decision that was saved), any other successor being flagged already.
+    Every decision of the batch and every rival the findings name must be flagged `conflict`, and each finding touched
+    must be a two-successors finding; an unflagged rival of any of them refuses the batch.
     """
     def flagged(decision_id: str) -> bool:
         entry = by_id.get(decision_id)
@@ -146,11 +146,7 @@ def _rivals_flagged(by_id: dict[str, Entry], findings: list[Finding], ids: tuple
     named = [f for f in findings if set(f.involves) & (set(ids) | targets)]
     if any(f.rule != CONFLICT for f in named):
         return False
-    unflagged: dict[str, set[str]] = {}
-    for f in named:
-        if not flagged(f.involves[0]):
-            unflagged.setdefault(f.involves[-1], set()).add(f.involves[0])
-    return all(len(rivals) <= 1 for rivals in unflagged.values())
+    return all(flagged(f.involves[0]) for f in named)
 
 
 def abandon(shared: DataRepo, generation: str) -> Recovery:

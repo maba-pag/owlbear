@@ -41,11 +41,11 @@ def _decision_file(rel: str) -> bool:
 
 
 def _rev(shared: DataRepo, ref: str, until: float) -> str | None:
-    """The commit *ref* names; "" when it names none yet (an unborn HEAD), None when Git could not say."""
+    """The commit *ref* names; None when Git could not say, including an unborn or empty answer."""
     said = shared.git("rev-parse", "--verify", "-q", ref, until=until)
-    if said.returncode == 0:
-        return said.stdout.strip()
-    return "" if said.returncode == 1 and not said.stdout.strip() else None
+    if said.returncode or not said.stdout.strip():
+        return None
+    return said.stdout.strip()
 
 
 def _changed(shared: DataRepo, base: str, tip: str, until: float) -> set[str] | None:

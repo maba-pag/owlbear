@@ -7,6 +7,7 @@ stays in flight exactly as the crash would leave it, then drives the public reco
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -145,6 +146,27 @@ def test_an_ambiguous_head_after_a_landed_commit_keeps_the_journal_and_the_writt
     assert shared.git("show", f"HEAD:{rel}").stdout.encode("utf-8") == written
 
 
+def test_an_empty_initial_head_probe_is_ambiguous_and_commits_nothing(picking, monkeypatch):
+    _seed(picking)
+    shared = picking.shared
+    new = make(title="Use UTC", statement="All timestamps use UTC.")
+    real_git = DataRepo.git
+    head_before = real_git(shared, "rev-parse", "HEAD").stdout
+
+    def empty_head(self, *args, **kwargs):
+        if args == ("rev-parse", "--verify", "-q", "HEAD"):
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
+        return real_git(self, *args, **kwargs)
+
+    monkeypatch.setattr(DataRepo, "git", empty_head)
+    receipt = decision_store.save(shared, new, expected_revision=None, message="decisions: empty head")
+
+    assert not receipt.published
+    assert real_git(shared, "rev-parse", "HEAD").stdout == head_before
+    assert decision_batch.pending(shared) is not None
+    assert (shared.root / f"{PROJECT}/decisions/{new.id}.md").exists()
+
+
 def test_finish_creates_a_missing_decisions_folder_after_the_whole_batch_is_checked(picking, monkeypatch):
     _seed(picking)
     shared = picking.shared
@@ -270,12 +292,13 @@ def test_a_refused_flag_batch_finishes_once_every_rival_is_flagged_and_publishes
     assert all(seen.get(i).decision.conflict for i in (a.id, b.id))
 
 
+@pytest.mark.parametrize("competitors", [("Notes in C",), ("Notes in C", "Notes in D")])
 def test_a_flag_batch_with_an_unflagged_competitor_is_refused_and_keeps_its_generation(
-    picking, monkeypatch
+    picking, monkeypatch, competitors
 ) -> None:
     shared = picking.shared
     old, _, _, pending = _two_rivals_with_refused_flags(shared, monkeypatch)
-    for title in ("Notes in C", "Notes in D"):  # unflagged competitors on disk; HEAD and the journal stay as they were
+    for title in competitors:  # unflagged competitors on disk; HEAD and the journal stay as they were
         write(replacing(old, title=title), shared.root / PROJECT)
     head = shared.git("rev-parse", "HEAD").stdout
 
